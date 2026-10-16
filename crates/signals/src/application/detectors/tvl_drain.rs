@@ -1,25 +1,7 @@
-//! TVL drain detector.
-//!
-//! Detects a pool being emptied of its liquidity (LP exodus, rug-like
-//! behaviour): over a trailing window, what share of the starting TVL has
-//! left? It reads per-pool windowed liquidity flow with current TVL
-//! ([`LiquidityFlowRepository`]) and emits a signal when
-//!
-//! ```text
-//!   net_removed = removed_usd - added_usd            (LP churn nets out)
-//!   drain       = net_removed / (tvl_usd + net_removed)  ∈ (0, 1]
-//! ```
-//!
-//! crosses a threshold. The denominator is the *starting* TVL (current TVL
-//! plus what left), so the floor and the ratio are measured against the
-//! pool as it was at the window's start — a pool drained to 5% of its size
-//! must not slip under the floor because of the drain itself.
-//!
-//! Guards: a pool whose TVL cannot be valued (`tvl_usd = None` — unknown
-//! price, unresolved mints, no reconstructed state) is skipped; no signal
-//! beats a fake one. Net inflow (adds ≥ removes) is a healthy pool.
-//!
-//! Stateless between ticks: it recomputes from the DB snapshot each time.
+//! TVL drain detector: over a trailing window, `drain = net_removed / (tvl_usd + net_removed)`,
+//! with `net_removed = removed_usd - added_usd`, from [`LiquidityFlowRepository`]. Stateless.
+//! ⚠️ The floor and the ratio are against the *starting* TVL, so a drained pool cannot slip under
+//! the floor by the drain itself. An unvaluable pool is skipped: no signal beats a fake one.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -34,10 +16,8 @@ use yog_core::domain::{
 
 use super::metrics::{DetectorMetrics, SkipReason};
 
-/// Tuning knobs of the TVL-drain detector, as loaded from the environment
-/// by the bootstrap config. A named-field struct rather than constructor
-/// arguments: half of these share a type (`Decimal` ×3, durations ×3), so
-/// positional passing would let a swapped pair compile silently.
+/// Tuning knobs of the TVL-drain detector, from the bootstrap config; named fields, since three
+/// `Decimal`s and three durations would let a swapped pair compile.
 pub struct TvlDrainSettings {
     /// Trailing window over which liquidity flow is aggregated.
     pub window: ChronoDuration,
@@ -45,13 +25,11 @@ pub struct TvlDrainSettings {
     pub interval: Duration,
     /// Rolling per-pool suppression window (engine-level dedup).
     pub cooldown: Duration,
-    /// Minimum starting TVL (current TVL + net removed) for a pool to be
-    /// considered — a dust pool losing its two dollars is not a drain.
+    /// Minimum starting TVL (current TVL + net removed) for a pool to be considered.
     pub min_tvl_usd: Decimal,
     /// Drain ratio at or above which a signal is emitted.
     pub threshold: Decimal,
-    /// Drain ratio at or above which the signal escalates to Critical.
-    /// The config guarantees `threshold < critical` at load.
+    /// Drain ratio at or above which the signal escalates to Critical; above `threshold`, by config.
     pub critical: Decimal,
 }
 
@@ -59,17 +37,14 @@ pub struct TvlDrainSettings {
 pub struct TvlDrainDetector {
     /// Source of per-pool windowed liquidity flow + current TVL.
     flow_repo: Arc<dyn LiquidityFlowRepository>,
-    /// The protocol tag stamped on emitted signals. Same reasoning as the
-    /// flow-imbalance detector: the read is protocol-specific today (DAMM
-    /// v2 view), so the detector is told what it observes at construction.
+    /// The protocol tag stamped on emitted signals: the read is protocol-specific (DAMM v2 view).
     protocol: Protocol,
     /// The detector's tuning knobs.
     settings: TvlDrainSettings,
 }
 
 impl TvlDrainDetector {
-    /// Build the detector: its dependencies positionally, its tuning as a
-    /// named-field struct.
+    /// Build the detector: dependencies positionally, tuning as a named-field struct.
     pub fn new(
         flow_repo: Arc<dyn LiquidityFlowRepository>,
         protocol: Protocol,
@@ -104,20 +79,14 @@ impl SignalDetector for TvlDrainDetector {
 
         let mut signals = Vec::new();
         for flow in flows {
-            // TVL guard: an unvaluable pool yields no signal, not a fake one.
-            // It used to be a pure silence; it is now counted, because "no
-            // drain detected" and "cannot see this pool" are not the same
-            // statement and only one of them is reassuring.
+            // TVL guard: an unvaluable pool is counted, "cannot see this pool" not being "no drain".
             let Some(tvl) = flow.tvl_usd else {
                 DetectorMetrics::record_skipped(self.name(), SkipReason::NoTvl);
                 continue;
             };
 
-            // Flow guard. A window only partly valuable used to arrive as a
-            // sub-total dressed as a total: `SUM` skipped the unpriced buckets
-            // and the repository's COALESCE hid what was left. That passed the
-            // TVL guard above whenever the window was merely PARTLY unpriced,
-            // and under-estimated the drain — a missed signal, in silence.
+            // ⚠️ Flow guard: a partly valuable window is a sub-total, which would under-estimate the
+            // drain in silence.
             let (Some(added), Some(removed)) = (flow.added_usd, flow.removed_usd) else {
                 DetectorMetrics::record_skipped(self.name(), SkipReason::Unpriced);
                 continue;
@@ -129,10 +98,8 @@ impl SignalDetector for TvlDrainDetector {
                 continue;
             }
 
-            // The floor is on the STARTING TVL — what the pool held before
-            // the drain — so a pool emptied within the window can't dodge
-            // the floor by having drained itself below it. Also guards the
-            // division (net_removed > 0 ⇒ starting_tvl > 0 here).
+            // ⚠️ The floor is on the starting TVL, so a pool emptied within the window cannot dodge
+            // it; it also guards the division (net_removed > 0 ⇒ starting_tvl > 0).
             let starting_tvl = tvl + net_removed;
             if starting_tvl < self.settings.min_tvl_usd {
                 continue;
@@ -143,9 +110,8 @@ impl SignalDetector for TvlDrainDetector {
                 continue;
             }
 
-            // The recorded threshold is the boundary that *justifies the
-            // severity* — the critical one for a Critical signal — not the
-            // emission floor, which would understate every escalation.
+            // The recorded threshold is the one that justifies the severity, the critical one for a
+            // Critical signal, not the emission floor.
             let (severity, threshold) = if drain >= self.settings.critical {
                 (Severity::Critical, self.settings.critical)
             } else {

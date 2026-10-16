@@ -1,20 +1,6 @@
-//! Solana account source — fetches raw on-chain accounts by address.
-//!
-//! Pure transport, protocol-agnostic: it calls `getMultipleAccounts` (base64
-//! encoding), base64-decodes each entry and hands the raw bytes plus the owner
-//! to the caller. It knows nothing about pools, layouts or protocols.
-//!
-//! # Where the seam is
-//!
-//! base64 is the **RPC's** encoding, not the chain's, so it is decoded here and
-//! never crosses into `core` — which stays free of transport concerns and of a
-//! base64 dependency. Interpreting the bytes is
-//! [`yog_core::application::decode_pool_account`]'s job: it routes on the
-//! account's `owner`, which *is* its program id, so one client serves every
-//! protocol.
-//!
-//! Accounts that do not exist are simply absent from the result — no error.
-//! The caller retries them on the next cycle.
+//! Solana account source: `getMultipleAccounts` in base64, decoded here so the RPC's encoding never
+//! reaches `core`, which routes the raw bytes on their owner. A missing account is simply absent,
+//! retried next cycle.
 
 use async_trait::async_trait;
 use base64::Engine;
@@ -31,8 +17,6 @@ use std::time::Instant;
 /// `getMultipleAccounts` accepts at most 100 keys per call.
 const ACCOUNTS_BATCH_MAX: usize = 100;
 const PROVIDER_LABEL: &str = "solana_account";
-
-// ── Wire types ────────────────────────────────────────────────────────
 
 #[derive(Debug, serde::Serialize)]
 struct RpcRequest<'a> {
@@ -54,8 +38,7 @@ struct RpcResponse {
 
 #[derive(Debug, Deserialize)]
 struct RpcResult {
-    /// One entry per requested key, positionally. `null` when the
-    /// account does not exist.
+    /// One entry per requested key, in order; `null` when the account does not exist.
     value: Vec<Option<RpcAccount>>,
 }
 
@@ -69,8 +52,7 @@ struct RpcAccount {
 #[derive(Clone)]
 pub struct SolanaAccountClient {
     http: reqwest::Client,
-    /// Wrapped for the same reason as [`super::helius_das::HeliusDasClient`]:
-    /// same provider, same URL, same key in its query string.
+    /// Wrapped like [`super::helius_das::HeliusDasClient`]'s.
     rpc_url: SecretUrl,
 }
 
@@ -117,15 +99,13 @@ impl SolanaAccountClient {
             .json::<RpcResponse>()
             .await?;
 
-        // Zip each requested address with its (possibly null) account. Missing
-        // accounts and undecodable base64 are dropped — retried next cycle.
+        // Missing accounts and undecodable base64 are dropped, retried next cycle.
         Ok(pool_addresses
             .iter()
             .zip(response.result.value)
             .filter_map(|(pool_address, account)| {
                 let account = account?;
-                // `owner` on the wire becomes `program_id` on our side: same
-                // pubkey, our vocabulary.
+                // `owner` on the wire is our `program_id`: same pubkey.
                 let program_id = Pubkey::try_from(account.owner.as_str()).ok()?;
                 let data = base64::engine::general_purpose::STANDARD
                     .decode(account.data.0)

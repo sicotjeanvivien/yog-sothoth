@@ -33,12 +33,9 @@ pub(super) enum TickOutcome {
 }
 
 impl TickOutcome {
-    /// Say why the tick ended, and record its duration under its own label.
-    /// If the stop came before the end, say also what became of what the tick
-    /// had received.
-    ///
-    /// ⚠️ `no_prices` (the source valued nothing: an alarm) and `unchanged`
-    /// (nothing moved: the normal case) must never share a label.
+    /// Say why the tick ended, and record its duration under its label; after a stop, also what
+    /// became of what the tick received.
+    /// ⚠️ `no_prices` (an alarm) and `unchanged` (the normal case) must never share a label.
     pub(super) fn record(self, start: Instant, stopped: bool) {
         let mut written = 0;
         let outcome = match self {

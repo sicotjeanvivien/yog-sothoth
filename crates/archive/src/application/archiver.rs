@@ -1,10 +1,7 @@
-//! One archiving run: read the server's versions, dump, stream to the bucket,
-//! check the archive, signal.
-//!
-//! A run always ends in a [`RunOutcome`], and the heartbeat is decided from
-//! it in one `match` with no catch-all: a new way to end cannot be added
-//! without deciding what it signals. That is the whole defence against the
-//! failure that matters here — a backup that stops working and says nothing.
+//! One archiving run: read the server's versions, dump, stream to the bucket, check the archive,
+//! signal.
+//! ⚠️ A run ends in a [`RunOutcome`], and the heartbeat is decided in one `match` with no
+//! catch-all: a new ending cannot be added without deciding what it signals.
 
 use std::sync::Arc;
 
@@ -26,11 +23,9 @@ use super::stream::{PART_SIZE, stream};
 /// Where the dumps sit in the bucket, which may one day hold other projects'.
 const KEY_PREFIX: &str = "yog-sothoth/";
 
-/// The server facts a dump depends on. A trait so the tests need no
-/// database; the production implementation connects for each run
-/// (`infra::versions`), so that a database that refuses ends a run in
-/// `refused` — signalled — instead of stopping the process before it can
-/// signal anything.
+/// The server facts a dump depends on; a trait so the tests need no database.
+/// ⚠️ Production connects for each run (`infra::versions`), so a refusing database ends a run
+/// in `refused`, signalled, instead of stopping the process.
 #[async_trait]
 pub(crate) trait VersionSource: Send + Sync {
     /// The error is the whole reason sent with the failure signal, saying
@@ -72,11 +67,9 @@ impl Archiver {
         }
     }
 
-    /// The run in two phases. Up to the upload, nothing is running and a
-    /// failure just returns. Once the upload is open, [`stream()`] owns
-    /// `pg_dump` and `pg_restore`: when it fails, both are dropped — killed —
-    /// as it returns, and only then is the upload aborted, so `pg_dump` never
-    /// holds its connection for the length of a round-trip to the bucket.
+    /// The run in two phases: up to the upload a failure just returns; once it is open, [`stream()`]
+    /// owns `pg_dump` and `pg_restore`.
+    /// ⚠️ Both are dropped, killed, before the upload is aborted, so `pg_dump` never holds its connection for a round-trip.
     async fn try_archive(
         &self,
         now: DateTime<Utc>,
@@ -128,10 +121,8 @@ impl Archiver {
     }
 }
 
-/// `yog-sothoth/2026-09-23T060000Z_timescaledb-2.27.1.dump`: sortable by
-/// time, and naming the TimescaleDB version the dump restores into — the
-/// restore procedure requires that exact version, and the object's name is
-/// what an operator reads first. The version is also in the object's metadata.
+/// `yog-sothoth/2026-09-23T060000Z_timescaledb-2.27.1.dump`: sortable by time, and naming the
+/// TimescaleDB version the restore requires, also in the object's metadata.
 pub(crate) fn object_key(now: DateTime<Utc>, timescaledb: &str) -> String {
     format!(
         "{KEY_PREFIX}{}_timescaledb-{timescaledb}.dump",
@@ -139,10 +130,8 @@ pub(crate) fn object_key(now: DateTime<Utc>, timescaledb: &str) -> String {
     )
 }
 
-/// Abandon an upload, so its parts do not linger in the bucket.
-///
-/// A failure here is logged, not propagated: the run already has its
-/// outcome, and the bucket's lifecycle rule removes incomplete uploads.
+/// Abandon an upload, so its parts do not linger; a failure is logged, the bucket's lifecycle rule
+/// removing incomplete uploads.
 async fn abort(writer: WriteMultipart) {
     if let Err(e) = writer.abort().await {
         warn!(error = %e, "cannot abort the multipart upload — the bucket's lifecycle rule will remove its parts");

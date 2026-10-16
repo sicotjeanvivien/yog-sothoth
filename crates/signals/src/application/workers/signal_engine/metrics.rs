@@ -1,9 +1,5 @@
-//! The engine's metrics: one tick per detector loop, and what it persisted.
-//!
-//! Cumulative counters on the Prometheus `/metrics` endpoint the binary
-//! installs. Emitted through the `metrics` facade — a no-op without a
-//! recorder, so unit tests need no exporter; the daemon calls
-//! [`EngineMetrics::register_descriptions`] once at startup.
+//! The engine's metrics: one tick per detector loop, and what it persisted; through the `metrics`
+//! facade, a no-op without a recorder.
 
 use metrics::{counter, describe_counter};
 

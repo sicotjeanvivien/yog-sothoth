@@ -1,38 +1,7 @@
-//! Pool-account resolver worker — fills account-derived pool properties.
-//!
-//! The indexer records a pool by address and nothing else — no mints, no fee. It
-//! cannot: a discovered pool is one whose genesis we missed, and the mints were
-//! once guessed per-event and mis-resolved on routed transactions. Every
-//! `poll_interval`, and **for each protocol**, this worker:
-//!   1. asks that protocol's resolver which of its pools need reading;
-//!   2. fetches their raw accounts through the shared [`PoolAccountSource`];
-//!   3. decodes each account in `core`, routed on its owner;
-//!   4. writes the two halves back — the protocol's satellite through its
-//!      resolver, the neutral `pools` columns through [`PoolRepository`].
-//!
-//! # The only writer of pool properties
-//!
-//! Nothing else writes these columns. The indexer sees events that *change* a
-//! property, but it does not decode and store the new value — it raises
-//! `pools.needs_refresh` and this worker re-reads the account. That keeps one
-//! writer per column, and it reads resolved state instead of interpreting an
-//! update delta, which is where the decoding hazards live.
-//!
-//! # Protocol-agnostic
-//!
-//! The worker names no protocol. It holds `Vec<Arc<dyn PoolAccountResolver>>`,
-//! one shared registry repository and one shared account source, and the
-//! decoding routes itself on the account's owner — the same shape as the
-//! indexer's `EventPersistor` over `DomainEvent`. Adding a protocol means adding
-//! a resolver to the list; not a line here changes.
-//!
-//! # Resilience
-//!
-//! Like the other yog-context workers, a single failed tick must not bring the
-//! daemon down: source and per-pool persistence errors are logged and the loop
-//! continues. A failure for one protocol does not skip the others. It must run
-//! before metadata/price enrichment can do anything — those key off the resolved
-//! mints.
+//! Pool-account resolver worker: for each protocol, reads the accounts of the pools its resolver
+//! queues, decodes them in `core` (routed on the owner), and writes the satellite and `pools`.
+//! ⚠️ The only writer of account-derived pool properties: the indexer raises `needs_refresh`
+//! instead. Metadata and price enrichment key off the mints it resolves.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -46,16 +15,13 @@ use yog_core::domain::{PoolAccountResolver, PoolRepository};
 use crate::application::source::PoolAccountSource;
 use crate::error::WorkerError;
 
-/// Max pools resolved per tick. Matches `getMultipleAccounts`' 100-key cap,
-/// so a tick is a single RPC round-trip.
+/// Max pools resolved per tick: `getMultipleAccounts`' 100-key cap, so one RPC round-trip.
 const RESOLVE_BATCH_MAX: i64 = 100;
 
 pub struct PoolAccountWorker {
-    /// One per protocol. Each owns its own queue and its own satellite; the
-    /// worker only iterates.
+    /// One per protocol, each owning its queue and its satellite; the worker only iterates.
     resolvers: Vec<Arc<dyn PoolAccountResolver>>,
-    /// The neutral `pools` registry, shared by every protocol — the other half
-    /// of each decoded account goes here.
+    /// The neutral `pools` registry, shared by every protocol.
     pool_repository: Arc<dyn PoolRepository>,
     source: Arc<dyn PoolAccountSource>,
     poll_interval: std::time::Duration,
@@ -81,15 +47,8 @@ impl PoolAccountWorker {
         let mut ticker = tokio::time::interval(self.poll_interval);
         loop {
             tokio::select! {
-            // ⚠️ **`biased`: the stop must win a tie, and ties happen.** The
-            // ticker keeps tokio's default `MissedTickBehavior::Burst`, so a
-            // cycle that outruns the cadence leaves `tick()` **already ready**
-            // when the loop comes back round. An unbiased `select!` then picks
-            // pseudo-randomly between a tick and a stop that has already been
-            // asked for — about one stop in two would start a whole new cycle,
-            // burn the shutdown grace and be destroyed mid-write, which is the
-            // outcome joining these workers exists to prevent. Same reason the
-            // indexer's own loops are biased.
+            // ⚠️ `biased`: with the default `Burst`, a cycle that outruns the cadence leaves `tick()`
+            // ready, and an unbiased pick would start a new cycle after a stop was asked for.
             biased;
 
                 _ = shutdown.cancelled() => {
@@ -101,8 +60,7 @@ impl PoolAccountWorker {
         }
     }
 
-    /// One pass over every protocol. A failure for one is logged and the loop
-    /// moves to the next — a broken resolver must not stop the others.
+    /// One pass over every protocol; a failure for one does not stop the others.
     async fn run_one_cycle(&self) {
         for resolver in &self.resolvers {
             self.run_one_protocol(resolver.as_ref()).await;
@@ -137,17 +95,8 @@ impl PoolAccountWorker {
         let mut rejected = 0usize;
         let mut ok = 0usize;
         for account in &accounts {
-            // Decoding routes on the account's program id, so a pool that
-            // changed hands — or a resolver whose queue over-reaches — is
-            // rejected here rather than decoded at the wrong layout.
-            //
-            // Every rejection is logged. In this path none of them is routine:
-            // the accounts belong to pools this very queue asked for, so a
-            // rejection always means something is off — a stale row, or the
-            // program having changed its layout. "No decoder for this
-            // protocol" used to be a third reason; it is not one any more,
-            // `decode_pool_account` being total over `Protocol` since DAMM v1
-            // left the enum.
+            // Routed on the program id: a pool that changed hands is rejected rather than decoded
+            // at the wrong layout. Every rejection is logged, none being routine on this queue.
             let decoded_account = match decode_pool_account(&account.program_id, &account.data) {
                 Ok(decoded_account) => decoded_account,
                 Err(rejection) => {
@@ -173,16 +122,8 @@ impl PoolAccountWorker {
                 continue;
             }
 
-            // One account read, two tables, each written by the repository that
-            // owns it. **Satellite first, registry last** — the registry write
-            // is what lowers `pools.needs_refresh`, so anything that fails
-            // before it leaves the pool queued for the next cycle rather than
-            // half-refreshed and forgotten.
-            //
-            // No transaction spans the two: nothing observable is protected by
-            // one (the detail read already issues two queries of its own), and a
-            // torn write converges on the next tick because both halves are
-            // idempotent and the queue keeps proposing the pool.
+            // ⚠️ Satellite first, registry last: the registry write lowers `needs_refresh`, so a
+            // failure before it leaves the pool queued. No transaction: both halves are idempotent.
             if let Err(e) = resolver
                 .set_pool_account(&account.pool_address, &decoded_account.properties)
                 .await

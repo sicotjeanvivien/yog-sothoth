@@ -1,17 +1,5 @@
-//! Unit tests for `MetadataWorker::run_one_cycle`.
-//!
-//! The infinite `run` loop is not exercised directly: it is just a
-//! `tokio::select!` over a ticker and a shutdown token wrapping
-//! `run_one_cycle`. The cycle itself is where every interesting
-//! behaviour lives — chunking, error absorption, resilience under
-//! partial failure.
-//!
-//! Two fakes drive the worker:
-//!   - `FakeRepository` — records upserts, lets tests inject a list
-//!     of missing mints, an error on `list_missing_mints`, or
-//!     selective upsert failures.
-//!   - `FakeSource` — pops pre-configured responses off a queue and
-//!     records every call (mints sent on each chunk).
+//! Unit tests for `MetadataWorker::run_one_cycle`, where error absorption lives,
+//! driven by `FakeRepository` and `FakeSource`; `run` is only a `select!` around it.
 
 use std::sync::Mutex;
 
@@ -51,8 +39,7 @@ fn fetched(mint: Pubkey, symbol: &str, decimals: u8) -> FetchedMetadata {
 struct FakeRepository {
     /// Mints returned by `list_missing_mints` (when no error is set).
     missing: Mutex<Vec<Pubkey>>,
-    /// If `Some`, `list_missing_mints` returns this error once and
-    /// the option is reset to None.
+    /// If `Some`, `list_missing_mints` returns this error once, then `None`.
     list_missing_error: Mutex<Option<RepositoryError>>,
     /// Mints whose `upsert` must fail (returned in error order).
     upsert_failures: Mutex<Vec<Pubkey>>,
@@ -84,9 +71,7 @@ impl FakeRepository {
 #[async_trait]
 impl TokenMetadataRepository for FakeRepository {
     async fn upsert(&self, metadata: &TokenMetadata) -> RepositoryResult<()> {
-        // Always record the attempt — even on forced failure — so
-        // tests can assert that the worker kept iterating despite the
-        // error.
+        // Recorded even on a forced failure: tests assert the worker kept iterating.
         self.upserts.lock().unwrap().push(metadata.clone());
 
         let mut failures = self.upsert_failures.lock().unwrap();
@@ -136,9 +121,7 @@ impl MetadataSource for FakeSource {
         self.calls.lock().unwrap().push(mints.to_vec());
         let mut responses = self.responses.lock().unwrap();
         if responses.is_empty() {
-            // Defensive default — a test that didn't queue enough
-            // responses should fail loudly via assertions on
-            // `calls()`, not silently get empty data.
+            // A test that queued too few responses fails on `calls()`, not on silent empty data.
             return Ok(Vec::new());
         }
         responses.remove(0)
@@ -217,9 +200,7 @@ async fn enriches_all_mints_in_single_chunk() {
 
 #[tokio::test]
 async fn upserts_only_what_source_returned() {
-    // Source filters out one of the requested mints (no decimals on
-    // the DAS side). The worker must request all three but only
-    // upsert the two that came back.
+    // The source drops one of the three mints (no decimals): all three asked, two upserted.
     let mint_a = pk(1);
     let mint_b = pk(2);
     let mint_c = pk(3);
@@ -309,9 +290,8 @@ async fn upsert_error_does_not_stop_the_batch() {
 
     worker.run_one_cycle().await;
 
-    // All three upserts were attempted, even though the middle one
-    // returned Err. This is the resilience contract — it must be
-    // pinned by a test because the property is invisible at runtime.
+    // All three upserts attempted though the middle one failed: the resilience contract,
+    // invisible at runtime.
     let upserts = repository.upserts();
     assert_eq!(upserts.len(), 3);
     assert_eq!(upserts[0].mint, mint_a);

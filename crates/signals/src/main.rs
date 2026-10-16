@@ -1,13 +1,5 @@
-//! `yog-signals` — the Signal Engine daemon.
-//!
-//! One of the five backend binaries, beside `indexer`, `api`, `context` and
-//! `archive`. It runs its detectors on their own cadences and persists the
-//! signals they emit to the `signals` table, under the least-privilege
-//! `yog_signals` role.
-//!
-//! Bootstrap follows the same shape as the other crates:
-//! `init_rustls -> dotenv -> init_tracing -> metrics -> Config -> Daemon ->
-//! run`.
+//! `yog-signals`, the Signal Engine daemon: runs its detectors on their own cadences and persists
+//! what they emit to `signals`, under the least-privilege `yog_signals` role.
 
 mod application;
 mod bootstrap;
@@ -34,11 +26,8 @@ async fn main() -> anyhow::Result<()> {
     daemon.run().await
 }
 
-/// Install the Prometheus exporter as the global `metrics` recorder.
-///
-/// Exposes `http://0.0.0.0:9000/metrics` in Prometheus text format (mapped
-/// to a distinct host port by docker-compose). Must be called before any
-/// metric is emitted, in particular before `Daemon::new`.
+/// Install the Prometheus exporter on `:9000/metrics` as the global `metrics` recorder.
+/// ⚠️ Before any metric is emitted, so before `Daemon::new`.
 fn init_metrics() -> anyhow::Result<()> {
     PrometheusBuilder::new()
         .with_http_listener(([0, 0, 0, 0], 9000))

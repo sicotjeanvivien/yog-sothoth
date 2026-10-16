@@ -36,9 +36,7 @@ fn flow(seed: u8, a2b: i64, b2a: i64) -> PoolSwapFlow {
     }
 }
 
-/// A pool whose window could not be fully valued — some hour carried an
-/// amount in a token with no usable price. Both directions arrive absent
-/// together; that is the shape the repository now produces.
+/// A pool whose window could not be fully valued: both directions arrive absent together.
 fn unvaluable_flow(seed: u8) -> PoolSwapFlow {
     PoolSwapFlow {
         pool_address: pk(seed),
@@ -47,9 +45,7 @@ fn unvaluable_flow(seed: u8) -> PoolSwapFlow {
     }
 }
 
-/// Build a detector: window 24h, interval 300s, cooldown 6h, floor $1000,
-/// Build a detector over the mock. (Cooldown is engine-level, so it
-/// doesn't affect `evaluate`.)
+/// Build a detector over the mock; the cooldown is engine-level and does not affect `evaluate`.
 fn detector(flows: Vec<PoolSwapFlow>) -> FlowImbalanceDetector {
     FlowImbalanceDetector::new(
         Arc::new(MockFlowRepo(flows)),
@@ -101,8 +97,7 @@ async fn one_sided_flow_is_critical_with_imbalance_one() {
     assert_eq!(signals.len(), 1);
     assert_eq!(signals[0].severity, Severity::Critical);
     assert_eq!(signals[0].value, Decimal::ONE);
-    // A critical signal records the *critical* boundary, not the
-    // emission floor — the threshold must justify the severity.
+    // A critical signal records the critical boundary, not the emission floor.
     assert_eq!(signals[0].threshold, Some(Decimal::new(9, 1)));
 }
 
@@ -136,19 +131,10 @@ async fn mixed_batch_emits_only_qualifying_pools() {
     assert_eq!(signals[1].severity, Severity::Critical);
 }
 
-// ── The defect migration 006 exists to remove ─────────────────────────
+// ── an unvaluable window ───────────────────────────────────────────────
 
 #[tokio::test]
 async fn an_unvaluable_window_emits_nothing_rather_than_a_critical() {
-    // The central case. Before the fix, a window whose
-    // token A had no usable price arrived with that direction COALESCEd to 0
-    // while the other kept its full value — so this pool produced
-    // `(0 − X)/X = −1.0` exactly: a Critical at maximum magnitude, on a pool
-    // that may be perfectly balanced and merely half-unseen.
-    //
-    // Mutation check: give `unvaluable_flow` a `Some(usd(0))` on one direction
-    // and a real value on the other, and this goes red with one Critical at
-    // -1.0 — which is precisely what the old COALESCE produced.
     let signals = run(&detector(vec![unvaluable_flow(1)])).await;
     assert!(
         signals.is_empty(),
@@ -158,9 +144,7 @@ async fn an_unvaluable_window_emits_nothing_rather_than_a_critical() {
 
 #[tokio::test]
 async fn an_unvaluable_pool_does_not_suppress_its_valuable_neighbours() {
-    // The skip is per pool. A batch must not lose its good pools because one
-    // of them could not be valued — that would trade a false positive for a
-    // false negative on everything else.
+    // The skip is per pool: a batch keeps its good pools when one cannot be valued.
     let signals = run(&detector(vec![
         unvaluable_flow(1),
         flow(2, 10_000, 0), // 1.0 → Critical
@@ -171,18 +155,10 @@ async fn an_unvaluable_pool_does_not_suppress_its_valuable_neighbours() {
     assert_eq!(signals[0].severity, Severity::Critical);
 }
 
-// ── The skip must be a NUMBER, not merely an absence of signal ───────────────
+// ── the skip is a number, not merely an absence of signal ──────────────────
 //
-// Everything above asserts that an unvaluable pool emits nothing. That half is
-// satisfied just as well by a detector that has stopped working. The counters
-// are what separates "we looked and there was nothing" from "we could not
-// look", and until here nothing asserted they fire at all — a guard reordered
-// above its counter, or a `continue` slipped in before one, would be invisible.
-//
-// Not `#[tokio::test]`: `with_local_recorder` installs the recorder on the
-// CURRENT THREAD for the duration of a closure, so the future has to be driven
-// inside it. Same recipe as yog-indexer's persistor test and yog-context's
-// price-worker test.
+// ⚠️ A detector that stopped working also emits nothing: the counters tell "nothing there" from
+// "could not look". Not `#[tokio::test]`: `with_local_recorder` binds the current thread.
 
 use crate::application::metrics_probe::{counter, snapshot};
 
@@ -227,9 +203,7 @@ fn an_unvaluable_pool_is_counted_not_just_silently_dropped() {
 
 #[test]
 fn a_pool_below_the_volume_floor_is_not_counted_as_a_skip() {
-    // The distinction the signals README documents: below the floor is
-    // *evaluated and judged immaterial*, not unseen. Counting it as a skip
-    // would inflate `skipped/considered` with pools we saw perfectly well and
+    // Below the floor is evaluated and judged immaterial, not unseen: counted as a skip, it would
     // make a coverage alert fire on a quiet market.
     let snapshot = snapshot_one_evaluation(detector(vec![flow(1, 50, 0)]));
 

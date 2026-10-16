@@ -26,12 +26,8 @@ fn init_heartbeat(url: SecretUrl) -> anyhow::Result<Arc<dyn Heartbeat>> {
 }
 
 /// The alarm over the backlogs, reporting to its check if there is one.
-///
-/// It reads through **its own pool**, of one connection, whose
-/// `statement_timeout` lets Postgres cancel a read stuck on a lock. Sharing the
-/// detectors' pool, a stuck read would hold a connection they need — and one
-/// more at every check, since dropping the read on the client side leaves the
-/// statement running on the server.
+/// ⚠️ Through its own one-connection pool under `statement_timeout`: on the detectors' pool, a
+/// stuck read would hold a connection they need, one more at every check.
 pub(super) async fn init_materialization_alarm(
     database_url: &SecretUrl,
     config: &MaterializationAlarmConfig,

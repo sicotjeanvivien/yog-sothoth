@@ -1,5 +1,4 @@
-//! Unit tests for the cooldown / escalation dedup filter. DB-free: the
-//! `recent` map stands in for what the repository would return.
+//! Unit tests for the cooldown / escalation dedup filter; the `recent` map stands in for the repository.
 
 use super::*;
 use chrono::Utc;

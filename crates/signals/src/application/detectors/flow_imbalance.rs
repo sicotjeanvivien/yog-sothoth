@@ -1,18 +1,6 @@
-//! Flow imbalance detector.
-//!
-//! Measures directional pressure on a pool: over a trailing window, how
-//! lopsided is swap volume between the two trade directions? It reads
-//! per-pool directional USD volume ([`SwapFlowRepository`]) and emits a
-//! signal when the normalised imbalance
-//!
-//! ```text
-//!   imbalance = (a_to_b_usd - b_to_a_usd) / (a_to_b_usd + b_to_a_usd)  ∈ [-1, +1]
-//! ```
-//!
-//! crosses a threshold — provided total volume clears a floor, without which
-//! a near-dead pool with two dust swaps would read a spurious ±1.
-//!
-//! Stateless between ticks: it recomputes from the DB snapshot each time.
+//! Flow imbalance detector: over a trailing window, `(a_to_b_usd - b_to_a_usd) / (a_to_b_usd +
+//! b_to_a_usd)` ∈ [-1, +1], from [`SwapFlowRepository`]. Stateless between ticks.
+//! ⚠️ Only above a volume floor: a near-dead pool with two dust swaps would read a spurious ±1.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -27,11 +15,8 @@ use yog_core::domain::{
 
 use super::metrics::{DetectorMetrics, SkipReason};
 
-/// Tuning knobs of the flow-imbalance detector, as loaded from the
-/// environment by the bootstrap config. A named-field struct rather than
-/// constructor arguments: half of these share a type (`Decimal` ×3,
-/// durations ×3), so positional passing would let a swapped pair compile
-/// silently.
+/// Tuning knobs of the flow-imbalance detector, from the bootstrap config; named fields, since
+/// three `Decimal`s and three durations would let a swapped pair compile.
 pub struct FlowImbalanceSettings {
     /// Trailing window over which volume is aggregated.
     pub window: ChronoDuration,
@@ -43,8 +28,7 @@ pub struct FlowImbalanceSettings {
     pub min_volume_usd: Decimal,
     /// `|imbalance|` at or above which a signal is emitted.
     pub threshold: Decimal,
-    /// `|imbalance|` at or above which the signal escalates to Critical.
-    /// The config guarantees `threshold < critical` at load.
+    /// `|imbalance|` at or above which the signal escalates to Critical; above `threshold`, by config.
     pub critical: Decimal,
 }
 
@@ -52,19 +36,14 @@ pub struct FlowImbalanceSettings {
 pub struct FlowImbalanceDetector {
     /// Source of per-pool directional USD volume.
     flow_repo: Arc<dyn SwapFlowRepository>,
-    /// The protocol tag stamped on emitted signals. The flow repository is
-    /// protocol-specific today (it reads the DAMM v2 view), so the detector
-    /// is told which protocol it is observing at construction. When the flow
-    /// read becomes cross-protocol, `PoolSwapFlow` will carry the protocol
-    /// and this field goes away.
+    /// The protocol tag stamped on emitted signals: the flow read is protocol-specific (DAMM v2 view).
     protocol: Protocol,
     /// The detector's tuning knobs.
     settings: FlowImbalanceSettings,
 }
 
 impl FlowImbalanceDetector {
-    /// Build the detector: its dependencies positionally, its tuning as a
-    /// named-field struct.
+    /// Build the detector: dependencies positionally, tuning as a named-field struct.
     pub fn new(
         flow_repo: Arc<dyn SwapFlowRepository>,
         protocol: Protocol,
@@ -99,12 +78,7 @@ impl SignalDetector for FlowImbalanceDetector {
 
         let mut signals = Vec::new();
         for flow in flows {
-            // Valuation guard, and it comes FIRST because the alternative is
-            // not a smaller number, it is the loudest possible wrong one. When
-            // a window is not entirely valuable both directions arrive as
-            // `None` together; reading either as 0 gave `(0 − X)/X = −1.0`
-            // exactly — a guaranteed Critical, at maximum magnitude, on a pool
-            // that may be perfectly balanced and merely half-unseen.
+            // Valuation guard first.
             let (Some(a_to_b), Some(b_to_a)) = (flow.volume_a_to_b_usd, flow.volume_b_to_a_usd)
             else {
                 DetectorMetrics::record_skipped(self.name(), SkipReason::Unpriced);
@@ -112,8 +86,7 @@ impl SignalDetector for FlowImbalanceDetector {
             };
 
             let total = a_to_b + b_to_a;
-            // Volume floor: skip pools too thin for the ratio to mean anything
-            // (also guards the division below against a zero denominator).
+            // Volume floor: too thin for the ratio to mean anything; also guards the division.
             if total < self.settings.min_volume_usd || total.is_zero() {
                 continue;
             }
@@ -124,9 +97,8 @@ impl SignalDetector for FlowImbalanceDetector {
                 continue;
             }
 
-            // The recorded threshold is the boundary that *justifies the
-            // severity* — the critical one for a Critical signal — not the
-            // emission floor, which would understate every escalation.
+            // The recorded threshold is the one that justifies the severity, the critical one for a
+            // Critical signal, not the emission floor.
             let (severity, threshold) = if magnitude >= self.settings.critical {
                 (Severity::Critical, self.settings.critical)
             } else {

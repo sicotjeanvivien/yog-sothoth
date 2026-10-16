@@ -1,10 +1,8 @@
-//! Why a check failed, and what it says: the text that goes to `/fail` and
-//! to the logs.
+//! Why a check failed, and the text that goes to `/fail` and to the logs.
 
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 
-/// Why a check failed. Every variant has a reason to give — there is no
-/// failure without one to put in `/fail`.
+/// Why a check failed; every variant has a reason to put in `/fail`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Failure {
     /// These aggregates have a row waiting beyond `limit`.
@@ -14,10 +12,8 @@ pub(crate) enum Failure {
     },
     /// The backlogs could not be read; the text says why.
     Unreadable(String),
-    /// The read succeeded and reported no aggregate at all — the function no
-    /// longer finds them in TimescaleDB's catalog. Not `Unreadable`: the
-    /// database answered, and a connection or privilege fault would be the
-    /// wrong thing to look for.
+    /// The read succeeded and reported no aggregate: the function no longer finds them in the
+    /// catalog. Not `Unreadable`: the database answered.
     NothingReported,
 }
 
@@ -27,9 +23,8 @@ pub(crate) struct LateAggregate {
     pub(crate) name: String,
     /// How long its oldest pending row has waited.
     pub(crate) pending_for: ChronoDuration,
-    /// Where its materialisation ends, `None` if it never materialised a
-    /// bucket. Not part of the rule: it tells a refresh that stopped at some
-    /// hour from one that never ran — which the wait alone does not.
+    /// Where its materialisation ends, `None` if it never materialised a bucket: it tells a refresh
+    /// that stopped from one that never ran.
     pub(crate) watermark: Option<DateTime<Utc>>,
 }
 

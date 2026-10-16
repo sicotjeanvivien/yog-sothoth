@@ -1,6 +1,5 @@
-//! Unit tests for the deviation math, freshness gates and severity split.
-//! DB-free: a hand-written mock `PoolPriceSnapshotRepository` feeds fixed
-//! snapshots.
+//! Unit tests for the deviation math, freshness gates and severity split, against a mock
+//! `PoolPriceSnapshotRepository`.
 
 use super::*;
 use chrono::{DateTime, Utc};
@@ -27,8 +26,8 @@ impl PoolPriceSnapshotRepository for MockSnapshotRepo {
     }
 }
 
-/// A fresh, comparable snapshot: everything observed one minute before
-/// `now`, both tokens at 6 decimals. Tests override what they probe.
+/// A fresh, comparable snapshot: everything observed one minute before `now`, both tokens at 6
+/// decimals.
 fn snapshot(
     seed: u8,
     now: DateTime<Utc>,
@@ -51,8 +50,7 @@ fn snapshot(
     }
 }
 
-/// Build a detector over the mock. (Cooldown is engine-level, so it
-/// doesn't affect `evaluate`.)
+/// Build a detector over the mock; the cooldown is engine-level and does not affect `evaluate`.
 fn detector(snapshots: Vec<PoolPriceSnapshot>) -> PriceOracleDeviationDetector {
     PriceOracleDeviationDetector::new(
         Arc::new(MockSnapshotRepo(snapshots)),
@@ -116,8 +114,7 @@ async fn critical_when_deviation_is_extreme() {
     assert_eq!(signals.len(), 1);
     assert_eq!(signals[0].severity, Severity::Critical);
     assert_eq!(signals[0].value, Decimal::from(3));
-    // A critical signal records the *critical* boundary, not the
-    // emission floor — the threshold must justify the severity.
+    // A critical signal records the critical boundary, not the emission floor.
     assert_eq!(signals[0].threshold, Some(Decimal::new(2, 1)));
 }
 

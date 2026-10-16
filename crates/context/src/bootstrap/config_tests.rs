@@ -2,9 +2,8 @@ use std::env;
 
 use super::*;
 
-/// The DAS and the account reads come from two variables, given two hosts
-/// here. The refusals of each pair are tested in `yog-bootstrap`, where the
-/// pair lives.
+/// The DAS and the account reads come from two variables, given two hosts here; the refusals of
+/// each pair are `yog-bootstrap`'s.
 #[test]
 fn the_two_solana_endpoints_are_read_from_two_variables() {
     // SAFETY: process-global keys, and the tests run in parallel; this is the
@@ -59,11 +58,8 @@ fn debugging_the_config_prints_no_credential() {
     assert!(rendered.contains("accounts.example.invalid"), "{rendered}");
 }
 
-/// The two cadences the daemon cannot honour: zero, and anything at or past the
-/// staleness bound.
-///
-/// ⚠️ 480 s must be accepted: the floor of `KeptPrices` absorbs the cadence,
-/// and a guard capping it at 300 s would refuse a cadence that works.
+/// The two cadences the daemon cannot honour: zero, and anything at or past the staleness bound.
+/// ⚠️ 480 s must be accepted: `KeptPrices`' floor absorbs the cadence.
 #[test]
 fn only_a_cadence_that_keeps_prices_current_is_accepted() {
     for accepted in [1_u64, 30, 300, 480, 899] {

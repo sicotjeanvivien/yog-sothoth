@@ -1,30 +1,18 @@
-/// Failure of an external data source (HTTP, JSON-RPC, decoding).
-///
-/// Returned by the source clients (`HeliusDasClient`,
-/// `JupiterPriceClient`). The workers absorb these errors in their
-/// loop (log + retry on the next tick) rather than propagating —
-/// `yog-context` is resilient by design: an external hiccup must not
-/// take the daemon down.
-///
-/// The conversion from a `reqwest` failure — which strips the URL, and the
-/// secret it can carry, before anything else sees it — is transport knowledge:
-/// it lives with the clients, in `infra/source_error.rs`.
+/// Failure of an external data source (HTTP, JSON-RPC, decoding), absorbed by the workers and
+/// retried next tick; the conversion from `reqwest`, which strips the URL, is `infra/source_error.rs`.
 #[derive(Debug, thiserror::Error)]
 pub enum SourceError {
     /// Transport-level failure (DNS, connection, non-2xx).
     #[error("source HTTP error: {0}")]
     Http(String),
 
-    /// HTTP 429 — the provider is rate-limiting us. Carries the
-    /// `Retry-After` delay when the response provided one, so the
-    /// caller can pace its retry instead of guessing.
+    /// HTTP 429, with the `Retry-After` delay when the response gave one.
     #[error("source rate-limited (429), retry_after={retry_after:?}")]
     RateLimited {
         retry_after: Option<std::time::Duration>,
     },
 
-    /// The response was 2xx but the body could not be decoded into
-    /// the expected shape.
+    /// A 2xx whose body could not be decoded into the expected shape.
     #[error("source decode error: {0}")]
     Decode(String),
 }

@@ -1,9 +1,5 @@
-//! The archiver's Prometheus metrics.
-//!
-//! Nobody scrapes them in production yet — Healthchecks.io is what raises the
-//! alarm. They exist so the archiver reads like the other daemons the day a
-//! Prometheus is added, and so a run can be inspected on `/metrics` without
-//! reading logs.
+//! The archiver's Prometheus metrics; Healthchecks.io raises the alarm, these let a run be
+//! inspected on `/metrics`.
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 

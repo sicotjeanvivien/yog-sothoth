@@ -19,16 +19,9 @@ pub(crate) struct ArchiveWorker {
 }
 
 impl ArchiveWorker {
-    /// Dump now, then every interval, until `shutdown` is cancelled — the
-    /// loop of every daemon here (`signals`' detectors, `context`'s workers):
-    /// a ticker, and a stop that wins a tie.
-    ///
-    /// The first tick fires at once, which is the dump at startup. After each
-    /// run the ticker is **reset**, so the next dump comes a full interval
-    /// after this one *ended*: a run that outlasted the interval is not
-    /// followed by another started back to back. No `MissedTickBehavior`
-    /// gives that — even `Delay` fires an overdue tick at once and only
-    /// spaces the ones after it.
+    /// Dump now, then every interval, until `shutdown` is cancelled.
+    /// ⚠️ The ticker is reset after each run, so the next dump comes a full interval after this one
+    /// ended; no `MissedTickBehavior` gives that, even `Delay` fires an overdue tick at once.
     pub(crate) async fn run(self, shutdown: CancellationToken) {
         let mut ticker = tokio::time::interval(self.interval);
         loop {
@@ -49,13 +42,8 @@ impl ArchiveWorker {
         info!("archiver stopped");
     }
 
-    /// One run, recorded and logged. `false` when a stop arrived and the run
-    /// outlived [`SHUTDOWN_GRACE`]: the process leaves it behind, and the
-    /// bucket's lifecycle rule removes its incomplete upload.
-    ///
-    /// A stop arriving mid-dump is seen by the run itself, which kills
-    /// `pg_dump` and aborts the upload; the grace only bounds how long that
-    /// may take.
+    /// One run, recorded and logged; `false` when a stop came and the run outlived
+    /// [`SHUTDOWN_GRACE`]. The run sees the stop itself, kills `pg_dump` and aborts the upload.
     async fn run_once(&self, shutdown: &CancellationToken) -> bool {
         let started = Instant::now();
         let outcome = tokio::select! {

@@ -1,16 +1,7 @@
-//! The materialisation alarm — the one alarm on the continuous aggregates.
-//!
-//! The detectors read hourly aggregates that TimescaleDB's scheduler keeps
-//! materialised. When it stops, nothing fails: the aggregates freeze and the
-//! detectors keep evaluating hours that no longer change. From 16 June to
-//! 10 August 2026 all four sat that way unnoticed. This loop asks the database
-//! how long raw rows have been waiting to be materialised, and reports the
-//! verdict to a Healthchecks.io check — a late aggregate as `/fail` with its
-//! name, and a stopped daemon by the silence the check notices on its own.
-//!
-//! Nothing scrapes Prometheus in production: the gauge is for the diagnosis,
-//! the heartbeat is the alarm. Without a heartbeat URL (development, where the
-//! scheduler is off by design) the verdict is logged and measured only.
+//! The materialisation alarm: when TimescaleDB's scheduler stops, the aggregates freeze and
+//! nothing fails. This loop reads how long raw rows have waited to be materialised and reports to
+//! a Healthchecks.io check: a late aggregate as `/fail` with its name, a stopped daemon as silence.
+//! Without a heartbeat URL (development, scheduler off) the verdict is logged and measured only.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -29,20 +20,13 @@ use failure::{Failure, hours_minutes};
 pub(crate) use metrics::{AlarmMetrics, HEARTBEAT_FAILURES};
 use verdict::Verdict;
 
-/// How long Postgres lets one read of the backlogs run before cancelling it —
-/// the `statement_timeout` of the alarm's own pool, opened by the daemon with
-/// one connection. A read stuck on a lock is ended **by the server**, so its
-/// connection comes back usable: stopping only the client's wait would leave
-/// the statement running and the connection held, one more at every check.
-/// Measured at 3.5 ms warm on the dev database (29 September 2026), so a
-/// minute is margin, not a budget.
+/// The `statement_timeout` of the alarm's one-connection pool.
+/// ⚠️ Ended by the server, so the connection comes back usable; a client-side wait alone would
+/// leave the statement running and one more connection held at every check.
 pub(crate) const STATEMENT_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// How long the alarm waits for a read before failing the check with
-/// `unreadable` on its own — for a server that cannot answer at all, not even
-/// to cancel. Longer than [`STATEMENT_TIMEOUT`] by construction, so that the
-/// server's cancellation, which frees the connection, comes first; otherwise
-/// Healthchecks.io would report a stopped daemon instead of the reason.
+/// How long the alarm waits for a read before failing the check `unreadable` itself.
+/// ⚠️ Longer than [`STATEMENT_TIMEOUT`]: the server's cancellation, which frees the connection, comes first.
 const READ_TIMEOUT: Duration = Duration::from_secs(STATEMENT_TIMEOUT.as_secs() + 30);
 
 /// The two numbers an operator tunes.
@@ -74,19 +58,11 @@ impl MaterializationAlarm {
     }
 
     /// Check on every interval until `shutdown` is cancelled.
-    ///
-    /// One `select!` per turn: the stop on one side, and on the other the wait
-    /// for the tick **then** the whole check — the read, then the ping. So the
-    /// check races the stop too: a ping cut short is harmless (the check simply
-    /// sees the next one, or none), while a stop held by a slow endpoint is the
-    /// delay Docker ends with SIGKILL. `biased`, for the reason the detector
-    /// loops give: the stop must win a tie. `CancellationToken::run_until_cancelled`
-    /// would read shorter, and its documentation says it breaks a tie the other
-    /// way.
+    /// ⚠️ The whole check races the stop, `biased`: a stop held by a slow endpoint ends in SIGKILL.
+    /// Not `run_until_cancelled`, which breaks a tie the other way.
     pub(crate) async fn run(self, shutdown: CancellationToken) {
         let mut ticker = tokio::time::interval(self.settings.interval);
-        // After a slow check, the next one waits a full interval rather than
-        // firing the missed ones back to back — each would read and ping again.
+        // Missed ticks are not fired back to back.
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         self.log_start();
 
@@ -148,8 +124,7 @@ impl MaterializationAlarm {
     }
 }
 
-/// Set every aggregate's pending gauge — to **zero** when no row waits, so a
-/// gauge that went up comes back down once the aggregate catches up.
+/// Set every aggregate's pending gauge, to zero when no row waits, so a raised gauge comes down.
 fn record_pending(backlogs: &[MaterializationBacklog], now: DateTime<Utc>) {
     for backlog in backlogs {
         let seconds = backlog
@@ -159,9 +134,7 @@ fn record_pending(backlogs: &[MaterializationBacklog], now: DateTime<Utc>) {
     }
 }
 
-/// Speak when the state changes, not on every tick: in development the
-/// scheduler is off, every aggregate is late for good, and a warning every
-/// ten minutes would bury everything else.
+/// Speak when the state changes, not on every tick: in development every aggregate is late for good.
 fn log_change(previous: Option<&Verdict>, verdict: &Verdict) {
     if previous.map(Verdict::state) == Some(verdict.state()) {
         return;
