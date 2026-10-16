@@ -6,7 +6,7 @@ use crate::infra::http_client;
 const SECRET: &str = "SECRET-DE-TEST-a1b2c3d4";
 
 /// Port 1 on loopback refuses without a packet leaving the machine, and reqwest's error carries
-/// the URL, the shape that leaked the Helius key. Through `http_client()`, the shipped client,
+/// the URL. Through `http_client()`, the shipped client,
 /// whose connect timeout bounds a host that drops port 1.
 #[tokio::test]
 async fn a_transport_failure_carries_neither_the_url_nor_its_secret() {

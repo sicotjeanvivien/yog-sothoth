@@ -62,7 +62,7 @@ struct DasContent {
     /// Logo URI; may be an `ipfs://` URI. Stored verbatim.
     #[serde(default)]
     files: Vec<DasFile>,
-    /// Some assets report the logo here; the worker falls back to `files[0]` when absent.
+    /// Some assets report the logo here; else the first non-empty `files[].uri`.
     links: Option<DasLinks>,
 }
 

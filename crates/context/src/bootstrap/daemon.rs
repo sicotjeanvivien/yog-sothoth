@@ -136,7 +136,7 @@ impl Daemon {
         );
 
         // ⚠️ The cancellation arm carries no verdict: a failing worker may still be stopping, and its
-        // error arrives through `Stop`, which steps over the handle already polled.
+        // error arrives through `Stop`; `ended` lets it step over the handle the `select!` polled.
         let (ended, first) = tokio::select! {
             result = &mut metadata_task => (Some(METADATA), handle_task_result(result, METADATA)),
             result = &mut price_task => (Some(PRICE), handle_task_result(result, PRICE)),

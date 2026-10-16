@@ -1,7 +1,7 @@
 //! Pool-account resolver worker: for each protocol, reads the accounts of the pools its resolver
 //! queues, decodes them in `core` (routed on the owner), and writes the satellite and `pools`.
 //! ⚠️ The only writer of account-derived pool properties: the indexer raises `needs_refresh`
-//! instead. It runs before metadata and price enrichment, which key off the mints it resolves.
+//! instead. Metadata and price enrichment key off the mints it resolves.
 
 use std::sync::Arc;
 use std::time::Instant;

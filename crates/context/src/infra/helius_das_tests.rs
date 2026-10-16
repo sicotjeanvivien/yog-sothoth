@@ -285,7 +285,7 @@ fn das_response_deserializes_mixed_results_with_nulls() {
     );
     assert!(response.result[1].is_none(), "middle entry must be null");
 
-    // The whole deserialization + projection chain `fetch_asset_batch` runs.
+    // The whole deserialization + projection chain `fetch_chunk_inner` runs.
     let projected: Vec<FetchedMetadata> = response
         .result
         .into_iter()

@@ -1,6 +1,6 @@
 //! One run of the archiver against fake `pg_dump` / `pg_restore` scripts, an in-memory bucket and
-//! a recording heartbeat. Each failure asserts the outcome and reason, an empty bucket, an aborted
-//! upload and one failure signal. ⚠️ The abort is counted: an unaborted upload is not listed either.
+//! a recording heartbeat. Each failure asserts the outcome and reason, an empty bucket, an opened
+//! upload aborted and one failure signal. ⚠️ The abort is counted: an unaborted upload is not listed either.
 
 use std::{
     fs,
@@ -554,7 +554,6 @@ async fn a_stop_mid_dump_kills_pg_dump_keeps_nothing_and_signals_nothing() {
 
 #[tokio::test]
 async fn an_archive_larger_than_any_head_is_checked_whole() {
-    // 6 MiB, past a 4 MiB head, which the table of contents would outgrow as chunks accumulate.
     const SIZE: usize = 6 * 1024 * 1024;
     let fakes = Fakes::new();
     let pg_dump = fakes.pg_dump(VERSION_16, &format!("head -c {SIZE} /dev/zero"));

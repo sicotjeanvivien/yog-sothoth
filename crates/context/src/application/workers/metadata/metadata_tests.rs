@@ -1,4 +1,4 @@
-//! Unit tests for `MetadataWorker::run_one_cycle`, where chunking and error absorption live,
+//! Unit tests for `MetadataWorker::run_one_cycle`, where error absorption lives,
 //! driven by `FakeRepository` and `FakeSource`; `run` is only a `select!` around it.
 
 use std::sync::Mutex;
@@ -290,7 +290,7 @@ async fn upsert_error_does_not_stop_the_batch() {
 
     worker.run_one_cycle().await;
 
-    // ⚠️ All three upserts attempted though the middle one failed: the resilience contract,
+    // All three upserts attempted though the middle one failed: the resilience contract,
     // invisible at runtime.
     let upserts = repository.upserts();
     assert_eq!(upserts.len(), 3);

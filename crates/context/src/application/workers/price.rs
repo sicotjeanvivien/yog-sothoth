@@ -60,9 +60,8 @@ impl PriceWorker {
 
         loop {
             tokio::select! {
-                // ⚠️ `biased`: the stop must win a tie. A cycle that outruns the
-                // cadence leaves `tick()` already ready, and an unbiased
-                // `select!` would start a new cycle about one stop in two.
+                // ⚠️ `biased`: a cycle that outruns the cadence leaves `tick()` ready, and an
+                // unbiased pick would start a new cycle after a stop was asked for.
                 biased;
 
                 _ = shutdown.cancelled() => {

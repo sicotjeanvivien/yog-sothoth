@@ -67,7 +67,7 @@ impl SignalEngine {
             match joined {
                 Ok(name) => info!(detector = name, "detector loop stopped"),
                 // ⚠️ A `JoinError` is a panic or a cancellation ([`TaskEnd`]), and only the first is a
-                // failure; nothing aborts these tasks today, but the reading must not default to panic.
+                // failure, and the reading must not default to panic.
                 Err(e) => match TaskEnd::from(&e) {
                     TaskEnd::Panicked => {
                         error!(error = %e, "detector task panicked — stopping engine");
