@@ -1,6 +1,6 @@
-//! An external endpoint: `<FUNCTION>_URL`, `<FUNCTION>_KEY` and an optional
-//! `<FUNCTION>_HEADER_NAME` / `_HEADER_VALUE`; the key replaces `{key}` wherever
-//! the operator wrote it, so the code knows no provider's convention.
+//! An external endpoint: `<FUNCTION>_URL`, `<FUNCTION>_KEY`, and a header pair where
+//! the consumer sends one; the key replaces `{key}` wherever the operator wrote it,
+//! so the code knows no provider's convention.
 //! ⚠️ A credential in a header has no counterpart to [`SecretUrl::scrub`]: a client
 //! echoing request metadata in its errors would print it.
 

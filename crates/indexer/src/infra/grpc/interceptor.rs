@@ -1,34 +1,7 @@
-//! The credential, put on every request — and printed by nothing.
-//!
-//! This is the module that justifies refusing `yellowstone-grpc-client`. That
-//! crate's `InterceptorXToken` and `GeyserGrpcBuilder` both `#[derive(Debug)]`
-//! over a `pub x_token: Option<AsciiMetadataValue>`, and an
-//! `AsciiMetadataValue` is not marked sensitive — so any `{:?}` anywhere in the
-//! process writes the token in the clear, and "the token appears in no log"
-//! becomes a property of a third party's derive. Ten lines of our own keep it a
-//! property of this file.
-//!
-//! # What carries the credential, and what does not
-//!
-//! Nothing here decides *whether* there is a header, and nothing here validates
-//! it either — that is [`Credential`], once, for both ingestion paths.
-//! What is left in this file is the one thing only gRPC does: turning a
-//! validated header into request metadata.
-//!
-//! Whether there is one at all is the operator's, through
-//! `INGEST_STREAM_HEADER_NAME` / `_HEADER_VALUE`, and
-//! [`yog_bootstrap::Endpoint`] is what assembles the two with the key. This module
-//! takes what `Endpoint::header()` hands over, or nothing at all, and puts it
-//! on the wire.
-//!
-//! # ⚠️ Calling `required_endpoint_allowing_header` is a promise, and this is one of the two places it is kept
-//!
-//! `yog-bootstrap` cannot check that the code holding an `Endpoint` actually
-//! sends its header; the two doors are separate function names precisely
-//! because only the caller knows. `bootstrap/config.rs` walks through the wide
-//! door for `INGEST_STREAM` **whatever the source**, because both listeners
-//! keep the promise: this module for gRPC, `Credential::ws_request` for the
-//! WebSocket handshake.
+//! The credential, put on every request and printed by nothing: our own interceptor,
+//! since `yellowstone-grpc-client` derives `Debug` over a token not marked sensitive.
+//! ⚠️ `INGEST_STREAM` is read through `required_endpoint_allowing_header`: this module
+//! keeps that promise for gRPC, `Credential::ws_request` for the WebSocket.
 
 use tonic::{
     Status,

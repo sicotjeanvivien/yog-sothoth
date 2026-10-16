@@ -36,7 +36,7 @@ pub fn optional_secret_url(key: &str) -> Option<SecretUrl> {
     optional(key).map(SecretUrl::new)
 }
 
-/// Read an optional, non-secret environment variable, trimmed, blank read as absent.
+/// Read an optional environment variable, trimmed, blank read as absent.
 /// ⚠️ Must agree with [`required`] on "set", or an empty `_KEY` passes
 /// [`required_endpoint`]'s guard.
 pub fn optional(key: &str) -> Option<String> {

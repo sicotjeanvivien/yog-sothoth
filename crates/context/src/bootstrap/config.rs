@@ -1,7 +1,7 @@
 //! Daemon configuration, read once from the environment by `Config::load`.
 //!
 //! Every external address is a `<FUNCTION>_URL` / `<FUNCTION>_KEY` pair named
-//! after what it serves, never after its protocol (see [`Endpoint`]). Jupiter
+//! after what it serves, never after its protocol. Jupiter
 //! is the exception: it authenticates by header, so its key never enters its
 //! URL.
 

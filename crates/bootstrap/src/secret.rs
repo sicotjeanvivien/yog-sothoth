@@ -57,8 +57,8 @@ impl fmt::Debug for SecretKey {
     }
 }
 
-/// A URL carrying a secret: `Display` and `Debug` keep scheme, user, host and port,
-/// and redact the password, path, query and fragment (Postgres keeps its database).
+/// A URL carrying a secret: `Display` and `Debug` print what `redact` keeps,
+/// the carrier legible and the secret parts gone.
 /// ⚠️ A bare key has no carrier and would pass through unchanged: use [`SecretKey`].
 #[derive(Clone)]
 pub struct SecretUrl(String);
@@ -174,7 +174,8 @@ fn is_postgres(url: &str) -> bool {
 
 /// Replace the password of `scheme://user:password@host`, up to the **last** `@` of
 /// the authority; the role stays.
-/// ⚠️ An `@` past the authority is ambiguous: with a `:` in it, all but the scheme goes.
+/// ⚠️ An `@` past the authority is ambiguous: with a `:`, all but the scheme goes;
+/// without one, the userinfo is printed, bare token included.
 pub(crate) fn redact_password(url: &str) -> String {
     let Some(scheme_end) = url.find("://") else {
         return url.to_string();

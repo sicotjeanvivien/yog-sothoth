@@ -29,7 +29,7 @@ fn expose_returns_raw_url() {
     assert_eq!(url.expose(), raw);
 }
 
-/// ⚠️ For a URL only: a bare key passed through is a leak, hence [`SecretKey`].
+/// Mutation: a redaction that also hides a secret-free URL's host or path.
 #[test]
 fn url_carrying_no_secret_is_unchanged() {
     let url = SecretUrl::new("https://api.mainnet-beta.solana.com");

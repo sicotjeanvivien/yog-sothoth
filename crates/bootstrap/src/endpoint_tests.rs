@@ -193,7 +193,7 @@ fn the_placeholder_and_its_carrier_stay_legible() {
     );
 }
 
-// ── the four shapes, one test each ──────────────────────────────────
+// ── where the credential rides ──────────────────────────────────────
 
 #[test]
 fn a_credential_in_a_header_is_substituted_there() {
@@ -525,7 +525,7 @@ fn a_refusal_never_advises_what_the_next_refusal_forbids() {
     }
 }
 
-/// ⚠️ `x-token: <secret>` pasted into the name would print in the clear.
+/// Mutation: accepting a `:` in a name, which prints `x-token: <secret>` in the clear.
 #[test]
 fn a_header_name_carrying_a_space_or_a_colon_is_refused() {
     // ⚠️ `PASTED_TIGHT` has no space: the only case that bites on the `:` rule alone.
