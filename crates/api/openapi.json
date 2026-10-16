@@ -995,7 +995,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/UnsignedDecimal",
-                "description": "USD value of `reserve_a`. `null` when token A's price is older than\n15 minutes or unknown, or either token's decimals are unresolved."
+                "description": "USD value of `reserve_a`. `null` when token A's price is stale or\nunknown, or either token's decimals are unresolved."
               },
               {
                 "type": "null"

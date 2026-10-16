@@ -283,7 +283,7 @@ async fn a_side_value_goes_absent_on_its_own_stale_price(pool: PgPool) {
         .await
         .unwrap();
 
-    // 10.0 A × $2, valued; B's half-hour-old quote values nothing.
+    // Mutation: the bound dropped from B's price join in the view.
     assert_eq!(values.value_a_usd, Some(Decimal::from(20)));
     assert_eq!(
         values.value_b_usd, None,

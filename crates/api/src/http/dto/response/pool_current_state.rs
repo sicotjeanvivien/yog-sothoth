@@ -40,8 +40,8 @@ pub(crate) struct PoolCurrentStateResponse {
     #[schema(value_type = Option<UnsignedDecimal>)]
     spot_price_a_in_b: Option<Decimal>,
 
-    /// USD value of `reserve_a`. `null` when token A's price is older than
-    /// 15 minutes or unknown, or either token's decimals are unresolved.
+    /// USD value of `reserve_a`. `null` when token A's price is stale or
+    /// unknown, or either token's decimals are unresolved.
     #[schema(value_type = Option<UnsignedDecimal>)]
     value_a_usd: Option<Decimal>,
 

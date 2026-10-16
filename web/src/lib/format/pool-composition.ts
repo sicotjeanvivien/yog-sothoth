@@ -1,12 +1,7 @@
 /**
- * Pool composition — pure math helpers.
- *
- * Derives the share in [0, 1] of each side of a pool from the USD value
- * `/latest-state` gives for it.
- *
- * Returns `null` when either value is missing — the caller should treat
- * that as "don't render the composition card". A partial composition
- * (one side valued, the other not) would be misleading rather than useful.
+ * The share in [0, 1] of each side of a pool, from the USD values of
+ * `/latest-state`. `null` when either is missing: a one-sided composition
+ * would mislead, so the card is not rendered.
  */
 
 export type PoolComposition = {

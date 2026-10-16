@@ -54,14 +54,8 @@ pub(crate) struct EnrichedPoolPage {
     pub(crate) as_of: Option<DateTime<Utc>>,
     pub(crate) touched_since: i64,
 }
-/// A pool's latest observed state plus its derived spot price and the USD value
-/// of each side.
-///
-/// `spot_price_a_in_b` is the on-chain `last_sqrt_price` decoded to a human
-/// price (units of token B per 1 token A) via
-/// [`yog_core::amm::damm_v2::sqrt_price_to_price_a_in_b`]. `None` when there is
-/// no `sqrt_price` yet, or the token decimals needed to rescale it are not
-/// resolved — derived in the service so the HTTP layer only formats.
+/// A pool's latest observed state, its spot price (token B per token A, `None`
+/// without a `sqrt_price` or resolved decimals) and the USD value of each side.
 pub(crate) struct PoolCurrentStateView {
     pub(crate) state: PoolCurrentState,
     pub(crate) spot_price_a_in_b: Option<Decimal>,

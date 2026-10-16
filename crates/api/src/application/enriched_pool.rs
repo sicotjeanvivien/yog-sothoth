@@ -1,10 +1,5 @@
-//! Application-level aggregate composing a pool with everything
-//! needed to present it: both token sides (metadata) and its derived
-//! analytics.
-//!
-//! This type is domain-facing — it carries `yog-core` types only and
-//! is free of any HTTP/wire concern. The HTTP layer maps it to its
-//! own `PoolResponse` DTO.
+//! A pool composed with its two token sides (identity only) and its derived
+//! analytics, in `yog-core` types; the HTTP layer maps it to `PoolResponse`.
 
 use chrono::{DateTime, Utc};
 use yog_core::{
