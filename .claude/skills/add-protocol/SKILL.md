@@ -63,7 +63,7 @@ In the order of the table in `crates/README.md` → *What stays narrow*:
 If you find yourself touching a central registry outside this list, stop — you've left
 the pattern.
 
-## Step 1 — `core` (no I/O, wasm-compatible; no Postgres/axum/HTTP here)
+## Step 1 — `core` (no I/O; no Postgres/axum/HTTP here)
 
 **Extraction side** — template: `crates/core/src/application/extraction/meteora/damm_v2/`
 - Create `application/extraction/<platform>/<product>/` with:

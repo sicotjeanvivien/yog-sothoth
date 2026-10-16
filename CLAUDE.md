@@ -65,8 +65,7 @@ for p in $crates; do cargo check -p "$p" || solo="$solo $p"; done
 # an `--all-features` or dev-dependency path needs is still checked in one
 # grouped invocation, and still maskable.
 
-# Lint — the nine native crates (yog-wasm is excluded; it's a deferred
-# scaffold). Every one must be named: clippy only DRIVES the packages given
+# Lint — the nine crates. Every one must be named: clippy only DRIVES the packages given
 # with `-p`, so a crate reached as a path dependency is compiled but never
 # linted — that is how yog-bootstrap went unlinted until 1 Sept 2026.
 cargo clippy -p yog-analytic -p yog-api -p yog-archive -p yog-bootstrap -p yog-core -p yog-context \
@@ -149,7 +148,7 @@ A query-builder/ORM migration of the persistence layer (SeaQuery et al.) was eva
 
 A PR that breaks these is unlikely to be accepted (full list in `crates/README.md` → *Conventions*):
 
-- **Strict one-directional layering.** `core` has no I/O (no Postgres, no axum, no HTTP, wasm-compatible). `persistence` has no business logic. Binaries do no business logic and no SQL — they wire repositories into the runtime. Dependency graph: binaries → `core` + `persistence` + `bootstrap`; everything → `core`.
+- **Strict one-directional layering.** `core` has no I/O (no Postgres, no axum, no HTTP). `persistence` has no business logic. Binaries do no business logic and no SQL — they wire repositories into the runtime. Dependency graph: binaries → `core` + `persistence` + `bootstrap`; everything → `core`.
 - **Repository traits in `core`, `Pg*` impls in `persistence`.** Binaries depend on the trait, never the concrete type.
 - **Typed errors at every boundary** (`RepositoryError`, `ApiError`, per-stage indexer errors). A `?` crossing a boundary maps the error explicitly.
 - **Skip-and-log over abort-and-die.** Per-event / per-signature failures are logged + counted (Prometheus) and stepped over. Only loop-level failures (closed channel, exhausted semaphore, panic) bubble up and trigger graceful shutdown via the shared `CancellationToken`.

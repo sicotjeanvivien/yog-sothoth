@@ -29,8 +29,7 @@ Limits (the same heuristic as the measurement the rule was chosen from):
     `cfg(test)` module is checked as production code. Keep the marker's
     attributes on one line, or put the marker below them;
   - test code is skipped: `tests/` directories, `*_tests.rs`, and any
-    `mod` under a `cfg(test)` attribute. `yog-wasm` (deferred scaffold) is
-    skipped too.
+    `mod` under a `cfg(test)` attribute.
 
 Usage: python3 crates/check-module-visibility.py [<crates dir>]
 """
@@ -44,7 +43,6 @@ MARKER = "// Visible:"
 # The workspace declares ~340 re-exported modules (September 2026). Far
 # below that, the scan is broken, not the code clean.
 MIN_INVENTORY = 100
-SKIPPED_CRATES = {"wasm"}
 
 MOD_DECL = re.compile(r"^[ \t]*(?P<vis>pub(?:\([^)]*\))?\s+)?mod\s+(?P<name>\w+)\s*;")
 ATTRIBUTE = re.compile(r"^[ \t]*#\[")
@@ -91,7 +89,7 @@ def scan(crates_dir: Path):
     """Yields (path, line number, name, visible, justified) per re-exported module."""
     for path in sorted(crates_dir.glob("*/src/**/*.rs")):
         relative = path.relative_to(crates_dir)
-        if relative.parts[0] in SKIPPED_CRATES or is_test_file(relative):
+        if is_test_file(relative):
             continue
         source = path.read_text(encoding="utf-8")
         lines = source.split("\n")
