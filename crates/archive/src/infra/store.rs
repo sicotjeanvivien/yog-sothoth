@@ -1,11 +1,5 @@
-//! The bucket the dumps go to.
-//!
-//! The run sees an [`ObjectStore`], the generic trait of `object_store`, and
-//! nothing of the provider behind it. This file is the only place that knows
-//! the bucket is S3-compatible — Scaleway Object Storage in production, MinIO
-//! in a local test — so changing provider means changing this file and its
-//! [`StoreSettings`], and nothing the run does. Which variables fill them is
-//! the configuration's business (`bootstrap/config.rs`).
+//! The bucket the dumps go to: the run sees an [`ObjectStore`], and this file is the only place
+//! that knows it is S3-compatible (Scaleway in production, MinIO locally).
 
 use std::sync::Arc;
 

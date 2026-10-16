@@ -1,14 +1,6 @@
-//! `yog-archive` — the backup daemon.
-//!
-//! Every six hours it runs `pg_dump` against the database, streams the dump
-//! into an S3-compatible bucket without writing it to disk, checks that what
-//! it produced is a readable archive, and tells a dead man's switch
-//! (Healthchecks.io) whether it succeeded. A missing signal is what raises the
-//! alarm: it is the only kind of alert a stopped daemon can still trigger.
-//!
-//! It does not restore. Restoring is rare, done by hand, and needs someone to
-//! choose the dump and the target; the proven sequence is in
-//! `crates/persistence/README.md`, *Backup and restore*.
+//! `yog-archive`, the backup daemon: every six hours, streams `pg_dump` into an S3-compatible
+//! bucket without touching disk, checks it reads as an archive, and tells a dead man's switch.
+//! It does not restore: that is by hand, per `crates/persistence/README.md`, *Backup and restore*.
 
 mod application;
 mod bootstrap;
@@ -35,10 +27,7 @@ async fn main() -> anyhow::Result<()> {
         .inspect_err(|e| error!(error = %e, "failed to initialize the archiver"))?;
     info!("archiver initialized");
 
-    // SIGTERM or Ctrl-C cancels the token; `ArchiveWorker::run` stops between
-    // two dumps, or kills the one in progress. `shutdown_signal` listens for
-    // both: under `docker compose stop` this process is PID 1, and SIGTERM is
-    // the signal that arrives.
+    // SIGTERM or Ctrl-C cancels the token: as PID 1 under compose, SIGTERM is what arrives.
     let token = CancellationToken::new();
     let shutdown_token = token.clone();
     tokio::spawn(async move {
@@ -50,12 +39,8 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Install the Prometheus exporter as the global `metrics` recorder, and
-/// describe the archiver's metrics.
-///
-/// Exposes `http://0.0.0.0:9000/metrics`, like every daemon here. Must run
-/// before any metric is emitted, in particular before `Daemon::new`, which
-/// can signal a misconfigured bucket.
+/// Install the Prometheus exporter on `:9000/metrics` and describe the archiver's metrics.
+/// ⚠️ Before any metric is emitted, so before `Daemon::new`, which can signal a misconfigured bucket.
 fn init_metrics() -> anyhow::Result<()> {
     PrometheusBuilder::new()
         .with_http_listener(([0, 0, 0, 0], 9000))

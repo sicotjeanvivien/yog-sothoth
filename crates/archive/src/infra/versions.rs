@@ -6,17 +6,9 @@ use yog_persistence::{Database, PgServerInfo, ServerVersions};
 
 use crate::application::VersionSource;
 
-/// Reads the server's versions over a connection opened for this run and
-/// closed after it.
-///
-/// Connecting once at startup made a refusing database — a wrong password, a
-/// server that is down — stop the process before the heartbeat could say
-/// anything. Under `restart: unless-stopped` that is a silent crash loop,
-/// noticed only when the missing ping times out, hours later and without a
-/// reason. Measured on 23 September 2026 with a wrong password: exit 1, no
-/// signal. Connected here, the same refusal ends the run in `refused` and
-/// sends the failure signal with the database's own words. One connection
-/// every six hours costs nothing.
+/// Reads the server's versions over a connection opened for this run and closed after it.
+/// ⚠️ Not once at startup: a refusing database would stop the process before the heartbeat could
+/// say anything, a silent crash loop under `restart: unless-stopped`.
 pub(crate) struct PgVersions {
     pub(crate) url: SecretUrl,
 }

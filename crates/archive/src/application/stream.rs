@@ -16,12 +16,9 @@ pub(super) const PART_SIZE: usize = 8 * 1024 * 1024;
 /// the upload holds at most ~24 MiB (two in flight, one filling).
 const PARTS_IN_FLIGHT: usize = 2;
 
-/// Dump into the open upload while `pg_restore` checks the same bytes, and
-/// return how many were written.
-///
-/// `dump` and `check` are locals: **any return drops them, which kills
-/// `pg_dump` and `pg_restore`** before the caller aborts the upload. That
-/// order is what `a_stop_mid_dump_kills_pg_dump…` checks.
+/// Dump into the open upload while `pg_restore` checks the same bytes; returns the bytes written.
+/// ⚠️ `dump` and `check` are locals: any return drops them, killing `pg_dump` and `pg_restore`
+/// before the caller aborts the upload.
 pub(super) async fn stream(
     tools: &PgTools,
     url: &SecretUrl,

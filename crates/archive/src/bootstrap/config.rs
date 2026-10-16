@@ -1,9 +1,5 @@
-//! Archiver configuration, loaded from the environment.
-//!
-//! Every variable is named after what it serves (`ARCHIVE_STORE_*`,
-//! `ARCHIVE_HEARTBEAT_URL`), never after the provider behind it: the store is
-//! Scaleway Object Storage in production and MinIO in a local test, and
-//! nothing here needs to know which.
+//! Archiver configuration, loaded from the environment. Every variable is named after what it
+//! serves (`ARCHIVE_STORE_*`, `ARCHIVE_HEARTBEAT_URL`), never after the provider behind it.
 
 use std::{path::PathBuf, time::Duration};
 
@@ -14,14 +10,12 @@ use yog_bootstrap::{
 
 use crate::infra::StoreSettings;
 
-/// Six hours between dumps: the largest hole the history can take when the
-/// database is lost, since the indexer cannot re-ingest the past.
-/// Overridable via `ARCHIVE_INTERVAL_SECS`.
+/// Six hours between dumps, the largest hole the history can take when the database is lost
+/// (`ARCHIVE_INTERVAL_SECS`).
 const DEFAULT_INTERVAL_SECS: u64 = 6 * 60 * 60;
 
-/// The shortest interval accepted. Dumps are named to the second, so two
-/// runs within the same second would share a key and the second would
-/// overwrite the first; and a zero interval dumps back to back without end.
+/// The shortest interval accepted: dumps are named to the second, so two runs in one second would
+/// share a key, and zero dumps back to back.
 const MIN_INTERVAL_SECS: u64 = 60;
 
 /// Runtime configuration for the `yog-archive` binary.
