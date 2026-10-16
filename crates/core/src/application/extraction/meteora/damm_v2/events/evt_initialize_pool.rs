@@ -10,12 +10,8 @@ pub fn discriminator_initialize_pool() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtInitializePool")
 }
 
-/// Mirror of `cp-amm::BaseFeeParameters`.
-///
-/// An opaque 27-byte packed blob on the program side (fee scheduler config).
-/// We do not interpret it here — it is captured losslessly and decoded later
-/// by the dedicated fee-tier work. Reproduced as a fixed array so the borsh
-/// layout of the surrounding [`PoolFeeParameters`] stays byte-exact.
+/// Mirror of `cp-amm::BaseFeeParameters`: an opaque 27-byte blob, kept as a fixed
+/// array so the layout of [`PoolFeeParameters`] stays byte-exact.
 #[derive(Debug, Clone, Copy, BorshDeserialize, BorshSerialize)]
 pub struct BaseFeeParameters {
     pub data: [u8; 27],
@@ -33,13 +29,9 @@ pub struct DynamicFeeParameters {
     pub variable_fee_control: u32,
 }
 
-/// Mirror of `cp-amm::PoolFeeParameters`.
-///
-/// `dynamic_fee` is borsh-`Option`: a 1-byte tag precedes the inner struct
-/// when present. Field order mirrors the on-chain struct exactly — it sits
-/// in the middle of [`EvtInitializePool`], so any drift here corrupts every
-/// field after it. `BorshSerialize` is derived so the whole blob can be
-/// re-serialized and persisted raw (undecoded) under "voie C".
+/// Mirror of `cp-amm::PoolFeeParameters`, re-serialized to be persisted raw.
+/// ⚠️ `dynamic_fee` is a borsh `Option` mid-event: any drift here corrupts every
+/// field of [`EvtInitializePool`] after it.
 #[derive(Debug, Clone, Copy, BorshDeserialize, BorshSerialize)]
 pub struct PoolFeeParameters {
     pub base_fee: BaseFeeParameters,
@@ -48,13 +40,7 @@ pub struct PoolFeeParameters {
     pub dynamic_fee: Option<DynamicFeeParameters>,
 }
 
-/// Mirror of `cp-amm::EvtInitializePool`.
-///
-/// Pool genesis: carries both mints, the initial AMM state (sqrt price /
-/// bounds, liquidity), the fee configuration, and the seeded token amounts.
-/// `pool_fees` is captured but not interpreted (see [`PoolFeeParameters`]).
-///
-/// Field order mirrors the on-chain struct exactly — do not reorder.
+/// Mirror of `cp-amm::EvtInitializePool`, the pool genesis.
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtInitializePool {
     pub pool: Pubkey,

@@ -4,7 +4,7 @@ use crate::application::extraction::meteora::damm_v2::events::EvtPermanentLockPo
 use crate::domain::{EventPosition, MeteoraDammV2PermanentLockPositionEvent};
 
 /// Translate an [`EvtPermanentLockPosition`] into a
-/// [`MeteoraDammV2PermanentLockPositionEvent`]. Infallible.
+/// [`MeteoraDammV2PermanentLockPositionEvent`].
 pub(super) fn translate_permanent_lock_position(
     wire: &EvtPermanentLockPosition,
     event_position: EventPosition,

@@ -1,7 +1,4 @@
-/// Errors a translation can produce.
-///
-/// These are reported via `ExtractionFailure::Translation` and never abort
-/// the whole extraction.
+/// Errors a translation can produce, reported as `ExtractionFailure::Translation`.
 #[derive(Debug, thiserror::Error)]
 pub enum TranslationError {
     #[error("invalid {field} value: {value}")]

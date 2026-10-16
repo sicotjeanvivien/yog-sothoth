@@ -1,32 +1,20 @@
-//! Common types for the multi-protocol event extraction pipeline.
-//!
-//! Every protocol implementation of [`crate::application::EventExtractor`]
-//! returns an [`ExtractionOutcome`] carrying domain events alongside
-//! diagnostic information about events that could not be processed.
+//! What every protocol extractor returns: domain events, plus what could not be processed.
 
 use solana_pubkey::Pubkey;
 use thiserror::Error;
 
 use crate::domain::{DomainEvent, Protocol};
 
-/// Result of extracting domain events from a single transaction.
-///
-/// Always well-formed — extraction never fails as a whole. Per-event
-/// problems are reported through `unknown` and `failures` so that callers
-/// can emit metrics with appropriate cardinality.
+/// Result of extracting domain events from one transaction; never fails as a whole.
 #[derive(Debug, Default)]
 pub struct ExtractionOutcome {
-    /// Successfully extracted, decoded, and translated domain events.
-    /// Order reflects the order of appearance in the transaction.
+    /// Translated domain events, in transaction order.
     pub events: Vec<DomainEvent>,
 
-    /// Anchor events whose discriminator is unknown to the protocol's
-    /// extractor. Most often correspond to events from rings we haven't
-    /// implemented yet.
+    /// Anchor events whose discriminator the extractor does not know.
     pub unknown: Vec<UnknownEventInfo>,
 
-    /// Events that targeted the protocol but failed somewhere in the
-    /// pipeline (decoding, deserialization, or translation).
+    /// Events of the protocol that failed to decode, deserialize or translate.
     pub failures: Vec<ExtractionFailure>,
 }
 
@@ -40,39 +28,31 @@ pub struct UnknownEventInfo {
 /// A failed extraction attempt, paired with the reason why.
 #[derive(Debug, Error)]
 pub enum ExtractionFailure {
-    /// The Anchor event_cpi payload could not be decoded (wrong tag,
-    /// payload too short, etc.).
+    /// Not a valid Anchor event_cpi payload.
     #[error("anchor decoding: {0}")]
     AnchorDecode(String),
 
-    /// Discriminator matched a known event but the borsh payload could
-    /// not be deserialized — usually a schema drift between the program
-    /// and our wire mirrors.
+    /// Known discriminator, but borsh failed: usually schema drift in our mirror.
     #[error("borsh deserialization of {event_name}: {reason}")]
     Borsh {
         event_name: &'static str,
         reason: String,
     },
 
-    /// Wire event was decoded successfully but could not be translated
-    /// into a domain event — for example, an enum field carried a value
-    /// the translator does not know.
+    /// Decoded, but not translatable (e.g. an unknown enum value).
     #[error("translation of {event_name}: {reason}")]
     Translation {
         event_name: &'static str,
         reason: String,
     },
 
-    /// The transaction emitted more event payloads than an `event_index` can
-    /// number, so the event was dropped rather than stored under a truncated
-    /// index. Unreachable in practice; counted separately because, unlike the
-    /// other three, it means a *valid* event was lost.
+    /// Too many payloads for an `event_index`: a *valid* event was dropped,
+    /// rather than stored under a truncated index.
     #[error("event index {index} exceeds the u16 an event_index can hold")]
     EventIndexOverflow { index: usize },
 }
 
-/// Companion to [`UnknownEventInfo::discriminator`], for callers that want
-/// a stable hex representation suitable for metrics labels.
+/// Stable hex form of a discriminator, for metric labels.
 pub fn discriminator_hex(disc: &[u8; 8]) -> String {
     let mut s = String::with_capacity(16);
     for b in disc {
@@ -82,9 +62,7 @@ pub fn discriminator_hex(disc: &[u8; 8]) -> String {
 }
 
 impl UnknownEventInfo {
-    /// Pubkey form of the program emitting the event — handy for callers
-    /// that want to label metrics with the program ID rather than the
-    /// protocol enum.
+    /// Program emitting the event.
     pub fn program_id(&self) -> Pubkey {
         self.protocol.program_id()
     }

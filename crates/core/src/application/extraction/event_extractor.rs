@@ -5,35 +5,9 @@ use crate::{
     application::extraction::{ExtractionOutcome, OnChainTransaction},
 };
 
-/// Common interface for all supported AMM protocols.
-///
-/// Each protocol implements this trait. Routing happens before any
-/// implementation is asked: [`ExtractionDispatcher::extract`] takes the
-/// [`Protocol`] the transaction was fetched for, and matches on it.
-/// [`program_id`] is not a routing key — it names the program whose
-/// inner-instruction payloads this extractor decodes.
-///
-/// The transaction arrives as a [`OnChainTransaction`] — the neutral shape every
-/// source adapter produces — so no implementation names a transport.
-///
-/// # Contract
-///
-/// `extract_events` is the single entry point. It walks the transaction,
-/// decodes every protocol-specific event it can, translates them into
-/// protocol-agnostic [`crate::domain::DomainEvent`] variants, and returns
-/// an [`ExtractionOutcome`] that ventilates successes / unknowns / failures.
-///
-/// The implementation MUST NOT panic on partial failures (unrecognized
-/// discriminators, borsh errors, invalid enum values, etc.).
-/// Those go into `unknown` or `failures`. A returned `Err` is reserved
-/// for a malformation of the transaction as a whole, and neither
-/// implementation has one today: the DAMM v2 extractor always returns `Ok`,
-/// and the DLMM one is a stub. The indexer still counts the case, under
-/// `extract_failure`.
-///
-/// [`ExtractionDispatcher::extract`]: crate::application::extraction::ExtractionDispatcher::extract
-/// [`Protocol`]: crate::domain::Protocol
-/// [`program_id`]: Self::program_id
+/// One protocol's extraction of domain events from an [`OnChainTransaction`].
+/// ⚠️ Per-event failures go into `unknown` or `failures`, never a panic; `Err` is
+/// for a malformed transaction as a whole.
 pub trait EventExtractor: Send + Sync {
     /// Program ID this extractor decodes events from.
     fn program_id(&self) -> Pubkey;
@@ -42,32 +16,7 @@ pub trait EventExtractor: Send + Sync {
     fn extract_events(&self, tx: &OnChainTransaction) -> CoreResult<ExtractionOutcome>;
 
     /// Whether this extractor actually extracts anything.
-    ///
-    /// ⚠️ **A stub must say so, because subscribing to it costs money.** The
-    /// ingestion decides what to watch from
-    /// [`ExtractionDispatcher::implemented_protocols`], and watching a protocol
-    /// means a program-wide subscription: on the JSON-RPC path, one
-    /// `getTransaction` per transaction against a rate-limited quota; on the
-    /// gRPC path, bandwidth billed by the byte. Doing that for an extractor
-    /// that returns an empty outcome is paying a firehose to decode and
-    /// discard.
-    ///
-    /// ⚠️ **No default, deliberately.** It had one — `true` — for the length of
-    /// a review, and a default here points the wrong way: the expensive answer
-    /// would be the one a new extractor gives by saying nothing. A protocol
-    /// added by following the `add-protocol` recipe with a stub body, which is
-    /// exactly how `MeteoraDlmm` exists today, would compile, keep every test
-    /// green, and subscribe the indexer to a program id on the next restart.
-    ///
-    /// Required, the compiler asks the question at the one moment somebody can
-    /// answer it — while writing the extractor and knowing whether it extracts.
-    /// It costs each implementation one line and it is a spending decision, not
-    /// a formality.
-    ///
-    /// **The answer lives beside the stub**, and is flipped in the change that
-    /// replaces it: nobody has to remember a second list when the protocol is
-    /// finally written, which is the failure this repository keeps paying for.
-    ///
-    /// [`ExtractionDispatcher::implemented_protocols`]: crate::application::extraction::ExtractionDispatcher::implemented_protocols
+    /// ⚠️ No default: subscribing to a stub pays a firehose for nothing, so each
+    /// extractor answers beside its own body.
     fn is_implemented(&self) -> bool;
 }

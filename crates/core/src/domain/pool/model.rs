@@ -5,27 +5,14 @@ use solana_pubkey::Pubkey;
 
 use crate::domain::Protocol;
 
-/// A discovered pool — identity and stable metadata.
-///
-/// Yog-Sothoth observes entire protocols, so pools are discovered on the fly
-/// as they appear in the transaction stream. This struct stores what we know
-/// about a pool independently of its state at any given momen
-///
-/// Rows are upserted on every parsed event: `first_seen_at` is set once on
-/// first observation, `last_seen_at` is refreshed on every subsequent event.
-///
-/// # Mints
-///
-/// The token mints are a property of the pool, resolved authoritatively from
-/// the on-chain pool account by yog-context. They are `None` between a pool's
-/// discovery (its address appears in the stream) and that resolution — the
-/// indexer no longer infers them from the transaction.
+/// A pool discovered in the transaction stream: identity and stable metadata.
+/// `first_seen_at` is set once, `last_seen_at` refreshed by every event.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Pool {
     /// On-chain address of the AMM pool.
     pub pool_address: Pubkey,
 
-    /// Protocol this pool belongs to (DAMM v2, DLMM).
+    /// Protocol this pool belongs to.
     pub protocol: Protocol,
 
     /// Mint of token A. `None` until resolved by yog-context.
@@ -34,24 +21,9 @@ pub struct Pool {
     /// Mint of token B. `None` until resolved by yog-context.
     pub token_b_mint: Option<Pubkey>,
 
-    /// Base trading fee in basis points, read from the on-chain `Pool` account
-    /// by yog-context — its single writer. `None` until that read happens,
-    /// which the enrichment queue schedules on the column being NULL.
-    ///
-    /// It is **not** decoded from the `InitializePool` event: nothing decodes a
-    /// fee blob any more (that path went with migration §036/§038), and a pool
-    /// discovered from the swap stream never had a genesis event to begin with.
-    ///
-    /// For a fee-scheduler pool this is the genesis **cliff**, not the live
-    /// decayed rate — the fee a trader pays now is derived at read time from
-    /// the decoded curve (`base_fee_numerator_at`) and can be an order of
-    /// magnitude lower.
-    ///
-    /// The one fee property that belongs here rather than in a per-protocol
-    /// satellite: it is a normalized cross-protocol notion (every AMM has an
-    /// effective base fee in bps) *and* a read surface — filtered by the
-    /// pool-list fee-tier filter and aggregated by
-    /// [`super::PoolCatalog::list_fee_tiers`].
+    /// Base fee in bps, from the pool account; `None` until yog-context reads it.
+    /// ⚠️ For a fee scheduler this is the genesis **cliff**, not the fee paid now
+    /// (`base_fee_numerator_at`).
     pub fee_bps: Option<Decimal>,
 
     /// When Yog-Sothoth first observed this pool in the transaction stream.

@@ -69,12 +69,7 @@ fn test_net_price_impact_higher_than_without_fee() {
 
 // ── base_fee_kind_from ──────────────────────────────────────────────────
 
-/// The mapping is shared by every reader of a `BaseFeeMode`, so it is tested
-/// here on its own terms — the account decoder's tests cover reading the two
-/// inputs out of a real layout.
-///
-/// A scheduler mode with zero periods is a **constant** fee: the mode byte
-/// alone is never the answer.
+/// Mutation: deciding on the mode byte alone (zero periods is a constant fee).
 #[test]
 fn scheduler_modes_with_no_periods_are_constant() {
     for mode in [0u8, 1, 3, 4] {
@@ -98,8 +93,7 @@ fn scheduler_modes_with_periods_keep_their_own_kind() {
     }
 }
 
-/// Mode 2 reinterprets the bytes the schedulers use for the period count, so
-/// the value passed in is meaningless and must not change the answer.
+/// Mutation: mode 2 consulting the period count, which its layout reuses.
 #[test]
 fn the_rate_limiter_ignores_the_period_count() {
     for periods in [0u16, 144] {
@@ -131,11 +125,7 @@ fn test_net_price_impact_zero_fee_equals_price_impact() {
 }
 
 // ── sqrt_price_to_price_a_in_b ──────────────────────────────────────────
-//
-// Real pool states captured from the dev DB (2026-06-29), each cross-checked
-// against the Jupiter oracle ratio for the pair (price_a_usd / price_b_usd).
-// The decimal-adjustment exponent is the part that is easy to get wrong, so
-// the assertions pin actual mainnet magnitudes, not just "it computes".
+// Real pool states, cross-checked against the oracle: they pin the decimals exponent.
 
 /// Assert a `Decimal` price is within `rel_tol` (relative) of `expected`.
 fn assert_price_approx(actual: Decimal, expected: f64, rel_tol: f64) {
@@ -227,9 +217,7 @@ fn linear_decay_reaches_its_floor_at_the_last_period() {
     assert_eq!(fee_numerator_to_bps(floor).round_dp(1).to_string(), "400.0");
 }
 
-/// The case the audit measured, and the reason this computation exists: the pool's
-/// scheduler expired on 2026-07-28, so a trader pays the 400 bps floor while
-/// `pools.fee_bps` still publishes the 5000 bps cliff — a factor of 12.5.
+/// An expired scheduler: the trader pays the 400 bps floor, not the 5000 bps cliff.
 #[test]
 fn an_expired_scheduler_stays_at_its_floor_not_its_cliff() {
     let p = fixture_28bdu1();
@@ -243,8 +231,7 @@ fn an_expired_scheduler_stays_at_its_floor_not_its_cliff() {
     );
 }
 
-/// cp-amm's surprise, absent from the public docs: before activation the period
-/// is `number_of_period`, so the pool sits at its FLOOR, not at its cliff.
+/// Mutation: a pre-activation period of 0, which publishes the cliff, not the floor.
 #[test]
 fn before_activation_the_fee_is_the_floor_not_the_cliff() {
     let p = fixture_28bdu1();
@@ -262,11 +249,8 @@ fn exponential_decay_matches_the_chain_arithmetic() {
         base_fee_numerator_at(&p, p.activation_point),
         Some(990_000_000)
     );
-    // Anchored on an INDEPENDENT computation, not on our own output: in float,
-    // 990_000_000 * (1 - 326/10_000)^180 = 2_539_394 (25.39 bps) and the same
-    // at period 90 = 50_139_808 (501.40 bps). The Q64.64 port truncates at each
-    // squaring, so it lands just under; a divergence beyond a few 1e-4 would
-    // mean the port, not the rounding.
+    // Anchored on a float computation (2_539_394 at period 180, 50_139_808 at 90):
+    // the port truncates, so it lands just under, within a few 1e-4.
     let floor = base_fee_numerator_at(&p, p.expiry_point().unwrap()).unwrap();
     assert!(
         (2_538_000..=2_540_000).contains(&floor),
@@ -296,16 +280,7 @@ fn a_zero_reduction_factor_never_moves() {
 }
 
 /// A zero `period_frequency` returns the **cliff**, at any point in time.
-///
-/// cp-amm short-circuits on it as the first statement of
-/// `get_base_fee_numerator`, before the pre-activation branch and before any
-/// division: a curve whose periods have no length never advances, so it stays
-/// where it started. Two earlier shapes of our port returned the floor, then
-/// `None`, both from a summary of the source rather than the source itself.
-///
-/// Unreachable on real accounts — on-chain `validate` requires the three
-/// scheduler fields to be non-zero together — which is exactly why it is pinned
-/// rather than left to drift.
+/// Mutation: returning the floor or `None` instead of cp-amm's short-circuit.
 #[test]
 fn a_zero_period_frequency_stays_at_the_cliff() {
     let p = FeeSchedulerParams {
@@ -321,16 +296,8 @@ fn a_zero_period_frequency_stays_at_the_cliff() {
     }
 }
 
-/// The `u16` saturation is load-bearing, and **reachable in production today**.
-///
-/// `FvAQ9j…` and `59cbVF…` both run a one-second period (read from their real
-/// account bytes), so `u16::MAX` elapsed periods is passed about **18 hours**
-/// after activation — months ago for both. A conversion that wrapped or zeroed
-/// instead of saturating would send them back to period 0 and republish the
-/// cliff: 9900 bps instead of 25.39, a factor of 390, which is the very defect
-/// this module removes.
-///
-/// Mutation-checked: `unwrap_or(u16::MAX)` → `unwrap_or(0)` fails here.
+/// A real one-second period, long past `u16::MAX` elapsed periods.
+/// Mutation: `unwrap_or(u16::MAX)` → `unwrap_or(0)`, which republishes the cliff.
 #[test]
 fn an_elapsed_count_past_u16_saturates_instead_of_wrapping_to_the_cliff() {
     let p = fixture_fvaq9j();
@@ -345,8 +312,7 @@ fn an_elapsed_count_past_u16_saturates_instead_of_wrapping_to_the_cliff() {
     assert_ne!(fee, p.cliff_fee_numerator);
 }
 
-/// The expiry boundary itself: `is_expired_at` is strict, so the last point of
-/// the curve is not yet expired. A public field deserves its edge pinned.
+/// Mutation: `>` → `>=` in `is_expired_at`; the last point is not yet expired.
 #[test]
 fn expiry_is_strict_at_its_own_boundary() {
     let p = fixture_28bdu1();
@@ -358,30 +324,20 @@ fn expiry_is_strict_at_its_own_boundary() {
     assert!(p.is_expired_at(expiry + 1));
 }
 
-/// `pow`'s inversion branch, exercised directly.
-///
-/// The fee scheduler never reaches it — its base is `1 - rf/10_000`, always
-/// below 1. It is transcribed anyway, and this module's own doc-comment says why:
-/// "dropping a branch because today's only caller cannot reach it is how a port
-/// silently diverges from its source". Leaving it untested is the same omission
-/// wearing a different hat.
+/// `pow`'s inversion branch, which the fee scheduler never reaches.
 #[test]
 fn pow_inverts_a_base_above_one_like_the_source_does() {
     // 2.0 in Q64.64, squared, is 4.0 — the branch must not change the value.
     let two = ONE_Q64 * 2;
     let four = pow(two, 2).expect("2^2 is representable");
-    // Exactly 4: the inversion path computes (2^128 − 1) / (2^62 − 1), whose
-    // integer ratio to ONE_Q64 is 4 on the nose. A tolerance band would accept
-    // −25 % in the one module whose argument is that the last digits are the
-    // chain's.
+    // Exactly 4, no tolerance band: the last digits are the chain's.
     assert_eq!(four / ONE_Q64, 4);
     // Exponent 0 is 1.0 whatever the base, on both sides of the branch.
     assert_eq!(pow(two, 0), Some(ONE_Q64));
     assert_eq!(pow(ONE_Q64 / 2, 0), Some(ONE_Q64));
 }
 
-/// The kinds that must never reach this function get `None`, never the cliff.
-/// Returning the cliff would republish the exact number this computation replaces.
+/// Mutation: the fallback arm returning the cliff instead of `None`.
 #[test]
 fn a_non_time_scheduler_kind_yields_no_fee_not_the_cliff() {
     for kind in [
@@ -403,52 +359,28 @@ fn a_non_time_scheduler_kind_yields_no_fee_not_the_cliff() {
 }
 
 // ── The cap that must NOT be applied ──────────────────────────────
-//
-// `core/README.md` used to state that this function "saturates at the
-// chain's 10 % cap". It never did, and it must not: cp-amm's ceiling is a
-// function of the pool's `fee_version` — 5000 bps (50 %) in v0, 9900 bps
-// (99 %) in v1 — while 10 % is `MAX_FEE_NUMERATOR_POST_UPDATE`, the cap on
-// an operator *update*, not on a pool.
-//
-// The danger was never the doc: it was someone reading it, finding the
-// function does not match, and "fixing" the code. Clamping to 1000 bps
-// would report 10 % for a legitimate anti-sniper launch pool, silently —
-// `fee_bps` is an unconstrained NUMERIC and the value stays plausible.
-// These assertions are what turns that into a red test.
+// ⚠️ 10 % caps an operator *update*, not a pool: v0 pools reach 50 %, v1 99 %.
 
-/// The v1 ceiling, 99 %, converts whole. A clamp at any of the plausible
-/// wrong values — 1000 bps, or cp-amm's own v0 cap — reddens this.
+/// Mutation: a clamp at 1000 bps or at the v0 cap.
 #[test]
 fn a_v1_ceiling_fee_converts_without_clamping() {
     assert_eq!(fee_numerator_to_bps(990_000_000), Decimal::from(9900));
 }
 
-/// And the v0 ceiling, 50 %, which the function's own doc-comment already
-/// gives as an example. Kept distinct so a clamp introduced at exactly one
-/// of the two caps cannot pass.
+/// Mutation: a clamp below 50 %, such as the 10 % of an operator update.
 #[test]
 fn a_v0_ceiling_fee_converts_without_clamping() {
     assert_eq!(fee_numerator_to_bps(500_000_000), Decimal::from(5000));
 }
 
-/// Above every cp-amm ceiling the conversion still just divides. The
-/// function's contract is arithmetic, not validation — an out-of-range
-/// numerator is an abnormal *account*, and flattening it here would hide
-/// that behind a number indistinguishable from a real 10 % tier.
+/// Mutation: any clamp; past every ceiling the conversion still just divides.
 #[test]
 fn a_numerator_past_every_ceiling_is_still_converted_not_flattened() {
     assert_eq!(fee_numerator_to_bps(1_000_000_000), Decimal::from(10_000));
 }
 
-/// The other end, and the reason the return type is `Decimal`: sub-bp tiers
-/// survive. An integer conversion would round 2.5 bps to 2 — the same class
-/// of silent loss as the clamp, at the opposite end of the range.
-///
-/// Like the three above, compared as a `Decimal` and not a string — here the
-/// division yields scale 2, so `to_string()` is `"2.50"`, and asserting the
-/// rendering would tie the test to a formatting detail instead of to the value
-/// it is about. The ceiling cases happen to render at scale 0 today, which is
-/// exactly why they must not be written that way either.
+/// Mutation: an integer conversion, which rounds 2.5 bps to 2.
+/// ⚠️ Compared as `Decimal`, not as a string: the scale is a formatting detail.
 #[test]
 fn a_sub_bp_tier_keeps_its_fraction() {
     assert_eq!(

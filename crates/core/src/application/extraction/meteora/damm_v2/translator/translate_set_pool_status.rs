@@ -4,7 +4,6 @@ use crate::application::extraction::meteora::damm_v2::events::EvtSetPoolStatus;
 use crate::domain::{EventPosition, MeteoraDammV2SetPoolStatusEvent};
 
 /// Translate an [`EvtSetPoolStatus`] into a [`MeteoraDammV2SetPoolStatusEvent`].
-/// Infallible.
 pub(super) fn translate_set_pool_status(
     wire: &EvtSetPoolStatus,
     event_position: EventPosition,

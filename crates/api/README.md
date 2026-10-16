@@ -271,7 +271,8 @@ served raw above rather than folded into `feeBps`:
 maxVariableFeeBps = ⌈variableFeeControl × (maxVolatilityAccumulator × binStep)² / 1e11⌉ / 1e5
 ```
 
-Worked examples and the derivation are in `yog_core::amm::dlmm::base_fee_bps`.
+The per-pool values are asserted on the captured accounts in `yog-core`'s
+`amm/dlmm_tests.rs`.
 
 Every pool response — all three endpoints — embeds `signals24h`: the pool's
 signals over the last 24h (newest first, capped per pool,

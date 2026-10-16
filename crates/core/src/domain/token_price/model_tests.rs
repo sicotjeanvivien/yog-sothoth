@@ -1,14 +1,5 @@
-//! Boundary of [`TokenPrice::is_storable`].
-//!
-//! The values below are not round numbers picked for readability — they sit on
-//! either side of the one place the rule can be got wrong. `4e-19` and `5e-19`
-//! are both positive `Decimal`s; only the second survives a write to
-//! `NUMERIC(38, 18)`. A `price_usd > 0` implementation passes **both**, which is
-//! precisely the bug this guards, so `sub_midpoint_is_not_storable` is the test
-//! that has to stay red against it.
-//!
-//! `price_positivity.rs` in `yog-persistence` re-asserts these same values
-//! against a live Postgres, so the two halves of the rule cannot drift apart.
+//! Boundary of [`TokenPrice::is_storable`], on either side of each column end.
+//! Mutation: `price_usd > 0`, which `sub_midpoint_is_not_storable` refuses.
 
 use super::*;
 use std::str::FromStr;
@@ -36,9 +27,7 @@ fn smallest_representable_price_is_storable() {
 
 #[test]
 fn midpoint_rounds_up_and_is_storable() {
-    // 5e-19 rounds AWAY from zero under Postgres's NUMERIC rules, landing on
-    // 1e-18. rust_decimal's default (banker's) would round it to zero instead —
-    // this test is what pins the strategy.
+    // Mutation: banker's rounding, which stores 5e-19 as zero; Postgres rounds away.
     assert!(price("0.0000000000000000005").is_storable());
 }
 
@@ -66,11 +55,7 @@ fn negative_is_not_storable() {
 }
 
 // ── The other end of the column ──────────────────────────────────────────────
-//
-// `NUMERIC(38, 18)` leaves 20 integer digits. A value at or above 10^20 is
-// refused by the column TYPE (`22003`), not by the CHECK — so the constraint of
-// migration 009 cannot catch it, and only this filter stands between an absurd
-// Jupiter response and a batch abort that takes every other mint down.
+// ⚠️ At 10^20 the column type refuses the value, not the CHECK: only this filter guards it.
 
 #[test]
 fn the_largest_storable_price_is_accepted() {

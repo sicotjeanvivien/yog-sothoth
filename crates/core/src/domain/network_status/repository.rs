@@ -1,40 +1,19 @@
-//! Network status repository trait.
-//!
-//! The domain-level contract for persisting and reading the current
-//! network status snapshot. The concrete Postgres implementation
-//! lives in the `persistence` crate.
-//!
-//! The underlying table is a singleton (one row), so there is no
-//! notion of querying "a" status — there is only ever *the* current
-//! one.
+//! Contracts of the singleton `network_status` row.
 
 use async_trait::async_trait;
 
 use crate::{RepositoryResult, domain::NetworkStatus};
 
-/// Persistence contract for the network status snapshot — the write side,
-/// owned by the indexer's reporter. The read side lives in
-/// [`NetworkStatusLookup`].
+/// Write side of the snapshot, the indexer reporter's lens.
 #[async_trait]
 pub trait NetworkStatusRepository: Send + Sync {
-    /// Overwrite the current snapshot.
-    ///
-    /// Called by the indexer on every tick (~15s). Implementations
-    /// upsert the singleton row — there is never more than one.
+    /// Overwrite the singleton row.
     async fn upsert(&self, status: &NetworkStatus) -> RepositoryResult<()>;
 }
 
-/// Consultation of the network status snapshot — the api's lens.
-///
-/// Kept separate from [`NetworkStatusRepository`] (write side, indexer)
-/// so each binary depends on exactly the methods it uses.
+/// Reading the snapshot, the api's lens.
 #[async_trait]
 pub trait NetworkStatusLookup: Send + Sync {
-    /// Read the current snapshot.
-    ///
-    /// Called by the API for the dashboard's "Solana Live" panel.
-    /// The singleton row is seeded by the migration, so a healthy
-    /// system always has a row to return; `None` would indicate the
-    /// seed row is missing (e.g. migration not applied).
+    /// The current snapshot; `None` means the migration's seed row is missing.
     async fn get(&self) -> RepositoryResult<Option<NetworkStatus>>;
 }

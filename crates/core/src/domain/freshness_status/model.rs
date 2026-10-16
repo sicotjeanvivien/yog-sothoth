@@ -1,22 +1,11 @@
-//! Ingestion freshness — how recent the indexed data is.
-//!
-//! The "Solana Live" panel needs to tell the user whether the data
-//! they are looking at is current. That judgement — turning the age
-//! of the last indexed event into a Live / Delayed / Stale verdict —
-//! is a business rule, so it lives here in the domain, not in the
-//! API layer.
+//! Ingestion freshness: the age of the last indexed event as Live / Delayed / Stale.
 
 use chrono::{DateTime, Duration, Utc};
 
-/// Below this age, ingestion is considered healthy ("Live").
-///
-/// The indexer watches a small allowlist of pools, so short lulls
-/// with no events are normal — the threshold is deliberately
-/// generous rather than alarmist.
+/// Below this age, ingestion is "Live".
 const LIVE_THRESHOLD: Duration = Duration::minutes(2);
 
-/// Below this age (and above `LIVE_THRESHOLD`), ingestion is
-/// "Delayed". Above it, "Stale".
+/// Below this age, "Delayed"; above it, "Stale".
 const STALE_THRESHOLD: Duration = Duration::minutes(15);
 
 /// Freshness verdict for the indexed data.
@@ -31,12 +20,7 @@ pub enum FreshnessStatus {
 }
 
 impl FreshnessStatus {
-    /// Derive the freshness verdict from the timestamp of the most
-    /// recent indexed event, evaluated against `now`.
-    ///
-    /// `last_event_at` is `None` when no event has ever been indexed
-    /// (empty database) — treated as `Stale`, since there is no
-    /// evidence of a live flow.
+    /// The verdict for the most recent indexed event at `now`; none at all is `Stale`.
     pub fn from_last_event(last_event_at: Option<DateTime<Utc>>, now: DateTime<Utc>) -> Self {
         let Some(last) = last_event_at else {
             return FreshnessStatus::Stale;
@@ -53,7 +37,7 @@ impl FreshnessStatus {
         }
     }
 
-    /// Stable lowercase tag, for serialization on the API boundary.
+    /// Stable tag of the API boundary.
     pub fn as_str(&self) -> &'static str {
         match self {
             FreshnessStatus::Live => "live",

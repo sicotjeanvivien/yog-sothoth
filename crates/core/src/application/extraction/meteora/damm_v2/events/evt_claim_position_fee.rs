@@ -10,12 +10,8 @@ pub fn discriminator_claim_position_fee() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtClaimPositionFee")
 }
 
-/// Mirror of `cp-amm::EvtClaimPositionFee`.
-///
-/// Emitted when an LP claims accumulated trading fees on their position.
-/// `fee_a_claimed` / `fee_b_claimed` are absolute amounts in each token —
-/// the protocol does not expose a "since-last-claim" delta, only the
-/// amount transferred in this specific claim.
+/// Mirror of `cp-amm::EvtClaimPositionFee`: an LP claims its position's fees,
+/// the amounts transferred by this claim (not a running total).
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtClaimPositionFee {
     pub pool: Pubkey,

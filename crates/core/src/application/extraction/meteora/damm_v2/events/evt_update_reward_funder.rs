@@ -10,16 +10,8 @@ pub fn discriminator_update_reward_funder() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtUpdateRewardFunder")
 }
 
-/// Mirror of `cp-amm::EvtUpdateRewardFunder`.
-///
-/// Emitted when an admin **transfers the right to fund a slot** from one wallet
-/// to another. Moves no tokens and does not touch the emission rate — it only
-/// changes who may call `fund_reward` on this `reward_index`.
-///
-/// Admin-gated: pool creator, or an operator holding the `UpdateRewardFunder`
-/// permission. Layout taken from the cp-amm source
-/// (`ix_update_reward_funder.rs`, single `emit_cpi!` site); no on-chain fixture
-/// captured.
+/// Mirror of `cp-amm::EvtUpdateRewardFunder`: who may fund slot `reward_index`.
+/// Layout from the cp-amm source alone, no fixture.
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtUpdateRewardFunder {
     pub pool: Pubkey,

@@ -1,10 +1,5 @@
-//! The arbiter's own guards.
-//!
-//! These do **not** prove the expectation is what mainnet sent — only the
-//! JSON-RPC adapter's conformance test, which reaches this module from the
-//! verbatim fixture, can do that. What they catch is the failure mode a
-//! hand-transcribed constant actually has: a digit dropped or a line lost while
-//! copying 392 hex characters twice.
+//! The arbiter's own guards: a digit or a line lost from the hand-transcribed hex.
+//! Whether the bytes match mainnet is the JSON-RPC adapter's test, not these.
 
 use super::*;
 use crate::application::extraction::anchor_event::{DISCRIMINATOR_LEN, EVENT_IX_TAG};
@@ -12,10 +7,8 @@ use crate::application::extraction::meteora::damm_v2::events::discriminator_swap
 
 #[test]
 fn both_reference_payloads_are_anchor_event_emissions() {
-    // A dropped digit shifts every byte after it; a mistyped one does not. So
-    // check both ends of the framing — Anchor's tag, then the event
-    // discriminator that follows it — plus the length. Cheaper than re-reading
-    // 392 characters, and it fails loudly.
+    // A dropped digit shifts every byte after it: check the tag, the
+    // discriminator and the length.
     let swap2 = discriminator_swap2();
 
     for (index, payload) in reference_transaction()
@@ -45,9 +38,7 @@ fn both_reference_payloads_are_anchor_event_emissions() {
 
 #[test]
 fn the_two_reference_payloads_are_distinct() {
-    // The whole point of the reference is to witness *order*. Two identical
-    // payloads would make any permutation invisible, and this assertion is what
-    // stops a future edit from quietly choosing such a transaction.
+    // ⚠️ Two identical payloads would make any reordering invisible.
     let tx = reference_transaction();
     assert_ne!(
         tx.inner_instructions[0].data, tx.inner_instructions[1].data,
@@ -58,8 +49,7 @@ fn the_two_reference_payloads_are_distinct() {
 
 #[test]
 fn assert_matches_reference_accepts_the_reference() {
-    // The control. Without it, the two tests below could pass because the
-    // comparison never looked at anything.
+    // The control: without it, the tests below could pass by looking at nothing.
     assert_matches_reference(&reference_transaction(), None);
 }
 
@@ -79,9 +69,7 @@ fn a_dropped_payload_is_rejected() {
     assert_matches_reference(&tx, None);
 }
 
-/// The field the two sources disagree on is still checked — making it an
-/// argument must not turn it into a field nobody asserts, which is the failure
-/// mode of "just pass what the code produced".
+/// Mutation: `assert_matches_reference` ignoring its `transaction_index` argument.
 #[test]
 #[should_panic(expected = "transaction_index")]
 fn a_transaction_index_the_caller_did_not_expect_is_rejected() {
@@ -90,9 +78,7 @@ fn a_transaction_index_the_caller_did_not_expect_is_rejected() {
     assert_matches_reference(&tx, None);
 }
 
-/// And the mirror: a caller stating `Some` must not be satisfied by a `None`.
-/// Without this, the protobuf adapter could stop filling the one field the
-/// migration exists for and nothing would say so.
+/// Mutation: a `None` satisfying a caller that states `Some`.
 #[test]
 #[should_panic(expected = "transaction_index")]
 fn a_missing_transaction_index_is_rejected_when_the_caller_expects_one() {

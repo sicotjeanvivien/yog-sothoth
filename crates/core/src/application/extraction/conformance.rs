@@ -1,37 +1,8 @@
-//! What every source adapter must produce, and the reference to prove it on.
+//! The reference transaction every source adapter must produce, and its arbiter.
 //!
-//! [`OnChainTransaction`] carries a contract its own crate cannot enforce: the
-//! order of `inner_instructions` decides the persisted `event_index`, and the
-//! adapters that fill it live outside `core` — one per source. Two adapters,
-//! two independent test suites and a single contract is the configuration where
-//! both drift and nothing turns red. This module is the shared arbiter.
-//!
-//! # How it is meant to be used
-//!
-//! Each adapter feeds its own rendering of the reference transaction through
-//! itself and calls [`assert_matches_reference`]. The JSON-RPC adapter starts
-//! from the mainnet fixture; a protobuf adapter will start from a hand-built
-//! `SubscribeUpdate`. Same expectation, one place.
-//!
-//! # Why a hand-written expectation is sound here, and only here
-//!
-//! Building an `OnChainTransaction` by hand inside a test is normally the wrong
-//! move: the test and the code then agree on the author's understanding of the
-//! format instead of confronting it with a real transaction. That objection is
-//! answered by **one** test — the JSON-RPC adapter's conformance test, which
-//! reaches this expectation from the verbatim mainnet response in
-//! `core/tests/fixtures/damm_v2/swap_double.json`. That test is what pins the
-//! bytes below to reality; every other consumer trusts them because of it. Delete
-//! it and this module becomes exactly the trap it exists to avoid.
-//!
-//! # Why this transaction
-//!
-//! `2qJrr…` routes two swaps through the same pool under one signature and one
-//! `blockTime` — it is already the repository's reference for the defect that
-//! `event_index` was introduced to fix. Its two payloads sit in **different**
-//! inner-instruction groups (5 and 8), so an adapter that flattens groups in the
-//! wrong order produces a different result here. A transaction whose payloads
-//! shared a group could not witness the order contract at all.
+//! ⚠️ Sound only because the JSON-RPC adapter's conformance test reaches it from
+//! the verbatim mainnet fixture: delete that test and these bytes prove nothing.
+//! Its two payloads sit in different inner-instruction groups, so order shows.
 
 use std::str::FromStr;
 
@@ -41,7 +12,7 @@ use solana_signature::Signature;
 use crate::application::extraction::{InnerInstructionPayload, OnChainTransaction};
 use crate::domain::{Protocol, TransactionPosition};
 
-/// Signature of the reference transaction — its id, and what it is fetched by.
+/// Signature of the reference transaction.
 const REFERENCE_SIGNATURE: &str =
     "2qJrrEVDC3DipMWmd8WgfKRaXBu9RFZLi8udbxW6NKPQ4kfU1fz8pZ6zeepKRG2EoMQ2rY3BhQ96yHSGMqxoh6NN";
 
@@ -51,11 +22,8 @@ const REFERENCE_SLOT: u64 = 415_296_180;
 /// Its `blockTime`, in seconds since the epoch.
 const REFERENCE_BLOCK_TIME: i64 = 1_777_013_942;
 
-/// First cp-amm payload — the A→B leg, emitted from inner-instruction group 5.
-///
-/// Hexadecimal rather than base58 on purpose: base58 would put `bs58` back into
-/// `core`, which is one of the two dependencies this arrangement exists to
-/// remove. Hex also diffs and reads, which a binary blob does not.
+/// First cp-amm payload, the A→B leg, from inner-instruction group 5.
+/// ⚠️ Hex, not base58: base58 would bring `bs58` back into `core`.
 const LEG_A_HEX: &str = "\
     e445a52e51cb9a1dbd4233a826507599cb422f17f0e7100ec0a157eb01fb720f\
     557b0027b7416c913255aec50a533489000100450b2730020000002d9b7dbea4\
@@ -87,10 +55,8 @@ pub fn reference_transaction() -> OnChainTransaction {
             timestamp: DateTime::from_timestamp(REFERENCE_BLOCK_TIME, 0)
                 .expect("the reference block time is a constant and must convert"),
             slot: REFERENCE_SLOT,
-            // ⚠️ Not part of the shared expectation — see
-            // [`assert_matches_reference`], which takes it as an argument. The
-            // value here is the JSON-RPC one, and it is only what
-            // `reference_transaction` needs in order to be a whole value.
+            // ⚠️ Not part of the shared expectation: [`assert_matches_reference`]
+            // takes it as an argument.
             transaction_index: None,
         },
         inner_instructions: vec![
@@ -106,28 +72,9 @@ pub fn reference_transaction() -> OnChainTransaction {
     }
 }
 
-/// Assert that `actual` is the reference transaction, naming what diverged.
-///
-/// Panics with the offending payload index or position field rather than two
-/// several-hundred-byte `Debug` blobs, because the failure this guards against
-/// is a *reordering* — and two orderings of the same bytes look identical until
-/// something points at the index that moved.
-///
-/// # Why `transaction_index` is an argument and no other field is
-///
-/// Because it is the one field the two sources legitimately disagree on, and
-/// that disagreement is the reason the second source exists. `getTransaction`
-/// leaves it out — optional in the API, never returned by the provider in
-/// use — so the JSON-RPC adapter yields `None`; a Yellowstone
-/// `SubscribeUpdateTransactionInfo` carries `index` unconditionally, so the
-/// protobuf adapter yields `Some`. Two adapters cannot both match a constant
-/// here.
-///
-/// Making it a parameter keeps the arbiter **total** — the field is still
-/// checked, in one place — while forcing each caller to state what its own
-/// source provides. The alternative, dropping the field from the shared
-/// expectation, would leave the one column this whole migration is about
-/// unasserted by the module whose job is asserting.
+/// Assert that `actual` is the reference transaction, naming the payload or field
+/// that diverged. `transaction_index` is an argument: JSON-RPC yields `None`,
+/// gRPC `Some`, and each caller states what its source provides.
 pub fn assert_matches_reference(
     actual: &OnChainTransaction,
     expected_transaction_index: Option<u32>,
@@ -175,11 +122,7 @@ pub fn assert_matches_reference(
     }
 }
 
-/// Decode an even-length hex string, ignoring the whitespace that lets the
-/// constants above be read 32 bytes to a line.
-///
-/// Ten lines rather than a dependency: `core` is shedding two here, and adding
-/// one back for test data would undo the point.
+/// Decode an even-length hex string, ignoring whitespace.
 fn decode_hex(s: &str) -> Vec<u8> {
     let digits: Vec<u8> = s
         .bytes()

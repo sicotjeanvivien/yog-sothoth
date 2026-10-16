@@ -1,13 +1,5 @@
 //! Translate DAMM v2 wire events into protocol-agnostic domain events.
-//!
-//! Wire events ([`super::events::DammV2WireEvent`]) are byte-perfect mirrors
-//! of cp-amm's on-chain Anchor events. Domain events
-//! ([`crate::domain::DomainEvent`]) are protocol-agnostic representations
-//! consumed by the indexer service.
-//!
-//! Token mints are NOT derived here: they are a property of the pool,
-//! resolved authoritatively from the cp-amm Pool account by yog-context. Swap
-//! and liquidity events therefore carry no mints — they reference the pool.
+//! Mints are not derived here: yog-context resolves them from the pool account.
 
 use crate::domain::EventPosition;
 use crate::error::TranslationError;
@@ -48,8 +40,7 @@ use translate_permanent_lock_position::translate_permanent_lock_position;
 use translate_set_pool_status::translate_set_pool_status;
 use translate_split_position::translate_split_position;
 use translate_swap::translate_swap;
-// Swap-specific helper, re-exported only so `translator_tests.rs` — which reaches
-// it through `use super::*` — keeps compiling now that it lives with translate_swap.
+// Re-exported for `translator_tests.rs`, which reaches it through `use super::*`.
 #[cfg(test)]
 use translate_swap::compute_fee_token_is_a;
 use translate_update_pool_fees::translate_update_pool_fees;
@@ -136,16 +127,8 @@ pub(super) fn translate_wire_event(
     Ok(DomainEvent::MeteoraDammV2(damm_v2_event))
 }
 
-// ---------------------------------------------------------------------------
-// Translation unit tests
-// ---------------------------------------------------------------------------
-//
-// Field-mapping guards for the ring-2 lifecycle events that have no on-chain
-// fixture yet (close / lock / permanent-lock / set-pool-status). They build a
-// wire event with a distinct sentinel per field and assert each lands in the
-// right domain field — catching swaps/typos in the translator. They do NOT
-// validate the borsh layout or the discriminator against the real program;
-// that still needs a fixture.
+// Field mapping of events without an on-chain fixture: a crossed field fails,
+// a wrong borsh layout does not.
 
 #[cfg(test)]
 #[path = "translator_tests.rs"]

@@ -1,17 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-/// Direction of a swap, relative to the pool's own `(token_a, token_b)`
-/// ordering — the designation the program assigns, **not** a sort of the two
-/// mints by their bytes (see
-/// [`crate::domain::MeteoraDammV2SwapEvent`] for what that order does and does
-/// not guarantee).
-///
-/// - [`TradeDirection::AtoB`]: the trader provided token_a, received token_b
-/// - [`TradeDirection::BtoA`]: the trader provided token_b, received token_a
-///
-/// Combined with the pool's `token_a_mint` / `token_b_mint`, this is enough to
-/// recover what the trader sent and received from the `amount_a` / `amount_b`
-/// fields of a swap event.
+/// Direction of a swap in the pool's own A/B order: `AtoB`, the trader sent
+/// token A and received token B; `BtoA` the reverse.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TradeDirection {
@@ -20,7 +10,7 @@ pub enum TradeDirection {
 }
 
 impl TradeDirection {
-    /// Stable string representation, used for DB persistence and logs.
+    /// Stable tag of the DB and the logs.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::AtoB => "a_to_b",
@@ -28,8 +18,7 @@ impl TradeDirection {
         }
     }
 
-    /// Decode from the on-chain `u8` representation used by Anchor events.
-    /// `0 = AtoB`, `1 = BtoA`. Other values are rejected.
+    /// Decode the Anchor event's `u8`: `0 = AtoB`, `1 = BtoA`, any other refused.
     pub fn from_u8(v: u8) -> Result<Self, u8> {
         match v {
             0 => Ok(Self::AtoB),

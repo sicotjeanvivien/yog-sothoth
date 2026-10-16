@@ -3,11 +3,8 @@ use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 
-/// What actually moved from the first position to the second.
-///
-/// Field order differs from [`MeteoraDammV2SplitPositionState`] on the wire —
-/// see the note there. Modelled as separate types rather than one shared type
-/// precisely so the two can never be confused.
+/// What moved from the first position to the second.
+/// ⚠️ Its wire field order differs from [`MeteoraDammV2SplitPositionState`].
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct MeteoraDammV2SplitAmounts {
     pub permanent_locked_liquidity: u128,
@@ -19,11 +16,7 @@ pub struct MeteoraDammV2SplitAmounts {
     pub reward_1: u64,
 }
 
-/// The state of one position **after** the split.
-///
-/// The three liquidity buckets are reported separately. The deprecated v2 event
-/// collapsed them into a single `liquidity` total, which is why cp-amm versioned
-/// the event — and why we index v3 only.
+/// The state of one position **after** the split, its three liquidity buckets apart.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct MeteoraDammV2SplitPositionState {
     pub unlocked_liquidity: u128,
@@ -35,13 +28,8 @@ pub struct MeteoraDammV2SplitPositionState {
     pub reward_1: u64,
 }
 
-/// The fractions the caller requested, each a numerator over
-/// `SPLIT_POSITION_DENOMINATOR` (1e9).
-///
-/// Requested, not realised: the amounts actually moved are in
-/// [`MeteoraDammV2SplitAmounts`]. Kept alongside them because the gap between
-/// the two is itself informative (rounding, or a component that had nothing to
-/// give).
+/// The requested fractions, each over 1e9; the amounts moved are in
+/// [`MeteoraDammV2SplitAmounts`].
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct MeteoraDammV2SplitNumerators {
     pub unlocked_liquidity: u32,
@@ -53,27 +41,14 @@ pub struct MeteoraDammV2SplitNumerators {
     pub inner_vesting_liquidity: u32,
 }
 
-/// A position transferring **a fraction of its contents to another position**,
-/// possibly owned by a different wallet.
-///
-/// Each component is split independently: unlocked liquidity, permanently
-/// locked liquidity, vesting liquidity, pending fees A/B, pending farm rewards
-/// 0/1.
-///
-/// Product angle: a split moves liquidity **between two wallets and leaves a
-/// traceable event**, unlike transferring the position NFT outright — the blind
-/// spot of any LP-concentration score. Splits are therefore visible to
-/// concentration analytics, which is the reason to index this at all.
-///
-/// Decoded from `EvtSplitPosition3`. cp-amm also emits a deprecated
-/// `EvtSplitPosition2` on every split; it is a strict subset and is dropped at
-/// extraction to avoid double counting.
+/// A position moves a fraction of its contents to another position, possibly
+/// another wallet's: liquidity changing hands that an NFT transfer would hide.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MeteoraDammV2SplitPositionEvent {
     pub pool_address: Pubkey,
     pub signature: Signature,
     pub timestamp: DateTime<Utc>,
-    /// Position in the chain — see [`crate::domain::EventPosition`].
+    /// Position in the chain, see [`crate::domain::EventPosition`].
     pub slot: u64,
     pub transaction_index: Option<u32>,
     pub event_index: u16,
@@ -81,8 +56,7 @@ pub struct MeteoraDammV2SplitPositionEvent {
     pub second_owner: Pubkey,
     pub first_position: Pubkey,
     pub second_position: Pubkey,
-    /// Pool sqrt price at the time of the split — lets the moved liquidity be
-    /// valued without joining back to the swap timeline.
+    /// Pool sqrt price at the split, to value the moved liquidity.
     pub current_sqrt_price: u128,
     pub amounts: MeteoraDammV2SplitAmounts,
     pub first_position_after: MeteoraDammV2SplitPositionState,

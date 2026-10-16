@@ -10,44 +10,28 @@ use crate::{
     domain::{InsertOutcome, MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventValued},
 };
 
-/// Cursor identifying a position in the canonical liquidity-event
-/// ordering (`timestamp DESC`, `signature ASC` as tiebreaker).
+/// The last item of a page in the liquidity-event ordering.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MeteoraDammV2LiquidityEventCursor {
     pub timestamp: DateTime<Utc>,
     pub signature: Signature,
-    /// Third key of the ordering, and the reason it is a total one: since
-    /// migration 041 a routed transaction stores one row per hop, all sharing
-    /// `timestamp` **and** `signature`. Without it a page boundary landing
-    /// between two hops drops the other one — silently, which is how the row
-    /// it recovers went missing in the first place.
+    /// ⚠️ Third key of the ordering: the hops of a routed transaction share
+    /// `timestamp` and `signature`, and a page boundary between them drops one.
     pub event_index: u16,
 }
 
-/// Persistence contract for liquidity events — the write side, owned by
-/// the indexer's persistor. The read side lives in
-/// [`MeteoraDammV2LiquidityEventFeed`].
+/// Write side of liquidity events, the indexer's lens.
 #[async_trait]
 pub trait MeteoraDammV2LiquidityEventRepository: Send + Sync {
     async fn insert(&self, event: &MeteoraDammV2LiquidityEvent) -> RepositoryResult<InsertOutcome>;
 }
 
-/// The per-pool liquidity-event feed — the api's lens: a cursor-paginated,
-/// time-ordered listing, same shape as the signal feed (`SignalFeed`).
-///
-/// Kept separate from [`MeteoraDammV2LiquidityEventRepository`] (write
-/// side, indexer) so each binary depends on exactly the methods it uses.
+/// The per-pool liquidity-event feed, the api's lens.
 #[async_trait]
 pub trait MeteoraDammV2LiquidityEventFeed: Send + Sync {
-    /// Paginate liquidity events for a given pool, ordered by
-    /// `timestamp DESC`, `signature ASC` as tiebreaker. Each item carries its
-    /// trade-time USD value (`None` when not computable) — see
-    /// [`MeteoraDammV2LiquidityEventValued`].
-    ///
-    /// `cursor` is `None` for the first page; for subsequent pages,
-    /// pass the `next_cursor` returned by the previous call. `limit`
-    /// is the maximum number of items to return; implementations
-    /// may cap it to an upper bound.
+    /// A page of the pool's events, `(timestamp DESC, signature ASC, event_index ASC)`;
+    /// the returned cursors chain the pages, `limit` may be capped.
+    /// Each carries its USD value at event time, see [`MeteoraDammV2LiquidityEventValued`].
     async fn find_by_pool_paginated(
         &self,
         pool_address: &Pubkey,

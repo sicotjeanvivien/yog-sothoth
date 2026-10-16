@@ -3,8 +3,8 @@
 use crate::application::extraction::meteora::damm_v2::events::EvtUpdatePoolFees;
 use crate::domain::{EventPosition, MeteoraDammV2UpdatePoolFeesEvent};
 
-/// Translate an [`EvtUpdatePoolFees`] into a [`MeteoraDammV2UpdatePoolFeesEvent`].
-/// Infallible — the fee params are carried through as the raw, undecoded blob.
+/// Translate an [`EvtUpdatePoolFees`] into a [`MeteoraDammV2UpdatePoolFeesEvent`],
+/// the fee params as the raw blob.
 pub(super) fn translate_update_pool_fees(
     wire: &EvtUpdatePoolFees,
     event_position: EventPosition,

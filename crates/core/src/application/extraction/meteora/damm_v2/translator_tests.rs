@@ -105,11 +105,10 @@ fn set_pool_status_maps_every_field() {
     assert_eq!(d.event_index, 3);
 }
 
-// ── ring-1 fee-side logic ───────────────────────────────────────────
+// ── fee-side logic ──────────────────────────────────────────────────
 
-/// `compute_fee_token_is_a` mirrors cp-amm's FeeMode. A wrong branch here
-/// mislabels which token a swap's fee is denominated in — every combination
-/// is pinned, including the unknown-mode error path.
+/// Every `collect_fee_mode` × direction, and the unknown-mode error.
+/// Mutation: any wrong branch, which mislabels the fee's token.
 #[test]
 fn compute_fee_token_is_a_covers_every_mode() {
     // BothToken (0): fee on the OUT token → A only when the trade is B→A.
@@ -144,10 +143,7 @@ fn enum_from_u8_decoders() {
 }
 
 // ── rewards family: admin/funder events with no on-chain fixture ─────
-//
-// Same guard as the lifecycle events above: one distinct sentinel per field,
-// asserting each lands in the right domain field. Catches a swap or typo in the
-// translator. The borsh layout itself is pinned separately in `events_tests.rs`.
+// One sentinel per field: a crossed field fails.
 
 #[test]
 fn update_reward_duration_maps_every_field() {

@@ -10,22 +10,8 @@ pub fn discriminator_update_reward_duration() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtUpdateRewardDuration")
 }
 
-/// Mirror of `cp-amm::EvtUpdateRewardDuration`.
-///
-/// Emitted when an admin **re-paces a slot**: the length of a funding window
-/// changes, which changes the emission rate every subsequent
-/// [`EvtFundReward`] will compute (`rate = amount / duration`). It does not
-/// re-rate the *current* window on its own.
-///
-/// Admin-gated: the signer is either the pool creator or an operator holding
-/// the `UpdateRewardDuration` permission.
-///
-/// Durations are in seconds. Layout taken from the cp-amm source
-/// (`ix_update_reward_duration.rs`, single `emit_cpi!` site); no on-chain
-/// fixture has been captured for this event — see the module-level note on
-/// fixture-less events.
-///
-/// [`EvtFundReward`]: crate::application::extraction::meteora::damm_v2::events::EvtFundReward
+/// Mirror of `cp-amm::EvtUpdateRewardDuration` (seconds): re-paces later fundings,
+/// not the current window. Layout from the cp-amm source alone, no fixture.
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtUpdateRewardDuration {
     pub pool: Pubkey,

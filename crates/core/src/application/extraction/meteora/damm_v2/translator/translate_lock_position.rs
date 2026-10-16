@@ -4,8 +4,6 @@ use crate::application::extraction::meteora::damm_v2::events::EvtLockPosition;
 use crate::domain::{EventPosition, MeteoraDammV2LockPositionEvent};
 
 /// Translate an [`EvtLockPosition`] into a [`MeteoraDammV2LockPositionEvent`].
-///
-/// Infallible — every field maps directly, no enum or context to resolve.
 pub(super) fn translate_lock_position(
     wire: &EvtLockPosition,
     event_position: EventPosition,

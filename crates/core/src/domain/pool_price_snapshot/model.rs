@@ -1,12 +1,5 @@
-//! Pool price snapshot read model.
-//!
-//! A pool's *current* price inputs from both sources: the on-chain side
-//! (the raw `sqrt_price` of the last swap — decoded to a spot price by the
-//! consumer, since the Q64.64 interpretation is protocol-specific) and the
-//! oracle side (each token's most recent USD price observation, with its
-//! fetch instant so the consumer can gate on staleness). The read model
-//! feeding the price-oracle-deviation detector. Pure domain type — no
-//! persistence backend leaks in here.
+//! A pool's current price inputs from the chain (`sqrt_price` of the last swap)
+//! and the oracle (each token's latest USD price), for the deviation detector.
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
@@ -14,13 +7,8 @@ use solana_pubkey::Pubkey;
 
 use crate::domain::Protocol;
 
-/// Current price inputs for one pool, from both the chain and the oracle.
-///
-/// Only pools that *can* be compared appear as snapshots: mints and decimals
-/// resolved, at least one swap observed, and a price observation for both
-/// tokens — hence no `Option` fields. Staleness, however, is the consumer's
-/// call: `last_swap_at` and the two `fetched_at` instants are carried so it
-/// can decide how old is too old.
+/// Current price inputs of one comparable pool; staleness is the consumer's
+/// call, from the three instants carried.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PoolPriceSnapshot {
     /// The pool this snapshot is for.

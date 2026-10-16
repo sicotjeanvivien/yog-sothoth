@@ -4,8 +4,6 @@ use crate::application::extraction::meteora::damm_v2::events::EvtClaimPositionFe
 use crate::domain::{EventPosition, MeteoraDammV2ClaimPositionFeeEvent};
 
 /// Translate an [`EvtClaimPositionFee`] into a [`MeteoraDammV2ClaimPositionFeeEvent`].
-///
-/// This translation is infallible — every field maps directly.
 pub(super) fn translate_claim_position_fee(
     wire: &EvtClaimPositionFee,
     event_position: EventPosition,

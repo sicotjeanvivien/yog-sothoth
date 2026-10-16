@@ -1,12 +1,5 @@
-//! Signal domain model.
-//!
-//! A signal is a *conclusion* emitted by a [`SignalDetector`] when a
-//! condition on the observed data becomes true — not a raw on-chain
-//! event. Its shape is uniform across protocols, so it lives in a single
-//! generic table (`signals`), discriminated by `detector` + `protocol`.
-//! Pure domain type; no persistence backend leaks in here.
-//!
-//! [`SignalDetector`]: crate::domain::SignalDetector
+//! A signal: a conclusion a detector emits on observed data, not an on-chain
+//! event. One generic `signals` table, discriminated by `detector` and `protocol`.
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
@@ -15,11 +8,8 @@ use solana_pubkey::Pubkey;
 
 use crate::domain::Protocol;
 
-/// How much attention a signal warrants. Closed, stable set → an enum,
-/// mirrored one-to-one by the `signals.severity` CHECK constraint.
-///
-/// `Ord` follows the declaration order (`Info < Warning < Critical`), which
-/// is exactly the escalation order the engine's dedup compares against.
+/// How much attention a signal warrants; mirrors the `signals.severity` CHECK.
+/// ⚠️ The declaration order is the escalation order the engine's dedup compares.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Severity {
@@ -29,7 +19,7 @@ pub enum Severity {
 }
 
 impl Severity {
-    /// Stable snake_case tag, as persisted in the `severity` column.
+    /// Stable tag of the `severity` column.
     pub fn as_str(&self) -> &'static str {
         match self {
             Severity::Info => "info",
@@ -61,18 +51,10 @@ impl std::str::FromStr for Severity {
 /// A single emitted signal — one row of the `signals` table.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signal {
-    /// Which detector fired. A stable snake_case tag equal to the
-    /// producing detector's [`SignalDetector::name`]. A plain `String`
-    /// (not a central enum) on purpose: detectors are the product's
-    /// high-churn, open-ended surface — a shared enum would re-tax the
-    /// one action done most often, the same reason `signals` is not
-    /// split per-detector.
-    ///
-    /// [`SignalDetector::name`]: crate::domain::SignalDetector::name
+    /// The producing detector's [`SignalDetector::name`](crate::domain::SignalDetector::name).
     pub detector: String,
 
-    /// The protocol of the pool this signal is about. Closed set → the
-    /// shared [`Protocol`] enum, persisted as its snake_case tag.
+    /// The protocol of the pool this signal is about.
     pub protocol: Protocol,
 
     /// The pool the signal concerns.
@@ -81,34 +63,20 @@ pub struct Signal {
     /// How much attention it warrants.
     pub severity: Severity,
 
-    /// The metric value that crossed the threshold (units are the
-    /// detector's own — a ratio, a percentage, a USD amount). Exact
-    /// fixed-point, like [`crate::domain::TokenPrice::price_usd`].
+    /// The metric value that crossed the threshold, in the detector's own unit.
     pub value: Decimal,
 
-    /// The threshold that was crossed, kept for traceability. Optional:
-    /// some detectors have no single scalar threshold.
+    /// The threshold crossed, when the detector has a single scalar one.
     pub threshold: Option<Decimal>,
 
     /// Optional human-readable summary for feeds and notifications.
     pub message: Option<String>,
 
-    /// The tick instant at which the signal was raised. Shared by every
-    /// signal of one evaluation (see [`EvalContext`]).
-    ///
-    /// [`EvalContext`]: crate::domain::EvalContext
+    /// The tick instant, shared by every signal of one evaluation.
     pub triggered_at: DateTime<Utc>,
 }
 
-/// A persisted signal, as read back from storage.
-///
-/// Wraps the [`Signal`] payload with its storage identity: `id` only
-/// exists once the row is inserted (`BIGSERIAL`), so it has no place on
-/// the write-side [`Signal`] — but the read side needs it as the
-/// deterministic tie-breaker of the feed ordering (see
-/// [`SignalCursor`]).
-///
-/// [`SignalCursor`]: crate::domain::SignalCursor
+/// A persisted signal and its storage `id`, the tie-breaker of the feed ordering.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SignalRecord {
     /// Storage-assigned identity, unique within the table.

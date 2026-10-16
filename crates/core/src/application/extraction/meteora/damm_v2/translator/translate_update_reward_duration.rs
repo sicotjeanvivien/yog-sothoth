@@ -4,7 +4,7 @@ use crate::application::extraction::meteora::damm_v2::events::EvtUpdateRewardDur
 use crate::domain::{EventPosition, MeteoraDammV2UpdateRewardDurationEvent};
 
 /// Translate an [`EvtUpdateRewardDuration`] into a
-/// [`MeteoraDammV2UpdateRewardDurationEvent`]. Infallible.
+/// [`MeteoraDammV2UpdateRewardDurationEvent`].
 pub(super) fn translate_update_reward_duration(
     wire: &EvtUpdateRewardDuration,
     event_position: EventPosition,

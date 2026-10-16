@@ -10,10 +10,7 @@ pub fn discriminator_set_pool_status() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtSetPoolStatus")
 }
 
-/// Mirror of `cp-amm::EvtSetPoolStatus`.
-///
-/// Emitted when a pool's status flag is changed (e.g. enabled/disabled).
-/// `status` is the raw on-chain status byte — not interpreted here.
+/// Mirror of `cp-amm::EvtSetPoolStatus`; `status` is the raw, uninterpreted byte.
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtSetPoolStatus {
     pub pool: Pubkey,

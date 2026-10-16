@@ -10,23 +10,9 @@ pub fn discriminator_swap2() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtSwap2")
 }
 
-/// Mirror of `cp-amm::SwapParameters2`.
-///
-/// The semantics of `amount_0` and `amount_1` depend on `swap_mode`:
-/// - `ExactIn` / `PartialFill`: `amount_0 = amount_in`, `amount_1 = minimum_amount_out`
-/// - `ExactOut`: `amount_0 = amount_out`, `amount_1 = maximum_amount_in`
-///
-/// `swap_mode` corresponds to cp-amm's `SwapMode` enum:
-/// - `0` = `ExactIn`
-/// - `1` = `PartialFill`
-/// - `2` = `ExactOut`
-///
-/// A legacy `swap` instruction never reaches us as a distinct shape: its
-/// two-field `SwapParameters { amount_in, minimum_amount_out }` is widened by
-/// cp-amm's entrypoint into `SwapParameters2 { amount_0: amount_in, amount_1:
-/// minimum_amount_out, swap_mode: ExactIn }` before the shared handler runs. So
-/// `swap_mode == 0` on a legacy swap is the program's own normalisation, not an
-/// assumption of ours.
+/// Mirror of `cp-amm::SwapParameters2`. `swap_mode` 0 `ExactIn` and 1 `PartialFill`:
+/// `amount_0` in, `amount_1` min out; 2 `ExactOut`: `amount_0` out, `amount_1` max in.
+/// cp-amm widens a legacy `swap` to `ExactIn`.
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct SwapParameters2 {
     pub amount_0: u64,
@@ -34,11 +20,7 @@ pub struct SwapParameters2 {
     pub swap_mode: u8,
 }
 
-/// Mirror of `cp-amm::SwapResult2`.
-///
-/// Captures every fee component computed by the swap engine. The four fee
-/// fields (`claiming_fee`, `protocol_fee`, `compounding_fee`, `referral_fee`)
-/// must be summed to obtain the total fee charged on the swap.
+/// Mirror of `cp-amm::SwapResult2`; the total fee is the sum of the four fee fields.
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct SwapResult2 {
     pub included_fee_input_amount: u64,
@@ -52,35 +34,9 @@ pub struct SwapResult2 {
     pub referral_fee: u64,
 }
 
-/// Mirror of `cp-amm::EvtSwap2`.
-///
-/// Emitted by the cp-amm program for every executed swap, including those
-/// initiated through the legacy `swap` instruction — both `swap` and `swap2`
-/// are routed by cp-amm's custom entrypoint to the *same* handler
-/// (`p_handle_swap`), the legacy parameters being widened to
-/// [`SwapParameters2`] on the way in. There is exactly one emission site and no
-/// `EvtSwap` v1 event exists, so this single mirror covers every swap and
-/// carries no double-counting risk.
-///
-/// **This event is not emitted via `emit_cpi!`** — cp-amm hand-rolls the same
-/// wire format on its pinocchio fast path. See the module-level section "The
-/// swap path does NOT go through `emit_cpi!`" before auditing or changing
-/// anything here.
-///
-/// The `reserve_*` fields hold the pool reserves **after** the swap, in the
-/// pool's own `(token_a, token_b)` order — the program's designation, stable
-/// over the pool's life and independent of swap direction, which is what makes
-/// it usable for time-series analytics. It is **not** a sort of the two mints;
-/// see [`crate::domain::MeteoraDammV2SwapEvent`].
-///
-/// `trade_direction` reflects the direction the user requested:
-/// - `0` (`AtoB`): user provided token A, received token B
-/// - `1` (`BtoA`): user provided token B, received token A
-///
-/// `collect_fee_mode` corresponds to cp-amm's `CollectFeeMode` enum:
-/// - `0` = `BothToken`
-/// - `1` = `OnlyB`
-/// - `2` = `Compounding`
+/// Mirror of `cp-amm::EvtSwap2`, the one event of every swap, legacy `swap` included.
+/// `reserve_*` are **after** the swap, in the pool's own A/B order. `trade_direction`:
+/// 0 `AtoB`, 1 `BtoA`; `collect_fee_mode`: 0 `BothToken`, 1 `OnlyB`, 2 `Compounding`.
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtSwap2 {
     pub pool: Pubkey,

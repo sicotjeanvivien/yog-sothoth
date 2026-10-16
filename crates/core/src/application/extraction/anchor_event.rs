@@ -1,47 +1,5 @@
-//! Generic Anchor event decoding for `event_cpi`-style events.
-//!
-//! Anchor offers two ways for a program to emit events:
-//! 1. **`emit!`** — writes the event payload as a `Program data: <base64>`
-//!    log line.
-//! 2. **`emit_cpi!`** — performs a self-CPI to the program with the event
-//!    payload as instruction data, recorded under `inner_instructions` in
-//!    the transaction metadata.
-//!
-//! Meteora's cp-amm program uses the `emit_cpi!` form. This module supports
-//! that form exclusively. The legacy log-based form is intentionally not
-//! covered — adding it later is straightforward if a future protocol needs it.
-//!
-//! ## Wire format of an Anchor `event_cpi` payload
-//!
-//! ```text
-//! [8 bytes EVENT_IX_TAG][8 bytes event discriminator][borsh payload]
-//! ```
-//!
-//! - `EVENT_IX_TAG` is a constant defined by Anchor itself
-//!   (`sha256("anchor:event")[..8]`). It identifies the inner instruction
-//!   as an Anchor self-CPI event, regardless of which program emitted it.
-//! - The event discriminator is `sha256("event:<EventName>")[..8]`.
-//! - The borsh payload mirrors the event struct's field layout.
-//!
-//! ## Where event payloads come from
-//!
-//! When a program uses `emit_cpi!`, the runtime records a CPI to the
-//! program itself with:
-//! - `program_id == <emitting program>`
-//! - `accounts == [event_authority]` (a single account, the program's PDA
-//!   acting as event signer)
-//! - `data == [tag][discriminator][payload]`, which the source's adapter has
-//!   already decoded into bytes on
-//!   [`OnChainTransaction::inner_instructions`](crate::application::extraction::OnChainTransaction::inner_instructions)
-//!
-//! [`extract_anchor_event_cpis`] isolates these instructions; the caller
-//! then runs each through [`decode_anchor_event_cpi`] to obtain the
-//! discriminator and payload, and finally borsh-deserializes the payload
-//! into a known struct.
-//!
-//! Nothing here knows how the transaction reached the process: it reads the
-//! neutral [`OnChainTransaction`], which an adapter living in the ingestion
-//! crate fills — one per source, none of them named here.
+//! Generic decoding of Anchor `emit_cpi!` events (not `emit!` log lines): a
+//! self-CPI whose data is `[EVENT_IX_TAG][discriminator][borsh payload]`.
 
 use solana_pubkey::Pubkey;
 
@@ -54,28 +12,15 @@ pub const DISCRIMINATOR_LEN: usize = 8;
 /// Length of the Anchor `event_cpi` self-CPI tag, in bytes.
 pub const EVENT_IX_TAG_LEN: usize = 8;
 
-/// The constant tag Anchor prepends to every `event_cpi` payload.
-///
-/// Equal to `sha256("anchor:event")[..8]`, in the order produced by the
-/// hash function — same order as on-chain bytes.
-///
-/// This tag is identical for every Anchor program — it's part of the
-/// Anchor framework, not specific to any individual program.
+/// `sha256("anchor:event")[..8]`, the same for every Anchor program.
 pub const EVENT_IX_TAG: [u8; EVENT_IX_TAG_LEN] = [0xe4, 0x45, 0xa5, 0x2e, 0x51, 0xcb, 0x9a, 0x1d];
 
 // ---------------------------------------------------------------------------
 // Decoding
 // ---------------------------------------------------------------------------
 
-/// Decode the raw bytes of an Anchor `event_cpi` instruction.
-///
-/// Validates that the leading 8 bytes match [`EVENT_IX_TAG`], then splits
-/// the remainder into the event discriminator (next 8 bytes) and the borsh
-/// payload (everything after).
-///
-/// Returns `Err(NotAnAnchorEvent)` if the tag does not match — the caller
-/// can use this to filter out cp-amm inner instructions that aren't events
-/// (regular CPI calls performed by the program for other reasons).
+/// Split an Anchor `event_cpi` payload into its discriminator and borsh body;
+/// `NotAnAnchorEvent` marks a self-CPI that is not an event.
 pub(crate) fn decode_anchor_event_cpi(
     data: &[u8],
 ) -> Result<([u8; DISCRIMINATOR_LEN], Vec<u8>), AnchorDecodeError> {
@@ -103,26 +48,9 @@ pub(crate) fn decode_anchor_event_cpi(
 // Extraction from a Solana transaction
 // ---------------------------------------------------------------------------
 
-/// Extract every inner-instruction payload of `tx` addressed to
-/// `target_program_id`, which could be an Anchor `event_cpi` event emission.
-///
-/// Each returned entry is the raw instruction data — ready to be passed to
-/// [`decode_anchor_event_cpi`].
-///
-/// Filtering is intentionally permissive: we keep every payload addressed to
-/// the target program, regardless of how many accounts it references.
-/// Discriminating "is this really an event" is the job of
-/// [`decode_anchor_event_cpi`], which checks the [`EVENT_IX_TAG`] prefix. This
-/// keeps the extractor stable across Anchor framework upgrades that might
-/// change incidental conventions like account counts.
-///
-/// # ⚠️ Only ever widen this filter
-///
-/// The position of a payload in this function's output is persisted as
-/// `event_index`. Narrowing the filter renumbers events already stored — the
-/// full reasoning, which applies identically to the adapter that fills the
-/// transaction, is on
-/// [`InnerInstructionPayload`](crate::application::extraction::InnerInstructionPayload).
+/// Every inner-instruction payload of `tx` addressed to `target_program_id`.
+/// ⚠️ Only ever widen this filter: the output position is the persisted
+/// `event_index` ([`InnerInstructionPayload`](crate::application::extraction::InnerInstructionPayload)).
 pub(crate) fn extract_anchor_event_cpis<'a>(
     tx: &'a OnChainTransaction,
     target_program_id: &Pubkey,
@@ -133,10 +61,6 @@ pub(crate) fn extract_anchor_event_cpis<'a>(
         .map(|ix| ix.data.as_slice())
         .collect()
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 #[path = "anchor_event_tests.rs"]

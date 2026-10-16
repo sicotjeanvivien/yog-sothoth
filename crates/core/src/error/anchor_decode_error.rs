@@ -5,13 +5,11 @@ pub enum AnchorDecodeError {
     #[error("invalid base58 in instruction data: {0}")]
     InvalidBase58(String),
 
-    /// The instruction data is shorter than the minimum required to
-    /// contain the Anchor event tag plus a discriminator.
+    /// Shorter than the Anchor event tag plus a discriminator.
     #[error("payload too short: expected at least {min} bytes, got {got}")]
     PayloadTooShort { min: usize, got: usize },
 
-    /// The first 8 bytes do not match the Anchor `event_cpi` tag — this
-    /// inner instruction is not an Anchor event emission.
+    /// Not an Anchor event emission: the first 8 bytes are not the `event_cpi` tag.
     #[error("not an Anchor event_cpi instruction: tag mismatch")]
     NotAnAnchorEvent,
 }

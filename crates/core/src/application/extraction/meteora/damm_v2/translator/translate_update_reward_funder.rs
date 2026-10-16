@@ -4,7 +4,7 @@ use crate::application::extraction::meteora::damm_v2::events::EvtUpdateRewardFun
 use crate::domain::{EventPosition, MeteoraDammV2UpdateRewardFunderEvent};
 
 /// Translate an [`EvtUpdateRewardFunder`] into a
-/// [`MeteoraDammV2UpdateRewardFunderEvent`]. Infallible.
+/// [`MeteoraDammV2UpdateRewardFunderEvent`].
 pub(super) fn translate_update_reward_funder(
     wire: &EvtUpdateRewardFunder,
     event_position: EventPosition,

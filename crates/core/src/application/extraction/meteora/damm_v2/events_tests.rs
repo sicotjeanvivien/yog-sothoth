@@ -1,6 +1,5 @@
 use super::*;
-// `try_from_slice` comes from this trait; the parent module no longer imports
-// borsh now that each event struct lives in its own file.
+// `try_from_slice` comes from this trait.
 use borsh::BorshDeserialize;
 
 /// Sanity check: discriminators are 8 bytes and stable across runs.
@@ -41,9 +40,7 @@ fn discriminators_are_eight_bytes() {
     assert_eq!(discriminator_update_pool_fees().len(), DISCRIMINATOR_LEN);
 }
 
-/// Sanity check: each event has a distinct discriminator. If two events
-/// ever collide (extremely unlikely with sha256), our dispatch logic
-/// would silently mis-decode one as the other.
+/// Mutation: two events sharing a discriminator, which dispatch would silently mis-decode.
 #[test]
 fn discriminators_are_unique() {
     let all = [
@@ -76,18 +73,8 @@ fn discriminators_are_unique() {
 // ---------------------------------------------------------------------------
 // Layout pinning — events mirrored without an on-chain fixture
 // ---------------------------------------------------------------------------
-//
-// EvtUpdateRewardDuration / EvtUpdateRewardFunder / EvtWithdrawDeadLiquidityReward
-// have no captured mainnet transaction, so nothing proves our mirror against
-// bytes the program actually emitted. These tests are the next best thing: they
-// build the payload byte by byte from the cp-amm source layout and assert both
-// the total size and that every field lands at its expected offset.
-//
-// What they catch: a future edit that reorders, resizes or inserts a field in
-// our mirror. What they CANNOT catch: a misreading of the cp-amm source in the
-// first place — the bytes here are derived from the same reading. Only a real
-// fixture closes that gap. Replace these with a fixture test when a transaction
-// is captured.
+// Mutation: reordering, resizing or inserting a field in our mirror. A misreading
+// of the cp-amm source passes: only a captured transaction would catch it.
 
 /// Little-endian byte helper mirroring borsh's integer encoding.
 fn payload_update_reward_duration() -> Vec<u8> {
@@ -102,8 +89,7 @@ fn payload_update_reward_duration() -> Vec<u8> {
 #[test]
 fn update_reward_duration_layout_is_pinned() {
     let bytes = payload_update_reward_duration();
-    // 32 (pool) + 1 (u8) + 8 + 8. Borsh does not pad, so the u8 sits flush
-    // between the pubkey and the first u64.
+    // 32 (pool) + 1 (u8) + 8 + 8: borsh does not pad.
     assert_eq!(bytes.len(), 49, "payload size drift");
 
     let e = EvtUpdateRewardDuration::try_from_slice(&bytes).expect("deserialize");
@@ -143,10 +129,8 @@ fn withdraw_dead_liquidity_reward_layout_is_pinned() {
     assert_eq!(e.amount, 42_000);
 }
 
-/// EvtWithdrawDeadLiquidityReward and EvtWithdrawIneligibleReward are
-/// byte-identical in shape (72 B, pool + reward_mint + amount). Only the
-/// discriminator tells them apart — so the same payload must decode to both,
-/// and dispatch must never rely on size.
+/// Two events with one shape: the same payload decodes to both, so dispatch
+/// must never rely on size.
 #[test]
 fn dead_liquidity_and_ineligible_reward_share_a_shape() {
     let mut bytes = Vec::new();

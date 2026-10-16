@@ -10,18 +10,8 @@ pub fn discriminator_liquidity_change() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtLiquidityChange")
 }
 
-/// Mirror of `cp-amm::EvtLiquidityChange`.
-///
-/// Unified event covering both add and remove liquidity operations. The
-/// `change_type` field discriminates:
-/// - `0`: liquidity added
-/// - `1`: liquidity removed
-///
-/// `reserve_a_amount` / `reserve_b_amount` are post-change reserves in the
-/// pool's own `(token_a, token_b)` order — same convention as [`EvtSwap2`],
-/// and like it, not a sort of the mints.
-///
-/// [`EvtSwap2`]: crate::application::extraction::meteora::damm_v2::events::EvtSwap2
+/// Mirror of `cp-amm::EvtLiquidityChange`: `change_type` 0 = add, 1 = remove;
+/// `reserve_*` are after the change, in the pool's own A/B order.
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtLiquidityChange {
     pub pool: Pubkey,

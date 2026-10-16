@@ -2,12 +2,8 @@ use rust_decimal::Decimal;
 
 use super::{base_fee_bps, max_variable_fee_bps};
 
-/// The anchor: values read from a live `LbPair` before any of this was written.
-///
-/// Pool `HTvjzsfX3yU6BUodCjZ5vZkUrAxMDTrBs3CJaq43ashR` (SOL/USDC) carries
-/// `base_factor = 10000`, `bin_step = 1`, `base_fee_power_factor = 0`, and
-/// Meteora displays 0.01 % for it. This test is what ties the formula to the
-/// product rather than to the documentation alone.
+/// Pool `HTvjzs…` (SOL/USDC), which Meteora displays at 0.01 %: ties the
+/// formula to the product, not to the documentation.
 #[test]
 fn the_mainnet_sol_usdc_pool_yields_one_basis_point() {
     assert_eq!(base_fee_bps(10_000, 1, 0), Decimal::ONE);
@@ -21,9 +17,7 @@ fn the_fee_scales_with_the_bin_step() {
     assert_eq!(base_fee_bps(10_000, 100, 0), Decimal::from(100));
 }
 
-/// Sub-basis-point fees are representable and must not be rounded away. An
-/// integer return type would have collapsed this to 0 in silence, which is why
-/// `pools.fee_bps` is NUMERIC and this returns `Decimal`.
+/// Mutation: an integer return type, which rounds a sub-bp fee to 0.
 #[test]
 fn a_sub_basis_point_fee_keeps_its_fraction() {
     assert_eq!(base_fee_bps(5_000, 1, 0), Decimal::new(5, 1)); // 0.5 bps
@@ -39,10 +33,7 @@ fn the_power_factor_multiplies_by_ten_each_step() {
     assert_eq!(base_fee_bps(100, 1, 2), Decimal::ONE); // 1
 }
 
-/// The chain caps the total fee rate at 10 %; the base fee alone cannot exceed
-/// it either. Saturating keeps the function total — the caller has nowhere to
-/// put an error, since `fee_bps` is not an `Option` and an unresolvable pool
-/// never leaves the enrichment queue.
+/// Mutation: removing the saturation at the chain's 10 % cap.
 #[test]
 fn an_absurd_power_factor_saturates_at_the_chain_cap() {
     let cap = Decimal::from(1_000);
@@ -54,8 +45,7 @@ fn an_absurd_power_factor_saturates_at_the_chain_cap() {
     assert_eq!(base_fee_bps(u16::MAX, u16::MAX, 0), cap);
 }
 
-/// Exactly at the cap, and one step below it — the boundary is inclusive, not
-/// clamped early.
+/// Mutation: a cap that clamps one step early.
 #[test]
 fn the_cap_itself_is_reached_but_not_exceeded() {
     // 10_000 × 1_000 / 10_000 = 1_000 bps = 10 %.
@@ -63,9 +53,7 @@ fn the_cap_itself_is_reached_but_not_exceeded() {
     assert_eq!(base_fee_bps(10_000, 999, 0), Decimal::from(999));
 }
 
-/// A zeroed pool account decodes to a zero fee rather than to anything
-/// surprising — worth pinning, since `bin_step = 0` is what an all-zero buffer
-/// looks like.
+/// An all-zero account (`bin_step = 0`) decodes to a zero fee.
 #[test]
 fn a_zeroed_account_yields_a_zero_fee() {
     assert_eq!(base_fee_bps(0, 0, 0), Decimal::ZERO);
@@ -74,17 +62,13 @@ fn a_zeroed_account_yields_a_zero_fee() {
 
 // ── max_variable_fee_bps ────────────────────────────────────────────
 
-/// The anchor again: `HTvjzs…` carries `variable_fee_control = 2_000_000`,
-/// `max_volatility_accumulator = 100_000`, `bin_step = 1`. Its floor is 1 bps,
-/// so it can charge up to **three times** what `pools.fee_bps` announces.
+/// Pool `HTvjzs…` again: a 1 bps floor that can charge three times that.
 #[test]
 fn the_mainnet_sol_usdc_pool_can_add_two_basis_points() {
     assert_eq!(max_variable_fee_bps(2_000_000, 100_000, 1), Decimal::TWO);
 }
 
-/// The doc's table, on the parameters actually decoded from the captured
-/// accounts. This is what makes the "same definition, different upper bound"
-/// claim checkable rather than prose.
+/// The parameters decoded from the captured DLMM account fixtures.
 #[test]
 fn the_captured_pools_bounds_match_their_documented_values() {
     // (variable_fee_control, max_volatility_accumulator, bin_step) → bps
@@ -105,8 +89,7 @@ fn the_captured_pools_bounds_match_their_documented_values() {
     }
 }
 
-/// DLMM has no `has_dynamic_fee` flag: a zero magnitude *is* "no dynamic fee",
-/// and must come back as an exact zero rather than a rounding artefact.
+/// A zero magnitude *is* "no dynamic fee": an exact zero, not a rounding artefact.
 #[test]
 fn a_zero_control_means_no_variable_fee() {
     assert_eq!(max_variable_fee_bps(0, 100_000, 1), Decimal::ZERO);
@@ -115,16 +98,14 @@ fn a_zero_control_means_no_variable_fee() {
     assert_eq!(max_variable_fee_bps(2_000_000, 0, 1), Decimal::ZERO);
 }
 
-/// The formula rounds **up**: a swapper never pays less than the computed rate.
-/// Picked so the division by 1e11 lands just past an integer.
+/// Mutation: `div_ceil` → plain division, which rounds this rate to zero.
 #[test]
 fn the_rate_rounds_up_never_down() {
     // 1 × (1 × 1)² = 1 → ceil(1 / 1e11) = 1 → 1/1e5 bps, not zero.
     assert_eq!(max_variable_fee_bps(1, 1, 1), Decimal::new(1, 5));
 }
 
-/// The squared term reaches ~7.9e28 and the numerator lands within a hair of
-/// `u128::MAX`. Saturating rather than panicking is the contract.
+/// Inputs at their maximum widths: saturates rather than panicking.
 #[test]
 fn extreme_parameters_saturate_at_the_chain_cap() {
     let cap = Decimal::from(1_000);
@@ -134,7 +115,7 @@ fn extreme_parameters_saturate_at_the_chain_cap() {
     assert_eq!(max_variable_fee_bps(u32::MAX, 100_000, 1), cap);
 }
 
-/// Exactly at the cap, and just under it — the saturation must not clamp early.
+/// Mutation: a saturation that clamps one step early.
 #[test]
 fn the_variable_cap_is_reached_but_not_exceeded() {
     // numerator = 1e19 → ceil(1e19 / 1e11) = 1e8 → 1e8 / 1e5 = 1000 bps.
@@ -148,11 +129,7 @@ fn the_variable_cap_is_reached_but_not_exceeded() {
     );
 }
 
-/// The margin the doc claims, asserted rather than trusted.
-///
-/// The `checked_mul`s in `max_variable_fee_bps` are provably dead at the current
-/// input widths — this pins *why*, so that widening any of the three inputs
-/// turns the claim red instead of quietly making the guards load-bearing.
+/// The worst-case numerator at these input widths fits in `u128`.
 #[test]
 fn the_numerator_cannot_overflow_at_these_input_widths() {
     let accumulated = u128::from(u32::MAX) * u128::from(u16::MAX);

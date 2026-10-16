@@ -9,131 +9,36 @@ use crate::{
     domain::{Pool, PoolRegistryProperties},
 };
 
-/// Cursor identifying a position in a pool ordering.
-///
-/// Carries the sort column it was built for, so the API layer can
-/// reject a cursor that is replayed under a different sort (a
-/// tampered or stale URL) rather than silently producing an
-/// inconsistent page.
-///
-/// `sort_value` is the value of the active sort column for the anchor
-/// row; `pool_address` is the unique tiebreaker. Both `first_seen_at`
-/// and `last_seen_at` are `TIMESTAMPTZ`, so a single `DateTime<Utc>`
-/// covers every supported column.
+/// Cursor in a pool ordering: the anchor row's sort value, and its address as
+/// tiebreaker. Carries its sort column, so a cursor replayed under another is refused.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PoolCursor {
     pub sort_column: PoolSortColumn,
     pub sort_value: DateTime<Utc>,
     pub pool_address: Pubkey,
-    /// Snapshot fence of the traversal this cursor belongs to — see
-    /// [`PoolPage::as_of`]. `None` on a sort over an immutable column
-    /// (nothing to fence), and on a cursor minted before this field
-    /// existed: [`PoolCatalog::find_paginated`] then mints a fresh
-    /// fence, so the traversal re-anchors from the next page on.
+    /// Fence of the traversal, see [`PoolPage::as_of`]; when `None`,
+    /// [`PoolCatalog::find_paginated`] mints a fresh one.
     pub as_of: Option<DateTime<Utc>>,
 }
 
-/// A page of the pool listing, plus what the reader needs to know about
-/// the traversal it belongs to — the output of
-/// [`PoolCatalog::find_paginated`].
-///
-/// # Why a page carries a fence
-///
-/// Keyset pagination assumes the sort key is **immutable** for the whole
-/// traversal: each page asks for "the rows after this point". `last_seen_at`
-/// is rewritten on every event touching the pool, so a row whose value moves
-/// crosses to the other side of the cursor — skipped under a descending sort,
-/// returned twice under an ascending one.
-///
-/// `last_seen_at` only ever grows, so pinning `as_of` at the start of the
-/// traversal and reading only `last_seen_at <= as_of` makes the result set
-/// **shrink-only**: a row that is touched no longer moves within the ordering,
-/// it leaves. Inside the fence the key is effectively immutable again, which is
-/// exactly the assumption keyset needs.
-///
-/// What this buys, and what it does not: the duplicate under an ascending sort
-/// is gone, and backward navigation returns the page that was already read.
-/// Under a descending sort the touched pool is still not shown by this
-/// traversal — but it is now *defined* (it moved above `as_of`, i.e. to the head
-/// of the list, which the reader has already passed) and, above all, *countable*
-/// — that count is [`touched_since`], and surfacing it is what keeps the
-/// omission from being silent.
-///
-/// [`touched_since`]: Self::touched_since
+/// A page of the pool listing and the snapshot fence of its traversal.
+/// ⚠️ `last_seen_at` moves under keyset pagination: reading only `<= as_of`
+/// makes the set shrink-only, so a touched pool leaves instead of moving.
 #[derive(Debug, Clone)]
 pub struct PoolPage {
     pub page: Page<Pool>,
-    /// The instant this traversal is anchored to. `Some` on a sort over
-    /// `last_seen_at`; `None` on a sort over an immutable column, which needs
-    /// no fence.
-    ///
-    /// The **first page is served unfenced** — with no cursor there is no
-    /// keyset assumption to protect, and bounding it could only subtract rows
-    /// (any whose stored instant runs ahead of the reading process's clock),
-    /// on the most-visited page of the product, with `touched_since` reporting
-    /// `0` so nothing would say so. The anchor is minted there all the same
-    /// and carried by the outgoing cursors, so every page after it is fenced.
+    /// The fence; `None` on a sort over an immutable column.
+    /// ⚠️ The first page is served unfenced: bounding it could only drop rows.
     pub as_of: Option<DateTime<Utc>>,
-    /// How many pools **matching the same filters** became active after
-    /// `as_of` — that is, moved above this traversal's fence.
-    ///
-    /// # An upper bound on what was missed, not a count of it
-    ///
-    /// It counts every pool now above the fence, including ones the reader
-    /// has **already been shown** on an earlier page and which were touched
-    /// again since — and under a descending sort those are the likeliest of
-    /// all, since the first page holds exactly the most recently active pools.
-    ///
-    /// This is not a shortcut: it is the only thing computable. Once a pool is
-    /// touched its previous `last_seen_at` is overwritten, so nothing left in
-    /// the database can say whether it used to sit before or after the cursor.
-    /// Callers must therefore word it as what it is — "became active since
-    /// `as_of`" — and never as "pools you missed".
-    ///
-    /// `0` when there is no fence. `0` too whenever the fence was minted by
-    /// this very call (a first page, or a `position` jump): nothing can be
-    /// above an instant taken a moment ago. Note that a **backward** page
-    /// landing back on the first page still carries a cursor, so it does get a
-    /// non-zero count — `is_first` does not imply `0`.
-    ///
-    /// # What it does not cover
-    ///
-    /// The fence restores the immutability of the sort *key*, not of set
-    /// *membership*. A pool can **enter** a filtered listing mid-traversal
-    /// without being touched at all: `yog-context` resolves its properties and
-    /// writes `fee_bps` without moving `last_seen_at`, so a pool sitting above
-    /// the cursor can start matching a `fee_bps` filter it did not match
-    /// before. It is never shown, and it is not counted here either — this
-    /// count keys strictly on `last_seen_at`. Silent, and not something the
-    /// count can be widened to catch: nothing records when a row entered a
-    /// filter. Worth knowing before reading `touched_since` as "everything
-    /// this traversal cannot show you".
+    /// Pools matching the same filters that became active after `as_of`.
+    /// ⚠️ An upper bound, never "pools you missed": it counts pools already shown,
+    /// and misses one that enters a filter without being touched.
     pub touched_since: i64,
 }
 
-/// Everything a paginated pool listing needs — the input of
-/// [`PoolCatalog::find_paginated`].
-///
-/// A single struct rather than a long positional argument list: the
-/// navigation trio (`cursor` / `direction` / `position`), the ordering
-/// (`sort`), the filters (`search`, `fee_bps`) and the page size all
-/// describe one query. The HTTP layer parses query params, decodes the
-/// cursor, converts wire enums and normalizes the filters, then hands a
-/// fully-valid `PoolListQuery` straight to the repository.
-///
-/// - `cursor` + `direction` cooperate: traverse forward (`Next`) or
-///   backward (`Prev`) from the cursor's position. Without a cursor,
-///   `direction` is ignored and the natural ordering is used (newest
-///   first).
-/// - `position` jumps to a list boundary (`First` or `Last`), ignoring
-///   any cursor. Mutually exclusive with `cursor`.
-/// - `search` matches the pool address or a token symbol/name.
-/// - `fee_bps` filters to pools whose base trading fee (basis points)
-///   exactly equals the given tier. `None` leaves the fee dimension
-///   unfiltered. Meant to be fed one of the tiers returned by
-///   [`PoolCatalog::list_fee_tiers`].
-/// - `limit` is the maximum number of items returned; the repository
-///   clamps it defensively.
+/// A paginated pool listing, fully validated by the HTTP layer: `position` jumps
+/// to a boundary and excludes `cursor`; `direction` is ignored without a cursor.
+/// `fee_bps` is one of [`PoolCatalog::list_fee_tiers`]; `limit` is clamped.
 #[derive(Debug, Clone)]
 pub struct PoolListQuery {
     pub cursor: Option<PoolCursor>,
@@ -145,163 +50,60 @@ pub struct PoolListQuery {
     pub limit: i64,
 }
 
-/// Pool inventory counts over the whole observed universe.
-///
-/// A protocol-centric snapshot of *what was seen*: `observed` is every pool
-/// the indexer has ever recorded; `discovered_24h` is how many of those were
-/// first seen in the last 24h (the discovery pulse). Powers the pools KPI of
-/// `GET /api/stats`.
+/// Every pool ever recorded, and how many were first seen in the last 24h.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PoolCounts {
     pub observed: i64,
     pub discovered_24h: i64,
 }
 
-/// One entry of the pools fee-filter option list: a base-fee tier (basis
-/// points) and how many pools carry it.
-///
-/// The observed fee distribution is long-tailed — a handful of real tiers
-/// hold most pools, plus a long tail of one-off values (dynamic-fee / launch
-/// pools). [`PoolCatalog::list_fee_tiers`] returns only the **most common**
-/// tiers so the filter stays short and useful; `pool_count` is surfaced so
-/// the UI can label each option (`0.25% · 166`) and justify the shortlist.
+/// One option of the fee filter: a base-fee tier in bps and how many pools carry it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FeeTier {
     pub fee_bps: rust_decimal::Decimal,
     pub pool_count: i64,
 }
 
-/// Persistence contract for Pool — the write side, owned by the indexer.
-///
-/// Implemented by the infrastructure layer (`yog-persistence`).
-/// `core` defines the interface; the indexer wires the concrete
-/// implementation under the `yog_indexer` Postgres role.
-///
-/// The read side lives in [`PoolCatalog`] — one lens per consumer, same
-/// `Pg` struct behind both. At runtime, calls that exceed the connected
-/// role's grants fail with a permission error from Postgres — by design.
+/// Write side of the pool registry, the indexer's lens; [`PoolCatalog`] reads it.
 #[async_trait]
 pub trait PoolRepository: Send + Sync {
     /// Insert a new pool, or refresh an existing one's `last_seen_at`.
-    /// Used when an event arrives that fully describes the pool
-    /// (Swap, Liquidity).
     async fn upsert(&self, pool: &Pool) -> RepositoryResult<()>;
 
-    /// Refresh `last_seen_at` for an existing pool — but do NOT insert
-    /// the row if the pool is unknown.
-    ///
-    /// Used by events that touch a pool without carrying enough info
-    /// to populate it (ClaimPositionFee, ClaimReward — these don't
-    /// expose the pool's mint addresses). If the pool isn't yet known,
-    /// the call is a no-op; the next Swap or Liquidity event will
-    /// create the row properly.
+    /// Refresh `last_seen_at` of a known pool; a no-op for an unknown one.
     async fn touch_last_seen(&self, pool_address: &Pubkey) -> RepositoryResult<()>;
 
-    /// Mark a pool's account-derived properties as stale, so yog-context
-    /// re-reads its on-chain account and rewrites them.
-    ///
-    /// The indexer's **only** way to affect a pool property. It sees an event
-    /// saying a fee changed; it does not decode the new value and store it —
-    /// that would make it a second writer of columns yog-context owns, and it
-    /// would have to interpret an update *delta*, which is far more fragile than
-    /// reading resolved state (a delta carries variable-offset borsh tags and
-    /// tri-state `Option`s; an account does not).
-    ///
-    /// A flag rather than NULLing the stale column: the old value stays readable
-    /// while the refresh is pending, and the flag lives on `pools`, which every
-    /// protocol shares — so no satellite needs to grant the indexer write access.
-    ///
-    /// Idempotent, and a no-op for an unknown pool.
+    /// Flag a pool's account-derived properties for yog-context to re-read;
+    /// idempotent, a no-op for an unknown pool.
+    /// ⚠️ The indexer's only way to affect a property: never write the value itself.
     async fn mark_needs_refresh(&self, pool_address: &Pubkey) -> RepositoryResult<()>;
 
-    /// Store the neutral half of a decoded pool account — the token pair and the
-    /// base fee — and clear [`mark_needs_refresh`]'s flag.
-    ///
-    /// Written by yog-context, which is the **sole writer** of these columns:
-    /// they cannot be inferred from the event stream (the mints were once
-    /// guessed per-event and mis-resolved on routed transactions; the base fee is
-    /// only emitted at a genesis the indexer never sees for a discovered pool).
-    ///
-    /// # Ordering is load-bearing
-    ///
-    /// The caller writes the protocol's satellite **first** and this **last**,
-    /// because this call is what lowers the flag. Any failure before it leaves
-    /// the flag raised and the pool queued for the next cycle; lowering it first
-    /// would let a satellite failure strand a half-refreshed pool until the next
-    /// event happened to touch it.
-    ///
-    /// A no-op if the pool row does not exist. Idempotent.
-    ///
-    /// [`mark_needs_refresh`]: Self::mark_needs_refresh
+    /// Store the token pair and base fee decoded from the account, and clear the flag.
+    /// ⚠️ Call it after the protocol satellite: it lowers the refresh flag, so a
+    /// failure before it leaves the pool queued.
     async fn set_registry_properties(
         &self,
         pool_address: &Pubkey,
         core: &PoolRegistryProperties,
     ) -> RepositoryResult<()>;
-
-    // NOTE: `set_fee_bps` used to live here, writing the base fee decoded from a
-    // genesis or fee-update event. It went with the indexer's property writes:
-    // `fee_bps` now reaches `pools` only through `set_registry_properties`, from the
-    // account. The column itself stays on `pools` — a base fee in bps is
-    // genuinely cross-protocol, and it is a read surface (fee-tier filter,
-    // `PoolCatalog::list_fee_tiers`).
-    //
-    // The fee *shape* (`base_fee_kind` / `has_dynamic_fee`) left earlier still,
-    // with migration 036: both are cp-amm concepts, and passing `base_fee_kind`
-    // as an opaque string was the tell that a protocol-specific notion was being
-    // squeezed through a cross-protocol trait.
 }
 
-/// The consultation surface of the pool registry — the api's read lens.
-///
-/// "Catalog" in the project's own language: the `pools` table records what
-/// was *seen*, and this trait is how the API browses it — point lookup,
-/// batch lookup, paginated listing, inventory counts.
-///
-/// Kept separate from [`PoolRepository`] (write side, indexer) and from
-/// [`crate::domain::PoolAccountResolver`] (property backfill, context) so each
-/// binary depends on exactly the methods it uses and mocks carry no dead stubs.
+/// Read side of the pool registry, the api's lens.
 #[async_trait]
 pub trait PoolCatalog: Send + Sync {
-    /// Fetch a single pool by its on-chain address.
-    /// Returns `Ok(None)` if the pool has never been observed.
+    /// A pool by address, `None` if never observed.
     async fn find_by_address(&self, pool_address: &Pubkey) -> RepositoryResult<Option<Pool>>;
 
-    /// Count pools across the whole observed universe: the total ever seen and
-    /// how many were first seen in the last 24h. See [`PoolCounts`].
+    /// See [`PoolCounts`].
     async fn counts(&self) -> RepositoryResult<PoolCounts>;
 
-    /// Fetch many pools by address in one query. The result is unordered and
-    /// silently omits unknown addresses — the caller (e.g. a top-N ranking)
-    /// owns the ordering and reconciles against the addresses it requested.
+    /// Many pools in one query, unordered, unknown addresses omitted.
     async fn find_by_addresses(&self, pool_addresses: &[Pubkey]) -> RepositoryResult<Vec<Pool>>;
 
-    /// Fetch a page of pools described by `query` (see [`PoolListQuery`]
-    /// for the navigation / ordering / filter contract).
-    ///
-    /// The returned [`PoolPage`] wraps a `Page<Pool>` carrying enough
-    /// information for the caller to render Previous / Next / First / Last
-    /// navigation without follow-up queries, plus the snapshot fence this
-    /// traversal is anchored to and how many pools have left it.
-    ///
-    /// **The fence is minted here, not by the caller.** `PoolListQuery` has no
-    /// `as_of` field: the value is carried by the cursor the query already
-    /// holds, and an implementation mints a fresh one when there is none. A
-    /// caller cannot forget it, and cannot pass one that disagrees with the
-    /// cursor.
+    /// A page of pools; the fence is minted here when the cursor carries none,
+    /// so a caller can neither forget it nor contradict the cursor.
     async fn find_paginated(&self, query: PoolListQuery) -> RepositoryResult<PoolPage>;
 
-    /// The **most common** base-fee tiers (basis points), each with its pool
-    /// count — the fee filter's option list (`GET /api/pools/fee-tiers`). The
-    /// client picks one and replays it as the `fee_bps` argument of
-    /// [`PoolCatalog::find_paginated`].
-    ///
-    /// Ranked by pool count and capped (the observed distribution is
-    /// long-tailed: a few real tiers plus ~50 one-off dynamic-fee/launch
-    /// values that would bloat the dropdown without being useful filters),
-    /// then returned **ascending by fee** for natural display order. Pools
-    /// whose `fee_bps` is not yet resolved (`NULL`, before yog-context reads
-    /// their account) are excluded, so the filter never offers an option that
-    /// would match nothing. See [`FeeTier`].
+    /// The **most common** base-fee tiers, ascending by fee, unresolved pools excluded.
     async fn list_fee_tiers(&self) -> RepositoryResult<Vec<FeeTier>>;
 }
