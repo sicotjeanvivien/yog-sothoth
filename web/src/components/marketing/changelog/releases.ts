@@ -29,20 +29,19 @@ export const RELEASES: readonly Release[] = [
     version: "v0.1.6",
     date: "2026-10-16",
     summary:
-      "Pages no longer fail on a token logo that is not a web link or on a mistyped pool address, and the API's routes are now described once, by the server.",
+      "Pages no longer fail on a token logo that is not a link or on a mistyped pool address, and the network status is split between the Solana network and our own indexing.",
     sections: [
       {
         kind: "features",
         items: [
-          "The API's routes are described in one contract, generated from the server's code, from which the dashboard's checks of each response are generated. They were written twice by hand before.",
-          "The network status is split in two: /api/network gives the Solana network as our probe sees it (slot and latency), /api/ingestion gives how fresh our own indexing is. /api/network/status is gone.",
-          "The current state of a pool gives the dollar value of each of its two sides, under the same price-age limit as its TVL. Tokens embedded in a pool or a signal no longer carry a price, which had no age limit; the pool page's composition chart now uses the server's values.",
+          "The network status is split in two: /api/network gives the Solana network as our probe sees it (slot and latency), /api/ingestion gives how fresh our own indexing is. /api/network/status is gone. In the dashboard, the network panel loads each half on its own, so one that is slow or down no longer blanks the other.",
+          "The current state of a pool gives the dollar value of each of its two sides, under the same price-age limit as its TVL. Tokens embedded in a pool or a signal no longer carry a price, which had no age limit: the pool page's composition chart now uses the server's values, and the signal card no longer shows a line of token prices.",
         ],
       },
       {
         kind: "fixes",
         items: [
-          "A token logo that is not an http or https link is now sent as empty, and the page shows the token's initial instead. A single such logo used to make the whole page fail to load: pool list and pool page, top pools, signals.",
+          "A token logo that is not an http or https link is now sent as empty, and the page shows the token's initial instead. A logo that was not a link at all used to make the whole page fail to load: pool list and pool page, top pools, signals.",
           "A pool page opened with a mistyped or truncated address now shows \"Pool not found\". It used to fail with a server error, or show an error with a Retry button that could never work.",
           "A security update of the TLS library used by the backend services (rustls 0.23.46).",
         ],
