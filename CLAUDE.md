@@ -65,9 +65,9 @@ for p in $crates; do cargo check -p "$p" || solo="$solo $p"; done
 # an `--all-features` or dev-dependency path needs is still checked in one
 # grouped invocation, and still maskable.
 
-# Lint — the nine crates. Every one must be named: clippy only DRIVES the packages given
-# with `-p`, so a crate reached as a path dependency is compiled but never
-# linted — that is how yog-bootstrap went unlinted until 1 Sept 2026.
+# Lint — the nine crates. Every one must be named: clippy only DRIVES the
+# packages given with `-p`, so a crate reached as a path dependency is compiled
+# but never linted — that is how yog-bootstrap went unlinted until 1 Sept 2026.
 cargo clippy -p yog-analytic -p yog-api -p yog-archive -p yog-bootstrap -p yog-core -p yog-context \
     -p yog-indexer -p yog-persistence -p yog-signals --all-targets --all-features -- -D warnings
 
