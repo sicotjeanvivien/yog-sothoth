@@ -1,13 +1,6 @@
 //! Tests for what one update does.
-//!
-//! ⚠️ **The same caveat as `transaction_adapter_tests`, and it is worth
-//! repeating rather than referencing:** the updates come from `test_fixtures`, where
-//! they are built by hand, so they carry this author's understanding of what a
-//! provider sends. What they *can* establish is everything this module decides
-//! on its own — which slot a transaction waits for, what happens when a
-//! block-meta brings no time, what a ping is answered with, what a full channel
-//! does. Those are our rules, not the wire's, and each of them is invisible when
-//! wrong.
+//! ⚠️ The updates are hand-built (`test_fixtures`): these tests prove this module's own rules,
+//! not what a provider sends.
 
 use super::*;
 
@@ -19,15 +12,12 @@ use yellowstone_grpc_proto::prelude::{
     SubscribeRequestPing, SubscribeUpdatePing, SubscribeUpdatePong,
 };
 
-// The updates themselves live next door, because `listener_tests` builds the
-// same ones to put on a real stream — see `test_fixtures`.
 use crate::infra::grpc::test_fixtures::{
     PROTOCOL, at, block_meta, ping, transaction, transaction_update_with_signature,
     unroutable_transaction, update,
 };
 
-/// How many ping answers the harness's outbound half holds unread — what
-/// `a_full_outbound_half_does_not_park_the_session` fills.
+/// How many ping answers the harness's outbound half holds unread.
 const HARNESS_OUTBOUND_CAPACITY: usize = 4;
 
 /// A session, its downstream receiver, and its outbound receiver.
@@ -41,8 +31,7 @@ fn session(
     session_with(capacity, CancellationToken::new())
 }
 
-/// The same, with a token the test can fire — for the one case where the
-/// session is parked and shutdown has to reach it.
+/// The same, with a token the test can fire, for a session parked when shutdown comes.
 fn session_with(
     capacity: usize,
     shutdown: CancellationToken,
@@ -53,10 +42,7 @@ fn session_with(
 ) {
     let (downstream_tx, downstream_rx) = mpsc::channel(capacity);
     let (outbound_tx, outbound_rx) = mpsc::channel(HARNESS_OUTBOUND_CAPACITY);
-    // The session does not keep the request it subscribed with, so the only
-    // thing ever written here is the answer to a ping. The receiver is handed
-    // back so that the tests can assert that answer is a bare ping and nothing
-    // more.
+    // Only ping answers are ever written here; the receiver is handed back to assert them.
     (
         StreamSession::new(downstream_tx, outbound_tx, shutdown),
         downstream_rx,
@@ -66,8 +52,7 @@ fn session_with(
 
 // ── the two halves meet ─────────────────────────────────────────────
 
-/// The path the whole session exists for: a transaction arrives with no instant,
-/// waits, and leaves carrying the one its block-meta brought.
+/// A transaction arrives with no instant, waits, and leaves with the one its block-meta brought.
 #[tokio::test]
 async fn a_transaction_waits_for_its_block_time_and_leaves_with_it() {
     let (mut session, mut downstream, _outbound) = session(4);
@@ -98,8 +83,7 @@ async fn a_transaction_waits_for_its_block_time_and_leaves_with_it() {
     );
 }
 
-/// The reverse order, and the one a buffer is easy to write without: the
-/// block-meta first, the transaction after.
+/// The reverse order: the block-meta first, the transaction after.
 #[tokio::test]
 async fn a_transaction_arriving_after_its_block_meta_leaves_at_once() {
     let (mut session, mut downstream, _outbound) = session(4);
@@ -111,11 +95,8 @@ async fn a_transaction_arriving_after_its_block_meta_leaves_at_once() {
     assert_eq!(ingested.transaction.position.timestamp, at(1_700_000_000));
 }
 
-/// ⚠️ **A block-meta with no `block_time` gives the slot up — it does not leave
-/// it waiting, and it does not invent a time.** Neither the receive time nor
-/// `SubscribeUpdate::created_at` (the server's send time) is a substitute: this
-/// column is in every event table's unique key, so a plausible wrong value is
-/// one nothing will ever question.
+/// ⚠️ A block-meta with no `block_time` gives the slot up: neither the receive time nor
+/// `created_at` substitutes, in a column of every unique key.
 #[tokio::test]
 async fn a_block_meta_without_a_time_gives_up_the_slot() {
     let (mut session, mut downstream, _outbound) = session(4);
@@ -128,8 +109,7 @@ async fn a_block_meta_without_a_time_gives_up_the_slot() {
         "no instant, no row — and no invented one"
     );
 
-    // And the slot is gone rather than pending: a later time for it releases
-    // nothing, which is what frees its place in the window.
+    // The slot is gone rather than pending: a later time for it releases nothing.
     session.handle(block_meta(10, Some(1_700_000_000))).await;
     assert!(
         downstream.try_recv().is_err(),
@@ -139,8 +119,7 @@ async fn a_block_meta_without_a_time_gives_up_the_slot() {
 
 // ── routing and skip-and-log ────────────────────────────────────────
 
-/// A transaction that matched no protocol filter cannot be routed — the
-/// pipeline is per-protocol all the way down. Dropped, not guessed at.
+/// A transaction that matched no protocol filter is dropped, not guessed at.
 #[tokio::test]
 async fn a_transaction_matching_no_protocol_filter_is_dropped() {
     let (mut session, mut downstream, _outbound) = session(4);
@@ -151,10 +130,8 @@ async fn a_transaction_matching_no_protocol_filter_is_dropped() {
     assert!(downstream.try_recv().is_err());
 }
 
-/// ⚠️ Skip-and-log, and the second half is what this asserts: a malformed
-/// transaction must not take the stream down with it, and the next good one
-/// must still get through. A `?` in the emit path would pass the first half of
-/// this test and fail the second.
+/// ⚠️ Skip-and-log: a `?` in the emit path would pass the first half of this test and fail the
+/// second, the next good transaction getting through.
 #[tokio::test]
 async fn a_transaction_that_cannot_be_translated_does_not_stop_the_stream() {
     let (mut session, mut downstream, _outbound) = session(4);
@@ -177,14 +154,8 @@ async fn a_transaction_that_cannot_be_translated_does_not_stop_the_stream() {
     );
 }
 
-/// ⚠️ **The two drops are counted apart, and that is the whole point of the
-/// counter's shape.** A malformed message is fixed in the adapter; a
-/// transaction matching no protocol filter is fixed in the subscription —
-/// nothing about it is malformed, the request and this reader simply disagree.
-/// One label for both would send whoever reads the metric to the wrong file,
-/// which is the defect `EvictionReason` was added to the buffer to avoid.
-///
-/// Not `#[tokio::test]` — see [`counted`].
+/// ⚠️ The two drops are counted apart: a malformed message is fixed in the adapter, an unroutable
+/// one in the subscription. Not `#[tokio::test]`, see [`counted`].
 #[test]
 fn a_malformed_transaction_and_an_unroutable_one_are_counted_apart() {
     let ((), snapshot) = counted(async {
@@ -228,11 +199,7 @@ type Snapshot = Vec<(
 )>;
 
 /// Drive `future` to completion and return its output with what it counted.
-///
-/// `with_local_recorder` installs the recorder on the *current thread* for the
-/// duration of a closure, so the future is driven inside it on a current-thread
-/// runtime — the recipe the persistor tests use. Hence `#[test]` and not
-/// `#[tokio::test]` on every test that reads a counter.
+/// ⚠️ `with_local_recorder` binds the current thread, hence a current-thread runtime and `#[test]`.
 fn counted<T>(future: impl std::future::Future<Output = T>) -> (T, Snapshot) {
     let recorder = DebuggingRecorder::new();
     let snapshotter = recorder.snapshotter();
@@ -248,8 +215,7 @@ fn counted<T>(future: impl std::future::Future<Output = T>) -> (T, Snapshot) {
     (output, snapshotter.snapshot().into_vec())
 }
 
-/// The counter `name` for one `reason` label, or `None` when it was never
-/// touched.
+/// The counter `name` for one `reason` label, or `None` when never touched.
 fn counter_for<'a>(snapshot: &'a Snapshot, name: &str, reason: &str) -> Option<&'a DebugValue> {
     snapshot
         .iter()
@@ -265,17 +231,9 @@ fn counter_for<'a>(snapshot: &'a Snapshot, name: &str, reason: &str) -> Option<&
 
 // ── back-pressure ───────────────────────────────────────────────────
 
-/// ⚠️ **The stream is slowed, never drained into the void** — the opposite of
-/// the JSON-RPC dispatcher, which drops when its channel is full. There a
-/// dropped signature can be asked for again; here the transaction came once,
-/// over a stream billed by the byte.
-///
-/// ⚠️ The shape of this test is load-bearing and its first version was wrong:
-/// with one transaction per slot the consumer emptied the channel between two
-/// block-metas, so `try_send` always succeeded and the waiting branch was never
-/// entered — a mutation replacing the wait by a drop kept it green. Two
-/// transactions in the **same** slot are what makes the second one meet a full
-/// channel, since a block-meta releases a slot's payloads in one call.
+/// ⚠️ The stream is slowed, never drained into the void: a streamed transaction comes once.
+/// ⚠️ Two transactions in the same slot, released in one call: with one per slot the consumer
+/// empties the channel between metas and the wait is never entered.
 #[tokio::test]
 async fn a_full_downstream_slows_the_stream_instead_of_dropping() {
     // Room for exactly one.
@@ -284,8 +242,7 @@ async fn a_full_downstream_slows_the_stream_instead_of_dropping() {
     session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
     session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
 
-    // This blocks partway through, on the second payload, until the consumer
-    // takes the first — which is the behaviour under test.
+    // Blocks on the second payload until the consumer takes the first: the behaviour under test.
     let handling = tokio::spawn(async move {
         session.handle(block_meta(10, Some(1_700_000_000))).await;
         session
@@ -299,29 +256,21 @@ async fn a_full_downstream_slows_the_stream_instead_of_dropping() {
         .expect("the second waited for room; dropping it here is the defect");
     assert_eq!(second.transaction.position.slot, 10);
 
-    // Slot 10 *was* closed by its block-meta above, so this is the
-    // `highest_meta_slot` branch of `resume_from`, rewound. The pending branch
-    // is the business of
-    // `the_resume_point_is_the_oldest_slot_the_session_did_not_finish` — said
-    // here because an earlier version of this comment claimed the wrong branch,
-    // and both happen to yield 8.
+    // Slot 10 was closed by its block-meta: the `highest_meta_slot` branch of `resume_from`, rewound.
     assert_eq!(
         handling.await.expect("no panic").resume_from(),
         Some(10 - REWIND_SLOTS)
     );
 }
 
-/// Receive with a deadline: the point of the test above is that a transaction
-/// *arrives*, and a version of the code that drops it would otherwise hang the
-/// suite instead of failing it.
+/// Receive with a deadline: a dropped transaction must fail the suite, not hang it.
 async fn recv(downstream: &mut mpsc::Receiver<IngestedTransaction>) -> Option<IngestedTransaction> {
     tokio::time::timeout(std::time::Duration::from_secs(5), downstream.recv())
         .await
         .expect("nothing arrived within five seconds")
 }
 
-/// A consumer that is gone ends the session: there is nothing left to feed, and
-/// retrying the connection would not bring it back.
+/// A consumer that is gone ends the session: retrying the connection would not bring it back.
 #[tokio::test]
 async fn a_closed_downstream_ends_the_session() {
     let (mut session, downstream, _outbound) = session(4);
@@ -337,12 +286,8 @@ async fn a_closed_downstream_ends_the_session() {
 
 // ── keep-alive ──────────────────────────────────────────────────────
 
-/// ⚠️ **A ping is answered with a ping and nothing else** — a request whose only
-/// field is `ping`. The reference server returns the pong *before* it reads
-/// anything else off the request, so this answer never touches the
-/// subscription. Anything more is a defect, and each assertion below names the
-/// one it is about: a `from_slot` would re-issue the replay on every ping, and
-/// a filter would describe a subscription the server is not meant to see again.
+/// ⚠️ A ping is answered with a request whose only field is `ping`: a `from_slot` would re-issue
+/// the replay on every ping, a filter would describe a subscription anew.
 #[tokio::test]
 async fn a_ping_is_answered_with_a_bare_ping() {
     let (mut session, _downstream, mut outbound) = session(4);
@@ -368,8 +313,7 @@ async fn a_ping_is_answered_with_a_bare_ping() {
             && answer.entry.is_empty(),
         "a filter on the answer describes a subscription — the answer must carry none: {answer:?}"
     );
-    // The net under the two above: commitment, data slices, and whatever field a
-    // later proto adds must all stay at their default as well.
+    // The net under the two above: every other field, current or future, stays at its default.
     assert_eq!(
         answer,
         SubscribeRequest {
@@ -379,16 +323,8 @@ async fn a_ping_is_answered_with_a_bare_ping() {
     );
 }
 
-/// A ping during a replay leaves the **session's** side of it exactly as it
-/// was — same resume point, same pending payload, released by its block-meta
-/// as if no ping had come. A replay is when a ping is the most likely to
-/// arrive: a reconnection rewinds, and the server pings long before the
-/// backlog drains.
-///
-/// ⚠️ This guards the `Ping` arm of `handle`, not `PingAnswer::answer`, which takes
-/// `&self` and cannot touch either. The damage an *answer* could do to a
-/// replay happens on the server, through a `from_slot` riding along — that is
-/// [`a_ping_is_answered_with_a_bare_ping`]'s to catch.
+/// A ping during a replay leaves the session's resume point and pending payload as they were.
+/// ⚠️ This guards `handle`'s `Ping` arm; an answer's damage is [`a_ping_is_answered_with_a_bare_ping`]'s.
 #[tokio::test]
 async fn a_ping_during_a_replay_leaves_it_alone() {
     let (mut session, mut downstream, mut outbound) = session(4);
@@ -418,10 +354,8 @@ async fn a_ping_during_a_replay_leaves_it_alone() {
     assert!(downstream.try_recv().is_err(), "and nothing else was held");
 }
 
-/// An answer that cannot leave is counted and stepped over: the session is
-/// still receiving, and if the server does close it for want of an answer, the
-/// reconnection is what handles that. Ending the session here would turn a
-/// failed keep-alive into the very reconnection it exists to avoid.
+/// An answer that cannot leave is counted and stepped over: ending the session would turn a
+/// failed keep-alive into the reconnection it exists to avoid.
 #[test]
 fn a_ping_whose_answer_cannot_leave_is_counted_and_keeps_the_session_open() {
     let (state, snapshot) = counted(async {
@@ -444,12 +378,8 @@ fn a_ping_whose_answer_cannot_leave_is_counted_and_keeps_the_session_open() {
     );
 }
 
-/// ⚠️ **A full outbound half must not park the session.** `handle` runs from
-/// the body of the listener's `select!` arm, so a wait here would hold off the
-/// shutdown token — and a full channel means the transport is not draining,
-/// so waiting would not even get the answer out. Once the harness's outbound
-/// half is full, the next ping must return at once, and its answer must be
-/// **dropped and counted**, not handed to something that sends it later.
+/// ⚠️ A full outbound half must not park the session, which runs in `select!`'s body: the next ping
+/// returns at once, its answer dropped and counted.
 #[test]
 fn a_full_outbound_half_does_not_park_the_session() {
     let ((state, queued), snapshot) = counted(async {
@@ -492,8 +422,7 @@ fn a_full_outbound_half_does_not_park_the_session() {
     );
 }
 
-/// A pong is the server's answer to one of our ping answers: counted, and
-/// nothing more.
+/// A pong, the server's answer to one of our ping answers: counted, nothing more.
 #[tokio::test]
 async fn a_pong_changes_nothing() {
     let (mut session, mut downstream, mut outbound) = session(4);
@@ -517,13 +446,8 @@ async fn a_pong_changes_nothing() {
 
 // ── resuming ────────────────────────────────────────────────────────
 
-/// ⚠️ **Where a reconnection resumes from is the oldest slot this session did
-/// not finish — not the highest slot it saw.** The first version took the
-/// highest slot of *any* update, transaction updates included, and that lost
-/// data on every mid-block break: a transaction names a slot still in flight,
-/// its payloads sit in the buffer, and the buffer dies with the session. Asking
-/// for `M+1` then skipped exactly what the break destroyed. Found in review,
-/// 9 September 2026, and this test is the shape of that defect.
+/// ⚠️ The resume point is the oldest slot not finished, not the highest seen: a mid-block break
+/// leaves payloads in the buffer, which dies with the session.
 #[tokio::test]
 async fn the_resume_point_is_the_oldest_slot_the_session_did_not_finish() {
     let (mut session, _downstream, _outbound) = session(4);
@@ -550,9 +474,7 @@ async fn the_resume_point_is_the_oldest_slot_the_session_did_not_finish() {
     );
 }
 
-/// The rewind must not underflow near genesis, which is only reachable in a
-/// test but is the kind of arithmetic that panics in release-mode debug builds
-/// and wraps in release.
+/// The rewind must not underflow near genesis.
 #[tokio::test]
 async fn the_rewind_saturates_instead_of_wrapping() {
     let (mut session, _downstream, _outbound) = session(4);
@@ -562,13 +484,8 @@ async fn the_rewind_saturates_instead_of_wrapping() {
     assert_eq!(session.resume_from(), Some(0));
 }
 
-/// ⚠️ **What separates churn from a provider refusing us — and a ping is not
-/// it.** A stream that opens and closes having delivered no data must count
-/// against the retry budget; one that delivered must not. Yellowstone servers
-/// ping shortly after `subscribe`, so counting "any message" would put a stream
-/// that pings once and closes in the churn arm: counter reset, redialled once a
-/// second, for ever. Found in review, 9 September 2026 — the day after the rule
-/// this test was first written for.
+/// ⚠️ Only data separates churn from a refusal: servers ping right after `subscribe`, so counting
+/// a ping would redial a refusing provider once a second for ever.
 #[tokio::test]
 async fn only_data_counts_as_delivered_not_a_keep_alive() {
     let (mut session, _downstream, _outbound) = session(4);
@@ -599,12 +516,8 @@ async fn only_data_counts_as_delivered_not_a_keep_alive() {
     assert!(session.received_data(), "a block-meta is data");
 }
 
-/// ⚠️ **Only a block-meta moves the count the stall clock reads** — with or
-/// without a block time, since either way the server delivered. Not a ping:
-/// Yellowstone pings from a task of its own, so pings keep coming from a server
-/// whose data path has stopped, and counting them would keep a stalled stream
-/// alive for ever. Not a transaction either: a quiet market sends none for
-/// minutes, and the clock is about the stream, not the market.
+/// ⚠️ Only a block-meta moves the stall clock's count, with or without a time: pings outlive a
+/// stopped data path, and a quiet market sends no transaction for minutes.
 #[tokio::test]
 async fn only_a_block_meta_moves_the_block_meta_count() {
     let (mut session, _downstream, _outbound) = session(4);
@@ -635,19 +548,8 @@ async fn only_a_block_meta_moves_the_block_meta_count() {
     );
 }
 
-/// ⚠️ **An unroutable transaction is delivery with nothing to resume from**, and
-/// that pair is the premise of the listener's keep-the-mark rule. `handle` sets
-/// `received_data` before `on_transaction` decides anything — which is right,
-/// since the server did send us data and is not refusing us — and
-/// `on_transaction` then drops the transaction *before* the buffer, leaving no
-/// slot to resume from.
-///
-/// So the two answers below disagree on purpose, and the listener has to read
-/// the second as "this session has no mark", never as "there is no mark":
-/// `an_attempt_with_nothing_to_resume_from_keeps_the_mark_we_hold` is what
-/// proves it does. Stated here so that a session which stopped producing the
-/// pair would redden *this* test, with a message that names the reason, rather
-/// than only that one.
+/// ⚠️ An unroutable transaction is delivery with nothing to resume from: the premise of the
+/// listener's keep-the-mark rule, pinned here so its loss reddens this test.
 #[tokio::test]
 async fn an_unroutable_transaction_is_delivery_with_nothing_to_resume_from() {
     let (mut session, _downstream, _outbound) = session(4);
@@ -667,11 +569,7 @@ async fn an_unroutable_transaction_is_delivery_with_nothing_to_resume_from() {
     );
 }
 
-/// ⚠️ **The back-pressure wait must not swallow a shutdown.** `handle` is driven
-/// from the body of the listener's `select!` arm, so while it is parked on a
-/// full consumer nothing else polls the cancellation token. A consumer that
-/// stalls without dropping its receiver would otherwise make the process ignore
-/// a stop request for as long as the stall lasts.
+/// ⚠️ `handle` runs in `select!`'s body: parked on a full consumer, it must still see shutdown.
 #[tokio::test]
 async fn a_shutdown_reaches_a_session_parked_on_a_full_consumer() {
     let shutdown = CancellationToken::new();

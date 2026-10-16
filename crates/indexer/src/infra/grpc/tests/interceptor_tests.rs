@@ -1,10 +1,5 @@
-//! Tests for the gRPC half of the credential.
-//!
-//! Deliberately short: validating the header, refusing a malformed one without
-//! quoting it, and keeping it out of `{:?}` are `infra::endpoint::credential`'s business
-//! and are tested there, once, for both paths. What is left here is what only
-//! this module does — putting the pair on a tonic request, and the one shape a
-//! metadata key refuses that a header name allows.
+//! Tests for the gRPC half of the credential: the pair on a tonic request, and the `-bin` name a
+//! metadata key refuses; validation is `infra::endpoint::credential`'s.
 
 use super::*;
 
@@ -18,11 +13,8 @@ fn interceptor(name: &str) -> CredentialInterceptor {
     CredentialInterceptor::new(&credential).expect("valid as metadata too")
 }
 
-/// ⚠️ **The half `yog-bootstrap` cannot check.**
-/// `required_endpoint_allowing_header` is a promise that the consumer sends the
-/// header, and this is the test that the promise is kept on this path. Without
-/// it the process authenticates as anonymous and succeeds against any endpoint
-/// that allows it — silence, and a stream that looks fine until it is refused.
+/// ⚠️ `required_endpoint_allowing_header` promises the header is sent: without it the process
+/// authenticates as anonymous and succeeds wherever that is allowed.
 #[test]
 fn the_configured_header_is_put_on_the_request() {
     let mut interceptor = interceptor("x-token");
@@ -41,9 +33,7 @@ fn the_configured_header_is_put_on_the_request() {
     );
 }
 
-/// The sensitive flag has to survive the conversion into tonic's metadata, or
-/// the guard stops at the crate boundary — which is exactly where the header
-/// dumps that would print it live.
+/// The sensitive flag must survive the conversion into tonic's metadata, where header dumps live.
 #[test]
 fn the_value_is_still_marked_sensitive_as_metadata() {
     let mut interceptor = interceptor("x-token");
@@ -77,8 +67,7 @@ fn an_endpoint_without_a_header_sends_none() {
     );
 }
 
-/// The name is the operator's, not ours — `authorization: Bearer {key}` is as
-/// legitimate a shape as `x-token`, and the code knows neither provider.
+/// The name is the operator's: `authorization: Bearer {key}` is as legitimate as `x-token`.
 #[test]
 fn any_header_name_the_operator_writes_is_used() {
     let mut interceptor = interceptor("authorization");
@@ -94,10 +83,8 @@ fn any_header_name_the_operator_writes_is_used() {
     );
 }
 
-/// ⚠️ The one refusal that belongs here rather than in `credential`: a name
-/// ending in `-bin` is a perfectly valid HTTP header name — the WebSocket path
-/// would send it — but names *binary* metadata in gRPC, a different type this
-/// endpoint does not carry. A gRPC rule, checked where gRPC is.
+/// ⚠️ A `-bin` name is a valid HTTP header name but binary metadata in gRPC: refused here, not in
+/// `credential`, where the WebSocket path would send it.
 #[test]
 fn a_binary_metadata_name_is_refused_here_and_not_upstream() {
     let credential = Credential::new(Some(("x-token-bin", SecretKey::for_tests(TOKEN))))

@@ -1,8 +1,4 @@
-//! Tests for the retry budget, on the values it returns — no clock involved.
-//!
-//! Only what `run` cannot show: how long the next attempt waits. Which ending
-//! restarts the budget and which charges it is owned by `listener_tests`, one
-//! test per rule, and is not repeated here.
+//! Tests for the retry budget's backoff, on its values; which ending charges it is `listener_tests`'.
 
 use super::*;
 
@@ -33,10 +29,7 @@ fn waits(next: Next) -> Duration {
     }
 }
 
-/// ⚠️ **A churn resets the backoff**, not only the attempt count. Without it a
-/// stream that broke after a run of failures would wait the doubled backoff of
-/// those failures before its first redial.
-///
+/// ⚠️ A churn resets the backoff too, or a stream broken after failures waits their doubled backoff.
 /// Mutation this is written against: `churn` leaving `backoff` as it was.
 #[test]
 fn a_churn_resets_the_backoff() {

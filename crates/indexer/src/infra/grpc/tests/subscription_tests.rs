@@ -1,12 +1,5 @@
-//! Tests for the subscription request and the routing back.
-//!
-//! ⚠️ **What these can and cannot say.** They pin what *we ask for*, exactly:
-//! the request is our own object, so asserting on it is not the circular
-//! exercise `transaction_adapter_tests` has to warn about. What no test here
-//! can say is whether a provider **honours** the request — whether `vote:
-//! false` really keeps votes off the wire, whether `from_slot` replays what we
-//! think it replays. That takes a real provider, and the
-//! `yog_indexer_grpc_updates_total{kind}` counter is what it will read.
+//! Tests for the subscription request and the routing back: what we ask for, exactly. Whether a
+//! provider honours it takes a real one, and `yog_indexer_grpc_updates_total{kind}` will say.
 
 use super::*;
 
@@ -25,16 +18,10 @@ fn request(watched: &[(Protocol, Pubkey)]) -> SubscribeRequest {
     build_request(&watched.iter().copied().collect(), None).expect("something is watched")
 }
 
-// ── the two flags nothing else will remind us of ─────────
+// ── the two flags nothing else will remind us of ────────────────────
 
-/// ⚠️ **Votes and failed transactions are refused at the server**, and both
-/// omissions are silent in a way this test exists to break.
-///
-/// Without `failed: false` the events of a reverted transaction are persisted
-/// as though they happened — the adapter never looks at `meta.err`. Without
-/// `vote: false` the bulk of Solana's stream is paid for, decoded and dropped,
-/// and against a provider that marks votes `inner_instructions_none` each one
-/// becomes a counted failure: an error metric that reads as a dead pipeline.
+/// ⚠️ Both omissions are silent: without `failed: false` reverted events are persisted, without
+/// `vote: false` the stream's bulk is paid for and may count as failures.
 #[test]
 fn the_transaction_filter_refuses_votes_and_failures() {
     let request = request(&[damm_v2_program()]);
@@ -52,9 +39,8 @@ fn the_transaction_filter_refuses_votes_and_failures() {
     );
 }
 
-/// The block-meta subscription is not optional: it is the only source of
-/// `block_time`, and without it every transaction waits for an instant that
-/// never comes and leaves through the buffer's eviction counter.
+/// The block-meta subscription is the only source of `block_time`: without it every transaction
+/// waits for ever and leaves through the eviction counter.
 #[test]
 fn the_request_also_subscribes_to_block_metas() {
     let request = request(&[damm_v2_program()]);
@@ -72,9 +58,7 @@ fn the_request_also_subscribes_to_block_metas() {
 
 // ── what is asked for ───────────────────────────────────────────
 
-/// A watched protocol is its program id, which is what makes the firehose
-/// mode a single filter here where the RPC path needs a subscription per
-/// address.
+/// A watched protocol is its program id: one filter, where the RPC path needs one per address.
 #[test]
 fn a_watched_program_id_is_included_as_is() {
     let request = request(&[damm_v2_program()]);
@@ -85,8 +69,7 @@ fn a_watched_program_id_is_included_as_is() {
     );
 }
 
-/// Watched pools: the allowlist is enforced **at the subscription**, as it is
-/// on the RPC path — not by a filter downstream.
+/// Watched pools: the allowlist is enforced at the subscription, not by a downstream filter.
 #[test]
 fn watched_pools_are_grouped_by_protocol() {
     let request = request(&[
@@ -102,10 +85,7 @@ fn watched_pools_are_grouped_by_protocol() {
          identifies the protocol on the way back, and a filter per pool would \
          multiply the account quota that is already the tight one"
     );
-    // The expectation is sorted, not the result: `account_include` is a
-    // repeated field whose order reaches the wire, and `account_includes` sorts
-    // it so this comparison is against a defined order rather than a `HashSet`
-    // iteration.
+    // The expectation is sorted, not the result: `account_includes` sorts the repeated field.
     let mut expected = vec![pool(1).to_string(), pool(2).to_string()];
     expected.sort();
     assert_eq!(
@@ -118,12 +98,8 @@ fn watched_pools_are_grouped_by_protocol() {
     );
 }
 
-/// ⚠️ Nothing watched is a refusal, not an empty subscription. A stream that
-/// subscribes to nothing connects, succeeds, and goes quiet — a failure that
-/// reads as a network fault and is a configuration one, and that returning an
-/// empty request here would reproduce. The config-time `check_supported` that
-/// used to catch the same shape earlier is gone since 10 September 2026; this
-/// refusal is now the only one.
+/// ⚠️ Nothing watched is a refusal: an empty subscription connects and goes quiet, reading as a
+/// network fault. This refusal is the only one left.
 #[test]
 fn nothing_watched_is_refused_rather_than_subscribed_empty() {
     assert!(matches!(
@@ -132,9 +108,7 @@ fn nothing_watched_is_refused_rather_than_subscribed_empty() {
     ));
 }
 
-/// `from_slot` is what a reconnection asks for, and its absence is what a first
-/// connection asks for. Carried through untouched — the semantics belong to the
-/// server, and the listener's fallback for a refused replay is at its own level.
+/// `from_slot` is carried through untouched; its semantics are the server's.
 #[test]
 fn from_slot_is_carried_only_when_given() {
     assert_eq!(request(&[damm_v2_program()]).from_slot, None);
@@ -147,8 +121,7 @@ fn from_slot_is_carried_only_when_given() {
 
 // ── reading the protocol back ───────────────────────────────────────
 
-/// The routing: a filter named after a protocol is how an update says which one
-/// it belongs to, without re-deriving it from the account keys.
+/// The routing: a filter named after a protocol says which one an update belongs to.
 #[test]
 fn an_update_names_its_protocol_through_the_filter_that_matched() {
     assert_eq!(
@@ -161,8 +134,7 @@ fn an_update_names_its_protocol_through_the_filter_that_matched() {
     );
 }
 
-/// A block-meta matches its own filter and no protocol — and must not be
-/// mistaken for one, since it carries no transaction to route.
+/// A block-meta matches its own filter and no protocol.
 #[test]
 fn a_block_meta_filter_names_no_protocol() {
     assert_eq!(protocol_of(&[BLOCK_META_FILTER.to_string()]), None);
@@ -170,10 +142,8 @@ fn a_block_meta_filter_names_no_protocol() {
     assert_eq!(protocol_of(&["something_else".to_string()]), None);
 }
 
-/// ⚠️ The two names must line up in **both** directions: the filter is built
-/// from `Protocol::as_str` and read back through `FromStr`, and nothing but
-/// this test connects the two. A protocol added with a name that does not
-/// round-trip would subscribe correctly and route nothing, silently.
+/// ⚠️ `Protocol::as_str` and `FromStr` must round-trip: a name that does not would subscribe
+/// correctly and route nothing.
 #[test]
 fn every_protocol_name_round_trips_through_the_filter() {
     for protocol in Protocol::all() {
