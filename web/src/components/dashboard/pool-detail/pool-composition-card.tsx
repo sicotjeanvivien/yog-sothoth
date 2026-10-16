@@ -4,7 +4,7 @@
  * Renders only when both sides of the pool have a USD value (the
  * computation helper returns null otherwise). The parent block
  * decides what to show in the null case; this component assumes a
- * non-null `composition` and a non-null `tvlUsd`.
+ * non-null `composition`; the centre TVL is the sum of its two sides.
  *
  * The donut is a single SVG with two arc paths:
  *   - arc A from 12 o'clock clockwise to share-A boundary
@@ -49,7 +49,6 @@ export async function PoolCompositionCard({
   tokenA,
   tokenB,
   composition,
-  tvlUsd,
   reserveA,
   reserveB,
   className,
@@ -59,7 +58,6 @@ export async function PoolCompositionCard({
   tokenA: EmbeddedTokenResponse;
   tokenB: EmbeddedTokenResponse;
   composition: PoolComposition;
-  tvlUsd: string | null;
   /** Reserve in native units (integer string from the API) per side. */
   reserveA: string;
   reserveB: string;
@@ -86,7 +84,10 @@ export async function PoolCompositionCard({
           centred instead of leaving dead space at the bottom. */}
       <div className="mt-1 flex flex-1 items-center gap-5">
         {/* Donut */}
-        <Donut shareA={composition.shareA} tvlUsd={tvlUsd} />
+        <Donut
+          shareA={composition.shareA}
+          tvlUsd={composition.valueAUsd + composition.valueBUsd}
+        />
 
         {/* Legend */}
         <div className="flex flex-1 flex-col gap-3 text-[14px]">
@@ -119,7 +120,7 @@ function Donut({
   tvlUsd,
 }: {
   shareA: number;
-  tvlUsd: string | null;
+  tvlUsd: number;
 }) {
   // Edge case: when one side is 100%, a single full-circle arc
   // doesn't render correctly with the path-based approach (the
@@ -163,7 +164,7 @@ function Donut({
       {/* Centre label */}
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
         <span className="font-display text-[14px] font-bold tracking-[0.02em] text-[#f5f2ff] lg:text-[15px]">
-          {formatUsdCompact(tvlUsd)}
+          {formatUsdCompact(String(tvlUsd))}
         </span>
         <span className="mt-0.5 text-[10px] font-semibold tracking-[0.2em] text-slate-400 uppercase">
           TVL

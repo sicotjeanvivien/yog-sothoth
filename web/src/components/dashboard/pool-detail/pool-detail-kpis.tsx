@@ -134,8 +134,8 @@ export async function PoolDetailKpis({
     </>
   );
 
-  // `composition` is non-null only when `state` is non-null (it is derived
-  // from the reserves), so the reserves are guaranteed present here.
+  // `composition` is non-null only when `state` is non-null, so the reserves
+  // are present here.
   const compositionCard = composition && state && (
     <PoolCompositionCard
       label={t("composition")}
@@ -143,7 +143,6 @@ export async function PoolDetailKpis({
       tokenA={pool.tokenA}
       tokenB={pool.tokenB}
       composition={composition}
-      tvlUsd={pool.tvlUsd}
       reserveA={state.reserveA}
       reserveB={state.reserveB}
       className="lg:col-span-4 lg:h-full"
