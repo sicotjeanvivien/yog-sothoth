@@ -1,21 +1,11 @@
-//! Tests for the stall clock: what counts as the server's silence.
-//!
-//! Only what `run` cannot show without timing it: how waits add up. That a
-//! block-meta resets the clock and a ping does not is owned by `listener_tests`
-//! (`pings_do_not_keep_a_stalled_stream_alive`,
-//! `a_slow_but_live_stream_is_not_restarted`).
+//! Tests for the stall clock: how waits add up. What resets it is `listener_tests`'.
 
 use super::*;
 
 const TIMEOUT: Duration = Duration::from_secs(30);
 
-/// ⚠️ **Time spent outside a wait is not silence.** The listener waits ten
-/// seconds, then sits fifty in `handle` on a full consumer, then waits again:
-/// only the ten count. A wall-clock reading would see sixty and call a healthy
-/// stream stalled on its first ordinary wait after back-pressure.
-///
-/// Mutation this is written against: counting the gap between two waits —
-/// `wait_started` adding the time since the previous `wait_ended`.
+/// ⚠️ Time spent outside a wait, parked on a full consumer, is not silence.
+/// Mutation this is written against: `wait_started` adding the time since the previous `wait_ended`.
 #[test]
 fn time_outside_a_wait_is_not_silence() {
     let t0 = Instant::now();

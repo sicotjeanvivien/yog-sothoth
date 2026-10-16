@@ -41,8 +41,7 @@ impl Delivery {
     ) -> SessionState {
         let transaction = match from_grpc(&pending.update, at) {
             Ok(transaction) => transaction,
-            // Skip-and-log, per transaction: a malformed message must not stop
-            // the stream. `from_grpc`'s doc-comment lists what can appear here.
+            // Skip-and-log per transaction: a malformed message must not stop the stream.
             Err(error) => {
                 GrpcListenerMetrics::record_dropped(drop_reason(&error));
                 log::untranslatable(pending.update.slot, &error);
@@ -55,10 +54,8 @@ impl Delivery {
             transaction,
         };
 
-        // ⚠️ Back-pressure, not dropping — the opposite of the JSON-RPC
-        // dispatcher. There a dropped signature can be asked for again; here
-        // the transaction came once, over a stream billed by the byte. So the
-        // stream is slowed to the consumer's speed, bounded only by shutdown.
+        // ⚠️ Back-pressure, not dropping (unlike the JSON-RPC dispatcher): a streamed
+        // transaction comes once and cannot be asked for again.
         let ingested = match self.downstream.try_send(ingested) {
             Ok(()) => return emitted(),
             Err(mpsc::error::TrySendError::Closed(_)) => return SessionState::DownstreamClosed,

@@ -1,12 +1,7 @@
 use yog_bootstrap::EnvEnum;
 
-/// Where the indexer's transactions come from.
-///
-/// Names the acquisition model rather than the wire protocol, because that
-/// is what differs: `Rpc` **notifies then asks** — a `logsSubscribe` socket
-/// carrying signatures, then one `getTransaction` per signature, which is
-/// what caps throughput and drops `transaction_index`. `Grpc` **delivers** —
-/// a single Yellowstone stream carrying whole transactions, no second call.
+/// Where the indexer's transactions come from, named by acquisition model: `Rpc` notifies then
+/// asks (one `getTransaction` per signature, no `transaction_index`), `Grpc` delivers them whole.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum IngestSource {
     Rpc,

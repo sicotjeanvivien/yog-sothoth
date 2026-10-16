@@ -1,18 +1,5 @@
-//! Two kinds of test, and the second one used not to exist.
-//!
-//! **Before the loop** — `channel_endpoint` and `watch` are pure functions of
-//! the configured endpoint and the watch set, and what they refuse is the
-//! misconfiguration this path makes possible. What each refusal *says* is
-//! `scheme_tests`'s; what is tested here is that this path builds its endpoint,
-//! and asks.
-//!
-//! **Inside the loop** — the retry rule itself, driven against `test_geyser_server`.
-//! A scripted server is what makes it reachable: every decision `run` makes is
-//! a decision about *how a stream ended*, and nothing short of a server
-//! produces those endings. See the header of that module for what this proves
-//! and what it does not; the short version is that it validates this client
-//! against our model of the server, and that only a run against a real
-//! provider meets the model with a real one.
+//! The listener before its loop (endpoint and watch set), then the retry rules inside it, driven
+//! against `test_geyser_server`: this client against our model of the server, not a real one.
 
 use super::*;
 
@@ -24,8 +11,7 @@ fn listener(url: &str) -> GrpcListener {
     GrpcListener::new(Endpoint::for_tests(url, None), 1, STALL_TIMEOUT)
 }
 
-/// Accepted means built: TLS and keep-alive are configured on the way out, so
-/// this also says a plaintext `http://` endpoint survives `tls_config`.
+/// Accepted means built: a plaintext `http://` endpoint also survives `tls_config`.
 #[test]
 fn an_http_endpoint_is_accepted() {
     for url in [
@@ -40,11 +26,8 @@ fn an_http_endpoint_is_accepted() {
     }
 }
 
-/// ⚠️ The defect this call was written for, and it was found by *reading a
-/// successful-looking run*: the gRPC path was launched against the `wss://` URL
-/// of `.env`, produced ten retries with backoff, and that was taken for "a
-/// transport error, as expected". Deleting the scheme check from
-/// `channel_endpoint` turns this red; `scheme_tests` would stay green.
+/// Mutation this is written against: deleting the scheme check from `channel_endpoint`
+/// (`scheme_tests` would stay green).
 #[test]
 fn a_websocket_endpoint_is_refused_before_the_loop() {
     let detail = listener("wss://api.example.com")
@@ -53,16 +36,12 @@ fn a_websocket_endpoint_is_refused_before_the_loop() {
         .expect_err("a WebSocket URL is not a gRPC endpoint")
         .to_string();
 
-    // The scheme check's own wording, and not merely `InvalidEndpoint`:
-    // `from_shared` and `tls_config` raise that variant too, so a tonic that
-    // one day refused `wss://` itself would keep a variant-only assertion green
-    // while operators lost the message that says what to write.
+    // The scheme check's own wording, not merely `InvalidEndpoint`, which `from_shared` and
+    // `tls_config` raise too.
     assert!(detail.contains("`wss` scheme"), "{detail}");
 }
 
-/// ⚠️ **A URL with no scheme gets past `from_shared`** — `grpc.example.com:443`
-/// is a valid URI — so it is the scheme check, and only it, that has to name the
-/// mistake. `scheme_tests` pins the wording; this pins that the URL gets there.
+/// ⚠️ `grpc.example.com:443` is a valid URI, so only the scheme check can name the mistake.
 #[test]
 fn a_url_without_a_scheme_reaches_the_scheme_check() {
     let detail = listener("grpc.example.com:443")
@@ -74,11 +53,8 @@ fn a_url_without_a_scheme_reaches_the_scheme_check() {
     assert!(detail.contains("no scheme"), "{detail}");
 }
 
-/// ⚠️ **A watched protocol is its program id, and this is the only place that
-/// says so** on this path. The listener holds one set of addresses and no
-/// scope, so the translation lives in `watch` — and a `watch` that inserted
-/// anything else would open a stream that matches nothing. A pool is taken as
-/// given, grouped into the same protocol's filter.
+/// Mutation this is written against: `watch` inserting anything but the program id, which would
+/// open a stream that matches nothing.
 #[tokio::test]
 async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
     let listener = listener("https://grpc.example.com:443");
@@ -105,46 +81,8 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 
 // ── the retry rules, against a scripted server ──────────────────────
 //
-// Everything below drives `GrpcListener::run` itself, against `test_geyser_server`.
-// Until 16 September 2026 nothing did: `Ending::verdict`, read by
-// `RetryBudget::settle`, is the rule that decides what restarts the retry
-// budget and what charges it — and,
-// until later the same day, where the next attempt resumed from too. Every one
-// of the five defects that rule has had was found by reading it. None could
-// have been found by running it. Where the resume point lives now, and what
-// that moved, is the last note of this header.
-//
-// ⚠️ **Every rule below has an owner**: one test whose failure message names
-// that rule, listed on the test as the mutation it is written against. A
-// mutation that reddens a test which does *not* own the rule sends the reader
-// to the wrong file, so where a test needs a rule it does not own — the budget
-// reset, to reach a second attempt at all — it asserts a *prefix* of what it
-// observed rather than the whole of it.
-//
-// ⚠️ **One entanglement cannot be removed, and pretending otherwise is how this
-// file already went wrong once.** The three tests that prove a resume point is
-// *given up*, or *kept across an attempt that had none*, need one to exist
-// first, and the only things that create one are the two endings that prove a
-// resume point is *kept*. So breaking the mark an errored stream carries
-// reddens four tests, not one:
-// `an_error_mid_block_resumes_from_the_slot_that_was_cut`, which owns it and
-// names it, plus the three that borrowed it as scaffolding. The owner is what
-// makes that readable; it was missing until a review of this change found the
-// arm had none.
-//
-// ⚠️ **Two rules below are driven at `Connector::attempt` and not at `run`**,
-// and they are the only ones: what an attempt that never reached the service
-// does to the **mark**. Observing a mark being kept needs one to exist first,
-// and only a delivered session makes one — against a server that must, for the
-// next attempt, be unreachable. What that same ending costs the **budget** is
-// driven through `run` like every other rule here. Each header says which.
-//
-// ⚠️ **Where the resume mutations live moved on 16 September 2026**, with the
-// fix for a delivered session that had no mark of its own. The budget does not
-// write `resume_from`: the rule is `Verdict::next_resume_from`, which reads the
-// same verdict as the budget, and the *per-ending* facts behind it are
-// built in `Connector::open` and `Connector::read`. So a mutation that used to belong to one arm
-// now belongs to one of those two places, and each annotation below says which.
+// ⚠️ One entanglement: a mark given up or kept needs one first, so breaking the errored stream's
+// mark reddens more tests than its owner.
 
 use tokio::{net::TcpListener, time::timeout};
 use tonic::Status;
@@ -154,28 +92,15 @@ use crate::infra::grpc::{
     test_geyser_server::{self, Action, ScriptedGeyserHandle, ScriptedSession},
 };
 
-/// Nothing here should take seconds; `run`'s own backoff starts at one and the
-/// longest script waits through three of them. What this bounds is the failure
-/// mode every mutation below produces — a listener that retries for ever, or a
-/// wait that never wakes. Without it the suite would **hang instead of going
-/// red**, which is a guard that does not guard.
+/// Bounds the failure mode of every mutation below, a listener retrying for ever: without it the
+/// suite would hang instead of going red.
 const TEST_DEADLINE: Duration = Duration::from_secs(30);
 
-/// A block time, and any one will do: no assertion below reads it. It is here
-/// because a block-meta without one gives its slot up rather than releasing it,
-/// which would silently defeat the two consumer tests.
+/// Any block time: a block-meta without one gives its slot up instead of releasing it.
 const BLOCK_TIME: i64 = 1_700_000_000;
 
-/// A listener pointed at a scripted server, watching the one protocol with a
-/// working extractor.
-///
-/// ⚠️ The `watch` is not decoration: `build_request` refuses an empty
-/// subscription with `NoSubscriptionTargets` **before** the retry loop, so a
-/// test that forgot it would never reach a single one of these rules.
-///
-/// With the production [`STALL_TIMEOUT`], so that no test below stalls a
-/// stream it did not mean to — `Action::Hold` would otherwise turn every
-/// shutdown test into a reconnection race.
+/// A listener pointed at a scripted server, watching DAMM v2, with the production stall timeout.
+/// ⚠️ The `watch` is needed: an empty subscription is refused before the retry loop.
 async fn listener_for(server: &ScriptedGeyserHandle, max_attempts: u32) -> Arc<GrpcListener> {
     listener_with_stall(server, max_attempts, STALL_TIMEOUT).await
 }
@@ -196,34 +121,18 @@ async fn listener_with_stall(
 }
 
 /// A transaction of `slot`, carrying the filter name that makes it routable.
-///
-/// ⚠️ Any other name and `on_transaction` drops it before the buffer, so
-/// `resume_from` stays `None` and the resumption tests assert nothing. Which is
-/// why the name comes from `test_fixtures::PROTOCOL` and is not spelled again here:
-/// that constant *is* the rule, and a second copy of a rule is how this module
-/// has produced defects before.
+/// ⚠️ A name that is no protocol drops it before the buffer, and the resumption tests assert nothing.
 fn routable(slot: u64) -> Action {
     Action::send(transaction(slot, &[PROTOCOL.as_str()]))
 }
 
-/// A transaction of `slot` the pipeline cannot route.
-///
-/// ⚠️ The pair it produces — delivered, with nothing to resume from — is stated
-/// once, on `test_fixtures::unroutable_transaction`, and pinned on its own by
-/// `session_tests`. What is built here is only the `Action` that puts it on a
-/// stream, exactly as `routable` does: the rule is not spelled twice, for the
-/// reason the constant next to `PROTOCOL` gives.
+/// A transaction of `slot` the pipeline cannot route: delivered, with nothing to resume from.
 fn unroutable(slot: u64) -> Action {
     Action::send(unroutable_transaction(slot))
 }
 
-/// A `http://` URL nothing listens on: bound to take a free port, then closed.
-///
-/// The only way to a **refused dial** in this process — the server next door
-/// cannot produce one, and the header of the test that uses this says why. The
-/// window between the close and the dial is why this is a URL and not a server:
-/// nothing may bind that port in between, and if something did, the test would
-/// fail loudly on the ending it got rather than pass on the wrong one.
+/// A `http://` URL nothing listens on, the only way to a refused dial in this process; a port
+/// rebound in between would fail the test on the ending it got, not pass it.
 async fn a_closed_port() -> String {
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
@@ -234,14 +143,8 @@ async fn a_closed_port() -> String {
     format!("http://{address}")
 }
 
-/// A port that accepts every connection and cuts it at once, before a byte of
-/// HTTP/2 is exchanged.
-///
-/// ⚠️ **This is not a slower way to refuse a dial** — it is the other
-/// pre-contact fault, and the one a middlebox actually produces. `connect()`
-/// *succeeds* against it (hyper's handshake does not wait for the server's
-/// settings), so the failure surfaces inside `client.subscribe` as a `Status`,
-/// which is where it can be mistaken for the server answering.
+/// A port that accepts every connection and cuts it before any HTTP/2 byte.
+/// ⚠️ Not a refused dial: `connect()` succeeds, so the fault surfaces inside `subscribe` as a `Status`.
 struct CuttingPort {
     url: String,
     accepting: tokio::task::JoinHandle<()>,
@@ -254,9 +157,7 @@ impl CuttingPort {
             .expect("a free loopback port");
         let address = listener.local_addr().expect("a bound address");
 
-        // Every socket, not just the first: tonic's `Reconnect` redials
-        // underneath a failing RPC, and a second connection that was *served*
-        // would let the attempt succeed.
+        // Every socket: tonic redials underneath a failing RPC, and a served one would succeed.
         let accepting = tokio::spawn(async move {
             while let Ok((connection, _)) = listener.accept().await {
                 drop(connection);
@@ -289,17 +190,9 @@ async fn wait_for_subscriptions(server: &ScriptedGeyserHandle, count: usize) {
     }
 }
 
-/// ⚠️ **A stream that pings and closes having delivered nothing is a failing
-/// attempt, not churn** — and a Yellowstone server pings shortly after
-/// `subscribe`, so this is the ordinary shape of a refusal: an exhausted quota,
-/// a token refused at stream level, a `from_slot` past retention. Reading the
-/// ping as delivery puts it in the churn arm, where the budget restarts and the
-/// provider is redialled once a second for ever, `max_attempts` never reached.
-///
-/// Mutation this is written against: `session.rs`, the `Ping` arm setting
-/// `received_data = true`. It does not turn the error into a different one —
-/// the budget still runs out eventually, on the exhausted script — so what says
-/// it is the **number of attempts**, which is the quantity the rule is about.
+/// ⚠️ A server pings right after `subscribe`, so this is the ordinary shape of a refusal.
+/// Mutation this is written against: `session.rs`'s `Ping` arm setting `received_data = true`;
+/// the number of attempts says it, the error stays the same.
 #[tokio::test]
 async fn a_stream_that_only_pings_before_closing_spends_the_budget() {
     let server = test_geyser_server::start(vec![
@@ -333,18 +226,9 @@ async fn a_stream_that_only_pings_before_closing_spends_the_budget() {
     );
 }
 
-/// ⚠️ **A session that delivered and then errored is churn**, and this arm
-/// forgot it until 10 September 2026. `Err(Status)` is how a long-lived stream
-/// ordinarily breaks — a GOAWAY, an h2 reset, a nightly provider restart — so
-/// with the budget charged and never restarted, `attempt` climbed across
-/// sessions and the tenth restart shut the indexer down having lost nothing.
-///
-/// The arithmetic is the assertion: *delivers then errors*, *closes empty*,
-/// *closes empty*, with a budget of two, is **three** subscriptions. Without
-/// the reset the first one is charged and it is two.
-///
-/// Mutation this is written against: `Ending::verdict` classing
-/// `Failed { delivered: true }` as `Unanswered` instead of `Delivered`.
+/// The arithmetic is the assertion: delivers then errors, closes empty, closes empty, with a
+/// budget of two, is three subscriptions; charged, it would be two.
+/// Mutation this is written against: `Ending::verdict` classing `Failed { delivered: true }` as `Unanswered`.
 #[tokio::test]
 async fn a_stream_that_delivered_before_breaking_restarts_the_budget() {
     let server = test_geyser_server::start(vec![
@@ -382,26 +266,13 @@ async fn a_stream_that_delivered_before_breaking_restarts_the_budget() {
     );
 }
 
-/// ⚠️ **And the same resume point, when the cut is an error rather than a clean
-/// close.** Which of the two a provider sends is not ours to choose — a TCP
-/// reset and a graceful GOAWAY cut the same block in the same place — so the
-/// arm that handles the error must carry the mark exactly as its twin does.
-///
-/// Found by review of this change, 16 September 2026: the mark an errored
-/// stream carries had **no owner**. Two tests used it as scaffolding to produce
-/// their `Some(8)`, so dropping it turned both of them red with messages about
-/// other rules — the very pattern the section header above forbids, left
-/// unapplied on one arm by the commit that wrote the rule.
-///
-/// Mutation this is written against: `on_message`'s `Err(status)`
-/// ending handing back `resume_from: None` instead of `session.resume_from()`.
-/// That is where this ending's mark is now built — `next_resume_from` no longer
-/// tells the two endings apart, which is the point of it.
+/// ⚠️ A TCP reset and a GOAWAY cut the same block in the same place: the error arm carries the mark too.
+/// Mutation this is written against: `on_message`'s `Err(status)` ending handing back
+/// `resume_from: None` instead of `session.resume_from()`.
 #[tokio::test]
 async fn an_error_mid_block_resumes_from_the_slot_that_was_cut() {
     let server = test_geyser_server::start(vec![
-        // Slot 10's transaction, then the stream breaks — no block-meta, so the
-        // slot is still open when the session dies.
+        // Slot 10's transaction, then the stream breaks with the slot still open.
         ScriptedSession::Stream(vec![
             routable(10),
             Action::Fail(Status::unavailable("the connection was reset")),
@@ -429,25 +300,13 @@ async fn an_error_mid_block_resumes_from_the_slot_that_was_cut() {
     );
 }
 
-/// ⚠️ **And a stream that delivered and then closed *cleanly* is churn too** —
-/// the same rule, on the arm next door. A graceful GOAWAY, a provider draining
-/// a node before a restart and an idle-timeout close all end as `Ok(None)`
-/// rather than `Err(Status)`, and which of the two a given provider sends is
-/// not ours to choose. Charging the budget for them makes `attempt` climb
-/// across sessions until the *n*-th restart stops an indexer that has lost
-/// nothing — the defect the `Failed` arm had until 10 September 2026, waiting
-/// on its twin.
-///
-/// Found by review of this very change, 16 September 2026: the first version of
-/// these tests claimed to cover every arm and left this one reset unobserved.
-///
-/// Mutation this is written against: `Ending::verdict` classing
-/// `StreamClosed { delivered: true }` as `Unanswered` instead of `Delivered`.
+/// ⚠️ A drained node and an idle timeout end as `Ok(None)`: churn, like the error arm.
+/// Mutation this is written against: `Ending::verdict` classing `StreamClosed { delivered: true }`
+/// as `Unanswered` instead of `Delivered`.
 #[tokio::test]
 async fn a_stream_that_delivered_before_closing_cleanly_restarts_the_budget() {
     let server = test_geyser_server::start(vec![
-        // No `Fail`: the actions simply run out, which the client sees as a
-        // clean end of stream.
+        // No `Fail`: the actions run out, a clean end of stream.
         ScriptedSession::Stream(vec![routable(10)]),
         ScriptedSession::closes_empty(),
         ScriptedSession::closes_empty(),
@@ -479,22 +338,13 @@ async fn a_stream_that_delivered_before_closing_cleanly_restarts_the_budget() {
     );
 }
 
-/// ⚠️ **The resume point is the oldest slot the session did not finish, and a
-/// break mid-block is the case it exists for.** A transaction names a slot
-/// still in flight: its payload sits in the buffer, and the buffer dies with
-/// the session. So slot 10 arriving without its block-meta must be asked for
-/// again — rewound by `REWIND_SLOTS`, because a block-meta does not promise its
-/// slot's transactions have all arrived either.
-///
-/// Mutation this is written against: `on_message`'s `Ok(None)` ending
-/// handing back `resume_from: None` instead of `session.resume_from()` — the
-/// half `session_tests` cannot see, since it proves `resume_from` computes 8,
-/// not that anything asks for it.
+/// ⚠️ The buffer dies with the session, so slot 10 without its block-meta is asked for again.
+/// Mutation this is written against: `on_message`'s `Ok(None)` ending handing back
+/// `resume_from: None` instead of `session.resume_from()`.
 #[tokio::test]
 async fn a_break_mid_block_resumes_from_the_slot_that_was_cut() {
     let server = test_geyser_server::start(vec![
-        // Slot 10's transaction, and then the stream ends — no block-meta, so
-        // the slot is still open when the session dies.
+        // Slot 10's transaction, then the stream ends with the slot still open.
         ScriptedSession::Stream(vec![routable(10)]),
         ScriptedSession::closes_empty(),
     ])
@@ -519,37 +369,18 @@ async fn a_break_mid_block_resumes_from_the_slot_that_was_cut() {
     );
 }
 
-/// ⚠️ **A session that delivered but has no mark of its own must not erase the
-/// mark we already hold.** An absent mark is not a mark at zero: a transaction
-/// matching no protocol filter is counted `Unroutable` and dropped before the
-/// buffer, so the session ends `delivered` with `resume_from() == None` — and
-/// reading that as "there is no resume point" threw away a still-valid one and
-/// sent the attempt after it to the live edge. The transactions of the original
-/// break are then never asked for again, and no event table can know a row is
-/// missing.
-///
-/// The three attempts are the defect: *break mid-block* leaves slot 8, *one
-/// unroutable transaction then a clean close* has nothing to offer, and the
-/// third must still ask for 8.
-///
-/// Mutation this is written against: `Verdict::next_resume_from`'s
-/// `Delivered` arm returning the session's mark alone (`*mark`) instead of
-/// `mark.or(held)`. It reddens nothing else — the two resumption
-/// tests above hold `None` at that point, where `or` is invisible.
-///
-/// ⚠️ **The mark of the first attempt is scaffolding**, produced by the
-/// `Failed { delivered: true }` ending as its siblings' is, and for the reason
-/// the header gives: only the delivered arms can create a mark to observe.
+/// ⚠️ An absent mark is not zero: an unroutable delivery leaves `resume_from() == None`.
+/// Mutation this is written against: `next_resume_from`'s `Delivered` arm returning `*mark`
+/// instead of `mark.or(held)`; the first attempt's mark is scaffolding.
 #[tokio::test]
 async fn an_attempt_with_nothing_to_resume_from_keeps_the_mark_we_hold() {
     let server = test_geyser_server::start(vec![
-        // Slot 10's transaction and then a break — the mark is 10 rewound by two.
+        // Slot 10's transaction and then a break: the mark is 10 rewound by two.
         ScriptedSession::Stream(vec![
             routable(10),
             Action::Fail(Status::unavailable("the connection was reset")),
         ]),
-        // Delivery the pipeline cannot route, then a clean close: this session
-        // has nothing to resume from, and nothing is not "slot zero".
+        // Delivery the pipeline cannot route, then a clean close: no mark of its own.
         ScriptedSession::Stream(vec![unroutable(20)]),
         ScriptedSession::closes_empty(),
     ])
@@ -566,10 +397,7 @@ async fn an_attempt_with_nothing_to_resume_from_keeps_the_mark_we_hold() {
     .expect("one empty close after two churn endings exhausts a budget of one");
 
     assert!(outcome.is_err(), "{outcome:?}");
-    // ⚠️ The whole vector, not a prefix, and it is safe here where its
-    // neighbours' is not: sending either churn arm to `charge` still
-    // leaves three subscriptions asking for these same three points, so no
-    // budget rule can redden this test.
+    // The whole vector is safe here: no budget rule changes these three resume points.
     assert_eq!(
         server.resume_points(),
         vec![None, Some(8), Some(8)],
@@ -578,25 +406,9 @@ async fn an_attempt_with_nothing_to_resume_from_keeps_the_mark_we_hold() {
     );
 }
 
-/// ⚠️ **A replay refused at the handshake is not asked for twice.** The slot
-/// may be past the server's retention, and providers do not agree on how far
-/// back that goes, so the next attempt starts from the live edge: the gap is
-/// lost rather than looped on. No error text is read to decide it — only
-/// whether the stream produced anything.
-///
-/// Mutation this is written against: `Verdict::next_resume_from`'s `Refused`
-/// arm returning `held` rather than `None`, which keeps the refused mark and
-/// asks for it again. It is the mutation
-/// `a_clean_close_that_delivered_nothing_gives_up_the_replay_point` also owns —
-/// one branch now answers for both endings, and a branch cannot be corrected on
-/// one ending and forgotten on the other, which is what four assignments
-/// allowed. What separates the two tests is the ending each drives it with.
-///
-/// ⚠️ A **prefix** of the resume points, not all of them: reaching a second
-/// attempt at all needs the budget reset of
-/// `a_stream_that_delivered_before_breaking_restarts_the_budget`, and breaking
-/// *that* rule changes how many attempts happen after the third. Asserting the
-/// whole vector would make this test red for a defect it does not own.
+/// ⚠️ The slot may be past retention: the next attempt starts live, never decided on error text.
+/// Mutation this is written against: `next_resume_from`'s `Refused` arm returning `held`; a prefix,
+/// since a second attempt needs another test's budget rule.
 #[tokio::test]
 async fn a_refused_resume_point_is_not_asked_for_twice() {
     let server = test_geyser_server::start(vec![
@@ -631,30 +443,9 @@ async fn a_refused_resume_point_is_not_asked_for_twice() {
     );
 }
 
-/// ⚠️ **And a stream that opened, delivered nothing and closed gives the replay
-/// point up too** — again the same rule as the arm above, on the clean-EOF
-/// side. The mark may be past the server's retention, so it is asked for once
-/// and then abandoned for the live edge; keeping it loops on a request that
-/// cannot succeed, at one attempt per backoff, for the whole budget.
-///
-/// Found by review of this change, 16 September 2026, with its twin above.
-///
-/// Mutation this is written against: the same one its `Failed`-side twin names
-/// — `Verdict::next_resume_from`'s `Refused` arm returning `held` rather
-/// than `None`. The arm is shared; the ending that reaches it is not, and
-/// that is what this test adds.
-///
-/// ⚠️ **The mark is produced by the `Failed` arm, on purpose**, though the rule
-/// under test is the clean-EOF one. Observing a mark being dropped needs a mark
-/// to exist first, and the only producers are the two delivered arms — so
-/// making the churn arm produce it would put *its* rule under this test too,
-/// and a review of the first version of this file caught exactly that: one
-/// mutation reddening two tests sends the reader to the wrong file. How the
-/// mark got there is scaffolding; which arm gives it up is the subject.
-///
-/// ⚠️ A **prefix**, for the reason its `Failed`-side twin gives: reaching a
-/// third attempt needs the budget reset of another rule, and breaking *that*
-/// one would otherwise make this test red for a defect it does not own.
+/// The clean-EOF side of the refusal above; its mark comes from the `Failed` arm, scaffolding.
+/// Mutation this is written against: `next_resume_from`'s `Refused` arm returning `held`; a prefix,
+/// since a third attempt needs another test's budget rule.
 #[tokio::test]
 async fn a_clean_close_that_delivered_nothing_gives_up_the_replay_point() {
     let server = test_geyser_server::start(vec![
@@ -687,49 +478,9 @@ async fn a_clean_close_that_delivered_nothing_gives_up_the_replay_point() {
     );
 }
 
-/// ⚠️ **A failure that never reached the server must not give up the mark.** A
-/// dial that fails — DNS, a refused connection, the ~2-minute link cuts this
-/// machine sees routinely — produces nothing, exactly like a stream the server
-/// opened and closed empty. Until 16 September 2026 the rule read only that, so
-/// a local fault was answered as a provider's verdict on `from_slot`: the mark
-/// was dropped, the attempt after it started from the live edge, and the
-/// transactions of the original break were never asked for again.
-///
-/// Mutation this owns: `Connector::open`'s `channel.connect()` failure
-/// returning `Ending::Failed { delivered: false }` again, which the `match`
-/// below catches by name.
-///
-/// ⚠️ It also reddens under `Verdict::next_resume_from`'s `Unanswered` arm
-/// returning `None`, **and so does its twin below** — one arm answers for
-/// every site that never got an answer, exactly as one arm answers for both
-/// refusals. That is the price of the single expression, and it is
-/// paid knowingly: what separates the two tests is the *site* each drives it
-/// from, which is where the defect lived.
-///
-/// # ⚠️ Why the mark half cannot go through `run`
-///
-/// Three attempts are what the scenario needs — deliver and break, fail before
-/// contact, then ask again — and the middle one has to reach a **dead** port
-/// while the first reaches a live server, on the one URL the listener dials.
-/// Closing the port and reopening it around that attempt is the only way, and
-/// nothing server-side can observe *when* a refused dial happened, so the
-/// reopening would have to be **timed** between two backoffs: the sort of
-/// assertion this file refuses elsewhere, for the backoff reset, and for the
-/// same reason.
-///
-/// Scripting the cut instead of the refusal does not work either, and that was
-/// measured before this shape was chosen: a connection the server accepts and
-/// cuts leaves `connect()` succeeding — hyper's HTTP/2 handshake does not wait
-/// for the server's settings — and tonic's `Reconnect` then redials underneath
-/// the failing RPC. The three-attempt run written that way stayed green with
-/// the defect in place (16 September 2026).
-///
-/// So the mark half is driven one level down: the refusal is the operating
-/// system's, the return site is production's, and the rule is read from the
-/// value that site produces. What this leaves to reading is `run`'s single
-/// `resume_from =` assignment, which the five tests above that assert on
-/// `resume_points` drive — and the budget, which
-/// `a_dial_that_never_connects_spends_the_budget` drives through `run`.
+/// ⚠️ A refused dial produces nothing, like an empty close, but no one refused `from_slot`.
+/// Mutation this owns: `Connector::open`'s `connect()` failure returning `Ending::Failed`; driven
+/// at `attempt`, since `run` would need a port dead for one attempt only, a timing assertion.
 #[tokio::test]
 async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
     let listener = GrpcListener::new(
@@ -739,9 +490,7 @@ async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
     );
     listener.watch(PROTOCOL).await;
 
-    // Built exactly as `run` builds them, and none of the three is what fails:
-    // the endpoint is well formed, the credential empty, the subscription
-    // non-empty. What is missing is a server.
+    // Built as `run` builds them, none of them failing: what is missing is a server.
     let credential =
         Credential::new(listener.connector.endpoint().header()).expect("no header is valid");
     let interceptor = CredentialInterceptor::new(&credential).expect("no header to reject");
@@ -749,7 +498,7 @@ async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
         .connector
         .channel_endpoint()
         .expect("a plaintext loopback URL is a gRPC endpoint");
-    // The attempt is about to ask for slot 8 — the mark a previous break left.
+    // The attempt asks for slot 8, the mark a previous break left.
     let request = listener
         .subscribe_request(Some(8))
         .await
@@ -771,8 +520,7 @@ async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
 
     let error = match &outcome {
         Ending::Unreachable { error } => error,
-        // Naming the impostor rather than the expectation: reading this failure
-        // as an ending of a stream is the defect itself.
+        // Naming the impostor: reading this failure as a stream's ending is the defect itself.
         Ending::Failed { error, .. } => {
             panic!("the dial was refused, so nothing answered — yet: {error}")
         }
@@ -791,25 +539,9 @@ async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
     );
 }
 
-/// ⚠️ **And a connection cut before the server answered is the same fault, on
-/// the site that looks most like a verdict.** `client.subscribe` returning a
-/// `Status` is what a refused replay looks like — and it is *also* what our own
-/// transport giving way looks like, because tonic maps a broken connection into
-/// a `Status` too. A load balancer with no backend, a link cut just after the
-/// TCP handshake, a redial of tonic's that finds nothing: all land here,
-/// none of them is the server refusing `from_slot`, and reading them as one
-/// gives the gap up exactly as the dial used to.
-///
-/// Found in review of this change, 16 September 2026 — the first version fixed
-/// the two sites the plan had listed and left standing the one it had
-/// classified, wrongly, as the server's answer.
-///
-/// Mutation this owns: `Connector::subscribe` losing its
-/// `reached_the_service` guard, so every `Status` counts as an answer. It
-/// reddens nothing else — the twin above never reaches `subscribe`, and
-/// `a_refused_resume_point_is_not_asked_for_twice` drives a `Status` the
-/// scripted server really did send, which the guard keeps on the `Failed` side.
-/// The shared branch it also reddens is the one named on that twin.
+/// ⚠️ tonic maps our own broken connection into a `Status` too, which looks like a refused replay.
+/// Mutation this owns: `Connector::subscribe` losing its `reached_the_service` guard, so every
+/// `Status` counts as the server's answer.
 #[tokio::test]
 async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
     let port = CuttingPort::bind().await;
@@ -849,8 +581,7 @@ async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
         }
         _ => panic!("a cut connection ends the attempt before any stream exists"),
     };
-    // The site, and it is the point of this test: this fault is the one that
-    // arrives *through* `subscribe`.
+    // The site is the point: this fault arrives through `subscribe`.
     assert!(
         error.starts_with("subscribe:"),
         "the RPC is where a cut connection surfaces, and the log must say so: {error}"
@@ -864,23 +595,9 @@ async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
     );
 }
 
-/// ⚠️ **An attempt that never reached the service still costs the budget.** It
-/// is a failing attempt, not the churn of a live connection: restarting the
-/// counter on it would redial a dead endpoint once a second for ever,
-/// `max_attempts` never reached, one `warn!` per second as the only trace —
-/// the failure mode the empty-close arm was written against, on the ending
-/// next door.
-///
-/// This is the half of `Ending::Unreachable` that **does** go through `run`,
-/// and the header of its sibling says why the other half cannot: a mark has to
-/// exist before it can be kept, and nothing can deliver one through a port that
-/// must stay dead.
-///
-/// Mutation this is written against: `Ending::verdict` classing
-/// `Unreachable` as `Delivered { mark: None }`, which restarts the budget and
-/// leaves the mark as it was. It cannot produce a wrong value, only a
-/// listener that never returns — so the deadline is the assertion, as it is for
-/// the two shutdown tests.
+/// ⚠️ Charged, not churn, or a dead endpoint would be redialled once a second for ever.
+/// Mutation this is written against: `Ending::verdict` classing `Unreachable` as
+/// `Delivered { mark: None }`; it only hangs, so the deadline is the assertion.
 #[tokio::test]
 async fn a_dial_that_never_connects_spends_the_budget() {
     let url = a_closed_port().await;
@@ -908,15 +625,9 @@ async fn a_dial_that_never_connects_spends_the_budget() {
     );
 }
 
-/// ⚠️ **A stop request must reach a listener parked on a silent stream.** A
-/// Yellowstone stream is idle for as long as nothing matches the filters, which
-/// is most of the time, so this is where the process spends its life — and a
-/// `select!` that did not poll the token there would ignore graceful shutdown
-/// for exactly as long as the quiet lasted.
-///
-/// Mutation this is written against: removing the `shutdown.cancelled()` branch
-/// from `Connector::read`'s `select!`. It cannot produce a wrong value, only
-/// a listener that never returns — which is why the deadline is the assertion.
+/// ⚠️ An idle stream is where the process spends its life.
+/// Mutation this is written against: removing the `shutdown.cancelled()` branch from
+/// `Connector::read`'s `select!`; it only hangs, so the deadline is the assertion.
 #[tokio::test]
 async fn a_shutdown_reaches_a_listener_parked_on_a_silent_stream() {
     let server = test_geyser_server::start(vec![ScriptedSession::Stream(vec![Action::Hold])]).await;
@@ -926,8 +637,7 @@ async fn a_shutdown_reaches_a_listener_parked_on_a_silent_stream() {
     let listener = listener_for(&server, 1).await;
     let running = tokio::spawn(listener.run(downstream, shutdown.clone()));
 
-    // Not a sleep: the stream has to be open before the token fires, or this
-    // would be testing the `is_cancelled` check at the top of the loop instead.
+    // Not a sleep: the stream must be open first, or this tests the loop's `is_cancelled` check.
     wait_for_subscriptions(&server, 1).await;
     shutdown.cancel();
 
@@ -942,22 +652,9 @@ async fn a_shutdown_reaches_a_listener_parked_on_a_silent_stream() {
     );
 }
 
-/// ⚠️ **And it must reach one parked inside `handle`, on a full consumer.**
-/// `StreamSession::handle` runs in the *body* of the `select!` arm, not as a
-/// branch, so while it waits for room nothing polls the token. A consumer that
-/// stalls without dropping its receiver would otherwise make the process ignore
-/// a stop request for as long as the stall lasts.
-///
-/// Mutation this is written against: `session/delivery.rs`'s back-pressure wait made
-/// unconditional — `self.downstream.send(ingested).await` with no `select!`.
-/// `session_tests` covers the session's own answer; what is proved here is that
-/// the listener turns it into a clean stop rather than another attempt.
-///
-/// The shape is load-bearing, and it is `session_tests`': **two transactions in
-/// the same slot**, because a block-meta releases a slot's payloads in one
-/// call, so the second is the one that meets a full channel. Waiting for the
-/// first to land is what makes the park certain rather than likely — nobody
-/// consumes, so the second can never proceed.
+/// ⚠️ Two transactions of one slot, released in one call: the second meets the full channel.
+/// Mutation this is written against: `session/delivery.rs`'s back-pressure wait made unconditional,
+/// `self.downstream.send(ingested).await` with no `select!`.
 #[tokio::test]
 async fn a_shutdown_reaches_a_session_parked_on_a_full_consumer() {
     let server = test_geyser_server::start(vec![ScriptedSession::Stream(vec![
@@ -997,14 +694,9 @@ async fn a_shutdown_reaches_a_session_parked_on_a_full_consumer() {
     );
 }
 
-/// ⚠️ **A consumer that is gone ends the listener, and is not retried.** There
-/// is nothing left to feed and reconnecting would not bring it back, so this is
-/// a clean stop — the one ending that is neither churn nor a failing provider.
-///
-/// Mutation this is written against: treating `DownstreamClosed` as churn.
-/// That turns the clean stop into a reconnection, which the subscription count
-/// is what names — the budget would then run out on the exhausted script and
-/// `run` would return an error instead of `Ok`.
+/// A consumer that is gone ends the listener cleanly, without reconnecting.
+/// Mutation this is written against: treating `DownstreamClosed` as churn; the subscription count
+/// names it.
 #[tokio::test]
 async fn a_vanished_consumer_stops_the_listener_without_retrying() {
     let server = test_geyser_server::start(vec![ScriptedSession::Stream(vec![
@@ -1038,13 +730,10 @@ async fn a_vanished_consumer_stops_the_listener_without_retrying() {
 
 // ── a stream that stalls without closing ────────────────────────────
 
-/// Short enough to wait through in a test, long enough that a script spacing
-/// its block-metas 50 ms apart never comes near it.
+/// Short enough to wait through, long enough that block-metas 50 ms apart never near it.
 const TEST_STALL: Duration = Duration::from_millis(300);
 
-/// A listener that stays alive across one stall, with room for a second one
-/// should the stop request arrive late: the assertions read what was asked
-/// for, not how the run ended.
+/// Room for a second stall, should the stop arrive late: the assertions read what was asked for.
 const STALL_TEST_ATTEMPTS: u32 = 10;
 
 /// Run a listener against `script` until the server has been subscribed to
@@ -1075,18 +764,9 @@ async fn run_until_subscribed(
     server
 }
 
-/// ⚠️ **A stream that stops delivering and stays open is ended, and resumed at
-/// its mark.** The server keeps the connection and sends nothing more —
-/// Triton's issues #25 and #175 — and nothing below the listener notices:
-/// without a bound, `stream.message()` is awaited for ever and every slot
-/// until the next process restart is lost.
-///
-/// Mutation this is written against: removing the stall arm of
-/// `Connector::read`'s `select!` — the second subscription never comes and
-/// `wait_for_subscriptions` gives up at `TEST_DEADLINE`. And `stalled` handing
-/// back `resume_from: None`, which the resume point catches. Not
-/// `#[tokio::test]` because it reads the counter — see `session_tests`'
-/// `counted` for the recipe.
+/// ⚠️ A server can stop delivering and keep the connection (`rpcpool/yellowstone-grpc` #25, #175).
+/// Mutation this is written against: removing the stall arm of `Connector::read`'s `select!`, or
+/// `stalled` handing back `resume_from: None`. Not `#[tokio::test]`: it reads the counter.
 #[test]
 fn a_stalled_stream_is_resubscribed_at_its_mark() {
     use metrics_util::debugging::{DebugValue, DebuggingRecorder};
@@ -1118,9 +798,7 @@ fn a_stalled_stream_is_resubscribed_at_its_mark() {
          rewound — a stall is churn, and keeps the mark"
     );
 
-    // At least one, not exactly one: the second session holds too, and a stop
-    // request that reaches it later than `TEST_STALL` on a loaded runner would
-    // stall it as well. What the rule needs is that a stall is counted at all.
+    // At least one: the second session holds too, and a late stop on a loaded runner stalls it as well.
     let stalls = snapshotter
         .snapshot()
         .into_vec()
@@ -1140,13 +818,8 @@ fn a_stalled_stream_is_resubscribed_at_its_mark() {
     );
 }
 
-/// ⚠️ **Pings do not keep a stalled stream alive.** A Yellowstone server pings
-/// from a task of its own, so a server whose data path has stopped keeps
-/// pinging — issue #25's exact shape. Only a block-meta resets the clock.
-///
-/// Mutation this is written against: resetting the clock on every message
-/// rather than on a block-meta. The pings then hold the stream open for ever,
-/// and the second subscription never comes.
+/// ⚠️ A server pings from a task of its own, so a stopped data path keeps pinging.
+/// Mutation this is written against: resetting the clock on every message rather than on a block-meta.
 #[tokio::test]
 async fn pings_do_not_keep_a_stalled_stream_alive() {
     let server = run_until_subscribed(
@@ -1164,13 +837,8 @@ async fn pings_do_not_keep_a_stalled_stream_alive() {
     assert_eq!(server.resume_points(), vec![None, Some(8)]);
 }
 
-/// A stream that is slow but alive is **not** restarted: block-metas spaced well
-/// inside the timeout, over a span longer than it, keep one subscription until
-/// the script breaks it on purpose.
-///
-/// Mutation this is written against: never resetting the clock, so that it
-/// measures the session's age. The stall then lands mid-script, and the resume
-/// point names a slot well before the last one.
+/// A slow but live stream is not restarted.
+/// Mutation this is written against: never resetting the clock, so it measures the session's age.
 #[tokio::test]
 async fn a_slow_but_live_stream_is_not_restarted() {
     let mut actions = Vec::new();
@@ -1197,13 +865,9 @@ async fn a_slow_but_live_stream_is_not_restarted() {
     );
 }
 
-/// A stream that stalls having delivered **nothing** spends the retry budget,
-/// like any ending that delivered nothing: a server that accepts and then says
-/// nothing at all must stop the indexer in the end, not be redialled for ever.
-///
-/// Mutation this is written against: `stalled` reporting `delivered: true`,
-/// which puts it in the churn arm — the budget restarts each time and the
-/// script runs out instead.
+/// A stream that stalls having delivered nothing spends the retry budget.
+/// Mutation this is written against: `stalled` reporting `delivered: true`, which restarts the
+/// budget each time.
 #[tokio::test]
 async fn a_stall_that_delivered_nothing_spends_the_budget() {
     let server = test_geyser_server::start(vec![
@@ -1235,17 +899,9 @@ async fn a_stall_that_delivered_nothing_spends_the_budget() {
     assert_eq!(server.requests().len(), 2);
 }
 
-/// ⚠️ **A stall that delivered nothing keeps the mark.** A `Failed` that
-/// delivered nothing gives its mark up because the server had our `from_slot`
-/// and refused it; a stall is no refusal — the decision to stop waiting is
-/// ours. Here the first session closes slot 10 and stalls, the second's replay
-/// never starts, and the third must still ask for slot 10: a provider whose
-/// data path stays stuck across two attempts must not send the next one to the
-/// live edge.
-///
-/// Mutation this is written against: `Ending::verdict` classing a stall that
-/// delivered nothing as `Refused`, as it does a `Failed` — the third request
-/// then asks for no slot at all.
+/// ⚠️ A stall is no refusal: the decision to stop waiting is ours, so the mark is kept.
+/// Mutation this is written against: `Ending::verdict` classing a stall that delivered nothing as
+/// `Refused`.
 #[tokio::test]
 async fn a_stall_that_delivered_nothing_keeps_the_mark() {
     let server = run_until_subscribed(
@@ -1268,15 +924,9 @@ async fn a_stall_that_delivered_nothing_keeps_the_mark() {
     );
 }
 
-/// ⚠️ **A `subscribe` that is never answered is bounded too**, or the hang
-/// survives one step earlier: a front end that took the connection with a
-/// wedged backend behind it sends no response headers, and the stream clock
-/// never starts. It ends as a stall that delivered nothing — the mark is kept,
-/// the budget is charged.
-///
-/// Mutation this is written against: `subscribe` awaited without the timeout —
-/// the third subscription never comes. And the timeout giving the mark up,
-/// which the third resume point catches.
+/// ⚠️ A front end with a wedged backend never sends headers, and the stream clock never starts.
+/// Mutation this is written against: `subscribe` awaited without the timeout, or the timeout
+/// giving the mark up.
 #[tokio::test]
 async fn a_subscribe_that_is_never_answered_is_bounded_and_keeps_the_mark() {
     let server = run_until_subscribed(
@@ -1295,14 +945,8 @@ async fn a_subscribe_that_is_never_answered_is_bounded_and_keeps_the_mark() {
     assert_eq!(server.resume_points(), vec![None, Some(8), Some(8)]);
 }
 
-/// ⚠️ **A stop request reaches a `subscribe` that is never answered.** The
-/// stall timeout bounds that wait, but thirty seconds is longer than a
-/// container's stop grace period: without the shutdown branch, `docker compose
-/// stop` would kill the indexer instead of stopping it.
-///
-/// Mutation this is written against: awaiting the bounded `subscribe` without
-/// the `select!` on the token. With a stall timeout of an hour, the run then
-/// outlives `TEST_DEADLINE`.
+/// ⚠️ The stall timeout outlasts a container's stop grace, so `docker compose stop` would kill it.
+/// Mutation this is written against: awaiting the bounded `subscribe` without the `select!` on the token.
 #[tokio::test]
 async fn a_shutdown_reaches_a_subscribe_that_is_never_answered() {
     let server = test_geyser_server::start(vec![ScriptedSession::NeverAnswer]).await;

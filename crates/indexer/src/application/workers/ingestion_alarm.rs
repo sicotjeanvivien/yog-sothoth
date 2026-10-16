@@ -1,23 +1,7 @@
-//! The ingestion alarm — tells someone when this process stops writing.
-//!
-//! The ingestion can stop without the process dying: a stream the provider
-//! refuses, a WebSocket that never reopens, a database that refuses the
-//! writes. `restart: unless-stopped` only brings back a process that died, and
-//! the other checks look elsewhere — the materialisation alarm of `yog-signals`
-//! deliberately does not read a stalled ingestion as its own fault. This loop
-//! reads when the last event was indexed and reports the verdict to a
-//! Healthchecks.io check: a stale ingestion as `/fail` with the age of its last
-//! event, and a stopped daemon by the silence the check notices on its own.
-//!
-//! **The verdict is the dashboard's**,
-//! [`FreshnessStatus::from_last_event`](yog_core::domain::FreshnessStatus::from_last_event) —
-//! the rule behind the live indicator — so the alarm and the panel cannot
-//! disagree. It reads what was *written*, not what this process believes it
-//! did: a persist that fails is logged and stepped over, so a count of indexed
-//! transactions would keep climbing on a database that refuses every row.
-//!
-//! Without a heartbeat URL (development) the verdict is logged and counted
-//! only.
+//! The ingestion alarm: tells a Healthchecks.io check when this process stops writing, which
+//! `restart: unless-stopped` cannot see. A stale ingestion pings `/fail`, a stopped daemon is silence.
+//! ⚠️ It judges what was *written*, by the dashboard's [`from_last_event`](yog_core::domain::FreshnessStatus::from_last_event),
+//! not what the process believes: a failing persist is stepped over while counts keep climbing.
 
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -36,28 +20,17 @@ mod verdict;
 pub(crate) use metrics::{HEARTBEAT_FAILURES, IngestionAlarmMetrics};
 use verdict::Verdict;
 
-/// Time between two checks — and between two pings of the check, whose period
-/// must say the same or it reports the daemon down.
-///
-/// With the dashboard's fifteen minutes before `Stale`, a stopped ingestion
-/// fails the check at most twenty minutes after its last event.
+/// Time between two checks, and between two pings: the check's period must say the same, or it
+/// reports the daemon down.
 const CHECK_INTERVAL: Duration = Duration::from_secs(300);
 
-/// How long Postgres lets one read of the last event run before cancelling it —
-/// the `statement_timeout` of the alarm's own pool, opened by the daemon with
-/// one connection. A read stuck on a lock is ended **by the server**, so its
-/// connection comes back usable: stopping only the client's wait would leave
-/// the statement running and the connection held, one more at every check.
-/// Measured in production at 0.4–0.6 ms of execution and ~15 ms of planning
-/// (6 October 2026, one index-only scan per table), so a minute is margin, not
-/// a budget.
+/// The `statement_timeout` of the alarm's one-connection pool.
+/// ⚠️ Ended by the server, so the connection comes back usable; a client-side wait alone would
+/// leave the statement running and one more connection held at every check.
 pub(crate) const STATEMENT_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// How long the alarm waits for a read before failing the check with
-/// `unreadable` on its own — for a server that cannot answer at all, not even
-/// to cancel. Longer than [`STATEMENT_TIMEOUT`] by construction, so that the
-/// server's cancellation, which frees the connection, comes first; otherwise
-/// Healthchecks.io would report a stopped daemon instead of the reason.
+/// How long the alarm waits for a read before failing the check `unreadable` itself.
+/// ⚠️ Longer than [`STATEMENT_TIMEOUT`]: the server's cancellation, which frees the connection, comes first.
 const READ_TIMEOUT: Duration = Duration::from_secs(STATEMENT_TIMEOUT.as_secs() + 30);
 
 pub(crate) struct IngestionAlarm {
@@ -76,20 +49,12 @@ impl IngestionAlarm {
         }
     }
 
-    /// Check on every interval until `shutdown` is cancelled.
-    ///
-    /// One `select!` per turn: the stop on one side, and on the other the wait
-    /// for the tick **then** the whole check — the read, then the ping. So the
-    /// check races the stop: a ping cut short is harmless (the check simply
-    /// sees the next one, or none), while a stop held by a slow endpoint is the
-    /// delay Docker ends with SIGKILL. `biased`: the stop must win a tie.
-    ///
-    /// `Infallible`, like the network status reporter: nothing a check meets
-    /// is a reason to stop indexing, and only a panic ends this task early.
+    /// Check on every interval until `shutdown` is cancelled; `Infallible`, nothing a check meets
+    /// is a reason to stop indexing.
+    /// ⚠️ The whole check races the stop, `biased`: a stop held by a slow endpoint ends in SIGKILL.
     pub(crate) async fn run(self, shutdown: CancellationToken) -> Result<(), Infallible> {
         let mut ticker = tokio::time::interval(CHECK_INTERVAL);
-        // After a slow check, the next one waits a full interval rather than
-        // firing the missed ones back to back — each would read and ping again.
+        // A slow check delays the next one instead of firing the missed ones back to back.
         ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
         self.log_start();
 
@@ -146,8 +111,7 @@ impl IngestionAlarm {
     }
 }
 
-/// Speak when the outcome changes, not on every tick: through a long outage a
-/// warning every five minutes would bury everything else.
+/// Speak when the outcome changes, not on every tick, or a long outage buries everything else.
 fn log_change(previous: Option<&'static str>, verdict: &Verdict, now: DateTime<Utc>) {
     if previous == Some(verdict.label()) {
         return;

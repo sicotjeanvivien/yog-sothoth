@@ -1,5 +1,4 @@
-//! The lines a stream session writes, one function each — same shape as the
-//! listener's `log`.
+//! The lines a stream session writes, one function each.
 
 use tracing::{debug, warn};
 use yog_core::CoreError;

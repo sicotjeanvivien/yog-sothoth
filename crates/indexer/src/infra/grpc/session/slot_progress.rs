@@ -9,31 +9,20 @@ use crate::infra::grpc::slot_timestamp_buffer::{Resolved, SlotTimestampBuffer};
 
 use super::log;
 
-/// How many slots a reconnection asks for again, on top of what this session
-/// did not finish.
-///
-/// ⚠️ A **deliberate overlap**: a block-meta closing slot *N* does not promise
-/// all of *N*'s transactions have arrived, so the closed mark can be one short.
-/// Re-asking is cheap — every event table's unique key skips a row that comes
-/// twice — while a row that never comes leaves a hole nothing notices. Two is
-/// what the reference client uses.
+/// How many slots a reconnection asks for again, on top of what this session did not finish.
+/// ⚠️ A deliberate overlap: a block-meta closing slot N does not promise all of N's transactions
+/// arrived; a row asked twice is skipped by the unique keys, a row never asked is a silent hole.
 pub(super) const REWIND_SLOTS: u64 = 2;
 
-/// A transaction waiting for its slot's block time.
-///
-/// Holds the whole update: `from_grpc` reads `slot` off it, and translating
-/// before the instant is known would mean inventing one.
+/// A transaction waiting for its slot's block time, untranslated: `from_grpc` needs the instant.
 pub(super) struct PendingTransaction {
     pub(super) protocol: Protocol,
     pub(super) update: SubscribeUpdateTransaction,
 }
 
 /// The slots one session has seen, closed, or is still waiting on.
-///
-/// Dies with its session, on purpose: a replay delivers the oldest slots
-/// **last**, so a buffer still holding the pre-cut backlog would evict each
-/// replayed arrival on entry. What dies here is asked for again through
-/// [`Self::resume_from`].
+/// ⚠️ Dies with its session: a replay delivers the oldest slots last, so a buffer holding the
+/// pre-cut backlog would evict each replayed arrival; [`Self::resume_from`] asks for them again.
 pub(super) struct SlotProgress {
     buffer: SlotTimestampBuffer<PendingTransaction>,
     /// The highest slot a block-meta closed. Advanced by block-metas alone: a
@@ -68,11 +57,8 @@ impl SlotProgress {
         let slot = meta.slot;
         self.highest_meta_slot = Some(self.highest_meta_slot.map_or(slot, |seen| seen.max(slot)));
 
-        // ⚠️ `block_time` is optional on the wire, and **nothing** substitutes
-        // for it — not the receive time, not a neighbour's, not `created_at`.
-        // It is in every event table's unique key and is the partitioning
-        // column, so a plausible wrong value is one nothing will question. The
-        // slot is given up instead.
+        // ⚠️ Nothing substitutes for a missing `block_time`: in every unique key and the partitioning
+        // column, a plausible wrong value is one nothing will question. The slot is given up.
         let Some(at) = meta
             .block_time
             .and_then(|time| DateTime::from_timestamp(time.timestamp, 0))
@@ -86,13 +72,8 @@ impl SlotProgress {
     }
 
     /// Where a reconnection should resume from, or `None` when nothing arrived.
-    ///
-    /// ⚠️ **The oldest slot this session did not finish**, not the highest it
-    /// saw: a transaction names a slot still in flight, whose payloads die with
-    /// the buffer, so resuming past it would skip exactly what the break
-    /// destroyed. That is the oldest slot still pending, or else the last one a
-    /// block-meta closed — rewound by [`REWIND_SLOTS`], since "closed" is not
-    /// "complete".
+    /// ⚠️ The oldest slot not finished (oldest pending, else the last closed), not the highest
+    /// seen, rewound by [`REWIND_SLOTS`]: resuming past it would skip what the break destroyed.
     pub(super) fn resume_from(&self) -> Option<u64> {
         let unfinished = self
             .buffer

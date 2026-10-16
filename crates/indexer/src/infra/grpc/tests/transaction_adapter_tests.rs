@@ -1,32 +1,7 @@
-//! Tests for the Yellowstone protobuf adapter.
-//!
-//! ⚠️ Read this module's parent doc-comment before trusting anything green
-//! here: the inputs are built by hand, so they carry the author's understanding
-//! of the wire format and not an observation of it.
-//!
-//! # Why the reference rendering carries two inner instructions and not fourteen
-//!
-//! The mainnet fixture the shared arbiter is pinned to holds **14** inner
-//! instructions across four groups; the JSON-RPC adapter keeps **2** of them,
-//! dropping the twelve the RPC had already parsed into SPL Token shapes it
-//! cannot represent as raw bytes. Protobuf has no such distinction — every
-//! inner instruction arrives as `{program_id_index, accounts, data}` — so a
-//! *faithful* rendering of that transaction would make this adapter produce all
-//! fourteen.
-//!
-//! That is correct behaviour, not a bug: `InnerInstructionPayload`'s contract
-//! says an adapter must be permissive, and that dropping payloads addressed to
-//! **other** programs "costs nothing" because numbering happens after the filter
-//! on the emitting program. The two adapters therefore legitimately produce
-//! different vectors for the same transaction, and
-//! `conformance::assert_matches_reference` compares whole vectors.
-//!
-//! So the rendering below is **deliberately reduced** to the two cp-amm
-//! instructions — enough to witness what the arbiter is for (the order that
-//! becomes `event_index`), and honest about being a reduction rather than a
-//! transcription. What the reduction cannot show — that non-cp-amm instructions
-//! are kept rather than filtered — is covered on its own by
-//! [`every_inner_instruction_is_kept_whatever_its_program`].
+//! Tests for the Yellowstone protobuf adapter; the inputs are hand-built, see its module doc.
+//! ⚠️ The reference rendering keeps only the two cp-amm inner instructions of the fourteen: the
+//! JSON-RPC adapter keeps two, and the arbiter compares whole vectors. That every program is kept
+//! is [`every_inner_instruction_is_kept_whatever_its_program`]'s.
 
 use super::*;
 use yellowstone_grpc_proto::prelude::{
@@ -43,15 +18,11 @@ const REFERENCE_SIGNATURE: &str =
 
 const REFERENCE_SLOT: u64 = 415_296_180;
 
-/// The position in the slot a provider would report. Absent from the JSON-RPC
-/// response, which is the whole reason this source exists — so any value does
-/// here, as long as the test states it rather than reading it back.
+/// The position in the slot a provider would report; any value, stated rather than read back.
 const REFERENCE_INDEX: u64 = 42;
 
-/// The timestamp the arbiter expects, since the adapter cannot read one and the
-/// caller has to supply it. That the adapter really uses what it is handed —
-/// rather than reaching for a constant — is the separate business of
-/// [`the_timestamp_is_the_one_supplied`], which passes a different instant.
+/// The timestamp the arbiter expects; that the adapter uses what it is handed is
+/// [`the_timestamp_is_the_one_supplied`]'s.
 fn reference_timestamp() -> DateTime<Utc> {
     reference_transaction().position.timestamp
 }
@@ -62,14 +33,12 @@ fn signature_bytes() -> Vec<u8> {
         .expect("the reference signature is a constant and must decode")
 }
 
-/// A pubkey that is not any real program, for the account slots the tests do
-/// not care about.
+/// A pubkey that is no real program, for the account slots the tests do not care about.
 fn filler_key(seed: u8) -> Vec<u8> {
     vec![seed; 32]
 }
 
-/// Build an update whose account keys are exactly `static_keys`, with the given
-/// inner-instruction groups and no loaded addresses.
+/// Build an update with exactly `static_keys`, the given inner-instruction groups, no loaded addresses.
 fn update_with(
     static_keys: Vec<Vec<u8>>,
     groups: Vec<InnerInstructions>,
@@ -123,9 +92,7 @@ fn instruction(program_id_index: u32, data: Vec<u8>) -> InnerInstruction {
     }
 }
 
-/// The payloads the arbiter expects, taken from the arbiter itself rather than
-/// re-transcribed: 392 hex characters copied a third time is 392 chances to
-/// drop a digit, and the arbiter already guards its own transcription.
+/// The payloads the arbiter expects, taken from the arbiter rather than transcribed a third time.
 fn reference_payloads() -> (Vec<u8>, Vec<u8>) {
     let tx = reference_transaction();
     (
@@ -136,9 +103,8 @@ fn reference_payloads() -> (Vec<u8>, Vec<u8>) {
 
 // ── the shared contract ─────────────────────────────────────────────
 
-/// The arbiter both adapters answer to. The two payloads sit in groups 5 and 8
-/// as they do on chain, so a flattening that ignored group order would put them
-/// the wrong way round and fail here — which is what the arbiter exists for.
+/// The arbiter both adapters answer to; the payloads sit in groups 5 and 8, as on chain, so a
+/// flattening that ignored group order fails here.
 #[test]
 fn the_reference_transaction_is_what_this_adapter_produces() {
     let (leg_a, leg_b) = reference_payloads();
@@ -157,9 +123,8 @@ fn the_reference_transaction_is_what_this_adapter_produces() {
     assert_matches_reference(&actual, Some(REFERENCE_INDEX as u32));
 }
 
-/// The order contract, seen from the failure side: a source that hands its
-/// groups back in descending order must still produce ascending payloads.
-/// Providers are under no obligation to sort, and `event_index` is a stored key.
+/// Groups handed back in descending order still produce ascending payloads: providers need not
+/// sort, and `event_index` is a stored key.
 #[test]
 fn groups_are_ordered_by_their_outer_instruction_not_by_arrival() {
     let (leg_a, leg_b) = reference_payloads();
@@ -178,9 +143,7 @@ fn groups_are_ordered_by_their_outer_instruction_not_by_arrival() {
     assert_matches_reference(&actual, Some(REFERENCE_INDEX as u32));
 }
 
-/// The timestamp is the one handed in, never one read off the message — the
-/// message carries none, and inventing one would put a wrong value in the
-/// partitioning column.
+/// The timestamp is the one handed in, never read off the message, which carries none.
 #[test]
 fn the_timestamp_is_the_one_supplied() {
     let program = Protocol::MeteoraDammV2.program_id();
@@ -199,16 +162,8 @@ fn the_timestamp_is_the_one_supplied() {
 
 // ── resolving program_id_index ──────────────────────────────────────
 
-/// ⚠️ **The test the reference transaction cannot be.** No transaction fixture
-/// in this repository carries a `loadedAddresses` — 25 of the 92 use address
-/// lookup tables, but the captured responses resolve nothing — so the
-/// conformance test above passes even against an implementation that ignores
-/// `loaded_*` entirely.
-///
-/// The program sits in `loaded_readonly_addresses`, behind a **non-empty**
-/// `loaded_writable_addresses` — the only arrangement that tells the right order
-/// from both wrong ones: reading readonly before writable resolves to the wrong
-/// key, and skipping the loaded segments resolves to nothing.
+/// ⚠️ No fixture carries `loadedAddresses`, so this is the only resolution test. The program sits
+/// in `loaded_readonly` behind a non-empty `loaded_writable`, the one layout that tells both wrong orders.
 #[test]
 fn a_program_in_the_loaded_addresses_is_resolved_through_all_three_segments() {
     let (leg_a, _) = reference_payloads();
@@ -232,8 +187,7 @@ fn a_program_in_the_loaded_addresses_is_resolved_through_all_three_segments() {
     );
 }
 
-/// An index past the end resolves to nothing, and that is an error rather than
-/// an absent payload: dropping one silently renumbers every event after it.
+/// An index past the end is an error, not an absent payload that would renumber later events.
 #[test]
 fn an_index_beyond_the_account_list_is_an_error() {
     let (leg_a, _) = reference_payloads();
@@ -247,11 +201,8 @@ fn an_index_beyond_the_account_list_is_an_error() {
 
     let error = from_grpc(&update, reference_timestamp()).expect_err("index 9 of 3 keys");
     let message = error.to_string();
-    // ⚠️ Whole phrases, not the digits `9` and `3`. Those were the first
-    // assertion here, and they verified nothing: the reference base58 signature
-    // is part of every error's Display and already contains both. Proven by
-    // mutation on 8 September 2026 — replacing the entire reason with
-    // "MUTATED" left the test green. A neighbour was answering for the rule.
+    // ⚠️ Whole phrases, not the digits `9` and `3`: the signature in every error's Display
+    // already contains both.
     assert!(
         message.contains("program_id_index 9"),
         "the error must name the index it could not resolve: {message}"
@@ -263,13 +214,8 @@ fn an_index_beyond_the_account_list_is_an_error() {
     );
 }
 
-/// Every inner instruction becomes a payload, whatever program it names. The
-/// filter on the emitting program runs downstream, and an adapter that narrowed
-/// here would renumber stored events — `InnerInstructionPayload` calls this
-/// "only ever widen".
-///
-/// This is what the reduced reference rendering above cannot show, since it
-/// carries cp-amm instructions only.
+/// Every inner instruction becomes a payload, whatever program it names: narrowing here would
+/// renumber stored events.
 #[test]
 fn every_inner_instruction_is_kept_whatever_its_program() {
     let (leg_a, leg_b) = reference_payloads();
@@ -305,9 +251,7 @@ fn every_inner_instruction_is_kept_whatever_its_program() {
 
 // ── the position fields ─────────────────────────────────────────────
 
-/// The index is narrowed, never truncated. A wrapped value would not fail — it
-/// would order events wrongly in a stored column, which is the defect this whole
-/// migration exists to remove.
+/// The index is narrowed, never truncated: a wrapped value would order events wrongly.
 #[test]
 fn an_index_too_large_for_the_domain_is_an_error() {
     let program = Protocol::MeteoraDammV2.program_id();
@@ -326,9 +270,7 @@ fn a_missing_transaction_envelope_is_an_error() {
     };
 
     let error = from_grpc(&update, reference_timestamp()).expect_err("no transaction");
-    // Backticked: `MissingField`'s Display carries the bare word "transaction"
-    // in its own template, so asserting on it checked the template rather than
-    // the field. Same mutation, same lesson as above.
+    // Backticked: `MissingField`'s Display carries the bare word "transaction" in its template.
     assert!(
         error.to_string().contains("`transaction`"),
         "the error must name the field that was missing: {error}"
@@ -349,12 +291,8 @@ fn a_signature_of_the_wrong_length_is_an_error() {
     assert!(error.to_string().contains("31"), "{error}");
 }
 
-/// ⚠️ A message that is absent must **refuse**, not resolve against zero static
-/// keys. Found in review, 8 September 2026: an empty first segment shifts every
-/// index one segment along, so `program_id_index = 0` lands on the first
-/// *loaded* key — a valid, wrong `Pubkey` the downstream filter drops in
-/// silence. The loaded segments below are non-empty precisely so that a
-/// regression resolves to something instead of failing on its own.
+/// ⚠️ An absent message must refuse, not resolve against zero static keys; the loaded segments are
+/// non-empty so that a regression resolves to a wrong key instead of failing by itself.
 #[test]
 fn a_missing_message_is_an_error_not_an_empty_key_list() {
     let (leg_a, _) = reference_payloads();
@@ -378,18 +316,14 @@ fn a_missing_message_is_an_error_not_an_empty_key_list() {
         rendered.contains("`transaction.message`"),
         "the error must name the field: {rendered}"
     );
-    // ⚠️ And name the transaction. Found by mutation on 8 September 2026:
-    // blanking the signature here left the test green, so the one identifier an
-    // operator has on the skip-and-log path was unasserted.
+    // ⚠️ And name the transaction: it is all an operator has on the skip-and-log path.
     assert!(
         rendered.contains(REFERENCE_SIGNATURE),
         "the error must say which transaction it is about: {rendered}"
     );
 }
 
-/// The same absence, one field up: `meta` itself is optional on the wire, and an
-/// absent one used to yield an empty payload list. Two ways of saying "the
-/// source did not tell us" must not have two opposite outcomes.
+/// No `meta` refuses like `inner_instructions_none`: two ways of saying "not captured".
 #[test]
 fn a_missing_meta_is_an_error_not_an_empty_list() {
     let program = Protocol::MeteoraDammV2.program_id();
@@ -398,17 +332,8 @@ fn a_missing_meta_is_an_error_not_an_empty_list() {
 
     let error = from_grpc(&update, reference_timestamp()).expect_err("no meta");
 
-    // ⚠️ The exact field, not `contains("not captured")`. That fragment is true
-    // of **both** refusals of this pair, so it asserted "a reason was named" and
-    // never "which one" — the two labels could be swapped in the adapter with
-    // all 153 tests green, checked by mutation on 15 September 2026.
-    //
-    // Which one it is, is the whole of what an operator acts on: a source that
-    // dropped `meta` wholesale and one that stopped recording inner
-    // instructions are two different fixes. The counter cannot tell them apart —
-    // `drop_reason` folds both into `reason="missing_field"` on purpose, to
-    // bound cardinality — so `session/log.rs`'s `untranslatable` is the only place
-    // they are told apart, and this `field` is what it prints.
+    // ⚠️ The exact field, not `contains("not captured")`, true of both refusals: which one is
+    // what an operator acts on, and only the log line tells them apart.
     assert!(
         matches!(&error, CoreError::MissingField { field, .. }
             if field == Gap::Meta.field()),
@@ -416,10 +341,7 @@ fn a_missing_meta_is_an_error_not_an_empty_list() {
     );
 }
 
-/// ⚠️ `inner_instructions_none` means "the source did not capture them", which
-/// is not "there were none". Reading it as an empty list records a transaction
-/// full of events as "nothing to record" — silently, for ever. Refusing puts it
-/// on the skip-and-log path, where it is counted.
+/// ⚠️ `inner_instructions_none` means "not captured", not "none": refused and counted.
 #[test]
 fn inner_instructions_not_captured_is_an_error_not_an_empty_list() {
     let program = Protocol::MeteoraDammV2.program_id();
@@ -444,8 +366,7 @@ fn inner_instructions_not_captured_is_an_error_not_an_empty_list() {
 
 // ── absences that are not failures ──────────────────────────────────
 
-/// A transaction with no inner instructions is ordinary — most are. It yields an
-/// empty payload list, and extraction reports "nothing to record".
+/// A transaction with no inner instructions is ordinary: an empty payload list.
 #[test]
 fn no_inner_instructions_is_an_empty_list_not_an_error() {
     let program = Protocol::MeteoraDammV2.program_id();

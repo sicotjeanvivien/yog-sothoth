@@ -46,11 +46,7 @@ use yog_persistence::{
     PgPoolCurrentStateRepository, PgPoolRepository, PgWatchedPoolRepository, PoolSettings,
 };
 
-/// Connect to the database.
-///
-/// The database URL is held in `Config::database_url` (a redacted secret),
-/// so we never log it directly — [`anyhow::Context`] is sufficient to surface
-/// the failure at startup without leaking credentials.
+/// Connect to the database; the URL is a redacted secret, never logged.
 pub(super) async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
     let db = Database::connect(database_url.expose())
         .await
@@ -59,16 +55,8 @@ pub(super) async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database
     Ok(db)
 }
 
-/// Build the transaction source the configuration selects.
-///
-/// **The only place in the crate that names a concrete source.** Everything
-/// downstream holds `Arc<dyn TransactionSource>` and never learns which model
-/// is running — which is why `INGEST_SOURCE` is read here and nowhere else.
-///
-/// The two builders below are not the same size, and that asymmetry is the
-/// subject of the whole port: `logsSubscribe` notifies, so its source has to
-/// assemble a fleet, a filter chain and a fetch stage; Yellowstone delivers, so
-/// its source is the listener.
+/// Build the transaction source the configuration selects: the only place in the crate that
+/// names a concrete source.
 pub(super) fn init_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
     match &config.transaction_arrival {
         TransactionArrival::Fetched { from } => init_rpc_source(config, from),
@@ -76,11 +64,8 @@ pub(super) fn init_source(config: &Config) -> anyhow::Result<Arc<dyn Transaction
     }
 }
 
-/// The notify-then-ask model: a WebSocket fleet, a filter chain, a fetch stage.
-///
-/// `transaction` comes in from the [`TransactionArrival::Fetched`] arm rather
-/// than off `Config` directly: it is the endpoint `getTransaction` goes to, it
-/// exists on this path alone, and this is the only function that needs it.
+/// The notify-then-ask model: a WebSocket fleet, a filter chain, a fetch stage; `transaction`,
+/// the `getTransaction` endpoint, comes from the [`TransactionArrival::Fetched`] arm.
 fn init_rpc_source(
     config: &Config,
     transaction: &Endpoint,
@@ -91,17 +76,7 @@ fn init_rpc_source(
     ));
     let dispatcher =
         Arc::new(SignatureDispatcher::new_default().context("dispatcher initialization failed")?);
-    // ⚠️ **The RPC client is built here, inside the arm that needs one.** It
-    // used to be built by `Daemon::new` and handed in, because the reporter
-    // wanted one too — which made the composition root assemble an ingredient
-    // belonging to exactly one of the two sources, and gave this function a
-    // parameter the gRPC arm could only ignore. Raised in review of PR #139.
-    // The price of not sharing is a second connection pool, for a caller making
-    // one request every fifteen seconds — against the same host whenever the
-    // two variables hold the same address, which the shipped `.env.example`
-    // does. What changed on 21 September 2026 is not that the second pool went
-    // away: it is that the probe reads its own variable, so separating the two
-    // providers is now something configuration can express.
+    // Built inside the arm that needs it: the probe opens its own client, on its own variable.
     let rpc_client = Arc::new(RpcClient::new(transaction.url().expose().to_string()));
     info!("transaction RPC client initialized: {transaction}");
     let fetcher = Arc::new(TransactionFetcher::new(rpc_client, transaction.url()));
@@ -111,12 +86,8 @@ fn init_rpc_source(
     )))
 }
 
-/// The delivering model: no fetch, no filter chain, no fleet — the listener is
-/// the source.
-///
-/// Nothing here can fail today — the endpoint is checked in `run` — and the
-/// `Result` is the shape of its sibling, so `init_source` reads as two arms of
-/// one kind.
+/// The delivering model: the listener is the source. Nothing here can fail yet; the `Result`
+/// matches its sibling's.
 fn init_grpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
     Ok(Arc::new(GrpcTransactionSource::new(Arc::new(
         GrpcListener::new(
@@ -130,12 +101,12 @@ fn init_grpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource
 /// Build the EventPersistor: shared pool maintenance plus the per-protocol
 /// sub-persistor and its bundle of per-event-kind repositories.
 fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
-    // Cross-protocol repositories
+    // Cross-protocol repositories.
     let pg_pool_repo = Arc::new(PgPoolRepository::new(database.pool().clone()));
     let pg_pool_current_state_repo =
         Arc::new(PgPoolCurrentStateRepository::new(database.pool().clone()));
 
-    // Shared pool maintenance helper — reused by every per-protocol sub-persistor.
+    // Shared pool maintenance, reused by every per-protocol sub-persistor.
     let pool_maintenance = Arc::new(PoolMaintenance::new(
         pg_pool_repo,
         pg_pool_current_state_repo,
@@ -194,27 +165,8 @@ pub(super) fn init_processor(
     Arc::new(TransactionProcessor::new(extractor, event_persistor))
 }
 
-/// Initialise the NetworkStatusReporter and its repository dependency.
-///
-/// ⚠️ **It opens its own RPC client**, rather than borrowing the ingestion's.
-/// Sharing one made the reporter's health probe and the fetcher's transport the
-/// same object, which is a coincidence of endpoint and not a shared concern —
-/// and it is why the client used to be built one storey up, where neither of
-/// them lives.
-///
-/// ⚠️ **And it reads its own variable**, `NETWORK_STATUS_*`, not
-/// `INGEST_TRANSACTION`. What the probe measures is an *external reference on
-/// the chain*, independent of ingestion by design; [`NetworkStatusReporter`]'s
-/// own module docs carry the reasoning and the two readings it rules out. Until
-/// 21 September 2026 it read the ingestion's fetch endpoint, which under
-/// `INGEST_SOURCE=grpc` nothing ingests through: the panel showed the health of
-/// a link no data travelled on, and no configuration could say so.
-///
-/// **It builds the reporter and says nothing.** Which endpoints it ended up on,
-/// and whether they are independent of ingestion, are written by
-/// [`super::config_log`] — a comparison of two addresses is not wiring, and
-/// while it lived here it needed a live `Database` to reach, so no test could
-/// hold it.
+/// Initialise the NetworkStatusReporter on its own RPC client and its own `NETWORK_STATUS_*`
+/// variable, independent of ingestion; [`super::config_log`] says which endpoints it reads.
 pub(super) async fn init_network_status_reporter(
     database: &Database,
     config: &Config,
@@ -231,15 +183,9 @@ pub(super) async fn init_network_status_reporter(
     ))
 }
 
-/// Open the ingestion alarm's **own pool**: the same database, one connection,
-/// under a `statement_timeout` that lets Postgres cancel a read stuck on a
-/// lock.
-///
-/// ⚠️ **Not the indexing pool, and on purpose.** That pool has no
-/// `statement_timeout` — giving it one would bound the index writes too — and
-/// [`super::tasks::index_concurrency`] sizes the index tasks against it, minus
-/// its other users. A stuck read there would hold a connection the tasks
-/// wait for; this pool stays out of that count by not being shared.
+/// Open the ingestion alarm's own one-connection pool, under a `statement_timeout`.
+/// ⚠️ Not the indexing pool: a timeout there would bound the index writes, and a stuck read
+/// would hold a connection [`super::tasks::index_concurrency`] counts on.
 pub(super) async fn init_alarm_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
     let db = Database::connect_with(
         database_url.expose(),
@@ -254,8 +200,7 @@ pub(super) async fn init_alarm_db(database_url: &SecretUrl) -> anyhow::Result<Da
     Ok(db)
 }
 
-/// The alarm on the ingestion, over the pool [`init_alarm_db`] opened,
-/// reporting to its check if there is one.
+/// The alarm on the ingestion, over the pool [`init_alarm_db`] opened, reporting to its check if any.
 pub(super) fn init_ingestion_alarm(
     database: &Database,
     heartbeat_url: Option<SecretUrl>,
@@ -278,7 +223,7 @@ fn init_heartbeat(url: SecretUrl) -> anyhow::Result<Arc<dyn Heartbeat>> {
     Ok(Arc::new(heartbeat))
 }
 
-// Initialise the WatchedPoolService and its repository dependency.
+/// Initialise the WatchedPoolService and its repository dependency.
 pub(super) async fn init_watched_pool_service(
     database: &Database,
     source: Arc<dyn TransactionSource>,
@@ -300,13 +245,8 @@ pub(super) fn register_metric_descriptions() {
     IndexerWorkerMetrics::register_descriptions();
     TransactionProcessorMetrics::register_descriptions();
     EventPersistorMetrics::register_descriptions();
-    // The gRPC path's two families are registered whichever source is
-    // running. Descriptions are only HELP text — registering them costs a
-    // string and exports nothing until a counter is touched — and the
-    // alternative, registering them where the gRPC listener is built, is a
-    // line that only ever runs on the path whose reader has the least
-    // context. A counter exported without its HELP text is unreadable to
-    // exactly the person who goes looking for it.
+    // The gRPC families are registered whichever source runs: HELP text costs a string, and a
+    // counter exported without it is unreadable to whoever goes looking.
     GrpcBufferMetrics::register_descriptions();
     GrpcListenerMetrics::register_descriptions();
     NetworkStatusReporterMetrics::register_descriptions();

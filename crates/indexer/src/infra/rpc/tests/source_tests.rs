@@ -8,16 +8,8 @@ fn semaphore_closed(stage: &'static str) -> SourceError {
     SourceError::SemaphoreClosed { stage }
 }
 
-/// ⚠️ **A stage that fails while the pipeline winds down must still be the
-/// source's verdict.** The `select!` above answers with whichever stage ended
-/// first, and on an orderly stop that is usually a clean `Ok(())` from the
-/// dispatcher; a listener that panics a millisecond later reports only here.
-/// Dropping what the drain collects would leave that failure with no error, no
-/// exit code and no log line — the same defect `Daemon::run`'s `Stop` exists to
-/// prevent one level up, and one that reached `main` once already.
-///
-/// Verified by mutation: put the `join` back behind a `let _` and this test is
-/// the one that fails.
+/// ⚠️ A stage that fails while the pipeline winds down is still the source's verdict.
+/// Mutation this is written against: the drain's `join` behind a `let _`.
 #[tokio::test]
 async fn a_stage_that_fails_during_the_drain_is_the_verdict() {
     let (mut listener, mut dispatcher, mut fetch) = (
@@ -44,9 +36,8 @@ async fn a_stage_that_fails_during_the_drain_is_the_verdict() {
     );
 }
 
-/// And the other direction: the stage that ended first is the cause, and the
-/// stages it brought down with it — all reporting `Ok(())` — must not replace
-/// it. That is the whole reason the `select!` is `biased`.
+/// The stage that ended first is the cause; the stages it brought down, `Ok(())`, must not
+/// replace it.
 #[tokio::test]
 async fn the_stages_brought_down_by_a_failure_do_not_replace_it() {
     let (mut listener, mut dispatcher, mut fetch) =
@@ -70,11 +61,8 @@ async fn the_stages_brought_down_by_a_failure_do_not_replace_it() {
     );
 }
 
-/// ⚠️ **The stage that already answered is stepped over, and nothing else is.**
-/// `tokio` panics on a `JoinHandle` polled after completion, so a drain that
-/// forgot `ended` would take the whole source down on every ordinary stop —
-/// loudly, but only at runtime, and only on the path with no test. Here the
-/// listener's handle is deliberately left joined beforehand.
+/// ⚠️ tokio panics on a `JoinHandle` polled after completion: the drain must step over `ended`,
+/// left joined here on purpose.
 #[tokio::test]
 async fn the_stage_that_already_answered_is_not_polled_again() {
     let mut listener = ends_with(Ok(()));

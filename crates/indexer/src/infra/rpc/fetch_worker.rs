@@ -1,19 +1,6 @@
-//! The JSON-RPC path's third stage: ask for what the dispatcher named.
-//!
-//! This stage has **no counterpart on the gRPC path** and that is the whole
-//! reason it lives here rather than in `application`. `logsSubscribe` pushes a
-//! signature and some text; the transaction has to be fetched back over HTTP,
-//! one call each. Yellowstone delivers the transaction itself, so a source
-//! built on it has nothing to fetch and no quota to respect.
-//!
-//! What it produces is the neutral [`IngestedTransaction`] — from here on the
-//! two paths are the same pipeline.
-//!
-//! # Error semantics
-//!
-//! Per-signature failures are counted and stepped over: a transaction that the
-//! RPC will not return, or that will not translate, must not stop the fleet.
-//! Only the loop-level failure — a closed semaphore — is propagated.
+//! The JSON-RPC path's third stage, with no gRPC counterpart: fetch back over HTTP what the
+//! dispatcher named. Per-signature failures are counted and stepped over; only a closed
+//! semaphore is propagated.
 
 use std::{sync::Arc, time::Instant};
 
@@ -28,30 +15,8 @@ use crate::{
 };
 
 /// Maximum number of `getTransaction` calls in flight.
-///
-/// ⚠️ **Sized against the RPC quota, and nothing else** — the Helius free tier
-/// at 10 req/s, with headroom. It travelled here from `IndexerWorker`, where it
-/// had come to look like a general concurrency setting; it never was one. The
-/// consumer downstream is bounded by the database connection pool instead,
-/// which is a different resource and therefore a different number.
-///
-/// # ⚠️ What splitting the stages changed, and it is not nothing
-///
-/// A permit used to cover the fetch **and** the persist, because one worker did
-/// both. The sustained request rate was therefore `15 / (fetch + persist)`, and
-/// a slow database throttled the RPC as a side effect. A permit now covers the
-/// fetch alone: the transaction goes into a 1 000-deep channel and the slot
-/// frees at once, so the rate is `15 / fetch`.
-///
-/// In normal operation that is a few percent — a persist is short next to a
-/// round-trip — and it is the *correct* shape: two resources, two bounds, each
-/// beside the thing it protects. But when the database degrades the two
-/// diverge, and this stage will keep asking at full rate while the queue fills,
-/// which is when a rate-limited provider is least forgiving. The channel's
-/// depth is what delays back-pressure reaching here; it is sized for memory
-/// (see `INGESTED_CHANNEL_CAPACITY`), not for this. Nothing has measured which
-/// of the two should give way, and until something has, this note is the whole
-/// of what is known.
+/// ⚠️ Sized against the RPC quota alone; a permit covers the fetch, not the persist, so a slow
+/// database fills the channel before it slows the fetch.
 const MAX_CONCURRENT_FETCHES: usize = 15;
 
 /// Fetches transactions for qualified signatures, with bounded concurrency.
@@ -83,11 +48,8 @@ impl FetchWorker {
 
         loop {
             tokio::select! {
-                // `biased`: the cancellation arm is checked first, so a
-                // `dispatch_one` that returned *because* the token fired cannot
-                // be followed by another message being taken instead of the
-                // stop. Without it the loop would race a ready `recv` against a
-                // ready token on every iteration.
+                // `biased`: a `dispatch_one` that returned because the token fired is not followed
+                // by another message taken instead of the stop.
                 biased;
 
                 _ = shutdown.cancelled() => {
@@ -95,15 +57,8 @@ impl FetchWorker {
                     return Ok(());
                 }
 
-                // ⚠️ **The consumer going away stops this stage**, which is the
-                // port's second exit clause and was a promise nothing kept: the
-                // send failure happens inside a detached task, so `run` never
-                // learned of it and kept pulling signatures and paying for
-                // `getTransaction` calls whose results had nowhere to go. Short
-                // today, because the daemon cancels the token as soon as any
-                // task returns — but "another task will stop us shortly" is not
-                // what the contract says, and the gRPC source will be written
-                // against the contract.
+                // ⚠️ The consumer going away stops this stage: the send fails in a detached task,
+                // so without this arm `run` would keep paying for fetches with nowhere to go.
                 _ = downstream.closed() => {
                     info!("downstream gone — fetch worker stopping");
                     return Ok(());
@@ -122,15 +77,8 @@ impl FetchWorker {
         }
     }
 
-    /// Acquire a permit and spawn one fetch.
-    ///
-    /// Blocks only on permit acquisition — the fetch itself runs detached so
-    /// the receive loop keeps draining the dispatcher.
-    ///
-    /// ⚠️ **The wait is interruptible**, which the port requires of every
-    /// implementation: `run`'s cancellation arm is not polled while this future
-    /// is pending, so waiting here on a bare `acquire_owned` would make a
-    /// saturated stage unstoppable for as long as the permits stay held.
+    /// Acquire a permit and spawn one fetch, detached, so the loop keeps draining the dispatcher.
+    /// ⚠️ The wait is interruptible: `run`'s cancellation arm is not polled while this is pending.
     async fn dispatch_one(
         &self,
         qs: QualifiedSignature,
@@ -142,10 +90,7 @@ impl FetchWorker {
             biased;
 
             _ = shutdown.cancelled() => {
-                // The signature is discarded, and that is a loss: it named a
-                // transaction nothing will ask for again. Counted for the same
-                // reason as the two in `fetch_one` — this stage's rule is
-                // *counted* and stepped over.
+                // A loss, counted: the signature named a transaction nothing will ask for again.
                 FetchMetrics::record_dropped(&qs.protocol, "shutdown_before_fetch");
                 return Ok(());
             }
@@ -175,9 +120,7 @@ impl FetchWorker {
     }
 }
 
-/// Fetch one transaction and hand it downstream.
-///
-/// Every failure here is per-signature: logged, counted, stepped over.
+/// Fetch one transaction and hand it downstream; every failure is per-signature, counted.
 async fn fetch_one(
     fetcher: Arc<TransactionFetcher>,
     qs: QualifiedSignature,
@@ -207,23 +150,8 @@ async fn fetch_one(
         }
     };
 
-    // The RPC response becomes the neutral transaction here, on the side that
-    // knows what a `getTransaction` response looks like. A malformation is a
-    // transaction-level failure and takes the same exit as a fetch failure: one
-    // log, one count, nothing sent on.
-    //
-    // *Which* malformations is deliberately not re-listed here: `from_rpc`'s
-    // `# Errors` holds the list, and this site collapses every variant into the
-    // same two lines anyway. A copy here is a copy that goes stale — it already
-    // had, naming two of the refusals when there were five.
-    //
-    // ⚠️ It is counted under the fetch family with `reason="adapt"` rather than
-    // under a name of its own. What the family answers is "this signature
-    // produced nothing usable", which is the question an operator alerts on,
-    // and the reason label is what separates a rate limit from a malformed
-    // response. Before the fetch moved, this same failure was one of the
-    // `index_transaction_exited{outcome="extract_failure"}` — it has to be
-    // counted somewhere, and it can no longer be counted there.
+    // A malformation takes the fetch failure's exit, counted `reason="adapt"`: the family answers
+    // "this signature produced nothing usable", what an operator alerts on.
     let transaction = match from_rpc(&fetched) {
         Ok(tx) => tx,
         Err(e) => {
@@ -233,15 +161,8 @@ async fn fetch_one(
         }
     };
 
-    // Waiting on a full consumer is correct — it is the database being the
-    // bottleneck, and dropping here would lose a transaction nothing would
-    // re-request.
-    //
-    // ⚠️ **But the wait is interruptible**, and not by accident. It does
-    // resolve on its own today, because `IndexerWorker` drops its receiver when
-    // the token fires and the send then fails at once — which makes shutdown
-    // depend on what the *consumer* happens to do. The port asks each source to
-    // honour the token itself, so this one does.
+    // Waiting on a full consumer is the database being the bottleneck: dropping would lose a
+    // transaction nothing re-requests. ⚠️ Interruptible: shutdown must not depend on the consumer.
     let ingested = IngestedTransaction {
         protocol,
         transaction,

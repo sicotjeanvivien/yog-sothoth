@@ -1,40 +1,26 @@
-//! Tests for the slot/time pairing.
-//!
-//! Unlike its neighbour `transaction_adapter_tests`, nothing here is a guess
-//! about a wire format: the buffer is pure state, and these tests exercise it
-//! exhaustively. What they cannot say is whether the **bound** is the right
-//! number — that is a physical property of a provider's stream, to be
-//! measured on a real one, and the eviction counter is what will say it.
+//! Tests for the slot/time pairing: pure state, exercised exhaustively. Whether the bounds are
+//! the right numbers is a provider's stream's to say, through the eviction counter.
 
 use super::*;
 
-/// What the assertions below read, and nothing in production does. They lean on
-/// two `#[cfg(test)]` accessors of the halves, `WaitingSlots::count` and
-/// `KnownTimes::len`.
-///
-/// The reader production would have is an occupancy gauge — this buffer can
-/// hold 40–160 MB — and it is what a real-stream measurement will read.
+/// What the assertions read and nothing in production does, through two `#[cfg(test)]` accessors.
 impl<T> SlotTimestampBuffer<T> {
     /// How many payloads are waiting.
     fn pending_payloads(&self) -> usize {
         self.waiting.count()
     }
 
-    /// How many slot outcomes are remembered — instants and given-up slots
-    /// alike, since they share the table and its bound.
+    /// How many slot outcomes are remembered, instants and given-up slots alike.
     fn known_slots(&self) -> usize {
         self.known.len()
     }
 }
 
-/// A payload standing in for whatever the listener will carry. A `u32` rather
-/// than a protobuf message on purpose: the buffer is generic, and a test that
-/// needed the real type would be testing the wrong thing.
+/// A payload standing in for whatever the listener carries; the buffer is generic.
 type Payload = u32;
 
 fn buffer() -> SlotTimestampBuffer<Payload> {
-    // Deliberately tiny. Reaching 256 slots by pushing 257 would say nothing
-    // three slots do not, and would say it slowly.
+    // Deliberately tiny: three slots say what 256 would, faster.
     SlotTimestampBuffer::with_bounds(3, 5, 2)
 }
 
@@ -44,8 +30,7 @@ fn at(secs: i64) -> DateTime<Utc> {
 
 // ── the two arrival orders ──────────────────────────────────────────
 
-/// The common order: transactions stream as they execute, the block-meta closes
-/// the block. They wait, then come out together.
+/// The common order: transactions wait, the block-meta closes the block and releases them together.
 #[test]
 fn payloads_arriving_before_their_block_time_wait_for_it() {
     let mut buffer = buffer();
@@ -73,9 +58,7 @@ fn payloads_arriving_before_their_block_time_wait_for_it() {
     assert_eq!(buffer.pending_payloads(), 0);
 }
 
-/// The reverse order, which is why `known` exists at all. Without it a payload
-/// arriving after its block-meta would wait for a message that already came and
-/// be evicted in the end.
+/// The reverse order, the reason `known` exists: a late payload would wait for a meta already gone.
 #[test]
 fn a_payload_arriving_after_its_block_time_resolves_at_once() {
     let mut buffer = buffer();
@@ -119,12 +102,8 @@ fn a_block_time_releases_only_its_own_slot() {
 
 // ── the bounds ──────────────────────────────────────────────────────
 
-/// ⚠️ **The test that carries the slot-count bound.** A stream that stops
-/// delivering must cost nothing: the bound counts slots, so no new slot means
-/// no eviction, and an outage stays an outage instead of becoming data loss.
-///
-/// A time-bounded implementation fails here — that is the whole point of
-/// writing it down.
+/// ⚠️ The bound counts slots: a stream that stops delivering evicts nothing, and an outage stays
+/// an outage. A time-bounded implementation fails here.
 #[test]
 fn a_stalled_stream_evicts_nothing() {
     let mut buffer = buffer();
@@ -133,8 +112,7 @@ fn a_stalled_stream_evicts_nothing() {
     buffer.on_payload(11, 2);
     buffer.on_payload(12, 3);
 
-    // Time passes in the real world; nothing passes here, because nothing
-    // arrived. No tick, no clock, no eviction — there is no method to call.
+    // Nothing arrived, so nothing is evicted: there is no clock and no method to call.
     assert_eq!(buffer.pending_payloads(), 3);
 
     // And on reconnect they still resolve.
@@ -144,9 +122,7 @@ fn a_stalled_stream_evicts_nothing() {
     assert_eq!(buffer.pending_payloads(), 0);
 }
 
-/// Past the slot bound, the oldest slot goes — and the bound is a **distance**:
-/// what evicts a slot is the stream moving on without it, not the number of
-/// slots being held.
+/// Past the slot bound the oldest slot goes; the bound is a distance from the head, not a count.
 #[test]
 fn a_slot_left_behind_by_the_stream_is_dropped() {
     let mut buffer = buffer(); // window of 3 slots
@@ -174,21 +150,15 @@ fn a_slot_left_behind_by_the_stream_is_dropped() {
     assert_eq!(buffer.on_block_time(14, at(104)).len(), 1);
 }
 
-/// ⚠️ **The case the count-based bound could not see, and the one that cost a
-/// reconnection its resume point.** A single slot whose block-meta never comes
-/// — a fork at `confirmed` — is not accompanied by 256 others: in steady state
-/// one or two slots are pending, so a population bound never fires and that
-/// slot stays for the life of the session. It then stays the oldest pending
-/// slot for ever, and `resume_from` answers with it at every reconnection.
-/// Measuring against the head is what ends it, on the stream's own clock.
+/// ⚠️ A fork's slot whose meta never comes is never accompanied by 256 others: only a distance
+/// from the head ends it, or it stays the resume point for ever.
 #[test]
 fn an_orphan_slot_does_not_pin_the_buffer_for_ever() {
     let mut buffer = buffer(); // window of 3 slots
 
     buffer.on_payload(10, 1); // its block-meta will never come
 
-    // The stream carries on normally, one or two slots pending at a time —
-    // never near any population ceiling.
+    // One or two slots pending at a time, never near a population ceiling.
     for slot in 11..=14 {
         buffer.on_payload(slot, slot as Payload);
         buffer.on_block_time(slot, at(100 + slot as i64));
@@ -202,15 +172,8 @@ fn an_orphan_slot_does_not_pin_the_buffer_for_ever() {
     );
 }
 
-/// ⚠️ The second bound, which exists because bounding slots does **not** bound
-/// memory. Here the slot count stays legal — 2 of 3 — and only the payload
-/// total is exceeded, so this test fails if that limit is dropped.
-///
-/// **And it evicts the other end.** Block-metas arrive in slot order, so the
-/// oldest pending slot is the one due to resolve next; under the payload bound
-/// nothing is stale, and dropping the oldest to make room for the burst would
-/// destroy the resolvable half. Found in review, 8 September 2026 — this test
-/// asserted the opposite until then.
+/// ⚠️ Bounding slots does not bound memory: here only the payload total is exceeded. And it
+/// evicts the newest: the oldest pending slot resolves next, nothing is stale.
 #[test]
 fn the_payload_bound_evicts_the_newest_slot_not_the_oldest() {
     let mut buffer = buffer(); // 3 slots, 5 payloads
@@ -239,13 +202,10 @@ fn the_payload_bound_evicts_the_newest_slot_not_the_oldest() {
     );
 }
 
-/// ⚠️ **The two bounds evict opposite ends, and nothing else says so.** Both
-/// branches drop a slot and count it, so swapping them is invisible except in
-/// which data survives. This is the test that fails if they are made alike.
+/// ⚠️ The two bounds evict opposite ends, and swapping them is visible only in which data survives.
 #[test]
 fn the_two_bounds_evict_opposite_ends() {
-    // Slot bound: the oldest goes, because it is beyond the window and its
-    // block-meta is not coming.
+    // Slot bound: the oldest goes, its block-meta is not coming.
     let mut by_slots = SlotTimestampBuffer::with_bounds(2, 100, 2);
     for slot in 10..=13 {
         by_slots.on_payload(slot, slot as Payload);
@@ -260,7 +220,7 @@ fn the_two_bounds_evict_opposite_ends() {
         "slot bound: the newest survived"
     );
 
-    // Payload bound: the newest goes, because the oldest is due to resolve.
+    // Payload bound: the newest goes, the oldest is due to resolve.
     let mut by_payloads = SlotTimestampBuffer::with_bounds(100, 2, 2);
     for slot in 10..=13 {
         by_payloads.on_payload(slot, slot as Payload);
@@ -276,9 +236,7 @@ fn the_two_bounds_evict_opposite_ends() {
     );
 }
 
-/// ⚠️ The table nobody thinks to bound. Nothing in the pending path touches it,
-/// so an unbounded `known` grows for the life of the process without a single
-/// other test noticing.
+/// ⚠️ `known` must be bounded too: nothing in the pending path touches it.
 #[test]
 fn the_table_of_known_times_is_bounded_too() {
     let mut buffer = buffer(); // 2 known slots
@@ -303,15 +261,8 @@ fn the_table_of_known_times_is_bounded_too() {
     );
 }
 
-/// ⚠️ **The eviction has to be counted, not just to happen.** This counter is
-/// what a real-stream measurement reads to replace the guessed bound, so a
-/// drop that increments nothing would leave that measurement looking at a
-/// metric that is silent for the wrong reason.
-///
-/// Not `#[tokio::test]` and no runtime: `with_local_recorder` installs the
-/// recorder on the **current thread** for a closure, and this buffer is
-/// synchronous — the same recipe as the persistor test, minus the future.
-/// `Snapshotter::snapshot` is destructive for counters, so it is taken once.
+/// ⚠️ The eviction has to be counted, or the measurement that replaces the guessed bound reads a
+/// silent metric. `Snapshotter::snapshot` is destructive for counters, so it is taken once.
 #[test]
 fn evicted_payloads_are_counted() {
     use metrics_util::debugging::{DebugValue, DebuggingRecorder};
@@ -343,10 +294,8 @@ fn evicted_payloads_are_counted() {
     );
 }
 
-/// ⚠️ The mirror, and the one that gives the label its point: the payload bound
-/// firing while the slot count is legal. An unlabelled counter reads both of
-/// these the same way, and the two ceilings cross at 32 payloads per slot — so
-/// above that rate the number would be blamed on the wrong bound.
+/// ⚠️ The mirror: the payload bound firing while the slot count is legal; unlabelled, the number
+/// would be blamed on the wrong bound.
 #[test]
 fn the_bound_that_evicted_is_recorded_with_the_count() {
     use metrics_util::debugging::{DebugValue, DebuggingRecorder};
@@ -378,10 +327,8 @@ fn the_bound_that_evicted_is_recorded_with_the_count() {
     );
 }
 
-/// ⚠️ **The label is the whole reason this method exists.** Giving up on a slot
-/// and letting the slot bound expel it destroy the same payloads; only the
-/// counter tells whoever measures the stream which of the two happened, and
-/// only one of the two is fixed by raising `MAX_PENDING_SLOTS`.
+/// ⚠️ Giving up and the slot bound destroy the same payloads; only the label says which happened,
+/// and only one is fixed by raising `MAX_PENDING_SLOTS`.
 #[test]
 fn a_slot_given_up_on_is_counted_under_its_own_reason() {
     use metrics_util::debugging::{DebugValue, DebuggingRecorder};
@@ -393,7 +340,7 @@ fn a_slot_given_up_on_is_counted_under_its_own_reason() {
         let mut buffer = buffer();
         buffer.on_payload(10, 1);
         buffer.on_payload(10, 2);
-        // The block-meta came, and carried no instant.
+        // The block-meta came, with no instant.
         buffer.on_slot_unresolvable(10);
     });
 
@@ -411,9 +358,7 @@ fn a_slot_given_up_on_is_counted_under_its_own_reason() {
     );
 }
 
-/// Giving up frees the window it occupied, which is the other half of the point:
-/// a slot nobody can resolve must not spend one of the places meant for slots
-/// that will.
+/// Giving up frees the window place it occupied, for slots that will resolve.
 #[test]
 fn giving_up_on_a_slot_releases_its_place_in_the_window() {
     let mut buffer = buffer(); // 3 slots
@@ -439,10 +384,7 @@ fn giving_up_on_a_slot_releases_its_place_in_the_window() {
     );
 }
 
-/// ⚠️ A slot that was never pending must count **nothing**. The listener calls
-/// this on every block-meta with no instant, most of which have no payload
-/// waiting; counting those would turn the metric a measurement reads into
-/// a count of empty blocks.
+/// ⚠️ A slot never pending counts nothing, or the metric would count empty blocks.
 #[test]
 fn giving_up_on_a_slot_with_nothing_waiting_counts_nothing() {
     use metrics_util::debugging::DebuggingRecorder;
@@ -462,13 +404,8 @@ fn giving_up_on_a_slot_with_nothing_waiting_counts_nothing() {
     );
 }
 
-/// ⚠️ **A slot given up must stay given up, including for a payload that has
-/// not arrived yet.** The reverse order is the case `known` exists for, and it
-/// applies to a dead slot exactly as it does to a resolved one: without this,
-/// a transaction arriving after its empty block-meta is buffered again, takes a
-/// place in the window, and leaves counted `slot_bound` — the mislabel the
-/// `Unresolvable` reason was introduced to prevent, reappearing one path over.
-/// Found in review, 9 September 2026.
+/// ⚠️ A given-up slot stays given up for a payload not yet arrived, or that payload would leave
+/// counted `slot_bound`, the mislabel `Unresolvable` prevents.
 #[test]
 fn a_payload_arriving_after_its_slot_was_given_up_is_dropped_at_once() {
     use metrics_util::debugging::{DebugValue, DebuggingRecorder};
@@ -496,13 +433,8 @@ fn a_payload_arriving_after_its_slot_was_given_up_is_dropped_at_once() {
     );
 }
 
-/// ⚠️ **A slot given up must not un-know an instant that was found.** A second
-/// block-meta for the same slot can arrive carrying nothing — a duplicate, a
-/// re-emission after a fork — and letting the tombstone overwrite `Some(at)`
-/// would throw away a timestamp already in hand, then drop every late payload
-/// for that slot as unresolvable while its instant sat one branch away. The
-/// opposite direction is fine and is what a real correction looks like; only
-/// this one is a loss. Found in review, 9 September 2026.
+/// ⚠️ A second, empty block-meta must not un-know a found instant; the opposite direction is a
+/// real correction.
 #[test]
 fn giving_up_on_a_slot_never_overwrites_a_time_already_known() {
     let mut buffer = buffer();
@@ -520,8 +452,7 @@ fn giving_up_on_a_slot_never_overwrites_a_time_already_known() {
     );
 }
 
-/// Where a break should resume from, seen from the buffer: the oldest slot
-/// whose payloads are still waiting, because those die with it.
+/// Where a break should resume from: the oldest slot whose payloads are still waiting.
 #[test]
 fn the_oldest_pending_slot_is_the_one_that_was_not_finished() {
     let mut buffer = buffer();
@@ -540,7 +471,7 @@ fn the_oldest_pending_slot_is_the_one_that_was_not_finished() {
     assert_eq!(buffer.oldest_pending_slot(), Some(12));
 }
 
-/// The counter for one `reason` label, or `None` when it was never touched.
+/// The counter for one `reason` label, or `None` when never touched.
 fn counter_for<'a>(
     snapshot: &'a [(
         metrics_util::CompositeKey,
@@ -564,9 +495,7 @@ fn counter_for<'a>(
 
 // ── accounting ──────────────────────────────────────────────────────
 
-/// The running total must track both paths in and both paths out, or the
-/// payload bound compares against a lie. A count that drifts up evicts too
-/// early; one that drifts down never evicts at all.
+/// The running total tracks both paths in and both out: drifting up evicts too early, down never.
 #[test]
 fn the_pending_count_tracks_every_way_in_and_out() {
     let mut buffer = buffer();
@@ -579,14 +508,8 @@ fn the_pending_count_tracks_every_way_in_and_out() {
     buffer.on_block_time(10, at(100));
     assert_eq!(buffer.pending_payloads(), 1, "released two");
 
-    // A time for a slot that was never pending must not disturb the count.
-    //
-    // ⚠️ The slot number is part of the test now, and was not before: this used
-    // to say 99, which with a three-slot window puts the head 88 ahead of the
-    // pending slot 11 and evicts it — correctly, since `on_block_time` began
-    // applying the window on 10 September 2026. Reaching for a far-away slot to
-    // mean "some other slot" is what made this test say the opposite of what it
-    // meant.
+    // A time for a slot never pending must not disturb the count.
+    // ⚠️ A near slot: a far one would move the head and evict slot 11 out of the window.
     buffer.on_block_time(12, at(200));
     assert_eq!(buffer.pending_payloads(), 1);
 
@@ -595,12 +518,8 @@ fn the_pending_count_tracks_every_way_in_and_out() {
     assert_eq!(buffer.pending_payloads(), 1);
 }
 
-/// ⚠️ **The window is applied on every path that moves the head, not only when
-/// a payload arrives.** The case that exposed it: a slot whose block-meta never
-/// comes, on a stream that then goes quiet for the watched protocol while
-/// block-metas keep flowing. No payload arrives to trigger enforcement, so the
-/// stale slot survives however far the head runs — and it is what
-/// `resume_from` would then answer with.
+/// ⚠️ The window applies on every path that moves the head: on a quiet stream only block-metas
+/// arrive, and a stale slot would survive to become the resume point.
 #[test]
 fn a_stale_slot_is_evicted_by_block_metas_alone() {
     let mut buffer = buffer(); // window of 3 slots

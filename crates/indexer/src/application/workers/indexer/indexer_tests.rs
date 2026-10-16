@@ -46,14 +46,8 @@ async fn an_empty_channel_drains_to_zero() {
 
 // ── Waiting for what was detached ────────────────────────────────────────────
 
-/// ⚠️ **The stop must be last, not first.** Indexing runs detached so the
-/// receive loop keeps draining, which means nothing holds a handle to a
-/// transaction being written — `run` returning is `Daemon::run` returning is
-/// `main` returning, and the runtime takes the `INSERT` with it. A permit still
-/// out is the only evidence that a write is in progress.
-///
-/// Verified by mutation: drop the `acquire_many` and this test fails on the
-/// first assertion, where the wait comes back while a permit is still held.
+/// ⚠️ The stop must be last: nothing holds a detached task's handle, so a permit still out is the
+/// only evidence of a write. Mutation this is written against: dropping the `acquire_many`.
 #[tokio::test(start_paused = true)]
 async fn the_stop_waits_for_indexing_that_is_still_in_flight() {
     let semaphore = Arc::new(Semaphore::new(4));
@@ -67,8 +61,7 @@ async fn the_stop_waits_for_indexing_that_is_still_in_flight() {
         async move { await_in_flight(&semaphore, 4).await }
     });
 
-    // The paused clock jumps this whole second the moment the runtime is idle,
-    // which is exactly when a wait that was going to return early would have.
+    // The paused clock jumps this second when the runtime idles, when an early wait would return.
     tokio::time::sleep(Duration::from_secs(1)).await;
     assert!(
         !waiting.is_finished(),
@@ -82,8 +75,7 @@ async fn the_stop_waits_for_indexing_that_is_still_in_flight() {
         .expect("the waiting task must not panic");
 }
 
-/// The other half, and the one that would turn the wait into a hang: with
-/// nothing in flight there is nothing to wait for.
+/// The other half: with nothing in flight there is nothing to wait for, not a hang.
 #[tokio::test]
 async fn a_stop_with_nothing_in_flight_does_not_wait() {
     let semaphore = Semaphore::new(4);

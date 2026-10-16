@@ -1,48 +1,12 @@
-//! The log lines this daemon writes **about its own configuration**, before it
-//! acts on any of it.
-//!
-//! ⚠️ **The subject is what narrows the name, not the verb.** Twenty of the
-//! crate's twenty logging files log; a `logger.rs` would accept every one of
-//! them, and the real logger — the `tracing_subscriber` and its filter — is
-//! `yog_bootstrap::init_tracing`, not this. What this file refuses is
-//! everything that is not the configuration: `database initialized` belongs to
-//! the wiring, a stage outliving the grace belongs to the shutdown, a fetch
-//! failure belongs to its worker.
-//!
-//! Within that subject it carries the part an operator **cannot read off the
-//! variables they set**, because it follows from a *combination* of them.
-//!
-//! Three of those exist today, and each is a pair — **state it, then object if
-//! the combination deserves an objection**:
-//!
-//! - which of the four `(source, scope)` couples is running. Two variables,
-//!   four meanings, and nothing else in the crate names the one in force;
-//! - that one of those couples boots and cannot keep up. It is not an error,
-//!   so it cannot be a refusal; it is not visible either, so it cannot be
-//!   silence;
-//! - what the health probe reads beside what ingestion touches — and whether
-//!   they are the same address, which makes the dashboard's two halves fail
-//!   together while the configuration still looks like two endpoints.
-//!
-//! **Why not in `init.rs`.** That file wires dependencies. Building a log
-//! string and comparing two endpoints are neither of those, and they were
-//! there only because the values were already in scope. The test they hide is
-//! the giveaway: `probe_shares_ingestion_address` needed a live `Database` to
-//! reach while it sat inside the reporter's constructor, so nothing covered
-//! it. It is now a method on [`Config`] and this file only says what it found.
+//! The log lines this daemon writes about its own configuration, before acting on any of it:
+//! what follows from a combination of variables, stated, then objected to when it deserves it.
 
 use tracing::{info, warn};
 
 use crate::bootstrap::{Config, IngestScope, TransactionArrival};
 
-/// Name the acquisition couple that is running.
-///
-/// ⚠️ **The first line the process writes, because it is the first question a
-/// reader has.** Two acquisition models exist and one is running; from here on
-/// nothing else in the crate names which. The two `as_str` were written for
-/// the refusals of a validator that no longer exists — their remaining reader
-/// is this line, and it is a better one: a refusal is read once, a running
-/// mode every time something looks wrong.
+/// Name the acquisition couple that is running: the first line the process writes, and the only
+/// place that names it.
 pub(super) fn log_ingestion_mode(config: &Config) {
     info!(
         source = config.transaction_arrival.source().as_str(),
@@ -51,18 +15,8 @@ pub(super) fn log_ingestion_mode(config: &Config) {
     );
 }
 
-/// Object to the one couple that boots and cannot keep up.
-///
-/// `logsSubscribe` on a program id delivers everything that program does, and
-/// the RPC path then fetches each transaction back — measured at ~200 in 30 s
-/// against a ~10 req/s tier. Nothing stops: fetch failures are skip-and-logged
-/// per transaction, so the process stays up and the metrics stay plausible
-/// while most of what it sees is dropped.
-///
-/// A `check_supported` used to refuse that couple, for a different reason — an
-/// empty target set — and that reason is genuinely fixed. What went with the
-/// refusal was the only loud signal an operator got, and this warning puts it
-/// back at the cost of one branch.
+/// Object to the one couple that boots and cannot keep up: `logsSubscribe` on a program id, then a
+/// fetch per transaction against a rate-limited tier. Nothing stops, most of what it sees is dropped.
 pub(super) fn warn_saturating_couple(config: &Config) {
     if matches!(
         (&config.transaction_arrival, config.scope),
@@ -74,19 +28,8 @@ pub(super) fn warn_saturating_couple(config: &Config) {
     }
 }
 
-/// Print the probe's endpoint beside **everything ingestion touches**.
-///
-/// Everything, and not just the stream: on the notify-then-ask path ingestion
-/// also holds `INGEST_TRANSACTION`, the very endpoint the probe used to share
-/// until 21 September 2026, and a line omitting it would let an operator read
-/// an independence that endpoint denies.
-///
-/// The message states what the numbers are, and nothing about whether they are
-/// independent — that claim belongs to [`warn_probe_not_independent`], which
-/// checks it. It used to be asserted here whatever the addresses were, which
-/// made it false on a fresh clone, where `.env.example` points both at the same
-/// public host. A message is also what survives in an aggregator, where the
-/// fields beside it do not.
+/// Print the probe's endpoint beside everything ingestion touches, `INGEST_TRANSACTION` included.
+/// ⚠️ States the addresses only; whether they are independent is [`warn_probe_not_independent`]'s.
 pub(super) fn log_probe_endpoints(config: &Config) {
     let ingestion = match config.transaction_arrival.fetched_from() {
         Some(fetch) => format!(
@@ -102,15 +45,8 @@ pub(super) fn log_probe_endpoints(config: &Config) {
     );
 }
 
-/// Object when the probe reads an address ingestion already uses.
-///
-/// The panel it feeds combines two questions that are worth combining only
-/// because they fail apart — *is the chain advancing* and *are we keeping up*.
-/// One provider behind both turns them into one question again, silently,
-/// since the configuration still shows two endpoints.
-///
-/// What is compared, and what is not, is [`Config::probe_shares_ingestion_address`]'s
-/// business; the message repeats the limit rather than implying a guarantee.
+/// Object when the probe reads an address ingestion already uses: one provider behind both
+/// halves of the panel makes them fail together; see [`Config::probe_shares_ingestion_address`].
 pub(super) fn warn_probe_not_independent(config: &Config) {
     if config.probe_shares_ingestion_address() {
         warn!(

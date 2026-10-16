@@ -19,34 +19,18 @@ use crate::{
     },
 };
 
-/// Default size of the broadcast channel carrying `SubscriptionEvent`s.
-/// Oversized on purpose — with a handful of workers emitting occasional
-/// events, we never want the listener to drop telemetry because it lagged
-/// for a few milliseconds.
+/// Size of the broadcast channel carrying `SubscriptionEvent`s, oversized so a lagging listener
+/// does not drop telemetry.
 const EVENTS_CHANNEL_CAPACITY: usize = 256;
 
-/// Orchestrator for a pool of `SubscriptionWorker`s.
-///
-/// Responsibilities kept deliberately minimal:
-/// - build the list of `SubscriptionTarget`s from what is watched
-/// - spawn one `SubscriptionWorker` per target
-/// - consume their `SubscriptionEvent`s (log, metrics, tracking)
-/// - escalate to the Daemon when *all* workers have given up
-///
-/// The listener does NOT:
-/// - manage retries (each worker owns its retry budget)
-/// - force a global reconnect when one worker dies (siblings keep running)
-/// - respawn dead workers (a dead worker stays dead)
+/// Orchestrator for a fleet of `SubscriptionWorker`s, one per watched address; escalates only
+/// when *all* have given up.
+/// ⚠️ It neither retries (each worker owns its budget) nor respawns: a dead worker stays dead.
 pub(crate) struct RpcListener {
-    /// The whole endpoint, not just its URL: a provider may carry its key in
-    /// the query string **or** in a metadata header, and which one is the
-    /// operator's business — see the module docs of [`Credential`]. The fleet
-    /// clones the assembled URL and the validated header once per worker.
+    /// The whole endpoint, not just its URL: the key may ride in the query string or in a header.
     endpoint: Endpoint,
-    /// Every address to subscribe to, with the protocol it belongs to — a
-    /// program id or a pool. **One set, and no scope**: a `logsSubscribe`
-    /// target is one `mentions` pubkey whichever it is, and what goes in here
-    /// is decided upstream, by the daemon's registration.
+    /// Every address to subscribe to, program id or pool, with its protocol; what goes in is
+    /// decided upstream by the daemon.
     watched: Mutex<HashSet<(Protocol, Pubkey)>>,
     worker_max_retries: u32,
 }
@@ -61,11 +45,6 @@ impl RpcListener {
     }
 
     /// Watch a whole protocol: its program id becomes a target.
-    ///
-    /// It carried a `_` prefix from the day it was written until 10 September
-    /// 2026, because nothing called it and `INGEST_SCOPE=protocols` was refused
-    /// at load time for exactly that reason. The gRPC work gave it a caller:
-    /// the source's `watch_protocol`, driven from the daemon at start-up.
     pub(crate) async fn watch(&self, protocol: Protocol) {
         self.watched
             .lock()
@@ -77,22 +56,17 @@ impl RpcListener {
         self.watched.lock().await.insert((protocol, pool_address));
     }
 
-    /// Spawn workers, supervise them, and return when they're all done.
-    ///
-    /// Returns `Err(AllWorkersGaveUp)` with per-worker details when every
-    /// spawned worker has exhausted its retry budget. Returns `Ok(())` when
-    /// the shutdown token was cancelled before that happened.
+    /// Spawn workers, supervise them, and return when they are all done: `Ok(())` on shutdown,
+    /// `Err(AllWorkersGaveUp)` with per-worker details when every one exhausted its budget.
     pub(crate) async fn run(
         self: Arc<Self>,
         dispatcher_tx: mpsc::Sender<RawLogEvent>,
         shutdown: CancellationToken,
     ) -> Result<(), RpcListenerError> {
-        // Validated once, before a single worker is spawned: a malformed header
-        // is a configuration failure, and letting each worker rediscover it
-        // would spend a retry budget on something that cannot get better.
+        // Validated before a worker is spawned: a malformed header would spend each worker's
+        // retry budget on something that cannot get better.
         let credential = Credential::new(self.endpoint.header())?;
-        // Same reason, same place: a URL this path cannot speak would otherwise
-        // cost a retry budget per worker — see `scheme::WEBSOCKET`.
+        // Same for a URL this path cannot speak.
         scheme::check(&self.endpoint.url(), &scheme::WEBSOCKET)
             .map_err(|reason| RpcListenerError::InvalidEndpoint { reason })?;
         info!(
@@ -124,18 +98,13 @@ impl RpcListener {
             })
             .collect();
 
-        // Subscribe before dropping the original sender — guarantees we don't
-        // miss events emitted in the tiny window before the loop starts.
+        // Subscribe before dropping the original sender, so no event is missed.
         let mut events_rx = events_tx.subscribe();
-        // Drop the listener's own sender. Workers keep their clones alive
-        // as long as they run; when the last one exits, the receiver closes
-        // naturally. This is how we detect "all workers gone" without
-        // needing a counter.
+        // The receiver closes when the last worker drops its clone: "all workers gone", no counter.
         drop(events_tx);
 
         let mut gave_up: Vec<WorkerFailure> = Vec::new();
 
-        // Supervision loop.
         loop {
             tokio::select! {
                 biased;
@@ -162,14 +131,8 @@ impl RpcListener {
 
         join_fleet(handles.drain(..), &mut gave_up).await;
 
-        // ⚠️ **Kept, and no longer load-bearing.** It covers a stop that lands
-        // while workers are already out of retries, which `join_fleet` cannot
-        // tell from any other exhausted budget. Until 14 September 2026 it
-        // covered far more than that: every worker cancelled by the runtime
-        // shutting down went into `gave_up`, so an ordinary Ctrl-C filled it to
-        // the brim and this line was the only thing standing between a normal
-        // stop and `AllWorkersGaveUp`. `join_fleet` holds that now — see its
-        // tests, which never reach this branch.
+        // A stop that lands while workers are already out of retries; `join_fleet` cannot tell
+        // it from any other exhausted budget.
         if shutdown.is_cancelled() {
             info!("RPC listener stopped cleanly");
             return Ok(());
@@ -196,19 +159,7 @@ impl RpcListener {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Supervision helpers
-// ---------------------------------------------------------------------------
-
-/// Per-worker failure detail — bubbled up in `AllWorkersGaveUp`.
-///
-/// ⚠️ **It was not, until 14 September 2026.** The three fields were collected
-/// and then dropped: `AllWorkersGaveUp` was built with the literal `"gave_up"`,
-/// so a dead ingestion told its operator `All Workers GaveUp failure: gave_up`
-/// and named neither the target nor the reason — while `reason` held
-/// `retries_exhausted after 7: connection refused`. Three
-/// `#[allow(dead_code)]`, one per field, were the tombstone: correct, and
-/// marking exactly what had been thrown away.
+/// Per-worker failure detail, carried in `AllWorkersGaveUp`'s message.
 #[derive(Debug, Clone)]
 pub(crate) struct WorkerFailure {
     pub protocol: Protocol,
@@ -306,13 +257,8 @@ fn handle_event(event: &SubscriptionEvent) {
 }
 
 /// Drive every worker to completion and record the ones that gave up.
-///
-/// ⚠️ **A cancelled worker is not one of them.** A `JoinError` says one of two
-/// things (see [`TaskEnd`]) and only one is a failure: the fleet is never
-/// aborted here, so a cancellation means the runtime was torn down around it —
-/// the work was cut short, nothing gave up. Counting it as an abandonment is
-/// what made an ordinary Ctrl-C look like a fleet-wide collapse, and made a
-/// real panic indistinguishable from the noise of stopping.
+/// ⚠️ A cancelled worker did not give up: nothing aborts the fleet, so a cancellation is the
+/// runtime torn down around it, and counting it made a Ctrl-C look like a collapse.
 async fn join_fleet(
     handles: impl IntoIterator<Item = WorkerHandle>,
     gave_up: &mut Vec<WorkerFailure>,
@@ -354,11 +300,8 @@ async fn join_fleet(
     }
 }
 
-/// What the fleet's outcome means for the listener: every worker out of
-/// retries is a dead ingestion, anything less is not.
-///
-/// The error carries what each worker reported, because this message is the
-/// last thing the process says before it exits — see [`WorkerFailure`].
+/// Every worker out of retries is a dead ingestion, anything less is not; the error carries what
+/// each one reported, the last thing the process says before it exits.
 fn fleet_outcome(gave_up: &[WorkerFailure], total: usize) -> Result<(), RpcListenerError> {
     if gave_up.len() == total && total > 0 {
         return Err(RpcListenerError::AllWorkersGaveUp {

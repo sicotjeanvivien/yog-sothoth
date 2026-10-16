@@ -1,30 +1,5 @@
-//! The Yellowstone acquisition model, behind the port.
-//!
-//! Thin, and the thinness is the point: where
-//! [`RpcTransactionSource`](crate::infra::RpcTransactionSource) assembles three
-//! stages and two channels because `logsSubscribe` notifies and the pipeline
-//! then asks, this one has a single connection that **delivers**.
-//! `GrpcListener::run` already produces the port's own
-//! [`IngestedTransaction`] — the translation, the slot/time pairing and the
-//! reconnection all live inside it — so there is nothing here but the
-//! delegation.
-//!
-//! # What the port asks, and why this side already answered
-//!
-//! [`TransactionSource`] states three obligations, and the JSON-RPC source had
-//! to learn all three in review. This one was built with them, alongside the
-//! listener:
-//!
-//! - **skip-and-log inside** — `session` counts every dropped update by reason
-//!   and steps over it; only a broken stream reaches [`GrpcListenerError`];
-//! - **`Ok(())` on a shutdown and on a departed consumer** — `Ending::
-//!   ShutdownRequested` and `Ending::DownstreamClosed`, both already exits of
-//!   `GrpcListener::run`;
-//! - **an interruptible wait** — `SessionState::ShutdownRequested` is what makes
-//!   a full consumer stoppable, and it exists because a review found the
-//!   opposite first.
-//!
-//! [`GrpcListenerError`]: crate::error::GrpcListenerError
+//! The Yellowstone acquisition model behind the port: one connection that delivers, so nothing
+//! here but delegation to `GrpcListener::run`, which translates, pairs slot and time, and reconnects.
 
 use std::sync::Arc;
 

@@ -6,11 +6,8 @@ fn listener(url: &str) -> Arc<RpcListener> {
     Arc::new(RpcListener::new(Endpoint::for_tests(url, None), 1))
 }
 
-/// ⚠️ **That `run` calls the scheme check is the thing worth testing here**, and
-/// it is a separate statement from the check being right — which is
-/// `scheme_tests`'s. Deleting the call leaves every test there green. Verified
-/// by mutation: `run` returns the refusal before it dials anything, so this
-/// test needs no network.
+/// That `run` calls the scheme check, not that the check is right (`scheme_tests`'s).
+/// Mutation this is written against: deleting the call; it refuses before dialling, no network.
 #[tokio::test]
 async fn run_refuses_the_wrong_scheme_before_touching_the_network() {
     let (tx, _rx) = mpsc::channel(1);
@@ -26,10 +23,8 @@ async fn run_refuses_the_wrong_scheme_before_touching_the_network() {
     );
 }
 
-/// ⚠️ **A watched protocol is its program id, and this is the only place that
-/// says so.** The listener holds one set of addresses and no scope, so the
-/// translation lives in `watch` — and a `watch` that inserted anything else
-/// would subscribe, connect, and hear nothing. A pool is taken as given.
+/// Mutation this is written against: `watch` inserting anything but the program id, which would
+/// subscribe and hear nothing.
 #[tokio::test]
 async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
     let listener = listener("wss://api.example.com");
@@ -57,7 +52,7 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
     );
 }
 
-// ── Joining the fleet ────────────────────────────────────────────────────────
+// ── Joining the fleet ─────────────────────────────────────────────────
 
 fn target(n: u8) -> SubscriptionTarget {
     SubscriptionTarget::new(Protocol::MeteoraDammV2, Pubkey::new_from_array([n; 32]))
@@ -73,16 +68,9 @@ where
     }
 }
 
-/// ⚠️ **The behaviour this test holds used to be held by the guard below it.**
-/// Nothing aborts a worker, so a cancelled `JoinError` means the runtime was
-/// torn down around the fleet — an interrupted stop, not a fleet that gave up.
-/// Counting it as an abandonment filled `gave_up` to the brim on every Ctrl-C,
-/// and `run`'s `if shutdown.is_cancelled()` was all that stood between that and
-/// `AllWorkersGaveUp`.
-///
-/// Verified by mutation, which is the whole point of splitting it out: delete
-/// that `if` from `run` and this test, with the one below it, stays green.
-/// Neither goes through it.
+/// ⚠️ Nothing aborts a worker: a cancelled `JoinError` is the runtime torn down, not a give-up.
+/// Mutation this is written against: counting it in `gave_up`; `run`'s `is_cancelled` guard is
+/// not on this path, so deleting it leaves this test green.
 #[tokio::test]
 async fn a_cancelled_worker_has_not_given_up() {
     let fleet: Vec<_> = [1, 2]
@@ -102,23 +90,14 @@ async fn a_cancelled_worker_has_not_given_up() {
     );
 }
 
-/// The companion of the test above: with nothing in `gave_up`, the fleet's
-/// verdict is `Ok` — so a stop that cancels every worker cannot be read as a
-/// dead ingestion even once the guard in `run` is gone.
+/// With nothing in `gave_up` the verdict is `Ok`, so a stop that cancels every worker is no dead ingestion.
 #[test]
 fn a_fleet_that_gave_up_on_nothing_is_not_a_dead_ingestion() {
     assert!(fleet_outcome(&[], 2).is_ok());
 }
 
-/// And the reason `AllWorkersGaveUp` exists at all, so the test above cannot
-/// pass by the verdict having become unreachable.
-///
-/// ⚠️ **What it says is the point, not that it says something.** This error is
-/// the last line the process writes before exiting: `main` logs it as
-/// `fatal error in indexing loop`. Until 14 September 2026 it was built from
-/// the literal `"gave_up"` — every target and every reason collected, then
-/// dropped, with an `#[allow(dead_code)]` per field to keep the compiler quiet
-/// about it. An operator woken by a dead ingestion learned nothing.
+/// `AllWorkersGaveUp` is reachable, and says what each worker reported: it is the last line the
+/// process writes.
 #[test]
 fn a_fleet_that_gave_up_on_every_target_names_every_one_of_them() {
     let failures: Vec<_> = [1, 2]
@@ -151,9 +130,7 @@ fn a_fleet_that_gave_up_on_every_target_names_every_one_of_them() {
     );
 }
 
-/// A worker whose future panicked is the one `JoinError` that *is* a failure,
-/// and it stays counted. Only this case triggers the panic branch: the
-/// cancellation test above never panics, and this one never cancels.
+/// A worker whose future panicked is the one `JoinError` that is a failure, and stays counted.
 #[tokio::test]
 async fn a_panicking_worker_is_counted_as_a_panic() {
     let mut gave_up = Vec::new();
@@ -171,8 +148,7 @@ async fn a_panicking_worker_is_counted_as_a_panic() {
     );
 }
 
-/// The third reason, on its own: a worker that returned `Err` spent its whole
-/// retry budget. It is counted for a different cause than a panic, and says so.
+/// A worker that returned `Err` spent its retry budget: counted, and says so.
 #[tokio::test]
 async fn a_worker_out_of_retries_is_counted_for_that_reason() {
     let mut gave_up = Vec::new();

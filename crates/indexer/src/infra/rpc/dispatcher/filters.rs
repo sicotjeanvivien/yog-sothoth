@@ -18,10 +18,6 @@ pub(crate) trait LogFilter: Send + Sync {
     fn accept(&self, event: &RawLogEvent) -> FilterDecision;
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 #[cfg(test)]
 #[path = "filters_tests.rs"]
 mod tests;

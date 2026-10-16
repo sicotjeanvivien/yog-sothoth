@@ -20,47 +20,15 @@ use crate::{
     },
 };
 
-/// Bounds for the worker's internal retry loop.
-/// `max_attempts` is read from the environment (`RPC_WORKER_MAX_RETRIES`,
-/// default 10) by the caller and passed in.
+/// Backoff bounds of the worker's retry loop; the attempt budget is `RPC_WORKER_MAX_RETRIES`.
 const INITIAL_BACKOFF_SECS: u64 = 1;
 const MAX_BACKOFF_SECS: u64 = 60;
 
-/// A self-contained subscription task.
-///
-/// # Why it lives in `infra/rpc/` and not in `application/workers/`
-///
-/// It was next to `IndexerWorker` because both are called workers, which is a
-/// resemblance of vocabulary and not of subject. This one speaks WebSocket,
-/// holds a [`Credential`] and a `SubscriptionTarget`, and exists only because
-/// `logsSubscribe` accepts one pubkey per subscription — every line of it is
-/// about a transport. `IndexerWorker` is a use case: it consumes what a source
-/// delivered and knows no transport at all.
-///
-/// Keeping it under `application` made the dependency run the wrong way twice
-/// over — `application` reaching into `infra` for the types it needs, and
-/// [`infra::rpc::listener`] reaching back into `application` to spawn it. Moving
-/// the file removes both, and it is the only thing that had to move for that.
-///
-/// Each worker owns its own `PubsubClient` (one WebSocket connection per
-/// worker). This wastes a connection per subscription but keeps the worker
-/// fully independent: no shared state, no coordination needed with siblings.
-///
-/// Lifecycle:
-///   connect → subscribe → forward events → (on failure) retry with backoff
-///                                        → (on budget exhausted) GivingUp
-///                                        → (on cancel) ShutdownCompleted
-///
-/// The worker emits `SubscriptionEvent`s on a broadcast channel so the
-/// listener (and any future observer) can track its state.
-///
-/// [`infra::rpc::listener`]: crate::infra::rpc::listener
+/// One `logsSubscribe` subscription on its own WebSocket, since the method takes one pubkey:
+/// connect, subscribe, forward, retry with backoff until the budget is spent.
 pub(crate) struct SubscriptionWorker {
     ws_url: SecretUrl,
-    /// The header this endpoint authenticates with, if it has one. Validated by
-    /// the listener before any worker exists — see the module docs of
-    /// [`Credential`], and why the answer is the operator's configuration and
-    /// not the transport.
+    /// The header this endpoint authenticates with, if any, validated by the listener.
     credential: Credential,
     target: SubscriptionTarget,
     max_attempts: u32,
@@ -81,10 +49,8 @@ impl SubscriptionWorker {
         }
     }
 
-    /// Run the worker to completion. Terminates when:
-    /// - the retry budget is exhausted (→ `GivingUp`),
-    /// - the cancel token is triggered (→ `ShutdownCompleted`),
-    /// - the dispatcher channel is closed (→ `ShutdownCompleted`).
+    /// Run the worker to completion: `Err` when the retry budget is exhausted, `Ok(())` on
+    /// cancellation or a closed dispatcher channel.
     pub(crate) async fn run(
         self,
         dispatcher_tx: mpsc::Sender<RawLogEvent>,
@@ -161,14 +127,11 @@ impl SubscriptionWorker {
                             attempt,
                         },
                     );
-                    // On stream closure, reset the attempt counter — the
-                    // previous connection was alive long enough to matter.
-                    // The retry budget tracks *connection failures*, not
-                    // normal churn over a long-lived connection.
+                    // A stream that closed was alive: the budget counts connection failures,
+                    // not churn.
                     attempt = 0;
                     backoff = INITIAL_BACKOFF_SECS;
-                    // Small pause before resubscribing to avoid hammering
-                    // the provider right after it closed us.
+                    // A short pause, not to hammer the provider that just closed us.
                     sleep_or_cancel(Duration::from_secs(1), &shutdown).await;
                     continue;
                 }
@@ -218,10 +181,6 @@ impl SubscriptionWorker {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
 /// Outcome of a single connect+forward attempt.
 enum ConnectOutcome {
     /// Parent shutdown cancelled mid-attempt.
@@ -242,11 +201,7 @@ async fn connect_and_forward(
     events_tx: &broadcast::Sender<SubscriptionEvent>,
     shutdown: &CancellationToken,
 ) -> ConnectOutcome {
-    // The handshake request rather than the bare URL, because the credential
-    // does not always live in the URL: `PubsubClient::new` takes an
-    // `IntoClientRequest`, and an `http::Request` is what carries a header. What
-    // decides whether there is one is `INGEST_STREAM_HEADER_NAME` /
-    // `_HEADER_VALUE` and nothing else — see `infra::endpoint::credential`.
+    // The handshake request, not the bare URL: it is what carries a header credential.
     let request = match credential.ws_request(ws_url) {
         Ok(request) => request,
         Err(scrubbed) => return ConnectOutcome::Failed(scrubbed),
@@ -352,9 +307,7 @@ async fn sleep_or_cancel(duration: Duration, shutdown: &CancellationToken) {
     }
 }
 
-/// Broadcast send that swallows `SendError` (no active receivers).
-/// The worker should keep running even if no one is listening to its events —
-/// the dispatcher channel is what matters for its primary job.
+/// Broadcast send that ignores a missing receiver: the dispatcher channel is the worker's job.
 fn emit(tx: &broadcast::Sender<SubscriptionEvent>, event: SubscriptionEvent) {
     let _ = tx.send(event);
 }

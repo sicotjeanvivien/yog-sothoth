@@ -1,5 +1,4 @@
-//! What opens one connection per attempt, and follows it to the end of its
-//! stream.
+//! What opens one connection per attempt, and follows it to the end of its stream.
 
 use std::{error::Error, time::Duration};
 
@@ -35,16 +34,12 @@ use super::{ending::Ending, log, stall_clock::StallClock};
 /// How long to wait for the TCP+TLS handshake before calling an attempt failed.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// HTTP/2 keep-alive. An idle connection is what a load balancer collects, and
-/// a Geyser stream is idle whenever nothing matches the filters;
-/// `keep_alive_while_idle` keeps the path warm through those stretches.
+/// HTTP/2 keep-alive, also while idle: a stream nothing matches looks idle to a load balancer.
 const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
 
 /// Ceiling on one decoded message.
-///
-/// ⚠️ Not a tuning knob: tonic's 4 MiB default is too small for a busy
-/// block's meta or a long log, and the refusal ends the stream on an error
-/// that looks like a network fault. The buffer downstream bounds memory.
+/// ⚠️ tonic's 4 MiB default is too small for a busy block's meta, and its refusal ends the stream
+/// on an error that looks like a network fault.
 const MAX_DECODING_MESSAGE_SIZE: usize = 64 * 1024 * 1024;
 
 /// How many outbound requests may queue: the subscription, then one answer per
@@ -56,9 +51,7 @@ type Client = GeyserClient<InterceptedService<Channel, CredentialInterceptor>>;
 
 /// A stream the server has accepted, and what must live as long as it.
 struct OpenStream {
-    /// Held, never read: the stream is read through the channel this client
-    /// owns, and nothing here should depend on what tonic does once the last
-    /// client handle is gone.
+    /// Held, never read: nothing here should depend on what tonic does once the last client is gone.
     _client: Client,
     stream: Streaming<SubscribeUpdate>,
     /// The outbound half, handed to the session for its ping answers.
@@ -66,18 +59,12 @@ struct OpenStream {
 }
 
 /// Opens a connection per attempt, and follows it to the end of its stream.
-///
-/// Holds what every connection needs and nothing that lasts beyond one: the
-/// endpoint (its URL, and every error built from it scrubbed of the key) and
-/// the stall timeout.
 pub(super) struct Connector {
     /// The whole endpoint and not just its URL: on this path the credential can
     /// ride in a metadata header — see `interceptor`.
     endpoint: Endpoint,
-    /// [`STALL_TIMEOUT`] in production. A parameter so that a test can stall a
-    /// stream in milliseconds.
-    ///
-    /// [`STALL_TIMEOUT`]: super::stall_clock::STALL_TIMEOUT
+    /// [`STALL_TIMEOUT`](super::stall_clock::STALL_TIMEOUT) in production; a parameter so a test
+    /// can stall a stream in milliseconds.
     stall_timeout: Duration,
 }
 
@@ -93,26 +80,20 @@ impl Connector {
         &self.endpoint
     }
 
-    /// The address to dial, built once.
-    ///
-    /// TLS is configured unconditionally and applies only to an `https://`
-    /// URL — tonic reads the scheme, so a self-hosted `http://` Yellowstone
-    /// connects in the clear without a second code path.
+    /// The address to dial, built once; TLS applies only to `https://`, so `http://` connects in the clear.
     pub(super) fn channel_endpoint(&self) -> Result<ChannelEndpoint, GrpcListenerError> {
         let url = self.endpoint.url();
 
-        // ⚠️ Every error out of this function goes through `SecretUrl::scrub`:
-        // `tonic` quotes the URI it was handed, and that URI carries the key
-        // whenever the operator put it there rather than in a header.
+        // ⚠️ Every error here goes through `SecretUrl::scrub`: tonic quotes the URI, which carries
+        // the key when the operator put it there rather than in a header.
         let endpoint = ChannelEndpoint::from_shared(url.expose().to_string()).map_err(|e| {
             GrpcListenerError::InvalidEndpoint {
                 reason: url.scrub(&e.to_string()),
             }
         })?;
 
-        // ⚠️ `from_shared` does not look at the scheme, so a `wss://` URL would
-        // otherwise fail inside the retry loop — see `scheme::GRPC`. Checked
-        // after it, so that a URI tonic cannot read keeps tonic's own reason.
+        // ⚠️ `from_shared` ignores the scheme, so a `wss://` URL would fail in the retry loop;
+        // checked after it, so a URI tonic cannot read keeps tonic's own reason.
         scheme::check(&url, &scheme::GRPC)
             .map_err(|reason| GrpcListenerError::InvalidEndpoint { reason })?;
 
@@ -225,10 +206,7 @@ impl Connector {
     }
 
     /// Send the subscription and wait for the server to answer it.
-    ///
-    /// ⚠️ Bounded by the stall timeout, or a server that never sends response
-    /// headers hangs the listener here; and interruptible, since that timeout
-    /// outlasts a container's stop grace period.
+    /// ⚠️ Bounded by the stall timeout, since a server may never send headers, and interruptible.
     async fn subscribe(
         &self,
         client: &mut Client,
@@ -252,9 +230,8 @@ impl Connector {
         let url = self.endpoint.url();
         match subscribed {
             Ok(response) => Ok(response.into_inner()),
-            // ⚠️ A `Status` here is not proof that a server spoke: tonic also
-            // builds one from our own transport giving way, which is what a
-            // link cut just after the TCP handshake produces.
+            // ⚠️ A `Status` is not proof a server spoke: tonic builds one when our transport gives
+            // way. Asked only here: once `subscribe` is answered, the server has seen `from_slot`.
             Err(status) if !reached_the_service(&status) => Err(Ending::Unreachable {
                 error: url.scrub(&format!("subscribe: {status}")),
             }),
@@ -310,10 +287,6 @@ impl Connector {
 }
 
 /// The ending a session's state brings, if any.
-///
-/// `ShutdownRequested` here means the session was parked on a full consumer
-/// when the token fired: `handle` runs in the body of the `select!` arm, so
-/// nothing else polled the token meanwhile.
 fn ending_of(state: SessionState) -> Option<Ending> {
     match state {
         SessionState::Open => None,
@@ -322,17 +295,9 @@ fn ending_of(state: SessionState) -> Option<Ending> {
     }
 }
 
-/// Whether a `Status` is the server answering, or this side's transport giving
-/// way.
-///
-/// ⚠️ Not error-text matching: the chain of causes is walked for a
-/// [`tonic::transport::Error`], a type that exists only on *our* side — a
-/// status the server sent is rebuilt from the trailers with no source at all.
-/// Walked rather than tested at the first link, because where tonic wraps it
-/// changes between versions.
-///
-/// ⚠️ Asked at `subscribe` and nowhere else: once `subscribe` is answered, the
-/// server has seen our `from_slot`.
+/// Whether a `Status` is the server answering, or our transport giving way.
+/// ⚠️ Walks the causes for a [`tonic::transport::Error`], which only our side builds; not the first
+/// link only, since where tonic wraps it changes between versions.
 fn reached_the_service(status: &Status) -> bool {
     let mut source = status.source();
 

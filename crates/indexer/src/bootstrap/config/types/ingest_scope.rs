@@ -1,19 +1,7 @@
 use yog_bootstrap::EnvEnum;
 
-/// What the daemon registers with the source, and so what is subscribed to.
-///
-/// Read once, by the daemon's `Registration`; no listener sees it — they hold
-/// addresses, and a program id and a pool are both an address.
-///
-/// `Protocols` is one subscription per watched protocol, keyed on its
-/// program id — full coverage, and the throughput the free tier cannot
-/// sustain. `Pools` is one per row of `watched_pools`: that is where the
-/// allowlist is enforced — **at the subscription, not by a filter** —
-/// nothing downstream being aware of it.
-///
-/// Both outlive the RPC path. Pool scope is not legacy waiting to be
-/// deleted: it stays meaningful on a gRPC stream, where the same addresses
-/// go into the subscription filter instead of into one socket each.
+/// What the daemon registers with the source: a program id per protocol, or one address per
+/// `watched_pools` row. The allowlist is enforced at the subscription, not by a filter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum IngestScope {
     Protocols,

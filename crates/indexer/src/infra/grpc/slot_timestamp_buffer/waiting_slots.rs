@@ -1,5 +1,4 @@
-//! The payloads still waiting for their slot's instant, and which of them go
-//! when a bound is exceeded.
+//! The payloads still waiting for their slot's instant, and which go when a bound is exceeded.
 
 use std::collections::BTreeMap;
 
@@ -17,8 +16,7 @@ enum Bound {
 }
 
 impl Bound {
-    /// The label an eviction under this bound is counted with — recorded,
-    /// since an unlabelled count would be read as the wrong ceiling.
+    /// The label an eviction under this bound is counted with.
     fn reason(self) -> EvictionReason {
         match self {
             Self::Slots => EvictionReason::SlotBound,
@@ -27,17 +25,14 @@ impl Bound {
     }
 }
 
-/// Payloads waiting for their slot's time, in arrival order within a slot, and
-/// the two bounds that cap them. Every operation that moves the head applies
-/// the bounds itself.
+/// Payloads waiting for their slot's time, in arrival order within a slot; every operation that
+/// moves the head applies the two bounds itself.
 pub(super) struct WaitingSlots<T> {
     pending: BTreeMap<u64, Vec<T>>,
-    /// Running total of `pending`'s values, so the payload bound is a
-    /// comparison and not a walk.
+    /// Running total of `pending`'s values, so the payload bound is a comparison, not a walk.
     count: usize,
-    /// The furthest the stream has got, from either half. What the slot bound
-    /// measures against — and why no clock is needed: the window advances with
-    /// the stream, so a stalled stream evicts nothing.
+    /// The furthest the stream has got, from either half: the slot bound measures against it, so
+    /// a stalled stream evicts nothing.
     head_slot: Option<u64>,
     max_pending_slots: u64,
     max_pending_payloads: usize,
@@ -62,8 +57,7 @@ impl<T> WaitingSlots<T> {
         self.enforce_bounds();
     }
 
-    /// Release everything waiting for `slot`, in arrival order: its instant is
-    /// known.
+    /// Release everything waiting for `slot`, in arrival order: its instant is known.
     pub(super) fn release(&mut self, slot: u64) -> Vec<T> {
         self.see(slot);
         let released = self.take(slot);
@@ -79,8 +73,7 @@ impl<T> WaitingSlots<T> {
         self.enforce_bounds();
     }
 
-    /// The oldest slot still waiting, if any — the oldest the session did not
-    /// finish, so the one a reconnection resumes from.
+    /// The oldest slot still waiting, if any: the one a reconnection resumes from.
     pub(super) fn oldest(&self) -> Option<u64> {
         self.pending.first_key_value().map(|(slot, _)| *slot)
     }
@@ -91,15 +84,8 @@ impl<T> WaitingSlots<T> {
         self.count
     }
 
-    /// Drop one slot's payloads, counted and logged under `reason`.
-    ///
-    /// The single place a pending slot is destroyed, so the counter cannot be
-    /// forgotten on one path out of two. Nothing waiting means nothing lost,
-    /// and nothing is counted.
-    ///
-    /// ⚠️ Evicted payloads are **lost**: without an instant they cannot be
-    /// written at all. What is a choice is that the loss is counted and logged
-    /// — the counter is the only thing that will say a bound was wrong.
+    /// Drop one slot's payloads, counted and logged under `reason`; the single place a pending
+    /// slot is destroyed, so no path forgets the counter. Nothing waiting is not counted.
     fn evict(&mut self, slot: u64, reason: EvictionReason) {
         let dropped = self.take(slot);
         if dropped.is_empty() {
@@ -123,20 +109,12 @@ impl<T> WaitingSlots<T> {
     }
 
     /// Evict until both bounds hold.
-    ///
-    /// ⚠️ **Called by every operation that moves the head**, never left to a
-    /// caller: on a stream quiet for the watched protocol, block-metas alone
-    /// keep the head running, and a stale slot the window did not catch would
-    /// be what a reconnection resumes from — hours behind, on a billed replay.
-    ///
-    /// ⚠️ **Under sustained overload both ends lose**, and no policy fixes
-    /// that; the counter says it is happening. What [`Self::victim`] fixes is
-    /// the transient burst, which is the case that actually occurs.
+    /// ⚠️ Called by every operation that moves the head, never left to a caller: block-metas alone
+    /// move it on a quiet stream, and a stale slot would become the resume point.
     fn enforce_bounds(&mut self) {
         while let Some(bound) = self.exceeded_bound() {
             let Some(slot) = self.victim(bound) else {
-                // Unreachable while a bound is exceeded, but a loop that trusts
-                // an invariant it does not check is how loops become infinite.
+                // Unreachable while a bound is exceeded; checked so the loop cannot spin.
                 return;
             };
             self.evict(slot, bound.reason());
@@ -154,21 +132,9 @@ impl<T> WaitingSlots<T> {
         }
     }
 
-    /// Which slot goes when `bound` is exceeded.
-    ///
-    /// ⚠️ **The two bounds evict opposite ends**, and getting it backwards is
-    /// silent: both branches evict something and count it.
-    /// - **Slot bound → the oldest.** It is `max_pending_slots` behind the head,
-    ///   so its block-meta is not late, it is not coming.
-    /// - **Payload bound → the newest.** Nothing is stale: in steady state one
-    ///   or two slots are pending, and the oldest resolves next. Dropping it for
-    ///   the burst that caused the overflow destroys the resolvable half.
-    ///
-    /// ⚠️ **On a replay, oldest-by-slot is not oldest-by-arrival**: older slots
-    /// arrive *last*, so a buffer full under the slot bound evicts each replayed
-    /// arrival at once. Kept on purpose, and made harmless by ownership: the
-    /// buffer belongs to one session and cannot outlive it, so a replay never
-    /// arrives into the previous connection's backlog.
+    /// Which slot goes when `bound` is exceeded: the oldest under the slot bound (its meta is
+    /// not coming), the newest under the payload bound (the oldest resolves next).
+    /// ⚠️ Getting the ends backwards is silent: both branches evict something and count it.
     fn victim(&self, bound: Bound) -> Option<u64> {
         let end = match bound {
             Bound::Slots => self.pending.first_key_value(),
@@ -177,9 +143,8 @@ impl<T> WaitingSlots<T> {
         end.map(|(slot, _)| *slot)
     }
 
-    /// Whether the oldest pending slot has fallen out of the window — measured
-    /// against the head the *stream* has reached, so nothing is evicted while
-    /// nothing arrives.
+    /// Whether the oldest pending slot has fallen out of the window, measured against the head
+    /// the stream has reached.
     fn oldest_is_out_of_window(&self) -> bool {
         match (self.oldest(), self.head_slot) {
             (Some(oldest), Some(head)) => head.saturating_sub(oldest) > self.max_pending_slots,

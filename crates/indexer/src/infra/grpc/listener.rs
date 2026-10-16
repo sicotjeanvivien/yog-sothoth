@@ -1,37 +1,7 @@
-//! The Yellowstone connection: one stream, and what to do when it breaks.
-//!
-//! Sibling of [`crate::infra::rpc::RpcListener`], and **not** its translation:
-//! no fleet of workers (one `SubscribeRequest` describes everything), no
-//! `TransactionFetcher` (the transaction arrives whole, with its `index` in the
-//! block), and no `SignatureDispatcher` (failed transactions are refused by the
-//! server; the invocation filter has no server-side equivalent — see
-//! `subscription`).
-//!
-//! This file assembles. Each responsibility has its own module:
-//!
-//! - `connector` — one attempt: open a stream, then read it to its end;
-//! - `ending` — how it ended, what that is worth (its `Verdict`), and what
-//!   that does to the resume mark;
-//! - `retry_budget` — whether to try again, and when;
-//! - `stall_clock` — how long the server has been silent;
-//! - `log` — the lines the listener writes.
-//!
-//! # ⚠️ What a test reaches
-//!
-//! `listener_tests` drives `run` against `test_geyser_server`, a scripted
-//! Yellowstone server in the test process: every ending has a test that goes
-//! red when its answer — restart or charge the budget, what the next attempt
-//! asks for — changes. The budget and the stall clock are also tested on their
-//! own values, with no clock involved.
-//!
-//! ⚠️ The mark half of [`Ending::Unreachable`](ending::Ending::Unreachable) is driven at
-//! `Connector::attempt`, not `run`: observing a mark *kept* needs a delivered
-//! session first, against a server that must then be unreachable.
-//!
-//! What no local test reaches: TLS, the keep-alive, the connect timeout,
-//! whether a provider takes the answer to its pings, and whether it honours
-//! `from_slot` the way this code assumes. A scripted server validates this
-//! client against **our model** of the server, never the protocol.
+//! The Yellowstone connection: one stream, and what to do when it breaks. `connector` makes one
+//! attempt, `ending` judges how it ended, `retry_budget` decides whether to try again.
+//! ⚠️ `listener_tests` drives `run` against a scripted server: it proves this client against our
+//! model of the server, never TLS, keep-alive, ping answers or `from_slot` on a real provider.
 
 mod connector;
 mod ending;
@@ -62,21 +32,12 @@ use retry_budget::{Next, RetryBudget};
 
 pub(crate) use stall_clock::STALL_TIMEOUT;
 
-/// Subscribes to a Yellowstone stream and turns it into timestamped
-/// transactions.
-///
-/// Holds the same watch set as `RpcListener`, for the same reason: an address
-/// is an address, a program id or a pool, and which ones go in is decided
-/// upstream by the daemon's registration.
+/// Subscribes to a Yellowstone stream and turns it into timestamped transactions; what it
+/// watches, program ids or pools, is decided upstream by the daemon.
 pub(crate) struct GrpcListener {
-    /// What opens a connection per attempt — the endpoint and the stall
-    /// timeout.
+    /// What opens a connection per attempt: the endpoint and the stall timeout.
     connector: Connector,
-    /// Every address to subscribe to, with its protocol — see
-    /// [`subscription::build_request`], which groups them into one filter per
-    /// protocol.
-    ///
-    /// [`subscription::build_request`]: crate::infra::grpc::subscription::build_request
+    /// Every address to subscribe to, with its protocol.
     watched: Mutex<HashSet<(Protocol, Pubkey)>>,
     max_attempts: u32,
 }
@@ -102,18 +63,9 @@ impl GrpcListener {
         self.watched.lock().await.insert((protocol, pool_address));
     }
 
-    /// Open the stream, keep it open, and return when it is over.
-    ///
-    /// Returns `Ok(())` on a requested shutdown or when the consumer has gone,
-    /// and `Err` when the retry budget runs out or the configuration cannot
-    /// produce a subscription at all.
-    ///
-    /// # The three failures that are not retried
-    ///
-    /// A bad header, an unusable URL and an empty subscription are all
-    /// configuration, and a configuration does not repair itself between two
-    /// attempts. They fail before the loop, so an operator sees the cause
-    /// rather than ten backoffs and a budget exhausted.
+    /// Open the stream, keep it open, and return `Ok(())` on shutdown or a departed consumer.
+    /// `Err` when the retry budget runs out, or before the loop on a configuration fault (bad
+    /// header, unusable URL, empty subscription), which no retry would repair.
     pub(crate) async fn run(
         self: Arc<Self>,
         downstream: mpsc::Sender<IngestedTransaction>,
@@ -143,8 +95,7 @@ impl GrpcListener {
                 .await
                 .verdict();
 
-            // ⚠️ The only place `resume_from` is written. The mark rule and the
-            // budget both read the one verdict, and neither hides in the other.
+            // ⚠️ The only place `resume_from` is written; the mark rule and the budget read the one verdict.
             resume_from = verdict.next_resume_from(resume_from);
 
             match budget.settle(verdict, resume_from) {
