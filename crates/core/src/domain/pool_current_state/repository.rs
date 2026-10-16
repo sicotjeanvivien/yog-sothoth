@@ -36,7 +36,8 @@ pub trait PoolCurrentStateLookup: Send + Sync {
     /// has no state yet or a token's metadata is unresolved.
     async fn side_values_usd(&self, pool_address: &Pubkey) -> RepositoryResult<PoolSideValues>;
 
-    /// Pools by most recent activity; `before_last_event_at` is the keyset cursor.
+    /// Pools by most recent activity; `limit` must be > 0, `before_last_event_at`
+    /// is the keyset cursor.
     async fn list_most_recent(
         &self,
         limit: u32,

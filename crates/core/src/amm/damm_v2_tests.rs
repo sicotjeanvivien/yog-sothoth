@@ -367,7 +367,7 @@ fn a_v1_ceiling_fee_converts_without_clamping() {
     assert_eq!(fee_numerator_to_bps(990_000_000), Decimal::from(9900));
 }
 
-/// Mutation: a clamp at exactly the v0 cap.
+/// Mutation: a clamp below 50 %, such as the 10 % of an operator update.
 #[test]
 fn a_v0_ceiling_fee_converts_without_clamping() {
     assert_eq!(fee_numerator_to_bps(500_000_000), Decimal::from(5000));

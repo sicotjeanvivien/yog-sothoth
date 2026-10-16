@@ -3,7 +3,7 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
-/// USD metrics of one pool; a USD field is `None` when nothing could be valued.
+/// USD metrics of one pool.
 /// ⚠️ The fee split is read, never derived: cp-amm takes the referral from the
 /// protocol share, so `lp` is not `fees - protocol` (`split_fees`).
 #[derive(Debug, Clone, PartialEq, Eq)]

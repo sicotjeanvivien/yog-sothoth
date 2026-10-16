@@ -10,9 +10,9 @@ pub fn discriminator_swap2() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtSwap2")
 }
 
-/// Mirror of `cp-amm::SwapParameters2`. `swap_mode`: 0 `ExactIn`, 1 `PartialFill`
-/// (`amount_0` in, `amount_1` min out), 2 `ExactOut` (`amount_0` out, `amount_1`
-/// max in). cp-amm widens a legacy `swap` to `ExactIn`.
+/// Mirror of `cp-amm::SwapParameters2`. `swap_mode` 0 `ExactIn` and 1 `PartialFill`:
+/// `amount_0` in, `amount_1` min out; 2 `ExactOut`: `amount_0` out, `amount_1` max in.
+/// cp-amm widens a legacy `swap` to `ExactIn`.
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct SwapParameters2 {
     pub amount_0: u64,

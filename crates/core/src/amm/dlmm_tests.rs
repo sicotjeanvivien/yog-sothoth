@@ -129,8 +129,7 @@ fn the_variable_cap_is_reached_but_not_exceeded() {
     );
 }
 
-/// The worst-case numerator fits in `u128`. Mutation: widening any of the
-/// three input types, which would make the `checked_mul`s load-bearing.
+/// The worst-case numerator at these input widths fits in `u128`.
 #[test]
 fn the_numerator_cannot_overflow_at_these_input_widths() {
     let accumulated = u128::from(u32::MAX) * u128::from(u16::MAX);

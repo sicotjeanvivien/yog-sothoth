@@ -4,8 +4,7 @@ use solana_pubkey::Pubkey;
 use crate::amm::damm_v2::{BaseFeeKind, FeeSchedulerParams};
 
 /// DAMM v2-only pool properties, the satellite of [`crate::domain::Pool`].
-/// The fields are `None` together until yog-context resolves the account; only
-/// `base_fee_kind` can stay `None` alone, for a mode this build cannot map.
+/// The fields are `None` together until yog-context resolves the account.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MeteoraDammV2PoolProperties {
     /// The pool these properties describe.

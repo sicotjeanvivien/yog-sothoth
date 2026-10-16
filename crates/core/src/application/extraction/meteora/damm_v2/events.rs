@@ -81,8 +81,7 @@ fn compute_discriminator(name: &str) -> [u8; DISCRIMINATOR_LEN] {
 // Wire event sum type
 // ---------------------------------------------------------------------------
 
-/// One decoded DAMM v2 Anchor event; the variants are the whole set the extractor
-/// dispatches on, anything else is an unknown discriminator.
+/// One decoded DAMM v2 Anchor event.
 #[derive(Debug, Clone)]
 pub enum DammV2WireEvent {
     Swap2(EvtSwap2),

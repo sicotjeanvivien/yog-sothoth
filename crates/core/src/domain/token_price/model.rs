@@ -74,8 +74,8 @@ fn storage_ceiling() -> Decimal {
 
 impl TokenPrice {
     /// Whether `token_prices.price_usd` can hold this price, rounded as Postgres rounds.
-    /// ⚠️ Not `> 0`: below `5e-19` the column stores a zero, which passes the
-    /// `IS NULL` valuation guards; at `10^20` the whole batch insert fails.
+    /// ⚠️ Not `> 0`: below `5e-19` the value rounds to a zero the CHECK refuses, at
+    /// `10^20` the type refuses it, and either fails the whole batch insert.
     pub fn is_storable(&self) -> bool {
         let rounded = self
             .price_usd

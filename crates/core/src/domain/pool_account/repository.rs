@@ -17,7 +17,6 @@ pub trait PoolAccountResolver: Send + Sync {
     async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>>;
 
     /// Store a pool's decoded account properties. Idempotent.
-    /// ⚠️ Atomic across its tables: a half-written pool is re-proposed every cycle.
     async fn set_pool_account(
         &self,
         pool_address: &Pubkey,

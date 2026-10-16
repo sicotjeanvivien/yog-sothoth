@@ -1,7 +1,6 @@
 //! The pool-account decoders against real mainnet accounts (`fixtures/<protocol>/accounts/`).
 //! ⚠️ Synthetic buffers are built from the very offsets they verify, so a wrong
-//! offset passes them. The expectations below were anchored outside the decoder:
-//! realized fee rates from swap amounts, and mints that name known tokens.
+//! offset passes them.
 
 use std::path::PathBuf;
 
