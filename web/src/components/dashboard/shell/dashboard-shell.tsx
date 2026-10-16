@@ -2,7 +2,7 @@
 
 /**
  * The dashboard chrome: below `lg` the sidebar is a drawer behind a hamburger, above it a
- * fixed rail. The switch is CSS; React only tracks `isOpen`. No focus trap in the drawer yet.
+ * fixed rail. The switch is CSS; React only tracks `isOpen`. No focus trap in the drawer.
  */
 
 import { useCallback, useEffect, useState } from "react";

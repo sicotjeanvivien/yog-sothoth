@@ -1,6 +1,5 @@
 // Declares every env var on `ProcessEnv`, so the dotted `process.env.X` passes
-// `noPropertyAccessFromIndexSignature`. ⚠️ Not `process.env["X"]`: Next.js inlines
-// `NEXT_PUBLIC_*` only on literal dotted accesses. Kept in step with `RAW_VALUES` and `.env.example`.
+// `noPropertyAccessFromIndexSignature`. Kept in step with `RAW_VALUES` and `.env.example`.
 
 declare global {
   namespace NodeJS {

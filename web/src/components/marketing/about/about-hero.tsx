@@ -1,6 +1,5 @@
 /**
- * The About page hero: copy over the left half of a full-bleed artwork composed empty on the
- * left, under a light scrim. A Server Component.
+ * The About page hero, a Server Component.
  */
 
 import { useTranslations } from "next-intl";
@@ -15,8 +14,6 @@ export function AboutHero() {
 
   return (
     <section className="relative flex min-h-[86vh] items-center overflow-hidden">
-     
-
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,3,13,0.80)_0%,rgba(5,3,13,0.55)_30%,rgba(5,3,13,0.15)_50%,transparent_66%)]" />
 
       <div className="relative z-[1] mx-auto w-full max-w-[1800px] px-6 lg:px-12">

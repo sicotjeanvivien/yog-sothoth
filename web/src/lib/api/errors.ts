@@ -12,7 +12,7 @@ export type ApiClientErrorDetails =
   | { kind: "http"; status: number; remoteMessage: string | null }
   | { kind: "validation"; issues: string[] };
 
-/** Thrown by every function of `lib/api/`; the message is for server logs. */
+/** The message is for server logs. */
 export class ApiClientError extends Error {
   public readonly details: ApiClientErrorDetails;
 
@@ -21,8 +21,6 @@ export class ApiClientError extends Error {
     this.name = "ApiClientError";
     this.details = details;
   }
-
-
 
   static timeout(timeoutMs: number): ApiClientError {
     return new ApiClientError(`yog-api request timed out after ${timeoutMs}ms`, {

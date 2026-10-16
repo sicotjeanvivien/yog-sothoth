@@ -21,7 +21,6 @@ import { InfoPopover } from "@/components/shared/info-popover";
 
 import { FeeTypeBadge } from "./fee-type-badge";
 
-
 const CARD_CLASS =
   "rounded-[8px] border border-sothoth-500/15 bg-cosmos-900/40 p-6 lg:p-8";
 
@@ -35,7 +34,6 @@ const LABEL_CLASS = "text-[14px] text-slate-400";
 
 const VALUE_CLASS =
   "flex items-center gap-2 text-[14px] text-slate-200 min-w-0";
-
 
 export async function PoolDetailInfo({
   pool,
@@ -190,7 +188,6 @@ export async function PoolDetailInfo({
     </section>
   );
 }
-
 
 async function InfoRow({
   label,

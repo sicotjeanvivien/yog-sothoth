@@ -35,7 +35,6 @@ import { BlockError } from "@/components/dashboard/block-error";
 import { PageError } from "@/components/dashboard/page-error";
 import { Pagination } from "@/components/shared/pagination";
 
-
 type PoolDetailPageProps = {
   params: Promise<{ locale: string; address: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -79,7 +78,6 @@ function parseCursor(raw: string | string[] | undefined): string | undefined {
 }
 
 const HISTORY_DAYS = 30;
-
 
 export default async function PoolDetailPage({
   params,

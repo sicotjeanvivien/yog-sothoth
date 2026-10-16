@@ -1,7 +1,6 @@
 /**
  * A pool row's actions: copy, Solscan, watchlist star — filled when watched, so "add" on
- * `/pools` and "remove" on `/watchlist`. ⚠️ A sibling of the row's `<Link>`, never inside it:
- * a control nested in an `<a>` is invalid.
+ * `/pools` and "remove" on `/watchlist`.
  */
 
 "use client";

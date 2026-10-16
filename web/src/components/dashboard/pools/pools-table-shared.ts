@@ -8,8 +8,7 @@
 export const GRID_COLS =
   "grid-cols-[minmax(190px,1.8fr)_minmax(84px,0.5fr)_minmax(112px,0.9fr)_minmax(84px,0.6fr)_minmax(112px,0.9fr)_minmax(144px,0.9fr)_minmax(112px,0.9fr)_minmax(112px,0.9fr)_minmax(104px,0.7fr)]";
 
-/** Below it the table scrolls rather than squashes. ⚠️ It is the sum of the column minimums,
- *  so it moves with any track. */
+/** Below it the table scrolls rather than squashes. ⚠️ It moves with any track. */
 export const TABLE_MIN_WIDTH_CLASS = "min-w-[1062px]";
 
 const HEAD_CELL_BASE =

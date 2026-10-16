@@ -24,7 +24,6 @@ import type {
 import type { PoolPageResponsePoolResponse } from "@/lib/api/schema/zod.gen";
 import { PoolsNoResults } from "@/components/dashboard/pools/pool-no-result";
 
-
 type PoolsPageProps = {
   params: Promise<{ locale: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -91,7 +90,6 @@ function parseSort(raw: string | string[] | undefined): PoolSort | undefined {
   return undefined;
 }
 
-
 type FetchOutcome =
   | { kind: "ok"; data: PoolPageResponsePoolResponse }
   | { kind: "error"; reason: ApiClientErrorKind };
@@ -121,7 +119,6 @@ async function load(args: {
     throw err;
   }
 }
-
 
 export default async function PoolsPage({
   params,

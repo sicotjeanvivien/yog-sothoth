@@ -22,7 +22,7 @@ export type ClientEnv = z.infer<typeof ClientEnvSchema>;
 
 let cached: ClientEnv | null = null;
 
-/** ⚠️ Literal `process.env.NEXT_PUBLIC_*` reads: Next.js replaces each with its value at build. */
+/** ⚠️ Literal reads: Next.js replaces each with its value at build. */
 export function loadClientEnv(): ClientEnv {
   if (cached !== null) return cached;
 

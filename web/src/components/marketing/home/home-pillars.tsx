@@ -14,7 +14,6 @@ import {
   type IconProps,
 } from "@/components/shared/icon";
 
-
 type Pillar = {
   key: string;
   icon: FC<IconProps>;

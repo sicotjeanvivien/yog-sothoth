@@ -2,8 +2,8 @@
 
 /**
  * The pools table's signal cell: the worst severity, the list on hover or focus, the Alerts tab
- * on activation. ⚠️ A `role="link"` span, since the row is already a `<Link>`; hover, not click,
- * reveals the list, as click opens the tab. Labels come resolved from the server parent.
+ * on activation. Hover, not click, reveals the list, as click opens the tab. Labels come
+ * resolved from the server parent.
  */
 
 import { useState } from "react";
@@ -53,8 +53,6 @@ export function PoolSignalsCell({
         tabIndex={0}
         aria-label={ariaLabel}
         onClick={(event) => {
-          // Keep the row's own <Link> out of it: this click means
-          // "Alerts tab", not "pool page".
           event.preventDefault();
           event.stopPropagation();
           navigate();

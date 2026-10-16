@@ -46,8 +46,6 @@ const BODY_CLASS: Record<Variant, string> = {
   warning: "mt-3 text-[17px] leading-[1.7] text-amber-100/90",
 };
 
-
-
 type CardConfig = {
   key: string;
   Icon: FC<IconProps>;

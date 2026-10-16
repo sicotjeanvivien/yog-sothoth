@@ -29,8 +29,6 @@ const TITLE_CLASS =
 
 const BODY_CLASS = "mt-3 text-[17px] leading-[1.7] text-slate-300";
 
-
-
 type CardConfig = {
   key: string;
   Icon: FC<IconProps>;

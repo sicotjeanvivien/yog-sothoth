@@ -1,6 +1,5 @@
 /**
  * The pool composition donut and legend, for a non-null `composition`: both sides valued.
- * ⚠️ Colours are inline, not Tailwind variables, which do not resolve inside `<svg>`.
  */
 
 import { getTranslations } from "next-intl/server";

@@ -1,7 +1,6 @@
 /**
  * One pool row, for `/pools` (server) and `/watchlist` (client): labels and `locale` come as
- * plain values. ⚠️ Each data cell is its own `<Link>`; the actions cell is a sibling, never
- * nested in one.
+ * plain values. ⚠️ The actions cell is never nested in a `<Link>`: a control in an `<a>` is invalid.
  */
 
 import { Link } from "@/i18n/navigation";

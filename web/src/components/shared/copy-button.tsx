@@ -1,8 +1,7 @@
 "use client";
 
 /**
- * An icon-only copy button, a client island; `aria-label` is required, the button showing no
- * text.
+ * An icon-only copy button, a client island; `label` is required, the button showing no text.
  */
 
 import { useState } from "react";
