@@ -7,12 +7,7 @@ use crate::{
     domain::{PoolAnalytics, PoolHistoryBucket},
 };
 
-/// The metric a top-N pool ranking is ordered by.
-///
-/// Exposed as the `metric` parameter of `/api/pools/top`. The two lenses
-/// answer different questions: `Volume24h` is *flow* (what is actively traded
-/// right now), `Tvl` is *stock* (where liquidity is parked — the deepest,
-/// most established pools).
+/// The metric a top-N pool ranking is ordered by: a flow or a stock.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PoolRankMetric {
     /// Realized 24h volume in USD (trade-time valued), descending.
@@ -21,40 +16,25 @@ pub enum PoolRankMetric {
     Tvl,
 }
 
-/// Read-only access to derived analytics over pools.
-///
-/// Implementations live in `yog-persistence`. The repository never
-/// writes; it only joins RPC and context tables to produce metrics
-/// at query time.
+/// Read-only analytics over pools, computed at query time.
 #[async_trait]
 pub trait PoolAnalyticsRepository: Send + Sync {
-    /// Compute TVL and 24h volume in USD for the given pools.
-    ///
-    /// Returns a map keyed by pool address. Pools requested but not
-    /// present in the map should be treated as
-    /// [`PoolAnalytics::empty`] by the caller; the implementation
-    /// is free to omit them from the result.
+    /// The analytics of the given pools; an absent pool reads as [`PoolAnalytics::empty`].
     async fn batch_compute(
         &self,
         pool_addresses: &[Pubkey],
     ) -> RepositoryResult<HashMap<Pubkey, PoolAnalytics>>;
 
-    /// Hourly activity history for a single pool over the last `days` days,
-    /// one [`PoolHistoryBucket`] per hour that had any activity, ordered by
-    /// bucket ascending (oldest first — chart-ready). Buckets with no activity
-    /// in any of the four sources are simply absent (sparse series).
+    /// One [`PoolHistoryBucket`] per active hour of the last `days` days, oldest
+    /// first; an hour without activity is absent.
     async fn history(
         &self,
         pool_address: &Pubkey,
         days: i32,
     ) -> RepositoryResult<Vec<PoolHistoryBucket>>;
 
-    /// Pool addresses ranked by `metric`, highest first, capped at `limit`.
-    ///
-    /// Read-time ranking over the priced analytics (no materialization): pools
-    /// with a NULL/absent metric value (unpriceable, or no activity in the
-    /// window) are excluded rather than sorted last. The returned order is the
-    /// ranking — callers preserve it when enriching for display.
+    /// Pool addresses ranked by `metric`, highest first, capped at `limit`; a pool
+    /// without a value is excluded. The order is the ranking: callers keep it.
     async fn top_pool_addresses(
         &self,
         metric: PoolRankMetric,

@@ -1,8 +1,4 @@
-//! Token metadata domain model.
-//!
-//! The identity of an SPL mint — symbol, name, decimals, logo —
-//! enriched from Helius DAS by the `yog-context` daemon. Pure domain
-//! type: no persistence, no serialization concerns.
+//! The identity of an SPL mint (symbol, name, decimals, logo), from Helius DAS.
 
 use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
@@ -13,26 +9,18 @@ use crate::CoreError;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokenMetadata {
     /// The SPL mint address.
-    ///
-    /// A `Pubkey`, consistent with `Pool` (`token_a_mint` /
-    /// `token_b_mint`) — the domain types addresses strongly; the
-    /// `Pubkey <-> TEXT` conversion happens in the persistence layer.
     pub mint: Pubkey,
 
-    /// Token symbol (e.g. "USDC"). `None` when the mint carries no
-    /// Metaplex metadata — rare, but valid.
+    /// Token symbol; `None` when the mint carries no Metaplex metadata.
     pub symbol: Option<String>,
 
-    /// Token name (e.g. "USD Coin"). `None` for the same reason as
-    /// `symbol`.
+    /// Token name; `None` like `symbol`.
     pub name: Option<String>,
 
-    /// Decimal precision of the mint. Always available from DAS — it
-    /// is the field the indexer most needs to render raw amounts.
+    /// Decimal precision of the mint.
     pub decimals: u8,
 
-    /// Logo URI as returned by DAS. May be an `ipfs://` URI — stored
-    /// verbatim, resolved by the frontend.
+    /// Logo URI as DAS returns it, `ipfs://` included; the frontend resolves it.
     pub logo_uri: Option<String>,
 
     /// Which source produced this metadata (e.g. "helius_das").
@@ -45,16 +33,15 @@ pub struct TokenMetadata {
     pub last_refresh_at: DateTime<Utc>,
 }
 
-/// Origin of a price observation.
+/// Origin of a metadata row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MetadataProvider {
-    /// Fetched from Helius (DAS `price_info`).
+    /// Fetched from Helius DAS.
     HeliusDas,
 }
 
 impl MetadataProvider {
-    /// Stable lowercase tag, as persisted in the `price_source`
-    /// column.
+    /// Stable tag of the `metadata_provider` column.
     pub fn as_str(&self) -> &'static str {
         match self {
             MetadataProvider::HeliusDas => "helius_das",

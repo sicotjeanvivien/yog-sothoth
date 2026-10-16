@@ -1,12 +1,5 @@
-//! Per-pool projection of the latest observed on-chain state.
-//!
-//! [`PoolCurrentState`] is a read model maintained by the indexer: every swap
-//! or liquidity event triggers an upsert that brings this struct in sync with
-//! what was just persisted in the append-only event tables.
-//!
-//! The domain types here are deliberately decoupled from any persistence
-//! detail (no sqlx attributes, no Postgres types). Conversions to/from the
-//! database row live in `crates/persistence/src/repositories/pool_current_state.rs`.
+//! Latest observed on-chain state per pool, upserted by the indexer after each
+//! swap or liquidity event it persists.
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
@@ -15,9 +8,8 @@ use solana_signature::Signature;
 
 use crate::domain::{EventPosition, MeteoraDammV2LiquidityEventKind, Protocol};
 
-/// Kind of the most recent event that touched a pool.
-///
-/// Mirrors the `last_event_kind` CHECK constraint in `001_baseline.sql` §4.
+/// Kind of the most recent event that touched a pool; mirrors the
+/// `last_event_kind` CHECK constraint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LastEventKind {
     Swap,
@@ -35,9 +27,7 @@ impl LastEventKind {
         }
     }
 
-    /// Parse the wire string. Returns `None` for unknown variants — the caller
-    /// is expected to surface this as a data-integrity error since the SQL
-    /// CHECK constraint forbids storing anything else.
+    /// Parse the wire string; `None` is a data-integrity error, the CHECK forbids it.
     pub fn from_wire(value: &str) -> Option<Self> {
         match value {
             "swap" => Some(LastEventKind::Swap),
@@ -54,11 +44,7 @@ impl std::fmt::Display for LastEventKind {
     }
 }
 
-/// Bridge from the liquidity-event domain enum to the projection event kind.
-///
-/// Lives here rather than on `MeteoraDammV2LiquidityEventKind` to keep the latter unaware
-/// of the projection: the projection depends on the event domain, not the
-/// other way around.
+/// Here, not beside the event kind: the projection depends on the event, not the reverse.
 impl From<MeteoraDammV2LiquidityEventKind> for LastEventKind {
     fn from(kind: MeteoraDammV2LiquidityEventKind) -> Self {
         match kind {
@@ -68,22 +54,9 @@ impl From<MeteoraDammV2LiquidityEventKind> for LastEventKind {
     }
 }
 
-/// Latest known state of a pool, materialized from the event stream.
-///
-/// Field ordering follows the SQL column ordering in `001_baseline.sql` §4,
-/// for ease of cross-reference.
-///
-/// * `reserve_a` / `reserve_b` are u64 in the pool's own `(token_a, token_b)`
-///   order — the program's designation, not a sort of the mints; on the wire
-///   they map to `BIGINT`, matching the upstream `swap_events` /
-///   `liquidity_events` hypertables.
-/// * `last_sqrt_price` is `None` until the first swap is observed
-///   (Q64.64 fixed-point as u128, stored as `NUMERIC(39, 0)`).
-///
-/// The projection carries **no liquidity L**, deliberately: cp-amm emits the
-/// pool's L on no event, so a column claiming to hold it held a position's
-/// unsigned `liquidity_delta` instead (migration 003 dropped it). A real L
-/// would have to be read off the on-chain `Pool` account.
+/// Latest known state of a pool. Reserves in the pool's own A/B order;
+/// `last_sqrt_price` is `None` until the first swap.
+/// ⚠️ No liquidity L: no cp-amm event emits the pool's L.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PoolCurrentState {
     pub pool_address: Pubkey,
@@ -110,26 +83,15 @@ pub struct PoolSideValues {
     pub value_b_usd: Option<Decimal>,
 }
 
-/// Payload describing a state change to apply via
-/// [`crate::domain::PoolCurrentStateRepository::upsert`].
-///
-/// Constructed by the indexer from the event it just persisted. Unlike
-/// [`PoolCurrentState`], this struct carries only what the event provides —
-/// a liquidity-derived upsert leaves `sqrt_price` as `None`, and the existing
-/// value is preserved by the repository.
-///
-/// See the repository contract for the merge semantics and the stale-write
-/// guard.
+/// A state change for [`crate::domain::PoolCurrentStateRepository::upsert`]: only
+/// what the event provides; a `None` `sqrt_price` keeps the stored one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PoolCurrentStateUpsert {
     pub pool_address: Pubkey,
     pub protocol: Protocol,
 
-    /// Where the source event sits in the chain. It carries the signature and
-    /// the timestamp the projection displays, **and** the `(slot,
-    /// transaction_index, event_index)` the repository orders on — the two
-    /// used to be separate fields, and ordering on the timestamp alone
-    /// rejected a third of all updates (they share a second).
+    /// Where the source event sits: the repository orders on it.
+    /// ⚠️ Never order on the timestamp alone: many updates share a second.
     pub event_position: EventPosition,
     pub event_kind: LastEventKind,
 
@@ -162,15 +124,7 @@ impl PoolCurrentStateUpsert {
     }
 
     /// Build an upsert payload from a liquidity event.
-    ///
-    /// `kind` is the domain enum; its mapping to the projection event kind
-    /// goes through the [`From<MeteoraDammV2LiquidityEventKind> for LastEventKind`] impl
-    /// defined above so add/remove sourcing stays in one place.
-    ///
-    /// The event's `liquidity_delta` is deliberately **not** carried here: it is
-    /// one position's unsigned movement, not the pool's L, and the projection
-    /// stopped pretending otherwise in migration 003. It stays where it is
-    /// meaningful — on the liquidity event row, next to its `kind`.
+    /// ⚠️ Not its `liquidity_delta`: one position's movement, not the pool's L.
     pub fn from_liquidity(
         pool_address: Pubkey,
         protocol: Protocol,
@@ -191,38 +145,16 @@ impl PoolCurrentStateUpsert {
     }
 }
 
-/// What an upsert did, and what it could not know.
-///
-/// Richer than a boolean because the ordering key is **partial**:
-/// `transaction_index` is empty on the `getTransaction` ingestion path, so two
-/// transactions landing in the same slot and touching the same pool are ranked
-/// on `event_index` alone — an ordinal that numbers the emissions of *one*
-/// transaction, so comparing it across two ranks unlike things. The state
-/// converges to the largest index, which favours a leg deep inside a routed
-/// transaction over a single-leg swap of the same block.
-///
-/// Rather than let that pass for healthy concurrency (the mistake the label
-/// `pool_current_state_stale` made for months), the repository reports when it
-/// happened and the caller counts it.
+/// What an upsert did, and what it could not know: without `transaction_index`
+/// two transactions of one slot are ranked on `event_index`, which only orders
+/// the emissions of one transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PoolCurrentStateUpsertOutcome {
-    /// `true` when the row was written (inserted or updated), `false` when the
-    /// ordering guard suppressed it.
+    /// `false` when the ordering guard suppressed the write.
     pub applied: bool,
 
-    /// The state this upsert met came from the **same slot** under a
-    /// **different signature** — the one case the reachable key cannot order.
-    ///
-    /// Reported whether the upsert applied or not, on purpose: an ambiguity
-    /// that wrongly *accepts* (overwriting newer state with older) does as
-    /// much damage as one that wrongly rejects, and a counter that only saw
-    /// rejections would be a lower bound dressed up as a measurement.
-    ///
-    /// It is a lower bound anyway, for a second reason the implementation
-    /// documents: under concurrent writers the report and the guard do not
-    /// read the same row version, and the miss goes in the direction that
-    /// flatters the assumption. Expect it to be large on hot pools — the
-    /// signal is its ratio to applied upserts, not its absolute value.
+    /// The stored state came from the **same slot**, another signature: the case
+    /// the key cannot order. Reported applied or not; a lower bound under concurrency.
     pub same_slot_ambiguity: bool,
 }
 

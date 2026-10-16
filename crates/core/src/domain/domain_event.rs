@@ -5,17 +5,8 @@ use solana_signature::Signature;
 use crate::domain::Protocol;
 use crate::domain::meteora::MeteoraDammV2Event;
 
-/// Sum type of every domain-level event Yog-Sothoth can extract from a
-/// transaction, grouped by protocol.
-///
-/// First level: the protocol that emitted the event. Second level (in the
-/// inner enums like [`MeteoraDammV2Event`]): the specific event kind for
-/// that protocol. Per-protocol schemas (and persistence tables) diverge
-/// enough that flattening would force NULLs or generic JSON; the two-level
-/// shape keeps each event kind strongly typed against its own protocol.
-///
-/// New protocols (DLMM, Raydium CLMM, Orca Whirlpool, …) will arrive as
-/// additional variants at this level.
+/// Every domain event extracted from a transaction: the outer variant is the
+/// protocol, the inner enum its event kind, each typed against its own table.
 #[derive(Debug, Clone)]
 pub enum DomainEvent {
     MeteoraDammV2(MeteoraDammV2Event),
@@ -43,16 +34,14 @@ impl DomainEvent {
         }
     }
 
-    /// Protocol that emitted the event. Determined by the outer variant.
+    /// Protocol that emitted the event.
     pub fn protocol(&self) -> Protocol {
         match self {
             Self::MeteoraDammV2(_) => Protocol::MeteoraDammV2,
         }
     }
 
-    /// Stable kind label suitable for metrics and structured logs
-    /// ("swap" | "liquidity" | "claim_position_fee" | "claim_reward").
-    /// Independent of protocol — the protocol is a separate label.
+    /// Stable kind label for metrics and logs; the protocol is a separate label.
     pub fn kind(&self) -> &'static str {
         match self {
             Self::MeteoraDammV2(e) => e.kind(),

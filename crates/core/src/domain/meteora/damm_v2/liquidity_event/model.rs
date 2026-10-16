@@ -49,23 +49,14 @@ impl std::str::FromStr for MeteoraDammV2LiquidityEventKind {
     }
 }
 
-/// Raw liquidity-change event extracted from an on-chain Anchor event.
-///
-/// Covers both add-liquidity and remove-liquidity operations, discriminated
-/// by [`Self::liquidity_event_kind`].
-///
-/// # Conventions
-///
-/// `amount_a` / `amount_b` and `reserve_a_after` / `reserve_b_after` are in
-/// the pool's own `(token_a, token_b)` order — see
-/// [`crate::domain::MeteoraDammV2SwapEvent`] for what that order guarantees,
-/// and for why it is not a sort of the mints.
+/// A liquidity add or remove; amounts and reserves (after it) in the pool's own
+/// A/B order.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MeteoraDammV2LiquidityEvent {
     pub pool_address: Pubkey,
     pub signature: Signature,
     pub timestamp: DateTime<Utc>,
-    /// Position in the chain — see [`crate::domain::EventPosition`].
+    /// Position in the chain, see [`crate::domain::EventPosition`].
     pub slot: u64,
     pub transaction_index: Option<u32>,
     pub event_index: u16,
@@ -79,18 +70,8 @@ pub struct MeteoraDammV2LiquidityEvent {
     pub owner: Pubkey,
 }
 
-/// A liquidity event plus its **read-time derived** USD value.
-///
-/// `value_usd` is the trade-time valuation of both legs —
-/// `(amount_a / 10^decA) * price_a + (amount_b / 10^decB) * price_b`, each leg
-/// priced at the most recent `token_prices` row as-of the event timestamp (the
-/// price *when it happened*, not the current price). `None` when the value
-/// cannot be computed: an event older than the pool's price coverage, or a pool
-/// whose mints / token decimals are not resolved yet.
-///
-/// This is a read model, kept separate from the raw [`MeteoraDammV2LiquidityEvent`]:
-/// the indexer persists the raw event with no USD, and domain events stay
-/// infra-neutral. The valuation belongs only to the read path.
+/// A liquidity event and its USD value at event time, derived on read; `None`
+/// when a price or a token's decimals are unknown.
 #[derive(Debug, Clone)]
 pub struct MeteoraDammV2LiquidityEventValued {
     pub event: MeteoraDammV2LiquidityEvent,

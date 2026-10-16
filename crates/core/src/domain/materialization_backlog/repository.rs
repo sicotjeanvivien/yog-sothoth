@@ -1,9 +1,4 @@
-//! Materialisation backlog repository trait.
-//!
-//! Reads, for every continuous aggregate, where its materialisation ends and
-//! the oldest raw row still waiting past it. It belongs to no CRUD repository —
-//! it spans all the aggregates at once — so it stands on its own, like
-//! [`EventFreshnessRepository`](crate::domain::EventFreshnessRepository).
+//! What every continuous aggregate still has to materialise.
 
 use async_trait::async_trait;
 

@@ -8,45 +8,26 @@ use crate::domain::{InsertOutcome, MeteoraDammV2SwapEvent};
 use crate::tools::Page;
 use crate::{PageDirection, PagePosition};
 
-/// Cursor identifying a position in the canonical swap-event ordering
-/// (`timestamp DESC`, `signature ASC` as tiebreaker).
-///
-/// A cursor points to the *last item of the current page*; the next
-/// page contains items strictly after this position in the ordering.
+/// The last item of a page in the swap-event ordering.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MeteoraDammV2SwapEventCursor {
     pub timestamp: DateTime<Utc>,
     pub signature: Signature,
-    /// Third key of the ordering, and the reason it is a total one: since
-    /// migration 041 a routed transaction stores one row per hop, all sharing
-    /// `timestamp` **and** `signature`. Without it a page boundary landing
-    /// between two hops drops the other one — silently, which is how the row
-    /// it recovers went missing in the first place.
+    /// ⚠️ Third key of the ordering: the hops of a routed transaction share
+    /// `timestamp` and `signature`, and a page boundary between them drops one.
     pub event_index: u16,
 }
 
-/// Persistence contract for swap events — the write side, owned by the
-/// indexer's persistor. The read side lives in
-/// [`MeteoraDammV2SwapEventFeed`].
+/// Write side of swap events, the indexer's lens.
 #[async_trait]
 pub trait MeteoraDammV2SwapEventRepository: Send + Sync {
     async fn insert(&self, event: &MeteoraDammV2SwapEvent) -> RepositoryResult<InsertOutcome>;
 }
 
-/// The per-pool swap-event feed — the api's lens: a cursor-paginated,
-/// time-ordered listing, same shape as the signal feed (`SignalFeed`).
-///
-/// Kept separate from [`MeteoraDammV2SwapEventRepository`] (write side,
-/// indexer) so each binary depends on exactly the methods it uses.
+/// The per-pool swap-event feed, the api's lens.
 #[async_trait]
 pub trait MeteoraDammV2SwapEventFeed: Send + Sync {
-    /// Paginate swap events for a given pool, ordered by
-    /// `timestamp DESC`, `signature ASC` as tiebreaker.
-    ///
-    /// `cursor` is `None` for the first page; for subsequent pages,
-    /// pass the `next_cursor` returned by the previous call. `limit`
-    /// is the maximum number of items to return; implementations
-    /// may cap it to an upper bound.
+    /// A page of the pool's events, `(timestamp DESC, signature ASC, event_index ASC)`.
     async fn find_by_pool_paginated(
         &self,
         pool_address: &Pubkey,

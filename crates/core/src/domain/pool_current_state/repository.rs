@@ -1,8 +1,4 @@
-//! Repository contract for the [`PoolCurrentState`] projection.
-//!
-//! The implementation lives in `crates/indexer/src/repositories/`. Keeping the
-//! trait in `core` lets `api` consume the projection without depending on
-//! sqlx/Postgres.
+//! Repository contracts of the [`PoolCurrentState`] projection.
 
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
@@ -14,53 +10,23 @@ use crate::{
     },
 };
 
-/// Write access to the pool-current-state projection — the indexer's lens.
-///
-/// The read side lives in [`PoolCurrentStateLookup`].
-///
-/// # Contract
-///
-/// * [`upsert`](Self::upsert) is **out-of-order safe**: the implementation
-///   MUST ignore an upsert whose position is not strictly after the one
-///   already stored, comparing `(slot, transaction_index, event_index)` as a
-///   tuple. This makes replay and out-of-order processing safe without
-///   requiring the caller to coordinate ordering.
-///
-///   It MUST NOT order on `event_at`: that timestamp comes from `blockTime`
-///   and has second granularity, which 56 % of swaps share with another swap
-///   of the same pool. Ordering on it rejected a third of all updates.
-///
-/// * [`upsert`](Self::upsert) MUST report a `same_slot_ambiguity` when the
-///   state it met came from the same slot under a different signature — the
-///   residual case the reachable key cannot rank (see
-///   [`PoolCurrentStateUpsertOutcome`]).
-///
-/// * [`upsert`](Self::upsert) MUST preserve `last_sqrt_price` / `last_swap_at`
-///   when the incoming payload is a liquidity event (i.e. `sqrt_price`
-///   is `None`). That pair is the only kind-specific state the projection
-///   still carries: the liquidity side used to hold a `liquidity` /
-///   `last_liquidity_at` pair, dropped in migration 003 because the value was
-///   a position's delta, not the pool's L.
-///
-/// * [`upsert`](Self::upsert) MUST refresh `updated_at` to `NOW()` on every
-///   successful write (whether or not the stale-write guard applied).
+/// Write access to the projection, the indexer's lens.
+/// ⚠️ `upsert` ignores a position not strictly after the stored one, by
+/// `(slot, transaction_index, event_index)`: never by `event_at`, a shared second.
 #[async_trait]
 pub trait PoolCurrentStateRepository: Send + Sync {
-    /// Apply an event-derived state update to the projection.
+    /// Apply an event-derived update; a liquidity payload keeps `last_sqrt_price`
+    /// and `last_swap_at`, and a same-slot ambiguity is reported.
     async fn upsert(
         &self,
         upsert: &PoolCurrentStateUpsert,
     ) -> RepositoryResult<PoolCurrentStateUpsertOutcome>;
 }
 
-/// Consultation of the pool-current-state projection — the api's lens.
-///
-/// Kept separate from [`PoolCurrentStateRepository`] (write side, indexer)
-/// so each binary depends on exactly the methods it uses.
+/// Reading the projection, the api's lens.
 #[async_trait]
 pub trait PoolCurrentStateLookup: Send + Sync {
-    /// Fetch the current state of a single pool, or `Ok(None)` if no event
-    /// has been observed for it yet.
+    /// The current state of a pool, `None` before its first event.
     async fn get_by_address(
         &self,
         pool_address: &str,
@@ -70,11 +36,7 @@ pub trait PoolCurrentStateLookup: Send + Sync {
     /// has no state yet or a token's metadata is unresolved.
     async fn side_values_usd(&self, pool_address: &Pubkey) -> RepositoryResult<PoolSideValues>;
 
-    /// List pools sorted by most-recent activity first.
-    ///
-    /// `limit` is the page size and MUST be > 0. `before_last_event_at`, when
-    /// set, restricts to rows strictly older than the given instant — used as
-    /// the cursor in keyset pagination.
+    /// Pools by most recent activity; `before_last_event_at` is the keyset cursor.
     async fn list_most_recent(
         &self,
         limit: u32,

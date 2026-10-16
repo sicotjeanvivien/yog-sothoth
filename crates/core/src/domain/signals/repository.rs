@@ -1,9 +1,4 @@
-//! Signal repository trait.
-//!
-//! Persistence contract for the `signals` hypertable. The engine calls
-//! it after a detector tick to persist the returned signals; detectors
-//! themselves never write. The concrete `Pg` implementation lives in
-//! `yog-persistence`.
+//! Persistence contracts of the `signals` hypertable; detectors never write.
 
 use std::collections::HashMap;
 
@@ -17,11 +12,7 @@ use crate::{
     domain::{Severity, Signal, SignalRecord},
 };
 
-/// Cursor identifying a position in the canonical signal ordering
-/// (`triggered_at DESC`, `id DESC` as tiebreaker — newest first).
-///
-/// A cursor points to the *last item of the current page*; the next
-/// page contains items strictly after this position in the ordering.
+/// The last item of a page in the feed ordering, `(triggered_at, id)` descending.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignalCursor {
     pub triggered_at: DateTime<Utc>,
@@ -31,17 +22,11 @@ pub struct SignalCursor {
 /// Read/write contract for emitted signals.
 #[async_trait]
 pub trait SignalRepository: Send + Sync {
-    /// Persist a batch of freshly-detected signals in one round-trip.
-    /// `signals` is append-only — each is a new row keyed by
-    /// `(id, triggered_at)`. Called by the engine per tick with whatever
-    /// a detector returned; an empty slice is a no-op.
+    /// Append a batch of signals in one round-trip; an empty slice is a no-op.
     async fn insert_batch(&self, signals: &[Signal]) -> RepositoryResult<()>;
 
-    /// The latest severity emitted per pool by `detector` since `since` —
-    /// the current suppression state for the engine's cooldown / escalation
-    /// dedup. Pools with no signal from this detector in the window are
-    /// absent from the map. Read under the SELECT already granted to the
-    /// yog_signals role.
+    /// The latest severity per pool emitted by `detector` since `since`: the
+    /// engine's suppression state. Pools without a signal are absent.
     async fn latest_severity_by_pool(
         &self,
         detector: &str,
@@ -49,26 +34,10 @@ pub trait SignalRepository: Send + Sync {
     ) -> RepositoryResult<HashMap<Pubkey, Severity>>;
 }
 
-/// Read contract for the signal feed (api process, RO role).
-///
-/// Kept separate from [`SignalRepository`] — the engine's contract —
-/// even though both are implemented by the same `Pg` struct: the two
-/// consumers share no method, so each depends only on what it uses and
-/// the api mock doesn't have to carry the engine's write/dedup methods
-/// (same reasoning as `PoolAccountResolver` vs `PoolRepository`).
+/// Read contract for the signal feed, the api's lens.
 #[async_trait]
 pub trait SignalFeed: Send + Sync {
-    /// Paginate the signal feed, ordered by `triggered_at DESC`,
-    /// `id DESC` as tiebreaker (newest first).
-    ///
-    /// `severity`, when set, restricts the feed to that exact severity.
-    /// `pool`, when set, restricts the feed to the signals emitted for
-    /// that pool (the pool-detail "Alerts" tab). The two filters
-    /// combine with AND.
-    /// `cursor` is `None` for the first page; for subsequent pages, pass
-    /// the cursor returned by the previous call. `limit` is the maximum
-    /// number of items to return; implementations may cap it to an upper
-    /// bound.
+    /// Paginate the feed, newest first; `severity` and `pool` filters combine with AND.
     async fn list(
         &self,
         severity: Option<Severity>,
@@ -79,34 +48,20 @@ pub trait SignalFeed: Send + Sync {
         limit: i64,
     ) -> RepositoryResult<Page<SignalRecord>>;
 
-    /// The current tip of the feed — the maximum `(triggered_at, id)` —
-    /// or `None` when no signal has ever been emitted. Anchors a
-    /// streaming consumer's watermark so it only sees signals born
-    /// after it started (history is the paginated [`list`]'s job).
-    ///
-    /// [`list`]: SignalFeed::list
+    /// The tip of the feed, `None` before any signal: a streaming consumer's
+    /// starting watermark.
     async fn latest_cursor(&self) -> RepositoryResult<Option<SignalCursor>>;
 
-    /// Every signal strictly after `after` in the feed ordering,
-    /// oldest first (chronological delivery), capped at `limit`. The
-    /// polling counterpart of [`list`]: no pagination envelope, just
-    /// the delta since a watermark. A result of exactly `limit` rows
-    /// may mean more are pending — the caller's next poll drains them.
-    ///
-    /// [`list`]: SignalFeed::list
+    /// Signals strictly after `after`, oldest first, capped at `limit`.
+    /// ⚠️ Exactly `limit` rows may mean more are pending: the next poll drains them.
     async fn newer_than(
         &self,
         after: &SignalCursor,
         limit: i64,
     ) -> RepositoryResult<Vec<SignalRecord>>;
 
-    /// The recent signals of each pool in `pools` — the pools-list
-    /// signal indicator, one batched round-trip for a whole page.
-    ///
-    /// For each address, the signals emitted strictly after `since`,
-    /// newest first, capped at `per_pool_limit` *per pool*. Pools with
-    /// no signal in the window are absent from the map, so an empty
-    /// map means "nothing to indicate" — never an error.
+    /// Per pool, the signals after `since`, newest first, capped at
+    /// `per_pool_limit` each; pools without one are absent.
     async fn recent_by_pools(
         &self,
         pools: &[Pubkey],

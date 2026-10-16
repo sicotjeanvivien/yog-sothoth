@@ -11,7 +11,6 @@ use solana_pubkey::Pubkey;
 use crate::domain::{PRICE_STORAGE_SCALE, PriceProvider, TokenPrice};
 
 /// How old the latest observation may be and still count as current.
-///
 /// ⚠️ A mirror of `yog_price_max_age_latest()` (migration 005): a migration
 /// that redefines it must revisit this constant — nothing enforces that.
 pub const PRICE_MAX_AGE_LATEST: Duration = Duration::minutes(15);
@@ -41,12 +40,8 @@ struct KeptPrice {
 
 impl KeptPrices {
     /// Build the rule for a worker ticking every `tick_interval`.
-    ///
-    /// ⚠️ The floor is decided one tick early, or the forced row would land at
-    /// the first tick *past* it. Above a 300 s cadence nothing is suppressed,
-    /// silently — [`Self::rewrites_at_most_every`] says so at startup. A tick
-    /// that overruns its cadence widens the spacing; the margin up to
-    /// [`PRICE_MAX_AGE_LATEST`] absorbs a cycle of up to 450 s.
+    /// ⚠️ The floor is decided one tick early, or the forced row lands *past* it.
+    /// Above half the floor nothing is suppressed: [`Self::rewrites_at_most_every`] says so.
     pub fn new(tick_interval: core::time::Duration) -> Self {
         let tick = Duration::from_std(tick_interval).unwrap_or(PRICE_SERIES_MAX_GAP);
 
@@ -67,12 +62,8 @@ impl KeptPrices {
     }
 
     /// Whether this observation earns a row: a new mint, a moved price, another
-    /// provenance, or a last row at the floor.
-    ///
-    /// ⚠️ Both sides are rounded at [`PRICE_STORAGE_SCALE`] first: Postgres
-    /// rounds on write and Jupiter sends more decimals, so raw values would
-    /// almost never compare equal. `confidence` is left out: an `f32` that
-    /// wobbles would make every tick look new.
+    /// provenance, or a last row at the floor. `confidence` is ignored.
+    /// ⚠️ Compared at [`PRICE_STORAGE_SCALE`]: raw values almost never compare equal.
     pub fn worth_keeping(&self, candidate: &TokenPrice) -> bool {
         let Some(last) = self.last.get(&candidate.mint) else {
             return true;
@@ -84,9 +75,7 @@ impl KeptPrices {
     }
 
     /// Remember observations that have been written.
-    ///
-    /// ⚠️ After a successful insert only: remembering a failed batch would hold
-    /// the real price back until the next floor.
+    /// ⚠️ After a successful insert only, or a failed batch holds the price back.
     pub fn record(&mut self, kept: &[TokenPrice]) {
         for price in kept {
             self.last.insert(
