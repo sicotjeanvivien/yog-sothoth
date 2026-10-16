@@ -13,10 +13,8 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
-/// Fatal dispatcher errors (configuration only).
-///
-/// Data errors (malformed signature, filter drop) are not errors:
-/// they are recorded as metrics and the pipeline keeps going.
+/// Runs raw log events through the filter chain and emits the signatures that pass; per-event
+/// outcomes are metrics, not errors.
 pub(crate) struct SignatureDispatcher {
     filters: Vec<Box<dyn LogFilter>>,
 }
@@ -40,21 +38,9 @@ impl SignatureDispatcher {
         Ok(Self { filters })
     }
 
-    /// Main loop: consumes raw events until shutdown
-    /// or upstream channel closure.
-    ///
-    /// Takes `&self` rather than `self`: it only ever reads its filter chain,
-    /// and the source that owns it holds it in an `Arc` for the life of the
-    /// process rather than handing it to one task.
-    ///
-    /// ⚠️ **Returns nothing, because it cannot fail.** [`DispatcherError`] is a
-    /// *construction* error — the empty filter chain — raised by
-    /// [`SignatureDispatcher::new_with_filters`] before a single event flows.
-    /// Once built, every per-event outcome is a metric: a signature that will
-    /// not parse is counted and dropped, a saturated consumer is counted and
-    /// dropped. Returning a `Result` here promised a runtime failure that has
-    /// no way of happening, and the promise was visible: the `SourceError`
-    /// variant carrying it could not be constructed by any path.
+    /// Consume raw events until shutdown or upstream closure.
+    /// ⚠️ Returns nothing: [`DispatcherError`] is a construction error, and once built every
+    /// per-event outcome is a metric.
     pub(crate) async fn run(
         &self,
         mut rx: mpsc::Receiver<RawLogEvent>,
@@ -124,8 +110,7 @@ impl SignatureDispatcher {
             signature,
         };
 
-        // `try_send`: if the Indexer is saturated, drop rather than block
-        // the whole pipeline. Tracked by the `downstream_saturated` metric.
+        // `try_send`: a saturated consumer costs a dropped signature, counted, not a blocked pipeline.
         match tx.try_send(qualified) {
             Ok(()) => {
                 DispatcherMetrics::record_emitted(&event.protocol);
@@ -139,16 +124,11 @@ impl SignatureDispatcher {
                 DispatcherMetrics::record_downstream_saturated(&dropped.protocol);
             }
             Err(mpsc::error::TrySendError::Closed(_)) => {
-                // Downstream closed: keep going, shutdown will handle the
-                // clean exit. No need to log on every event.
+                // Downstream closed: the shutdown handles the exit, no log per event.
             }
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 #[path = "tests/dispatcher_tests.rs"]

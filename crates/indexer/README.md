@@ -484,8 +484,8 @@ histograms.
   `yog_indexer_fetch_not_found_total`,
   `yog_indexer_fetch_dropped_total{reason}`. `reason="adapt"` on the failures is
   a response that arrived and could not be turned into an
-  `OnChainTransaction` — **every** refusal of `from_rpc`, whose `# Errors`
-  doc-comment holds the list and is the one place it is written; restating it
+  `OnChainTransaction` — **every** refusal of `from_rpc`, whose doc-comment
+  holds the list and is the one place it is written; restating it
   here is how the two drift. The pair worth knowing about from outside is a
   response carrying no `meta` or no `innerInstructions`: that says the source
   did not capture them, which is not the same as there being none, and a genuine

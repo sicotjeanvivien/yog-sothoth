@@ -1,18 +1,11 @@
 use solana_pubkey::Pubkey;
 use yog_core::domain::Protocol;
 
-/// Lifecycle events emitted by a `SubscriptionWorker` towards the listener.
-///
-/// The events are intentionally informational. The listener consumes them to
-/// track worker health, log activity, and decide when to escalate to the
-/// Daemon (when no worker is alive anymore). Workers handle their own
-/// reconnection strategy — the listener does not reshape their behaviour.
-///
-/// Broadcast-friendly: cheap to clone, small payloads, no references.
+/// Lifecycle events a `SubscriptionWorker` broadcasts to the listener: informational only, the
+/// worker owns its reconnection.
 #[derive(Debug, Clone)]
 pub(crate) enum SubscriptionEvent {
-    /// The worker has an active subscription streaming logs.
-    /// Emitted on first successful subscribe and on every successful resubscribe.
+    /// The worker is streaming logs, after every successful subscribe.
     Subscribed { protocol: Protocol, mention: Pubkey },
 
     /// The subscription stream closed (provider-side idle timeout, silent
@@ -23,9 +16,7 @@ pub(crate) enum SubscriptionEvent {
         attempt: u32,
     },
 
-    /// A subscribe attempt failed. Purely informational — does not signal
-    /// giving up. The worker will continue retrying with backoff until its
-    /// own budget is exhausted.
+    /// A subscribe attempt failed; the worker keeps retrying until its budget is spent.
     RetryFailed {
         protocol: Protocol,
         mention: Pubkey,
