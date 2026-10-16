@@ -81,7 +81,7 @@ fn account_includes(watched: &HashSet<(Protocol, Pubkey)>) -> Vec<(Protocol, Vec
     includes
 }
 
-/// The protocol an update belongs to, from the filters it matched; `None` for block-meta.
+/// The protocol an update belongs to, from the filters it matched; `None` for a block-meta or any other name.
 /// ⚠️ An update touching two protocols' addresses matches both filters, and the first one wins.
 pub(crate) fn protocol_of(filters: &[String]) -> Option<Protocol> {
     filters.iter().find_map(|name| name.parse().ok())

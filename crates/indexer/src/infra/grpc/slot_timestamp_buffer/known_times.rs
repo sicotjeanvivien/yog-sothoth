@@ -41,7 +41,6 @@ impl KnownTimes {
     }
 
     /// The slot's instant will never be known.
-    /// The slot's instant will never be known.
     /// ⚠️ Never over an instant already found: a duplicate empty block-meta would throw it away.
     /// `GivenUp` → `At` is a real correction, which [`Self::resolve`] allows.
     pub(super) fn give_up(&mut self, slot: u64) {

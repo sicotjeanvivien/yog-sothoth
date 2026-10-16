@@ -13,7 +13,7 @@ use yog_core::domain::Protocol;
 
 use super::subscription::BLOCK_META_FILTER;
 
-/// The one protocol whose filter name an update can carry and still be routed.
+/// The one protocol with a working extractor.
 pub(super) const PROTOCOL: Protocol = Protocol::MeteoraDammV2;
 
 pub(super) fn at(secs: i64) -> DateTime<Utc> {
@@ -55,8 +55,7 @@ pub(super) fn transaction_update_with_signature(
 /// ⚠️ `subscription_tests` keeps its own literal: `protocol_of`'s contract is any unknown name.
 pub(super) const UNROUTABLE_FILTER: &str = "a_filter_no_protocol_claims";
 
-/// A transaction the pipeline cannot route: delivery with nothing to resume from, the premise of
-/// the listener's keep-the-mark rule.
+/// A transaction the pipeline cannot route: delivery with nothing to resume from.
 /// ⚠️ A conformant server never sends it (`build_request` names filters `Protocol::as_str`): it is
 /// non-conformant on purpose, not evidence of frequency.
 pub(super) fn unroutable_transaction(slot: u64) -> SubscribeUpdate {
@@ -64,7 +63,7 @@ pub(super) fn unroutable_transaction(slot: u64) -> SubscribeUpdate {
 }
 
 /// A transaction update wrapped in the filters it matched.
-/// ⚠️ Anything but [`PROTOCOL`]`.as_str()` makes it unroutable, dropped before the buffer.
+/// ⚠️ A name that is no protocol makes it unroutable, dropped before the buffer.
 pub(super) fn transaction(slot: u64, filters: &[&str]) -> SubscribeUpdate {
     update(filters, UpdateOneof::Transaction(transaction_update(slot)))
 }

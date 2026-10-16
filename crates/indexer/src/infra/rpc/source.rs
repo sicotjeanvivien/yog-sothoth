@@ -157,7 +157,6 @@ fn spawn_fetch(
     tokio::spawn(async move { worker.run(sig_rx, downstream, shutdown).await })
 }
 
-/// Wait for the stages that have not ended yet, and keep the first failure.
 /// Wait for the stages that have not ended yet; the first failure wins, `first` being what the
 /// stage named by `ended` reported.
 async fn drain_stages(

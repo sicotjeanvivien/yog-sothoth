@@ -32,8 +32,8 @@ pub(crate) fn from_rpc(
         position: TransactionPosition {
             signature,
             timestamp: extract_timestamp(tx)?,
-            // `transaction_index` is optional, and absent on the provider in use; see `EventPosition`.
             slot: tx.slot,
+            // Optional, and absent on the provider in use; see `EventPosition`.
             transaction_index: tx.transaction_index,
         },
         inner_instructions: extract_inner_instructions(tx, &signature)?,

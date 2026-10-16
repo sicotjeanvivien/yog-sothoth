@@ -27,7 +27,7 @@ fn every_couple_of_the_two_axes_loads() {
     let _env = ENV.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 
     // SAFETY: `set_var` is unsound while another thread reads the environment; the one reader,
-    // the oracle's `UPDATE_GOLDEN`, races a handful of start-up instructions, never observed.
+    // the oracle's `UPDATE_GOLDEN`, races a handful of start-up instructions.
     unsafe {
         env::set_var("DATABASE_URL_INDEXER", "postgresql://u:p@localhost:5433/db");
         env::set_var("INGEST_STREAM_URL", "wss://stream.invalid/?k={key}");

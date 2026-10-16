@@ -53,7 +53,7 @@ impl WatchedPoolService {
             count += 1;
         }
 
-        // ⚠️ Every row skipped is a dead end: the listener will refuse with `NoSubscriptionTargets`,
+        // ⚠️ All rows skipped is a dead end: the listener will refuse with `NoSubscriptionTargets`,
         // knowing nothing of the skip; the `error!` names the cause while it is in hand.
         if count == 0 && skipped > 0 {
             error!(

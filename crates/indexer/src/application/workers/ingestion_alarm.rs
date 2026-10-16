@@ -1,9 +1,7 @@
 //! The ingestion alarm: tells a Healthchecks.io check when this process stops writing, which
 //! `restart: unless-stopped` cannot see. A stale ingestion pings `/fail`, a stopped daemon is silence.
-//! ⚠️ It judges what was *written* ([`FreshnessStatus::from_last_event`], the dashboard's rule),
+//! ⚠️ It judges what was *written*, by the dashboard's [`from_last_event`](yog_core::domain::FreshnessStatus::from_last_event),
 //! not what the process believes: a failing persist is stepped over while counts keep climbing.
-//!
-//! [`FreshnessStatus::from_last_event`]: yog_core::domain::FreshnessStatus::from_last_event
 
 use std::convert::Infallible;
 use std::sync::Arc;

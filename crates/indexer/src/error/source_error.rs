@@ -2,10 +2,8 @@ use thiserror::Error;
 
 use crate::error::{GrpcListenerError, RpcListenerError};
 
-/// What can stop a [`TransactionSource`]: loop-level failures only, each source mapping its own
-/// typed errors here at the boundary.
-///
-/// [`TransactionSource`]: crate::application::source::TransactionSource
+/// What can stop a [`TransactionSource`](crate::application::source::TransactionSource):
+/// loop-level failures only, each source mapping its own typed errors here at the boundary.
 #[derive(Debug, Error)]
 pub(crate) enum SourceError {
     /// The JSON-RPC fleet gave up, or could not be built.

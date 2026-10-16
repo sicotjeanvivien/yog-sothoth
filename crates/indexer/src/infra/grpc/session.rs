@@ -65,8 +65,7 @@ impl StreamSession {
         }
     }
 
-    /// Whether this session received a transaction or a block-meta; one that received neither
-    /// counts against the listener's retry budget instead of resetting it.
+    /// Whether a transaction or a block-meta came; one with neither is charged to the retry budget.
     /// ⚠️ A ping does not count: servers ping right after `subscribe`, so a stream that pings and
     /// closes would otherwise reset the budget and be redialled once a second for ever.
     pub(super) fn received_data(&self) -> bool {

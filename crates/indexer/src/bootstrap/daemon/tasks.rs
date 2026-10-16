@@ -26,8 +26,7 @@ pub(super) fn spawn_source_task(
 /// [`NetworkStatusReporter`]'s tick. `WatchedPoolService` runs once, before the worker.
 const CONNECTIONS_RESERVED: u32 = 1;
 
-/// How many transactions may be persisted concurrently: the opened pool minus what is reserved.
-/// Refuses a pool too small to reserve from: clamping would hand its only connection to a task.
+/// The opened pool minus what is reserved; refuses a pool too small to reserve from.
 /// ⚠️ Sound only while an index task issues one statement at a time: a `tokio::join!` of two
 /// repository calls in a sub-persistor would double it and starve the pool.
 pub(super) fn index_concurrency(max_connections: u32) -> anyhow::Result<usize> {

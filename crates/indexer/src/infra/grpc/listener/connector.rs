@@ -206,8 +206,6 @@ impl Connector {
     }
 
     /// Send the subscription and wait for the server to answer it.
-    ///
-    /// Send the subscription and wait for the server to answer it.
     /// ⚠️ Bounded by the stall timeout, since a server may never send headers, and interruptible.
     async fn subscribe(
         &self,

@@ -29,10 +29,8 @@ pub(crate) trait TransactionSource: Send + Sync {
     /// buy a firehose to discard.
     async fn watch_protocol(&self, protocol: Protocol);
 
-    /// Subscribe to one pool, before `run`, once per active `watched_pools` row
-    /// ([`WatchedPoolService::restore_subscriptions`]); under `INGEST_SCOPE=pools` only.
-    ///
-    /// [`WatchedPoolService::restore_subscriptions`]: crate::application::services::WatchedPoolService::restore_subscriptions
+    /// Subscribe to one pool, before `run`, once per active `watched_pools` row, from
+    /// [`restore_subscriptions`](crate::application::services::WatchedPoolService::restore_subscriptions).
     async fn watch_pool(&self, protocol: Protocol, pool_address: Pubkey);
 
     /// Deliver transactions until shutdown, or until an unrecoverable failure.

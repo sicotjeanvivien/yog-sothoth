@@ -152,7 +152,7 @@ impl Daemon {
             spawn_network_status_reporter_task(self.network_status_reporter, shutdown.clone());
         let mut alarm_task = spawn_ingestion_alarm_task(self.ingestion_alarm, shutdown.clone());
 
-        // ⚠️ The cancellation arm carries no verdict: the source cancels the token before returning,
+        // ⚠️ The cancellation arm carries no verdict: the RPC source cancels the token before returning,
         // so its `AllWorkersGaveUp` may come later, through `Stop`, which collects the verdict.
         let (ended, first) = tokio::select! {
             result = &mut source_task => (Some(SOURCE), handle_task_result(result, SOURCE)),

@@ -81,9 +81,8 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 
 // ── the retry rules, against a scripted server ──────────────────────
 //
-// ⚠️ Each rule has one owning test, which names it as its mutation; a test needing a rule it
-// does not own asserts a prefix of what it observed. One entanglement stays: the tests of a mark
-// given up or kept need one first, so breaking the errored stream's mark reddens four tests.
+// ⚠️ Each rule has one owning test, which names it as its mutation. One entanglement stays: a mark
+// given up or kept needs one first, so breaking the errored stream's mark reddens four tests.
 
 use tokio::{net::TcpListener, time::timeout};
 use tonic::Status;
@@ -407,8 +406,7 @@ async fn an_attempt_with_nothing_to_resume_from_keeps_the_mark_we_hold() {
     );
 }
 
-/// ⚠️ The slot may be past retention: the next attempt starts live, decided on what the stream
-/// produced, never on error text.
+/// ⚠️ The slot may be past retention: the next attempt starts live, never decided on error text.
 /// Mutation this is written against: `next_resume_from`'s `Refused` arm returning `held`; a prefix,
 /// since a second attempt needs another test's budget rule.
 #[tokio::test]

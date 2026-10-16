@@ -12,8 +12,7 @@ use thiserror::Error;
 use tokio_retry::{RetryIf, strategy::FixedInterval};
 use yog_bootstrap::SecretUrl;
 
-/// The highest transaction version `getTransaction` is told this crate reads; above it the RPC
-/// refuses with `-32015`, and the transaction is lost. Version 1 carries no lookup tables.
+/// The highest transaction version `getTransaction` is told this crate reads; above, `-32015`, lost.
 /// ⚠️ Not a setting: it moves only with a mainnet fixture of the version it names, which
 /// `the_declared_ceiling_is_the_highest_fixture_version` holds equal; hence no environment variable.
 pub(crate) const MAX_SUPPORTED_TRANSACTION_VERSION: u8 = 1;

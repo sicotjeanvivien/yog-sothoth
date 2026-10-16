@@ -16,7 +16,7 @@ use crate::{
 
 /// Maximum number of `getTransaction` calls in flight.
 /// ⚠️ Sized against the RPC quota alone; a permit covers the fetch, not the persist, so a slow
-/// database no longer slows the fetch: it fills the channel instead.
+/// database does not slow the fetch: it fills the channel instead.
 const MAX_CONCURRENT_FETCHES: usize = 15;
 
 /// Fetches transactions for qualified signatures, with bounded concurrency.
