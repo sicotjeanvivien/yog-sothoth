@@ -1,19 +1,6 @@
-//! Shared test harness for asserting on the metrics a detector or a worker
-//! emits.
-//!
-//! Lives here rather than being copy-pasted per detector test: the snapshot
-//! recipe carries two traps that are silent when got wrong, and one copy of
-//! each explanation is one copy to keep true.
-//!
-//!   * `with_local_recorder` installs the recorder on the **current thread**
-//!     for the duration of a closure, so the future has to be driven *inside*
-//!     it — hence the current-thread runtime rather than `#[tokio::test]`;
-//!   * `Snapshotter::snapshot` is **destructive** for counters (`swap(0)`), so
-//!     a second call returns zeros and would "prove" a metric that never fired.
-//!     Take one snapshot and query it repeatedly.
-//!
-//! Same recipe as `yog-indexer`'s persistor test and `yog-context`'s
-//! price-worker test.
+//! Shared test harness for the metrics a detector or a worker emits.
+//! ⚠️ `with_local_recorder` binds the current thread, so the future runs inside it on a
+//! current-thread runtime; `Snapshotter::snapshot` swaps counters to 0, so take one and query it.
 
 use std::future::Future;
 
@@ -45,11 +32,8 @@ where
     snapshotter.snapshot().into_vec()
 }
 
-/// The counter value for `name` carrying every label in `labels`.
-///
-/// `None` means the counter was never touched — which is the assertion that
-/// matters for a guard that must NOT count (a pool below a materiality floor
-/// was seen, not missed).
+/// The counter value for `name` carrying every label in `labels`; `None` if never touched, the
+/// assertion for a guard that must not count.
 pub(crate) fn counter(snapshot: &Snapshot, name: &str, labels: &[(&str, &str)]) -> Option<u64> {
     match find(snapshot, name, labels)? {
         DebugValue::Counter(n) => Some(*n),
@@ -57,10 +41,8 @@ pub(crate) fn counter(snapshot: &Snapshot, name: &str, labels: &[(&str, &str)]) 
     }
 }
 
-/// The gauge value for `name` carrying every label in `labels`.
-///
-/// `None` means the gauge was never set — which is not the same as `0`, the
-/// value that brings a gauge back down.
+/// The gauge value for `name` carrying every label in `labels`; `None` if never set, which is not
+/// `0`, the value that brings a gauge back down.
 pub(crate) fn gauge(snapshot: &Snapshot, name: &str, labels: &[(&str, &str)]) -> Option<f64> {
     match find(snapshot, name, labels)? {
         DebugValue::Gauge(n) => Some(n.into_inner()),

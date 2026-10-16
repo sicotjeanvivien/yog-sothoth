@@ -1,9 +1,5 @@
-//! Signal engine configuration, loaded from the environment.
-//!
-//! Mirrors the config pattern of the other crates: a plain struct built
-//! once at startup by `Config::load`, after `dotenvy` has populated the
-//! environment. Holds the DB URL (yog_signals role) and the flow-imbalance
-//! detector's tunable parameters.
+//! Signal engine configuration, built once at startup by `Config::load` after `dotenvy`: the
+//! database URL and each detector's tunable parameters.
 
 use std::time::Duration;
 
@@ -15,56 +11,44 @@ mod types;
 
 pub(crate) use types::MaterializationAlarmConfig;
 
-/// How often the flow-imbalance detector ticks, in seconds.
-/// Overridable via `SIGNALS_FLOW_INTERVAL_SECS`.
+/// How often the flow-imbalance detector ticks, in seconds (`SIGNALS_FLOW_INTERVAL_SECS`).
 const DEFAULT_FLOW_INTERVAL_SECS: u64 = 300;
 
-/// Trailing window over which directional volume is aggregated, in hours.
-/// Overridable via `SIGNALS_FLOW_WINDOW_HOURS`.
+/// Trailing window over which directional volume is aggregated, in hours (`SIGNALS_FLOW_WINDOW_HOURS`).
 const DEFAULT_FLOW_WINDOW_HOURS: u64 = 24;
 
-/// Rolling per-pool suppression window, in hours — a persisting imbalance
-/// re-alerts at most once per cooldown. Overridable via
-/// `SIGNALS_FLOW_COOLDOWN_HOURS`.
+/// Rolling per-pool suppression window, in hours: a persisting imbalance re-alerts at most once
+/// per cooldown (`SIGNALS_FLOW_COOLDOWN_HOURS`).
 const DEFAULT_FLOW_COOLDOWN_HOURS: u64 = 6;
 
-/// Minimum total window volume (USD) for a pool to be considered.
-/// Overridable via `SIGNALS_FLOW_MIN_VOLUME_USD`.
+/// Minimum total window volume (USD) for a pool to be considered (`SIGNALS_FLOW_MIN_VOLUME_USD`).
 const DEFAULT_FLOW_MIN_VOLUME_USD: i64 = 10_000;
 
-/// How often the price-oracle-deviation detector ticks, in seconds.
-/// Overridable via `SIGNALS_PRICE_DEVIATION_INTERVAL_SECS`.
+/// How often the price-oracle-deviation detector ticks, in seconds (`SIGNALS_PRICE_DEVIATION_INTERVAL_SECS`).
 const DEFAULT_PRICE_DEVIATION_INTERVAL_SECS: u64 = 300;
 
-/// Rolling per-pool suppression window, in hours. Overridable via
-/// `SIGNALS_PRICE_DEVIATION_COOLDOWN_HOURS`.
+/// Rolling per-pool suppression window, in hours (`SIGNALS_PRICE_DEVIATION_COOLDOWN_HOURS`).
 const DEFAULT_PRICE_DEVIATION_COOLDOWN_HOURS: u64 = 6;
 
-/// Oldest acceptable oracle price observation, in minutes — older and the
-/// pool is skipped (a stale oracle reads as a spurious deviation).
-/// Overridable via `SIGNALS_PRICE_DEVIATION_MAX_PRICE_AGE_MINS`.
+/// Oldest acceptable oracle price, in minutes (`SIGNALS_PRICE_DEVIATION_MAX_PRICE_AGE_MINS`).
+/// ⚠️ A stale oracle reads as a spurious deviation, so the pool is skipped.
 const DEFAULT_PRICE_DEVIATION_MAX_PRICE_AGE_MINS: u64 = 15;
 
-/// Oldest acceptable last swap, in hours — quieter pools are skipped (their
-/// spot price is history, not a live quote). Overridable via
-/// `SIGNALS_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS`.
+/// Oldest acceptable last swap, in hours (`SIGNALS_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS`).
+/// ⚠️ A quieter pool's spot price is history, not a live quote, so it is skipped.
 const DEFAULT_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS: u64 = 24;
 
-/// How often the TVL-drain detector ticks, in seconds.
-/// Overridable via `SIGNALS_TVL_DRAIN_INTERVAL_SECS`.
+/// How often the TVL-drain detector ticks, in seconds (`SIGNALS_TVL_DRAIN_INTERVAL_SECS`).
 const DEFAULT_TVL_DRAIN_INTERVAL_SECS: u64 = 300;
 
-/// Trailing window over which liquidity flow is aggregated, in hours. Short
-/// on purpose: a drain is fast, a 24h window would dilute it.
-/// Overridable via `SIGNALS_TVL_DRAIN_WINDOW_HOURS`.
+/// Trailing window over which liquidity flow is aggregated, in hours (`SIGNALS_TVL_DRAIN_WINDOW_HOURS`);
+/// short on purpose, a 24 h window would dilute a drain.
 const DEFAULT_TVL_DRAIN_WINDOW_HOURS: u64 = 6;
 
-/// Rolling per-pool suppression window, in hours. Overridable via
-/// `SIGNALS_TVL_DRAIN_COOLDOWN_HOURS`.
+/// Rolling per-pool suppression window, in hours (`SIGNALS_TVL_DRAIN_COOLDOWN_HOURS`).
 const DEFAULT_TVL_DRAIN_COOLDOWN_HOURS: u64 = 6;
 
-/// Minimum starting TVL (USD) for a pool to be considered.
-/// Overridable via `SIGNALS_TVL_DRAIN_MIN_TVL_USD`.
+/// Minimum starting TVL (USD) for a pool to be considered (`SIGNALS_TVL_DRAIN_MIN_TVL_USD`).
 const DEFAULT_TVL_DRAIN_MIN_TVL_USD: i64 = 10_000;
 
 /// Runtime configuration for the `yog-signals` binary.
@@ -207,10 +191,8 @@ impl Config {
             materialization_alarm: MaterializationAlarmConfig::load()?,
         };
 
-        // The two cutoffs of one detector form a ladder: Warning strictly
-        // below Critical. Configured the other way round, Warning becomes
-        // unreachable (every emitted signal would be Critical) — a silent
-        // misconfiguration, so fail loud at startup instead.
+        // ⚠️ Warning strictly below Critical: the other way round every signal would be Critical,
+        // a silent misconfiguration, so refused at startup.
         validate_ladder(
             "SIGNALS_FLOW_THRESHOLD",
             config.flow_threshold,
@@ -247,13 +229,8 @@ fn validate_ladder(
     Ok(())
 }
 
-/// Read an optional `Decimal` env var, falling back to `default` when unset.
-/// A present-but-unparseable value is an error (mirrors `duration_var`).
-///
-/// Trims for the same reason [`yog_bootstrap::required`] does: a `\r` from the
-/// CRLF `.env`, sourced into the shell by the native workflow, would otherwise
-/// be refused as ``got `0.6`, expected a decimal number`` — a message whose
-/// cause is invisible.
+/// Read an optional `Decimal` env var, `default` when unset; a present but unparseable value is
+/// an error. ⚠️ Trimmed, like [`yog_bootstrap::required`]: a `\r` from the CRLF `.env` would be refused.
 fn decimal_var(key: &'static str, default: Decimal) -> Result<Decimal, ConfigError> {
     match std::env::var(key).map(|v| v.trim().to_string()) {
         Err(_) => Ok(default),

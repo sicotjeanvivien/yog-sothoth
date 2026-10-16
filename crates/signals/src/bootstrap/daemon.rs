@@ -1,9 +1,5 @@
-//! Daemon assembly: connect the DB, wire the concrete Pg repositories into
-//! the detectors and the engine, then run until shutdown.
-//!
-//! This is the one place that knows about `yog-persistence` — the same
-//! dependency-injection shape as `yog-context`'s daemon. The engine and
-//! detectors only ever see core traits.
+//! Daemon assembly: connect the database, wire the Pg repositories into the detectors and the
+//! engine, then run until shutdown; the one place that knows `yog-persistence`.
 
 use std::sync::Arc;
 
@@ -109,21 +105,9 @@ impl Daemon {
         Ok(Self { engine, alarm })
     }
 
-    /// Run the engine and the materialisation alarm until the process is asked
-    /// to stop, then let every detector loop finish its tick. The alarm ends
-    /// at once: its check races the stop.
-    ///
-    /// ⚠️ **SIGTERM, not only Ctrl-C.** This waited on `tokio::signal::ctrl_c()`
-    /// alone — SIGINT — while `docker compose stop` sends SIGTERM. As PID 1 in
-    /// its container the process did not even die on it: the kernel withholds a
-    /// signal's default action from PID 1, so the SIGTERM was ignored and
-    /// Docker's SIGKILL ended things ten seconds later, mid-tick.
-    /// `shutdown_signal` covers both, and it is the one the other daemons use.
-    ///
-    /// ⚠️ **The other half is still missing here**, and it is written down
-    /// rather than half-done: `engine.run` joins its detectors with no deadline,
-    /// so a detector stuck in a slow query still holds the stop open without
-    /// naming itself.
+    /// Run the engine and the materialisation alarm until the stop, then let every detector loop
+    /// finish its tick; the alarm ends at once, its check racing the stop.
+    /// ⚠️ `engine.run` joins its detectors with no deadline: a detector stuck in a slow query holds the stop.
     pub(crate) async fn run(self) -> anyhow::Result<()> {
         let shutdown = CancellationToken::new();
 
@@ -133,8 +117,7 @@ impl Daemon {
             signal.cancel();
         });
 
-        // The alarm shares the stop, and ends as soon as it fires — its check
-        // races the token — so it never outlasts the engine it runs beside.
+        // The alarm shares the stop and ends as soon as it fires, never outlasting the engine.
         let (engine, ()) = tokio::join!(
             self.engine.run(shutdown.clone()),
             self.alarm.run(shutdown.clone()),

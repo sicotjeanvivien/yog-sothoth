@@ -21,11 +21,8 @@ impl Verdict {
         now: DateTime<Utc>,
         max_wait: ChronoDuration,
     ) -> Self {
-        // ⚠️ **Nothing reported is not "on time".** The function finds the
-        // aggregates in TimescaleDB's catalog; if an upgrade changed what it
-        // joins on, it would return no row, and every check would ping success
-        // while watching nothing — the silent green this alarm exists to end.
-        // The schema always holds aggregates, so an empty answer is a fault.
+        // ⚠️ Nothing reported is not "on time": an upgrade changing what the catalog query joins on
+        // would return no row, and every check would ping success while watching nothing.
         if backlogs.is_empty() {
             return Self::Failed(Failure::NothingReported);
         }
@@ -59,8 +56,7 @@ impl Verdict {
         }
     }
 
-    /// What must change for the logs to speak again: the outcome, or which
-    /// aggregates are late — not how long they have been.
+    /// What must change for the logs to speak again: the outcome or the late aggregates, not their age.
     pub(crate) fn state(&self) -> (&'static str, Vec<&str>) {
         let names = match self {
             Self::Failed(Failure::Late { aggregates, .. }) => {

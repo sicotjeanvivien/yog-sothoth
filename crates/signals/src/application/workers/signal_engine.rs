@@ -1,14 +1,6 @@
-//! The signal engine — one poll loop per detector.
-//!
-//! Evaluation model (batch, per-detector cadence): each detector runs on its
-//! own [`interval`](SignalDetector::interval); on every tick it recomputes
-//! from a DB snapshot (read through its own repositories) and returns the
-//! signals to raise. The engine persists them.
-//!
-//! Resilience follows the project's skip-and-log rule: a per-tick failure
-//! (evaluation error, or a persistence error on the batch insert) is logged
-//! and the tick is stepped over — one missed tick, never a dead loop. Only a
-//! task panic (a genuine bug) is loop-level and bubbles up as [`EngineError`].
+//! The signal engine: one poll loop per detector, each on its own
+//! [`interval`](SignalDetector::interval), recomputing from the database and persisting what it
+//! emits. A failed tick is logged and stepped over; only a task panic reaches [`EngineError`].
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -27,19 +19,16 @@ mod metrics;
 
 pub(crate) use metrics::EngineMetrics;
 
-/// Loop-level failure of the engine. Per-tick failures never reach here —
-/// they are skipped-and-logged inside the loop.
+/// Loop-level failure of the engine; per-tick failures are skipped and logged inside the loop.
 #[derive(Debug, Error)]
 pub enum EngineError {
-    /// A detector's poll loop panicked. Detector logic is written to
-    /// skip-and-log, so this signals a real bug, not a transient fault.
+    /// A detector's poll loop panicked: a real bug, detectors skipping and logging by design.
     #[error("a detector task panicked: {0}")]
     DetectorPanicked(String),
 }
 
-/// Runs a set of detectors, each on its own cadence, and persists what they
-/// emit. Holds only core traits — the concrete repositories are injected by
-/// the binary.
+/// Runs a set of detectors, each on its own cadence, and persists what they emit, through core
+/// traits only.
 pub struct SignalEngine {
     signal_repository: Arc<dyn SignalRepository>,
     detectors: Vec<Arc<dyn SignalDetector>>,
@@ -56,9 +45,8 @@ impl SignalEngine {
         }
     }
 
-    /// Spawn one poll loop per detector and run until `shutdown` is
-    /// cancelled. Returns `Ok(())` once every loop has stopped cleanly, or
-    /// the first panic if a detector task blew up (after cancelling the rest).
+    /// Spawn one poll loop per detector and run until `shutdown`: `Ok(())` once every loop stopped,
+    /// or the first panic, after cancelling the rest.
     pub async fn run(self, shutdown: CancellationToken) -> Result<(), EngineError> {
         if self.detectors.is_empty() {
             warn!("signal engine started with no detectors — nothing to do");
@@ -78,19 +66,8 @@ impl SignalEngine {
         while let Some(joined) = set.join_next().await {
             match joined {
                 Ok(name) => info!(detector = name, "detector loop stopped"),
-                // ⚠️ **`tokio` bundles two outcomes in this one error and only
-                // one of them is a failure** (see [`TaskEnd`]). Reading every
-                // `JoinError` as a panic is what made an ordinary stop shout in
-                // the indexer's logs, and it was still written that way here.
-                //
-                // The cancelled arm is **not reachable through this module
-                // today**: nothing aborts these tasks but `set.shutdown()`
-                // below, which drains its own aborts, and the engine is gone
-                // before the runtime tears the rest down. It is written anyway
-                // because the alternative is to restate, at a third site, a
-                // rule the other two already share — and the day an abort or a
-                // deadline is added here, the default reading must not be
-                // "panic".
+                // ⚠️ A `JoinError` is a panic or a cancellation ([`TaskEnd`]), and only the first is a
+                // failure; nothing aborts these tasks today, but the reading must not default to panic.
                 Err(e) => match TaskEnd::from(&e) {
                     TaskEnd::Panicked => {
                         error!(error = %e, "detector task panicked — stopping engine");
@@ -121,16 +98,8 @@ async fn detector_loop(
 
     loop {
         tokio::select! {
-            // ⚠️ **`biased`: the stop must win a tie.** The ticker keeps
-            // tokio's default `MissedTickBehavior::Burst`, so a `run_tick` that
-            // outruns the detector's interval leaves `tick()` **already ready**
-            // at the next turn — both arms ready, and an unbiased `select!`
-            // picks pseudo-randomly. About one stop in two would start a fresh
-            // round of reads and `signals` inserts *after* the stop was asked
-            // for, and `SignalEngine::run` joins this task with no deadline at
-            // all, so that extra tick delays the process exit until Docker's
-            // SIGKILL. Same reason the indexer's loops and `yog-context`'s
-            // three workers are biased.
+            // ⚠️ `biased`: with the default `Burst`, a slow tick leaves `tick()` ready, and an
+            // unbiased pick would run a new tick after the stop, which `run` waits for without deadline.
             biased;
 
             _ = shutdown.cancelled() => {
@@ -142,8 +111,7 @@ async fn detector_loop(
     }
 }
 
-/// A single tick: evaluate, then persist. Absorbs every recoverable error so
-/// one hiccup never stops the loop.
+/// A single tick: evaluate, then persist, absorbing every recoverable error.
 async fn run_tick(
     detector: &dyn SignalDetector,
     repository: &dyn SignalRepository,
@@ -198,10 +166,8 @@ async fn run_tick(
     info!(detector = name, count, "signals emitted");
 }
 
-/// Keep only candidates that are new or escalate an existing signal for the
-/// same pool. `recent` maps a pool to the latest severity this detector has
-/// already emitted for it within the cooldown window; a candidate is dropped
-/// only when a signal of equal-or-higher severity is already present.
+/// Keep only candidates that are new or escalate: a candidate is dropped when a signal of equal
+/// or higher severity for its pool is already within the cooldown (`recent`).
 fn emittable(candidates: Vec<Signal>, recent: &HashMap<Pubkey, Severity>) -> Vec<Signal> {
     candidates
         .into_iter()

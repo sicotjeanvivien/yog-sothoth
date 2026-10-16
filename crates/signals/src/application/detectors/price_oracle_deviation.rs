@@ -1,20 +1,7 @@
-//! Price-oracle deviation detector.
-//!
-//! Compares each pool's on-chain **spot price** (decoded from the Q64.64
-//! `sqrt_price` of its last swap) with the **oracle price** implied by the
-//! two tokens' latest USD observations, and emits a signal when the relative
-//! gap
-//!
-//! ```text
-//!   deviation = (spot_a_in_b - oracle_a_in_b) / oracle_a_in_b
-//! ```
-//!
-//! crosses a threshold. Both sides are gated on freshness: a pool that has
-//! not swapped recently carries a stale spot price, and a stale oracle price
-//! (yog-context down) would read as a spurious deviation — either one makes
-//! the comparison meaningless, so the pool is skipped, not signalled.
-//!
-//! Stateless between ticks: it recomputes from the DB snapshot each time.
+//! Price-oracle deviation detector: `(spot_a_in_b - oracle_a_in_b) / oracle_a_in_b`, the spot from
+//! the Q64.64 `sqrt_price` of the last swap, the oracle from the two tokens' latest USD prices.
+//! ⚠️ Both sides gated on freshness: a stale spot or a stale oracle makes the comparison
+//! meaningless, so the pool is skipped, not signalled. Stateless between ticks.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -30,26 +17,20 @@ use yog_core::domain::{
 
 use super::metrics::{DetectorMetrics, SkipReason};
 
-/// Tuning knobs of the price-oracle-deviation detector, as loaded from the
-/// environment by the bootstrap config. A named-field struct rather than
-/// constructor arguments: the fields pair up by type (`Duration` ×2,
-/// `ChronoDuration` ×2, `Decimal` ×2), so positional passing would let a
-/// swapped pair compile silently.
+/// Tuning knobs of the price-oracle-deviation detector, from the bootstrap config; named fields,
+/// since they pair up by type and a swapped pair would compile.
 pub struct PriceOracleDeviationSettings {
     /// How often the engine ticks this detector.
     pub interval: Duration,
     /// Rolling per-pool suppression window (engine-level dedup).
     pub cooldown: Duration,
-    /// Oldest acceptable oracle observation. Pools where either token's
-    /// price is older are skipped.
+    /// Oldest acceptable oracle observation: a pool with either token's price older is skipped.
     pub max_price_age: ChronoDuration,
-    /// Oldest acceptable last swap. Pools quiet for longer are skipped —
-    /// their spot price is history, not a live quote.
+    /// Oldest acceptable last swap: a pool quiet for longer is skipped.
     pub max_spot_age: ChronoDuration,
     /// `|deviation|` at or above which a signal is emitted.
     pub threshold: Decimal,
-    /// `|deviation|` at or above which the signal escalates to Critical.
-    /// The config guarantees `threshold < critical` at load.
+    /// `|deviation|` at or above which the signal escalates to Critical; above `threshold`, by config.
     pub critical: Decimal,
 }
 
@@ -62,8 +43,7 @@ pub struct PriceOracleDeviationDetector {
 }
 
 impl PriceOracleDeviationDetector {
-    /// Build the detector: its dependency positionally, its tuning as a
-    /// named-field struct.
+    /// Build the detector: dependency positionally, tuning as a named-field struct.
     pub fn new(
         snapshot_repo: Arc<dyn PoolPriceSnapshotRepository>,
         settings: PriceOracleDeviationSettings,
@@ -75,8 +55,7 @@ impl PriceOracleDeviationDetector {
     }
 }
 
-/// Decode a snapshot's raw `sqrt_price` into a spot price (token B per
-/// 1 token A, human units). The interpretation is protocol-specific; a
+/// Decode a snapshot's raw `sqrt_price` into a spot price (token B per token A, human units); a
 /// protocol without a decoder yields `None` and the pool is skipped.
 fn spot_price_a_in_b(snapshot: &PoolPriceSnapshot) -> Option<Decimal> {
     match snapshot.protocol {
@@ -91,8 +70,7 @@ fn spot_price_a_in_b(snapshot: &PoolPriceSnapshot) -> Option<Decimal> {
     }
 }
 
-/// Render a price for the message without drowning it in digits — six
-/// significant figures keeps memecoin magnitudes (1e-12) readable where a
+/// Render a price with six significant figures, which keeps memecoin magnitudes readable where a
 /// fixed decimal rounding would collapse them to zero.
 fn compact(price: Decimal) -> Decimal {
     price.round_sf(6).unwrap_or(price).normalize()
@@ -121,10 +99,8 @@ impl SignalDetector for PriceOracleDeviationDetector {
 
         let mut signals = Vec::new();
         for snapshot in snapshots {
-            // Freshness gates: a stale side makes the comparison
-            // meaningless, not alarming. Counted rather than silent, like the
-            // other detectors' guards — a detector going quiet because its
-            // inputs went stale must not look like a quiet market.
+            // Freshness gates, counted: a detector gone quiet on stale inputs must not look like a
+            // quiet market.
             if snapshot.last_swap_at < spot_cutoff
                 || snapshot.price_a_fetched_at < price_cutoff
                 || snapshot.price_b_fetched_at < price_cutoff
@@ -144,10 +120,8 @@ impl SignalDetector for PriceOracleDeviationDetector {
                 continue;
             }
 
-            // Distinguished from `undecodable`: this one means we have not
-            // shipped a decoder for that protocol yet, which is missing code
-            // rather than a pathological pair. Conflating them would hide a
-            // whole protocol behind noise from a handful of extreme pools.
+            // ⚠️ Apart from `undecodable`: a missing decoder for a whole protocol must not hide behind
+            // a handful of pathological pairs.
             let Some(spot) = spot_price_a_in_b(&snapshot) else {
                 DetectorMetrics::record_skipped(self.name(), SkipReason::NoDecoder);
                 continue;
@@ -162,9 +136,8 @@ impl SignalDetector for PriceOracleDeviationDetector {
                 continue;
             }
 
-            // The recorded threshold is the boundary that *justifies the
-            // severity* — the critical one for a Critical signal — not the
-            // emission floor, which would understate every escalation.
+            // The recorded threshold is the one that justifies the severity, the critical one for a
+            // Critical signal, not the emission floor.
             let (severity, threshold) = if magnitude >= self.settings.critical {
                 (Severity::Critical, self.settings.critical)
             } else {
