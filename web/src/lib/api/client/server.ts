@@ -1,7 +1,7 @@
 /**
  * Server-side fetch wrapper for `yog-api`.
  *
- * Every higher-level call (`fetchPools`, `fetchNetworkStatus`, etc.)
+ * Every higher-level call (`fetchPools`, `fetchStats`, etc.)
  * imported from a Server Component (or any other server-side code)
  * routes through `apiGet`. Reads `YOG_API_INTERNAL_URL` from the
  * server env to reach yog-api over the internal network — never

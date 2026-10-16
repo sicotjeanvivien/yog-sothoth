@@ -149,6 +149,28 @@
         ],
         "type": "string"
       },
+      "IngestionResponse": {
+        "description": "Whether our ingestion keeps up, judged on the last event it wrote.",
+        "properties": {
+          "freshness": {
+            "$ref": "#/components/schemas/FreshnessStatusResponse",
+            "description": "Ingestion freshness verdict: \"live\" | \"delayed\" | \"stale\"."
+          },
+          "lastEventAt": {
+            "description": "Timestamp of the most recent indexed event, `null` when the database\nholds no events yet.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "freshness",
+          "lastEventAt"
+        ],
+        "type": "object"
+      },
       "LastEventKindResponse": {
         "description": "The kind of the event that last changed the pool's state.",
         "enum": [
@@ -385,21 +407,9 @@
         ],
         "type": "object"
       },
-      "NetworkStatusResponse": {
-        "description": "Where the chain is (slot, probe latency) and whether ingestion keeps up. The\ntwo fail apart: the probe's endpoint is not the one ingestion uses.",
+      "NetworkResponse": {
+        "description": "Where the chain is, as the probe last saw it. The probe's endpoint is not\nthe one ingestion uses: this says nothing about our ingestion.",
         "properties": {
-          "freshness": {
-            "$ref": "#/components/schemas/FreshnessStatusResponse",
-            "description": "Ingestion freshness verdict: \"live\" | \"delayed\" | \"stale\"."
-          },
-          "lastEventAt": {
-            "description": "Timestamp of the most recent indexed event, if any. `null`\nwhen the database holds no events yet.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "observedAt": {
             "description": "When the probe recorded the slot above.",
             "format": "date-time",
@@ -420,9 +430,7 @@
         "required": [
           "slot",
           "rpcLatencyMs",
-          "observedAt",
-          "freshness",
-          "lastEventAt"
+          "observedAt"
         ],
         "type": "object"
       },
@@ -1787,19 +1795,19 @@
         "summary": "The announcements whose display window contains the request instant, most\nsevere first then most recent. An empty array is the normal case."
       }
     },
-    "/api/network/status": {
+    "/api/ingestion": {
       "get": {
-        "operationId": "get_network_status",
+        "operationId": "get_ingestion",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NetworkStatusResponse"
+                  "$ref": "#/components/schemas/IngestionResponse"
                 }
               }
             },
-            "description": "The chain's latest slot, and how fresh ingestion is."
+            "description": "How fresh ingestion is."
           },
           "default": {
             "content": {
@@ -1812,7 +1820,35 @@
             "description": "A failure: RFC 9457 Problem Details."
           }
         },
-        "summary": "Where the chain is (slot, probe latency) and, apart, whether ingestion keeps\nup. The `network_status` row is seeded by the baseline migration: its absence\nis a 500, not a 404."
+        "summary": "How fresh our ingestion is, judged on the last indexed event. No event at\nall is `stale`, not an error."
+      }
+    },
+    "/api/network": {
+      "get": {
+        "operationId": "get_network",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkResponse"
+                }
+              }
+            },
+            "description": "The chain's latest slot, as the probe saw it."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        },
+        "summary": "Where the chain is: the latest slot and the probe's latency. The\n`network_status` row is seeded by the baseline migration: its absence is a\n500, not a 404."
       }
     },
     "/api/pools": {

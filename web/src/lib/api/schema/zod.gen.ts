@@ -53,6 +53,13 @@ export const zFreshnessStatusResponse = z.enum([
 
 export type FreshnessStatusResponse = z.infer<typeof zFreshnessStatusResponse>;
 
+export const zIngestionResponse = z.object({
+    freshness: zFreshnessStatusResponse,
+    lastEventAt: z.iso.datetime({ offset: true }).nullable()
+});
+
+export type IngestionResponse = z.infer<typeof zIngestionResponse>;
+
 export const zLastEventKindResponse = z.enum([
     'swap',
     'liquidity_add',
@@ -125,15 +132,13 @@ export const zU128String = z.string().regex(/^\d+$/);
 
 export type U128String = z.infer<typeof zU128String>;
 
-export const zNetworkStatusResponse = z.object({
-    freshness: zFreshnessStatusResponse,
-    lastEventAt: z.iso.datetime({ offset: true }).nullable(),
+export const zNetworkResponse = z.object({
     observedAt: z.iso.datetime({ offset: true }),
     rpcLatencyMs: z.int().gte(0).lte(4294967295),
     slot: zU128String
 });
 
-export type NetworkStatusResponse = z.infer<typeof zNetworkStatusResponse>;
+export type NetworkResponse = z.infer<typeof zNetworkResponse>;
 
 export const zPageResponseSwapEventResponse = z.object({
     isFirst: z.boolean(),
@@ -422,7 +427,9 @@ export type TokenResponse = z.infer<typeof zTokenResponse>;
 
 export const zListActiveAnnouncementsResponse = z.array(zAnnouncementResponse);
 
-export const zGetNetworkStatusResponse = zNetworkStatusResponse;
+export const zGetIngestionResponse = zIngestionResponse;
+
+export const zGetNetworkResponse = zNetworkResponse;
 
 export const zListPoolsQuery = z.object({
     cursor: z.string().nullish(),

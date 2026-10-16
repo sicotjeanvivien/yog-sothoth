@@ -1,41 +1,22 @@
 "use client";
 
 /**
- * Network status panel — the Solana block at the foot of the sidebar:
- * state, slot, latency.
- *
- * Autonomous: it owns its own data lifecycle. It fetches yog-api
- * directly through the public gateway on mount and then polls every
- * `POLL_INTERVAL_MS`. The sidebar just mounts it — it knows nothing
- * about fetching or polling.
- *
- * # Three states
- *
- *   - loading : first fetch not yet returned — slot/latency show
- *               "—", the dot is neutral;
- *   - ready   : data in hand — slot, latency, and a freshness dot
- *               (see `presentation`);
- *   - error   : the fetch failed — an explicit "offline" state
- *               (negative dot + label), never a silent "—". An health
- *               panel that can't signal its own connection loss
- *               would defeat its purpose.
- *
- * # Polling
- *
- * `setInterval` at 10s, cleared on unmount. The first fetch fires
- * immediately so the panel doesn't sit empty for a full interval.
- * A slow request is not stacked on by the next tick — an in-flight
- * guard skips a tick while one is already running.
+ * The Solana block at the foot of the sidebar. Polls `/api/network` (slot,
+ * latency) and `/api/ingestion` (the dot) together; each half fails alone, to
+ * "—" or to an explicit "offline" dot. A tick is skipped while the previous
+ * one is in flight.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { ApiClientError } from "@/lib/api/errors";
-import { fetchNetworkStatusBrowser } from "@/lib/api/browser/network-status";
+import { fetchIngestionBrowser } from "@/lib/api/browser/ingestion";
+import { fetchNetworkBrowser } from "@/lib/api/browser/network";
 import type {
   FreshnessStatusResponse,
-  NetworkStatusResponse,
+  IngestionResponse,
+  NetworkResponse,
 } from "@/lib/api/schema/zod.gen";
 
 /** How often the panel re-fetches the network status. */
@@ -43,10 +24,9 @@ const POLL_INTERVAL_MS = 10_000;
 
 // ── Panel state ───────────────────────────────────────────────────────
 
-type PanelState =
-  | { phase: "loading" }
-  | { phase: "ready"; data: NetworkStatusResponse }
-  | { phase: "error" };
+type Half<T> = { phase: "loading" } | { phase: "ready"; data: T } | { phase: "error" };
+
+const LOADING = { phase: "loading" } as const;
 
 // ── Component ─────────────────────────────────────────────────────────
 
@@ -63,7 +43,8 @@ export function NetworkStatusPanel({
 }) {
   const t = useTranslations("Dashboard.Sidebar.network");
 
-  const [state, setState] = useState<PanelState>({ phase: "loading" });
+  const [network, setNetwork] = useState<Half<NetworkResponse>>(LOADING);
+  const [ingestion, setIngestion] = useState<Half<IngestionResponse>>(LOADING);
 
   // Guards against overlapping requests: if a fetch is still in
   // flight when the next interval tick fires, that tick is skipped.
@@ -73,21 +54,12 @@ export function NetworkStatusPanel({
     if (inFlight.current) return;
     inFlight.current = true;
     try {
-      const data = await fetchNetworkStatusBrowser();
-      setState({ phase: "ready", data });
-    } catch (err) {
-      // Any ApiClientError variant (timeout, network, http, validation)
-      // collapses to the panel's "offline" state. The dot/label is
-      // enough signal for this UI; we don't need to differentiate.
-      // Errors that aren't ApiClientError should not reach here, but
-      // if they do they get the same treatment — the panel is
-      // best-effort by design.
-      if (!(err instanceof ApiClientError)) {
-        // Surface unexpected throws in the console for the developer;
-        // the user still sees "offline".
-        console.error("NetworkStatusPanel: unexpected error", err);
-      }
-      setState({ phase: "error" });
+      const [net, ing] = await Promise.allSettled([
+        fetchNetworkBrowser(),
+        fetchIngestionBrowser(),
+      ]);
+      setNetwork(settled(net));
+      setIngestion(settled(ing));
     } finally {
       inFlight.current = false;
     }
@@ -102,7 +74,7 @@ export function NetworkStatusPanel({
     return () => clearInterval(timer);
   }, [load]);
 
-  const { dotClass, labelClass, labelKey } = presentation(state);
+  const { dotClass, labelClass, labelKey } = presentation(ingestion);
   const label = t(labelKey);
 
   return (
@@ -123,8 +95,8 @@ export function NetworkStatusPanel({
         </header>
 
         <dl className="flex flex-col gap-1.5 text-[12px]">
-          <StatRow label={t("slot")} value={slotValue(state)} />
-          <StatRow label={t("latency")} value={latencyValue(state)} />
+          <StatRow label={t("slot")} value={slotValue(network)} />
+          <StatRow label={t("latency")} value={latencyValue(network)} />
         </dl>
       </div>
 
@@ -141,6 +113,15 @@ export function NetworkStatusPanel({
   );
 }
 
+/** Any `ApiClientError` is the half's "offline"; anything else is logged too. */
+function settled<T>(result: PromiseSettledResult<T>): Half<T> {
+  if (result.status === "fulfilled") return { phase: "ready", data: result.value };
+  if (!(result.reason instanceof ApiClientError)) {
+    console.error("NetworkStatusPanel: unexpected error", result.reason);
+  }
+  return { phase: "error" };
+}
+
 // ── State presentation ────────────────────────────────────────────────
 //
 // Violet means live (the accent marks the live state); the warning and
@@ -149,7 +130,7 @@ export function NetworkStatusPanel({
 
 type Presentation = { dotClass: string; labelClass: string; labelKey: string };
 
-function presentation(state: PanelState): Presentation {
+function presentation(state: Half<IngestionResponse>): Presentation {
   if (state.phase === "loading") {
     return {
       dotClass: "bg-dash-ink-3",
@@ -187,11 +168,11 @@ const BY_FRESHNESS: Record<FreshnessStatusResponse, Presentation> = {
 
 // ── Value formatting ──────────────────────────────────────────────────
 
-function slotValue(state: PanelState): string {
+function slotValue(state: Half<NetworkResponse>): string {
   return state.phase === "ready" ? state.data.slot : "—";
 }
 
-function latencyValue(state: PanelState): string {
+function latencyValue(state: Half<NetworkResponse>): string {
   return state.phase === "ready" ? `${state.data.rpcLatencyMs} ms` : "—";
 }
 

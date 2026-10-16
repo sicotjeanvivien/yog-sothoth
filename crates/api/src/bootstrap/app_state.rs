@@ -18,8 +18,8 @@ use yog_persistence::{
 };
 
 use crate::application::{
-    AnnouncementService, MeteoraDammV2LiquidityService, MeteoraDammV2SwapService,
-    NetworkStatusService, PoolService, PoolServiceDeps, STREAM_CHANNEL_CAPACITY, SignalService,
+    AnnouncementService, IngestionService, MeteoraDammV2LiquidityService, MeteoraDammV2SwapService,
+    NetworkService, PoolService, PoolServiceDeps, STREAM_CHANNEL_CAPACITY, SignalService,
     SignalStreamPoller, StatsService, TokenService, WorkSlots,
 };
 use crate::bootstrap::Config;
@@ -113,10 +113,8 @@ pub(crate) async fn build_app_state(
         })),
         swap_service: Arc::new(MeteoraDammV2SwapService::new(swap_event_repo)),
         liquidity_service: Arc::new(MeteoraDammV2LiquidityService::new(liquidity_event_repo)),
-        network_status_service: Arc::new(NetworkStatusService::new(
-            network_status_repo,
-            event_freshness_repo,
-        )),
+        network_service: Arc::new(NetworkService::new(network_status_repo)),
+        ingestion_service: Arc::new(IngestionService::new(event_freshness_repo)),
         signal_service,
         signal_stream,
         stream_slots: Arc::new(Semaphore::new(SSE_MAX_STREAMS)),

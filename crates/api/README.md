@@ -23,7 +23,7 @@ api/src/
 ├── application/
 │   ├── services/          ← cross-protocol services at the root (PoolService,
 │   │   │                    SignalService, StatsService, TokenService,
-│   │   │                    NetworkStatusService, AnnouncementService)…
+│   │   │                    NetworkService, IngestionService, AnnouncementService)…
 │   │   └── meteora/damm_v2/ …per-protocol ones under their protocol
 │   │                        (swap.rs, liquidity.rs) — mirrors core/domain
 │   ├── signal_stream.rs   ← SignalStreamPoller (enriches once, feeds the SSE broadcast)
@@ -113,7 +113,8 @@ variant breaks the build there instead of silently dropping a field.
 | `GET` | `/api/pools/{address}/history` | Hourly time-series buckets (`?days=N`) — volume, fees, liquidity, claims, USD-valued |
 | `GET` | `/api/pools/{address}/swap-events` | Paginated swap events |
 | `GET` | `/api/pools/{address}/liquidity-events` | Paginated liquidity events |
-| `GET` | `/api/network/status` | Latest indexer/RPC slot, RPC latency, observed timestamp |
+| `GET` | `/api/network` | The chain's latest slot as the probe saw it, the probe's `getSlot` latency, when it was observed |
+| `GET` | `/api/ingestion` | Our ingestion's freshness (`live` / `delayed` / `stale`) and its last indexed event |
 | `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` and `?pool=` filters); each item embeds its pool's token pair (`tokenA`/`tokenB`, same shape as in `PoolResponse`) |
 | `GET` | `/api/signals/stream` | SSE stream of new signals (see below) |
 | `GET` | `/api/stats` | Global KPIs — total TVL, 24h volume/fees, pool counts |

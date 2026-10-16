@@ -1,7 +1,8 @@
 mod announcement;
 mod fee_tier;
+mod ingestion;
 mod liquidity_event;
-mod network_status;
+mod network;
 mod page;
 mod pool;
 mod pool_current_state;
@@ -18,8 +19,9 @@ mod token;
 
 pub(crate) use announcement::AnnouncementResponse;
 pub(crate) use fee_tier::FeeTierResponse;
+pub(crate) use ingestion::IngestionResponse;
 pub(crate) use liquidity_event::LiquidityEventResponse;
-pub(crate) use network_status::NetworkStatusResponse;
+pub(crate) use network::NetworkResponse;
 pub(crate) use page::PageResponse;
 pub(crate) use pool::PoolResponse;
 pub(crate) use pool_current_state::PoolCurrentStateResponse;

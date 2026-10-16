@@ -40,8 +40,8 @@ Comments follow the absolute rule of `CLAUDE.md` (*Comments — absolute rule*).
   server. They reach the API over the internal network via
   `YOG_API_INTERNAL_URL` (`http://yog-api:5000` inside Docker).
 - **The browser** calls the API directly for everything dynamic —
-  the signal SSE stream, reconnection refills, the network-status
-  poll. It goes through the public gateway (`https://api.yog-scope.xyz`
+  the signal SSE stream, reconnection refills, the network and
+  ingestion poll. It goes through the public gateway (`https://api.yog-scope.xyz`
   in production, `http://localhost:5000` in dev) via
   `NEXT_PUBLIC_YOG_API_URL`. `yog-api`'s CORS layer authorises the
   dashboard origin.
@@ -96,8 +96,8 @@ What the schemas cannot say, and a component must still know:
 - **Numbers that stay strings.** A token quantity or a reserve
   (`U128String`) can exceed 2^53: use `BigInt(value)` for arithmetic. A USD
   amount or a rate (`UnsignedDecimal`, `SignedDecimal`) keeps digits a JS
-  `number` drops: format it, never compute on `Number(value)`. The `slot` of the
-  network status is shown as is.
+  `number` drops: format it, never compute on `Number(value)`. The `slot` of
+  `/api/network` is shown as is.
 - **Closed sets fail loudly.** A protocol, a severity, an announcement or event
   kind, a provider or a freshness outside its enum is a `validation` error, never
   an unknown tag reaching the UI. `baseFeeKind` is the exception: a string.

@@ -2,7 +2,7 @@
  * High-level fetcher for `GET /api/announcements/active`.
  *
  * No parameters — a thin wrapper over `apiGet` pinning the path and
- * the schema, like `fetchNetworkStatus`.
+ * the schema.
  *
  * @throws ApiClientError on any transport, HTTP, or schema failure.
  *         The dashboard layout catches it: a broken announcement
