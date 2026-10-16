@@ -78,7 +78,7 @@ pub use pool_analytics::{
 };
 pub use pool_current_state::{
     LastEventKind, PoolCurrentState, PoolCurrentStateLookup, PoolCurrentStateRepository,
-    PoolCurrentStateUpsert, PoolCurrentStateUpsertOutcome,
+    PoolCurrentStateUpsert, PoolCurrentStateUpsertOutcome, PoolSideValues,
 };
 pub use pool_price_snapshot::{PoolPriceSnapshot, PoolPriceSnapshotRepository};
 pub use pool_properties::{PoolProperties, PoolPropertiesLookup};

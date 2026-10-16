@@ -29,24 +29,14 @@ function validPool() {
       "symbol": "SOL",
       "name": "Wrapped SOL",
       "decimals": 9,
-      "logoUri": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
-      "price": {
-        "usd": "85.819299811880730000",
-        "provider": "jupiter",
-        "fetchedAt": "2026-05-25T12:17:17.479657Z"
-      }
+      "logoUri": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png"
     },
     "tokenB": {
       "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
       "symbol": "USDC",
       "name": "USD Coin",
       "decimals": 6,
-      "logoUri": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
-      "price": {
-        "usd": "0.999668653937465800",
-        "provider": "jupiter",
-        "fetchedAt": "2026-05-25T12:17:17.479657Z"
-      }
+      "logoUri": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png"
     },
     "feeBps": "25",
     "tvlUsd": "1332007.7148736200400326721044",
@@ -484,11 +474,6 @@ function validSignal() {
       name: "Wrapped SOL",
       decimals: 9,
       logoUri: null,
-      price: {
-        usd: "85.819299811880730000",
-        provider: "jupiter",
-        fetchedAt: "2026-05-25T12:17:17.479657Z",
-      },
     },
     tokenB: {
       mint: null,
@@ -496,7 +481,6 @@ function validSignal() {
       name: null,
       decimals: 0,
       logoUri: null,
-      price: null,
     },
     severity: "critical",
     value: "1.1059558665865029280736523078",

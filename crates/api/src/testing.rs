@@ -28,9 +28,9 @@ use yog_core::{
         MeteoraDammV2LiquidityEventFeed, MeteoraDammV2LiquidityEventValued, MeteoraDammV2SwapEvent,
         MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventFeed, NetworkStatus,
         NetworkStatusLookup, Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCatalog, PoolCounts,
-        PoolCurrentState, PoolCurrentStateLookup, PoolCursor, PoolListQuery, PoolPage, Protocol,
-        Severity, Signal, SignalCursor, SignalFeed, SignalRecord, TokenMetadata,
-        TokenMetadataLookup, TokenPrice, TokenPriceLookup,
+        PoolCurrentState, PoolCurrentStateLookup, PoolCursor, PoolListQuery, PoolPage,
+        PoolSideValues, Protocol, Severity, Signal, SignalCursor, SignalFeed, SignalRecord,
+        TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceLookup,
     },
 };
 
@@ -435,23 +435,31 @@ impl TokenPriceLookup for MockPriceRepo {
 
 pub(crate) struct MockPoolCurrentStateRepo {
     by_address: Mutex<Option<RepositoryResult<Option<PoolCurrentState>>>>,
+    side_values: PoolSideValues,
 }
 
 impl MockPoolCurrentStateRepo {
     pub(crate) fn found(state: PoolCurrentState) -> Self {
         Self {
             by_address: Mutex::new(Some(Ok(Some(state)))),
+            side_values: PoolSideValues::default(),
         }
     }
     pub(crate) fn not_found() -> Self {
         Self {
             by_address: Mutex::new(Some(Ok(None))),
+            side_values: PoolSideValues::default(),
         }
     }
     pub(crate) fn failing() -> Self {
         Self {
             by_address: Mutex::new(Some(Err(RepositoryError::Integrity("state boom".into())))),
+            side_values: PoolSideValues::default(),
         }
+    }
+    pub(crate) fn with_side_values(mut self, side_values: PoolSideValues) -> Self {
+        self.side_values = side_values;
+        self
     }
 }
 
@@ -459,6 +467,9 @@ impl MockPoolCurrentStateRepo {
 impl PoolCurrentStateLookup for MockPoolCurrentStateRepo {
     async fn get_by_address(&self, _: &str) -> RepositoryResult<Option<PoolCurrentState>> {
         take(&self.by_address)
+    }
+    async fn side_values_usd(&self, _: &Pubkey) -> RepositoryResult<PoolSideValues> {
+        Ok(self.side_values)
     }
     async fn list_most_recent(
         &self,

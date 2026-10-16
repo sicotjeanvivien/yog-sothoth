@@ -299,7 +299,9 @@ Two consequences worth knowing before you touch a valuation view:
 - `pool_current_tvl` goes NULL when `yog-context` stops refreshing prices, so a
   dead enrichment loop makes the TVL *disappear* rather than freeze at a stale
   figure. That is deliberate — `tvl_drain` reads the same view and must not
-  compute ratios against a quote from yesterday.
+  compute ratios against a quote from yesterday. Its two sides (`value_a_usd`,
+  `value_b_usd`, migration 019), whose sum is `tvl_usd`, go NULL each on its
+  own price.
 - `pool_price_snapshot` is the one **exempt** view, and the exemption is the
   policy's boundary rather than an oversight: it publishes no USD figure, only
   raw inputs with their `fetched_at`, and `price_oracle_deviation` gates on them

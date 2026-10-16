@@ -22,16 +22,20 @@
 //! error mapping consistent across the crate.
 mod rows;
 
-use crate::repositories::helper::{convert_u64_to_i64, convert_u128_to_bigdecimal, map_sqlx_error};
+use crate::repositories::helper::{
+    convert_bigdecimal_to_decimal, convert_optional, convert_u64_to_i64,
+    convert_u128_to_bigdecimal, map_sqlx_error,
+};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use rows::PoolCurrentStateRow;
+use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryError, RepositoryResult,
     domain::{
         LastEventKind, PoolCurrentState, PoolCurrentStateLookup, PoolCurrentStateRepository,
-        PoolCurrentStateUpsert, PoolCurrentStateUpsertOutcome,
+        PoolCurrentStateUpsert, PoolCurrentStateUpsertOutcome, PoolSideValues,
     },
 };
 
@@ -238,6 +242,36 @@ impl PoolCurrentStateLookup for PgPoolCurrentStateRepository {
         .map_err(map_sqlx_error)?;
 
         row.map(PoolCurrentState::try_from).transpose()
+    }
+
+    async fn side_values_usd(&self, pool_address: &Pubkey) -> RepositoryResult<PoolSideValues> {
+        let row = sqlx::query!(
+            r#"
+            SELECT value_a_usd, value_b_usd
+            FROM pool_current_tvl
+            WHERE pool_address = $1
+            "#,
+            pool_address.to_string(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        let Some(row) = row else {
+            return Ok(PoolSideValues::default());
+        };
+        Ok(PoolSideValues {
+            value_a_usd: convert_optional(
+                row.value_a_usd,
+                "value_a_usd",
+                convert_bigdecimal_to_decimal,
+            )?,
+            value_b_usd: convert_optional(
+                row.value_b_usd,
+                "value_b_usd",
+                convert_bigdecimal_to_decimal,
+            )?,
+        })
     }
 
     async fn list_most_recent(

@@ -68,8 +68,8 @@ fn pool_response_serialises_the_coverage_counters_in_camel_case() {
 
     let resp = PoolResponse::new(
         make_pool(pk(1), pk(2), pk(3)),
-        EmbeddedTokenResponse::from_sources(Some(pk(2)), None, None),
-        EmbeddedTokenResponse::from_sources(Some(pk(3)), None, None),
+        EmbeddedTokenResponse::from_sources(Some(pk(2)), None),
+        EmbeddedTokenResponse::from_sources(Some(pk(3)), None),
         analytics,
         Vec::new(),
     );
@@ -108,8 +108,8 @@ fn pool_response_carries_the_three_fee_shares_without_recomputing_them() {
 
     let resp = PoolResponse::new(
         make_pool(pk(1), pk(2), pk(3)),
-        EmbeddedTokenResponse::from_sources(Some(pk(2)), None, None),
-        EmbeddedTokenResponse::from_sources(Some(pk(3)), None, None),
+        EmbeddedTokenResponse::from_sources(Some(pk(2)), None),
+        EmbeddedTokenResponse::from_sources(Some(pk(3)), None),
         analytics,
         Vec::new(),
     );
@@ -132,8 +132,8 @@ fn pool_response_carries_the_three_fee_shares_without_recomputing_them() {
 fn a_quiet_pool_reports_zero_buckets_not_full_coverage() {
     let resp = PoolResponse::new(
         make_pool(pk(1), pk(2), pk(3)),
-        EmbeddedTokenResponse::from_sources(Some(pk(2)), None, None),
-        EmbeddedTokenResponse::from_sources(Some(pk(3)), None, None),
+        EmbeddedTokenResponse::from_sources(Some(pk(2)), None),
+        EmbeddedTokenResponse::from_sources(Some(pk(3)), None),
         PoolAnalytics::empty(),
         Vec::new(),
     );

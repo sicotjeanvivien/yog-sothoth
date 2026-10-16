@@ -20,8 +20,8 @@ use crate::testing::{make_pool, pk};
 fn pool_response() -> PoolResponse {
     PoolResponse::new(
         make_pool(pk(1), pk(2), pk(3)),
-        EmbeddedTokenResponse::from_sources(None, None, None),
-        EmbeddedTokenResponse::from_sources(None, None, None),
+        EmbeddedTokenResponse::from_sources(None, None),
+        EmbeddedTokenResponse::from_sources(None, None),
         PoolAnalytics::empty(),
         vec![],
     )

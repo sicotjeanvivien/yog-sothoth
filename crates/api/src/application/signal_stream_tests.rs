@@ -11,8 +11,8 @@ use yog_core::domain::{Pool, SignalCursor, SignalRecord};
 use super::poll_once;
 use crate::application::{EnrichedSignal, SignalService};
 use crate::testing::{
-    MockMetadataRepo, MockPriceRepo, MockSignalRepo, PoolRepoOnce, make_metadata, make_pool,
-    make_signal_record, pk, ts,
+    MockMetadataRepo, MockSignalRepo, PoolRepoOnce, make_metadata, make_pool, make_signal_record,
+    pk, ts,
 };
 
 /// An enricher whose catalog answers **one** batch lookup — a second call
@@ -22,7 +22,6 @@ fn enricher(pools: Vec<Pool>, metadata: MockMetadataRepo) -> SignalService {
         Arc::new(MockSignalRepo::empty()),
         Arc::new(PoolRepoOnce::with_pools(pools)),
         Arc::new(metadata),
-        Arc::new(MockPriceRepo::empty()),
     )
 }
 

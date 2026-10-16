@@ -1,18 +1,12 @@
 /**
  * Pool composition — pure math helpers.
  *
- * Computes the USD value of each side of a pool from its reserves
- * (native units, integer string) and the latest price for that
- * side, then derives the share in [0, 1].
+ * Derives the share in [0, 1] of each side of a pool from the USD value
+ * `/latest-state` gives for it.
  *
- * Kept in `lib/format/` (or `lib/pool/` if you prefer; the file is
- * pure and has no UI dependency) so the SVG donut component can
- * import a single deterministic function and stay small.
- *
- * Returns `null` when any required input is missing — the caller
- * should treat that as "don't render the composition card". A
- * partial composition (one side priced, the other not) would be
- * misleading rather than useful.
+ * Returns `null` when either value is missing — the caller should treat
+ * that as "don't render the composition card". A partial composition
+ * (one side valued, the other not) would be misleading rather than useful.
  */
 
 export type PoolComposition = {
@@ -23,40 +17,25 @@ export type PoolComposition = {
 };
 
 export type CompositionInput = {
-  /** Reserve in native units, integer string from the API. */
-  reserveA: string;
-  reserveB: string;
-  /** Decimals of each token. */
-  decimalsA: number;
-  decimalsB: number;
-  /** Latest USD price as a string. Null when not priced. */
-  priceAUsd: string | null;
-  priceBUsd: string | null;
+  /** USD value of each side, a decimal string. Null when not valued. */
+  valueAUsd: string | null;
+  valueBUsd: string | null;
 };
 
 export function computePoolComposition(
   input: CompositionInput,
 ): PoolComposition | null {
-  if (input.priceAUsd === null || input.priceBUsd === null) {
+  if (input.valueAUsd === null || input.valueBUsd === null) {
     return null;
   }
 
-  const reserveA = Number.parseFloat(input.reserveA);
-  const reserveB = Number.parseFloat(input.reserveB);
-  const priceA = Number.parseFloat(input.priceAUsd);
-  const priceB = Number.parseFloat(input.priceBUsd);
+  const valueAUsd = Number.parseFloat(input.valueAUsd);
+  const valueBUsd = Number.parseFloat(input.valueBUsd);
 
-  if (
-    !Number.isFinite(reserveA) ||
-    !Number.isFinite(reserveB) ||
-    !Number.isFinite(priceA) ||
-    !Number.isFinite(priceB)
-  ) {
+  if (!Number.isFinite(valueAUsd) || !Number.isFinite(valueBUsd)) {
     return null;
   }
 
-  const valueAUsd = (reserveA / 10 ** input.decimalsA) * priceA;
-  const valueBUsd = (reserveB / 10 ** input.decimalsB) * priceB;
   const total = valueAUsd + valueBUsd;
 
   if (total <= 0) {

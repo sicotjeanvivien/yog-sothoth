@@ -14,7 +14,7 @@
  *
  * The price and composition cards are dropped from the layout when
  * the pool has no current state yet (or, for composition, when a side
- * has no known USD price) — the grid collapses rather than showing a
+ * has no USD value) — the grid collapses rather than showing a
  * placeholder, in line with the broader rule of "factual or absent,
  * never fake". The price is `spotPriceAInB` from the API (already
  * decimal-adjusted); the card additionally needs both symbols to label
@@ -30,7 +30,8 @@
  *
  * Inputs:
  *   - `pool`: identity + analytics from `GET /api/pools/{address}`
- *   - `state`: current reserves from `GET /api/pools/{address}/latest-state`,
+ *   - `state`: current reserves and the USD value of each side, from
+ *              `GET /api/pools/{address}/latest-state`,
  *              null when the endpoint returned 404 (pool observed
  *              but no swap/liquidity event yet).
  */
@@ -57,17 +58,12 @@ export async function PoolDetailKpis({
 }) {
   const t = await getTranslations("Dashboard.PoolDetail.kpis");
 
-  // Composition needs the current state AND both prices. Anything
-  // missing → don't render the donut card.
+  // Composition needs both sides valued. Anything missing → no donut card.
   const composition =
     state !== null
       ? computePoolComposition({
-        reserveA: state.reserveA,
-        reserveB: state.reserveB,
-        decimalsA: pool.tokenA.decimals,
-        decimalsB: pool.tokenB.decimals,
-        priceAUsd: pool.tokenA.price?.usd ?? null,
-        priceBUsd: pool.tokenB.price?.usd ?? null,
+        valueAUsd: state.valueAUsd,
+        valueBUsd: state.valueBUsd,
       })
       : null;
 

@@ -1,7 +1,7 @@
 /**
  * Pool composition card — donut chart + legend.
  *
- * Renders only when both sides of the pool have a known price (the
+ * Renders only when both sides of the pool have a USD value (the
  * computation helper returns null otherwise). The parent block
  * decides what to show in the null case; this component assumes a
  * non-null `composition` and a non-null `tvlUsd`.
@@ -214,8 +214,8 @@ function ArcPath({
  *
  * Top line carries the identity (colour dot + symbol) and the USD value
  * of the side; bottom line the human-readable reserve and the share of
- * TVL. All four numbers are factual (reserves from current state, prices
- * from the latest quote) — no derived signal.
+ * TVL. All four numbers are factual (reserves and values from current
+ * state) — no derived signal.
  */
 function LegendRow({
   color,

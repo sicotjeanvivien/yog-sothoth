@@ -107,17 +107,6 @@
               "null"
             ]
           },
-          "price": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/TokenPriceResponse",
-                "description": "Latest known price observation, or `null` when the token has\nnever been priced."
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "symbol": {
             "description": "Symbol (e.g. \"USDC\"). `null` when DAS returned no metadata.",
             "type": [
@@ -131,7 +120,6 @@
           "logoUri",
           "mint",
           "name",
-          "price",
           "symbol"
         ],
         "type": "object"
@@ -1002,6 +990,28 @@
           "updatedAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "valueAUsd": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal",
+                "description": "USD value of `reserve_a`. `null` when token A's price is older than\n15 minutes or unknown, or either token's decimals are unresolved."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "valueBUsd": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal",
+                "description": "USD value of `reserve_b`, under the same rule as `value_a_usd`."
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -1015,7 +1025,9 @@
           "updatedAt",
           "lastSqrtPrice",
           "lastSwapAt",
-          "spotPriceAInB"
+          "spotPriceAInB",
+          "valueAUsd",
+          "valueBUsd"
         ],
         "type": "object"
       },
@@ -1627,7 +1639,7 @@
         "type": "object"
       },
       "TokenPriceResponse": {
-        "description": "A token's latest price, in `TokenResponse` and in `EmbeddedTokenResponse`.",
+        "description": "A token's latest price, in `TokenResponse`.",
         "properties": {
           "fetchedAt": {
             "description": "When the price was observed.",

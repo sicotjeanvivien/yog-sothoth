@@ -40,6 +40,15 @@ pub(crate) struct PoolCurrentStateResponse {
     #[schema(value_type = Option<UnsignedDecimal>)]
     spot_price_a_in_b: Option<Decimal>,
 
+    /// USD value of `reserve_a`. `null` when token A's price is older than
+    /// 15 minutes or unknown, or either token's decimals are unresolved.
+    #[schema(value_type = Option<UnsignedDecimal>)]
+    value_a_usd: Option<Decimal>,
+
+    /// USD value of `reserve_b`, under the same rule as `value_a_usd`.
+    #[schema(value_type = Option<UnsignedDecimal>)]
+    value_b_usd: Option<Decimal>,
+
     last_swap_at: Option<DateTime<Utc>>,
 
     updated_at: DateTime<Utc>,
@@ -50,6 +59,7 @@ impl From<PoolCurrentStateView> for PoolCurrentStateResponse {
         let PoolCurrentStateView {
             state,
             spot_price_a_in_b,
+            side_values,
         } = view;
         Self {
             pool_address: state.pool_address.to_string(),
@@ -61,6 +71,8 @@ impl From<PoolCurrentStateView> for PoolCurrentStateResponse {
             reserve_b: state.reserve_b.to_string(),
             last_sqrt_price: state.last_sqrt_price.map(|v| v.to_string()),
             spot_price_a_in_b,
+            value_a_usd: side_values.value_a_usd,
+            value_b_usd: side_values.value_b_usd,
             last_swap_at: state.last_swap_at,
             updated_at: state.updated_at,
         }

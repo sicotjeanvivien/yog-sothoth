@@ -5,16 +5,17 @@ use super::{PoolService, PoolServiceDeps};
 use crate::testing::make_pool_current_state;
 use crate::testing::work_slots;
 use crate::testing::{
-    MockAnalyticsRepo, MockMetadataRepo, MockPoolCurrentStateRepo, MockPriceRepo, MockSignalRepo,
-    PoolRepoOnce, make_metadata, make_page, make_pool, make_price, make_signal_record, pk,
+    MockAnalyticsRepo, MockMetadataRepo, MockPoolCurrentStateRepo, MockSignalRepo, PoolRepoOnce,
+    make_metadata, make_page, make_pool, make_signal_record, pk,
 };
+use rust_decimal::Decimal;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use std::collections::HashMap;
 use yog_core::domain::{
     MeteoraDammV2PoolProperties, Pool, PoolAnalytics, PoolListQuery, PoolProperties,
-    PoolPropertiesLookup, PoolRankMetric, Protocol,
+    PoolPropertiesLookup, PoolRankMetric, PoolSideValues, Protocol,
 };
 use yog_core::{PageDirection, PoolSort, RepositoryError};
 
@@ -23,7 +24,6 @@ fn service(
     pool_current_state_repo: MockPoolCurrentStateRepo,
     analytics: MockAnalyticsRepo,
     metadata: MockMetadataRepo,
-    price: MockPriceRepo,
 ) -> PoolService {
     // Most scenarios don't care about the signal indicator: a quiet
     // window (empty map) is the neutral default.
@@ -32,7 +32,6 @@ fn service(
         pool_current_state_repo,
         analytics,
         metadata,
-        price,
         MockSignalRepo::recent_empty(),
     )
 }
@@ -42,7 +41,6 @@ fn service_with_signals(
     pool_current_state_repo: MockPoolCurrentStateRepo,
     analytics: MockAnalyticsRepo,
     metadata: MockMetadataRepo,
-    price: MockPriceRepo,
     signals: MockSignalRepo,
 ) -> PoolService {
     PoolService::new(PoolServiceDeps {
@@ -50,7 +48,6 @@ fn service_with_signals(
         pool_current_state_repository: Arc::new(pool_current_state_repo),
         pool_analytics_repository: Arc::new(analytics),
         token_metadata_repository: Arc::new(metadata),
-        token_price_repository: Arc::new(price),
         signal_feed: Arc::new(signals),
         pool_properties_lookups: vec![Arc::new(MockPropertiesLookup::empty(
             Protocol::MeteoraDammV2,
@@ -142,7 +139,6 @@ async fn missing_analytics_falls_back_to_empty() {
         MockPoolCurrentStateRepo::not_found(),
         MockAnalyticsRepo::empty(),
         MockMetadataRepo::empty(),
-        MockPriceRepo::empty(),
     );
 
     let page = svc.list_pools(default_params()).await.unwrap();
@@ -160,7 +156,6 @@ async fn pagination_metadata_is_preserved() {
         MockPoolCurrentStateRepo::not_found(),
         MockAnalyticsRepo::empty(),
         MockMetadataRepo::empty(),
-        MockPriceRepo::empty(),
     );
 
     let page = svc.list_pools(default_params()).await.unwrap();
@@ -179,7 +174,6 @@ async fn single_page_reports_both_boundaries() {
         MockPoolCurrentStateRepo::not_found(),
         MockAnalyticsRepo::empty(),
         MockMetadataRepo::empty(),
-        MockPriceRepo::empty(),
     );
 
     let page = svc.list_pools(default_params()).await.unwrap();
@@ -191,23 +185,20 @@ async fn single_page_reports_both_boundaries() {
 }
 
 #[tokio::test]
-async fn enrichment_tolerates_missing_metadata_and_price() {
+async fn enrichment_tolerates_missing_metadata() {
     let pool = make_pool(pk(1), pk(10), pk(11));
     let svc = service(
         PoolRepoOnce::with_page(make_page(vec![pool], true, true)),
         MockPoolCurrentStateRepo::not_found(),
         MockAnalyticsRepo::empty(),
         MockMetadataRepo::empty(),
-        MockPriceRepo::empty(),
     );
 
     let page = svc.list_pools(default_params()).await.unwrap();
     let item = &page.items[0];
 
     assert!(item.token_a.metadata.is_none());
-    assert!(item.token_a.price.is_none());
     assert!(item.token_b.metadata.is_none());
-    assert!(item.token_b.price.is_none());
 }
 
 #[tokio::test]
@@ -224,7 +215,6 @@ async fn token_sides_map_to_their_own_mint() {
             (token_a, make_metadata(token_a, "AAA")),
             (token_b, make_metadata(token_b, "BBB")),
         ]),
-        MockPriceRepo::empty(),
     );
 
     let page = svc.list_pools(default_params()).await.unwrap();
@@ -253,16 +243,13 @@ async fn partial_enrichment_one_side_only() {
         MockPoolCurrentStateRepo::not_found(),
         MockAnalyticsRepo::empty(),
         MockMetadataRepo::with(vec![(token_a, make_metadata(token_a, "AAA"))]),
-        MockPriceRepo::with(vec![(token_a, make_price(token_a))]),
     );
 
     let page = svc.list_pools(default_params()).await.unwrap();
     let item = &page.items[0];
 
     assert!(item.token_a.metadata.is_some());
-    assert!(item.token_a.price.is_some());
     assert!(item.token_b.metadata.is_none());
-    assert!(item.token_b.price.is_none());
 }
 
 #[tokio::test]
@@ -272,7 +259,6 @@ async fn get_pool_returns_none_for_unknown_pool() {
         MockPoolCurrentStateRepo::not_found(),
         MockAnalyticsRepo::empty(),
         MockMetadataRepo::empty(),
-        MockPriceRepo::empty(),
     );
 
     assert!(svc.get_pool_detail(&pk(99)).await.unwrap().is_none());
@@ -289,7 +275,6 @@ async fn get_pool_enriches_found_pool() {
         MockPoolCurrentStateRepo::not_found(),
         MockAnalyticsRepo::empty(),
         MockMetadataRepo::with(vec![(token_a, make_metadata(token_a, "AAA"))]),
-        MockPriceRepo::empty(),
     );
 
     let detail = svc.get_pool_detail(&addr).await.unwrap().unwrap();
@@ -321,7 +306,6 @@ async fn get_pool_detail_routes_to_the_matching_protocol_lookup() {
         pool_current_state_repository: Arc::new(MockPoolCurrentStateRepo::not_found()),
         pool_analytics_repository: Arc::new(MockAnalyticsRepo::empty()),
         token_metadata_repository: Arc::new(MockMetadataRepo::empty()),
-        token_price_repository: Arc::new(MockPriceRepo::empty()),
         signal_feed: Arc::new(MockSignalRepo::recent_empty()),
         pool_properties_lookups: vec![lookup.clone()],
         work_slots: work_slots(),
@@ -357,7 +341,6 @@ async fn get_pool_detail_skips_a_protocol_with_no_lookup() {
         pool_current_state_repository: Arc::new(MockPoolCurrentStateRepo::not_found()),
         pool_analytics_repository: Arc::new(MockAnalyticsRepo::empty()),
         token_metadata_repository: Arc::new(MockMetadataRepo::empty()),
-        token_price_repository: Arc::new(MockPriceRepo::empty()),
         signal_feed: Arc::new(MockSignalRepo::recent_empty()),
         pool_properties_lookups: vec![damm_v2_lookup.clone()],
         work_slots: work_slots(),
@@ -376,7 +359,6 @@ async fn paginate_error_propagates() {
         MockPoolCurrentStateRepo::not_found(),
         MockAnalyticsRepo::empty(),
         MockMetadataRepo::empty(),
-        MockPriceRepo::empty(),
     );
 
     assert!(svc.list_pools(default_params()).await.is_err());
@@ -390,7 +372,6 @@ async fn analytics_error_propagates() {
         MockPoolCurrentStateRepo::not_found(),
         MockAnalyticsRepo::failing(),
         MockMetadataRepo::empty(),
-        MockPriceRepo::empty(),
     );
 
     assert!(svc.list_pools(default_params()).await.is_err());
@@ -416,7 +397,6 @@ async fn present_analytics_are_attached_to_the_right_pool() {
         MockPoolCurrentStateRepo::not_found(),
         MockAnalyticsRepo::with(map),
         MockMetadataRepo::empty(),
-        MockPriceRepo::empty(),
     );
 
     let page = svc.list_pools(default_params()).await.unwrap();
@@ -451,7 +431,6 @@ async fn recent_signals_are_attached_to_the_right_pool() {
         MockPoolCurrentStateRepo::not_found(),
         MockAnalyticsRepo::empty(),
         MockMetadataRepo::empty(),
-        MockPriceRepo::empty(),
         MockSignalRepo::with_recent(map),
     );
 
@@ -477,7 +456,6 @@ async fn get_latest_state_returns_none_when_no_state() {
         MockPoolCurrentStateRepo::not_found(),
         MockAnalyticsRepo::empty(),
         MockMetadataRepo::empty(),
-        MockPriceRepo::empty(),
     );
 
     let result = svc.get_latest_state("anyaddr").await.unwrap();
@@ -494,7 +472,6 @@ async fn get_latest_state_returns_state_when_present() {
         MockPoolCurrentStateRepo::found(state.clone()),
         MockAnalyticsRepo::empty(),
         MockMetadataRepo::empty(),
-        MockPriceRepo::empty(),
     );
 
     let result = svc
@@ -508,6 +485,31 @@ async fn get_latest_state_returns_state_when_present() {
     // empty metadata), so the spot price cannot be rescaled → None,
     // never a fabricated value.
     assert!(result.spot_price_a_in_b.is_none());
+}
+
+#[tokio::test]
+async fn get_latest_state_carries_each_side_value() {
+    // Mutation: `get_latest_state` leaving `side_values` at its default.
+    let addr = pk(1);
+    let side_values = PoolSideValues {
+        value_a_usd: Some(Decimal::from(20)),
+        value_b_usd: None,
+    };
+    let svc = service(
+        PoolRepoOnce::with_pool(None),
+        MockPoolCurrentStateRepo::found(make_pool_current_state(addr))
+            .with_side_values(side_values),
+        MockAnalyticsRepo::empty(),
+        MockMetadataRepo::empty(),
+    );
+
+    let result = svc
+        .get_latest_state(&addr.to_string())
+        .await
+        .unwrap()
+        .expect("should be Some");
+
+    assert_eq!(result.side_values, side_values);
 }
 
 #[tokio::test]
@@ -528,7 +530,6 @@ async fn get_latest_state_derives_spot_price_when_resolvable() {
             (mint_a, make_metadata(mint_a, "AAA")),
             (mint_b, make_metadata(mint_b, "BBB")),
         ]),
-        MockPriceRepo::empty(),
     );
 
     let view = svc
@@ -557,7 +558,6 @@ async fn get_latest_state_propagates_repo_error() {
         MockPoolCurrentStateRepo::failing(),
         MockAnalyticsRepo::empty(),
         MockMetadataRepo::empty(),
-        MockPriceRepo::empty(),
     );
 
     assert!(svc.get_latest_state("anyaddr").await.is_err());
@@ -583,7 +583,6 @@ async fn get_pool_attaches_analytics_correctly() {
         MockPoolCurrentStateRepo::not_found(),
         MockAnalyticsRepo::with(map),
         MockMetadataRepo::empty(),
-        MockPriceRepo::empty(),
     );
 
     let enriched = svc.get_pool_detail(&addr).await.unwrap().unwrap().pool;
@@ -616,7 +615,6 @@ async fn top_pools_emits_in_rank_order() {
         MockPoolCurrentStateRepo::not_found(),
         MockAnalyticsRepo::with(map).with_top(vec![a1, a2]),
         MockMetadataRepo::empty(),
-        MockPriceRepo::empty(),
     );
 
     let top = svc.top_pools(PoolRankMetric::Volume24h, 10).await.unwrap();
@@ -648,7 +646,6 @@ async fn top_pools_cuts_every_limit_from_one_ranking() {
         MockPoolCurrentStateRepo::not_found(),
         MockAnalyticsRepo::with(map).with_top(vec![a1, a2, a3]),
         MockMetadataRepo::empty(),
-        MockPriceRepo::empty(),
     );
 
     let three = svc.top_pools(PoolRankMetric::Volume24h, 3).await.unwrap();
@@ -668,7 +665,6 @@ async fn top_pools_empty_when_no_ranking() {
         MockPoolCurrentStateRepo::not_found(),
         MockAnalyticsRepo::empty(),
         MockMetadataRepo::empty(),
-        MockPriceRepo::empty(),
     );
 
     let top = svc.top_pools(PoolRankMetric::Volume24h, 10).await.unwrap();
@@ -682,7 +678,6 @@ async fn top_pools_ranking_error_propagates() {
         MockPoolCurrentStateRepo::not_found(),
         MockAnalyticsRepo::failing(),
         MockMetadataRepo::empty(),
-        MockPriceRepo::empty(),
     );
 
     assert!(svc.top_pools(PoolRankMetric::Volume24h, 10).await.is_err());
@@ -704,7 +699,6 @@ async fn the_cached_ranking_waits_for_a_work_slot() {
         pool_current_state_repository: Arc::new(MockPoolCurrentStateRepo::not_found()),
         pool_analytics_repository: Arc::new(MockAnalyticsRepo::empty()),
         token_metadata_repository: Arc::new(MockMetadataRepo::empty()),
-        token_price_repository: Arc::new(MockPriceRepo::empty()),
         signal_feed: Arc::new(MockSignalRepo::recent_empty()),
         pool_properties_lookups: vec![],
         work_slots: slots.clone(),

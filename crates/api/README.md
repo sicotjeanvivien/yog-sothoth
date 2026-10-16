@@ -28,7 +28,7 @@ api/src/
 │   │                        (swap.rs, liquidity.rs) — mirrors core/domain
 │   ├── signal_stream.rs   ← SignalStreamPoller (enriches once, feeds the SSE broadcast)
 │   ├── cache.rs           ← SharedCache (moka) and its named CachePolicy per use
-│   ├── enriched_pool.rs   ← pool + embedded token/price composition
+│   ├── enriched_pool.rs   ← pool + embedded token composition
 │   └── enriched_signal.rs ← signal + embedded token pair of its pool
 ├── http/
 │   ├── handlers/          ← one module per route family
@@ -109,7 +109,7 @@ variant breaks the build there instead of silently dropping a field.
 | `GET` | `/api/pools/fee-tiers` | The fee tiers worth offering as a filter: the top-8 `fee_bps` values by pool count, each with its count, re-ordered ascending for display (non-paginated) |
 | `GET` | `/api/pools/top` | Top-N pools by `metric` — `volume_24h` (default) or `tvl`; non-paginated, default 10, capped at 20 |
 | `GET` | `/api/pools/{address}` | Single pool — everything the list returns, **plus** its protocol's own properties (see below) |
-| `GET` | `/api/pools/{address}/latest-state` | Latest observed AMM state for the pool |
+| `GET` | `/api/pools/{address}/latest-state` | Latest observed AMM state for the pool, and the USD value of each side under the TVL's 15-minute price bound |
 | `GET` | `/api/pools/{address}/history` | Hourly time-series buckets (`?days=N`) — volume, fees, liquidity, claims, USD-valued |
 | `GET` | `/api/pools/{address}/swap-events` | Paginated swap events |
 | `GET` | `/api/pools/{address}/liquidity-events` | Paginated liquidity events |

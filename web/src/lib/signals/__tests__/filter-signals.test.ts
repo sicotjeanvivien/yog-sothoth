@@ -19,7 +19,6 @@ function signal(
       name: null,
       decimals: 0,
       logoUri: null,
-      price: null,
     },
     tokenB: {
       mint: null,
@@ -27,7 +26,6 @@ function signal(
       name: null,
       decimals: 0,
       logoUri: null,
-      price: null,
     },
     severity,
     value: "0.75",
