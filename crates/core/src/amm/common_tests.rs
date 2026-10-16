@@ -88,8 +88,7 @@ fn test_imbalance_fully_skewed_is_max() {
 
 #[test]
 fn test_imbalance_real_pool_values() {
-    // From live pool: 85 SOL vs 3167 USDC — not comparable in native units
-    // but the function measures ratio deviation regardless of units
+    // Native units are not comparable; the function measures the ratio regardless.
     let reserve_a = 85_000_000_000u128;
     let reserve_b = 3_167_000_000u128;
     let result = imbalance(reserve_a, reserve_b).unwrap();

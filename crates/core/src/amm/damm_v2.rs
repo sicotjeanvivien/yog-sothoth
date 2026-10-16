@@ -5,42 +5,30 @@ use crate::CoreResult;
 use crate::amm::common::price_impact;
 use crate::error::CoreError;
 
-/// cp-amm fee denominator: a fee numerator `n` represents the fraction
-/// `n / FEE_DENOMINATOR`. 1e9 → a numerator of 2_500_000 is 0.25 %.
+/// cp-amm fee denominator: a numerator `n` is the fraction `n / 1e9`.
 const FEE_DENOMINATOR: u64 = 1_000_000_000;
 
 /// How a DAMM v2 pool's **base** trading fee behaves over time.
-///
-/// Decoded from the `BaseFeeMode` discriminant plus the scheduler period
-/// count — the mode byte alone is not enough, since a scheduler mode with
-/// zero periods is a constant fee (see [`base_fee_kind_from`]).
-/// Serialized in `snake_case` so serde agrees with [`BaseFeeKind::as_str`],
-/// which the DB column and the wire already use. Two text spellings of one enum
-/// is a divergence waiting for its first consumer.
+/// ⚠️ serde's `snake_case` must match [`BaseFeeKind::as_str`], the DB and wire spelling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BaseFeeKind {
-    /// Fixed fee — no scheduling (any scheduler mode with
-    /// `number_of_period == 0`).
+    /// Fixed fee: any scheduler mode with `number_of_period == 0`.
     Constant,
     /// Fee scheduler with linear decay (mode 0, `number_of_period > 0`).
     SchedulerLinear,
     /// Fee scheduler with exponential decay (mode 1, `number_of_period > 0`).
     SchedulerExponential,
-    /// Rate limiter / anti-sniper (mode 2). Its internal parameters are
-    /// deliberately not decoded — that layout reuses bytes 8..26 and has no
-    /// captured fixture to validate against.
+    /// Rate limiter / anti-sniper (mode 2); its parameters are not decoded.
     RateLimiter,
     /// Market-cap scheduler with linear decay (mode 3, `number_of_period > 0`).
     MarketCapSchedulerLinear,
-    /// Market-cap scheduler with exponential decay (mode 4,
-    /// `number_of_period > 0`).
+    /// Market-cap scheduler with exponential decay (mode 4, `number_of_period > 0`).
     MarketCapSchedulerExponential,
 }
 
 impl BaseFeeKind {
-    /// Stable, lowercase discriminant for persistence / the wire. Kept in
-    /// sync with the DB `base_fee_kind` column values.
+    /// Stable discriminant of the DB `base_fee_kind` column and the wire.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Constant => "constant",
@@ -53,37 +41,15 @@ impl BaseFeeKind {
     }
 }
 
-/// Map a `BaseFeeMode` discriminant and a scheduler period count to the fee
-/// *shape*.
-///
-/// Called from one place today — the account decoder, which reads the mode at
-/// offset 16 and the period count at 22 of the zero-copy struct. It is kept
-/// here rather than inlined there because the same two quantities also sit in
-/// the genesis event's borsh blob at different offsets (26 and 8), a blob still
-/// captured verbatim though nothing decodes it any more: the *meaning* of the
-/// pair is protocol knowledge, and it should not have to be rediscovered if a
-/// second reader appears.
-///
-/// # Why the period count is part of the decision
-///
-/// The mode byte alone cannot tell a constant fee from a scheduler: every
-/// scheduler mode with `number_of_period == 0` never moves, and is therefore a
-/// constant fee. This holds for all four scheduler modes (0, 1, 3, 4), whose
-/// layouts all place `number_of_period` at the same spot within their variant.
-///
-/// **Mode 2 (rate limiter) is the exception** and must not consult it: its
-/// layout puts `fee_increment_bps` where the schedulers keep the period count,
-/// so the value passed in is meaningless for that arm.
-///
-/// Fails loud on an unrecognised discriminant — the caller decides whether that
-/// is fatal or merely leaves the shape unknown.
+/// Map a `BaseFeeMode` discriminant and a scheduler period count to the fee shape.
+/// ⚠️ A scheduler mode with zero periods is a constant fee; mode 2 must not read
+/// the period count, its layout puts `fee_increment_bps` there.
 pub fn base_fee_kind_from(mode: u8, number_of_period: u16) -> CoreResult<BaseFeeKind> {
     Ok(match mode {
         // Scheduler modes with no periods never move → a constant fee.
         0 | 1 | 3 | 4 if number_of_period == 0 => BaseFeeKind::Constant,
         0 => BaseFeeKind::SchedulerLinear,
         1 => BaseFeeKind::SchedulerExponential,
-        // Rate limiter: `number_of_period` is not consulted — see above.
         2 => BaseFeeKind::RateLimiter,
         3 => BaseFeeKind::MarketCapSchedulerLinear,
         4 => BaseFeeKind::MarketCapSchedulerExponential,
@@ -95,43 +61,16 @@ pub fn base_fee_kind_from(mode: u8, number_of_period: u16) -> CoreResult<BaseFee
     })
 }
 
-/// Convert a cp-amm fee numerator to basis points. The fee fraction is
-/// `numerator / FEE_DENOMINATOR`; in bps that is `numerator / 100_000`. Exact
-/// in `Decimal` (e.g. 2_500_000 → 25, 500_000_000 → 5000, 250_000 → 2.5).
-///
-/// Public because the cliff fee numerator is also read directly (as the leading
-/// `u64`) from the on-chain `Pool` account by yog-context, bypassing the borsh
-/// event blobs entirely.
+/// Convert a cp-amm fee numerator to basis points, exact in `Decimal` (2_500_000 → 25).
 pub fn fee_numerator_to_bps(numerator: u64) -> Decimal {
     Decimal::from(numerator) / Decimal::from(FEE_DENOMINATOR / 10_000)
 }
 
-/// Q64.64 fixed-point scale factor: the on-chain `sqrt_price` encodes
-/// `sqrt(price) * 2^64`. As `f64` (exact — 2^64 is a power of two).
 const Q64_SCALE: f64 = 18_446_744_073_709_551_616.0; // 2^64
 
-/// Derive a pool's **spot price** — units of token B per 1 unit of token A, in
-/// human (decimal-adjusted) terms — from the on-chain Q64.64 `sqrt_price`.
-///
-/// DAMM v2 is concentrated liquidity (Uniswap-v3 style), so the spot price is
-/// carried by `sqrt_price`, **not** by the reserve ratio: reserves reflect
-/// *where* liquidity is parked across price ranges, not the active trading
-/// price. `sqrt_price` encodes `sqrt(raw_price) * 2^64`, where `raw_price` is
-/// token B per token A in their raw on-chain integer units. Squaring undoes the
-/// square root, dividing out the `2^64` factor undoes the fixed point, and
-/// `10^(decimals_a - decimals_b)` rescales raw units to human units:
-///
-/// ```text
-/// price_a_in_b = (sqrt_price / 2^64)^2 * 10^(decimals_a - decimals_b)
-/// ```
-///
-/// Computed in `f64`. This is a **display / comparison ratio** (a handful of
-/// significant figures), not a token quantity, so the project's lossless-integer
-/// rule does not apply: `f64`'s ~15 significant digits far exceed any price's
-/// display need, and squaring a `u128` exactly would overflow `Decimal` anyway.
-/// Validated against real mainnet pool states (see tests). Returns `None` when
-/// the result is not a finite, strictly positive number (a zero / garbage
-/// `sqrt_price`, or a magnitude `Decimal` cannot hold).
+/// Spot price, token B per token A in human units, from the Q64.64 `sqrt_price`.
+/// ⚠️ Not the reserve ratio: in concentrated liquidity reserves are not the price.
+/// `f64` is fine for a display ratio; `None` unless finite and positive.
 pub fn sqrt_price_to_price_a_in_b(
     sqrt_price: u128,
     decimals_a: u8,
@@ -147,29 +86,9 @@ pub fn sqrt_price_to_price_a_in_b(
     Decimal::from_f64_retain(price).map(|d| d.normalize())
 }
 
-/// Apply the DAMM v2 fee to an input amount, in basis points (1 bp = 0.01%).
-/// Returns the amount net of fees.
-///
-/// ⚠️ **Dormant, and it disagrees with cp-amm in three independent ways.** Its
-/// only caller is [`net_price_impact`], dormant for the same reason — nothing
-/// outside this pair reaches it, which is why none of these has ever produced a
-/// wrong number. They are listed because each survives even if the
-/// constant-product model of [`super::common`] is one day replaced, and because
-/// "apply the fee" reads like a settled question:
-///
-/// 1. **`fee_bps: u32` truncates sub-bp tiers.** A pool at 2.5 bps becomes 2 —
-///    a 20 % error on the fee. [`fee_numerator_to_bps`], twenty lines above in
-///    this same file, returns `Decimal` precisely to keep those fractions.
-/// 2. **It rounds down; cp-amm rounds up.** The program computes
-///    `⌈amount × numerator / 1e9⌉`, so this under-charges by up to one unit on
-///    every trade.
-/// 3. **It takes the fee off the input.** Under `CollectFeeMode::BothToken`
-///    cp-amm takes it off the **output** — a choice `compute_fee_token_is_a`
-///    already models correctly in the indexer's translator, from the pool's own
-///    `collect_fee_mode`, which this signature cannot even express.
-///
-/// Fixing them means deciding a `Decimal` signature, a rounding direction and a
-/// fee-side parameter — worth doing against a real caller, not in advance.
+/// Amount net of a fee in bps, taken off the input.
+/// ⚠️ Dormant, and wrong three ways against cp-amm: `u32` truncates sub-bp tiers,
+/// it rounds down (cp-amm up), and `BothToken` takes the fee off the output.
 pub fn fee_adjusted_amount(amount_in: u128, fee_bps: u32) -> CoreResult<u128> {
     let fee = amount_in.checked_mul(fee_bps as u128).ok_or_else(|| {
         crate::error::CoreError::ArithmeticOverflow {
@@ -180,20 +99,9 @@ pub fn fee_adjusted_amount(amount_in: u128, fee_bps: u32) -> CoreResult<u128> {
     Ok(amount_in.saturating_sub(fee))
 }
 
-/// Net price impact of a DAMM v2 swap, after fees: the fee is taken off
-/// `amount_in`, and the remainder drives the impact calculation.
-///
-/// ⚠️ **Dormant, and it inherits both problems above.** From
-/// [`fee_adjusted_amount`], the three fee divergences — including that taking
-/// the fee off the *input* is only one of cp-amm's two modes, so the premise of
-/// the line above is itself half right. From [`super::common::price_impact`],
-/// a constant-product model whose error on a concentrated-liquidity pool has no
-/// fixed sign.
-///
-/// It is also the most *plausible-looking* name in the module — "net price
-/// impact, after fees" is exactly what a price-impact detector would reach for,
-/// and it would get a number that is neither a floor nor a ceiling, with no
-/// error to catch. See the [`super::common`] module note before wiring it.
+/// Price impact of a swap after fees.
+/// ⚠️ Dormant: inherits the fee errors of [`fee_adjusted_amount`] and the
+/// constant-product model of [`super::common`]. Neither a floor nor a ceiling.
 pub fn net_price_impact(
     reserve_a: u128,
     reserve_b: u128,
@@ -208,8 +116,7 @@ pub fn net_price_impact(
 // Fee scheduler — the base fee as a function of time
 // ============================================================
 
-/// Basis-point denominator of the exponential decay factor
-/// (`cp-amm::constants::fee::MAX_BASIS_POINT`).
+/// `cp-amm::constants::fee::MAX_BASIS_POINT`.
 const MAX_BASIS_POINT: u128 = 10_000;
 
 /// 1.0 in Q64.64 (`cp-amm::constants::ONE_Q64`).
@@ -219,35 +126,20 @@ const ONE_Q64: u128 = 1u128 << 64;
 const SCALE_OFFSET: u32 = 64;
 
 /// Exponent ceiling of [`pow`] (`cp-amm::math::fee_math::MAX_EXPONENTIAL`).
-/// Above it the Q64.64 result cannot be represented.
 const MAX_EXPONENTIAL: u32 = 0x8_0000;
 
-/// A curve whose periods have no length never advances, and cp-amm returns its
-/// cliff rather than failing — the short-circuit that opens
-/// `get_base_fee_numerator` (`fee_time_scheduler.rs:122`).
+/// A zero period length never advances: cp-amm returns the cliff, not an error
+/// (`fee_time_scheduler.rs:122`).
 const ZERO_FREQUENCY_STAYS_AT_CLIFF: u64 = 0;
 
-/// The parameters a **time-based** fee scheduler needs to place a pool's base
-/// fee on its decay curve.
-///
-/// A named struct rather than six positional arguments: four of the six are
-/// integers of similar magnitude, so a swapped pair would compile silently and
-/// produce a plausible-but-wrong fee.
-///
-/// ⚠️ Only meaningful for [`BaseFeeKind::SchedulerLinear`] and
-/// [`BaseFeeKind::SchedulerExponential`]. The market-cap schedulers decay on
-/// capitalisation rather than time, and `rate_limiter` reinterprets the very
-/// same account bytes — reading `period_frequency` off a mode-2 or mode-4
-/// account yields garbage, which is visible on real fixtures (one returns
-/// 13 722 280 043 814 587 382). The decoder is what refuses to build this
-/// struct for those modes; nothing here can detect it.
+/// What a **time-based** fee scheduler needs to place a pool's base fee on its curve.
+/// ⚠️ Only for the two time schedulers: other modes reinterpret these bytes, and
+/// only the decoder refuses to build it for them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FeeSchedulerParams {
-    /// Fee numerator at period 0 — the **starting** fee, hence the maximum of a
-    /// decaying curve.
+    /// Fee numerator at period 0: the maximum of a decaying curve.
     pub cliff_fee_numerator: u64,
-    /// How many periods the decay runs for. Past it, the fee is frozen at the
-    /// floor.
+    /// Periods the decay runs for; past them the fee stays at the floor.
     pub number_of_period: u16,
     /// Length of one period, in the unit named by `activation_type`.
     pub period_frequency: u64,
@@ -256,57 +148,29 @@ pub struct FeeSchedulerParams {
     pub reduction_factor: u64,
     /// Start of the curve, a slot or a Unix timestamp.
     pub activation_point: u64,
-    /// Which unit `activation_point` and `period_frequency` are in:
-    /// **0 = slot, 1 = timestamp**. All eleven captured mainnet accounts use 1.
+    /// Unit of `activation_point` and `period_frequency`: **0 = slot, 1 = timestamp**.
     pub activation_type: u8,
     /// Linear or exponential. Any other kind must not reach this type.
     pub kind: BaseFeeKind,
 }
 
 impl FeeSchedulerParams {
-    /// The point past which the fee stops moving:
-    /// `activation_point + number_of_period × period_frequency`.
-    ///
-    /// `None` on overflow, which no real account produces but which a garbage
-    /// decode would.
+    /// `activation_point + number_of_period × period_frequency`; `None` on overflow.
     pub fn expiry_point(&self) -> Option<u64> {
         u64::from(self.number_of_period)
             .checked_mul(self.period_frequency)
             .and_then(|span| self.activation_point.checked_add(span))
     }
 
-    /// Whether the decay has finished at `current_point` — the fee is then
-    /// static at its floor, and the cliff has no relation to what a trader pays.
-    ///
-    /// This is the case that made the audit's measurement so wide: both pools
-    /// found at ×5 and ×49 had **expired** schedulers, so the gap was permanent
-    /// rather than a snapshot taken mid-decay.
+    /// Whether the decay has finished: the fee is then at its floor, not the cliff.
     pub fn is_expired_at(&self, current_point: u64) -> bool {
         self.expiry_point()
             .is_some_and(|expiry| current_point > expiry)
     }
 
-    /// How many periods have elapsed at `current_point`, clamped to
-    /// `number_of_period`.
-    ///
-    /// ⚠️ **Before activation the period is `number_of_period`, not 0** — so a
-    /// not-yet-activated pool sits at its **floor**, not at its cliff. That is
-    /// cp-amm's behaviour (`fee_time_scheduler.rs`), it is not in the public
-    /// docs, and it is the opposite of what the name "cliff" suggests.
-    ///
-    /// ⚠️ **A zero `period_frequency` is not an error**: cp-amm short-circuits on
-    /// it *before* anything else and returns the cliff
-    /// (`fee_time_scheduler.rs:122`), so a curve that cannot advance simply
-    /// never leaves its starting point. [`ZERO_FREQUENCY_STAYS_AT_CLIFF`] carries
-    /// that, and this function reports "no elapsed periods" for it.
-    ///
-    /// Two earlier shapes of this got it wrong in opposite directions — first
-    /// returning the floor, then returning `None` on the strength of a
-    /// `safe_div` that the short-circuit means is never reached. Both were
-    /// written from a summary of the source rather than the source. On-chain
-    /// `validate` requires the three scheduler fields to be non-zero together,
-    /// so no real account exercises this; it is transcribed because a port that
-    /// drops an unreachable branch is a port that has quietly stopped being one.
+    /// Periods elapsed at `current_point`, clamped to `number_of_period`.
+    /// ⚠️ Before activation it is `number_of_period` (the floor, not the cliff),
+    /// and a zero `period_frequency` gives 0, as in cp-amm.
     fn elapsed_periods(&self, current_point: u64) -> u16 {
         if self.period_frequency == ZERO_FREQUENCY_STAYS_AT_CLIFF {
             return 0;
@@ -315,28 +179,17 @@ impl FeeSchedulerParams {
             return self.number_of_period;
         }
         let elapsed = (current_point - self.activation_point) / self.period_frequency;
-        // Saturate then clamp. cp-amm clamps in `u64` and casts afterwards, so
-        // its cast can never fail; doing it in this order is equivalent because
-        // `number_of_period` is itself a `u16`. **The saturation is load-bearing**:
-        // a real pool with a one-second period passes `u16::MAX` elapsed periods
-        // about 18 hours after activation, and a wrapping or zeroing conversion
-        // there would send it back to period 0 — republishing the cliff, which is
-        // the exact defect this module exists to remove.
+        // ⚠️ Saturate, never wrap: a one-second period passes `u16::MAX` within a day,
+        // and wrapping to 0 would republish the cliff.
         u16::try_from(elapsed)
             .unwrap_or(u16::MAX)
             .min(self.number_of_period)
     }
 }
 
-/// The **base fee numerator actually in force** at `current_point`.
-///
-/// Transcribed from cp-amm's `FeeTimeScheduler::get_base_fee_numerator`
-/// (`programs/cp-amm/src/base_fee/fee_time_scheduler.rs`) and
-/// `get_fee_in_period` (`math/fee_math.rs`), read from the source rather than
-/// the public documentation — the docs give an approximate formula and omit
-/// both the before-activation branch and the Q64.64 arithmetic.
-///
-/// Returns `None` only on arithmetic the on-chain program would also reject.
+/// The **base fee numerator in force** at `current_point`, ported from cp-amm's
+/// `get_base_fee_numerator` and `get_fee_in_period`, not from the public docs.
+/// `None` only on arithmetic the program would also reject.
 pub fn base_fee_numerator_at(params: &FeeSchedulerParams, current_point: u64) -> Option<u64> {
     if params.period_frequency == ZERO_FREQUENCY_STAYS_AT_CLIFF {
         return Some(params.cliff_fee_numerator);
@@ -350,19 +203,13 @@ pub fn base_fee_numerator_at(params: &FeeSchedulerParams, current_point: u64) ->
         BaseFeeKind::SchedulerExponential => {
             fee_in_period(params.cliff_fee_numerator, params.reduction_factor, period)
         }
-        // Not a time scheduler. Unreachable — the decoder only builds these
-        // params for the two modes above — and `None` rather than the cliff on
-        // purpose: the cliff is precisely the wrong number this computation
-        // exists to stop publishing, so a fallback that returns it would quietly
-        // reinstate the defect the day this arm becomes reachable.
+        // ⚠️ `None`, never the cliff: the cliff is the wrong number this exists to replace.
         _ => None,
     }
 }
 
-/// `cliff × (1 - reduction_factor / 10_000) ^ passed_period`, in Q64.64.
-///
-/// Verbatim port of cp-amm's `get_fee_in_period`, including its
-/// `reduction_factor == 0` short-circuit.
+/// `cliff × (1 - reduction_factor / 10_000) ^ passed_period`, in Q64.64;
+/// verbatim port of cp-amm's `get_fee_in_period`.
 fn fee_in_period(
     cliff_fee_numerator: u64,
     reduction_factor: u64,
@@ -380,23 +227,9 @@ fn fee_in_period(
     u64::try_from(fee).ok()
 }
 
-/// Q64.64 exponentiation by squaring — a port of cp-amm's `pow`
-/// (`math/fee_math.rs`), kept structurally faithful rather than rewritten.
-///
-/// ## Why not `f64::powi`
-///
-/// The on-chain fee is whatever this integer arithmetic yields, truncation
-/// included. A floating-point approximation would disagree with the chain in
-/// the last basis points — precisely the range that separates a 400 bps floor
-/// from a 402 bps one, and precisely what this computation is for.
-///
-/// ## The inversion branch
-///
-/// cp-amm inverts the base when `base >= 1.0` so that repeated squaring shrinks
-/// instead of overflowing. **The fee scheduler never takes that branch**: its
-/// base is `1 - reduction_factor/10_000`, always below 1. It is transcribed
-/// anyway — dropping a branch because today's only caller cannot reach it is
-/// how a port silently diverges from its source.
+/// Q64.64 exponentiation by squaring, ported from cp-amm's `pow`.
+/// ⚠️ Not `f64::powi`: the chain's fee is this integer arithmetic, truncation
+/// included. The inversion branch is unreachable here and kept for fidelity.
 fn pow(base: u128, exp: i32) -> Option<u128> {
     if exp == i32::MIN {
         return None;
@@ -419,11 +252,8 @@ fn pow(base: u128, exp: i32) -> Option<u128> {
         invert = !invert;
     }
 
-    // cp-amm unrolls this over 19 bits (0x1 … 0x40000): nineteen tests with
-    // eighteen squarings *between* them. A loop is the same computation without
-    // inviting a copy/paste slip on the nineteenth line — but it must not square
-    // after the last test, or it can overflow and return `None` where the chain
-    // returns a fee.
+    // ⚠️ No squaring after the last bit: it can overflow and return `None`
+    // where the chain returns a fee.
     let mut bit = 1u32;
     loop {
         if exp & bit > 0 {
@@ -444,10 +274,6 @@ fn pow(base: u128, exp: i32) -> Option<u128> {
     }
     Some(result)
 }
-
-// ============================================================
-// Tests
-// ============================================================
 
 #[cfg(test)]
 #[path = "damm_v2_tests.rs"]
