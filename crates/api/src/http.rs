@@ -125,7 +125,8 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         .routes(routes!(handlers::pools::get_pool_latest_state))
         .routes(routes!(handlers::pools::list_pool_swaps))
         .routes(routes!(handlers::pools::list_pool_liquidity_events))
-        .routes(routes!(handlers::network_status::get_network_status))
+        .routes(routes!(handlers::network::get_network))
+        .routes(routes!(handlers::ingestion::get_ingestion))
         // ── Signal feed (live) — capped by its own slots, see the handler ──
         .routes(routes!(handlers::signals::stream_signals))
         .routes(routes!(handlers::token::get_token))

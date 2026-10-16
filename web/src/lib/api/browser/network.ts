@@ -1,0 +1,14 @@
+/**
+ * Browser-side fetcher for `GET /api/network`: the slot and latency the
+ * sidebar's `NetworkStatusPanel` polls through the public gateway.
+ *
+ * @throws ApiClientError on any transport, HTTP, or schema failure.
+ */
+
+import { apiGetBrowser } from "@/lib/api/client/browser";
+import { zGetNetworkResponse, type NetworkResponse } from "../schema/zod.gen";
+
+/** Fetch the chain's latest slot, as the probe saw it. */
+export async function fetchNetworkBrowser(): Promise<NetworkResponse> {
+  return apiGetBrowser("/api/network", {}, zGetNetworkResponse);
+}

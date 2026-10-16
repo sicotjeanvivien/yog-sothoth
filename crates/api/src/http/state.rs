@@ -10,8 +10,9 @@ use tokio_util::sync::CancellationToken;
 use yog_persistence::PgHealthChecker;
 
 use crate::application::{
-    AnnouncementService, EnrichedSignal, MeteoraDammV2LiquidityService, MeteoraDammV2SwapService,
-    NetworkStatusService, PoolService, SignalService, StatsService, TokenService, WorkSlots,
+    AnnouncementService, EnrichedSignal, IngestionService, MeteoraDammV2LiquidityService,
+    MeteoraDammV2SwapService, NetworkService, PoolService, SignalService, StatsService,
+    TokenService, WorkSlots,
 };
 
 /// Application-level dependencies shared across HTTP handlers.
@@ -30,7 +31,8 @@ pub(crate) struct AppState {
     pub(crate) pool_service: Arc<PoolService>,
     pub(crate) swap_service: Arc<MeteoraDammV2SwapService>,
     pub(crate) liquidity_service: Arc<MeteoraDammV2LiquidityService>,
-    pub(crate) network_status_service: Arc<NetworkStatusService>,
+    pub(crate) network_service: Arc<NetworkService>,
+    pub(crate) ingestion_service: Arc<IngestionService>,
     pub(crate) signal_service: Arc<SignalService>,
     /// Live end of the signal feed: SSE handlers `subscribe()` here;
     /// the [`SignalStreamPoller`](crate::application::SignalStreamPoller)
