@@ -1,9 +1,6 @@
 use super::*;
 
-// SAFETY-NOTE on env tests: tests run in parallel by default, and
-// `env::set_var` is process-global. Tests that mutate the
-// environment must use unique key names to avoid interfering with
-// each other.
+// ⚠️ `set_var` is process-global and the harness parallel: every test uses unique key names.
 
 #[test]
 fn required_returns_value_when_present() {
@@ -81,9 +78,6 @@ fn parse_required_bool_rejects_garbage() {
 }
 
 // ── parse_required_enum ──────────────────────────────────────────────
-//
-// A stand-in enum: what is under test is the helper's contract, not a set of
-// names.
 
 #[derive(Debug, PartialEq, Eq)]
 enum Colour {
@@ -115,9 +109,7 @@ fn parse_required_enum_accepts_a_known_name() {
     );
 }
 
-/// ⚠️ Case-insensitivity belongs to the helper: implementors match lowercase
-/// literals, so if it stopped lowercasing, every enum would refuse what an
-/// operator types.
+/// Mutation: the helper no longer lowercasing; implementors match lowercase only.
 #[test]
 fn parse_required_enum_ignores_case() {
     // SAFETY: unique keys, isolated from other tests
@@ -135,8 +127,7 @@ fn parse_required_enum_ignores_case() {
     );
 }
 
-/// Same, for whitespace: a `\r` from the CRLF `.env` would be refused with a
-/// value that looks right.
+/// Mutation: no trim, and a CRLF `\r` refuses a value that looks right.
 #[test]
 fn parse_required_enum_ignores_surrounding_whitespace() {
     // SAFETY: unique key, isolated from other tests
@@ -228,8 +219,7 @@ fn parse_optional_refuses_what_the_type_refuses() {
     );
 }
 
-/// Absent and blank both read as "not configured" — a `FOO=` left in a `.env`
-/// must not turn into a URL the daemon then tries to reach.
+/// Absent and blank both read as "not configured".
 #[test]
 fn optional_secret_url_reads_blank_and_absent_as_none() {
     // SAFETY: unique key, isolated from other tests

@@ -1,12 +1,5 @@
 //! Tests for [`Endpoint`] and its reader, `required_endpoint`.
-//!
-//! Every guard below was put in failure before being trusted: the assembly, the
-//! two refusals and the fail-closed `Display` were each mutated in turn and
-//! each turned this file red. A guard nobody has seen fail is a guard nobody
-//! knows works.
-//!
-//! SAFETY-NOTE on env tests, as in `env_tests.rs`: `set_var` is process-global
-//! and the harness is parallel, so every test here uses **unique key names**.
+//! ⚠️ `set_var` is process-global and the harness parallel: every test uses unique key names.
 
 use super::*;
 use crate::{
@@ -16,13 +9,8 @@ use crate::{
 use std::env;
 
 /// Build one without an environment to read it from.
-///
-/// The crate-private constructor, **not** `Endpoint::for_tests`, even though
-/// that exists for other crates: a feature-gated constructor used here would
-/// compile green under `--workspace` — where `yog-context`'s dev-dependency
-/// turns `test-support` on for everyone — and red under
-/// `cargo test -p yog-bootstrap`. Measured on this file, which is the trap
-/// `crates/README.md` warns about, seen from inside.
+/// ⚠️ Not `Endpoint::for_tests`: feature-gated, it compiles under `--workspace`
+/// only, and `cargo test -p yog-bootstrap` would fail.
 fn endpoint(template: &str, key: Option<&str>) -> Endpoint {
     Endpoint::new(template.to_string(), None, key.map(SecretKey::new))
 }
@@ -38,9 +26,7 @@ fn with_header(template: &str, header: (&str, &str), key: Option<&str>) -> Endpo
 
 // ── assembly ────────────────────────────────────────────────────────
 
-/// The substitution happens where the operator wrote it, and nowhere else —
-/// which is the whole reason the code knows no provider: Helius' `?api-key=`
-/// and Alchemy's `/v2/<key>` are the same line of code here.
+/// The substitution happens where the operator wrote it, query or path alike.
 #[test]
 fn the_key_is_substituted_at_the_placeholder() {
     let query = endpoint("https://host/?api-key={key}", Some("abc123"));
@@ -50,8 +36,7 @@ fn the_key_is_substituted_at_the_placeholder() {
     assert_eq!(path.url().expose(), "https://host/v2/abc123");
 }
 
-/// A public endpoint is called exactly as written. `api.mainnet-beta.solana.com`
-/// wants no credential, and the local workflow points all five endpoints at it.
+/// A public endpoint is called exactly as written.
 #[test]
 fn a_url_without_a_placeholder_is_used_verbatim() {
     let public = endpoint("https://api.mainnet-beta.solana.com", None);
@@ -60,9 +45,7 @@ fn a_url_without_a_placeholder_is_used_verbatim() {
 
 // ── what the reader refuses ─────────────────────────────────────────
 
-/// The refusal names **the variable**, not just its kind: the operator reads
-/// this in a crash log with nothing else to go on, and `MissingVariable` is the
-/// one variant that carries no value alongside it.
+/// Mutation: a refusal that does not name the missing `_KEY` variable.
 #[test]
 fn a_placeholder_without_its_key_is_refused_by_name() {
     // SAFETY: unique keys, isolated from other tests
@@ -76,10 +59,7 @@ fn a_placeholder_without_its_key_is_refused_by_name() {
     }
 }
 
-/// A blank `_KEY` is the same oversight as an absent one, and must not be the
-/// gap the guard above leaves open: `FOO=` in a `.env` — or `${FOO:-}` in the
-/// compose file, which is how the container gets it — must not start a process
-/// whose address carries a literal `{key}`.
+/// Mutation: a blank `_KEY` read as set, which sends a literal `{key}`.
 #[test]
 fn a_blank_key_is_refused_like_an_absent_one() {
     // SAFETY: unique keys, isolated from other tests
@@ -93,9 +73,7 @@ fn a_blank_key_is_refused_like_an_absent_one() {
     }
 }
 
-/// The same failure from the other side: a credential that is configured and
-/// goes nowhere. Both variables are named, because the fix is in one of them
-/// and the operator is the one who knows which.
+/// A key with no `{key}` to receive it is refused, naming both variables.
 #[test]
 fn a_key_with_nowhere_to_go_is_refused_naming_both() {
     // SAFETY: unique keys, isolated from other tests
@@ -116,8 +94,7 @@ fn a_key_with_nowhere_to_go_is_refused_naming_both() {
     }
 }
 
-/// The URL itself is required, and its absence names it — the reader must not
-/// swallow it into the key's refusal.
+/// Mutation: a missing URL reported as the key's refusal.
 #[test]
 fn an_absent_url_is_refused_by_name() {
     match required_endpoint("YOG_TEST_EP_ABSENT") {
@@ -126,10 +103,7 @@ fn an_absent_url_is_refused_by_name() {
     }
 }
 
-/// The two names are **derived from the prefix**. Asserted here because that
-/// derivation is the point of taking a prefix rather than two names: a caller
-/// spelling them itself is a convention, and this repository has measured what
-/// conventions are worth at the ninth site.
+/// The `_URL` and `_KEY` names are derived from the prefix.
 #[test]
 fn both_variables_are_derived_from_the_prefix() {
     // SAFETY: unique keys, isolated from other tests
@@ -141,8 +115,7 @@ fn both_variables_are_derived_from_the_prefix() {
     assert_eq!(endpoint.url().expose(), "https://host/v2/abc123");
 }
 
-/// `required` trims for the whole workspace; the pair inherits it, on both
-/// halves. The `.env` here is CRLF and the native workflow sources it.
+/// Both halves inherit `required`'s trim, against a CRLF `.env`.
 #[test]
 fn both_halves_are_trimmed() {
     // SAFETY: unique keys, isolated from other tests
@@ -156,9 +129,7 @@ fn both_halves_are_trimmed() {
 
 // ── what it prints ──────────────────────────────────────────────────
 
-/// The return on the whole design: an address with `{key}` in it hides nothing,
-/// so a startup log names the endpoint **in full** — no arbitrage left between
-/// the diagnostic and the leak.
+/// An address with `{key}` prints in full.
 #[test]
 fn a_template_is_printed_whole() {
     let endpoint = endpoint(
@@ -175,11 +146,7 @@ fn a_template_is_printed_whole() {
     );
 }
 
-/// And the fail-closed half. An operator who pastes the credential straight
-/// into the URL — the old shape, which every existing `.env` still has — gets
-/// the redacted form, because nothing here can tell that URL apart from a
-/// genuinely public one. Without this, the readability win of the test above
-/// would double as a leak the first time somebody filled the file the old way.
+/// Mutation: printing a URL without `{key}` in full; it may hold an inlined key.
 #[test]
 fn a_url_without_a_placeholder_is_redacted() {
     let pasted = endpoint("https://mainnet.helius-rpc.com/?api-key=s3cret", None);
@@ -195,11 +162,7 @@ fn a_url_without_a_placeholder_is_redacted() {
     );
 }
 
-/// A `{key}` accounts for the credential the operator moved out — and for
-/// nothing else. The components a template has no business carrying are
-/// redacted whether or not it has a placeholder, because "it has a `{key}`, so
-/// it hides nothing" is an assumption about the *rest* of the URL that nobody
-/// can make. Found in review, 6 September 2026: this line printed whole.
+/// Mutation: trusting a `{key}` template whole; its userinfo and fragment still go.
 #[test]
 fn a_second_credential_does_not_ride_the_placeholder_out() {
     let userinfo = endpoint("https://user:s3cret@host/?api-key={key}", Some("k"));
@@ -212,8 +175,7 @@ fn a_second_credential_does_not_ride_the_placeholder_out() {
         "Debug leaked it: {userinfo:?}"
     );
 
-    // A bare-token userinfo — `https://<token>@host` — has no `:` to split on,
-    // so the whole of it goes; the host is what the log needed anyway.
+    // A bare-token userinfo has no `:` to split on: the whole of it goes.
     let token = endpoint("https://s3cret@host/v2/{key}", Some("k"));
     assert_eq!(token.to_string(), "https://***REDACTED***@host/v2/{key}");
 
@@ -221,9 +183,7 @@ fn a_second_credential_does_not_ride_the_placeholder_out() {
     assert_eq!(fragment.to_string(), "https://host/v2/{key}#***REDACTED***");
 }
 
-/// And the readability the fix must not cost: path and query are exactly where
-/// the placeholder lives, so they stay legible. A redaction that swallowed them
-/// would give back the arbitrage this design removed.
+/// Mutation: redacting path or query of a `{key}` template, where the placeholder lives.
 #[test]
 fn the_placeholder_and_its_carrier_stay_legible() {
     let query = endpoint("https://mainnet.helius-rpc.com/?api-key={key}", Some("k"));
@@ -241,9 +201,7 @@ fn the_placeholder_and_its_carrier_stay_legible() {
 
 // ── the four shapes, one test each ──────────────────────────────────
 
-/// Shape 1 — the credential rides in a header, the URL carries none.
-/// QuickNode, Alchemy, Shyft and Helius all authenticate a gRPC stream this
-/// way, and it is the shape `Endpoint` could not express before.
+/// Shape 1: the credential rides in a header, the URL carries none.
 #[test]
 fn a_credential_in_a_header_is_substituted_there() {
     let endpoint = with_header(
@@ -262,10 +220,7 @@ fn a_credential_in_a_header_is_substituted_there() {
     assert_eq!(value.expose(), "s3cret");
 }
 
-/// Shape 2 — the credential rides in the URL, as it already did. Kept as a
-/// test of its own so that the header work cannot quietly regress it: Triton's
-/// load balancers take `user:password` basic auth, so this is a live shape and
-/// not merely the legacy one.
+/// Shape 2: the credential rides in the URL.
 #[test]
 fn a_credential_in_the_url_still_works_with_no_header() {
     let basic = endpoint("https://token_user:{key}@host:443", Some("s3cret"));
@@ -277,8 +232,7 @@ fn a_credential_in_the_url_still_works_with_no_header() {
     );
 }
 
-/// Shape 3 — no credential at all. A self-hosted Yellowstone ships
-/// `"x_token": null`, and a public JSON-RPC node wants nothing either.
+/// Shape 3: no credential at all.
 #[test]
 fn an_endpoint_with_no_credential_has_neither_key_nor_header() {
     let public = endpoint("https://api.mainnet-beta.solana.com", None);
@@ -287,9 +241,8 @@ fn an_endpoint_with_no_credential_has_neither_key_nor_header() {
     assert!(public.header().is_none());
 }
 
-/// Shape 4 — **the one that proves the header name is not carved in.** If
-/// anything in this crate knew the string `x-token`, this test would be the one
-/// to fail, which is why it is written with a different scheme entirely.
+/// Shape 4: another header name and scheme.
+/// Mutation: anything in this crate knowing the string `x-token`.
 #[test]
 fn the_header_name_is_whatever_the_operator_wrote() {
     let bearer = with_header(
@@ -309,10 +262,8 @@ fn the_header_name_is_whatever_the_operator_wrote() {
 
 // ── the truth table, read on two carriers ───────────────────────────
 
-/// The generalisation itself: a `{key}` living **only** in the header is a
-/// `{key}`, so the `_KEY` beside it is accepted rather than refused as going
-/// nowhere. Restricting the search back to the URL turns this red — which is
-/// the mutation that proves the rule was widened and not duplicated.
+/// A `{key}` only in the header receives the `_KEY`.
+/// Mutation: looking for the placeholder in the URL only.
 #[test]
 fn a_placeholder_in_the_header_alone_accepts_its_key() {
     unsafe {
@@ -336,9 +287,7 @@ fn a_placeholder_in_the_header_alone_accepts_its_key() {
     }
 }
 
-/// And the other side of the same rule: with a header that carries no
-/// placeholder either, the key really does go nowhere, and the refusal must
-/// name **both** carriers so the operator knows where a `{key}` may go.
+/// No `{key}` in either carrier: the key is refused, naming both carriers.
 #[test]
 fn a_key_with_no_placeholder_in_either_carrier_is_refused() {
     unsafe {
@@ -368,10 +317,8 @@ fn a_key_with_no_placeholder_in_either_carrier_is_refused() {
     }
 }
 
-/// Half a pair stops the process at startup, names **both** variables, and —
-/// the part that matters — never repeats the value, which is what carries the
-/// credential. `ConfigError::InvalidValue` has a `value` field that would put it
-/// in the crash log; this path must never reach that variant.
+/// Half a pair is refused, naming both variables.
+/// Mutation: an error quoting the value, which carries the credential.
 #[test]
 fn half_a_header_pair_is_refused_naming_both_variables() {
     for (suffix, name, value, because) in [
@@ -420,17 +367,8 @@ fn half_a_header_pair_is_refused_naming_both_variables() {
     }
 }
 
-/// ⚠️ **With no header configured, the two doors produce the same endpoint** —
-/// which is what makes the wide door safe for a variable that *may* carry one
-/// rather than one that must.
-///
-/// Raised as a doubt in review of PR #138 on 10 September 2026: `yog-indexer`
-/// reads `INGEST_STREAM` through the wide door unconditionally, and the
-/// question was whether that imposes a header on an endpoint that has none. It
-/// does not. The door decides which **configurations are refused**, never what
-/// a header-less one yields: same URL, same absence of header, same printed
-/// form. Only when a pair is actually set do the two part ways, and that is
-/// [`a_header_on_a_url_only_consumer_is_refused`].
+/// With no header configured, the two doors produce the same endpoint: the door
+/// decides what is refused, never what a header-less endpoint yields.
 #[test]
 fn without_a_header_the_two_doors_produce_the_same_endpoint() {
     // A credentialed endpoint, key in the URL.
@@ -467,8 +405,7 @@ fn without_a_header_the_two_doors_produce_the_same_endpoint() {
     }
 }
 
-/// A blank half is an absent half, and the two must agree on what "set" means —
-/// `optional` decides it once, here it is inherited rather than restated.
+/// A blank half is an absent half, by `optional`'s rule.
 #[test]
 fn a_blank_half_counts_as_absent_not_as_present() {
     unsafe {
@@ -492,10 +429,7 @@ fn a_blank_half_counts_as_absent_not_as_present() {
 
 // ── what the header prints ──────────────────────────────────────────
 
-/// The header half of the fail-closed rule. A value carrying `{key}` prints
-/// whole — that is the diagnostic an operator needs, and it hides nothing. A
-/// value without one is a credential somebody inlined, or a header that needs
-/// none, and nothing here can tell them apart.
+/// A header value with `{key}` prints whole; without, it is masked.
 #[test]
 fn a_header_value_is_printed_only_when_its_key_is_outside_it() {
     let templated = with_header("https://host", ("x-token", "{key}"), Some("s3cret"));
@@ -513,9 +447,7 @@ fn a_header_value_is_printed_only_when_its_key_is_outside_it() {
     );
 }
 
-/// An endpoint with no header prints exactly as it did before this feature
-/// existed. Four endpoints in production have none, and their startup lines
-/// must not have moved a character.
+/// An endpoint with no header prints no header part.
 #[test]
 fn an_endpoint_without_a_header_prints_as_it_always_did() {
     let plain = endpoint("https://mainnet.helius-rpc.com/?api-key={key}", Some("k"));
@@ -528,14 +460,8 @@ fn an_endpoint_without_a_header_prints_as_it_always_did() {
 
 // ── the header only counts where somebody sends it ──────────────────
 
-/// **The refusal this whole split exists for.** A `_HEADER` set on an endpoint
-/// whose consumer sends only the URL is a credential that goes nowhere — and
-/// unlike a wrong key, it fails *upward*: the process connects anonymously and
-/// any endpoint tolerating anonymous callers answers normally.
-///
-/// Found in review, 8 September 2026. The first shape of this feature accepted
-/// it, and the verification run that was supposed to prove the feature actually
-/// demonstrated the defect — `# Connected.` on a stream carrying no credential.
+/// A header pair on a url-only consumer is refused: nothing would send it, and
+/// the process would connect anonymously.
 #[test]
 fn a_header_on_a_url_only_consumer_is_refused() {
     unsafe {
@@ -556,9 +482,7 @@ fn a_header_on_a_url_only_consumer_is_refused() {
         "the refusal repeated the credential: {detail}"
     );
 
-    // And the same variables, read by a consumer that does send it, are fine —
-    // which is what makes the refusal a statement about the *caller* rather
-    // than a ban on headers.
+    // The same variables, read by a consumer that sends it, are accepted.
     let ok = required_endpoint_allowing_header("HDR_UNREAD").expect("this consumer sends it");
     let (name, value) = ok.header().expect("the header is configured");
     assert_eq!(name, "x-token");
@@ -572,9 +496,7 @@ fn a_header_on_a_url_only_consumer_is_refused() {
     }
 }
 
-/// The url-only door is not merely stricter — it is the *unchanged* one. Every
-/// endpoint in production reads through it, and none of them may have gained a
-/// refusal from this feature.
+/// The url-only door accepts every endpoint without a header pair.
 #[test]
 fn a_url_only_endpoint_is_unaffected_by_the_feature() {
     unsafe {
@@ -594,14 +516,10 @@ fn a_url_only_endpoint_is_unaffected_by_the_feature() {
 
 // ── refusals must not point at each other ───────────────────────────
 
-/// A refusal that names a fix the *next* refusal undoes is worse than one that
-/// names none. Found in review, 8 September 2026: the advice offered the header
-/// as a destination on an endpoint that refuses headers, so an operator who
-/// followed it earned the opposite refusal on the next start.
+/// Mutation: a refusal advising the header on a door that refuses headers.
 #[test]
 fn a_refusal_never_advises_what_the_next_refusal_forbids() {
-    // A key with nowhere to go, on a url-only endpoint. The advice must not
-    // offer the header as a destination — writing one there is refused.
+    // A key with nowhere to go, on a url-only endpoint: no header in the advice.
     unsafe {
         env::set_var("HDR_ADVICE_URL", "https://host");
         env::set_var("HDR_ADVICE_KEY", "s3cret");
@@ -628,20 +546,11 @@ fn a_refusal_never_advises_what_the_next_refusal_forbids() {
     }
 }
 
-/// A name is not a header name if it carries a space or a `:`. That is shape,
-/// not charset — and the `:` case is the migration hazard: this feature shipped
-/// once as a single `<PREFIX>_HEADER=name: value`, so pasting the whole of it
-/// into `_HEADER_NAME` is the mistake an operator actually makes. Left accepted
-/// it would also **print in the clear**, a name never being masked.
-///
-/// The single-variable parser refused whitespace and the split dropped it;
-/// review caught the regression on 8 September 2026.
+/// A header name with a space or a `:` is refused.
+/// ⚠️ `x-token: <secret>` pasted into the name would print in the clear.
 #[test]
 fn a_header_name_carrying_a_space_or_a_colon_is_refused() {
-    // ⚠️ `PASTED_TIGHT` has no space, and it is the only case that observes the
-    // `:` rule on its own: found by mutation, 8 September 2026 — with only the
-    // spaced variants, removing the `:` check left every case still refused by
-    // the whitespace rule, so one of the two rules was never tested.
+    // ⚠️ `PASTED_TIGHT` has no space: the only case that bites on the `:` rule alone.
     for (suffix, name) in [
         ("SPACED", "x token"),
         ("PASTED", "x-token: s3cretpasted"),
@@ -677,9 +586,7 @@ fn a_header_name_carrying_a_space_or_a_colon_is_refused() {
     }
 }
 
-/// And what the check must not cost: a name with surrounding whitespace is
-/// trimmed by `optional` and accepted, since that is a `.env` artefact and not
-/// an operator's meaning.
+/// A name with surrounding whitespace is trimmed and accepted.
 #[test]
 fn a_header_name_is_trimmed_not_refused() {
     unsafe {
@@ -702,16 +609,11 @@ fn a_header_name_is_trimmed_not_refused() {
     }
 }
 
-/// Three refusals can fire on the same input, and **which one fires first is
-/// the message**. Both orderings below were verified by mutation on
-/// 8 September 2026, and the second one was silent until this test existed:
-/// moving the `header_is_read` refusal after the pairing match left all 80
-/// tests green, though its own comment claims the order is load-bearing.
+/// Three refusals can fire on one input, and which fires first is the message.
+/// Mutation: moving the `header_is_read` or the shape refusal after the pairing.
 #[test]
 fn the_first_refusal_is_the_one_that_ends_the_matter() {
-    // 1. A bad name with no value yet. Shape must answer, not pairing: an
-    //    operator told to complete the pair would earn the shape refusal on the
-    //    next start — the defect this whole family of tests exists to catch.
+    // 1. A bad name with no value yet: shape answers, not pairing.
     unsafe {
         env::set_var("HDR_SEQ_A_URL", "https://host:443");
         env::set_var("HDR_SEQ_A_HEADER_NAME", "x-token: s3cretpasted");
@@ -734,9 +636,7 @@ fn the_first_refusal_is_the_one_that_ends_the_matter() {
         env::remove_var("HDR_SEQ_A_HEADER_NAME");
     }
 
-    // 2. Half a pair on a url-only consumer. "Nobody would send it" must answer
-    //    before "complete the pair", or the operator completes a pair they are
-    //    then told to delete.
+    // 2. Half a pair on a url-only consumer: "nobody would send it" answers first.
     unsafe {
         env::set_var("HDR_SEQ_B_URL", "https://host:443");
         env::set_var("HDR_SEQ_B_HEADER_NAME", "x-token");
@@ -760,9 +660,7 @@ fn the_first_refusal_is_the_one_that_ends_the_matter() {
     }
 }
 
-/// A `{key}` in the header NAME is never substituted — it would reach the
-/// client as the literal name `{key}`. The dangerous half is the second case:
-/// with a placeholder in the URL as well, the config used to be **accepted**.
+/// A `{key}` in the header name is refused, with or without one in the URL.
 #[test]
 fn a_placeholder_in_the_header_name_is_refused_even_when_the_url_has_one() {
     unsafe {
@@ -778,9 +676,7 @@ fn a_placeholder_in_the_header_name_is_refused_even_when_the_url_has_one() {
         panic!("expected UnsupportedCombination");
     };
     assert!(detail.contains("HDR_NAMEKEY_HEADER_NAME"), "{detail}");
-    // Not `contains("NAME")`, which the line above already satisfies through
-    // the variable name — it asserted nothing. What must be said is *where* the
-    // placeholder belongs, since that is the fix the operator needs.
+    // ⚠️ Not `contains("NAME")`, satisfied by the variable name: assert where it belongs.
     assert!(detail.contains("HDR_NAMEKEY_HEADER_VALUE"), "{detail}");
 
     unsafe {

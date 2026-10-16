@@ -1,31 +1,12 @@
-//! The guard on `.expose()`.
-//!
-//! The types in `secret` make a secret unprintable; `expose` is the one door
-//! out, and this test is what keeps that door where it belongs. The rule it
-//! enforces is not "call `expose` sparingly" — that is a habit, and a habit
-//! applied at seven sites out of nine is what leaked a key. The rule
-//! is: **every exposure sits on the line that consumes the secret** — a
-//! `connect`, a request builder, a client constructor owned by a third party.
-//!
-//! A new exposure anywhere else fails here, with the file named. Adding a
-//! legitimate one means adding it to [`ALLOWED`] *with its reason* — writing
-//! the reason is the point of the exercise, and a site whose reason cannot be
-//! written is a site that should not exist.
-//!
-//! ⚠️ This guard was itself put in failure before being trusted: an exposure
-//! added outside the list, and a count raised on a listed file, both turn it
-//! red. A guard nobody has seen fail is a guard nobody knows works.
+//! The guard on `.expose()`: every exposure sits on the line that consumes the
+//! secret. A new one fails here, with its file named, until it joins [`ALLOWED`]
+//! with its reason.
+//! Mutation: an exposure outside the list, or a count raised on a listed file.
 
 use std::{fs, path::Path};
 
 /// Every file allowed to expose a secret, how many times, and why.
-///
-/// The count is per file, so a *net-new* exposure is caught even in a file that
-/// already had one. ⚠️ What it does **not** catch is a *relocated* one: moving
-/// the `RpcClient::new` exposure of `indexer/bootstrap/daemon/init.rs` into
-/// a `warn!` in the same file leaves its count unchanged and passes. This guard
-/// bounds where secrets may escape, file by file; it is not a substitute for
-/// reading the line.
+/// ⚠️ Counted per file: an exposure moved within its file, into a `warn!`, passes.
 const ALLOWED: &[(&str, usize, &str)] = &[
     (
         "crates/analytic/src/bootstrap/daemon/init.rs",
@@ -167,11 +148,7 @@ fn workspace_root() -> &'static Path {
 }
 
 /// Count the `.expose()` calls in one file, ignoring line comments.
-///
-/// Comments are skipped so that *writing about* the rule — as the daemons and
-/// this module do — never trips it. A `.expose()` inside a block comment or a
-/// string literal would still count; neither exists in this workspace, and a
-/// guard that needed a Rust parser to be right would cost more than it saves.
+/// ⚠️ One in a block comment or a string literal would count; none exists.
 fn count_exposures(source: &str) -> usize {
     source
         .lines()
@@ -180,17 +157,8 @@ fn count_exposures(source: &str) -> usize {
         .sum()
 }
 
-/// Walk the crates' sources, collecting every file that exposes a secret.
-///
-/// Two things are skipped, for the same reason: a test is not a production
-/// exposure path. `*_tests.rs` files — the workspace's inline convention — and
-/// whole `tests/` directories, which hold the DB-backed integration suites. A
-/// test that legitimately builds a client from an exposed URL would otherwise
-/// have to be listed in a table titled "every file allowed to expose a
-/// secret", which is exactly the entry this module says should not exist.
-///
-/// `target/` never appears: the walk starts at `crates/`, and build output
-/// lives at the workspace root.
+/// Walk `crates/`, collecting every file that exposes a secret; `*_tests.rs` and
+/// `tests/` are skipped, a test not being a production exposure path.
 fn exposure_sites(root: &Path) -> Vec<(String, usize)> {
     let mut found = Vec::new();
     let mut stack = vec![root.join("crates")];
@@ -200,7 +168,6 @@ fn exposure_sites(root: &Path) -> Vec<(String, usize)> {
         for entry in entries {
             let path = entry.expect("readable directory entry").path();
             if path.is_dir() {
-                // `tests/` holds integration suites — see this function's docs.
                 if path.file_name().is_some_and(|n| n == "tests") {
                     continue;
                 }
@@ -254,8 +221,7 @@ fn every_exposure_site_is_a_known_point_of_consumption() {
     );
 }
 
-/// The list is documentation as much as a guard, and an entry without a reason
-/// documents nothing.
+/// Mutation: an `ALLOWED` entry without a reason.
 #[test]
 fn every_allowed_site_carries_its_reason() {
     for (file, count, reason) in ALLOWED {
@@ -267,9 +233,7 @@ fn every_allowed_site_carries_its_reason() {
     }
 }
 
-/// The guard must see what it claims to see, and ignore what it claims to
-/// ignore. Without this, a counter that silently returned zero would make
-/// every check above pass on an empty set.
+/// Mutation: a counter that returns zero, or counts commented lines.
 #[test]
 fn the_counter_sees_code_and_skips_comments() {
     assert_eq!(count_exposures("let a = x.expose();"), 1);
@@ -279,9 +243,7 @@ fn the_counter_sees_code_and_skips_comments() {
     assert_eq!(count_exposures("let a = 1;"), 0);
 }
 
-/// The workspace really was walked. A typo in the root, a `crates` directory
-/// that moved, or a filter that excluded everything would leave the main
-/// assertion comparing two empty sets and passing for the wrong reason.
+/// Mutation: a walk that finds nothing, comparing two empty sets.
 #[test]
 fn the_walk_reaches_the_workspace() {
     let found = exposure_sites(workspace_root());

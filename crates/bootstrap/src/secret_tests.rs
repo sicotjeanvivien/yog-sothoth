@@ -29,14 +29,8 @@ fn expose_returns_raw_url() {
     assert_eq!(url.expose(), raw);
 }
 
-/// A URL that carries no secret at all is left alone — and that is correct
-/// *for a URL*, whose host and path are what a startup failure has to name.
-///
-/// ⚠️ Do not read this as a general property of the module. The same
-/// pass-through applied to a bare API key is a leak, which is why [`SecretKey`]
-/// has no counterpart to this test and never will: it redacts unconditionally.
-/// `JUPITER_API_KEY` sat in a `SecretUrl` for months precisely because this
-/// behaviour looked like a blessed one.
+/// A URL that carries no secret at all is left alone.
+/// ⚠️ For a URL only: a bare key passed through is a leak, hence [`SecretKey`].
 #[test]
 fn url_carrying_no_secret_is_unchanged() {
     let url = SecretUrl::new("https://api.mainnet-beta.solana.com");
@@ -47,8 +41,7 @@ fn url_carrying_no_secret_is_unchanged() {
 // SecretUrl — the password in the userinfo
 // ---------------------------------------------------------------------------
 
-/// The case the module was blind to: a Postgres URL has no `?`, so the old
-/// rule redacted nothing at all.
+/// The password of a Postgres URL, which has no `?`, is redacted.
 #[test]
 fn display_redacts_postgres_password() {
     let url = SecretUrl::new("postgresql://yog_indexer:hunter2@localhost:5433/yog_sothoth");
@@ -58,9 +51,7 @@ fn display_redacts_postgres_password() {
     );
 }
 
-/// The carrier is what makes this worth keeping over a blanket `****`: role,
-/// host, port and database all survive, so a daemon that cannot connect still
-/// says which database it failed against.
+/// Role, host, port and database survive the redaction.
 #[test]
 fn postgres_redaction_keeps_the_diagnostic() {
     let url = SecretUrl::new("postgresql://yog_indexer:hunter2@localhost:5433/yog_sothoth");
@@ -83,8 +74,7 @@ fn debug_redacts_postgres_password() {
     );
 }
 
-/// A password may contain `@`; a hostname may not. Hence `rfind` — splitting on
-/// the *first* `@` would leave the tail of the password in the open.
+/// Mutation: `rfind` → `find` on `@`, which leaves the password's tail in the open.
 #[test]
 fn password_containing_at_sign_is_fully_redacted() {
     let url = SecretUrl::new("postgresql://yog:p@ss@localhost:5433/yog_sothoth");
@@ -127,12 +117,8 @@ fn value_without_scheme_is_left_alone_by_the_password_rule() {
 // SecretUrl — the ambiguous cases, where the rule fails closed
 // ---------------------------------------------------------------------------
 
-/// An unencoded delimiter inside the password pushes the `@` past the authority
-/// bound, and nothing short of a parser can tell that from a path that happens
-/// to contain an `@`. Every one of these leaked at some point: `/` and `#`
-/// returned the URL untouched, `?` printed the password's prefix, and `@`
-/// combined with `/` printed its tail. The rule now keeps the scheme and drops
-/// the rest.
+/// An unencoded delimiter in the password pushes the `@` past the authority:
+/// only the scheme is kept, whichever delimiter it is.
 #[test]
 fn ambiguous_userinfo_is_redacted_whole() {
     let cases = [
@@ -153,18 +139,14 @@ fn ambiguous_userinfo_is_redacted_whole() {
     }
 }
 
-/// The cost of failing closed, asserted rather than discovered: a URL with a
-/// port and an `@` in its path is indistinguishable from `user:pass@host`, so
-/// its host goes too. Nothing leaks; a diagnostic is lost. That trade is the
-/// decision, and this test is where it is written down.
+/// The cost of failing closed: a port and an `@` in the path lose the host too.
 #[test]
 fn failing_closed_can_cost_a_host_that_hid_nothing() {
     let url = SecretUrl::new("https://host:8080/pa@th");
     assert_eq!(format!("{url}"), "https://***REDACTED***");
 }
 
-/// The fallback is narrow: without a `:` in the authority there is no password
-/// to protect, so an `@` in the path costs nothing and the host stays.
+/// Without a `:` in the authority, an `@` in the path keeps the host.
 #[test]
 fn an_at_in_the_path_alone_does_not_trigger_the_fallback() {
     let url = SecretUrl::new("https://api.jup.ag/price/v3@latest");
@@ -179,10 +161,7 @@ fn an_at_in_the_path_alone_does_not_trigger_the_fallback() {
 // SecretUrl — the credential in the path
 // ---------------------------------------------------------------------------
 
-/// Alchemy and QuickNode put the key in a path segment, and the repository's
-/// own provider study puts Alchemy first. A rule that only knew about `?` would
-/// print these whole — which is the defect this module exists to close, applied
-/// one level up.
+/// A key in a path segment (Alchemy, QuickNode) is redacted.
 #[test]
 fn credential_in_the_path_is_redacted() {
     for raw in [
@@ -212,8 +191,7 @@ fn path_redaction_keeps_scheme_and_host() {
     );
 }
 
-/// A path made only of separators hides nothing — the far more common
-/// "key in the query string" endpoint keeps its shape.
+/// A path made only of separators is kept.
 #[test]
 fn empty_path_is_left_alone() {
     let url = SecretUrl::new("https://mainnet.helius-rpc.com/?api-key=abc123");
@@ -223,8 +201,7 @@ fn empty_path_is_left_alone() {
     );
 }
 
-/// Postgres is the one scheme whose path survives: it is the database name,
-/// and naming the database is what makes this type worth more than `****`.
+/// Postgres is the one scheme whose path, the database, survives.
 #[test]
 fn postgres_path_is_the_database_name_and_survives() {
     let url = SecretUrl::new("postgresql://yog_indexer:hunter2@localhost:5433/yog_sothoth");
@@ -236,8 +213,7 @@ fn postgres_path_is_the_database_name_and_survives() {
     assert!(!shown.contains("hunter2"), "password leaked: {shown}");
 }
 
-/// An unknown scheme gets its path hidden rather than shown. The rule fails
-/// closed, so the provider nobody has met yet is covered by default.
+/// An unknown scheme gets its path hidden: the rule fails closed.
 #[test]
 fn unknown_scheme_has_its_path_redacted() {
     let url = SecretUrl::new("grpc://some-new-provider.example/CREDENTIAL");
@@ -268,9 +244,7 @@ fn secret_key_expose_returns_raw() {
     assert_eq!(key.expose(), raw);
 }
 
-/// The regression this type exists to prevent: a value with neither `?` nor
-/// `@` is exactly what `SecretUrl` returned in the clear. `SecretKey` knows
-/// nothing about shape, so there is no shape that gets through it.
+/// A bare key, with neither `?` nor `@`, is masked whole.
 #[test]
 fn secret_key_masks_values_of_every_shape() {
     for raw in [
@@ -291,9 +265,7 @@ fn secret_key_masks_values_of_every_shape() {
 // SecretUrl — the fragment, and a userinfo that is itself the credential
 // ---------------------------------------------------------------------------
 
-/// `#` was recognised as a delimiter by two of the three rules and hidden by
-/// none, so a credential parked there came back whole. It is the gap between an
-/// invariant stated — "the places a URL hides a credential" — and one held.
+/// A credential in the fragment is redacted.
 #[test]
 fn fragment_is_redacted() {
     for raw in [
@@ -309,17 +281,14 @@ fn fragment_is_redacted() {
     }
 }
 
-/// A query string and a fragment together: the query rule truncates first, so
-/// the fragment is already gone. Asserted so the ordering is not accidental.
+/// Query and fragment together: the query rule truncates first.
 #[test]
 fn query_and_fragment_together_leave_nothing() {
     let url = SecretUrl::new("https://host/?api-key=abc123#SECRET");
     assert_eq!(format!("{url}"), "https://host/?***REDACTED***");
 }
 
-/// `https://<token>@host` is a real authentication shape, so a userinfo with no
-/// password is not automatically a harmless username. The host survives — only
-/// the credential goes.
+/// A userinfo with no password outside Postgres may be a token: it goes, the host stays.
 #[test]
 fn bare_userinfo_is_a_secret_outside_postgres() {
     let url = SecretUrl::new("https://SECRETTOKEN@rpc.example.com/");
@@ -331,9 +300,7 @@ fn bare_userinfo_is_a_secret_outside_postgres() {
     );
 }
 
-/// Postgres is the exception, and for a reason that is ours: a userinfo without
-/// a password is one of the five least-privilege role names, and naming the role
-/// is precisely the diagnostic this type exists to keep.
+/// A Postgres userinfo without a password is a role name, and stays.
 #[test]
 fn bare_userinfo_in_postgres_is_a_role_name_and_survives() {
     let url = SecretUrl::new("postgresql://yog@localhost:5433/yog_sothoth");
@@ -347,9 +314,7 @@ fn bare_userinfo_in_postgres_is_a_role_name_and_survives() {
 // SecretUrl::scrub — a string somebody else built
 // ---------------------------------------------------------------------------
 
-/// The message shape this exists for, measured on 4 September 2026 by driving
-/// `RpcClient` at an unresolvable host: reqwest renders the whole URL, and
-/// `solana-client` passes it straight through.
+/// The shape of a reqwest error, which `solana-client` passes through: the whole URL.
 fn reqwest_style_error(url: &str) -> String {
     format!("error sending request for url ({url})")
 }
@@ -368,9 +333,7 @@ fn scrub_removes_a_credential_from_a_third_party_error() {
     );
 }
 
-/// The carrier is why the whole URL is replaced by its redacted form rather
-/// than by the placeholder: an error that no longer names the endpoint costs
-/// more than it saves.
+/// The whole URL is replaced by its redacted form, so the host survives.
 #[test]
 fn scrub_keeps_the_sentence_and_the_carrier() {
     let url = SecretUrl::new("postgresql://yog_indexer:hunter2@localhost:5433/yog_sothoth");
@@ -381,18 +344,8 @@ fn scrub_keeps_the_sentence_and_the_carrier() {
     );
 }
 
-/// ⚠️ The binding between [`SecretUrl::scrub`] and the redaction rules.
-///
-/// `scrub` derives what to remove from `redact`, so the day `redact` learns a
-/// new hiding place `scrub` learns it too. If someone re-implements
-/// `secret_parts` by re-parsing the URL, this is what turns red.
-///
-/// **The haystack drops the scheme on purpose.** With the URL present verbatim,
-/// the whole-value replacement removes the secret on its own and this test
-/// passes no matter what `secret_parts` returns — which is exactly what it did
-/// in its first shape: a mutation that made `secret_parts` return only the
-/// query string left it green. Stripping the scheme is what forces the
-/// per-part pass to be the thing under test.
+/// Mutation: `secret_parts` re-parsing the URL instead of deriving from `redact`.
+/// ⚠️ The haystack drops the scheme, or the whole-URL pass hides the per-part one.
 #[test]
 fn scrub_removes_every_secret_that_display_hides() {
     let cases = [
@@ -407,8 +360,7 @@ fn scrub_removes_every_secret_that_display_hides() {
         ("https://TOKENASUSER@rpc.example.com/", "TOKENASUSER"),
         ("postgresql://yog:pa/ss@localhost:5433/db", "pa/ss"),
         ("postgresql://yog:pa#ss@localhost:5433/db", "pa#ss"),
-        // Two hiding places at once: a re-parse that handles one and forgets
-        // the other passes every single-secret case above.
+        // Two hiding places at once: a re-parse forgetting one passes the cases above.
         (
             "https://host/v2/PATHSECRET?api-key=QUERYSECRET",
             "PATHSECRET",
@@ -434,9 +386,7 @@ fn scrub_removes_every_secret_that_display_hides() {
     }
 }
 
-/// A third party may reformat the URL — a normalised trailing slash is the
-/// common one — so the whole-value match misses. The per-part pass is what
-/// catches it, and this is the test that keeps that pass alive.
+/// Mutation: dropping the per-part pass; a reformatted URL misses the whole-value match.
 #[test]
 fn scrub_still_removes_the_secret_from_a_reformatted_url() {
     let url = SecretUrl::new("https://rpc.example.com?api-key=SECRET123");
@@ -448,8 +398,7 @@ fn scrub_still_removes_the_secret_from_a_reformatted_url() {
     );
 }
 
-/// A message that never mentioned the URL comes back untouched — the scrub must
-/// not mangle text it has no business in.
+/// A message that never mentions the URL comes back untouched.
 #[test]
 fn scrub_leaves_an_unrelated_message_alone() {
     let url = SecretUrl::new("https://rpc.example.com/?api-key=abc123");
@@ -457,8 +406,7 @@ fn scrub_leaves_an_unrelated_message_alone() {
     assert_eq!(url.scrub(msg), msg);
 }
 
-/// When the userinfo is ambiguous the whole value is the secret, and `scrub`
-/// inherits that from `redact` rather than restating it.
+/// An ambiguous userinfo makes the whole value the secret, inherited from `redact`.
 #[test]
 fn scrub_of_an_ambiguous_url_leaves_nothing_of_it() {
     let url = SecretUrl::new("postgresql://yog:pa/ss@localhost:5433/yog_sothoth");
@@ -473,10 +421,6 @@ fn scrub_of_an_ambiguous_url_leaves_nothing_of_it() {
 }
 
 // ── SecretUrl::scheme ────────────────────────────────────────────────────────
-//
-// It exists so a caller can refuse an endpoint that belongs to the other
-// ingestion path without calling `expose` — `exposure_tests` refused that
-// first version, and rightly: reading a scheme consumes nothing.
 
 #[test]
 fn the_scheme_comes_back_lowercased() {
@@ -496,13 +440,7 @@ fn a_url_without_a_scheme_has_none() {
     assert_eq!(SecretUrl::new("").scheme(), None);
 }
 
-/// ⚠️ The case the naive version got wrong, and the reason this is not just
-/// `split_once("://")`.
-///
-/// A `://` appearing later in a schemeless URL would be read as the separator,
-/// and the part before it as a scheme — so a caller refusing the endpoint would
-/// tell the operator it "carries the `host/a` scheme", a message that reads as
-/// a bug in the message. A scheme is shaped like a scheme or there is none.
+/// Mutation: a bare `split_once("://")`, which reads `host/a` as a scheme.
 #[test]
 fn a_double_slash_further_along_is_not_a_scheme() {
     assert_eq!(SecretUrl::new("host/a://b").scheme(), None);
@@ -510,8 +448,7 @@ fn a_double_slash_further_along_is_not_a_scheme() {
     assert_eq!(SecretUrl::new("1nvalid://x").scheme(), None);
 }
 
-/// And the shapes RFC 3986 does allow, so the guard above cannot be tightened
-/// into refusing a legitimate endpoint.
+/// Mutation: a scheme check tightened past RFC 3986's shapes.
 #[test]
 fn a_scheme_may_carry_digits_and_punctuation() {
     assert_eq!(
