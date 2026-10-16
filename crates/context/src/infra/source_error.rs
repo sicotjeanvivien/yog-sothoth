@@ -4,7 +4,7 @@
 use crate::error::SourceError;
 
 /// Convert a `reqwest` failure, **stripping the URL first**: reqwest's errors may carry the full
-/// URL, and the Helius key rides in its query string.
+/// URL.
 /// ⚠️ At the boundary, not at the log sites: nothing out of here carries a URL, so none can leak.
 impl From<reqwest::Error> for SourceError {
     fn from(e: reqwest::Error) -> Self {

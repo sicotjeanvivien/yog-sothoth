@@ -135,9 +135,6 @@ async fn mixed_batch_emits_only_qualifying_pools() {
 
 #[tokio::test]
 async fn an_unvaluable_window_emits_nothing_rather_than_a_critical() {
-    // ⚠️ A direction read as 0 would give `(0 − X)/X = −1.0`, a Critical at maximum magnitude.
-    // Mutation this is written against: `unvaluable_flow` with `Some(usd(0))` on one direction and a
-    // real value on the other.
     let signals = run(&detector(vec![unvaluable_flow(1)])).await;
     assert!(
         signals.is_empty(),

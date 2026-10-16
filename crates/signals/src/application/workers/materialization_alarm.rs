@@ -62,7 +62,7 @@ impl MaterializationAlarm {
     /// Not `run_until_cancelled`, which breaks a tie the other way.
     pub(crate) async fn run(self, shutdown: CancellationToken) {
         let mut ticker = tokio::time::interval(self.settings.interval);
-        // A slow check delays the next one instead of firing the missed ones back to back.
+        // Missed ticks are not fired back to back.
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         self.log_start();
 
