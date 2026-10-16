@@ -12,17 +12,8 @@ use yog_core::{
 
 use crate::application::services::{EventPersistor, TransactionProcessorMetrics};
 
-/// Core pipeline — receives a transaction a source has already delivered,
-/// dispatches it to the appropriate protocol handler, and hands each extracted
-/// domain event to the EventPersistor.
-///
-/// # Why it does not fetch
-///
-/// It used to, and that was the JSON-RPC acquisition model leaking into the
-/// shared half of the pipeline. Fetching is what `logsSubscribe` forces —
-/// Yellowstone delivers the transaction whole — so it belongs to the source
-/// that needs it, `infra::rpc`, and what arrives here is the same
-/// `OnChainTransaction` whichever source produced it.
+/// Core pipeline: receives a transaction a source delivered, extracts its events through the
+/// protocol handler, and hands each one to the EventPersistor. Fetching is the RPC source's.
 pub(crate) struct TransactionProcessor {
     extractor: Arc<ExtractionDispatcher>,
     persistor: Arc<EventPersistor>,
@@ -39,14 +30,8 @@ impl TransactionProcessor {
         }
     }
 
-    /// Handle one transaction delivered by a source.
-    ///
-    /// Pipeline:
-    ///   1. Delegate event extraction to the protocol-specific handler.
-    ///   2. Hand each extracted event to the EventPersistor — failures
-    ///      on one event never abort the others.
-    ///   3. Surface unknown discriminators and extraction failures as
-    ///      metrics + structured logs.
+    /// Handle one transaction delivered by a source: extract, persist each event (one failing
+    /// never aborts the others), and surface unknown discriminators and extraction failures.
     pub(crate) async fn process_transaction(
         &self,
         protocol: Protocol,
@@ -83,8 +68,7 @@ impl TransactionProcessor {
         Ok(())
     }
 
-    /// Surface unknown discriminators and extraction failures via logs and
-    /// metrics. Does not affect persistence.
+    /// Surface unknown discriminators and extraction failures via logs and metrics.
     fn report_diagnostics(
         &self,
         protocol: &Protocol,
@@ -116,10 +100,6 @@ impl TransactionProcessor {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Free functions
-// ---------------------------------------------------------------------------
-
 fn failure_kind(f: &ExtractionFailure) -> &'static str {
     match f {
         ExtractionFailure::AnchorDecode(_) => "anchor_decode",
@@ -129,17 +109,8 @@ fn failure_kind(f: &ExtractionFailure) -> &'static str {
     }
 }
 
-// ---------------------------------------------------------------------------
-// ExitGuard
-// ---------------------------------------------------------------------------
-
-/// RAII guard that records the outcome and duration of `index_transaction`.
-///
-/// ⚠️ **It no longer spans the fetch**, because the fetch is no longer here.
-/// `yog_indexer_index_transaction_duration_seconds` therefore measures
-/// extract-and-persist alone — which is what makes it the same measurement on
-/// both acquisition paths, and so worth comparing. Fetch latency has its own
-/// histogram on the one path that has a fetch.
+/// RAII guard that records the outcome and duration of `index_transaction`: extract and persist,
+/// the same measurement on both acquisition paths.
 struct ExitGuard {
     protocol: Protocol,
     outcome: Option<&'static str>,

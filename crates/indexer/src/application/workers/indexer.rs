@@ -1,17 +1,6 @@
-//! Indexer worker — consumes what a [`TransactionSource`] delivered and drives
-//! `TransactionProcessor::process_transaction` with bounded concurrency.
-//!
-//! Responsibility split:
-//! - `run` owns the receive loop and the shutdown semantics.
-//! - `dispatch_one` handles a single transaction (permit + spawn).
-//! - `index_one` runs inside the spawned task and owns per-transaction logging.
-//!
-//! Error semantics:
-//! - Per-transaction failures are logged and counted, never propagated.
-//!   A single failing transaction must not stop the pipeline.
-//! - Loop-level failures (closed semaphore, closed channel in an
-//!   unexpected state) are propagated as `IndexerWorkerError` and bubble
-//!   up to `Daemon::run`.
+//! Indexer worker: consumes what a [`TransactionSource`] delivered and drives
+//! `TransactionProcessor::process_transaction` with bounded concurrency. Per-transaction
+//! failures are logged and counted; only loop-level ones reach `Daemon::run`.
 //!
 //! [`TransactionSource`]: crate::application::source::TransactionSource
 
@@ -29,31 +18,18 @@ mod metrics;
 
 pub(crate) use metrics::IndexerWorkerMetrics;
 
-/// Worker that consumes delivered transactions and indexes them with
-/// bounded concurrency.
+/// Worker that consumes delivered transactions and indexes them with bounded concurrency.
 pub(crate) struct IndexerWorker {
     processor: Arc<TransactionProcessor>,
     semaphore: Arc<Semaphore>,
-    /// The semaphore's full count, kept because `available_permits()` no
-    /// longer answers the question once tasks are in flight — and the stop
-    /// needs to ask for *all* of them back.
+    /// The semaphore's full count: the stop asks for *all* permits back, which
+    /// `available_permits()` cannot tell once tasks are in flight.
     max_concurrent: u32,
 }
 
 impl IndexerWorker {
-    /// # The concurrency bound is an argument, not a constant
-    ///
-    /// ⚠️ It used to be a `15` written here, sized against the RPC quota — and
-    /// that number belonged to the fetch, which is now the business of the one
-    /// source that has to fetch. What bounds *this* stage is the database: every
-    /// task in flight holds a connection while it persists, so beyond what the
-    /// pool holds an extra task adds no throughput — it queues and then fails
-    /// on `acquire_timeout`.
-    ///
-    /// It is passed in rather than computed here because the bound is not the
-    /// pool's size but the pool's size *minus its other users in this process*,
-    /// and only the composition root knows who those are — see
-    /// `bootstrap::daemon::tasks::index_concurrency`.
+    /// `max_concurrent` is bounded by the database pool minus its other users in this process,
+    /// which only the composition root knows (`bootstrap::daemon::tasks::index_concurrency`).
     pub(crate) fn new(processor: Arc<TransactionProcessor>, max_concurrent: usize) -> Self {
         Self {
             processor,
@@ -63,8 +39,7 @@ impl IndexerWorker {
         }
     }
 
-    /// Drive the receive loop until the upstream channel closes or
-    /// the shutdown token is triggered.
+    /// Drive the receive loop until the upstream channel closes or the shutdown token fires.
     pub(crate) async fn run(
         self,
         mut rx: mpsc::Receiver<IngestedTransaction>,
@@ -77,17 +52,14 @@ impl IndexerWorker {
 
         loop {
             tokio::select! {
-                // `biased`: a `dispatch_one` that returned because the token
-                // fired must not be followed by another message being taken
-                // instead of the stop.
+                // `biased`: a `dispatch_one` that returned because the token fired is not followed
+                // by another message taken instead of the stop.
                 biased;
 
                 _ = shutdown.cancelled() => {
                     info!("shutdown requested — indexer worker stopping");
-                    // What is still queued dies with the receiver. Counted
-                    // rather than merely lost: these transactions were paid for
-                    // by a source — a request on one path, bandwidth on the
-                    // other — and nothing re-requests them.
+                    // What is still queued dies with the receiver: counted, since a source paid
+                    // for it and nothing re-requests it.
                     let dropped = drain_and_count(&mut rx);
                     if dropped > 0 {
                         info!(dropped, "queued transactions dropped at shutdown");
@@ -112,19 +84,9 @@ impl IndexerWorker {
         }
     }
 
-    /// Acquire a concurrency permit and spawn an indexing task.
-    ///
-    /// Blocks only on permit acquisition — indexing itself runs in a
-    /// detached task so the receive loop can keep draining the channel.
-    ///
-    /// ⚠️ **The wait is interruptible**, for the same reason the source's is:
-    /// `run`'s cancellation arm is not polled while this future is pending, so
-    /// a bare `acquire_owned` would keep the worker alive as long as the
-    /// permits stay held. sqlx bounds how long a *connection* takes to acquire
-    /// and nothing bounds how long a statement runs, so "the permits come back
-    /// shortly" is an assumption, not a guarantee. The rule is written on
-    /// `TransactionSource`; applying it to the producer and not to the consumer
-    /// of the same channel would be applying it to one site in two.
+    /// Acquire a permit and spawn an indexing task, detached, so the loop keeps draining.
+    /// ⚠️ The wait is interruptible: `run`'s cancellation arm is not polled while this is
+    /// pending, and nothing bounds how long a statement holds a permit.
     async fn dispatch_one(
         &self,
         ingested: IngestedTransaction,
@@ -162,39 +124,20 @@ impl IndexerWorker {
     }
 }
 
-/// Return once every detached indexing task has finished.
-///
-/// ⚠️ **Returning without this is how a stop destroys an `INSERT`.**
-/// `dispatch_one` detaches the indexing so the receive loop keeps draining,
-/// which means `run` reaches its exit while transactions are still being
-/// written. Nothing joins those tasks — their handles are dropped on the spot —
-/// so the only thing that says they are done is their permits coming back.
-/// Asking for all of them at once is asking to be last.
-///
-/// Unbounded on purpose: the bound belongs to the caller that owns the whole
-/// stop, `Daemon::run`, which gives every stage one shared grace. A second
-/// timeout here would be a second answer to the same question, and the two
-/// would drift.
+/// Return once every detached indexing task has finished; unbounded, the grace is `Daemon::run`'s.
+/// ⚠️ Without it a stop destroys an `INSERT`: the tasks' handles are dropped, so only their
+/// permits coming back say they are done.
 async fn await_in_flight(semaphore: &Semaphore, max_concurrent: u32) {
     let in_flight = max_concurrent as usize - semaphore.available_permits();
     if in_flight > 0 {
         info!(in_flight, "waiting for in-flight indexing to finish");
     }
-    // Permits are only ever returned, never taken away, so this cannot fail
-    // unless the semaphore is closed — and nothing closes it.
+    // Cannot fail unless the semaphore is closed, and nothing closes it.
     let _ = semaphore.acquire_many(max_concurrent).await;
 }
 
-/// Count what is still in the channel when the worker stops.
-///
-/// ⚠️ **A snapshot, and it says so.** A source may still be sending while this
-/// runs, so the figure is what was queued at the moment the loop gave up, not a
-/// total of everything the shutdown will cost. It is the number that exists;
-/// the alternative was no number at all.
-///
-/// Returns the count so the caller can log it **and so a test can assert it** —
-/// the metric it increments is invisible to a test, and a drain that silently
-/// stopped draining would look exactly like a shutdown with an empty channel.
+/// Count, and drop, what is still in the channel when the worker stops; returned so a test can
+/// assert it. ⚠️ A snapshot: a source may still be sending.
 fn drain_and_count(rx: &mut mpsc::Receiver<IngestedTransaction>) -> usize {
     let mut dropped = 0usize;
     while let Ok(ingested) = rx.try_recv() {
@@ -208,8 +151,7 @@ fn drain_and_count(rx: &mut mpsc::Receiver<IngestedTransaction>) -> usize {
 #[path = "indexer/indexer_tests.rs"]
 mod tests;
 
-/// Index a single transaction. Per-transaction errors are logged and counted,
-/// never propagated — they must not stop the pipeline.
+/// Index a single transaction; errors are logged and counted, never propagated.
 async fn index_one(processor: Arc<TransactionProcessor>, ingested: IngestedTransaction) {
     let IngestedTransaction {
         protocol,

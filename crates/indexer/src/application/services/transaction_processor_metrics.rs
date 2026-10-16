@@ -1,12 +1,4 @@
-//! Metrics emitted by the TransactionProcessorMetrics.
-//!
-//! ⚠️ **The `yog_indexer_fetch_*` families used to be here and are not any
-//! more.** They moved to [`infra::rpc::FetchMetrics`] with the fetch itself,
-//! which belongs to the one acquisition path that has to ask for a
-//! transaction. Their exported names did not change; only the type that emits
-//! them did. What that costs is written on `INDEX_TX_EXITED` below.
-//!
-//! [`infra::rpc::FetchMetrics`]: crate::infra::FetchMetrics
+//! Metrics emitted by the transaction processor.
 
 use metrics::{counter, describe_counter, describe_histogram, histogram};
 use yog_core::domain::Protocol;
@@ -28,22 +20,14 @@ impl TransactionProcessorMetrics {
             "Transactions where no instruction was matched by any parser"
         );
         describe_counter!(INDEX_TX_ENTERED, "Calls to index_transaction (entry)");
-        // ⚠️ `fetch_not_found` and `fetch_failure` are gone from this label set,
-        // and that is the visible half of moving the fetch. Those two exits
-        // happen before a transaction exists, so they are now counted where
-        // they occur — `yog_indexer_fetch_not_found_total` and
-        // `yog_indexer_fetch_failures_total`, same names, same labels, one
-        // stage earlier.
+        // The fetch exits are counted by the RPC source, before a transaction exists.
         describe_counter!(
             INDEX_TX_EXITED,
             "Exits from index_transaction (label: outcome=ok|no_events|extract_failure|unknown_exit)"
         );
 
-        // ⚠️ This histogram no longer includes the RPC round-trip. It measures
-        // extract-and-persist, which is what both acquisition paths do
-        // identically — so the two are comparable, which is the whole point of
-        // keeping both. Fetch latency is `yog_indexer_fetch_duration_seconds`,
-        // on the one path that has any.
+        // Extract and persist only, comparable across both paths; fetch latency is
+        // `yog_indexer_fetch_duration_seconds`.
         describe_histogram!(
             INDEX_TX_DURATION,
             "Total duration of index_transaction in seconds (label: outcome)"

@@ -1,9 +1,5 @@
-//! Meteora DAMM v2 event persistor.
-//!
-//! Owns the per-event-kind DAMM v2 repositories and dispatches each
-//! event to its persistence recipe. Pool registry upserts and
-//! pool_current_state projection are delegated to the shared
-//! [`PoolMaintenance`] helper.
+//! Meteora DAMM v2 event persistor: dispatches each event to its persistence recipe; pool
+//! upserts and the current-state projection go through [`PoolMaintenance`].
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -34,9 +30,7 @@ use yog_core::domain::{
 
 use crate::application::services::{EventPersistorMetrics, PoolMaintenance};
 
-/// The per-event-kind DAMM v2 repositories, bundled so the persistor takes a
-/// single named-field argument instead of one positional `Arc` per event kind
-/// (which grows unbounded as new events are added).
+/// The per-event-kind DAMM v2 repositories, bundled into one named-field argument.
 pub(crate) struct DammV2Repos {
     pub swap_event: Arc<dyn MeteoraDammV2SwapEventRepository>,
     pub liquidity_event: Arc<dyn MeteoraDammV2LiquidityEventRepository>,
@@ -58,10 +52,8 @@ pub(crate) struct DammV2Repos {
     pub set_pool_status: Arc<dyn MeteoraDammV2SetPoolStatusEventRepository>,
     pub split_position: Arc<dyn MeteoraDammV2SplitPositionEventRepository>,
     pub update_pool_fees: Arc<dyn MeteoraDammV2UpdatePoolFeesEventRepository>,
-    // NOTE: no pool-properties repository here any more. The satellite is
-    // written only by yog-context, from the on-chain account; this crate raises
-    // `pools.needs_refresh` instead of storing values it would have to decode
-    // from an update delta.
+    // ⚠️ No pool-properties repository: yog-context writes the satellite from the account, and
+    // this crate raises `pools.needs_refresh` instead.
 }
 
 pub(crate) struct MeteoraDammV2EventPersistor {
@@ -79,10 +71,8 @@ impl MeteoraDammV2EventPersistor {
         }
     }
 
-    /// Apply a Meteora DAMM v2 event to its persistence targets.
-    ///
-    /// Per-event failures are logged and counted, never propagated —
-    /// the caller continues with the next event.
+    /// Apply a Meteora DAMM v2 event to its persistence targets; a failure is logged and counted,
+    /// never propagated.
     pub(crate) async fn persist(&self, event: &MeteoraDammV2Event) {
         let kind = event.kind();
         let start = Instant::now();
@@ -124,13 +114,8 @@ impl MeteoraDammV2EventPersistor {
             Ok(outcome) => {
                 EventPersistorMetrics::record_indexed(&Self::PROTOCOL, kind);
                 if outcome.is_skipped() {
-                    // The row was already there. The *counter* is the signal —
-                    // a non-zero rate on a live stream means two events shared
-                    // a unique key, the defect `event_index` was added to
-                    // close. The log line stays at `debug`: it carries the
-                    // detail the counter has no label for, and a replay (the
-                    // case where a skip is expected) would otherwise emit one
-                    // warning per event backfilled.
+                    // The counter is the signal: two events sharing a unique key on a live
+                    // stream. `debug` here, or a replay would warn once per event backfilled.
                     debug!(
                         protocol = %Self::PROTOCOL.as_str(),
                         kind,
@@ -240,9 +225,7 @@ impl MeteoraDammV2EventPersistor {
             .map_err(anyhow::Error::new)
     }
 
-    /// Opening a farm reward slot carries no mints or reserves for the *pool*
-    /// (the reward mint is a third token, not a pool side) — so it only
-    /// refreshes the pool's last-seen marker and records the event.
+    /// The reward mint is a third token, not a pool side: touch + insert.
     async fn persist_initialize_reward(
         &self,
         event: &MeteoraDammV2InitializeRewardEvent,
@@ -257,9 +240,7 @@ impl MeteoraDammV2EventPersistor {
             .map_err(anyhow::Error::new)
     }
 
-    /// Funding a farm moves the reward token, not a pool side — no reserve or
-    /// mint update for the pool itself. Touch + insert, like the other
-    /// non-AMM-mutating events.
+    /// Funding moves the reward token, not a pool side: touch + insert.
     async fn persist_fund_reward(
         &self,
         event: &MeteoraDammV2FundRewardEvent,
@@ -274,8 +255,7 @@ impl MeteoraDammV2EventPersistor {
             .map_err(anyhow::Error::new)
     }
 
-    /// Returning unearnable rewards moves the reward token out of its vault,
-    /// not a pool side — touch + insert, no reserve or projection update.
+    /// Moves the reward token out of its vault, not a pool side: touch + insert.
     async fn persist_withdraw_ineligible_reward(
         &self,
         event: &MeteoraDammV2WithdrawIneligibleRewardEvent,
@@ -320,8 +300,7 @@ impl MeteoraDammV2EventPersistor {
             .map_err(anyhow::Error::new)
     }
 
-    /// Reclaiming dead liquidity's reward share moves the reward token out of
-    /// its vault, not a pool side — touch + insert.
+    /// Moves the reward token out of its vault, not a pool side: touch + insert.
     async fn persist_withdraw_dead_liquidity_reward(
         &self,
         event: &MeteoraDammV2WithdrawDeadLiquidityRewardEvent,
@@ -336,9 +315,7 @@ impl MeteoraDammV2EventPersistor {
             .map_err(anyhow::Error::new)
     }
 
-    /// A create-position event carries no mints or reserves, so it neither
-    /// upserts the pool registry nor updates the current-state projection —
-    /// it only refreshes the pool's last-seen marker and records the event.
+    /// No mints or reserves: touch + insert, no registry upsert and no projection.
     async fn persist_create_position(
         &self,
         event: &MeteoraDammV2CreatePositionEvent,
@@ -353,8 +330,7 @@ impl MeteoraDammV2EventPersistor {
             .map_err(anyhow::Error::new)
     }
 
-    /// Same recipe as create-position: no mints/reserves, so just refresh the
-    /// pool's last-seen marker and record the event.
+    /// Same recipe as create-position: touch + insert.
     async fn persist_close_position(
         &self,
         event: &MeteoraDammV2ClosePositionEvent,
@@ -369,8 +345,7 @@ impl MeteoraDammV2EventPersistor {
             .map_err(anyhow::Error::new)
     }
 
-    /// Lock carries vesting params but no pool reserves — same touch_pool +
-    /// insert recipe as the other lifecycle events.
+    /// Vesting params but no pool reserves: touch + insert.
     async fn persist_lock_position(
         &self,
         event: &MeteoraDammV2LockPositionEvent,
@@ -399,14 +374,9 @@ impl MeteoraDammV2EventPersistor {
             .map_err(anyhow::Error::new)
     }
 
-    /// Pool genesis carries both mints, so it registers the pool authoritatively
-    /// (full upsert) rather than just touching last-seen. It does not feed the
-    /// current-state projection — there is no price/reserve trajectory yet.
-    ///
-    /// The InitializePool event does carry the mints, but the `pools` registry
-    /// gets them from a single source — yog-context decoding the pool account —
-    /// to avoid a dual-write that could disagree on A/B ordering. So here we
-    /// only register the pool; the mints land on the event's own table.
+    /// Pool genesis registers the pool (`discover_pool`); no projection, there is no reserve
+    /// trajectory yet.
+    /// ⚠️ Its mints stay on the event's table: `pools` takes them from yog-context alone.
     async fn persist_initialize_pool(
         &self,
         event: &MeteoraDammV2InitializePoolEvent,
@@ -418,14 +388,8 @@ impl MeteoraDammV2EventPersistor {
         {
             warn!(error = %err, kind = "initialize_pool", "pool upsert failed");
         }
-        // The genesis blob carries the base fee and the fee shape, and this used
-        // to decode both and store them. It no longer does: those columns belong
-        // to yog-context, which reads them from the account. `discover_pool`
-        // above leaves them NULL, which already puts the pool in the enrichment
-        // queue — so there is nothing to invalidate here.
-        //
-        // The blob itself is not lost: it is stored verbatim on this event's own
-        // table by the insert below.
+        // Fee columns are yog-context's, read from the account; `discover_pool` leaves them NULL,
+        // which queues the pool for enrichment. The blob is stored verbatim by the insert.
         self.repos
             .initialize_pool
             .insert(event)
@@ -433,9 +397,7 @@ impl MeteoraDammV2EventPersistor {
             .map_err(anyhow::Error::new)
     }
 
-    /// A split redistributes an existing position's contents between two
-    /// positions. Pool reserves are unchanged — nothing enters or leaves the
-    /// pool — so this is touch + insert, with no current-state projection.
+    /// A split moves contents between two positions, nothing in or out of the pool: touch + insert.
     async fn persist_split_position(
         &self,
         event: &MeteoraDammV2SplitPositionEvent,
@@ -471,18 +433,8 @@ impl MeteoraDammV2EventPersistor {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
-        // An operator fee change moves properties this crate no longer owns:
-        // the base fee tier on `pools`, the dynamic-fee flag on the satellite.
-        // Rather than decode the update and write the new values, flag the pool
-        // — yog-context re-reads the account and rewrites every property, so
-        // each column keeps exactly one writer.
-        //
-        // Reading state instead of a delta also drops a real hazard. This blob
-        // is a borsh `PoolFeeParameters` whose dynamic-fee tag moves between
-        // byte 1 and byte 9 depending on whether the base fee was touched, and
-        // whose `Option` encodes *three* states — `Some(default)` means
-        // "disable". The account carries the resolved value at a fixed offset,
-        // with nothing to disambiguate.
+        // ⚠️ Flag the pool rather than decode the update: yog-context rewrites every property from
+        // the account, one writer per column, and this blob's borsh layout shifts with its contents.
         if let Err(err) = self
             .pool_maintenance
             .mark_needs_refresh(Self::PROTOCOL, &event.pool_address)
@@ -497,17 +449,6 @@ impl MeteoraDammV2EventPersistor {
             .map_err(anyhow::Error::new)
     }
 }
-
-// ---------------------------------------------------------------------------
-// Tests — dispatch + recipe routing
-// ---------------------------------------------------------------------------
-//
-// Verify that `persist()` routes each `MeteoraDammV2Event` variant to the
-// correct per-event-kind repository AND applies the right pool-maintenance
-// recipe: full upsert for swap/liquidity/genesis, last-seen touch otherwise,
-// and the current-state projection only for swap/liquidity. All repositories
-// (and the pool/projection repos behind `PoolMaintenance`) are mocked to
-// append to an ordered call log — no database is involved.
 
 #[cfg(test)]
 #[path = "event_persistor_tests.rs"]

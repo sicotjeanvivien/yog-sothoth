@@ -4,21 +4,12 @@ use yog_core::domain::{Protocol, WatchedPoolRepository};
 
 use crate::{application::source::TransactionSource, error::DatabaseError};
 
-/// Manages the lifecycle of pool subscriptions.
-///
-/// Single responsibility : keep the database and the source in sync — a pool
-/// persisted in the database must always be subscribed to, and vice versa.
-///
-/// It depends on [`TransactionSource`] and not on a concrete listener: what
-/// "subscribe to a pool" means is one WebSocket per address on one path and one
-/// entry in a filter on the other, and this service has no business knowing
-/// which.
+/// Keeps the database and the source in sync: a pool persisted in `watched_pools` is subscribed
+/// to, through [`TransactionSource`], whatever subscribing means on the path running.
 pub(crate) struct WatchedPoolService {
     source: Arc<dyn TransactionSource>,
     repository: Arc<dyn WatchedPoolRepository>,
-    /// The protocols whose extraction is written — see
-    /// `ExtractionDispatcher::implemented_protocols`. A watched pool of any
-    /// other protocol is skipped; the reason is on `restore_subscriptions`.
+    /// The protocols whose extraction is written; see `restore_subscriptions`.
     implemented_protocols: Vec<Protocol>,
 }
 
@@ -35,32 +26,9 @@ impl WatchedPoolService {
         }
     }
 
-    /// On daemon startup, resubscribe to all pools persisted in the database.
-    /// Ensures no subscription is lost across restarts.
-    ///
-    /// Called only under `INGEST_SCOPE=pools` — the daemon's `Registration`
-    /// builds this service for that scope and no other.
-    ///
-    /// ⚠️ **A pool whose protocol has no working extractor is skipped.**
-    /// `watched_pools.protocol` is plain `TEXT` with no `CHECK`, the allowlist
-    /// is populated by hand, and `Protocol::from_str` accepts
-    /// `"meteora_dlmm"` — so without this guard one INSERT is enough to have
-    /// the indexer fetch every transaction of that pool and hand each to a stub
-    /// that returns nothing. The list it checks against is
-    /// `ExtractionDispatcher::implemented_protocols`, the same one the other
-    /// scope subscribes from.
-    ///
-    /// The skip is a `warn!` and not a silent filter: the row was put there on
-    /// purpose, and a pool that is watched in the database but not on the wire
-    /// is its own trap.
-    ///
-    /// ⚠️ **`count` changed meaning here, and the old one was wrong.** It used
-    /// to be `pools.len()` — every row, *including the inactive ones* — under a
-    /// message that says "subscriptions restored". It now counts what was
-    /// handed to the source, with `skipped` beside it. Anyone comparing this
-    /// line across the 10 September 2026 release will see the number drop
-    /// without the allowlist changing; that is the log becoming true, not the
-    /// indexer losing pools.
+    /// On start-up under `INGEST_SCOPE=pools`, resubscribe every active pool in the database.
+    /// ⚠️ A pool whose protocol is not in `ExtractionDispatcher::implemented_protocols` is skipped
+    /// with a `warn!`: `watched_pools.protocol` has no `CHECK`, and a stub would buy a firehose.
     pub(crate) async fn restore_subscriptions(&self) -> Result<(), DatabaseError> {
         let pools = self.repository.find_all().await?;
         let mut count = 0usize;
@@ -85,13 +53,8 @@ impl WatchedPoolService {
             count += 1;
         }
 
-        // ⚠️ **Every row skipped is not "nothing to do", it is a dead end**, and
-        // it deserves to be named here rather than three lines later. The
-        // listener will refuse with `NoSubscriptionTargets` — the "reads like a
-        // network fault, is a configuration one" message this module argues
-        // against everywhere else — and that refusal knows nothing of the skip.
-        // An `error!` at the moment the cause is still in hand is what connects
-        // the two.
+        // ⚠️ Every row skipped is a dead end: the listener will refuse with `NoSubscriptionTargets`,
+        // knowing nothing of the skip; the `error!` names the cause while it is in hand.
         if count == 0 && skipped > 0 {
             error!(
                 skipped,
