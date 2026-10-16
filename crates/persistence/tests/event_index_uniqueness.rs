@@ -1,16 +1,6 @@
-//! The unique key must tell apart two events emitted by one transaction.
-//!
-//! This is the regression guard for the defect measured on 4 August 2026: the
-//! key was `(signature, timestamp)`, a routed transaction emits one event per
-//! hop under a single signature and a single `blockTime`, and
-//! `ON CONFLICT DO NOTHING` dropped every hop but one — 29 losses out of 482
-//! emissions across three pools, silently.
-//!
-//! It runs the **real extractor over a real transaction** rather than
-//! hand-built events, because the point being proved is a property of on-chain
-//! data: that the two legs are indistinguishable on every field the old key
-//! looked at. A synthetic pair would only prove that two rows I made different
-//! stay different.
+//! The unique key must tell apart two events of one transaction: a routed transaction emits
+//! one per hop under one signature and one `blockTime`. ⚠️ The real extractor over a real
+//! transaction: a synthetic pair would only prove that two rows made different stay different.
 
 use sqlx::PgPool;
 use yog_core::application::extraction::conformance::reference_transaction;
@@ -21,18 +11,8 @@ use yog_core::domain::{
 };
 use yog_persistence::PgMeteoraDammV2SwapEventRepository;
 
-/// The mainnet transaction `2qJrr…`: two swaps on the **same pool**, in
-/// opposite directions, one signature, one `blockTime`.
-///
-/// The **real extractor over real bytes**, which is the point — a synthetic pair
-/// would only prove that two rows I made different stay different. What is not
-/// exercised here is the JSON-RPC decoding, and deliberately so: this test is
-/// about a property of on-chain data, not about a transport.
-///
-/// The neutral form comes from `yog-core`'s conformance module, shared with
-/// every source adapter and **pinned to the verbatim mainnet response** by the
-/// adapter's own conformance test. That pin is what makes these bytes the
-/// chain's rather than mine; see the module's doc-comment.
+/// The mainnet transaction `2qJrr…`: two swaps on the same pool, opposite directions, one
+/// signature, one `blockTime` — from `yog-core`'s conformance module, pinned to the mainnet response.
 pub(super) fn swap_double_swaps() -> Vec<MeteoraDammV2SwapEvent> {
     let outcome = MeteoraDammV2::new()
         .extract_events(&reference_transaction())
@@ -48,21 +28,13 @@ pub(super) fn swap_double_swaps() -> Vec<MeteoraDammV2SwapEvent> {
         .collect()
 }
 
-/// Both hops of a routed transaction reach the table.
-///
-/// Mutation-checked: put migration 041's unique index and this repository's
-/// `ON CONFLICT` target back to `(signature, timestamp)`, and it fails with
-/// `leg 1 was not written / left: Skipped, right: Inserted` — the defect,
-/// reproduced. Without running that mutation the test would be green against
-/// the very bug it exists to catch.
+/// Mutation: the unique index and the `ON CONFLICT` target back to `(signature, timestamp)`.
 #[sqlx::test]
 async fn both_legs_of_a_routed_transaction_persist(pool: PgPool) {
     let swaps = swap_double_swaps();
     assert_eq!(swaps.len(), 2, "fixture must carry exactly two swaps");
 
-    // What made the old key collapse them: everything it looked at is equal,
-    // and so is the pool — which is why adding `pool_address` to the key would
-    // not have helped either.
+    // Equal on everything the old key read, pool included.
     assert_eq!(swaps[0].signature, swaps[1].signature);
     assert_eq!(swaps[0].timestamp, swaps[1].timestamp);
     assert_eq!(swaps[0].pool_address, swaps[1].pool_address);
@@ -91,11 +63,7 @@ async fn both_legs_of_a_routed_transaction_persist(pool: PgPool) {
     );
 }
 
-/// Idempotency is preserved: the same event twice still writes one row, and
-/// the second attempt now *says so* instead of returning a bare `Ok(())`.
-///
-/// This is the other half of the contract. A key wide enough to separate two
-/// events is only correct if it still collapses a genuine replay.
+/// A key wide enough to separate two events must still collapse a genuine replay, and say so.
 #[sqlx::test]
 async fn re_ingesting_the_same_event_is_reported_as_skipped(pool: PgPool) {
     let swap = swap_double_swaps().remove(0);
@@ -115,9 +83,8 @@ async fn re_ingesting_the_same_event_is_reported_as_skipped(pool: PgPool) {
     assert_eq!(rows, 1, "the replay must not have duplicated the row");
 }
 
-/// The position columns survive the round-trip — a `DEFAULT 0` left in place,
-/// or a bind in the wrong slot, would otherwise store zeros that read back as
-/// a plausible "first event of its transaction".
+/// Mutation: a `DEFAULT 0` left in place, or a bind in the wrong slot — zeros read back as
+/// a plausible first event.
 #[sqlx::test]
 async fn position_columns_are_stored_as_extracted(pool: PgPool) {
     let swap = swap_double_swaps().remove(1);
@@ -137,25 +104,13 @@ async fn position_columns_are_stored_as_extracted(pool: PgPool) {
         slot, 0,
         "slot must come from the transaction, not the default"
     );
-    // The column exists for a source that carries the index natively. What this
-    // line guards is narrow and worth stating exactly: that `None` survives
-    // extraction and persistence unchanged. It observes nothing about the
-    // provider — the value comes from a constant in
-    // `conformance::reference_transaction`, and the adapter's own tests read a
-    // committed fixture, so **no test anywhere watches a live provider start
-    // returning `transactionIndex`**. The old comment promised that tripwire;
-    // it never existed. Only a run against a real endpoint would notice.
+    // Only that `None` survives: the value is a fixture constant, and no test watches a live
+    // provider start returning `transactionIndex`.
     assert_eq!(transaction_index, None);
 }
 
-/// Storing both hops is only half the fix: the feed must be able to *page*
-/// through them. The cursor is `(timestamp, signature, event_index)` — with
-/// only the first two it is not a total order over these rows, and a page
-/// boundary falling between two hops silently drops the second.
-///
-/// Mutation-checked: remove the `event_index` clause from the forward
-/// predicate in `swap_event.rs` and the second page comes back empty, so the
-/// recovered leg is lost again — this time on the read side.
+/// Mutation: the `event_index` clause removed from the forward predicate — a page boundary
+/// between the two hops drops the second.
 #[sqlx::test]
 async fn paging_across_two_hops_of_one_transaction_skips_nothing(pool: PgPool) {
     use yog_core::domain::MeteoraDammV2SwapEventFeed;
@@ -168,7 +123,6 @@ async fn paging_across_two_hops_of_one_transaction_skips_nothing(pool: PgPool) {
         assert_eq!(repo.insert(swap).await.unwrap(), InsertOutcome::Inserted);
     }
 
-    // One row per page, so the boundary lands exactly between the two hops.
     let first = repo
         .find_by_pool_paginated(&pool_address, None, PageDirection::Next, None, 1)
         .await
@@ -204,15 +158,7 @@ async fn paging_across_two_hops_of_one_transaction_skips_nothing(pool: PgPool) {
     );
 }
 
-/// The backward half of the same guarantee.
-///
-/// `Prev` navigation is a real API surface, and its predicate is the mirror of
-/// the forward one — `<` for `>`, `DESC` for `ASC` on all three keys. A mirror
-/// is exactly the kind of thing that looks obviously right and is worth one
-/// test anyway: it was written by hand, twice, in two repositories.
-///
-/// Mutation-checked: drop the `event_index` clause from the backward predicate
-/// and the second page comes back empty, same as forward.
+/// Mutation: the `event_index` clause removed from the backward predicate.
 #[sqlx::test]
 async fn paging_backward_across_two_hops_skips_nothing(pool: PgPool) {
     use yog_core::domain::MeteoraDammV2SwapEventFeed;
@@ -225,8 +171,6 @@ async fn paging_backward_across_two_hops_skips_nothing(pool: PgPool) {
         assert_eq!(repo.insert(swap).await.unwrap(), InsertOutcome::Inserted);
     }
 
-    // Jump to the far end of the list, one row per page, then walk back: the
-    // boundary again falls between the two hops.
     let last = repo
         .find_by_pool_paginated(
             &pool_address,
@@ -261,18 +205,8 @@ async fn paging_backward_across_two_hops_skips_nothing(pool: PgPool) {
     );
 }
 
-/// The liquidity feed received the same three columns, the same key, the same
-/// cursor and the same predicates as the swap feed — and, until this test, no
-/// coverage of its own. "Same shape, therefore same behaviour" is the
-/// assumption this audit has falsified three times.
-///
-/// The pair is built by hand rather than extracted, and that is a deliberate
-/// difference from the swap tests above: no fixture in the repo carries two
-/// liquidity events in one transaction. What needs real data is the *claim
-/// about the chain* — that two events genuinely share signature, timestamp and
-/// pool — and `swap_double.json` already establishes it. What this test
-/// exercises is storage and cursor code, where a hand-built pair proves the
-/// same thing.
+/// The liquidity feed's own key and cursor. Built by hand: no fixture carries two liquidity
+/// events of one transaction, and storage code needs no real data to be exercised.
 #[sqlx::test]
 async fn liquidity_feed_stores_and_pages_two_hops_of_one_transaction(pool: PgPool) {
     use yog_core::domain::{

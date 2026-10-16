@@ -1,9 +1,4 @@
-//! Integration tests for `PgTokenMetadataRepository::list_missing_mints`.
-//!
-//! Gated behind `integration-tests`. The subject is narrow on purpose: this
-//! query is what feeds yog-context's metadata worker, and it had no DB-backed
-//! coverage at all — its only test was a mock returning a canned `Vec`, which
-//! is why the cold-start defect below reached a running stack.
+//! `PgTokenMetadataRepository::list_missing_mints`, which feeds yog-context's metadata worker.
 
 use super::helpers::pk;
 use chrono::Utc;
@@ -12,8 +7,7 @@ use sqlx::PgPool;
 use yog_core::domain::TokenMetadataRepository;
 use yog_persistence::PgTokenMetadataRepository;
 
-/// A pool discovered from the event stream, before yog-context resolves it:
-/// both mints NULL, which is the state migration 014 made possible.
+/// A pool discovered from the event stream, both mints still NULL.
 async fn insert_unresolved_pool(pool: &PgPool, addr: &str) {
     sqlx::query(
         "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint)
@@ -51,20 +45,8 @@ async fn insert_metadata(pool: &PgPool, mint: &str) {
     .unwrap();
 }
 
-/// The cold-start case, and the regression guard.
-///
-/// `token_metadata` empty + a pool with unresolved mints. SQL defines
-/// `x NOT IN (<empty set>)` as TRUE for **any** x, NULL included, so the NULL
-/// row survived the filter and the non-null decode blew up with "unexpected
-/// null". Every freshly bootstrapped database went through this state, and the
-/// worker that would have populated `token_metadata` is the one that failed —
-/// so it could not clear the condition itself.
-///
-/// ⚠️ Mutation-checked: dropping `mint IS NOT NULL` from the query turns this
-/// into `RepositoryError::Backend(… unexpected null …)`, i.e. the assertion
-/// below fails. Without an empty `token_metadata` the test is vacuous — with a
-/// single row present, `NULL NOT IN (…)` is NULL and the row is filtered out
-/// even by the broken query.
+/// Mutation: `mint IS NOT NULL` dropped. ⚠️ Needs an empty `token_metadata`: `x NOT IN ()` is
+/// TRUE even for NULL, while with one row present the broken query filters it anyway.
 #[sqlx::test]
 async fn unresolved_mints_are_ignored_when_no_metadata_exists_yet(pool: PgPool) {
     insert_unresolved_pool(&pool, &pk(1).to_string()).await;
@@ -81,10 +63,7 @@ async fn unresolved_mints_are_ignored_when_no_metadata_exists_yet(pool: PgPool) 
     );
 }
 
-/// The same guard once `token_metadata` is non-empty: the NULL must still not
-/// come back, this time filtered by `NULL NOT IN (<non-empty>)` being NULL.
-/// Both paths matter — the bug only ever fired on the empty one, so a test
-/// written only here would have stayed green through it.
+/// The same guard over a non-empty `token_metadata`.
 #[sqlx::test]
 async fn unresolved_mints_are_ignored_alongside_resolved_ones(pool: PgPool) {
     let mint_a = pk(10).to_string();

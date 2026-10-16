@@ -1,10 +1,5 @@
-//! Integration test for the paginated signal feed read
-//! (`PgSignalRepository::list`).
-//!
-//! Gated behind `integration-tests`. Validates the vertical slice on the
-//! real `signals` hypertable: display order (`triggered_at DESC, id DESC`),
-//! forward/backward keyset navigation, boundary flags, the id tie-break on
-//! equal timestamps, and the optional severity and pool filters.
+//! `PgSignalRepository::list` on the real `signals` hypertable: display order, keyset
+//! navigation, the id tie-break, and the filters.
 
 use super::helpers::pk;
 use chrono::{DateTime, Duration, Utc};
@@ -41,10 +36,7 @@ fn signal_cursor(cursor: &Cursor) -> SignalCursor {
     }
 }
 
-/// Seed five signals at strictly increasing timestamps and return the
-/// base instant. In a fresh test database the BIGSERIAL assigns ids
-/// 1..=5 in insert order, so id N was triggered at `base + N seconds` —
-/// newest first is 5,4,3,2,1.
+/// Five signals at increasing timestamps; ids 1..=5 in insert order, so newest first is 5..1.
 async fn seed_five(repo: &PgSignalRepository) -> DateTime<Utc> {
     let base = Utc::now() - Duration::hours(1);
     let severities = [
@@ -252,8 +244,6 @@ async fn severity_filter_restricts_the_feed(pool: PgPool) {
     );
     assert!(page.is_first && page.is_last);
 }
-
-// ── recent_by_pools — the pools-list signal indicator ────────────────
 
 #[sqlx::test]
 async fn recent_by_pools_groups_newest_first_and_windows(pool: PgPool) {

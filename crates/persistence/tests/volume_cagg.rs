@@ -1,12 +1,5 @@
-//! Integration test for the swap volume continuous aggregate (baseline §13)
-//! and the CA-backed `volume_24h_usd` read path in `PgPoolAnalyticsRepository`.
-//!
-//! Gated behind `integration-tests`. Validates the full vertical slice:
-//! swaps land in the raw hypertable, the hourly CA (real-time aggregation,
-//! so no manual refresh needed) exposes the per-direction sums, and
-//! `batch_compute` values them at the per-bucket trade-time price — summing
-//! only the INPUT side of each swap (a_to_b → amount_a, b_to_a → amount_b),
-//! over the trailing 24h window.
+//! The swap volume continuous aggregate and `volume_24h_usd` in `PgPoolAnalyticsRepository`:
+//! each swap's input side valued at the bucket's trade-time price, over the trailing 24 h.
 
 use super::helpers::{pk, price_mint_since};
 use chrono::{DateTime, Duration, Utc};
@@ -49,9 +42,6 @@ async fn volume_24h_reads_cagg_with_trade_time_pricing(pool: PgPool) {
     let mint_a = pk(2).to_string();
     let mint_b = pk(3).to_string();
     let now = Utc::now();
-    // Metadata timestamp. Prices themselves are sampled hourly below: "well
-    // before the bucket" stopped being enough at migration 005, which bounds how
-    // far back the as-of lookup may reach.
     let price_at = now - Duration::hours(3);
 
     sqlx::query(
@@ -79,9 +69,7 @@ async fn volume_24h_reads_cagg_with_trade_time_pricing(pool: PgPool) {
         .unwrap();
     }
 
-    // Token A = $2.0, token B = $100.0, sampled hourly like the price worker
-    // does — one observation covers exactly the one bucket whose start falls in
-    // the hour after it.
+    // ⚠️ Sampled hourly: one observation prices only the bucket starting within the hour after it.
     for (mint, price) in [(&mint_a, "2.0"), (&mint_b, "100.0")] {
         price_mint_since(&pool, mint, price, 4).await;
     }

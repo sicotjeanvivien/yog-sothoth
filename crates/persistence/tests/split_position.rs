@@ -9,15 +9,11 @@ use yog_persistence::PgMeteoraDammV2SplitPositionEventRepository;
 
 use super::helpers::{pk, sg, ts};
 
-// ── split_position: 33 columns, exact u128, multi-target key ────────
-
 #[sqlx::test]
 async fn split_position_preserves_every_bucket(pool: PgPool) {
     let repo = PgMeteoraDammV2SplitPositionEventRepository::new(pool.clone());
-    // Distinct sentinel per field: the three liquidity buckets are all u128 and
-    // `amounts` declares them in a different order from `*_position_after` on
-    // the wire, so a mix-up cannot fail to deserialize — only differing values
-    // catch it.
+    // ⚠️ A distinct value per field: the three u128 buckets come in different orders on the
+    // wire, so only differing values catch a mix-up.
     const BIG: u128 = u128::MAX / 3;
     let event = MeteoraDammV2SplitPositionEvent {
         pool_address: pk(1),
@@ -82,9 +78,7 @@ async fn split_position_preserves_every_bucket(pool: PgPool) {
         "duplicate (signature, event_index, timestamp) must not insert twice"
     );
 
-    // One transaction can split the same source toward several targets. Each
-    // split is its own emission, so `event_index` tells them apart —
-    // `second_position` stays as data, but left the key in migration 041.
+    // One transaction can split one source toward several targets: `event_index` tells them apart.
     assert_eq!(
         repo.insert(&MeteoraDammV2SplitPositionEvent {
             second_position: pk(6),
@@ -113,8 +107,7 @@ async fn split_position_preserves_every_bucket(pool: PgPool) {
     .unwrap();
     assert_eq!(sqrt, BIG.to_string());
 
-    // Every bucket lands in its own column — the guard against a swapped
-    // `amounts` / `*_position_after` binding.
+    // Mutation: an `amounts` / `*_position_after` binding swapped.
     let (sp, su, sv, fu, fp, su2, sp2): (String, String, String, String, String, String, String) =
         sqlx::query_as(
             "SELECT split_permanent_locked_liquidity::TEXT, split_unlocked_liquidity::TEXT, \

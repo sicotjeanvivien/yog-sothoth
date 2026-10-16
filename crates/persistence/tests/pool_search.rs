@@ -1,11 +1,5 @@
-//! Integration tests for the `/pools` search filter — single free-text
-//! term vs. the `SOL/USDC` token-pair syntax.
-//!
-//! Gated behind `integration-tests`: they need a live Postgres (sqlx::test
-//! provisions an isolated, migrated DB per test). These exercise what the
-//! Couche-1 unit tests in `pool/query_tests.rs` cannot — that the assembled
-//! search SQL actually runs against a real dataset and filters correctly,
-//! including case-insensitivity and pair order-independence.
+//! The `/pools` search on a real dataset: a single free-text term against the `SOL/USDC`
+//! pair syntax, case-insensitive and order-independent.
 
 use super::helpers::pk;
 use chrono::{DateTime, TimeZone, Utc};
@@ -18,13 +12,10 @@ use yog_core::{
 };
 use yog_persistence::PgPoolRepository;
 
-// ── Seed helpers ────────────────────────────────────────────────────
-
 fn ts(secs: i64) -> DateTime<Utc> {
     Utc.timestamp_opt(secs, 0).unwrap()
 }
 
-/// Insert a token's metadata so the search join has a symbol/name to match.
 async fn seed_token(pool: &PgPool, mint: Pubkey, symbol: &str, name: &str) {
     sqlx::query(
         "INSERT INTO token_metadata (mint, symbol, name, decimals, fetched_at, last_refresh_at)
@@ -38,9 +29,7 @@ async fn seed_token(pool: &PgPool, mint: Pubkey, symbol: &str, name: &str) {
     .expect("seed token failed");
 }
 
-/// Insert a pool with explicit token mints (which side is A vs B matters for
-/// the pair order-independence test). Timestamps are derived from `seq` so
-/// the default LastSeenDesc order is deterministic.
+/// A pool with explicit mints, A and B sides mattering; `seq` makes the order deterministic.
 async fn seed_pool(pool: &PgPool, addr: Pubkey, mint_a: Pubkey, mint_b: Pubkey, seq: i64) {
     sqlx::query(
         r#"
@@ -104,8 +93,6 @@ fn search_query(term: &str) -> PoolListQuery {
     }
 }
 
-// ── Pair filter ─────────────────────────────────────────────────────
-
 #[sqlx::test]
 async fn pair_search_matches_only_the_exact_pair(pool: PgPool) {
     seed_scenario(&pool).await;
@@ -153,8 +140,6 @@ async fn pair_search_no_common_pool_yields_empty(pool: PgPool) {
 
     assert!(page.page.items.is_empty());
 }
-
-// ── Single term (regression: unchanged behaviour) ───────────────────
 
 #[sqlx::test]
 async fn single_term_matches_pools_on_either_side(pool: PgPool) {

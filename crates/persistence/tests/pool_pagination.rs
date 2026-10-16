@@ -1,14 +1,5 @@
-//! Integration tests for PgPoolRepository::find_paginated.
-//!
-//! Gated behind the `integration-tests` feature: they require a live
-//! Postgres (provided by sqlx::test, which creates an isolated
-//! database per test and applies the migrations). The CI job
-//! `test-integration` runs them; a plain `cargo test` skips them.
-//!
-//! These cover what the Couche-1 unit tests cannot: that the
-//! assembled SQL actually runs, orders rows correctly, and that
-//! Next/Prev/First/Last navigation is internally consistent against
-//! a real dataset.
+//! `PgPoolRepository::find_paginated` against a real dataset: ordering, navigation,
+//! filters, and the snapshot fence over `last_seen_at`.
 
 use super::helpers::pk;
 use chrono::{DateTime, TimeZone, Utc};
@@ -22,16 +13,11 @@ use yog_core::{
 };
 use yog_persistence::PgPoolRepository;
 
-// ── Seed helpers ────────────────────────────────────────────────────
-
 fn ts(secs: i64) -> DateTime<Utc> {
     Utc.timestamp_opt(secs, 0).unwrap()
 }
 
-/// Insert a pool with explicit first_seen / last_seen. We bypass the
-/// repository's `upsert` (which sets both timestamps equal) because
-/// these tests need first_seen and last_seen to differ, to tell the
-/// two sort columns apart.
+/// Inserts a pool with explicit timestamps, bypassing `upsert`, which sets both equal.
 async fn seed_pool(
     pool: &PgPool,
     addr: Pubkey,
@@ -57,19 +43,8 @@ async fn seed_pool(
     .expect("seed insert failed");
 }
 
-/// Seed three pools with distinct, interleaved first/last_seen so the
-/// two sort columns produce DIFFERENT orderings — this is what makes
-/// the tests able to catch "sorted by the wrong column".
-///
-///   addr | first_seen | last_seen
-///   A(1) |   100      |   300
-///   B(2) |   200      |   100
-///   C(3) |   300      |   200
-///
-/// first_seen ASC  → A, B, C
-/// first_seen DESC → C, B, A
-/// last_seen  ASC  → B, C, A
-/// last_seen  DESC → A, C, B
+/// Three pools whose two sort columns give different orders, so a sort on the wrong
+/// column fails: first_seen ASC → A, B, C; last_seen ASC → B, C, A.
 async fn seed_three(pool: &PgPool) {
     seed_pool(pool, pk(1), ts(100), ts(300)).await;
     seed_pool(pool, pk(2), ts(200), ts(100)).await;
@@ -80,10 +55,7 @@ fn addrs(pools: &[Pool]) -> Vec<Pubkey> {
     pools.iter().map(|p| p.pool_address).collect()
 }
 
-/// A `PoolListQuery` with the given sort and page size and every other
-/// dimension at its neutral default (no cursor, forward, no position, no
-/// filter). Tests that need a cursor/position/filter override the field
-/// via struct-update syntax: `PoolListQuery { cursor: Some(c), ..base_query(sort, 2) }`.
+/// A `PoolListQuery` with every other dimension neutral; tests override by struct update.
 fn base_query(sort: PoolSort, limit: i64) -> PoolListQuery {
     PoolListQuery {
         cursor: None,
@@ -95,8 +67,6 @@ fn base_query(sort: PoolSort, limit: i64) -> PoolListQuery {
         limit,
     }
 }
-
-// ── Ordering: the four sorts produce the documented order ───────────
 
 #[sqlx::test]
 async fn first_seen_asc_orders_oldest_first(pool: PgPool) {
@@ -152,8 +122,6 @@ async fn last_seen_desc_orders_by_last_seen(pool: PgPool) {
     assert_eq!(addrs(&page.page.items), vec![pk(1), pk(3), pk(2)]);
 }
 
-// ── Pagination: walk forward page by page ───────────────────────────
-
 #[sqlx::test]
 async fn forward_pagination_covers_all_rows_without_overlap(pool: PgPool) {
     seed_three(&pool).await;
@@ -181,8 +149,6 @@ async fn forward_pagination_covers_all_rows_without_overlap(pool: PgPool) {
     assert!(p2.page.is_last);
     assert!(p2.page.next_cursor.is_none());
 }
-
-// ── Round-trip: Next then Prev returns to the same page ─────────────
 
 #[sqlx::test]
 async fn next_then_prev_returns_to_first_page(pool: PgPool) {
@@ -215,8 +181,6 @@ async fn next_then_prev_returns_to_first_page(pool: PgPool) {
         .unwrap();
     assert_eq!(addrs(&back.page.items), vec![pk(3), pk(2)]);
 }
-
-// ── Position jumps: First / Last ────────────────────────────────────
 
 #[sqlx::test]
 async fn position_last_jumps_to_end(pool: PgPool) {
@@ -262,8 +226,6 @@ async fn position_first_matches_unanchored_first_page(pool: PgPool) {
     assert!(explicit_first.page.is_first);
 }
 
-// ── Empty table ─────────────────────────────────────────────────────
-
 #[sqlx::test]
 async fn empty_table_yields_empty_page_at_both_boundaries(pool: PgPool) {
     let repo = PgPoolRepository::new(pool);
@@ -280,10 +242,6 @@ async fn empty_table_yields_empty_page_at_both_boundaries(pool: PgPool) {
     assert!(page.page.prev_cursor.is_none());
 }
 
-// ── Fee-tier filter + option list ───────────────────────────────────
-
-/// Set a pool's base fee, so the fee-filter tests can seed distinct tiers
-/// on top of the timestamp-only `seed_pool`.
 async fn set_fee(pool: &PgPool, addr: Pubkey, fee_bps: rust_decimal::Decimal) {
     sqlx::query("UPDATE pools SET fee_bps = $2 WHERE pool_address = $1")
         .bind(addr.to_string())
@@ -343,16 +301,12 @@ async fn list_fee_tiers_returns_distinct_tiers_with_counts_ascending(pool: PgPoo
 
     let tiers = repo.list_fee_tiers().await.unwrap();
 
-    // Distinct, each with its count, ascending by fee for display (25 not
-    // duplicated, NULL excluded).
     assert_eq!(tiers, vec![fee_tier(dec(25), 2), fee_tier(dec(100), 1)]);
 }
 
 #[sqlx::test]
 async fn list_fee_tiers_keeps_only_the_most_common_capped(pool: PgPool) {
-    // Nine distinct tiers, one pool each (all count 1). The cap keeps the top
-    // 8; the count tie breaks by fee ASC, so the highest fee (90) is the one
-    // dropped. The survivors come back ascending for display.
+    // Nine tiers of one pool each: the tie breaks by fee, so the cap drops the highest (90).
     for i in 1..=9u8 {
         let addr = pk(50 + i);
         seed_pool(&pool, addr, ts(i as i64 * 10), ts(i as i64 * 10)).await;
@@ -377,20 +331,16 @@ async fn list_fee_tiers_empty_when_no_fees_resolved(pool: PgPool) {
     assert!(tiers.is_empty());
 }
 
-/// Small `Decimal` literal helper for the fee tiers.
 fn dec(n: i64) -> rust_decimal::Decimal {
     rust_decimal::Decimal::from(n)
 }
 
-/// Build an expected `FeeTier` for assertions.
 fn fee_tier(fee_bps: rust_decimal::Decimal, pool_count: i64) -> yog_core::domain::FeeTier {
     yog_core::domain::FeeTier {
         fee_bps,
         pool_count,
     }
 }
-
-// ── Helper: pull a PoolCursor out of the Cursor enum ────────────────
 
 fn extract_pool_cursor(cursor: &yog_core::Cursor) -> PoolCursor {
     match cursor {
@@ -399,25 +349,11 @@ fn extract_pool_cursor(cursor: &yog_core::Cursor) -> PoolCursor {
     }
 }
 
-// ── Snapshot fence: paginating over a column that moves ─────────────
-//
-// `last_seen_at` is rewritten on every event touching the pool, and a
-// keyset cursor assumes its sort key holds still. The fence pins the
-// traversal to the instant it started so a touched row leaves the result
-// set instead of moving across the cursor — see
-// `yog_core::domain::PoolPage`.
-//
-// Every test below mutates a pool *between two pages*, which is the
-// situation the production bug needed and no earlier test created.
-//
-// ⚠️ Asserting "the touched pool is absent" would NOT catch the bug:
-// absent is exactly what the broken code produced. What separates the two
-// is that the pool never reappears at a *different rank*, that the
-// duplicate is gone, and that the departure is counted.
+// Each fence test mutates a pool between two pages. ⚠️ "The touched pool is absent" would
+// not catch the bug, which produced exactly that: assert no other rank, no duplicate, a count.
 
-/// Push a pool's `last_seen_at` above any fence a running test can mint.
-/// An explicit hour ahead, not `NOW()`: the assertion must not depend on
-/// how many microseconds elapsed since the fence was taken.
+/// Pushes a pool's `last_seen_at` an hour ahead, not to `NOW()`: the assertion must not
+/// depend on the microseconds since the fence was taken.
 async fn touch_pool(pool: &PgPool, addr: Pubkey) {
     sqlx::query("UPDATE pools SET last_seen_at = $2 WHERE pool_address = $1")
         .bind(addr.to_string())
@@ -427,8 +363,7 @@ async fn touch_pool(pool: &PgPool, addr: Pubkey) {
         .expect("touch failed");
 }
 
-/// Ascending traversal, the duplicate case: a pool already shown moves to
-/// the tail and is served a second time. Under the fence it leaves instead.
+/// Ascending: a pool already shown moves to the tail; without the fence it is served twice.
 #[sqlx::test]
 async fn last_seen_asc_does_not_serve_a_touched_pool_twice(pool: PgPool) {
     seed_three(&pool).await;
@@ -439,8 +374,6 @@ async fn last_seen_asc_does_not_serve_a_touched_pool_twice(pool: PgPool) {
     let p1 = repo.find_paginated(base_query(sort, 1)).await.unwrap();
     assert_eq!(addrs(&p1.page.items), vec![pk(2)]);
 
-    // B is touched: its last_seen jumps past every remaining row, which
-    // without a fence would place it after the cursor — again.
     touch_pool(&pool, pk(2)).await;
 
     let cursor = extract_pool_cursor(p1.page.next_cursor.as_ref().unwrap());
@@ -466,10 +399,8 @@ async fn last_seen_asc_does_not_serve_a_touched_pool_twice(pool: PgPool) {
     );
 }
 
-/// Descending traversal, backward navigation: a pool touched mid-traversal
-/// has moved to the head of the live list. It must not come back into a
-/// page of *this* traversal, where it would appear at a rank the reader
-/// never saw it in.
+/// Descending, backward: a pool touched mid-traversal must not come back at a rank the
+/// reader never saw it in.
 #[sqlx::test]
 async fn last_seen_desc_backward_page_excludes_a_touched_pool(pool: PgPool) {
     seed_three(&pool).await;
@@ -509,9 +440,7 @@ async fn last_seen_desc_backward_page_excludes_a_touched_pool(pool: PgPool) {
     );
 }
 
-/// The departures are counted. This is what keeps a descending listing
-/// honest: it cannot show the pools that moved above its fence, so it says
-/// how many did.
+/// A descending listing cannot show the pools that moved above its fence: it counts them.
 #[sqlx::test]
 async fn touched_since_counts_the_pools_that_left(pool: PgPool) {
     seed_three(&pool).await;
@@ -543,12 +472,7 @@ async fn touched_since_counts_the_pools_that_left(pool: PgPool) {
     );
     assert_eq!(p2.touched_since, 2);
 
-    // Both remaining pools left, so the page is legitimately EMPTY — with no
-    // cursor either side, since there is no row to build one from. That is
-    // correct here and a dead end for whoever renders it: the count is the
-    // only thing left on the page that can explain it and offer a way out.
-    // Asserting the shape is what makes that obligation visible from the
-    // repository, rather than something a UI discovers in production.
+    // Empty, with no cursor either side: the count is all that explains the page.
     assert!(
         p2.page.items.is_empty(),
         "expected every remaining pool to have left: {:?}",
@@ -557,14 +481,8 @@ async fn touched_since_counts_the_pools_that_left(pool: PgPool) {
     assert!(p2.page.next_cursor.is_none() && p2.page.prev_cursor.is_none());
 }
 
-/// The complement of the test above, and the reason both exist: an empty page
-/// is the *right* answer only when everything left. A traversal with rows
-/// remaining must still serve them.
-///
-/// This one does not guard the fence's presence (dropping the fence leaves it
-/// green — the moved pool is out of the keyset window either way); it guards
-/// the fence's **direction and extent**. Inverting the comparison, which is
-/// the realistic typo, reddens it.
+/// Mutation: the fence's comparison inverted. ⚠️ Dropping the fence leaves this green:
+/// it guards the fence's direction, not its presence.
 #[sqlx::test]
 async fn fence_removes_only_the_pools_that_moved(pool: PgPool) {
     seed_three(&pool).await;
@@ -574,7 +492,6 @@ async fn fence_removes_only_the_pools_that_moved(pool: PgPool) {
     let p1 = repo.find_paginated(base_query(sort, 1)).await.unwrap();
     assert_eq!(addrs(&p1.page.items), vec![pk(1)]);
 
-    // Only C moves. B is untouched and must still be served.
     touch_pool(&pool, pk(3)).await;
 
     let cursor = extract_pool_cursor(p1.page.next_cursor.as_ref().unwrap());
@@ -594,8 +511,7 @@ async fn fence_removes_only_the_pools_that_moved(pool: PgPool) {
     assert_eq!(p2.touched_since, 1);
 }
 
-/// The count is scoped to the same population as the page. A pool the
-/// reader filtered out is not a pool that left *their* listing.
+/// Mutation: the count ignoring the filters, which would report pools the reader filtered out.
 #[sqlx::test]
 async fn touched_since_ignores_pools_outside_the_active_filter(pool: PgPool) {
     seed_three(&pool).await;
@@ -612,8 +528,6 @@ async fn touched_since_ignores_pools_outside_the_active_filter(pool: PgPool) {
     let p1 = repo.find_paginated(query()).await.unwrap();
     assert_eq!(addrs(&p1.page.items), vec![pk(1)]);
 
-    // One pool inside the filter, one outside. Only the first has left
-    // anything the reader can see.
     touch_pool(&pool, pk(2)).await;
     touch_pool(&pool, pk(3)).await;
 
@@ -638,8 +552,7 @@ async fn touched_since_ignores_pools_outside_the_active_filter(pool: PgPool) {
     );
 }
 
-/// The immutable sort column gets no fence — and must not: fencing it
-/// would hide pools for a mutation that cannot affect their order.
+/// Mutation: fencing `first_seen_at`, which would hide pools whose order cannot move.
 #[sqlx::test]
 async fn first_seen_traversal_is_unfenced(pool: PgPool) {
     seed_three(&pool).await;
@@ -670,18 +583,7 @@ async fn first_seen_traversal_is_unfenced(pool: PgPool) {
     );
 }
 
-// ── The invariant the fence rests on: `last_seen_at` only grows ─────
-//
-// The fence turns "a touched row moves across the cursor" into "a touched
-// row leaves the result set" *because* the column only ever increases. It
-// bounds from above only, so a row moving DOWN is invisible to it — it
-// re-enters the traversal below a cursor already passed and gets served a
-// second time. Nothing enforced that until `GREATEST` did: `upsert` writes
-// the indexer process clock, `touch_last_seen` writes Postgres' `NOW()`,
-// and events are persisted concurrently.
-
-/// A stale observation must not walk the column backwards, whichever writer
-/// carries it.
+/// ⚠️ The fence bounds from above only: a row moving down re-enters below a passed cursor.
 #[sqlx::test]
 async fn last_seen_at_never_moves_backwards(pool: PgPool) {
     use yog_core::domain::PoolRepository;
@@ -689,8 +591,7 @@ async fn last_seen_at_never_moves_backwards(pool: PgPool) {
     seed_pool(&pool, pk(1), ts(100), ts(300)).await;
     let repo = PgPoolRepository::new(pool.clone());
 
-    // An upsert carrying an *older* instant than what is stored — a swap
-    // whose event was decoded before a concurrent touch committed.
+    // An older instant than the stored one, as a concurrent touch would leave.
     repo.upsert(&Pool {
         pool_address: pk(1),
         protocol: Protocol::MeteoraDammV2,
@@ -709,8 +610,7 @@ async fn last_seen_at_never_moves_backwards(pool: PgPool) {
         "an older observation must not lower last_seen_at"
     );
 
-    // A newer one still moves it forward — the guard must not freeze the
-    // column, only floor it.
+    // Mutation: a guard that freezes the column instead of flooring it.
     repo.upsert(&Pool {
         pool_address: pk(1),
         protocol: Protocol::MeteoraDammV2,
@@ -725,8 +625,6 @@ async fn last_seen_at_never_moves_backwards(pool: PgPool) {
 
     assert_eq!(last_seen_of(&pool, pk(1)).await, ts(400));
 
-    // `touch_last_seen` writes NOW(), which is later than every seeded
-    // instant, so it must move the column forward and not be floored away.
     repo.touch_last_seen(&pk(1)).await.unwrap();
     assert!(
         last_seen_of(&pool, pk(1)).await > ts(400),
@@ -734,7 +632,6 @@ async fn last_seen_at_never_moves_backwards(pool: PgPool) {
     );
 }
 
-/// Read one pool's `last_seen_at` straight from the table.
 async fn last_seen_of(pool: &PgPool, addr: Pubkey) -> DateTime<Utc> {
     sqlx::query_scalar::<_, DateTime<Utc>>("SELECT last_seen_at FROM pools WHERE pool_address = $1")
         .bind(addr.to_string())
@@ -743,19 +640,11 @@ async fn last_seen_of(pool: &PgPool, addr: Pubkey) -> DateTime<Utc> {
         .expect("read last_seen_at failed")
 }
 
-// ── What the fence must NOT do ──────────────────────────────────────
-//
-// Each guard below removes a way the fence could hide or repeat a row
-// while looking like it was protecting one.
-
-/// A pool whose stored instant runs ahead of the API process's clock must
-/// still be listed. Bounding the *first* page — where there is no cursor,
-/// hence no keyset assumption to protect — could only ever subtract rows,
-/// and `touched_since` is 0 there, so nothing would report the loss.
+/// Mutation: fencing the first page — it could only hide rows stamped ahead of the API
+/// clock, with `touched_since` at 0 to say so.
 #[sqlx::test]
 async fn an_unanchored_first_page_hides_nothing(pool: PgPool) {
     seed_three(&pool).await;
-    // A clock ahead of ours, by more than any plausible skew.
     let ahead = Utc::now() + chrono::Duration::hours(2);
     sqlx::query("UPDATE pools SET last_seen_at = $2 WHERE pool_address = $1")
         .bind(pk(2).to_string())
@@ -777,10 +666,8 @@ async fn an_unanchored_first_page_hides_nothing(pool: PgPool) {
     );
 }
 
-/// A cursor whose anchor is refused loses its place with it. A fresh anchor
-/// over a stale `sort_value` is not a repair: under `LastSeenAsc` a pool
-/// already read and touched since would satisfy both halves of the predicate
-/// and be served a second time — the very duplicate the fence removes.
+/// Mutation: a refused anchor keeping its cursor — a fresh anchor over a stale
+/// `sort_value` serves again a pool already read and touched since.
 #[sqlx::test]
 async fn a_stale_cursor_restarts_at_the_head(pool: PgPool) {
     seed_three(&pool).await;
@@ -790,8 +677,7 @@ async fn a_stale_cursor_restarts_at_the_head(pool: PgPool) {
     let p1 = repo.find_paginated(base_query(sort, 1)).await.unwrap();
     assert_eq!(addrs(&p1.page.items), vec![pk(2)]);
 
-    // The same cursor, its anchor aged past the cutoff — a bookmarked URL
-    // rather than a reader mid-scroll.
+    // The same cursor, its anchor aged past the cutoff.
     let mut stale = extract_pool_cursor(p1.page.next_cursor.as_ref().unwrap());
     stale.as_of = Some(Utc::now() - chrono::Duration::hours(6));
 
@@ -814,10 +700,8 @@ async fn a_stale_cursor_restarts_at_the_head(pool: PgPool) {
     );
 }
 
-/// The transitional case, which must behave the *opposite* way: a cursor
-/// minted before the anchor existed carries no claim, so it keeps its place
-/// and simply gets one. Refusing these would reset every reader mid-listing
-/// the moment this shipped.
+/// Mutation: refusing a cursor that carries no anchor — minted before the field existed,
+/// it keeps its place.
 #[sqlx::test]
 async fn a_cursor_without_an_anchor_keeps_its_place(pool: PgPool) {
     seed_three(&pool).await;
@@ -844,20 +728,8 @@ async fn a_cursor_without_an_anchor_keeps_its_place(pool: PgPool) {
     assert!(page.as_of.is_some(), "and be anchored from here on");
 }
 
-/// The other half of the write rule, and the one `GREATEST` alone would have
-/// turned into a trap: a value **ahead** of the database clock is clamped,
-/// never stored.
-///
-/// Without the clamp, one NTP correction or a suspended VM on the indexer host
-/// writes a future instant that `GREATEST` then makes permanent — no later
-/// write can lower it. Such a pool fails `last_seen_at <= as_of` on every
-/// fenced page while satisfying `last_seen_at > as_of` in the count: invisible
-/// forever, and reported forever as having just moved.
-///
-/// The assertions are against "not in the future" rather than against the
-/// written value: Postgres stores microseconds where `Utc::now()` carries
-/// nanoseconds, so `stored < written` is true by truncation alone and would
-/// hold with the clamp removed.
+/// Mutation: no clamp to `NOW()` — `GREATEST` would make a future value permanent. ⚠️ Asserts
+/// "not in the future": Postgres truncates to microseconds, so `stored < written` holds anyway.
 #[sqlx::test]
 async fn a_clock_ahead_of_the_database_cannot_store_the_future(pool: PgPool) {
     use yog_core::domain::PoolRepository;
@@ -875,7 +747,6 @@ async fn a_clock_ahead_of_the_database_cannot_store_the_future(pool: PgPool) {
         last_seen_at: at,
     };
 
-    // On INSERT: neither column may land in the future.
     repo.upsert(&observed(ahead)).await.unwrap();
     let ceiling = Utc::now();
     assert!(
@@ -884,7 +755,7 @@ async fn a_clock_ahead_of_the_database_cannot_store_the_future(pool: PgPool) {
     );
     assert!(first_seen_of(&pool, pk(1)).await <= ceiling);
 
-    // And on UPDATE, where `GREATEST` would otherwise make it permanent.
+    // On UPDATE, where `GREATEST` would make it permanent.
     repo.upsert(&observed(ahead)).await.unwrap();
     let ceiling = Utc::now();
     let stored = last_seen_of(&pool, pk(1)).await;
@@ -893,8 +764,7 @@ async fn a_clock_ahead_of_the_database_cannot_store_the_future(pool: PgPool) {
         "an upsert must not store an instant ahead of the database clock: {stored}"
     );
 
-    // A row already holding a future instant is repaired by its next write,
-    // rather than merely not being made worse.
+    // A row already in the future is repaired by its next write.
     sqlx::query("UPDATE pools SET last_seen_at = $2 WHERE pool_address = $1")
         .bind(pk(1).to_string())
         .bind(ahead)
@@ -909,7 +779,6 @@ async fn a_clock_ahead_of_the_database_cannot_store_the_future(pool: PgPool) {
     );
 }
 
-/// Read one pool's `first_seen_at` straight from the table.
 async fn first_seen_of(pool: &PgPool, addr: Pubkey) -> DateTime<Utc> {
     sqlx::query_scalar::<_, DateTime<Utc>>(
         "SELECT first_seen_at FROM pools WHERE pool_address = $1",

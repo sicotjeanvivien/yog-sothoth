@@ -7,8 +7,6 @@ use yog_persistence::PgMeteoraDammV2InitializeRewardEventRepository;
 
 use super::helpers::{pk, sg, ts};
 
-// ── initialize_reward: persists, idempotent per slot, multi-slot tx ──
-
 #[sqlx::test]
 async fn initialize_reward_inserts_and_is_idempotent(pool: PgPool) {
     let repo = PgMeteoraDammV2InitializeRewardEventRepository::new(pool.clone());
@@ -28,7 +26,7 @@ async fn initialize_reward_inserts_and_is_idempotent(pool: PgPool) {
     };
 
     assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Inserted);
-    // Same (signature, reward_index, timestamp) again — ON CONFLICT DO NOTHING.
+    // A replay: ON CONFLICT DO NOTHING.
     assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Skipped);
 
     let count: i64 =
@@ -41,10 +39,7 @@ async fn initialize_reward_inserts_and_is_idempotent(pool: PgPool) {
         "duplicate (signature, event_index, timestamp) must not insert twice"
     );
 
-    // A single transaction may open more than one slot. Each opening is its own
-    // emission, so what separates them is `event_index` — since migration 041
-    // that is the key's discriminant, in place of `reward_index`, and it works
-    // the same way for the fifteen event kinds that never had one.
+    // One transaction may open several slots: `event_index` separates them.
     assert_eq!(
         repo.insert(&MeteoraDammV2InitializeRewardEvent {
             reward_index: 1,

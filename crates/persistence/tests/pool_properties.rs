@@ -1,20 +1,5 @@
-//! Integration tests for the DAMM v2 pool-properties satellite (baseline §8)
-//! and the account-resolution queue that reads it.
-//!
-//! Gated behind `integration-tests`: they need a live Postgres (sqlx::test
-//! provisions an isolated, migrated DB per test).
-//!
-//! These cover what the unit tests structurally cannot — that the two-table
-//! write is atomic, that the two writers do not clobber each other, and above
-//! all that `list_unresolved` no longer proposes pools it can never resolve.
-//! That last one is the regression guard for the failure mode migration 036 set
-//! out to remove: before it, the queue had no protocol filter, and since a pool
-//! it cannot resolve is never removed from the result set while the ordering is
-//! `first_seen_at` ascending, foreign-protocol pools accumulated at the head and
-//! eventually starved DAMM v2 enrichment entirely.
-//!
-//! The DLMM satellite (039) and the satellite↔protocol invariant migration 040
-//! writes into the schema are covered in their own sections below.
+//! The pool-properties satellites (baseline §8-§9), their resolution queues, and the
+//! pool↔protocol invariant the schema holds.
 
 use super::helpers::pk;
 use chrono::{DateTime, TimeZone, Utc};
@@ -39,9 +24,7 @@ fn ts(secs: i64) -> DateTime<Utc> {
     Utc.timestamp_opt(secs, 0).unwrap()
 }
 
-/// Read one pool's satellite row, unwrapping the cross-protocol
-/// [`PoolProperties`] enum the lookup returns. The reads below assert on cp-amm
-/// columns, so they want the concrete type; the enum is the api's concern.
+/// Reads one pool's cp-amm satellite row, unwrapped from [`PoolProperties`].
 async fn read_properties(
     repo: &PgMeteoraDammV2PoolPropertiesRepository,
     addr: &Pubkey,
@@ -69,9 +52,8 @@ async fn read_dlmm_properties(
         })
 }
 
-/// Insert a bare pool row, as `discover_pool` would: address + protocol only,
-/// everything else NULL. `seq` drives `first_seen_at` so queue ordering is
-/// deterministic.
+/// Inserts a bare pool row, as discovery would. `seq` drives `first_seen_at`, so
+/// queue order is deterministic.
 async fn seed_pool(pool: &PgPool, addr: Pubkey, protocol: Protocol, seq: i64) {
     sqlx::query(
         r#"
@@ -87,14 +69,13 @@ async fn seed_pool(pool: &PgPool, addr: Pubkey, protocol: Protocol, seq: i64) {
     .expect("seed pool failed");
 }
 
-/// The cp-amm half alone — what the satellite repository now receives.
+/// The cp-amm half alone — what the satellite repository receives.
 fn properties_only(base_fee_kind: Option<BaseFeeKind>) -> PoolAccountProperties {
     PoolAccountProperties::MeteoraDammV2(MeteoraDammV2PoolAccountProperties {
         protocol_fee_percent: 20,
         referral_fee_percent: 20,
         base_fee_kind,
         has_dynamic_fee: true,
-        // No decay curve — the helper builds a pool whose fee does not decay.
         fee_scheduler: None,
     })
 }
@@ -121,9 +102,7 @@ fn account_core() -> PoolRegistryProperties {
     }
 }
 
-/// One full resolution, in the order the worker uses: satellite first, registry
-/// last. The ordering is the invariant, so the tests below go through this
-/// helper rather than restating it.
+/// One full resolution in the worker's order: satellite first, registry last.
 async fn resolve(
     satellite: &PgMeteoraDammV2PoolPropertiesRepository,
     registry: &PgPoolRepository,
@@ -140,10 +119,6 @@ async fn resolve(
         .expect("set_registry_properties failed");
 }
 
-// ── One account read, two owners ────────────────────────────────────
-
-/// One decoded account reaches both tables — through two repositories, each
-/// writing only what it owns.
 #[sqlx::test]
 async fn a_resolution_fills_the_registry_and_the_satellite(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
@@ -152,7 +127,6 @@ async fn a_resolution_fills_the_registry_and_the_satellite(pool: PgPool) {
 
     resolve(&satellite, &registry, &pk(1), Some(BaseFeeKind::Constant)).await;
 
-    // The neutral columns, written by the registry's own repository.
     let row = sqlx::query_as::<_, (Option<String>, Option<Decimal>)>(
         "SELECT token_a_mint, fee_bps FROM pools WHERE pool_address = $1",
     )
@@ -163,20 +137,16 @@ async fn a_resolution_fills_the_registry_and_the_satellite(pool: PgPool) {
     assert_eq!(row.0.as_deref(), Some(pk(10).to_string().as_str()));
     assert_eq!(row.1, Some(Decimal::new(25, 0)));
 
-    // The cp-amm ones, written by the satellite's.
     let props = read_properties(&satellite, &pk(1))
         .await
         .expect("satellite row should have been created");
     assert_eq!(props.protocol_fee_percent, Some(20));
     assert_eq!(props.referral_fee_percent, Some(20));
-    // …including the fee shape, read from the same account rather than from a
-    // genesis event that, for a discovered pool, never comes.
     assert_eq!(props.base_fee_kind.as_deref(), Some("constant"));
     assert_eq!(props.has_dynamic_fee, Some(true));
 }
 
-/// The satellite is `REFERENCES pools`, so an unknown pool is an error rather
-/// than a silent no-op — and nothing must be left behind.
+/// Mutation: a silent no-op, or a row left behind, for an unknown pool.
 #[sqlx::test]
 async fn set_pool_account_for_an_unknown_pool_writes_nothing(pool: PgPool) {
     let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
@@ -192,8 +162,6 @@ async fn set_pool_account_for_an_unknown_pool_writes_nothing(pool: PgPool) {
         .expect("count failed");
     assert_eq!(count.0, 0, "the transaction must have rolled back");
 }
-
-// ── list_unresolved: the queue ──────────────────────────────────────
 
 #[sqlx::test]
 async fn list_unresolved_returns_a_freshly_discovered_damm_v2_pool(pool: PgPool) {
@@ -211,9 +179,7 @@ async fn list_unresolved_drops_a_pool_once_its_account_is_resolved(pool: PgPool)
     let satellite = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
     let registry = PgPoolRepository::new(pool.clone());
 
-    // **Both** halves are required to leave the queue — the satellite write
-    // alone leaves the registry's mints and fee NULL. Covered on its own by
-    // `only_the_registry_write_lowers_the_flag`.
+    // Both halves: the satellite write alone leaves the registry's mints and fee NULL.
     resolve(&satellite, &registry, &pk(1), Some(BaseFeeKind::Constant)).await;
     let unresolved = satellite.list_unresolved(100).await.expect("query failed");
 
@@ -223,19 +189,14 @@ async fn list_unresolved_drops_a_pool_once_its_account_is_resolved(pool: PgPool)
     );
 }
 
-/// A pool resolved by an **older build** — percents and mints filled, fee shape
-/// never — comes back into the queue, which is how the fee shape reaches the
-/// pools that were enriched before the account decoder learned to read it.
-///
-/// The predicate keys off `has_dynamic_fee` for this: it is written by the same
-/// call as `base_fee_kind` and is always decodable, so NULL means "never
-/// resolved" and never "resolved but undecodable".
+/// Mutation: the predicate keyed off `base_fee_kind` instead of `has_dynamic_fee`,
+/// which is always decodable — a pool without a fee shape must come back.
 #[sqlx::test]
 async fn a_pool_resolved_without_a_fee_shape_is_proposed_again(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
     let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
 
-    // What the pre-PR resolver left behind: everything but the fee shape.
+    // Everything resolved but the fee shape.
     sqlx::query(
         r#"
         UPDATE pools SET token_a_mint = $2, token_b_mint = $3, fee_bps = 25
@@ -269,13 +230,8 @@ async fn a_pool_resolved_without_a_fee_shape_is_proposed_again(pool: PgPool) {
     );
 }
 
-/// An account whose `BaseFeeMode` this build cannot map sends `base_fee_kind =
-/// NULL`. That must **not** erase a kind already established — by an earlier
-/// build that knew the mode, or by a genesis event.
-///
-/// This is why the upsert uses `COALESCE` on that one column rather than
-/// `EXCLUDED`: every other column is authoritative from the account, this one
-/// can legitimately arrive unknown.
+/// Mutation: `EXCLUDED` instead of `COALESCE` on `base_fee_kind`, which would erase a
+/// known kind when this build cannot map the account's mode.
 #[sqlx::test]
 async fn an_unmappable_fee_mode_does_not_erase_a_known_kind(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
@@ -298,14 +254,11 @@ async fn an_unmappable_fee_mode_does_not_erase_a_known_kind(pool: PgPool) {
     );
 }
 
-/// **The regression guard.** A DLMM pool can never be decoded by the cp-amm
-/// account source, so proposing it means re-fetching it every cycle, forever —
-/// and, since the queue is ordered oldest-first and capped, eventually crowding
-/// out every DAMM v2 pool behind it.
+/// Mutation: `p.protocol` dropped from the queue — a pool it can never decode would
+/// be proposed every cycle, forever.
 #[sqlx::test]
 async fn list_unresolved_never_returns_a_pool_of_another_protocol(pool: PgPool) {
-    // The foreign-protocol pools are the *oldest*, so under the pre-036 query
-    // they would sit at the head of the queue and starve the DAMM v2 one.
+    // The foreign pools are the oldest, so without the filter they head the queue.
     seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
     seed_pool(&pool, pk(3), Protocol::MeteoraDammV2, 3).await;
     let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool);
@@ -319,9 +272,7 @@ async fn list_unresolved_never_returns_a_pool_of_another_protocol(pool: PgPool) 
     );
 }
 
-/// Corollary of the above, stated as the failure it prevents: with the queue
-/// capped at a batch smaller than the number of foreign pools, the DAMM v2 pool
-/// must still be reached.
+/// With a batch smaller than the foreign pools, the DAMM v2 pool must still be reached.
 #[sqlx::test]
 async fn list_unresolved_is_not_starved_by_older_foreign_pools(pool: PgPool) {
     for seq in 1..=5 {
@@ -340,10 +291,6 @@ async fn list_unresolved_is_not_starved_by_older_foreign_pools(pool: PgPool) {
     );
 }
 
-// ── DLMM satellite (baseline §9) ──────────────────────────────────
-
-/// The DLMM resolver stores its six columns and reads them back unchanged,
-/// including the values a signed column of the on-chain width could not hold.
 #[sqlx::test]
 async fn the_dlmm_satellite_round_trips_every_column(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
@@ -364,9 +311,7 @@ async fn the_dlmm_satellite_round_trips_every_column(pool: PgPool) {
     assert_eq!(props.protocol_share, Some(1_000));
 }
 
-/// The reason the columns are INTEGER and BIGINT rather than SMALLINT and
-/// INTEGER: an on-chain `u16` / `u32` at the top of its range must survive the
-/// round trip through Postgres, which has no unsigned integers.
+/// Mutation: a column one width narrower — the top of a `u16` / `u32` must survive.
 #[sqlx::test]
 async fn the_dlmm_satellite_round_trips_the_top_of_each_unsigned_range(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
@@ -387,8 +332,6 @@ async fn the_dlmm_satellite_round_trips_the_top_of_each_unsigned_range(pool: PgP
     let props = read_dlmm_properties(&repo, &pk(1))
         .await
         .expect("row should exist");
-    // All six, not a sample: each column is what justifies its own width, so
-    // leaving one unread would leave that width unproven.
     assert_eq!(props.bin_step, Some(u16::MAX));
     assert_eq!(props.base_factor, Some(u16::MAX));
     assert_eq!(props.base_fee_power_factor, Some(u8::MAX));
@@ -397,10 +340,7 @@ async fn the_dlmm_satellite_round_trips_the_top_of_each_unsigned_range(pool: PgP
     assert_eq!(props.protocol_share, Some(u16::MAX));
 }
 
-/// A second resolution overwrites every column — no `COALESCE` anywhere, unlike
-/// cp-amm's `base_fee_kind`. A successful `LbPair` decode always carries all six
-/// fields, so there is never a NULL to protect an earlier value from, and an
-/// `update_fee_parameters` must actually take effect.
+/// Mutation: a `COALESCE` on a DLMM column — an `update_fee_parameters` must take effect.
 #[sqlx::test]
 async fn a_second_dlmm_resolution_overwrites_every_column(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
@@ -433,9 +373,7 @@ async fn a_second_dlmm_resolution_overwrites_every_column(pool: PgPool) {
     );
 }
 
-/// A resolver must refuse another protocol's payload rather than write it or
-/// silently do nothing. The worker routes by protocol, so reaching this is a
-/// wiring bug, and it must surface as one.
+/// Mutation: a resolver writing, or silently ignoring, another protocol's payload.
 #[sqlx::test]
 async fn each_resolver_rejects_the_other_protocols_payload(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
@@ -457,17 +395,7 @@ async fn each_resolver_rejects_the_other_protocols_payload(pool: PgPool) {
     assert!(read_properties(&damm, &pk(2)).await.is_none());
 }
 
-// ── The two queues, side by side ────────────────────────────────────
-
-/// **The test that needs two protocols to exist.** Each queue proposes only its
-/// own pools — in both directions.
-///
-/// The cp-amm side of this was already covered, but it could only ever assert
-/// half the invariant: before this migration there was no second resolver to
-/// starve. A DLMM `list_unresolved` missing its `p.protocol` predicate would
-/// propose the whole cp-amm catalogue, whose accounts it cannot decode, so those
-/// pools would never resolve, never leave the queue, and — ordered oldest-first
-/// with a capped batch — crowd out every DLMM pool behind them.
+/// Each queue proposes only its own pools, in both directions.
 #[sqlx::test]
 async fn each_queue_proposes_only_its_own_protocol(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
@@ -488,8 +416,7 @@ async fn each_queue_proposes_only_its_own_protocol(pool: PgPool) {
     );
 }
 
-/// The starvation guard, stated from the DLMM side: five older cp-amm pools and
-/// a batch of two must not keep the DLMM pool out of its own queue.
+/// Five older cp-amm pools and a batch of two must not keep the DLMM pool out.
 #[sqlx::test]
 async fn the_dlmm_queue_is_not_starved_by_older_cp_amm_pools(pool: PgPool) {
     for seq in 1..=5 {
@@ -508,9 +435,6 @@ async fn the_dlmm_queue_is_not_starved_by_older_cp_amm_pools(pool: PgPool) {
     );
 }
 
-/// A DLMM pool leaves its queue only once **both** halves are written — the
-/// satellite and the neutral registry columns. Same contract as cp-amm's, and
-/// the reason the worker writes the registry last.
 #[sqlx::test]
 async fn a_resolved_dlmm_pool_leaves_its_queue(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
@@ -538,8 +462,6 @@ async fn a_resolved_dlmm_pool_leaves_its_queue(pool: PgPool) {
     );
 }
 
-/// The satellite is `REFERENCES pools`, so a DLMM write for an unknown pool is
-/// an error rather than a silent no-op.
 #[sqlx::test]
 async fn a_dlmm_write_for_an_unknown_pool_fails(pool: PgPool) {
     let repo = PgMeteoraDlmmPoolPropertiesRepository::new(pool);
@@ -549,11 +471,6 @@ async fn a_dlmm_write_for_an_unknown_pool_fails(pool: PgPool) {
         .expect_err("an unknown pool must violate the foreign key");
 }
 
-// ── The pool↔protocol invariant, in the schema (baseline §8-§9) ──────
-
-// `sqlstate` lives in `helpers` — `price_positivity.rs` asserts a SQLSTATE for
-// the same reason, and one definition is what keeps the rationale attached to
-// the rule rather than to whichever test file happened to need it first.
 use super::helpers::sqlstate;
 
 /// `23503` — foreign_key_violation.
@@ -561,13 +478,8 @@ const FOREIGN_KEY_VIOLATION: &str = "23503";
 /// `428C9` — cannot insert into a `GENERATED ALWAYS` column.
 const GENERATED_ALWAYS: &str = "428C9";
 
-/// A dependent row cannot carry a protocol the registry disagrees with.
-///
-/// Deliberately **raw SQL**, not the repositories: the resolvers reject a
-/// foreign *payload* in Rust and the worker screens the pool before that, so
-/// going through them would exercise those guards and prove nothing about the
-/// constraint. Raw SQL is also the realistic threat model — a repair script, a
-/// psql session, a future writer that skipped the discipline.
+/// A dependent row cannot carry a protocol the registry disagrees with. ⚠️ Raw SQL:
+/// the repositories would exercise their own guards, not the constraint.
 #[sqlx::test]
 async fn a_dependent_row_cannot_disagree_with_the_registry(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
@@ -592,9 +504,7 @@ async fn a_dependent_row_cannot_disagree_with_the_registry(pool: PgPool) {
     .expect_err("a DLMM property row for a cp-amm pool must violate the composite key");
     assert_eq!(sqlstate(&err), FOREIGN_KEY_VIOLATION, "{err:?}");
 
-    // `pool_current_state` carries its own `protocol` column — real per-row data
-    // written by the indexer, not a constant — so it is the one place the two
-    // labels could genuinely be written apart.
+    // `pool_current_state` writes its own `protocol`: the one place the labels could differ.
     let err = sqlx::query(
         "INSERT INTO pool_current_state \
              (pool_address, protocol, last_event_at, last_event_kind, last_signature, \
@@ -609,13 +519,8 @@ async fn a_dependent_row_cannot_disagree_with_the_registry(pool: PgPool) {
     assert_eq!(sqlstate(&err), FOREIGN_KEY_VIOLATION, "{err:?}");
 }
 
-/// The satellite's `protocol` column is `GENERATED ALWAYS`, so a writer cannot
-/// name it — which is what stops the composite key from being talked around by
-/// simply supplying the protocol the row wants to be.
-///
-/// The SQLSTATE is the whole test: `428C9` is "you wrote to a generated column",
-/// and it is the only outcome that distinguishes the column being *there and
-/// generated* from it being absent.
+/// A writer cannot name the satellite's `protocol`, and so cannot talk around the
+/// composite key. `428C9` alone tells a generated column from an absent one.
 #[sqlx::test]
 async fn the_satellite_protocol_column_cannot_be_written(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
@@ -631,19 +536,8 @@ async fn the_satellite_protocol_column_cannot_be_written(pool: PgPool) {
     assert_eq!(sqlstate(&err), GENERATED_ALWAYS, "{err:?}");
 }
 
-/// The constraint seen from the repository, which is what yog-context actually
-/// holds.
-///
-/// This scenario is **not reachable through the worker today**:
-/// `context/src/application/workers/pool_account.rs` skips any pool whose
-/// decoded account disagrees with the queue's protocol, before the resolver is
-/// called. What the test pins is the contract the repository now offers
-/// regardless of who calls it — a refused write, mapped to
-/// [`RepositoryError::Conflict`] like any other foreign-key violation, so a
-/// future caller inherits skip-and-log rather than a silent success.
-///
-/// Its mirror image, a *foreign payload* caught in Rust, is
-/// `each_resolver_rejects_the_other_protocols_payload`.
+/// The constraint seen from the repository: a refused write surfaces as
+/// [`RepositoryError::Conflict`]. A foreign payload is `each_resolver_rejects_the_other_protocols_payload`.
 #[sqlx::test]
 async fn a_resolver_write_onto_a_foreign_pool_is_refused_by_the_schema(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
@@ -670,12 +564,7 @@ async fn a_resolver_write_onto_a_foreign_pool_is_refused_by_the_schema(pool: PgP
     assert!(read_dlmm_properties(&dlmm, &pk(2)).await.is_none());
 }
 
-/// The invariant read from the other end: once a dependent row exists, the
-/// registry can no longer relabel the pool underneath it.
-///
-/// Nothing updates `pools.protocol` today — `PgPoolRepository::upsert` writes it
-/// on INSERT and its `ON CONFLICT` touches only `last_seen_at` — so this blocks
-/// a bug rather than a workflow.
+/// Once a dependent row exists, the registry can no longer relabel the pool.
 #[sqlx::test]
 async fn a_pools_protocol_cannot_change_under_a_satellite_row(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
@@ -694,10 +583,7 @@ async fn a_pools_protocol_cannot_change_under_a_satellite_row(pool: PgPool) {
     assert_eq!(sqlstate(&err), FOREIGN_KEY_VIOLATION, "{err:?}");
 }
 
-/// The three satellite foreign keys are composite (baseline §8-§9), rebuilt
-/// from single-column ones in migration 040. `ON DELETE CASCADE` came with the
-/// originals, and losing it in that rebuild would leave orphan rows no code
-/// path ever cleans up — so it is asserted rather than assumed.
+/// Mutation: a satellite foreign key without `ON DELETE CASCADE`, leaving orphan rows.
 #[sqlx::test]
 async fn deleting_a_pool_still_cascades_to_its_dependents(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
@@ -710,8 +596,6 @@ async fn deleting_a_pool_still_cascades_to_its_dependents(pool: PgPool) {
     dlmm.set_pool_account(&pk(2), &dlmm_properties_only())
         .await
         .expect("set_pool_account failed");
-    // A matching state row, written the way the indexer writes it: same protocol
-    // as the registry, which is what the composite key now requires.
     sqlx::query(
         "INSERT INTO pool_current_state \
              (pool_address, protocol, last_event_at, last_event_kind, last_signature, \
@@ -738,13 +622,8 @@ async fn deleting_a_pool_still_cascades_to_its_dependents(pool: PgPool) {
     assert_eq!(orphans.0, 0, "the state projection must cascade too");
 }
 
-// ── needs_refresh: the invalidation loop ────────────────────────────
-
-/// The whole indexer→context handshake, end to end.
-///
-/// A resolved pool is out of the queue. The indexer sees a fee-change event and
-/// raises the flag — without writing any property value — and the pool comes
-/// back. The refresh then lowers it, and the pool leaves again.
+/// The indexer raises the flag without writing a value, the pool comes back, the
+/// refresh lowers it.
 #[sqlx::test]
 async fn the_refresh_flag_puts_a_resolved_pool_back_in_the_queue(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
@@ -757,7 +636,6 @@ async fn the_refresh_flag_puts_a_resolved_pool_back_in_the_queue(pool: PgPool) {
         "a resolved pool must be out of the queue to begin with"
     );
 
-    // What the indexer does on UpdatePoolFees — and all it does.
     registry
         .mark_needs_refresh(&pk(1))
         .await
@@ -787,10 +665,8 @@ async fn the_refresh_flag_puts_a_resolved_pool_back_in_the_queue(pool: PgPool) {
     assert_eq!(props.base_fee_kind.as_deref(), Some("rate_limiter"));
 }
 
-/// The satellite write **must not** clear the flag: only the registry write
-/// does, and the worker issues it last. Were it otherwise, a satellite success
-/// followed by a registry failure would drop the pool from the queue with half
-/// its properties refreshed.
+/// Mutation: the satellite write lowering the flag — a registry failure after it would
+/// drop a half-refreshed pool from the queue.
 #[sqlx::test]
 async fn only_the_registry_write_lowers_the_flag(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
@@ -800,7 +676,6 @@ async fn only_the_registry_write_lowers_the_flag(pool: PgPool) {
     resolve(&satellite, &registry, &pk(1), Some(BaseFeeKind::Constant)).await;
     registry.mark_needs_refresh(&pk(1)).await.unwrap();
 
-    // Only the satellite half lands — as if the registry write then failed.
     satellite
         .set_pool_account(&pk(1), &properties_only(Some(BaseFeeKind::Constant)))
         .await
@@ -813,8 +688,6 @@ async fn only_the_registry_write_lowers_the_flag(pool: PgPool) {
     );
 }
 
-/// `set_pool_account` writes the satellite and **nothing else** — the `pools`
-/// registry is another repository's table now.
 #[sqlx::test]
 async fn set_pool_account_does_not_touch_the_registry(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
@@ -839,16 +712,8 @@ async fn set_pool_account_does_not_touch_the_registry(pool: PgPool) {
     assert_eq!(row.1, None, "nor its fee_bps");
 }
 
-/// The fee-scheduler curve makes the full round trip, and its absence is
-/// written rather than skipped.
-///
-/// Six columns of one decoded curve. The test pins two things the upsert could
-/// get wrong in opposite directions: that a curve lands intact (a swapped pair
-/// among four same-typed integers would compile silently), and that a **later
-/// read without a curve clears it** — plain `EXCLUDED`, deliberately unlike the
-/// `COALESCE` that protects `base_fee_kind` one line above it. A pool whose fee
-/// shape genuinely changed must not keep publishing a decay it no longer has:
-/// a stale curve is confidently wrong, an absent one is visibly absent.
+/// Mutation: a swapped pair among the curve's same-typed integers, or a `COALESCE` that
+/// keeps a stale curve once a read establishes none.
 #[sqlx::test]
 async fn the_fee_scheduler_curve_round_trips_and_can_be_cleared(pool: PgPool) {
     let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
@@ -914,16 +779,8 @@ async fn the_fee_scheduler_curve_round_trips_and_can_be_cleared(pool: PgPool) {
     assert_eq!(cleared.activation_type, None);
 }
 
-/// A curve that does not fit `BIGINT` costs the curve, not the whole satellite.
-///
-/// cp-amm bounds `cliff_fee_numerator`, `reduction_factor` and
-/// `activation_point`, but bounds `period_frequency` by nothing beyond `!= 0` —
-/// and pool creation is permissionless, so a `u64` past `i64::MAX` is writable
-/// on chain today. Propagating that conversion failure with `?` would fail the
-/// entire write: the percents, the fee shape and the dynamic-fee flag would not
-/// land either, the worker would return before `set_registry_properties`, and
-/// the pool would keep `needs_refresh` raised and a NULL satellite row — taking
-/// a slot of every batch, forever, for a field nobody required.
+/// Mutation: `?` on the curve's conversion, which would sink the whole write and keep
+/// the pool queued forever.
 #[sqlx::test]
 async fn an_out_of_range_curve_costs_the_curve_and_nothing_else(pool: PgPool) {
     let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());

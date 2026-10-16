@@ -7,14 +7,10 @@ use yog_persistence::PgMeteoraDammV2WithdrawDeadLiquidityRewardEventRepository;
 
 use super::helpers::{pk, sg, ts};
 
-// ── withdraw_dead_liquidity_reward: persists, own table ─────────────
-
 #[sqlx::test]
 async fn withdraw_dead_liquidity_reward_inserts_and_is_idempotent(pool: PgPool) {
     let repo = PgMeteoraDammV2WithdrawDeadLiquidityRewardEventRepository::new(pool.clone());
-    // cp-amm only emits this event inside `if dead_liquidity_reward > 0`, so a
-    // realistic row always carries a non-zero amount — unlike the
-    // ineligible-reward table, whose real fixture is amount = 0.
+    // cp-amm emits this event only for a non-zero amount, unlike the ineligible reward.
     let event = MeteoraDammV2WithdrawDeadLiquidityRewardEvent {
         pool_address: pk(1),
         signature: sg(),

@@ -1,23 +1,13 @@
-//! The writes a runtime role receives without any grant naming it, taken back.
-//!
-//! `PUBLIC` holds two rights by default that let a role the matrix calls
-//! read-only write anyway: `EXECUTE` on TimescaleDB's job API, and `TEMP` on
-//! the database. `setup_roles.sql` revokes both, so these tests apply it, then
-//! act **under the role** (`SET ROLE`). A third write, `yog_indexer` drawing
-//! from the sequence of a table it cannot write, is closed by migration 012.
-//!
-//! Each refusal is asserted on its SQLSTATE **and** on the object the message
-//! names. `42501` alone would also be satisfied by a refusal on something else
-//! in the statement, which would stay green once the REVOKE under test is gone.
+//! The writes `PUBLIC` lets a read-only runtime role make — `EXECUTE` on TimescaleDB's job API,
+//! `TEMP` — taken back by `setup_roles.sql`, asserted under the role. ⚠️ Each refusal is
+//! asserted on its SQLSTATE and on the object named: `42501` alone could be another refusal.
 
 use super::helpers::{INSUFFICIENT_PRIVILEGE, apply_setup_roles, sqlstate};
 use sqlx::pool::PoolConnection;
 use sqlx::postgres::Postgres;
 use sqlx::{AssertSqlSafe, PgPool};
 
-// `AssertSqlSafe` below: every statement is a literal of this file, and the
-// role and sequence names interpolated into two of them are constants — a role
-// name cannot be a bind parameter.
+// `AssertSqlSafe`: only literals and constant role or sequence names are interpolated.
 
 /// Every role a runtime process connects under.
 const RUNTIME_ROLES: [&str; 6] = [
@@ -38,8 +28,7 @@ async fn connect_as(pool: &PgPool, role: &str) -> PoolConnection<Postgres> {
     conn
 }
 
-/// Run `statement` and require the insufficient-privilege refusal, with
-/// `reason` in its message.
+/// Runs `statement` and requires the insufficient-privilege refusal, `reason` in its message.
 async fn assert_refused(
     conn: &mut PoolConnection<Postgres>,
     role: &str,
@@ -75,10 +64,7 @@ async fn no_runtime_role_can_schedule_or_touch_a_job(pool: PgPool) {
             "function add_job",
         )
         .await;
-        // Why the message is asserted too: with `alter_job` left executable,
-        // TimescaleDB's own check on the job answers the same `42501`
-        // ("insufficient permissions to alter job 1") — measured by mutation.
-        // Only the object the message names tells the two refusals apart.
+        // With `alter_job` executable, TimescaleDB's own job check answers `42501` too.
         assert_refused(
             &mut conn,
             role,
@@ -117,8 +103,7 @@ async fn no_runtime_role_can_create_a_temporary_table(pool: PgPool) {
 async fn yog_indexer_draws_only_from_the_sequences_of_its_tables(pool: PgPool) {
     let mut conn = connect_as(&pool, "yog_indexer").await;
 
-    // The witness: a sequence behind a table it writes still serves it. Without
-    // it, the refusals below would also hold for a role that can draw nothing.
+    // The witness: without it, the refusals below hold for a role that can draw nothing.
     sqlx::query("SELECT nextval('meteora_damm_v2_swap_events_id_seq')")
         .execute(&mut *conn)
         .await

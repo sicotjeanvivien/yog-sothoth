@@ -1,12 +1,5 @@
-//! Integration test for the liquidity flow view (baseline §15) and the
-//! `PgLiquidityFlowRepository` read path.
-//!
-//! Gated behind `integration-tests`. Validates the vertical slice: liquidity
-//! events land in the raw hypertable, the hourly CA (011) exposes the
-//! per-direction sums, `meteora_damm_v2_pool_hourly_liquidity_flow` values
-//! each direction (both token legs) at the per-bucket trade-time price, and
-//! the repository sums the window and joins the pool's current TVL
-//! (`pool_current_tvl`, nullable).
+//! The liquidity flow view and `PgLiquidityFlowRepository`: each direction valued at the
+//! bucket's trade-time price, summed over the window, joined with the nullable current TVL.
 
 use super::helpers::{pk, price_mint_since};
 use chrono::{DateTime, Duration, Utc};
@@ -42,15 +35,8 @@ async fn insert_liquidity_event(
     .unwrap();
 }
 
-/// Seed one pool (token A: 6 decimals @ $2, token B: 9 decimals @ $100),
-/// priced hourly from `priced_since` up to now, and return its address string.
-///
-/// The series has to be continuous AND to reach the present, because this test
-/// crosses both bounds migration 005 introduced: the as-of one behind
-/// `meteora_damm_v2_pool_hourly_liquidity_flow` (no older than one hour before
-/// the bucket's start) and the latest one behind `pool_current_tvl` (no older
-/// than 15 minutes from now). A lone observation nine hours back satisfied
-/// neither — the flow read $0 and the TVL came out NULL.
+/// One pool (A: 6 decimals @ $2, B: 9 @ $100), priced hourly from `priced_since` to now.
+/// ⚠️ Continuous and up to now: the flow reads prices one hour back, the TVL 15 minutes.
 async fn seed_pool(pool: &PgPool, priced_since: DateTime<Utc>) -> String {
     let pool_addr = pk(1).to_string();
     let mint_a = pk(2).to_string();
@@ -215,18 +201,8 @@ async fn pool_without_current_state_has_null_tvl(pool: PgPool) {
 
 #[sqlx::test]
 async fn a_partly_unvaluable_window_yields_no_total(pool: PgPool) {
-    // The case found on 6 August 2026, and the one
-    // that had no coverage at all. It is the SILENT failure, not the loud one:
-    //
-    //   * the pool's current TVL is perfectly known, so `tvl_drain`'s existing
-    //     `tvl_usd` guard does not fire;
-    //   * `SUM` skips the unvaluable buckets and the old `COALESCE` dressed the
-    //     remainder as a total, so the drain came out UNDER-estimated;
-    //   * an under-estimated drain crosses no threshold — the signal is simply
-    //     missed, and nothing says a thing.
-    //
-    // Prices cover the last 2 hours: the removal at -1h is valuable, the one at
-    // -5h is not, and the window spans both.
+    // Mutation: a COALESCE or no `bool_and` — the TVL is known, so only the flow guard
+    // stands between a partly unpriced window and an under-estimated drain.
     let now = Utc::now();
     let pool_addr = seed_pool(&pool, now - Duration::hours(2)).await;
 
@@ -277,22 +253,11 @@ async fn a_partly_unvaluable_window_yields_no_total(pool: PgPool) {
 
 #[sqlx::test]
 async fn an_untouched_leg_does_not_void_a_valuable_bucket(pool: PgPool) {
-    // The asymmetric case: one mint priced, the other not, and an hour that
-    // moved only the priced one. Nothing about token B needs converting —
-    // there was no B — so the bucket is worth exactly what the A side is worth.
-    //
-    // Without the empty-leg `CASE`, `(0 / 10^dec_b) * NULL` is NULL and the
-    // whole `added_usd` goes NULL **while `valuation_complete` stays TRUE**
-    // (B carries no amount, so it is not required). `bool_and` therefore stays
-    // true, `SUM` skips the row, and the repository publishes a sub-total —
-    // the exact defect this migration claims to make unrepresentable.
-    //
-    // The previous test cannot catch this: it prices and un-prices both mints
-    // together, so the flag and the value always agree there.
+    // Mutation: no empty-leg `CASE` — `(0 / 10^dec_b) * NULL` nulls `added_usd` while
+    // `valuation_complete` stays TRUE, so `SUM` publishes a sub-total.
     let now = Utc::now();
     let pool_addr = seed_pool(&pool, now - Duration::hours(2)).await;
 
-    // Token B loses its price entirely — a mint Jupiter does not cover.
     sqlx::query(
         "WITH gone AS (DELETE FROM token_prices WHERE mint = $1)
          DELETE FROM token_last_price WHERE mint = $1",

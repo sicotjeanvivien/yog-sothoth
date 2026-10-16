@@ -1,11 +1,5 @@
-//! Integration test for the directional swap flow view (baseline §15) and
-//! the `PgSwapFlowRepository` read path.
-//!
-//! Gated behind `integration-tests`. Validates the vertical slice: swaps land
-//! in the raw hypertable, the hourly CA exposes the per-direction sums, and
-//! `meteora_damm_v2_pool_hourly_flow` values each direction at the per-bucket
-//! trade-time price WITHOUT collapsing them (unlike view 019) — a_to_b priced
-//! by token A's input side, b_to_a by token B's — summed over the window.
+//! The directional swap flow view and `PgSwapFlowRepository`: each direction valued at the
+//! bucket's trade-time price on its input side, without collapsing them, summed over the window.
 
 use super::helpers::{pk, price_mint_since};
 use chrono::{DateTime, Duration, Utc};
@@ -76,12 +70,7 @@ async fn directional_volume_splits_and_windows(pool: PgPool) {
         .unwrap();
     }
 
-    // Token A = $2.0, token B = $100.0, sampled hourly like the price worker
-    // does. One observation per mint is not enough since migration 005: the
-    // as-of lookup wants a price at or before the bucket's START and no older
-    // than `yog_price_max_age_asof()`, so a single row covers exactly one hour.
-    // A lone row at -3h priced the -2h bucket and left the -1h one dark, which
-    // read as $4 of a_to_b flow instead of $6.
+    // ⚠️ Sampled hourly: the as-of lookup reads one hour back, so a lone row prices one bucket.
     for (mint, price) in [(&mint_a, "2.0"), (&mint_b, "100.0")] {
         price_mint_since(&pool, mint, price, 4).await;
     }
@@ -157,8 +146,7 @@ async fn directional_volume_splits_and_windows(pool: PgPool) {
     assert!(close(b_to_a, 200), "b_to_a expected ~$200, got {b_to_a}");
 }
 
-/// Seed a pool with token A **unpriced** and token B priced hourly over
-/// `priced_hours`. The dominant DAMM v2 shape: a freshly launched token
+/// A pool with token A unpriced and token B priced over `priced_hours`: a fresh token
 /// against SOL.
 async fn seed_pool_with_unpriced_a(pool: &PgPool, priced_hours: i64) -> String {
     let pool_addr = pk(1).to_string();
@@ -196,13 +184,7 @@ async fn seed_pool_with_unpriced_a(pool: &PgPool, priced_hours: i64) -> String {
 
 #[sqlx::test]
 async fn a_partly_unvaluable_window_yields_no_total(pool: PgPool) {
-    // The silent half of the defect migration 006 fixes. `SUM` skips NULL
-    // buckets on its own, so dropping the COALESCE alone would still publish
-    // the valuable hours as if they were the whole window — a sub-total dressed
-    // as a total.
-    //
-    // Token B is priced for the last 2 hours only: the swap at -1h is valuable,
-    // the one at -6h is not, and the window covers both.
+    // Mutation: no `bool_and` — `SUM` skips the NULL bucket and publishes a sub-total.
     let now = Utc::now();
     let pool_addr = seed_pool_with_unpriced_a(&pool, 2).await;
 
@@ -239,34 +221,18 @@ async fn a_partly_unvaluable_window_yields_no_total(pool: PgPool) {
 
 #[sqlx::test]
 async fn an_empty_direction_is_zero_not_unknown(pool: PgPool) {
-    // The empty-leg defect view 023 carried until migration 006 (019 had it
-    // fixed back in 002). A one-way hour trading only B→A leaves token A
-    // carrying NOTHING — no volume, no fee — so the bucket is valuable through
-    // B alone, and the a→b direction is worth exactly zero.
-    //
-    // ⚠️ The trigger is a missing **decimal**, not a missing price, and an
-    // earlier version of this test got that wrong: with A merely unpriced, the
-    // priced view still derives an implied `eff_price_a` from the swap's own
-    // rate, so `0 * eff_price_a` is 0 and the `CASE` is never exercised — the
-    // test passed with the fix removed. It takes an unresolved mint (no
-    // `token_metadata` row for A) to make `POWER(10, NULL)` NULL and turn the
-    // empty leg into `0 / NULL * NULL` = NULL. That is precisely the scenario
-    // 019's own comment describes: "a pool whose token B has no
-    // `token_metadata` row yet".
+    // Mutation: no empty-leg `CASE`. ⚠️ It takes a missing decimal, not a missing price:
+    // an unpriced A still gets an implied rate, and `0 * rate` is 0 without the CASE.
     let now = Utc::now();
     let pool_addr = seed_pool_with_unpriced_a(&pool, 8).await;
 
-    // Take A's metadata away: the mint is seen on chain but `yog-context` has
-    // not resolved it yet, which is the ordinary state of a fresh token.
     sqlx::query("DELETE FROM token_metadata WHERE mint = $1")
         .bind(pk(2).to_string())
         .execute(&pool)
         .await
         .unwrap();
 
-    // b_to_a with the fee charged on B — the one one-directional shape that
-    // actually occurs on chain (see the fixture note in
-    // `implied_price_coverage.rs`: `a_to_b` paying on A exists in no fee mode).
+    // b_to_a with the fee on B: `a_to_b` paying on A exists in no fee mode.
     sqlx::query(
         "INSERT INTO meteora_damm_v2_swap_events
            (pool_address, signature, trade_direction,

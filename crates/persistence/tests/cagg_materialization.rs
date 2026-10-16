@@ -1,12 +1,6 @@
-//! `yog_cagg_materialization_backlog()` (migration 013): which raw rows each
-//! continuous aggregate has not materialised yet, and who may ask.
-//!
-//! The function is the whole distinction between the two stalls `yog-signals`
-//! must not confuse: an **ingestion** halt leaves nothing pending once the
-//! refresh catches up, a **materialisation** halt leaves rows pending that only
-//! grow older. Its filter — rows at or past the watermark — is what the first
-//! two tests pin; the watermark's position after a bounded refresh is
-//! TimescaleDB's, measured here rather than assumed.
+//! `yog_cagg_materialization_backlog()`: which raw rows each continuous aggregate has not
+//! materialised yet, and who may ask. It tells an ingestion halt (nothing pending once the
+//! refresh catches up) from a materialisation halt (pending rows that only grow older).
 
 use super::helpers::{INSUFFICIENT_PRIVILEGE, apply_setup_roles, pk, sqlstate};
 use chrono::{DateTime, TimeZone, Utc};
@@ -16,8 +10,7 @@ use yog_persistence::PgMaterializationBacklogRepository;
 
 const SWAPS: &str = "meteora_damm_v2_swap_events_hourly";
 
-/// 10 January 2026, `hour:minute` UTC — far enough back that nothing about the
-/// test depends on the clock.
+/// `hour:minute` UTC on a fixed past day, so nothing depends on the clock.
 fn at(hour: u32, minute: u32) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 1, 10, hour, minute, 0).unwrap()
 }
@@ -54,8 +47,7 @@ async fn swap_at(pool: &PgPool, address: &str, signature: &str, timestamp: DateT
     .unwrap();
 }
 
-/// A bounded refresh over the whole day. `refresh_continuous_aggregate` cannot
-/// run inside a transaction; `sqlx::test` hands out a pool, so it runs here.
+/// A bounded refresh over the whole day; it cannot run inside a transaction.
 async fn refresh_the_day(pool: &PgPool) {
     sqlx::query("CALL refresh_continuous_aggregate($1, $2, $3)")
         .bind(SWAPS)
@@ -105,9 +97,8 @@ async fn every_aggregate_is_reported_and_an_empty_one_has_nothing_pending(pool: 
     }
 }
 
-/// Rows arrived, no refresh ever ran: the oldest row is what waits. The
-/// watermark reads as `None` — TimescaleDB's own sentinel for "never" is a
-/// date (4714 BC under 2.30.1), which the function must not let through.
+/// No refresh ever ran: the oldest row waits, and the watermark reads `None` — not
+/// TimescaleDB's sentinel date for "never".
 #[sqlx::test]
 async fn before_any_refresh_the_oldest_raw_row_is_pending(pool: PgPool) {
     let address = seed_pool(&pool).await;
@@ -119,10 +110,8 @@ async fn before_any_refresh_the_oldest_raw_row_is_pending(pool: PgPool) {
     assert_eq!(swaps.oldest_pending_at, Some(at(10, 15)));
 }
 
-/// The refresh caught up and no row came after: this is what an ingestion
-/// halt looks like, and nothing may be pending. Also the premise the lag rests
-/// on, measured: the watermark stops at the end of the last bucket that held a
-/// row, not at the end of the refreshed window.
+/// An ingestion halt: nothing pending. ⚠️ The watermark stops at the end of the last bucket
+/// that held a row, not at the end of the refreshed window.
 #[sqlx::test]
 async fn once_refreshed_nothing_is_pending_and_the_watermark_stops_at_the_data(pool: PgPool) {
     let address = seed_pool(&pool).await;
@@ -135,9 +124,8 @@ async fn once_refreshed_nothing_is_pending_and_the_watermark_stops_at_the_data(p
     assert_eq!(swaps.oldest_pending_at, None);
 }
 
-/// A row landing after the refresh waits — and one landing exactly at the
-/// watermark does too: the watermark is the END of the last bucket, so a row
-/// at it opens the next one, which nothing has materialised.
+/// A row after the refresh waits, and one exactly at the watermark too: it opens the next
+/// bucket, which nothing has materialised.
 #[sqlx::test]
 async fn a_row_at_or_past_the_watermark_is_pending(pool: PgPool) {
     let address = seed_pool(&pool).await;
@@ -158,19 +146,13 @@ async fn a_row_at_or_past_the_watermark_is_pending(pool: PgPool) {
     );
 }
 
-/// `yog_signals` may call it; another runtime role may not. Proven under the
-/// roles themselves: a privilege is only shown by the statement it lets
-/// through or stops.
+/// `yog_signals` may call it; another runtime role may not — proven under the roles.
 #[sqlx::test]
 async fn only_yog_signals_may_read_the_backlogs(pool: PgPool) {
     apply_setup_roles(&pool).await;
 
-    // ⚠️ The function is SECURITY DEFINER, so it runs with its OWNER's rights.
-    // Here the migrations ran as the admin superuser, who bypasses every
-    // check: the catalog reads and `cagg_watermark` would pass whatever
-    // TimescaleDB grants. In production the owner is `yog_migrate`, which owns
-    // the schema — so the test hands the function to it, and gives it the read
-    // on the tables that ownership gives it there.
+    // ⚠️ SECURITY DEFINER runs as its owner, a superuser here: the test hands it to
+    // `yog_migrate`, the production owner, with the reads ownership gives it there.
     sqlx::raw_sql(
         "ALTER FUNCTION yog_cagg_materialization_backlog() OWNER TO yog_migrate;
          GRANT SELECT ON ALL TABLES IN SCHEMA public TO yog_migrate;",
@@ -179,8 +161,7 @@ async fn only_yog_signals_may_read_the_backlogs(pool: PgPool) {
     .await
     .expect("hand the function to its production owner");
 
-    // A row, so the function reads a real chunk under its owner's rights — an
-    // empty hypertable has no chunk, and the read of one would never be tried.
+    // A row, so a real chunk is read under the owner's rights.
     let address = seed_pool(&pool).await;
     swap_at(&pool, &address, "sig-privileges", at(10, 15)).await;
 

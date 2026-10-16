@@ -1,60 +1,8 @@
-//! The privilege matrix: what each runtime role may do, asserted against the
-//! database the migrations actually produce.
-//!
-//! # Why this exists
-//!
-//! `CLAUDE.md` presents the role split as a safety net — "calling `insert` from
-//! the api process fails with `permission denied` *by design*". Nothing verified
-//! it. Migration 036 moved the fee-shape columns off `pools` (where `yog_indexer`
-//! held table-level UPDATE) onto a satellite it granted only to `yog_context`
-//! and `yog_api`. Every `set_fee_config` from the indexer failed with
-//! `permission denied` for a month, invisibly: those writes are skip-and-log,
-//! no `InitializePool` event was observed in that window, and the tests run as
-//! the owner. A safety net nothing checks is not a net.
-//!
-//! The failure is not "a GRANT was forgotten once". It is that **every migration
-//! must remember its GRANTs by hand and nothing compares the result to an
-//! intent**. This module is that intent, written by hand.
-//!
-//! # Scope, and why it stops there
-//!
-//! **Explicit grants only** — those a migration emits. Measured: they reproduce
-//! faithfully in a `sqlx::test` database, column-level ones included, and that is
-//! precisely where migration 036's bug lived. Both tests read **every grant the
-//! owner made to anyone else** — the runtime roles, `PUBLIC`, and any role added
-//! later — and compare it to the matrix in both directions: table grants from
-//! `role_table_grants`, column grants from `pg_attribute.attacl`, on the tables
-//! and views of `public`.
-//!
-//! ⚠️ **No list of roles, on purpose.** The first version filtered on a
-//! hand-kept list of runtime roles, and `yog_archive` went unchecked because
-//! nobody added it. A role absent from the matrix — `yog_archive` today — is
-//! declared as granted nothing by name, and anything granted to it fails.
-//!
-//! Not read: sequences, functions, materialized views, other schemas.
-//!
-//! The **default privileges** of `setup_roles.sql` (a blanket `SELECT` to every
-//! role) do *not* reproduce, for two compounding reasons: that file is not a
-//! migration, so it never runs here; and `ALTER DEFAULT PRIVILEGES FOR ROLE
-//! yog_migrate` only applies to objects *created by* `yog_migrate`, whereas
-//! `sqlx::test` applies migrations as the connecting user. Running the
-//! migrations as `yog_migrate` is not an option either — that role has no
-//! `CREATEDB`, and granting it one would weaken the model to serve a test.
-//!
-//! So a role missing its blanket `SELECT` in production is **not** caught here.
-//! Neither is code that exceeds the rights the matrix grants it — that would
-//! need a test writing under the real role, deliberately left for later.
-//!
-//! `yog_migrate` is absent from the matrix on purpose: its rights come from
-//! owning the schema, not from grants, and the owner differs between this
-//! database (the connecting user) and production (`yog_migrate`).
-//!
-//! # When this test fails
-//!
-//! It is telling you a migration changed the privilege surface. Read the diff it
-//! prints as a question — *is this what I meant?* — and only then update the
-//! matrix. Pasting the missing line to make it green turns the guard back into
-//! the formality it was written to replace.
+//! The privilege matrix: every grant the owner made to anyone else, compared both ways with
+//! what the migrations produce. ⚠️ No role list: a role absent from the matrix is granted
+//! nothing. Not covered: default privileges (`setup_roles.sql` never runs here), sequences,
+//! functions. When it fails, read the diff as a question — *is this what I meant?* — before
+//! updating the matrix.
 
 use sqlx::PgPool;
 use std::collections::BTreeSet;
@@ -65,19 +13,8 @@ type RolePrivileges<'a> = (&'a str, &'a [&'a str]);
 /// One table's whole privilege surface: `(table, every role that may touch it)`.
 type TablePrivileges<'a> = (&'a str, &'a [RolePrivileges<'a>]);
 
-/// Table-level privileges, by table then role.
-///
-/// ## `yog_indexer` owns the event tables outright
-///
-/// It holds `SELECT, INSERT, UPDATE` on all 22 DAMM v2 event tables even though
-/// it currently updates none of them — every insert is `ON CONFLICT … DO
-/// NOTHING`. **That is intended, and the uniform grant is the point**: the
-/// indexer owns its event tables, and the grant states ownership rather than
-/// today's statements. `crates/README.md` says the same — "RW on event tables".
-///
-/// Recorded here so nobody re-derives an intent from usage and "tightens" it: an
-/// event table that later needs a corrective UPDATE must not require a migration
-/// to get a right it was always meant to have.
+/// Table-level privileges, by table then role. `yog_indexer` holds UPDATE on every event table
+/// though it updates none: the grant states ownership, not today's statements — do not tighten it.
 const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     (
         "analytic_hours",
@@ -110,10 +47,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     ("claim_reward_events", &[("yog_api", &["SELECT"])]),
     ("fund_reward_events", &[("yog_api", &["SELECT"])]),
     ("initialize_reward_events", &[("yog_api", &["SELECT"])]),
-    // `liquidity_events` and `swap_events` below: granted by 001, silently lost
-    // when 014 recreated them, restored by the baseline (§14). The loss was
-    // invisible to every check but this one — default privileges cover the read
-    // in production, so nothing failed and no schema diff could see it.
+    // Default privileges cover these reads in production: only this matrix sees them go missing.
     ("liquidity_events", &[("yog_api", &["SELECT"])]),
     (
         "meteora_damm_v2_claim_position_fee_events",
@@ -291,9 +225,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
             ("yog_indexer", &["INSERT", "SELECT", "UPDATE"]),
         ],
     ),
-    // Baseline §9. Same shape as the cp-amm satellite: yog-context owns it,
-    // yog_api reads it, and the indexer has no business here — it raises
-    // `pools.needs_refresh` rather than writing property values.
+    // yog-context owns it, yog_api reads it, the indexer has no business here.
     (
         "meteora_dlmm_pool_properties",
         &[
@@ -376,18 +308,13 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     ),
 ];
 
-/// Column-level privileges, kept apart because `role_table_grants` does not
-/// report them — a column grant is invisible to the table-level query, which is
-/// exactly how one would slip through unnoticed.
-///
+/// Column-level privileges, which `role_table_grants` does not report:
 /// `(table, role, privilege, columns)`.
 const COLUMN_PRIVILEGES: &[(&str, &str, &str, &[&str])] = &[(
     "pools",
     "yog_context",
     "UPDATE",
-    // The account-derived columns yog-context owns. Deliberately *not*
-    // table-level: `protocol`, `first_seen_at` and `last_seen_at` are the
-    // indexer's, and a column list is what keeps that boundary real.
+    // Not table-level: `protocol`, `first_seen_at` and `last_seen_at` are the indexer's.
     &["fee_bps", "needs_refresh", "token_a_mint", "token_b_mint"],
 )];
 
@@ -426,13 +353,8 @@ fn declared_column_grants() -> BTreeSet<ColumnGrant> {
         .collect()
 }
 
-/// Fail unless `declared` and `observed` are the same set, printing each
-/// difference as the SQL that would close it — `render(grant, statement,
-/// direction)` writes one statement.
-///
-/// Exact equality, not "at least": a privilege nobody declared is as much a
-/// finding as one that went missing — it silently widens what a compromised or
-/// buggy process can reach.
+/// Fails unless the two sets are equal, printing each difference as the SQL that closes it.
+/// Exact equality: an undeclared privilege widens what a buggy process can reach.
 fn assert_same_surface<T: Ord + Clone>(
     matrix: &str,
     hint: &str,
@@ -492,19 +414,8 @@ async fn table_privileges_match_the_declared_matrix(pool: PgPool) {
     );
 }
 
-/// Column-level grants, which the query above cannot see — in both directions.
-///
-/// A column grant is the finest tool in the model — `yog_context` may write four
-/// columns of `pools` and no others — and also the easiest to lose: it does not
-/// extend to a column added later, which is the trap migration 038 had to work
-/// around explicitly.
-///
-/// ⚠️ **Read from `pg_attribute.attacl`, not `information_schema.column_privileges`.**
-/// That view also repeats every *table-level* grant on each column — 2 874 rows
-/// on the migrated schema, against the four grants made per column — so a
-/// comparison on it would drown in `yog_indexer`'s table rights. `attacl` holds
-/// only what was granted column by column. A grant to `PUBLIC` has no role row,
-/// hence the `LEFT JOIN`; the relation kinds are those the table query covers.
+/// Column-level grants, which do not extend to a column added later. ⚠️ From `pg_attribute.attacl`,
+/// not `column_privileges`, which repeats every table-level grant on each column.
 #[sqlx::test]
 async fn column_privileges_match_the_declared_matrix(pool: PgPool) {
     let observed: BTreeSet<ColumnGrant> = sqlx::query_as(

@@ -1,11 +1,5 @@
-//! Integration test for the liquidity continuous aggregate (baseline §13).
-//!
-//! Gated behind `integration-tests`. There is no Rust read path consuming this
-//! rollup yet (history-only), so the test asserts the CA's per-kind splits
-//! directly: `liquidity_delta` is an unsigned magnitude and events carry an
-//! add/remove direction, so add and remove must never be summed together.
-//! Real-time aggregation means the just-inserted rows are visible without a
-//! manual refresh.
+//! The liquidity continuous aggregate's per-kind splits: `liquidity_delta` is unsigned and
+//! carries a direction, so adds and removes must never be summed together.
 
 use super::helpers::pk;
 use chrono::{DateTime, Duration, Utc};

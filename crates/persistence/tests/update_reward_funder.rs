@@ -7,8 +7,6 @@ use yog_persistence::PgMeteoraDammV2UpdateRewardFunderEventRepository;
 
 use super::helpers::{pk, sg, ts};
 
-// ── update_reward_funder: persists, old/new not swapped ─────────────
-
 #[sqlx::test]
 async fn update_reward_funder_inserts_and_is_idempotent(pool: PgPool) {
     let repo = PgMeteoraDammV2UpdateRewardFunderEventRepository::new(pool.clone());

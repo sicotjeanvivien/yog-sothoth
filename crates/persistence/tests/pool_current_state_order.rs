@@ -1,15 +1,5 @@
-//! The projection must order on the event's position, not on a timestamp it
-//! shares with half the pool's other swaps.
-//!
-//! Regression guard for the finding measured on 3 August 2026: the upsert was
-//! guarded by `last_event_at <` — a `blockTime`, so a **second** — while
-//! 56,1 % of swaps share their `(pool, timestamp)` with another swap, up to 46
-//! within one second. **33,5 % of state updates were rejected** and labelled
-//! `stale`, as if they were healthy concurrency.
-//!
-//! Its most visible consequence: both legs of a routed transaction persist,
-//! but the *first* wins the projection, so the pool shows intermediate
-//! reserves and an intermediate `sqrt_price` — never the transaction's result.
+//! The projection orders on the event's position, not on a timestamp it shares with half
+//! the pool's other swaps: a routed transaction's second hop must win over its first.
 
 use chrono::{DateTime, Duration, Utc};
 use solana_pubkey::Pubkey;
@@ -27,9 +17,7 @@ fn signature(seed: u8) -> Signature {
     Signature::from([seed; 64])
 }
 
-/// Every event of these tests carries the SAME timestamp on purpose: that is
-/// the situation the old guard could not handle, and the one the new key has
-/// to resolve without it.
+/// ⚠️ Every event carries the same timestamp: the guard must order without it.
 fn position(slot: u64, event_index: u16, signature_seed: u8) -> EventPosition {
     EventPosition {
         signature: signature(signature_seed),
@@ -51,10 +39,7 @@ fn swap(event_position: EventPosition, sqrt_price: u128) -> PoolCurrentStateUpse
     )
 }
 
-/// `pool_current_state` carries a foreign key to `pools`: the projection can
-/// only describe a pool the registry has seen. The indexer always discovers
-/// the pool before projecting onto it (`discover_pool` runs first in the
-/// persistor), so seeding it here reproduces the real order.
+/// The projection's foreign key needs the pool, which the indexer always discovers first.
 async fn seed_pool(pool: &PgPool) {
     sqlx::query("INSERT INTO pools (pool_address, protocol) VALUES ($1, 'meteora_damm_v2')")
         .bind(pk(1).to_string())
@@ -78,12 +63,7 @@ async fn stored_event_at(pool: &PgPool) -> DateTime<Utc> {
         .unwrap()
 }
 
-/// The second hop of a transaction wins, though it shares its second with the
-/// first. This is the defect, stated positively.
-///
-/// Mutation-checked: put the guard back to
-/// `pool_current_state.last_event_at < EXCLUDED.last_event_at` and this fails —
-/// the second upsert is rejected and the pool keeps the first hop's price.
+/// Mutation: the guard back on `last_event_at <` — the second hop is rejected.
 #[sqlx::test]
 async fn a_later_event_of_the_same_second_wins(pool: PgPool) {
     seed_pool(&pool).await;
@@ -107,9 +87,7 @@ async fn a_later_event_of_the_same_second_wins(pool: PgPool) {
     assert_eq!(stored_sqrt_price(&repo, pk(1)).await, Some(2_222));
 }
 
-/// …and the symmetric case: an event that is *earlier* in the same transaction
-/// must still be rejected. A guard that accepted everything would also make
-/// the first test pass.
+/// Mutation: a guard that accepts everything, which would also pass the test above.
 #[sqlx::test]
 async fn an_earlier_event_of_the_same_second_is_rejected(pool: PgPool) {
     seed_pool(&pool).await;
@@ -138,10 +116,7 @@ async fn an_earlier_event_of_the_same_second_is_rejected(pool: PgPool) {
     );
 }
 
-/// Slot beats event_index: the tuple is compared left to right, so an event
-/// from a later block wins even with a smaller index.
-///
-/// Mutation-checked: reduce the guard to `event_index` alone and this fails.
+/// Mutation: the guard reduced to `event_index` — the tuple compares slot first.
 #[sqlx::test]
 async fn a_later_slot_wins_over_a_higher_event_index(pool: PgPool) {
     seed_pool(&pool).await;
@@ -165,13 +140,8 @@ async fn a_later_slot_wins_over_a_higher_event_index(pool: PgPool) {
     assert_eq!(stored_sqrt_price(&repo, pk(1)).await, Some(1_000));
 }
 
-/// Two transactions in one block, on one pool: `transaction_index` is empty on
-/// this ingestion path, so `(slot, _, event_index)` cannot say which came
-/// first. The repository does not pretend otherwise — it reports the
-/// ambiguity so the indexer can count it.
-///
-/// Mutation-checked: drop the `previous` CTE's contribution (always report
-/// `same_slot_ambiguity: false`) and this fails.
+/// Mutation: `same_slot_ambiguity` always false. `transaction_index` is empty on this path,
+/// so two transactions of one block cannot be ranked.
 #[sqlx::test]
 async fn same_slot_different_signature_is_reported_as_ambiguous(pool: PgPool) {
     seed_pool(&pool).await;
@@ -186,8 +156,6 @@ async fn same_slot_different_signature_is_reported_as_ambiguous(pool: PgPool) {
         "the very first upsert meets no previous state at all"
     );
 
-    // Another transaction of the same block. Applied here — but the point is
-    // that the guard cannot know it deserved to be.
     let same_block = repo
         .upsert(&swap(position(300, 4, 2), 4_444))
         .await
@@ -198,8 +166,7 @@ async fn same_slot_different_signature_is_reported_as_ambiguous(pool: PgPool) {
         "same slot, different signature: this is the case the key cannot rank"
     );
 
-    // Reported on the rejected path too — an ambiguity that wrongly accepts
-    // costs as much as one that wrongly rejects.
+    // Reported on the rejected path too.
     let rejected = repo
         .upsert(&swap(position(300, 1, 3), 1_000))
         .await
@@ -210,8 +177,6 @@ async fn same_slot_different_signature_is_reported_as_ambiguous(pool: PgPool) {
         "counting only the applied path would understate the ambiguity"
     );
 
-    // A second hop of the *same* transaction is not ambiguous: one signature,
-    // one order, given by event_index.
     let same_tx = repo
         .upsert(&swap(position(300, 9, 2), 9_999))
         .await
@@ -220,8 +185,7 @@ async fn same_slot_different_signature_is_reported_as_ambiguous(pool: PgPool) {
     assert!(!same_tx.same_slot_ambiguity);
 }
 
-/// `last_event_at` keeps being written — it is what `/latest-state` displays —
-/// it simply stopped deciding anything.
+/// `last_event_at` is still written — `/latest-state` displays it — though it decides nothing.
 #[sqlx::test]
 async fn last_event_at_is_still_recorded_though_it_no_longer_orders(pool: PgPool) {
     seed_pool(&pool).await;
@@ -233,10 +197,8 @@ async fn last_event_at_is_still_recorded_though_it_no_longer_orders(pool: PgPool
     assert_eq!(stored_event_at(&pool).await, ts());
 }
 
-/// `reserve_a` carries the per-call marker. It used to be the projection's
-/// `liquidity` column, dropped in migration 003 — the assertion needs a field
-/// that actually differs between the two writes, otherwise "the later one
-/// landed" is unobservable and the test passes on a broken guard.
+/// ⚠️ `reserve_a` differs between the two writes: without a marker, "the later one landed"
+/// is unobservable and a broken guard passes.
 fn liquidity_upsert(event_position: EventPosition, reserve_a: u64) -> PoolCurrentStateUpsert {
     PoolCurrentStateUpsert::from_liquidity(
         pk(1),
@@ -248,9 +210,7 @@ fn liquidity_upsert(event_position: EventPosition, reserve_a: u64) -> PoolCurren
     )
 }
 
-/// Liquidity events share the upsert, so they share the guard. Worth its own
-/// test rather than an assumption: the two paths build their payload in
-/// different places.
+/// Liquidity events share the guard, but build their payload elsewhere.
 #[sqlx::test]
 async fn the_liquidity_path_shares_the_same_ordering(pool: PgPool) {
     seed_pool(&pool).await;
@@ -282,37 +242,9 @@ async fn the_liquidity_path_shares_the_same_ordering(pool: PgPool) {
     assert_eq!(stored, 20, "the second write must be the one that stuck");
 }
 
-/// A liquidity event must not erase the price the last swap left behind.
-///
-/// `last_sqrt_price` / `last_swap_at` are the projection's only kind-specific
-/// state — a liquidity payload carries neither, and the `COALESCE(EXCLUDED.x,
-/// pool_current_state.x)` in the UPDATE branch is what keeps the stored value.
-/// The trait states it as a MUST (`PoolCurrentStateRepository`), three
-/// doc-comments repeat it, and until this test **nothing exercised it**:
-/// removing both COALESCE left all 116 integration tests green.
-///
-/// The invariant has **two** halves, and they break in opposite directions:
-///
-/// * the SQL `COALESCE` gone → the pair is nulled. `pool_price_snapshot`
-///   filters on `last_sqrt_price IS NOT NULL AND last_swap_at IS NOT NULL`, so
-///   the pool drops out of the view and `price_oracle_deviation` silently stops
-///   evaluating it — no error, no log;
-/// * the Rust `match upsert.event_kind` gone (`last_swap_at = Some(event_at)`
-///   unconditionally) → the liquidity event **re-stamps** the swap timestamp.
-///   Worse than the first: the pool stays in the view carrying a stale price
-///   dated now, and sails through the detector's freshness gate.
-///
-/// ⚠️ Catching the second half is why this test departs from the module's
-/// "every event carries the SAME timestamp" convention. That convention exists
-/// to stress the ordering guard; here it would make "preserved" and
-/// "overwritten with an identical value" indistinguishable, and the assertion
-/// would pass on the broken code. The liquidity event is therefore stamped a
-/// minute later — its position stays strictly greater, so the guard still
-/// accepts it.
-///
-/// Mutation-checked, three ways: replace either COALESCE with a bare
-/// `EXCLUDED.x`, or drop the `match` in the repository, and this fails on the
-/// corresponding assertion.
+/// Mutation: either `COALESCE` replaced by `EXCLUDED.x`, or the `match` on the event kind
+/// dropped. ⚠️ The liquidity event is a minute later, unlike the module's convention: with
+/// the same timestamp, "preserved" and "overwritten identically" would look alike.
 #[sqlx::test]
 async fn a_liquidity_event_preserves_the_price_left_by_the_last_swap(pool: PgPool) {
     seed_pool(&pool).await;
@@ -325,10 +257,6 @@ async fn a_liquidity_event_preserves_the_price_left_by_the_last_swap(pool: PgPoo
             .applied
     );
 
-    // Strictly later position, so the guard accepts it and the UPDATE branch
-    // runs — which is the branch that could clobber the swap's columns. The
-    // distinct timestamp is what makes the `last_swap_at` assertion able to
-    // fail; see the note above.
     let liquidity_at = ts() + Duration::seconds(60);
     let later_position = EventPosition {
         timestamp: liquidity_at,
@@ -358,9 +286,7 @@ async fn a_liquidity_event_preserves_the_price_left_by_the_last_swap(pool: PgPoo
         "a liquidity event is not a swap: it must neither null this timestamp \
          nor re-stamp it with its own ({liquidity_at})"
     );
-    // And the liquidity event's own columns did land, so the preservation is
-    // not just "the second write was rejected". `last_event_kind` is the only
-    // assertion in this suite guarding `= EXCLUDED.last_event_kind`.
+    // The liquidity event's own columns landed: the write was not merely rejected.
     assert_eq!(stored.reserve_a, 42);
     assert_eq!(stored.last_event_kind, LastEventKind::LiquidityAdd);
     assert_eq!(
@@ -369,17 +295,8 @@ async fn a_liquidity_event_preserves_the_price_left_by_the_last_swap(pool: PgPoo
     );
 }
 
-/// The headline case, end to end: a real routed transaction must leave the
-/// projection showing **its result**, not its first hop.
-///
-/// The tests above prove the guard's mechanics on synthetic positions; this
-/// one takes the mainnet transaction `2qJrr…` through the real extractor and
-/// asserts the outcome the finding was written about. Before migration 042 the
-/// second leg was rejected — same signature, same second — and the pool kept
-/// intermediate reserves and an intermediate `sqrt_price` for good.
-///
-/// Mutation-checked: put the guard back to `last_event_at` and this fails on
-/// the `sqrt_price`, showing the first leg's value.
+/// The mainnet transaction `2qJrr…` through the real extractor must leave its result, not
+/// its first hop. Mutation: the guard back on `last_event_at`.
 #[sqlx::test]
 async fn a_routed_transaction_leaves_its_result_not_its_first_hop(pool: PgPool) {
     let swaps = super::event_index_uniqueness::swap_double_swaps();

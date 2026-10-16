@@ -1,36 +1,8 @@
-//! Integration test for the realized-fee split published by
-//! `meteora_damm_v2_pool_hourly_activity` (migration 007) and read back through
-//! `PgPoolAnalyticsRepository::batch_compute` / `history`.
-//!
-//! Gated behind `integration-tests`. The defect it guards: the LP share was
-//! published as `fees - protocol_fees`, which credits the referral to the
-//! liquidity providers. cp-amm takes the referral out of the PROTOCOL share
-//! (`cp-amm/src/state/fee.rs::split_fees`), so the LP share is
-//! `claiming + compounding`.
-//!
-//! ## What makes this fixture bite, component by component
-//!
-//! Every number below is chosen to defeat one specific wrong implementation
-//! that would otherwise produce the right answer. A first version of this file
-//! got two of them wrong and the code review caught it, so they are spelled out:
-//!
-//!   * **The four components are pairwise distinct on each side.** With
-//!     `referral = 0` the two formulas agree and the test asserts nothing. With
-//!     `referral = compounding` — the actual bug in the first version —
-//!     `SUM(compounding_fee)` mis-typed into the `referral_fee_in_*` columns
-//!     reads correct. With `protocol = referral` a doubled subtraction lands on
-//!     the right number.
-//!   * **The fee is charged in token A on one swap and in token B on the
-//!     other**, and the two tokens have different decimals AND different
-//!     prices. The two cagg columns are `FILTER (WHERE fee_token_is_a)` /
-//!     `FILTER (WHERE NOT ...)`, and with a single fee side — or with two
-//!     identically-scaled tokens — swapping those two filters is invisible.
-//!     Here it turns $5.15 of referral into ~$50 000.
-//!   * **The unvaluable case is asymmetric** (token A unresolved, token B
-//!     priced and carrying the fee), because a bucket where *neither* side is
-//!     priced NULLs every share through plain arithmetic — it cannot tell
-//!     whether the `valuation_complete` gate is still there. See
-//!     `an_unvaluable_bucket_nulls_every_share`.
+//! The realized-fee split of `meteora_damm_v2_pool_hourly_activity`, read back through the
+//! repository. ⚠️ The LP share is `claiming + compounding`, not `fees − protocol`: cp-amm takes
+//! the referral out of the protocol share. Every fixture number defeats one wrong
+//! implementation: four distinct components per side, a fee in each token with different
+//! decimals and prices, an unvaluable bucket priced on one side only.
 
 use super::helpers::{pk, price_mint};
 use chrono::{DateTime, Duration, Utc};
@@ -40,36 +12,27 @@ use sqlx::PgPool;
 use yog_core::domain::PoolAnalyticsRepository;
 use yog_persistence::PgPoolAnalyticsRepository;
 
-// ── Token scales and prices, deliberately different on the two sides ─────────
+// Token scales and prices, different on the two sides.
 const DEC_A: i32 = 0;
 const DEC_B: i32 = 6;
 const PRICE_A: &str = "1.0";
 const PRICE_B: &str = "3.0";
 
-// ── Swap 1: fee charged in token A (raw = USD, since A is $1 with 0 decimals)
+// Swap 1: fee in token A (raw = USD: A is $1 with 0 decimals).
 const CLAIMING_A: i64 = 70;
 const PROTOCOL_A: i64 = 21;
 const COMPOUNDING_A: i64 = 4;
 const REFERRAL_A: i64 = 5;
 
-// ── Swap 2: fee charged in token B (1 000 000 raw = 1.0 B = $3)
+// Swap 2: fee in token B (1 000 000 raw = 1.0 B = $3).
 const CLAIMING_B: i64 = 700_000;
 const PROTOCOL_B: i64 = 210_000;
 const COMPOUNDING_B: i64 = 40_000;
 const REFERRAL_B: i64 = 50_000;
 
-/// Expected USD figures, written as literals rather than recomputed from the
-/// constants: a test that re-derives the value with the same formula as the
-/// code under test proves only that the formula is stable.
-///
-/// ```text
-/// fees     = 100 (A)          + 3.00 (B: 1 000 000 / 1e6 × $3)  = 103.00
-/// protocol =  21              + 0.63 (210 000 / 1e6 × $3)       =  21.63
-/// referral =   5              + 0.15 ( 50 000 / 1e6 × $3)       =   5.15
-/// lp       =  74 (70 + 4)     + 2.22 (740 000 / 1e6 × $3)       =  76.22
-/// ```
-///
-/// The wrong formula (`fees − protocol`) gives **81.37**, not 76.22.
+/// Expected USD figures, as literals: re-deriving them with the code's formula proves nothing.
+/// `fees = 103.00`, `protocol = 21.63`, `referral = 5.15`, `lp = 74 + 2.22 = 76.22`
+/// — the wrong formula gives 81.37.
 fn expected_fees() -> Decimal {
     Decimal::new(10300, 2) // $103.00
 }
@@ -112,8 +75,6 @@ async fn insert_pool(pool: &PgPool, addr: &str, mint_a: &str, mint_b: &str) {
 }
 
 /// One swap, its four fee components and the side they are charged on.
-/// A params struct rather than a long argument list — same shape as
-/// `implied_price_coverage.rs`'s `Swap`.
 struct Swap<'a> {
     addr: &'a str,
     signature: &'a str,
@@ -163,8 +124,6 @@ async fn seed_pool_with_both_fee_sides(pool: &PgPool) -> String {
     insert_token(pool, &mint_b, DEC_B, Some(PRICE_B)).await;
     insert_pool(pool, &addr, &mint_a, &mint_b).await;
 
-    // An hour ago: inside the 24h window, on a bucket the hourly price series
-    // covers (see `price_mint`'s doc — one row prices exactly one bucket).
     let at = Utc::now() - Duration::hours(1);
 
     insert_swap(
@@ -237,8 +196,6 @@ async fn batch_compute_excludes_the_referral_from_the_lp_share(pool: PgPool) {
         expected_fees() - expected_protocol()
     );
 
-    // The property the three shares must have, stated as itself rather than
-    // left implied by the three values above.
     assert_eq!(
         a.lp_fees_24h_usd.unwrap()
             + a.protocol_fees_24h_usd.unwrap()
@@ -258,7 +215,6 @@ async fn history_publishes_the_same_split_as_the_24h_analytics(pool: PgPool) {
         .await
         .expect("history should succeed");
 
-    // Both swaps share a bucket, so exactly one carries fees.
     let bucket = buckets
         .iter()
         .find(|b| b.fees_usd.is_some())
@@ -276,21 +232,13 @@ async fn history_publishes_the_same_split_as_the_24h_analytics(pool: PgPool) {
 
 #[sqlx::test]
 async fn an_unvaluable_bucket_nulls_every_share(pool: PgPool) {
-    // `valuation_complete` governs all five figures at once, so no share may be
-    // a number while the total is unknown.
-    //
-    // ⚠️ The asymmetry is the whole test. Price NEITHER token and every share
-    // NULLs through plain arithmetic (`x * NULL`), so the gate could be gone and
-    // nothing would show. Here token B is priced and carries the entire fee: its
-    // shares are perfectly computable on their own, and only the gate stops
-    // them. Removing the gate from `referral_fees_usd` alone surfaces $0.15
-    // next to a NULL total — the shape this migration says is unrepresentable.
+    // Mutation: the `valuation_complete` gate dropped from one share. ⚠️ Token B alone is priced
+    // and carries the fee: with neither priced, `x * NULL` would hide a missing gate.
     let addr = pk(1).to_string();
     let mint_a = pk(2).to_string();
     let mint_b = pk(3).to_string();
 
-    // Token A: no metadata row at all — `POWER(10, NULL)` also kills the implied
-    // rate, so the volume leg is unvaluable and cannot be rescued.
+    // Token A has no metadata row: the volume leg cannot be valued.
     insert_token(&pool, &mint_b, DEC_B, Some(PRICE_B)).await;
     insert_pool(&pool, &addr, &mint_a, &mint_b).await;
 

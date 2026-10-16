@@ -1,7 +1,5 @@
-//! Integration test for `PgSignalRepository::latest_severity_by_pool` — the
-//! read backing the engine's cooldown / escalation dedup. Validates the
-//! DISTINCT-ON latest-per-pool pick, the `since` window filter, and the
-//! per-detector scoping.
+//! `PgSignalRepository::latest_severity_by_pool`, behind the engine's dedup: the latest row per
+//! pool, the `since` window, the per-detector scope.
 
 use super::helpers::pk;
 use chrono::{Duration, Utc};

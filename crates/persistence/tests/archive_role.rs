@@ -116,8 +116,7 @@ async fn yog_archive_reads_every_schema_and_writes_nothing(pool: PgPool) {
 
     assert_reads_no_password_hash(&mut conn).await;
 
-    // The privilege check runs before any constraint, so an otherwise invalid
-    // row still fails on the privilege and nothing else.
+    // The privilege check runs before any constraint: an invalid row fails on it alone.
     for statement in [
         "INSERT INTO pools DEFAULT VALUES",
         "UPDATE pools SET needs_refresh = true",
