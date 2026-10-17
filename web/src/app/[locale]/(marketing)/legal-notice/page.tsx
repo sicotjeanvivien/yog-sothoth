@@ -3,8 +3,7 @@
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import type { Metadata } from "next";
 
-import { LegalNoticeHeader } from "@/components/marketing/legal-notice/legal-notice-header";
-import { LegalNoticeContent } from "@/components/marketing/legal-notice/legal-notice-content";
+import { LegalNoticeDocument } from "@/components/marketing/legal-notice/legal-notice-document";
 
 type LegalNoticePageProps = {
   params: Promise<{ locale: string }>;
@@ -28,9 +27,8 @@ export default async function LegalNoticePage({
   setRequestLocale(locale);
 
   return (
-    <main>
-      <LegalNoticeHeader />
-      <LegalNoticeContent />
+    <main className="mx-auto max-w-[1280px] px-4 rail:px-8">
+      <LegalNoticeDocument />
     </main>
   );
 }
