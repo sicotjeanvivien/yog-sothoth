@@ -13,7 +13,6 @@ import {
 const GITHUB_REPO_URL = "https://github.com/sicotjeanvivien/yog-sothoth";
 const GITHUB_ISSUES_URL = `${GITHUB_REPO_URL}/issues`;
 const SITE_URL = "https://yog-scope.xyz";
-// ⚠️ Never the address as a link's text: Cloudflare's email obfuscation rewrites it and breaks hydration.
 const CONTACT_EMAIL_HREF = "mailto:awsd.contact@gmail.com";
 
 export function SupportUsWays() {
@@ -65,7 +64,6 @@ function Way({
   free: string;
   title: string;
   body: string;
-  /** The way's buttons. */
   children: ReactNode;
 }) {
   return (
