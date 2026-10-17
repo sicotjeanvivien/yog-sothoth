@@ -51,8 +51,8 @@ export function MarketingNav() {
 
   return (
     <header className="border-b border-dash-rule">
-      <div className="mx-auto flex min-h-16 max-w-[1280px] flex-wrap items-center justify-between gap-x-8 gap-y-2 px-4 rail:min-h-18 rail:px-8">
-        <SiteBrand priority />
+      <div className="mx-auto flex min-h-16 max-w-[1280px] flex-wrap items-center justify-between gap-x-3 gap-y-2 rail:gap-x-8 px-4 rail:min-h-18 rail:px-8">
+        <SiteBrand priority compact />
 
         <div className="flex items-center gap-2 rail:hidden">
           <DashboardButton label={t("dashboardShort")} />
@@ -62,10 +62,10 @@ export function MarketingNav() {
             onClick={toggle}
             aria-expanded={isOpen}
             aria-controls={navId}
-            className="inline-flex min-h-11 items-center gap-2 border border-dash-rule px-3 text-[13px] text-dash-ink"
+            aria-label={t("nav.menu")}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center border border-dash-rule text-dash-ink"
           >
             {isOpen ? <CloseIcon size={16} /> : <HamburgerIcon size={16} />}
-            {t("nav.menu")}
           </button>
         </div>
 
