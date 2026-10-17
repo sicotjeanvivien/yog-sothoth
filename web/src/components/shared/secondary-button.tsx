@@ -5,7 +5,7 @@
 
 import { Link } from "@/i18n/navigation";
 
-const CLASS =
+export const SECONDARY_BUTTON_CLASS =
   "inline-flex min-h-11 items-center gap-2.5 border border-dash-rule px-[18px] text-[14px] font-medium whitespace-nowrap text-dash-ink transition-colors hover:border-dash-ink-3";
 
 export function SecondaryButton({
@@ -19,14 +19,14 @@ export function SecondaryButton({
 }) {
   if (external) {
     return (
-      <a href={href} target="_blank" rel="noopener noreferrer" className={CLASS}>
+      <a href={href} target="_blank" rel="noopener noreferrer" className={SECONDARY_BUTTON_CLASS}>
         {label}
       </a>
     );
   }
 
   return (
-    <Link href={href} className={CLASS}>
+    <Link href={href} className={SECONDARY_BUTTON_CLASS}>
       {label}
     </Link>
   );

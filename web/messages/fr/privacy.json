@@ -29,7 +29,7 @@
       },
       "sponsors": {
         "title": "Quand vous soutenez le projet",
-        "body": "Si vous parrainez le projet sur GitHub Sponsors, le paiement est traité par GitHub (États-Unis), selon sa propre politique de confidentialité. GitHub nous communique votre nom d'utilisateur et le montant du parrainage, pour que nous sachions qui soutient le projet. La base juridique est notre intérêt légitime (article 6.1.f du RGPD). Nous ne copions pas ces informations ailleurs : elles restent sur GitHub, qui les conserve selon ses propres règles. Si vous faites un don en SOL à l'adresse affichée sur la page « Nous soutenir », la blockchain Solana rend publics, de façon permanente, l'adresse du wallet émetteur, le montant et la date. Nous les voyons comme tout le monde, pour savoir qui soutient le projet, sur la même base d'intérêt légitime. Ni nous ni personne ne pouvons les effacer : le droit à l'effacement ne peut pas s'exercer sur une transaction on-chain. Nous ne cherchons pas à relier une adresse de wallet à une personne."
+        "body": "Si vous faites un don en SOL à l'adresse affichée sur la page « Nous soutenir », la blockchain Solana rend publics, de façon permanente, l'adresse du wallet émetteur, le montant et la date. Nous les voyons comme tout le monde, pour savoir qui soutient le projet, sur la base de notre intérêt légitime (article 6.1.f du RGPD). Ni nous ni personne ne pouvons les effacer : le droit à l'effacement ne peut pas s'exercer sur une transaction on-chain. Nous ne cherchons pas à relier une adresse de wallet à une personne."
       },
       "thirdParties": {
         "title": "Logos des tokens",

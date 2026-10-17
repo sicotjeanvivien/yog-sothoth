@@ -1,8 +1,7 @@
 /**
  * The privacy policy, one card per processing. ⚠️ Its copy states Cloudflare dashboard facts:
- * both hosts proxied; Bot Fight Mode, rate limiting, Always Online, Web Analytics and Email
- * Address Obfuscation off (it rewrites the `mailto:` links here and on /legal-notice, breaking
- * hydration); Challenge Passage at 30 min. Changing one makes the page false. A new
+ * both hosts proxied; Bot Fight Mode, rate limiting, Always Online and Web Analytics off;
+ * Challenge Passage at 30 min. Changing one makes the page false. A new
  * `document.cookie` in `web/src` belongs on the cookie card.
  */
 
