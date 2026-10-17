@@ -10,7 +10,7 @@
       "titleMuted": "Open by design.",
       "lead": "Yog-Scope is a source-available platform that observes liquidity activity on Meteora pools on Solana as it happens, reconstructs the events and exposes them through an API and a dashboard.",
       "ctaGithub": "View on GitHub",
-      "whoLink": "Who is behind it: AWSD ↓"
+      "whoLink": "Who is behind it: AWSD"
     },
     "sections": {
       "problem": {

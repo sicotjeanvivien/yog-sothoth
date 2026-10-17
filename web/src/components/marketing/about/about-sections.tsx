@@ -11,7 +11,6 @@ import { AboutScope } from "./about-scope";
 export const GITHUB_REPO_URL = "https://github.com/sicotjeanvivien/yog-sothoth";
 const AWSD_URL = "https://awsd.fr/";
 
-/** ⚠️ The target of the hero's "Who is behind it" link. */
 export const BEHIND_ID = "awsd";
 
 // cp-amm's instruction names: not translated.

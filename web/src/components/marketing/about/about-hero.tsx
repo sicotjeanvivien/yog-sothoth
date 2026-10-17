@@ -35,6 +35,7 @@ export function AboutHero() {
           className="inline-flex min-h-11 items-center self-start text-[14px] text-dash-accent-2 hover:underline"
         >
           {t("whoLink")}
+          <span aria-hidden="true">&nbsp;↓</span>
         </a>
       </div>
     </section>
