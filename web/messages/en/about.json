@@ -5,33 +5,82 @@
       "description": "Yog-Scope is a source-available real-time observation platform for Meteora liquidity pools on Solana."
     },
     "hero": {
-      "eyebrow": "About Yog-Scope",
-      "titleLine1": "Built to observe.",
-      "titleLine2": "Open by design.",
-      "lead": "Yog-Scope is a source-available platform that observes liquidity activity on Meteora pools as it happens on Solana, reconstructs what occurred, and exposes the result through an API and a dashboard.",
+      "eyebrow": "About",
+      "title": "Built to observe.",
+      "titleMuted": "Open by design.",
+      "lead": "Yog-Scope is a source-available platform that observes liquidity activity on Meteora pools on Solana as it happens, reconstructs the events and exposes them through an API and a dashboard.",
       "ctaGithub": "View on GitHub",
-      "ctaAWSD": "About AWSD"
+      "whoLink": "Who is behind it: AWSD"
     },
-    "prose": {
+    "sections": {
       "problem": {
         "title": "The problem",
-        "body": "Meteora's pools are an active piece of Solana DeFi: swaps, liquidity events, fee claims, and rewards happen continuously across hundreds of pools. The on-chain state changes block by block, but reconstructing what actually happened — across time, across pools, with enriched context — is not something the chain offers out of the box. There is no public, real-time, queryable history of Meteora's activity."
+        "big": "Tens of thousands of pools, continuous activity, and no public history you can query in real time.",
+        "body": "Meteora's pools see a continuous flow of swaps, liquidity moves, and fee and reward claims. The chain does not natively offer a public, real-time, queryable history of that activity."
       },
       "approach": {
         "title": "The approach",
-        "body": "Yog-Scope sits on a persistent WebSocket connection to a Solana RPC and observes Meteora's events as they are emitted. Each event is decoded from its on-chain format, enriched with token metadata and USD prices, and persisted in a time-series database. The platform is focused on Meteora as a protocol — its decoding is anchored on Meteora's event format rather than a generic multi-DEX adapter — and the historical record accumulates as the platform runs."
+        "body": "A permanent stream from a Solana node captures Meteora's events as soon as they are emitted. Each event is decoded, enriched with token metadata and USD prices, then stored in a time-series database.",
+        "pipe": {
+          "capture": {
+            "label": "Capture",
+            "body": "A continuous stream from a Solana node"
+          },
+          "enrich": {
+            "label": "Enrich",
+            "body": "Token metadata, USD prices"
+          },
+          "store": {
+            "label": "Keep",
+            "body": "Time-series database"
+          }
+        },
+        "outro": "Each protocol has its own decoder, which understands its own events: no generic adapter smoothing the differences away. We start with Meteora, and the history builds up over time."
       },
       "audience": {
         "title": "Who it's for",
-        "body": "Three audiences. Liquidity providers who want to see, in real time, what is happening on the pools where they hold positions. Analysts and traders who want a queryable history of pool activity to detect patterns, large movements, or imbalances. Developers and builders who want a typed HTTP API exposing Meteora's activity, without having to build their own indexer."
+        "items": {
+          "lp": {
+            "label": "LP",
+            "title": "Liquidity providers",
+            "body": "Watch the pools where they hold positions."
+          },
+          "market": {
+            "label": "Market",
+            "title": "Analysts and traders",
+            "body": "Query pool history to spot patterns, large movements and imbalances."
+          },
+          "api": {
+            "label": "API",
+            "title": "Developers",
+            "body": "A typed HTTP API over Meteora's activity, without building their own indexer."
+          }
+        }
       },
       "availability": {
         "title": "How it's available",
-        "body": "The platform is released under the PolyForm Shield license. The code is public and the dashboard is free to use; this is intentional and not going to change. The current scope is Meteora's DAMM v2 pools — coverage of the other Meteora products (DLMM, DAMM v1, Stake2Earn) is planned but not yet delivered. Premium features may be added later, but the public code and the free public access stay."
+        "terms": {
+          "license": {
+            "label": "License",
+            "value": "PolyForm Shield"
+          },
+          "code": {
+            "label": "Code",
+            "value": "Public"
+          },
+          "dashboard": {
+            "label": "Dashboard",
+            "value": "Free"
+          }
+        },
+        "scope": "Scope",
+        "observed": "Observed",
+        "premium": "Premium features may be added later. The public code and the free public access stay."
       },
       "behind": {
         "title": "Who is behind it",
-        "body": "Yog-Scope is built and maintained by <awsd>AWSD</awsd>, an independent software company based in France. The source code lives on <github>GitHub</github>."
+        "tagline": "An independent software company, based in France.",
+        "ctaSource": "Source code"
       }
     }
   }

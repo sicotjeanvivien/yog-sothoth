@@ -69,18 +69,6 @@ export const FlowsIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-export const SignalsIcon: React.FC<IconProps> = ({
-  size = 18,
-  strokeWidth = 1.6,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <path d="M4.5 12.5a10 10 0 0 1 15 0" />
-    <path d="M7.5 15.5a6 6 0 0 1 9 0" />
-    <circle cx="12" cy="18.5" r="1.1" fill="currentColor" stroke="none" />
-  </svg>
-);
-
 export const AlertsIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,

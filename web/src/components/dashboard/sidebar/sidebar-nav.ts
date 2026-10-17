@@ -28,33 +28,20 @@ export type SidebarNavGroup = {
 
 export type SidebarNavItem = SidebarNavEntry | SidebarNavGroup;
 
+/** The "Protocol" group's entries, also the About page's scope. */
+export const PROTOCOL_ENTRIES: readonly SidebarNavEntry[] = [
+  { kind: "closed", key: "meteoraDammV2", labelKey: "meteoraDammV2" },
+  { kind: "closed", key: "meteoraDlmm", labelKey: "meteoraDlmm" },
+  { kind: "closed", key: "raydium", labelKey: "raydium" },
+  { kind: "closed", key: "orca", labelKey: "orca" },
+];
+
 export const SIDEBAR_NAV: readonly SidebarNavItem[] = [
   { kind: "open", key: "overview", href: "/overview", labelKey: "overview" },
   {
     kind: "group",
     labelKey: "protocol",
-    entries: [
-      {
-        kind: "closed",
-        key: "meteoraDammV2",
-        labelKey: "meteoraDammV2",
-      },
-      {
-        kind: "closed",
-        key: "meteoraDlmm",
-        labelKey: "meteoraDlmm",
-      },
-      {
-        kind: "closed",
-        key: "raydium",
-        labelKey: "raydium",
-      },
-      {
-        kind: "closed",
-        key: "orca",
-        labelKey: "orca",
-      },
-    ],
+    entries: PROTOCOL_ENTRIES,
   },
   { kind: "closed", key: "token", labelKey: "token" },
 ];
