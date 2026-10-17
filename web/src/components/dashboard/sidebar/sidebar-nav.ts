@@ -10,7 +10,7 @@ export type OpenNavEntry = {
   labelKey: string;
 };
 
-/** An entry without a page, shown with a lock, never a link. */
+/** An entry without a page yet, tagged "Soon", never a link. */
 export type ClosedNavEntry = {
   kind: "closed";
   key: ClosedNavKey;

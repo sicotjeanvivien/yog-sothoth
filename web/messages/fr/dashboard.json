@@ -2,39 +2,51 @@
   "Dashboard": {
     "Sidebar": {
       "nav": {
-        "overview": "Overview",
-        "protocol": "Protocol",
+        "overview": "Vue d'ensemble",
+        "protocol": "Protocoles",
         "meteoraDammV2": "Meteora DAMM v2",
         "meteoraDlmm": "Meteora DLMM",
         "raydium": "Raydium",
         "orca": "Orca",
-        "token": "Token"
-      },
-      "network": {
-        "title": "Solana",
-        "live": "En direct",
-        "slot": "Slot",
-        "latency": "Latence",
-        "connecting": "Connexion",
-        "offline": "Hors ligne",
-        "delayed": "Retardé",
-        "stale": "Périmé"
+        "token": "Token",
+        "soon": "Bientôt"
       }
     },
     "shell": {
-      "openMenu": "Ouvrir le menu de navigation",
       "closeMenu": "Fermer le menu de navigation",
       "pageInfo": "À propos de cette page",
       "collapseSidebar": "Réduire le menu",
       "expandSidebar": "Étendre le menu",
-      "metricInfo": "Définition"
+      "metricInfo": "Définition",
+      "menu": "Menu",
+      "loading": "Chargement…"
+    },
+    "preferences": {
+      "title": "Préférences",
+      "language": "Langue"
+    },
+    "liveStatus": {
+      "network": "Solana · mainnet",
+      "panelLabel": "État de l'ingestion et du réseau Solana",
+      "lastEvent": "Dernier événement",
+      "slot": "Slot",
+      "latency": "Latence RPC",
+      "states": {
+        "live": "En direct",
+        "delayed": "Retardé",
+        "stale": "Figé",
+        "offline": "Hors ligne",
+        "connecting": "Connexion"
+      }
     },
     "Overview": {
       "page": {
         "title": "Vue d'ensemble",
-        "description": "Aperçu global de toutes les pools Meteora observées par l'indexer : valeur totale verrouillée, activité 24h et découverte."
+        "description": "Aperçu global de toutes les pools Meteora observées par l'indexer : valeur totale verrouillée, activité 24h et découverte.",
+        "breadcrumb": "Tous les protocoles"
       },
       "kpis": {
+        "title": "Chiffres clés",
         "tvl": "TVL totale",
         "coverage": "{priced} / {observed} valorisées",
         "volume24h": "Volume 24h",

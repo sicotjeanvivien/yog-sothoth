@@ -1,6 +1,6 @@
 /**
  * Browser-side fetcher for `GET /api/ingestion`: the freshness the
- * sidebar's `NetworkStatusPanel` polls through the public gateway.
+ * dashboard's live indicator polls through the public gateway.
  *
  * @throws ApiClientError on any transport, HTTP, or schema failure.
  */

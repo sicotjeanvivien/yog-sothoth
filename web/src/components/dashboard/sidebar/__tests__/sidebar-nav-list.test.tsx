@@ -35,6 +35,15 @@ function render(): string {
   );
 }
 
+/** The markup of the `<li>` whose label is `label`. */
+function row(html: string, label: string): string {
+  const found = html
+    .split("<li")
+    .find((chunk) => chunk.includes(`<span>${label}</span>`));
+  if (found === undefined) throw new Error(`no row for ${label}`);
+  return found.slice(0, found.indexOf("</li>"));
+}
+
 function flatten(): SidebarNavEntry[] {
   return SIDEBAR_NAV.flatMap((item) =>
     item.kind === "group" ? [...item.entries] : [item],
@@ -62,6 +71,14 @@ describe("SidebarNavList", () => {
       expect(html).not.toMatch(new RegExp(`<a\\b[^>]*>(?:(?!</a>).)*${label}`));
     },
   );
+
+  // Mutations: the lock icon back in `ClosedEntry`, or the "Soon" tag removed.
+  it.each(CLOSED_LABELS)("tags %s « Bientôt », with no lock", (label) => {
+    const closed = row(render(), label);
+
+    expect(closed).toMatch(/>Bientôt</);
+    expect(closed).not.toMatch(/<svg\b/);
+  });
 
   it("gives nothing focusable besides the link", () => {
     const html = render();

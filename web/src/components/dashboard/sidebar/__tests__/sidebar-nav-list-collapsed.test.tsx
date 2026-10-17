@@ -38,7 +38,7 @@ vi.mock("../sidebar-nav", () => ({
 
 type Node = { tag: string; attrs: string; hidden: boolean; hasLink: boolean };
 
-/** For every link, closed entry and group, whether an `lg:hidden` on it or an ancestor hides it. */
+/** For every link, closed entry and group, whether a `rail:hidden` on it or an ancestor hides it. */
 function walk(html: string) {
   const links: { attrs: string; hidden: boolean }[] = [];
   const closed: boolean[] = [];
@@ -55,7 +55,7 @@ function walk(html: string) {
       continue;
     }
     const hidden =
-      (stack.at(-1)?.hidden ?? false) || /\blg:hidden\b/.test(attrs);
+      (stack.at(-1)?.hidden ?? false) || /\brail:hidden\b/.test(attrs);
     if (tag === "a") {
       links.push({ attrs, hidden });
       for (const node of stack) node.hasLink = true;
@@ -83,7 +83,7 @@ describe("SidebarNavList on the collapsed rail", () => {
     expect(links).toHaveLength(2);
     for (const link of links) {
       expect(link.hidden).toBe(false);
-      expect(link.attrs).toMatch(/\blg:px-0\b/);
+      expect(link.attrs).toMatch(/\brail:px-0\b/);
     }
   });
 

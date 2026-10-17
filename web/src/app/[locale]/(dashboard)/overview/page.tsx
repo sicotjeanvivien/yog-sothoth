@@ -1,18 +1,19 @@
 /**
- * The Overview, a Server Component: the protocol KPI strip, then the top pools and the latest
- * signals, each fetching its own data and degrading to a `BlockError` on its own.
+ * The Overview, a Server Component: the header renders at once, then the protocol KPI strip,
+ * the top pools and the latest signals stream in, each in its own `<Suspense>` and each
+ * degrading to a `BlockError` on its own.
  */
 
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
+import { BlockPlaceholder } from "@/components/dashboard/block-placeholder";
+import { LiveIndicator } from "@/components/dashboard/live-status/live-indicator";
 import { InfoPopover } from "@/components/shared/info-popover";
 import { OverviewLatestSignals } from "@/components/dashboard/overview/overview-latest-signals";
 import { OverviewStats } from "@/components/dashboard/overview/overview-stats";
 import { OverviewTopPools } from "@/components/dashboard/overview/overview-top-pools";
-import { PageError } from "@/components/dashboard/page-error";
-import { ApiClientError } from "@/lib/api/errors";
-import { fetchStats } from "@/lib/api/server/stats";
 import type { PoolRankMetric } from "@/lib/api/server/top-pools";
 
 type OverviewPageProps = {
@@ -52,30 +53,42 @@ export default async function OverviewPage({
   const t = await getTranslations("Dashboard.Overview.page");
   const tShell = await getTranslations("Dashboard.shell");
 
-  let stats;
-  try {
-    stats = await fetchStats();
-  } catch (err) {
-    if (err instanceof ApiClientError) {
-      return <PageError kind={err.details.kind} />;
-    }
-    throw err;
-  }
-
   return (
     <>
-      <header className="flex items-center gap-2.5 px-6 pt-6 pb-4 lg:px-10">
-        <h1 className="font-display text-[20px] leading-[1.2] font-bold tracking-[0.03em] text-[#f5f2ff]">
-          {t("title")}
-        </h1>
-        <InfoPopover label={tShell("pageInfo")}>{t("description")}</InfoPopover>
+      <header className="px-6 pt-6 pb-4 font-dash-sans lg:px-10">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <span className="font-dash-mono text-[11px] font-medium tracking-[0.12em] text-dash-ink-3 uppercase">
+            {t("breadcrumb")}
+          </span>
+          <span className="-mr-[10px]">
+            <LiveIndicator />
+          </span>
+        </div>
+        <div className="mt-2 flex items-center gap-2.5">
+          <h1 className="font-display text-[20px] leading-[1.2] font-bold tracking-[0.03em] text-[#f5f2ff]">
+            {t("title")}
+          </h1>
+          <InfoPopover label={tShell("pageInfo")}>{t("description")}</InfoPopover>
+        </div>
       </header>
 
-      <OverviewStats stats={stats} />
+      <Suspense
+        fallback={
+          <section className="px-6 lg:px-10">
+            <BlockPlaceholder className="h-[415px] sm:h-[210px] lg:h-[140px]" />
+          </section>
+        }
+      >
+        <OverviewStats />
+      </Suspense>
 
       <section className="mt-8 grid items-start gap-8 px-6 pb-10 lg:px-10 xl:grid-cols-2">
-        <OverviewTopPools metric={rankMetric} searchParams={sp} />
-        <OverviewLatestSignals />
+        <Suspense fallback={<BlockPlaceholder className="h-[520px]" />}>
+          <OverviewTopPools metric={rankMetric} searchParams={sp} />
+        </Suspense>
+        <Suspense fallback={<BlockPlaceholder className="h-[520px]" />}>
+          <OverviewLatestSignals />
+        </Suspense>
       </section>
     </>
   );

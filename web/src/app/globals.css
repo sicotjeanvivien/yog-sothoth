@@ -32,6 +32,7 @@
      is the TEXT red: a chart bar needs its own, darker tint. */
   --color-dash-bg: #000310;
   --color-dash-surface: #0a0815;
+  --color-dash-surface-2: #0f0c1d;
   --color-dash-rule: #241d44;
   --color-dash-ink: #ece9f7;
   --color-dash-ink-2: #aaa5c8;
@@ -40,6 +41,9 @@
   --color-dash-up: #25a877;
   --color-dash-down: #f87171;
   --color-dash-warn: #fbbf24;
+
+  /* 721 px: the dashboard menu is a drawer up to 720 px, a fixed rail from here. */
+  --breakpoint-rail: 45.0625rem;
 }
 
 /* `inline`, or Geist never applies: --font-geist(-mono) are set by
@@ -108,5 +112,15 @@
         transparent 1px);
     background-size: auto, auto, 240px 240px, 320px 320px, 280px 280px;
     background-attachment: fixed;
+  }
+}
+
+/* The dashboard's keyboard focus. In `base`, so a component's own
+   `focus-visible:` utility (an inset outline where a scroll box would clip
+   this one) still wins. */
+@layer base {
+  .dash-root :is(a, button, input, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-dash-accent);
+    outline-offset: 2px;
   }
 }

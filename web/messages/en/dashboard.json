@@ -8,33 +8,45 @@
         "meteoraDlmm": "Meteora DLMM",
         "raydium": "Raydium",
         "orca": "Orca",
-        "token": "Token"
-      },
-      "network": {
-        "title": "Solana",
-        "live": "Live",
-        "slot": "Slot",
-        "latency": "Latency",
-        "connecting": "Connecting",
-        "offline": "Offline",
-        "delayed": "Delayed",
-        "stale": "Stale"
+        "token": "Token",
+        "soon": "Soon"
       }
     },
     "shell": {
-      "openMenu": "Open navigation menu",
       "closeMenu": "Close navigation menu",
       "pageInfo": "About this page",
       "collapseSidebar": "Collapse the menu",
       "expandSidebar": "Expand the menu",
-      "metricInfo": "Definition"
+      "metricInfo": "Definition",
+      "menu": "Menu",
+      "loading": "Loading…"
+    },
+    "preferences": {
+      "title": "Preferences",
+      "language": "Language"
+    },
+    "liveStatus": {
+      "network": "Solana · mainnet",
+      "panelLabel": "Ingestion and Solana network status",
+      "lastEvent": "Last event",
+      "slot": "Slot",
+      "latency": "RPC latency",
+      "states": {
+        "live": "Live",
+        "delayed": "Delayed",
+        "stale": "Stale",
+        "offline": "Offline",
+        "connecting": "Connecting"
+      }
     },
     "Overview": {
       "page": {
         "title": "Overview",
-        "description": "Protocol-wide snapshot of every Meteora pool the indexer has observed: total value locked, 24h activity, and discovery."
+        "description": "Protocol-wide snapshot of every Meteora pool the indexer has observed: total value locked, 24h activity, and discovery.",
+        "breadcrumb": "All protocols"
       },
       "kpis": {
+        "title": "Key figures",
         "tvl": "Total TVL",
         "coverage": "{priced} / {observed} priced",
         "volume24h": "Volume 24h",
