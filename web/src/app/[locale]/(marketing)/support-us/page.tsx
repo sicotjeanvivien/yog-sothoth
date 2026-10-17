@@ -1,11 +1,11 @@
-/** The support page, from the cheapest help to the most engaged: visibility, feedback, sponsoring. */
+/** The support page: three free ways to help, then a donation in SOL. */
 
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import type { Metadata } from "next";
 
-import { SupportUsHeader } from "@/components/marketing/support-us/support-us-header";
-import { SupportUsMakeKnown } from "@/components/marketing/support-us/support-us-make-known";
-import { SupportUsActions } from "@/components/marketing/support-us/support-us-actions";
+import { SitePageHeader } from "@/components/marketing/site-page-header";
+import { SupportUsWays } from "@/components/marketing/support-us/support-us-ways";
+import { SupportUsSponsor } from "@/components/marketing/support-us/support-us-sponsor";
 
 type SupportUsPageProps = {
   params: Promise<{ locale: string }>;
@@ -25,12 +25,13 @@ export async function generateMetadata({
 export default async function SupportUsPage({ params }: SupportUsPageProps) {
   const { locale } = await params;
   setRequestLocale(locale);
+  const t = await getTranslations("SupportUs.header");
 
   return (
-    <main>
-      <SupportUsHeader />
-      <SupportUsMakeKnown />
-      <SupportUsActions />
+    <main className="mx-auto max-w-[1280px] px-4 rail:px-8">
+      <SitePageHeader eyebrow={t("eyebrow")} title={t("title")} lead={t("lead")} />
+      <SupportUsWays />
+      <SupportUsSponsor />
     </main>
   );
 }

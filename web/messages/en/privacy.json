@@ -29,7 +29,7 @@
       },
       "sponsors": {
         "title": "When you support the project",
-        "body": "If you sponsor the project on GitHub Sponsors, the payment is processed by GitHub (United States), under its own privacy policy. GitHub tells us your username and the amount of your sponsorship, so that we know who supports the project. The legal basis is our legitimate interest (GDPR, article 6(1)(f)). We do not copy this information anywhere else: it stays on GitHub, which keeps it under its own rules. If you donate SOL to the address shown on the \"Support us\" page, the Solana blockchain makes the sending wallet's address, the amount and the date public and permanent. We see them like everyone else, so that we know who supports the project, on the same legitimate-interest basis. Neither we nor anyone else can erase them: the right to erasure cannot be exercised on an on-chain transaction. We make no attempt to link a wallet address to a person."
+        "body": "If you donate SOL to the address shown on the \"Support us\" page, the Solana blockchain makes the sending wallet's address, the amount and the date public and permanent. We see them like everyone else, so that we know who supports the project, on the basis of our legitimate interest (GDPR, article 6(1)(f)). Neither we nor anyone else can erase them: the right to erasure cannot be exercised on an on-chain transaction. We make no attempt to link a wallet address to a person."
       },
       "thirdParties": {
         "title": "Token logos",
