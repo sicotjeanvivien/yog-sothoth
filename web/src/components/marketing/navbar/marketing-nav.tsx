@@ -5,7 +5,7 @@
  * the short "Dashboard" button stays out. The switch is CSS; React only tracks `isOpen`.
  */
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { Link, usePathname } from "@/i18n/navigation";
@@ -17,16 +17,23 @@ import { MARKETING_NAV_LINKS } from "./marketing-nav-links";
 
 export function MarketingNav() {
   const t = useTranslations("Marketing");
-  const [isOpen, setIsOpen] = useState(false);
+  const pathname = usePathname();
+  // The page it was opened on: the layout outlives a navigation, any link closes it.
+  const [openOn, setOpenOn] = useState<string | null>(null);
+  const isOpen = openOn === pathname;
   const navId = useId();
+  const toggleRef = useRef<HTMLButtonElement>(null);
 
-  const close = useCallback(() => setIsOpen(false), []);
-  const toggle = useCallback(() => setIsOpen((v) => !v), []);
+  const close = useCallback(() => setOpenOn(null), []);
+  const toggle = () => setOpenOn(isOpen ? null : pathname);
 
   useEffect(() => {
     if (!isOpen) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") close();
+      if (event.key !== "Escape") return;
+      close();
+      // ⚠️ Focus may sit on a link of the panel being hidden.
+      toggleRef.current?.focus();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -50,6 +57,7 @@ export function MarketingNav() {
         <div className="flex items-center gap-2 rail:hidden">
           <DashboardButton label={t("dashboardShort")} />
           <button
+            ref={toggleRef}
             type="button"
             onClick={toggle}
             aria-expanded={isOpen}

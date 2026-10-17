@@ -250,8 +250,8 @@ and red carry a meaning, never the brand. The frame (`shell/`, `sidebar/`,
 `live-status/`, `announcements/`) uses these tokens only, with no hex values
 and no Tailwind palette. The background is a flat `dash-bg`, which also sits
 behind the pages that left the menu, with no glow and no text shadow. The
-older palette (`cosmos-*`, `sothoth-*`, `slate-*`) remains in use for the
-marketing site and for page contents not yet moved to the roles, the Overview
+older palette (`cosmos-*`, `sothoth-*`, `slate-*`) remains in use for
+page contents not yet moved to the roles, the Overview and the site's pages
 included.
 
 ## Site

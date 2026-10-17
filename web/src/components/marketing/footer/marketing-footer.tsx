@@ -81,7 +81,7 @@ function LinksColumn({ column }: { column: FooterColumn }) {
       aria-label={t("heading")}
       className="col-span-12 flex flex-col gap-1 rail:col-span-4 wide:col-span-2"
     >
-      <span className={HEADING_CLASS}>{t("heading")}</span>
+      <h3 className={HEADING_CLASS}>{t("heading")}</h3>
       <ul className="mt-2 flex flex-col">
         {column.links.map((link) => (
           <li key={link.key}>
@@ -103,7 +103,7 @@ function AwsdColumn() {
 
   return (
     <div className="col-span-12 flex flex-col gap-1 rail:col-span-4 wide:col-span-3">
-      <span className={HEADING_CLASS}>{t("title")}</span>
+      <h3 className={HEADING_CLASS}>{t("title")}</h3>
       <div className="mt-2.5 flex flex-col items-start gap-2">
         <a
           href={FOOTER_AWSD.href}
