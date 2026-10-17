@@ -117,7 +117,7 @@
    component's own `focus-visible:` utility (an inset outline where a scroll
    box would clip this one) still wins. */
 @layer base {
-  :is(.dash-root, .site-root) :is(a, button, input, select, [tabindex]):focus-visible {
+  :is(.dash-root, .site-root) :is(a, button, input, select, summary, [tabindex]):focus-visible {
     outline: 2px solid var(--color-dash-accent);
     outline-offset: 2px;
   }

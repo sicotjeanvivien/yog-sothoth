@@ -60,4 +60,13 @@ describe("RELEASES", () => {
       }
     }
   });
+
+  it("marks every line visible or technical", () => {
+    for (const release of RELEASES) {
+      for (const item of release.sections.flatMap((s) => s.items)) {
+        expect(item.text.trim().length, release.version).toBeGreaterThan(0);
+        expect(typeof item.technical, `${release.version}: ${item.text}`).toBe("boolean");
+      }
+    }
+  });
 });

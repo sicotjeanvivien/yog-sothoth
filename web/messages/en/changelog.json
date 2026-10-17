@@ -5,10 +5,18 @@
       "description": "Release history of Yog-Scope: new detectors, dashboard features and fixes, one block per release."
     },
     "header": {
-      "eyebrow": "Releases",
+      "eyebrow": "Product",
       "title": "Changelog",
-      "lead": "What shipped, release by release. Release announcements on the dashboard link here."
+      "lead": "What shipped, release by release."
     },
+    "filter": {
+      "label": "Filter the changes",
+      "all": "All"
+    },
+    "caption": "{count, plural, one {# release} other {# releases}} · since {date}",
+    "latest": "Latest release",
+    "internalOnly": "Internal improvements only.",
+    "technical": "Technical details ({count})",
     "sections": {
       "features": "Features",
       "fixes": "Fixes"
