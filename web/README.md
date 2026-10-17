@@ -277,9 +277,7 @@ The About page (`about/`) is static too. Its scope lists the protocol group
 of the dashboard menu (`dashboard/sidebar/sidebar-nav.ts`), each one observed
 or "Soon"; its facts are re-checked against the prod like the home page's.
 
-The support page (`support-us/`) offers a donation in SOL only. Its email
-address is hidden from bots by Cloudflare's email obfuscation, which rewrites
-the `mailto:` links: the address is never the visible text of a link.
+The support page (`support-us/`) offers a donation in SOL only.
 
 The changelog's source is `changelog/releases.ts`, written in the PR that
 ships each release, in English only. Every line is marked `technical` or not:

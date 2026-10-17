@@ -45,7 +45,6 @@ export function SupportUsSponsor() {
       </div>
 
       <aside
-        aria-label={t("funds.label")}
         className="col-span-12 flex min-w-0 flex-col gap-5 border-r border-b border-dash-rule bg-dash-surface-2 px-[18px] py-6 rail:px-7 rail:py-8 wide:col-span-5 wide:border-t"
       >
         <div>

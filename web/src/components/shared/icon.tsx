@@ -316,7 +316,6 @@ export const AlertOctagonIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/** Filled, not stroked: the geometry is too dense for the 1.6px stroke. */
 export const MailIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
