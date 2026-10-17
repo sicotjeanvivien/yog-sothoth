@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 
 import { Link } from "@/i18n/navigation";
 import { SiteBrand } from "@/components/marketing/site-brand";
+import { SITE_LABEL_CLASS } from "@/components/marketing/site-label";
 import { RELEASES } from "@/components/marketing/changelog/releases";
 import { FooterLocaleSwitch } from "./footer-locale-switch";
 import {
@@ -16,9 +17,6 @@ import {
   FOOTER_SOCIALS,
   type FooterColumn,
 } from "./marketing-footer-links";
-
-const HEADING_CLASS =
-  "font-dash-mono text-[11px] font-medium tracking-[0.12em] text-dash-ink-3 uppercase";
 
 export function MarketingFooter() {
   const t = useTranslations("Marketing.footer");
@@ -81,7 +79,7 @@ function LinksColumn({ column }: { column: FooterColumn }) {
       aria-label={t("heading")}
       className="col-span-12 flex flex-col gap-1 rail:col-span-4 wide:col-span-2"
     >
-      <h3 className={HEADING_CLASS}>{t("heading")}</h3>
+      <h3 className={SITE_LABEL_CLASS}>{t("heading")}</h3>
       <ul className="mt-2 flex flex-col">
         {column.links.map((link) => (
           <li key={link.key}>
@@ -103,7 +101,7 @@ function AwsdColumn() {
 
   return (
     <div className="col-span-12 flex flex-col gap-1 rail:col-span-4 wide:col-span-3">
-      <h3 className={HEADING_CLASS}>{t("title")}</h3>
+      <h3 className={SITE_LABEL_CLASS}>{t("title")}</h3>
       <div className="mt-2.5 flex flex-col items-start gap-2">
         <a
           href={FOOTER_AWSD.href}

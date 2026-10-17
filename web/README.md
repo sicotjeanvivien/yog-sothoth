@@ -267,6 +267,12 @@ colour, through `shared/logo-mark.tsx`, on the site and in the dashboard menu.
 Page contents move to the tokens page by page and still use the older
 palette until then.
 
+The home page (`home/`) is static and calls no API: its dashboard preview is
+an illustration with fixed figures, and its facts strip is plain text, to
+re-check against the prod when a fact changes. Its text stays in Geist's
+`latin` subset: one character outside it (a superscript `ᵉʳ`) makes the
+browser fetch another 17 KB font file.
+
 ## Pools list, watchlist, pool detail
 
 The `/pools` page is a Server Component that reads its whole state from the

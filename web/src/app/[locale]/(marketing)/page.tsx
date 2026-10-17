@@ -1,9 +1,11 @@
-/** The marketing homepage, `/[locale]`, fully static. */
+/** The marketing homepage, `/[locale]`, fully static: not one API call. */
 
 import { setRequestLocale } from "next-intl/server";
 
 import { HomeHero } from "@/components/marketing/home/home-hero";
-import { HomePillars } from "@/components/marketing/home/home-pillars";
+import { HomeFacts } from "@/components/marketing/home/home-facts";
+import { HomeFeatures } from "@/components/marketing/home/home-features";
+import { HomeSteps } from "@/components/marketing/home/home-steps";
 import { HomeCta } from "@/components/marketing/home/home-cta";
 
 type HomePageProps = {
@@ -16,8 +18,12 @@ export default async function HomePage({ params }: HomePageProps) {
 
   return (
     <main>
-      <HomeHero />
-      <HomePillars />
+      <div className="mx-auto max-w-[1280px] px-4 rail:px-8">
+        <HomeHero />
+        <HomeFacts />
+        <HomeFeatures />
+        <HomeSteps />
+      </div>
       <HomeCta />
     </main>
   );

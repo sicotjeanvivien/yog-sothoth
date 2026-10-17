@@ -123,45 +123,6 @@ export const ChevronDownIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/** A generic chain mark, not a reproduction of any brand asset. */
-export const SolanaGlyph: React.FC<{ size?: number }> = ({ size = 28 }) => {
-  const id = React.useId();
-  return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden>
-      <defs>
-        <linearGradient id={`${id}-bg`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#1A1B2E" />
-          <stop offset="100%" stopColor="#0F1020" />
-        </linearGradient>
-        <linearGradient id={`${id}-bar`} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#9945FF" />
-          <stop offset="100%" stopColor="#14F195" />
-        </linearGradient>
-      </defs>
-      <rect
-        x="0.5"
-        y="0.5"
-        width="31"
-        height="31"
-        rx="8"
-        fill={`url(#${id}-bg)`}
-        stroke="rgba(153, 69, 255, 0.25)"
-      />
-      <path d="M10 11 L23 11 L20.5 13.5 L7.5 13.5 Z" fill={`url(#${id}-bar)`} />
-      <path
-        d="M7.5 15.25 L20.5 15.25 L23 17.75 L10 17.75 Z"
-        fill={`url(#${id}-bar)`}
-        opacity="0.85"
-      />
-      <path
-        d="M10 19.5 L23 19.5 L20.5 22 L7.5 22 Z"
-        fill={`url(#${id}-bar)`}
-        opacity="0.7"
-      />
-    </svg>
-  );
-};
-
 /**
  * Solscan's brand mark, in its own colours. ⚠️ The source's full-bounds `<clipPath>` is
  * dropped: it clips nothing and would emit a duplicate DOM id per rendered row.
@@ -454,6 +415,17 @@ export const ArrowLeftIcon: React.FC<IconProps> = ({
   <svg {...base(size, strokeWidth)} className={className}>
     <path d="M19 12H5" />
     <path d="M12 5l-7 7 7 7" />
+  </svg>
+);
+
+export const ArrowRightIcon: React.FC<IconProps> = ({
+  size = 16,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <path d="M5 12h14" />
+    <path d="M12 5l7 7-7 7" />
   </svg>
 );
 
