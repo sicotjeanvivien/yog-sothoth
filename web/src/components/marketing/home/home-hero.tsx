@@ -4,9 +4,9 @@ import { useTranslations } from "next-intl";
 
 import { DashboardButton } from "@/components/shared/dashboard-button";
 import { SecondaryButton } from "@/components/shared/secondary-button";
+import { SITE_GRID_CLASS } from "@/components/marketing/site-grid";
 import { SITE_LABEL_CLASS } from "@/components/marketing/site-label";
 import { HomePreview } from "./home-preview";
-import { SITE_GRID_CLASS } from "@/components/marketing/site-grid";
 
 const META_KEYS = ["chain", "design", "access"] as const;
 

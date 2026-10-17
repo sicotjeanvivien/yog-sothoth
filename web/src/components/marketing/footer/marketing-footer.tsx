@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 
 import { Link } from "@/i18n/navigation";
 import { SiteBrand } from "@/components/marketing/site-brand";
+import { SITE_GRID_CLASS } from "@/components/marketing/site-grid";
 import { SITE_LABEL_CLASS } from "@/components/marketing/site-label";
 import { RELEASES } from "@/components/marketing/changelog/releases";
 import { FooterLocaleSwitch } from "./footer-locale-switch";
@@ -17,7 +18,6 @@ import {
   FOOTER_SOCIALS,
   type FooterColumn,
 } from "./marketing-footer-links";
-import { SITE_GRID_CLASS } from "@/components/marketing/site-grid";
 
 export function MarketingFooter() {
   const t = useTranslations("Marketing.footer");

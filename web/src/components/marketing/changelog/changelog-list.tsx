@@ -6,11 +6,11 @@
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { ChevronDownIcon } from "@/components/shared/icon";
+import { SITE_GRID_CLASS } from "@/components/marketing/site-grid";
 import { ChangelogFilter } from "./changelog-filter";
 import { HIDDEN_ON } from "./changelog-filter-values";
 import { releaseView } from "./release-view";
 import { RELEASES } from "./releases";
-import { SITE_GRID_CLASS } from "@/components/marketing/site-grid";
 
 const KIND_CLASS = {
   features: "border-dash-accent text-dash-accent",

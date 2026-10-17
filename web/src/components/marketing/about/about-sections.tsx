@@ -5,9 +5,9 @@ import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
 import { SecondaryButton } from "@/components/shared/secondary-button";
+import { SITE_GRID_CLASS } from "@/components/marketing/site-grid";
 import { SITE_LABEL_CLASS } from "@/components/marketing/site-label";
 import { AboutScope } from "./about-scope";
-import { SITE_GRID_CLASS } from "@/components/marketing/site-grid";
 
 export const GITHUB_REPO_URL = "https://github.com/sicotjeanvivien/yog-sothoth";
 const AWSD_URL = "https://awsd.fr/";

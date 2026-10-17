@@ -258,11 +258,12 @@ page contents not yet moved to the roles, the Overview included.
 The `(marketing)` layout wraps every page in `site-root`: the dashboard's
 `dash-*` tokens and fonts, a flat `dash-bg`, the same keyboard focus. Its
 header (`navbar/`) folds its links behind "Menu" up to 720 px (`rail:`), the
-short "Dashboard" button staying out; its grids drop columns up to 1100 px
-(`wide:`). The footer ends on the version (the first entry of
-`changelog/releases.ts`) and the FR | EN switch, which leads to the same page
-in the other language. The logo is `public/logo_yog_scope.svg`, in the accent
-colour, through `shared/logo-mark.tsx`, on the site and in the dashboard menu.
+short "Dashboard" button staying out; its grids (`site-grid.ts`) drop columns
+up to 1100 px (`wide:`) and their column gap up to 720 px. The footer ends on
+the version (the first entry of `changelog/releases.ts`) and the FR | EN
+switch, which leads to the same page in the other language. The logo is
+`public/logo_yog_scope.svg`, in the accent colour, through
+`shared/logo-mark.tsx`, on the site and in the dashboard menu.
 
 The home page (`home/`) is static and calls no API: its dashboard preview is
 an illustration with fixed figures, and its facts strip is plain text, to
