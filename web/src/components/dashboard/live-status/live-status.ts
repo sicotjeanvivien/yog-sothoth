@@ -10,14 +10,13 @@ import type {
 
 import type { Half } from "./use-polled";
 
+/** Also the label's key under `Dashboard.liveStatus.states`. */
 export type LiveState = FreshnessStatusResponse | "offline" | "connecting";
 
 export type LiveStatus = {
   state: LiveState;
   dotClass: string;
   textClass: string;
-  /** Key under `Dashboard.liveStatus.states`. */
-  labelKey: LiveState;
 };
 
 const STATUS: Record<LiveState, LiveStatus> = {
@@ -25,31 +24,26 @@ const STATUS: Record<LiveState, LiveStatus> = {
     state: "live",
     dotClass: "bg-dash-up",
     textClass: "text-dash-up",
-    labelKey: "live",
   },
   delayed: {
     state: "delayed",
     dotClass: "bg-dash-warn",
     textClass: "text-dash-warn",
-    labelKey: "delayed",
   },
   stale: {
     state: "stale",
     dotClass: "bg-dash-ink-3",
     textClass: "text-dash-ink-3",
-    labelKey: "stale",
   },
   offline: {
     state: "offline",
     dotClass: "bg-dash-down",
     textClass: "text-dash-down",
-    labelKey: "offline",
   },
   connecting: {
     state: "connecting",
     dotClass: "bg-dash-ink-3",
     textClass: "text-dash-ink-2",
-    labelKey: "connecting",
   },
 };
 

@@ -70,7 +70,14 @@ export function Sidebar({
   );
 }
 
-function Brand({ collapsed }: { collapsed: boolean }) {
+/** The logo and wordmark, back to the site; `small` is the mobile bar's. */
+export function Brand({
+  collapsed = false,
+  small = false,
+}: {
+  collapsed?: boolean;
+  small?: boolean;
+}) {
   const t = useTranslations("Brand");
 
   return (
@@ -79,10 +86,10 @@ function Brand({ collapsed }: { collapsed: boolean }) {
         <Image
           src="/logo_ys.png"
           alt=""
-          width={48}
-          height={54}
+          width={small ? 30 : 48}
+          height={small ? 34 : 54}
           priority
-          className="h-13.5 w-12 shrink-0 object-contain"
+          className={`shrink-0 object-contain ${small ? "h-[34px] w-[30px]" : "h-13.5 w-12"}`}
         />
         <span
           className={`font-display text-[16px] font-semibold tracking-[0.16em] whitespace-nowrap uppercase ${collapsed ? "rail:sr-only" : ""}`}

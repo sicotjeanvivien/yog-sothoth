@@ -36,11 +36,9 @@ export function Preferences({ initialOpen }: { initialOpen: boolean }) {
   const labelId = useId();
 
   const toggle = () => {
-    setOpen((value) => {
-      const next = !value;
-      document.cookie = `${PREFERENCES_OPEN_COOKIE}=${next ? "1" : "0"}; path=/; max-age=${PREFERENCES_COOKIE_MAX_AGE_S}; samesite=lax`;
-      return next;
-    });
+    const next = !open;
+    document.cookie = `${PREFERENCES_OPEN_COOKIE}=${next ? "1" : "0"}; path=/; max-age=${PREFERENCES_COOKIE_MAX_AGE_S}; samesite=lax`;
+    setOpen(next);
   };
 
   return (

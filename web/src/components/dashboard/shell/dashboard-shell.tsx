@@ -8,16 +8,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import Image from "next/image";
-
 import { LiveStatusProvider } from "@/components/dashboard/live-status/live-status-provider";
-import { Sidebar } from "@/components/dashboard/sidebar/sidebar";
+import { Brand, Sidebar } from "@/components/dashboard/sidebar/sidebar";
 import {
   SIDEBAR_COLLAPSED_COOKIE,
   SIDEBAR_COOKIE_MAX_AGE_S,
 } from "@/components/dashboard/sidebar/sidebar-state";
 import { HamburgerIcon } from "@/components/shared/icon";
-import { Link } from "@/i18n/navigation";
 
 // ⚠️ `--breakpoint-rail` of globals.css, repeated for the resize listener.
 const RAIL_BREAKPOINT = "45.0625rem";
@@ -115,22 +112,9 @@ function MobileHeader({
   isOpen: boolean;
   menu: string;
 }) {
-  const tBrand = useTranslations("Brand");
-
   return (
     <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-dash-rule bg-dash-bg px-4 font-dash-sans text-dash-ink rail:hidden">
-      <Link href="/" className="flex items-center gap-3">
-        <Image
-          src="/logo_ys.png"
-          alt=""
-          width={30}
-          height={34}
-          className="h-[34px] w-[30px] shrink-0 object-contain"
-        />
-        <span className="font-display text-[16px] font-semibold tracking-[0.16em] uppercase">
-          {tBrand("name")}
-        </span>
-      </Link>
+      <Brand small />
       <button
         type="button"
         onClick={onOpen}

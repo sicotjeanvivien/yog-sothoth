@@ -21,7 +21,7 @@ describe("liveStatusOf", () => {
     expect(status.state).toBe(freshness);
     expect(status.dotClass).toBe(dot);
     expect(status.textClass).toBe(text);
-    expect(LABELS[status.labelKey]).toBe(label);
+    expect(LABELS[status.state]).toBe(label);
   });
 
   it("reads offline, in light red, from a failed call", () => {
@@ -30,7 +30,7 @@ describe("liveStatusOf", () => {
     expect(status.state).toBe("offline");
     expect(status.dotClass).toBe("bg-dash-down");
     expect(status.textClass).toBe("text-dash-down");
-    expect(LABELS[status.labelKey]).toBe("Hors ligne");
+    expect(LABELS[status.state]).toBe("Hors ligne");
   });
 
   it("reads connecting, never live, before the first answer", () => {

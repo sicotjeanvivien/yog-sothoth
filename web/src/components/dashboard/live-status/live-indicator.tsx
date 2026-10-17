@@ -5,7 +5,14 @@
  * slot and the RPC latency, and the legend of the four states. ⚠️ Opens on click only.
  */
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { ChevronDownIcon } from "@/components/shared/icon";
@@ -20,9 +27,7 @@ import { usePolled } from "./use-polled";
 
 export function LiveIndicator() {
   const t = useTranslations("Dashboard.liveStatus");
-  const locale = useLocale();
   const ingestion = useIngestion();
-  const now = useEverySecond();
 
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement>(null);
@@ -31,12 +36,9 @@ export function LiveIndicator() {
   useDismiss(rootRef, open, close);
 
   const status = liveStatusOf(ingestion);
-  const label = t(`states.${status.labelKey}`);
+  const label = t(`states.${status.state}`);
   const lastEventAt =
     ingestion.phase === "ready" ? ingestion.data.lastEventAt : null;
-  const age = lastEventAt
-    ? formatRelativeTime(lastEventAt, locale, { now, style: "short" })
-    : null;
 
   return (
     <span ref={rootRef} className="relative inline-flex">
@@ -50,7 +52,12 @@ export function LiveIndicator() {
         <Dot className={status.dotClass} />
         <span>
           {label}
-          {age && ` · ${age}`}
+          {lastEventAt && (
+            <>
+              {" · "}
+              <Age iso={lastEventAt} />
+            </>
+          )}
         </span>
         <ChevronDownIcon
           size={12}
@@ -58,13 +65,16 @@ export function LiveIndicator() {
         />
       </button>
 
-      {open && (
-        <div
-          id={panelId}
-          role="group"
-          aria-label={t("panelLabel")}
-          className="absolute top-full right-0 z-20 mt-1 w-[280px] border border-dash-rule bg-dash-surface-2 px-[14px] py-3 text-left text-[14px]"
-        >
+      {/* Rendered closed too, `hidden`: `aria-controls` must point at an element. */}
+      <div
+        id={panelId}
+        role="group"
+        aria-label={t("panelLabel")}
+        hidden={!open}
+        className="absolute top-full right-0 z-20 mt-1 w-[280px] border border-dash-rule bg-dash-surface-2 px-[14px] py-3 text-left text-[14px]"
+      >
+        {open && (
+          <>
           <div className="mb-2 flex items-center justify-between">
             <span className="font-dash-mono text-[11px] font-medium tracking-[0.12em] text-dash-ink-3 uppercase">
               {t("network")}
@@ -78,7 +88,10 @@ export function LiveIndicator() {
           </div>
 
           <dl className="flex flex-col gap-1.5 text-[12px]">
-            <Row label={t("lastEvent")} value={age ?? "—"} />
+            <Row
+              label={t("lastEvent")}
+              value={lastEventAt ? <Age iso={lastEventAt} /> : "—"}
+            />
             <NetworkRows />
           </dl>
 
@@ -86,12 +99,13 @@ export function LiveIndicator() {
             {LIVE_LEGEND.map((entry) => (
               <li key={entry.state} className="inline-flex items-center gap-[5px]">
                 <Dot className={entry.dotClass} />
-                {t(`states.${entry.labelKey}`)}
+                {t(`states.${entry.state}`)}
               </li>
             ))}
           </ul>
-        </div>
-      )}
+          </>
+        )}
+      </div>
     </span>
   );
 }
@@ -120,14 +134,19 @@ function NetworkRows() {
   );
 }
 
-/** ⚠️ The first value is the server's clock: only read it once data has arrived client-side. */
-function useEverySecond(): Date {
+/**
+ * "2 s ago", ticking every second. ⚠️ Never in the future: a browser clock behind the server's
+ * would otherwise read "in 3 s".
+ */
+function Age({ iso }: { iso: string }) {
+  const locale = useLocale();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
-  return now;
+  const at = new Date(Math.max(now.getTime(), Date.parse(iso)));
+  return <>{formatRelativeTime(iso, locale, { now: at, style: "short" })}</>;
 }
 
 function Dot({ className }: { className: string }) {
@@ -140,7 +159,7 @@ function Row({
   down = false,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   down?: boolean;
 }) {
   return (
