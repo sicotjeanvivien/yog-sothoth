@@ -16,9 +16,6 @@ pub struct Page<T> {
 /// A cursor, one variant per paginated domain; the wire encoding is the caller's.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Cursor {
-    Pool(crate::domain::PoolCursor),
-    MeteoraDammV2SwapEvent(crate::domain::MeteoraDammV2SwapEventCursor),
-    MeteoraDammV2LiquidityEvent(crate::domain::MeteoraDammV2LiquidityEventCursor),
     Signal(crate::domain::SignalCursor),
 }
 
@@ -48,38 +45,4 @@ pub enum PageDirection {
 pub enum PagePosition {
     First,
     Last,
-}
-
-/// Column the pool listing can be sorted on: columns of `pools` only.
-/// ⚠️ A keyset cursor needs an *immutable* key: a mutable one, like `LastSeen`,
-/// owes the listing the snapshot fence of [`crate::domain::PoolPage`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PoolSortColumn {
-    FirstSeen,
-    LastSeen,
-}
-
-/// Sort order for the pool listing: a column plus a direction.
-/// ⚠️ No `Default`: the default order is declared once, on the HTTP query param.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PoolSort {
-    FirstSeenAsc,
-    FirstSeenDesc,
-    LastSeenAsc,
-    LastSeenDesc,
-}
-
-impl PoolSort {
-    /// The column this sort operates on, stamped on the cursor.
-    pub fn column(self) -> PoolSortColumn {
-        match self {
-            PoolSort::FirstSeenAsc | PoolSort::FirstSeenDesc => PoolSortColumn::FirstSeen,
-            PoolSort::LastSeenAsc | PoolSort::LastSeenDesc => PoolSortColumn::LastSeen,
-        }
-    }
-
-    /// Whether the natural (forward) direction is ascending.
-    pub fn is_ascending(self) -> bool {
-        matches!(self, PoolSort::FirstSeenAsc | PoolSort::LastSeenAsc)
-    }
 }

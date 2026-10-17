@@ -43,12 +43,12 @@
           "lp": {
             "label": "LP",
             "title": "Fournisseurs de liquidité",
-            "body": "Surveiller les pools où ils ont des positions."
+            "body": "Voir comment bouge la liquidité des protocoles où ils ont des positions."
           },
           "market": {
             "label": "Marché",
             "title": "Analystes et traders",
-            "body": "Interroger l'historique des pools pour repérer motifs, gros mouvements et déséquilibres."
+            "body": "Suivre volume, fees et flux de liquidité pour repérer motifs, gros mouvements et déséquilibres."
           },
           "api": {
             "label": "API",

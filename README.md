@@ -94,9 +94,8 @@ For administering the allowlist (schema, seed scripts, SQL helpers), see **[`cra
 | Meteora DAMM v1, Farm, Stake2Earn, LST, Multi-Token | Not started | — |
 
 DLMM is *partial* in a specific sense worth stating, since the two halves land
-separately: its `LbPair` account is decoded, its per-protocol properties table
-and its normalized `fee_bps` are in place, and the pool-detail endpoint serves
-them. What is missing is **event extraction** — `MeteoraDlmm::extract_events` is
+separately: its `LbPair` account is decoded, and its per-protocol properties table
+and its normalized `fee_bps` are in place. What is missing is **event extraction** — `MeteoraDlmm::extract_events` is
 still a stub. Since pool discovery runs off extracted events, no DLMM pool
 reaches `pools` on its own yet, so that satellite stays empty until event
 extraction lands, despite being fully wired and tested against real mainnet accounts.

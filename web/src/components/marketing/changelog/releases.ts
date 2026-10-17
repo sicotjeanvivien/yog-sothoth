@@ -32,6 +32,39 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.1.9",
+    date: "2026-10-17",
+    summary:
+      "The dashboard drops its pool pages, which timed out in production, ahead of the pages built around protocols and tokens.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "The pool list, the pool pages and the Watchlist are gone: their data timed out in production. Their old addresses answer 404.",
+            technical: false,
+          },
+          {
+            text: "The Overview no longer shows the Top pools block, which failed to load.",
+            technical: false,
+          },
+          {
+            text: "A signal card shows its pool's pair without linking to a pool page; hovering it shows the pool address.",
+            technical: false,
+          },
+          {
+            text: "The About page no longer promises to watch pools or query their history.",
+            technical: false,
+          },
+          {
+            text: "The API drops its eight /api/pools routes and every read only they used; the contract and the dashboard's schemas are regenerated.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.1.8",
     date: "2026-10-17",
     summary:

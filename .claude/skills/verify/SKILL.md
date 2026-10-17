@@ -21,12 +21,11 @@ cd web && npm run dev                  # http://localhost:3000, dashboard routes
 
 ## Seed observable data
 
-Signals older than 24h don't feed the pools-list indicator. Insert fresh ones
-as the admin role, tagged for cleanup:
+Insert fresh signals as the admin role, tagged for cleanup:
 
 ```sql
 INSERT INTO signals (detector, protocol, pool_address, severity, value, threshold, message, triggered_at)
-VALUES ('flow_imbalance','meteora_damm_v2','<addr from GET /api/pools>','warning',0.75,0.6,'VERIFY_TEST', now() - interval '2 hours');
+VALUES ('flow_imbalance','meteora_damm_v2','<a pool_address from the pools table>','warning',0.75,0.6,'VERIFY_TEST', now() - interval '2 hours');
 -- afterwards: DELETE FROM signals WHERE message='VERIFY_TEST';
 ```
 
@@ -35,7 +34,7 @@ VALUES ('flow_imbalance','meteora_damm_v2','<addr from GET /api/pools>','warning
 ## Drive the GUI from WSL2 (no Linux browser installed)
 
 - **Static screenshot**: Windows Edge works headless against the WSL service:
-  `"/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" --headless=new --screenshot="C:\\Users\\<user>\\AppData\\Local\\Temp\\x.png" http://localhost:3000/en/pools`
+  `"/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" --headless=new --screenshot="C:\\Users\\<user>\\AppData\\Local\\Temp\\x.png" http://localhost:3000/en/overview`
   (write the PNG to a Windows path; read it back via /mnt/c). Its CDP port binds
   to Windows-localhost only — **not reachable from WSL**, so no interaction this way.
 - **Interactions (hover/click/keyboard)**: install Playwright in the scratchpad
@@ -49,11 +48,10 @@ VALUES ('flow_imbalance','meteora_damm_v2','<addr from GET /api/pools>','warning
 
 ## Flows worth driving
 
-- `/en/pools` and `/fr/pools` — table renders, locale strings (plural forms).
-- Pools-list signal indicator: icon severity/color, hover popover, click →
-  `?tab=alerts`, keyboard focus + Enter, and that clicking the rest of the row
-  still opens the plain pool page (the row is one big `<Link>`).
-- API directly: `curl -s localhost:5000/api/pools?limit=3 | jq` — check new
+- `/en/overview` and `/fr/overview` — KPI strip and latest signals render,
+  locale strings (plural forms).
+- `/en/signals` — the feed, its filters and the live stream.
+- API directly: `curl -s localhost:5000/api/signals?limit=3 | jq` — check new
   wire fields on real data, not just fixtures.
 
 ## Gotchas

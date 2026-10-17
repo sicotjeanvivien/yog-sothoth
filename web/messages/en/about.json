@@ -43,12 +43,12 @@
           "lp": {
             "label": "LP",
             "title": "Liquidity providers",
-            "body": "Watch the pools where they hold positions."
+            "body": "See how liquidity moves in the protocols where they hold positions."
           },
           "market": {
             "label": "Market",
             "title": "Analysts and traders",
-            "body": "Query pool history to spot patterns, large movements and imbalances."
+            "body": "Follow volume, fees and liquidity flows to spot patterns, large movements and imbalances."
           },
           "api": {
             "label": "API",

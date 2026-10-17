@@ -10,4 +10,4 @@ mod tools;
 
 pub use error::{AnchorDecodeError, CoreError, CoreResult, RepositoryError, RepositoryResult};
 
-pub use tools::{Cursor, Page, PageDirection, PagePosition, PoolSort, PoolSortColumn};
+pub use tools::{Cursor, Page, PageDirection, PagePosition};

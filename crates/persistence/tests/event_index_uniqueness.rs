@@ -109,111 +109,14 @@ async fn position_columns_are_stored_as_extracted(pool: PgPool) {
     assert_eq!(transaction_index, None);
 }
 
-/// Mutation: the `event_index` clause removed from the forward predicate — a page boundary
-/// between the two hops drops the second.
-#[sqlx::test]
-async fn paging_across_two_hops_of_one_transaction_skips_nothing(pool: PgPool) {
-    use yog_core::domain::MeteoraDammV2SwapEventFeed;
-    use yog_core::{Cursor, PageDirection};
-
-    let swaps = swap_double_swaps();
-    let pool_address = swaps[0].pool_address;
-    let repo = PgMeteoraDammV2SwapEventRepository::new(pool.clone());
-    for swap in &swaps {
-        assert_eq!(repo.insert(swap).await.unwrap(), InsertOutcome::Inserted);
-    }
-
-    let first = repo
-        .find_by_pool_paginated(&pool_address, None, PageDirection::Next, None, 1)
-        .await
-        .unwrap();
-    assert_eq!(first.items.len(), 1);
-
-    let Some(Cursor::MeteoraDammV2SwapEvent(cursor)) = first.next_cursor.clone() else {
-        panic!(
-            "expected a swap cursor to continue from, got {:?}",
-            first.next_cursor
-        );
-    };
-
-    let second = repo
-        .find_by_pool_paginated(&pool_address, Some(cursor), PageDirection::Next, None, 1)
-        .await
-        .unwrap();
-    assert_eq!(
-        second.items.len(),
-        1,
-        "the second hop must be reachable — a two-key cursor loses it"
-    );
-
-    let mut seen = [first.items[0].event_index, second.items[0].event_index];
-    seen.sort_unstable();
-    assert_eq!(
-        seen,
-        [
-            swaps[0].event_index.min(swaps[1].event_index),
-            swaps[0].event_index.max(swaps[1].event_index)
-        ],
-        "the two pages must together cover both hops, each exactly once"
-    );
-}
-
-/// Mutation: the `event_index` clause removed from the backward predicate.
-#[sqlx::test]
-async fn paging_backward_across_two_hops_skips_nothing(pool: PgPool) {
-    use yog_core::domain::MeteoraDammV2SwapEventFeed;
-    use yog_core::{Cursor, PageDirection, PagePosition};
-
-    let swaps = swap_double_swaps();
-    let pool_address = swaps[0].pool_address;
-    let repo = PgMeteoraDammV2SwapEventRepository::new(pool.clone());
-    for swap in &swaps {
-        assert_eq!(repo.insert(swap).await.unwrap(), InsertOutcome::Inserted);
-    }
-
-    let last = repo
-        .find_by_pool_paginated(
-            &pool_address,
-            None,
-            PageDirection::Next,
-            Some(PagePosition::Last),
-            1,
-        )
-        .await
-        .unwrap();
-    assert_eq!(last.items.len(), 1);
-
-    let Some(Cursor::MeteoraDammV2SwapEvent(cursor)) = last.prev_cursor.clone() else {
-        panic!(
-            "expected a cursor to walk back from, got {:?}",
-            last.prev_cursor
-        );
-    };
-
-    let previous = repo
-        .find_by_pool_paginated(&pool_address, Some(cursor), PageDirection::Prev, None, 1)
-        .await
-        .unwrap();
-    assert_eq!(
-        previous.items.len(),
-        1,
-        "walking back must reach the other hop — a two-key cursor loses it"
-    );
-    assert_ne!(
-        previous.items[0].event_index, last.items[0].event_index,
-        "the two pages must be the two different hops, not the same row twice"
-    );
-}
-
-/// The liquidity feed's own key and cursor. Built by hand: no fixture carries two liquidity
+/// The liquidity table's own key. Built by hand: no fixture carries two liquidity
 /// events of one transaction, and storage code needs no real data to be exercised.
 #[sqlx::test]
-async fn liquidity_feed_stores_and_pages_two_hops_of_one_transaction(pool: PgPool) {
+async fn liquidity_stores_two_hops_of_one_transaction(pool: PgPool) {
     use yog_core::domain::{
-        MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventFeed,
-        MeteoraDammV2LiquidityEventKind, MeteoraDammV2LiquidityEventRepository,
+        MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventKind,
+        MeteoraDammV2LiquidityEventRepository,
     };
-    use yog_core::{Cursor, PageDirection};
     use yog_persistence::PgMeteoraDammV2LiquidityEventRepository;
 
     let reference = swap_double_swaps().remove(0);
@@ -255,35 +158,4 @@ async fn liquidity_feed_stores_and_pages_two_hops_of_one_transaction(pool: PgPoo
         .await
         .unwrap();
     assert_eq!(rows, 2);
-
-    // …and both are reachable across a page boundary, through the valued VIEW.
-    let first = repo
-        .find_by_pool_paginated(&reference.pool_address, None, PageDirection::Next, None, 1)
-        .await
-        .unwrap();
-    assert_eq!(first.items.len(), 1);
-
-    let Some(Cursor::MeteoraDammV2LiquidityEvent(cursor)) = first.next_cursor.clone() else {
-        panic!("expected a liquidity cursor, got {:?}", first.next_cursor);
-    };
-
-    let second = repo
-        .find_by_pool_paginated(
-            &reference.pool_address,
-            Some(cursor),
-            PageDirection::Next,
-            None,
-            1,
-        )
-        .await
-        .unwrap();
-    assert_eq!(
-        second.items.len(),
-        1,
-        "the second hop must be reachable — a two-key cursor loses it"
-    );
-    assert_ne!(
-        first.items[0].event.event_index, second.items[0].event.event_index,
-        "the two pages must be the two different hops"
-    );
 }

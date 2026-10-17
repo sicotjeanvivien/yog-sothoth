@@ -6,57 +6,12 @@
 import { describe, expect, it } from "vitest";
 import {
   zAnnouncementResponse,
-  zGetPoolHistoryResponse,
   zPageResponseSignalResponse,
-  zPoolDetailResponse,
-  zPoolPageResponsePoolResponse,
-  zPoolResponse,
   zProblemDetailsResponse,
   zSignalResponse,
   zStatsResponse,
 } from "../schema/zod.gen";
-import { validPoolsPage, validPoolHistoryBucket } from "./fixtures";
 
-
-function validPool() {
-  return {
-    "poolAddress": "8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie",
-    "protocol": "meteora_damm_v2",
-    "tokenA": {
-      "mint": "So11111111111111111111111111111111111111112",
-      "symbol": "SOL",
-      "name": "Wrapped SOL",
-      "decimals": 9,
-      "logoUri": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png"
-    },
-    "tokenB": {
-      "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-      "symbol": "USDC",
-      "name": "USD Coin",
-      "decimals": 6,
-      "logoUri": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png"
-    },
-    "feeBps": "25",
-    "tvlUsd": "1332007.7148736200400326721044",
-    "volume24hUsd": "47964.973514780605664520660399",
-    "fees24hUsd": "119.912433786951514161301650",
-    "protocolFees24hUsd": "23.982486757390302832260330",
-    "referralFees24hUsd": "0.239824867573903028322603",
-    "lpFees24hUsd": "95.690122161987308300718717",
-    "effectiveFeeBps": "25",
-    "swapBuckets24h": 24,
-    "swapBucketsPriced24h": 24,
-    "signals24h": [
-      {
-        "severity": "warning",
-        "detector": "flow_imbalance",
-        "triggeredAt": "2026-05-25T11:47:02.000000Z"
-      }
-    ],
-    "firstSeenAt": "2026-05-21T10:01:35.084596Z",
-    "lastSeenAt": "2026-05-25T12:14:01.715170Z"
-  };
-}
 
 function validAnnouncement() {
   return {
@@ -95,260 +50,6 @@ describe("zAnnouncementResponse", () => {
     ).toThrow();
     expect(() =>
       zAnnouncementResponse.parse({ ...validAnnouncement(), severity: "loud" }),
-    ).toThrow();
-  });
-});
-
-describe("zPoolResponse", () => {
-  it("accepts a complete valid pool", () => {
-    const parsed = zPoolResponse.parse(validPool());
-    expect(parsed.poolAddress).toBe("8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie");
-    expect(parsed.protocol).toBe("meteora_damm_v2");
-  });
-
-  it("accepts an empty signals24h (quiet pool)", () => {
-    const parsed = zPoolResponse.parse({ ...validPool(), signals24h: [] });
-    expect(parsed.signals24h).toEqual([]);
-  });
-
-  it("rejects a signals24h entry with an unknown severity", () => {
-    expect(() =>
-      zPoolResponse.parse({
-        ...validPool(),
-        signals24h: [
-          {
-            severity: "catastrophic",
-            detector: "flow_imbalance",
-            triggeredAt: "2026-05-25T11:47:02.000000Z",
-          },
-        ],
-      }),
-    ).toThrow();
-  });
-
-  it("accepts a null feeBps (pool seen before its InitializePool)", () => {
-    const parsed = zPoolResponse.parse({ ...validPool(), feeBps: null });
-    expect(parsed.feeBps).toBeNull();
-  });
-
-  it("omits the protocol block on a list payload", () => {
-    const parsed = zPoolDetailResponse.parse(validPool());
-    expect(parsed.meteoraDammV2).toBeUndefined();
-  });
-
-  it("accepts a DAMM v2 block with a null fee shape (genesis never seen)", () => {
-    const parsed = zPoolDetailResponse.parse({
-      ...validPool(),
-      meteoraDammV2: {
-        protocolFeePercent: 20,
-        referralFeePercent: 20,
-        baseFeeKind: null,
-        hasDynamicFee: null,
-        currentFeeBps: null,
-        feeSchedulerExpired: null,
-      },
-    });
-    expect(parsed.meteoraDammV2?.baseFeeKind).toBeNull();
-    expect(parsed.meteoraDammV2?.protocolFeePercent).toBe(20);
-  });
-
-  it("accepts a DAMM v2 block with null fee-split percents (account unresolved)", () => {
-    const parsed = zPoolDetailResponse.parse({
-      ...validPool(),
-      meteoraDammV2: {
-        protocolFeePercent: null,
-        referralFeePercent: null,
-        baseFeeKind: "constant",
-        hasDynamicFee: false,
-        currentFeeBps: null,
-        feeSchedulerExpired: null,
-      },
-    });
-    expect(parsed.meteoraDammV2?.protocolFeePercent).toBeNull();
-    expect(parsed.meteoraDammV2?.baseFeeKind).toBe("constant");
-  });
-
-  it("rejects a fee-split percent out of the 0..=100 range", () => {
-    expect(() =>
-      zPoolDetailResponse.parse({
-        ...validPool(),
-        meteoraDammV2: {
-          protocolFeePercent: 101,
-          referralFeePercent: 0,
-          baseFeeKind: "constant",
-          hasDynamicFee: false,
-          currentFeeBps: null,
-          feeSchedulerExpired: null,
-        },
-      }),
-    ).toThrow();
-  });
-
-  it("accepts null fee analytics (no priced swap in the window)", () => {
-    const parsed = zPoolResponse.parse({
-      ...validPool(),
-      fees24hUsd: null,
-      protocolFees24hUsd: null,
-      referralFees24hUsd: null,
-      lpFees24hUsd: null,
-      effectiveFeeBps: null,
-    });
-    expect(parsed.fees24hUsd).toBeNull();
-    expect(parsed.referralFees24hUsd).toBeNull();
-    expect(parsed.lpFees24hUsd).toBeNull();
-    expect(parsed.effectiveFeeBps).toBeNull();
-  });
-
-  it("accepts RFC3339 with a numeric timezone offset", () => {
-    const parsed = zPoolResponse.parse({
-      ...validPool(),
-      firstSeenAt: "2026-05-21T10:01:35.084596Z",
-    });
-    expect(parsed.firstSeenAt).toBe("2026-05-21T10:01:35.084596Z");
-  });
-
-  it("rejects an empty poolAddress", () => {
-    expect(() =>
-      zPoolResponse.parse({ ...validPool(), poolAddress: "" }),
-    ).toThrow();
-  });
-
-  it("rejects a non-RFC3339 timestamp", () => {
-    expect(() =>
-      zPoolResponse.parse({ ...validPool(), firstSeenAt: "yesterday" }),
-    ).toThrow();
-  });
-
-  it("rejects a missing field", () => {
-    const { protocol, ...rest } = validPool();
-    void protocol;
-    expect(() => zPoolResponse.parse(rest)).toThrow();
-  });
-});
-
-describe("zPoolPageResponsePoolResponse", () => {
-  it("accepts a single-page result (no neighbours)", () => {
-    const parsed = zPoolPageResponsePoolResponse.parse(
-      validPoolsPage({
-        items: [],
-        nextCursor: null,
-        prevCursor: null,
-        isFirst: true,
-        isLast: true,
-      }),
-    );
-    expect(parsed.items).toHaveLength(0);
-    expect(parsed.nextCursor).toBeNull();
-    expect(parsed.prevCursor).toBeNull();
-    expect(parsed.isFirst).toBe(true);
-    expect(parsed.isLast).toBe(true);
-  });
-
-  it("accepts a first page with more data after", () => {
-    const parsed = zPoolPageResponsePoolResponse.parse(validPoolsPage());
-    expect(parsed.items).toHaveLength(1);
-    expect(parsed.prevCursor).toBeNull();
-    expect(parsed.nextCursor).not.toBeNull();
-    expect(parsed.isFirst).toBe(true);
-    expect(parsed.isLast).toBe(false);
-  });
-
-  it("accepts a middle page with neighbours on both sides", () => {
-    const parsed = zPoolPageResponsePoolResponse.parse(
-      validPoolsPage({
-        items: [validPool(), validPool()],
-        nextCursor: "next-x",
-        prevCursor: "prev-y",
-        isFirst: false,
-        isLast: false,
-      }),
-    );
-    expect(parsed.items).toHaveLength(2);
-    expect(parsed.nextCursor).toBe("next-x");
-    expect(parsed.prevCursor).toBe("prev-y");
-    expect(parsed.isFirst).toBe(false);
-    expect(parsed.isLast).toBe(false);
-  });
-
-  it("accepts a terminal page (last page reached)", () => {
-    const parsed = zPoolPageResponsePoolResponse.parse(
-      validPoolsPage({
-        nextCursor: null,
-        prevCursor: "prev-z",
-        isFirst: false,
-        isLast: true,
-      }),
-    );
-    expect(parsed.nextCursor).toBeNull();
-    expect(parsed.isLast).toBe(true);
-  });
-
-  it("rejects items that fail individual validation", () => {
-    expect(() =>
-      zPoolPageResponsePoolResponse.parse(
-        validPoolsPage({
-          items: [{ ...validPool(), poolAddress: "" }],
-        }),
-      ),
-    ).toThrow();
-  });
-
-  it("rejects a missing nextCursor field", () => {
-    const { nextCursor, ...rest } = validPoolsPage();
-    void nextCursor;
-    expect(() => zPoolPageResponsePoolResponse.parse(rest)).toThrow();
-  });
-
-  it("rejects a missing prevCursor field", () => {
-    const { prevCursor, ...rest } = validPoolsPage();
-    void prevCursor;
-    expect(() => zPoolPageResponsePoolResponse.parse(rest)).toThrow();
-  });
-
-  it("rejects a missing isFirst flag", () => {
-    const { isFirst, ...rest } = validPoolsPage();
-    void isFirst;
-    expect(() => zPoolPageResponsePoolResponse.parse(rest)).toThrow();
-  });
-
-  it("rejects a missing isLast flag", () => {
-    const { isLast, ...rest } = validPoolsPage();
-    void isLast;
-    expect(() => zPoolPageResponsePoolResponse.parse(rest)).toThrow();
-  });
-
-  it("rejects a non-boolean isFirst flag", () => {
-    expect(() =>
-      zPoolPageResponsePoolResponse.parse(validPoolsPage({ isFirst: "true" as unknown as boolean })),
-    ).toThrow();
-  });
-});
-
-describe("zGetPoolHistoryResponse", () => {
-  it("accepts an array of valid buckets", () => {
-    const parsed = zGetPoolHistoryResponse.parse([
-      validPoolHistoryBucket(),
-      validPoolHistoryBucket(),
-    ]);
-    expect(parsed).toHaveLength(2);
-    expect(parsed[0]?.feesUsd).toBe("160.70");
-    expect(parsed[0]?.swapCount).toBe(96);
-  });
-
-  it("accepts an empty series", () => {
-    expect(zGetPoolHistoryResponse.parse([])).toHaveLength(0);
-  });
-
-  it("accepts null USD metrics (a bucket with one source of activity)", () => {
-    const parsed = zGetPoolHistoryResponse.parse([
-      { ...validPoolHistoryBucket(), feesUsd: null, effectiveFeeBps: null },
-    ]);
-    expect(parsed[0]?.feesUsd).toBeNull();
-  });
-
-  it("rejects a non-RFC3339 bucket timestamp", () => {
-    expect(() =>
-      zGetPoolHistoryResponse.parse([{ ...validPoolHistoryBucket(), bucket: "nope" }]),
     ).toThrow();
   });
 });
@@ -518,17 +219,55 @@ describe("zSignalResponse", () => {
   });
 });
 
+/** A first page of signals with more after; overrides give the other shapes. */
+function validSignalsPage(overrides: Record<string, unknown> = {}) {
+  return {
+    items: [validSignal()],
+    nextCursor: "next-cursor-opaque",
+    prevCursor: null,
+    isFirst: true,
+    isLast: false,
+    ...overrides,
+  };
+}
+
 describe("zPageResponseSignalResponse", () => {
-  it("accepts a page envelope of signals", () => {
+  it("accepts a first page with more data after", () => {
+    const parsed = zPageResponseSignalResponse.parse(validSignalsPage());
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.prevCursor).toBeNull();
+    expect(parsed.isFirst).toBe(true);
+    expect(parsed.isLast).toBe(false);
+  });
+
+  it("accepts a single-page result (no neighbours)", () => {
+    const parsed = zPageResponseSignalResponse.parse(
+      validSignalsPage({ items: [], nextCursor: null, isLast: true }),
+    );
+    expect(parsed.items).toHaveLength(0);
+    expect(parsed.nextCursor).toBeNull();
+  });
+
+  it("rejects items that fail individual validation", () => {
     expect(() =>
-      zPageResponseSignalResponse.parse({
-        items: [validSignal()],
-        nextCursor: "opaque",
-        prevCursor: null,
-        isFirst: true,
-        isLast: false,
-      }),
-    ).not.toThrow();
+      zPageResponseSignalResponse.parse(
+        validSignalsPage({ items: [{ ...validSignal(), poolAddress: "" }] }),
+      ),
+    ).toThrow();
+  });
+
+  it("rejects a missing cursor or boundary flag", () => {
+    for (const key of ["nextCursor", "prevCursor", "isFirst", "isLast"]) {
+      const page: Record<string, unknown> = validSignalsPage();
+      delete page[key];
+      expect(zPageResponseSignalResponse.safeParse(page).success, key).toBe(false);
+    }
+  });
+
+  it("rejects a non-boolean isFirst flag", () => {
+    expect(() =>
+      zPageResponseSignalResponse.parse(validSignalsPage({ isFirst: "true" })),
+    ).toThrow();
   });
 });
 
@@ -536,35 +275,29 @@ describe("zPageResponseSignalResponse", () => {
 // the rule that states it leaves the spec, then the zod is regenerated.
 describe("the contract's wire forms", () => {
   it("refuses an amount out of format (the `UnsignedDecimal` pattern)", () => {
-    for (const tvlUsd of ["abc", "-1", "1e-7", "", " 25"]) {
-      expect(zPoolResponse.safeParse({ ...validPool(), tvlUsd }).success).toBe(false);
+    for (const threshold of ["abc", "-1", "1e-7", "", " 25"]) {
+      expect(zSignalResponse.safeParse({ ...validSignal(), threshold }).success).toBe(false);
     }
   });
 
   it("refuses a date out of RFC 3339, and keeps the offsets `to_rfc3339` writes", () => {
-    for (const firstSeenAt of ["2026-05-21T10:01:35", "2026-05-21", "yesterday"]) {
-      expect(zPoolResponse.safeParse({ ...validPool(), firstSeenAt }).success).toBe(false);
+    for (const triggeredAt of ["2026-05-21T10:01:35", "2026-05-21", "yesterday"]) {
+      expect(zSignalResponse.safeParse({ ...validSignal(), triggeredAt }).success).toBe(false);
     }
-    const offset = { ...validPool(), firstSeenAt: "2026-05-21T10:01:35+00:00" };
-    expect(zPoolResponse.safeParse(offset).success).toBe(true);
-  });
-
-  it("refuses a protocol block that is null where it must be absent", () => {
-    expect(zPoolDetailResponse.safeParse(validPool()).success).toBe(true);
-    const nulled = { ...validPool(), meteoraDammV2: null };
-    expect(zPoolDetailResponse.safeParse(nulled).success).toBe(false);
+    const offset = { ...validSignal(), triggeredAt: "2026-05-21T10:01:35+00:00" };
+    expect(zSignalResponse.safeParse(offset).success).toBe(true);
   });
 
   it("refuses a missing key where the API writes null (the required walk)", () => {
-    const { feeBps, ...rest } = validPool();
-    void feeBps;
-    expect(zPoolResponse.safeParse(rest).success).toBe(false);
+    const { threshold, ...rest } = validSignal();
+    void threshold;
+    expect(zSignalResponse.safeParse(rest).success).toBe(false);
   });
 
   it("reads a count as a number, never a BigInt (no int64 in the spec)", () => {
-    const parsed = zPoolResponse.parse(validPool());
-    expect(typeof parsed.swapBuckets24h).toBe("number");
-    const asString = { ...validPool(), swapBuckets24h: "24" };
-    expect(zPoolResponse.safeParse(asString).success).toBe(false);
+    const parsed = zSignalResponse.parse(validSignal());
+    expect(typeof parsed.id).toBe("number");
+    const asString = { ...validSignal(), id: "739" };
+    expect(zSignalResponse.safeParse(asString).success).toBe(false);
   });
 });

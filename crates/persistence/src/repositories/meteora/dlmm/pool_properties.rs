@@ -1,24 +1,18 @@
 //! DLMM pool-properties satellite (baseline §9): the Liquidity Book-only
-//! properties, kept out of the cross-protocol `pools` registry. Read by the api
-//! through [`PoolPropertiesLookup`], resolved by yog-context through [`PoolAccountResolver`].
+//! properties, kept out of the cross-protocol `pools` registry, resolved by
+//! yog-context through [`PoolAccountResolver`].
 //! It writes this satellite and nothing else: the mints and `fee_bps` of the same
 //! account go through [`yog_core::domain::PoolRepository::set_registry_properties`].
-
-mod rows;
 
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
-    domain::{
-        MeteoraDlmmPoolProperties, PoolAccountProperties, PoolAccountResolver, PoolProperties,
-        PoolPropertiesLookup, Protocol,
-    },
+    domain::{PoolAccountProperties, PoolAccountResolver, Protocol},
 };
 
 use crate::repositories::helper::{convert_string_to_pubkey, map_sqlx_error};
-use rows::MeteoraDlmmPoolPropertiesRow;
 
 pub struct PgMeteoraDlmmPoolPropertiesRepository {
     pool: PgPool,
@@ -27,38 +21,6 @@ pub struct PgMeteoraDlmmPoolPropertiesRepository {
 impl PgMeteoraDlmmPoolPropertiesRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
-    }
-}
-
-#[async_trait]
-impl PoolPropertiesLookup for PgMeteoraDlmmPoolPropertiesRepository {
-    fn protocol(&self) -> Protocol {
-        Protocol::MeteoraDlmm
-    }
-
-    /// No protocol predicate, unlike [`PoolAccountResolver::list_unresolved`]:
-    /// a pool of another protocol has no row in this satellite.
-    async fn find_by_pool(
-        &self,
-        pool_address: &Pubkey,
-    ) -> RepositoryResult<Option<PoolProperties>> {
-        let row = sqlx::query_as!(
-            MeteoraDlmmPoolPropertiesRow,
-            r#"
-            SELECT pool_address, bin_step, base_factor, base_fee_power_factor,
-                   variable_fee_control, max_volatility_accumulator, protocol_share
-            FROM meteora_dlmm_pool_properties
-            WHERE pool_address = $1
-            "#,
-            pool_address.to_string(),
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        row.map(MeteoraDlmmPoolProperties::try_from)
-            .transpose()
-            .map(|p| p.map(PoolProperties::MeteoraDlmm))
     }
 }
 

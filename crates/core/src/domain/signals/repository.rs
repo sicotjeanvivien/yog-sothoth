@@ -60,13 +60,4 @@ pub trait SignalFeed: Send + Sync {
         after: &SignalCursor,
         limit: i64,
     ) -> RepositoryResult<Vec<SignalRecord>>;
-
-    /// Per pool, the signals after `since`, newest first, capped at
-    /// `per_pool_limit` each; pools without one are absent.
-    async fn recent_by_pools(
-        &self,
-        pools: &[Pubkey],
-        since: DateTime<Utc>,
-        per_pool_limit: i64,
-    ) -> RepositoryResult<HashMap<Pubkey, Vec<SignalRecord>>>;
 }

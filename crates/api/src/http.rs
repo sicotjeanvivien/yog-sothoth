@@ -87,23 +87,15 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
 /// committed OpenAPI document is read from this same list, so a route cannot be
 /// served without being declared.
 fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
-    // ⚠️ `/api/pools/top` and `/api/stats` are slow too, but stay out: their
-    // computation takes a slot inside the cache, so its waiters hold none.
+    // ⚠️ `/api/stats` is slow too, but stays out: its computation takes a slot
+    // inside the cache, so its waiters hold none.
     let slotted = OpenApiRouter::new()
-        .routes(routes!(handlers::pools::list_pools))
-        .routes(routes!(handlers::pools::get_pool))
-        .routes(routes!(handlers::pools::get_pool_history))
         .routes(routes!(handlers::signals::list_signals))
         .route_layer(from_fn_with_state(work_slots, work_slot_limit));
 
     OpenApiRouter::new()
         .routes(routes!(handlers::announcements::list_active_announcements))
-        .routes(routes!(handlers::pools::list_top_pools))
         .routes(routes!(handlers::stats::get_stats))
-        .routes(routes!(handlers::pools::list_fee_tiers))
-        .routes(routes!(handlers::pools::get_pool_latest_state))
-        .routes(routes!(handlers::pools::list_pool_swaps))
-        .routes(routes!(handlers::pools::list_pool_liquidity_events))
         .routes(routes!(handlers::network::get_network))
         .routes(routes!(handlers::ingestion::get_ingestion))
         // The live feed is capped by its own slots, in the handler.

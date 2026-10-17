@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
@@ -68,12 +67,4 @@ pub struct MeteoraDammV2LiquidityEvent {
     pub reserve_b_after: u64,
     pub position: Pubkey,
     pub owner: Pubkey,
-}
-
-/// A liquidity event and its USD value at event time, derived on read; `None`
-/// when a price or a token's decimals are unknown.
-#[derive(Debug, Clone)]
-pub struct MeteoraDammV2LiquidityEventValued {
-    pub event: MeteoraDammV2LiquidityEvent,
-    pub value_usd: Option<Decimal>,
 }

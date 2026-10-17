@@ -1,24 +1,18 @@
 //! DAMM v2 pool-properties satellite (baseline §8): the cp-amm-only properties,
-//! kept out of the cross-protocol `pools` registry. Read by the api through
-//! [`PoolPropertiesLookup`], resolved by yog-context through [`PoolAccountResolver`].
+//! kept out of the cross-protocol `pools` registry, resolved by yog-context through
+//! [`PoolAccountResolver`].
 //! It writes this satellite and nothing else: the registry columns of the same
 //! account go through `PoolRepository`, without a transaction.
-
-mod rows;
 
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
-    domain::{
-        MeteoraDammV2PoolProperties, PoolAccountProperties, PoolAccountResolver, PoolProperties,
-        PoolPropertiesLookup, Protocol,
-    },
+    domain::{PoolAccountProperties, PoolAccountResolver, Protocol},
 };
 
 use crate::repositories::helper::{convert_string_to_pubkey, convert_u64_to_i64, map_sqlx_error};
-use rows::MeteoraDammV2PoolPropertiesRow;
 
 pub struct PgMeteoraDammV2PoolPropertiesRepository {
     pool: PgPool,
@@ -27,40 +21,6 @@ pub struct PgMeteoraDammV2PoolPropertiesRepository {
 impl PgMeteoraDammV2PoolPropertiesRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
-    }
-}
-
-#[async_trait]
-impl PoolPropertiesLookup for PgMeteoraDammV2PoolPropertiesRepository {
-    fn protocol(&self) -> Protocol {
-        Protocol::MeteoraDammV2
-    }
-
-    /// No protocol predicate, unlike [`PoolAccountResolver::list_unresolved`]:
-    /// a pool of another protocol has no row in this satellite.
-    async fn find_by_pool(
-        &self,
-        pool_address: &Pubkey,
-    ) -> RepositoryResult<Option<PoolProperties>> {
-        let row = sqlx::query_as!(
-            MeteoraDammV2PoolPropertiesRow,
-            r#"
-            SELECT pool_address, protocol_fee_percent,
-                   referral_fee_percent, base_fee_kind, has_dynamic_fee,
-                   cliff_fee_numerator, number_of_period, period_frequency,
-                   reduction_factor, activation_point, activation_type
-            FROM meteora_damm_v2_pool_properties
-            WHERE pool_address = $1
-            "#,
-            pool_address.to_string(),
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        row.map(MeteoraDammV2PoolProperties::try_from)
-            .transpose()
-            .map(|p| p.map(PoolProperties::MeteoraDammV2))
     }
 }
 

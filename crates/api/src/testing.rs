@@ -5,7 +5,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, TimeZone, Utc};
 use solana_pubkey::Pubkey;
-use solana_signature::Signature;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -13,14 +12,10 @@ use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
         Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity,
-        EventFreshnessRepository, FeeTier, GlobalAnalytics, GlobalAnalyticsRepository,
-        MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
-        MeteoraDammV2LiquidityEventFeed, MeteoraDammV2LiquidityEventValued, MeteoraDammV2SwapEvent,
-        MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventFeed, NetworkStatus,
-        NetworkStatusLookup, Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCatalog, PoolCounts,
-        PoolCurrentState, PoolCurrentStateLookup, PoolCursor, PoolListQuery, PoolPage,
-        PoolSideValues, Protocol, Severity, Signal, SignalCursor, SignalFeed, SignalRecord,
-        TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceLookup,
+        EventFreshnessRepository, GlobalAnalytics, GlobalAnalyticsRepository, NetworkStatus,
+        NetworkStatusLookup, Pool, PoolCatalog, PoolCounts, Protocol, Severity, Signal,
+        SignalCursor, SignalFeed, SignalRecord, TokenMetadata, TokenMetadataLookup, TokenPrice,
+        TokenPriceLookup,
     },
 };
 
@@ -79,46 +74,6 @@ pub(crate) fn make_price(mint: Pubkey) -> TokenPrice {
     }
 }
 
-/// A `PoolPage` over `pools`, sorted on the immutable `FirstSeen`: no fence, so `as_of: None`
-/// and `touched_since: 0`.
-pub(crate) fn make_page(pools: Vec<Pool>, is_first: bool, is_last: bool) -> PoolPage {
-    let prev = if is_first {
-        None
-    } else {
-        pools.first().map(|p| {
-            Cursor::Pool(PoolCursor {
-                sort_column: yog_core::PoolSortColumn::FirstSeen,
-                sort_value: ts(1_700_000_000),
-                pool_address: p.pool_address,
-                as_of: None,
-            })
-        })
-    };
-    let next = if is_last {
-        None
-    } else {
-        pools.last().map(|p| {
-            Cursor::Pool(PoolCursor {
-                sort_column: yog_core::PoolSortColumn::FirstSeen,
-                sort_value: ts(1_700_000_000),
-                pool_address: p.pool_address,
-                as_of: None,
-            })
-        })
-    };
-    PoolPage {
-        page: Page {
-            items: pools,
-            next_cursor: next,
-            prev_cursor: prev,
-            is_first,
-            is_last,
-        },
-        as_of: None,
-        touched_since: 0,
-    }
-}
-
 fn take<T>(slot: &Mutex<Option<RepositoryResult<T>>>) -> RepositoryResult<T> {
     slot.lock()
         .unwrap()
@@ -127,38 +82,13 @@ fn take<T>(slot: &Mutex<Option<RepositoryResult<T>>>) -> RepositoryResult<T> {
 }
 
 pub(crate) struct PoolRepoOnce {
-    paginated: Mutex<Option<RepositoryResult<PoolPage>>>,
-    by_address: Mutex<Option<RepositoryResult<Option<Pool>>>>,
     by_addresses: Mutex<Option<RepositoryResult<Vec<Pool>>>>,
 }
 
 impl PoolRepoOnce {
-    pub(crate) fn with_page(page: PoolPage) -> Self {
-        Self {
-            paginated: Mutex::new(Some(Ok(page))),
-            by_address: Mutex::new(Some(Ok(None))),
-            by_addresses: Mutex::new(Some(Ok(Vec::new()))),
-        }
-    }
-    pub(crate) fn with_pool(pool: Option<Pool>) -> Self {
-        Self {
-            paginated: Mutex::new(Some(Ok(make_page(vec![], true, true)))),
-            by_address: Mutex::new(Some(Ok(pool))),
-            by_addresses: Mutex::new(Some(Ok(Vec::new()))),
-        }
-    }
-    pub(crate) fn with_paginate_err() -> Self {
-        Self {
-            paginated: Mutex::new(Some(Err(RepositoryError::Integrity("boom".into())))),
-            by_address: Mutex::new(Some(Ok(None))),
-            by_addresses: Mutex::new(Some(Ok(Vec::new()))),
-        }
-    }
-    /// Seeds `find_by_addresses` — unordered, so a top-N test sees the service re-impose the rank.
+    /// Seeds `find_by_addresses`, unordered.
     pub(crate) fn with_pools(pools: Vec<Pool>) -> Self {
         Self {
-            paginated: Mutex::new(Some(Ok(make_page(vec![], true, true)))),
-            by_address: Mutex::new(Some(Ok(None))),
             by_addresses: Mutex::new(Some(Ok(pools))),
         }
     }
@@ -166,20 +96,11 @@ impl PoolRepoOnce {
 
 #[async_trait]
 impl PoolCatalog for PoolRepoOnce {
-    async fn find_by_address(&self, _addr: &Pubkey) -> RepositoryResult<Option<Pool>> {
-        take(&self.by_address)
-    }
     async fn counts(&self) -> RepositoryResult<yog_core::domain::PoolCounts> {
-        unreachable!("counts not used by PoolService")
+        unreachable!("counts not used by SignalService")
     }
     async fn find_by_addresses(&self, _addrs: &[Pubkey]) -> RepositoryResult<Vec<Pool>> {
         take(&self.by_addresses)
-    }
-    async fn find_paginated(&self, _query: PoolListQuery) -> RepositoryResult<PoolPage> {
-        take(&self.paginated)
-    }
-    async fn list_fee_tiers(&self) -> RepositoryResult<Vec<FeeTier>> {
-        unreachable!("list_fee_tiers not used by PoolService tests")
     }
 }
 
@@ -229,102 +150,11 @@ impl PoolCountsRepo {
 
 #[async_trait]
 impl PoolCatalog for PoolCountsRepo {
-    async fn find_by_address(&self, _addr: &Pubkey) -> RepositoryResult<Option<Pool>> {
-        unreachable!("find_by_address not used by StatsService")
-    }
     async fn counts(&self) -> RepositoryResult<PoolCounts> {
         take(&self.counts)
     }
     async fn find_by_addresses(&self, _addrs: &[Pubkey]) -> RepositoryResult<Vec<Pool>> {
         unreachable!("find_by_addresses not used by StatsService")
-    }
-    async fn find_paginated(&self, _query: PoolListQuery) -> RepositoryResult<PoolPage> {
-        unreachable!("find_paginated not used by StatsService")
-    }
-    async fn list_fee_tiers(&self) -> RepositoryResult<Vec<FeeTier>> {
-        unreachable!("list_fee_tiers not used by StatsService")
-    }
-}
-
-pub(crate) struct MockAnalyticsRepo {
-    map: HashMap<Pubkey, PoolAnalytics>,
-    /// Ranked addresses returned by `top_pool_addresses`, in order.
-    top_ranked: Vec<Pubkey>,
-    fail: bool,
-}
-
-impl MockAnalyticsRepo {
-    pub(crate) fn with(map: HashMap<Pubkey, PoolAnalytics>) -> Self {
-        Self {
-            map,
-            top_ranked: Vec::new(),
-            fail: false,
-        }
-    }
-    pub(crate) fn empty() -> Self {
-        Self {
-            map: HashMap::new(),
-            top_ranked: Vec::new(),
-            fail: false,
-        }
-    }
-    pub(crate) fn failing() -> Self {
-        Self {
-            map: HashMap::new(),
-            top_ranked: Vec::new(),
-            fail: true,
-        }
-    }
-    /// Set the ranking `top_pool_addresses` returns (already ordered).
-    pub(crate) fn with_top(mut self, ranked: Vec<Pubkey>) -> Self {
-        self.top_ranked = ranked;
-        self
-    }
-}
-
-#[async_trait]
-impl PoolAnalyticsRepository for MockAnalyticsRepo {
-    async fn batch_compute(
-        &self,
-        addresses: &[Pubkey],
-    ) -> RepositoryResult<HashMap<Pubkey, PoolAnalytics>> {
-        if self.fail {
-            return Err(RepositoryError::Integrity("analytics boom".into()));
-        }
-        let mut out = HashMap::new();
-        for a in addresses {
-            if let Some(v) = self.map.get(a) {
-                out.insert(*a, v.clone());
-            }
-        }
-        Ok(out)
-    }
-
-    async fn history(
-        &self,
-        _pool_address: &Pubkey,
-        _days: i32,
-    ) -> RepositoryResult<Vec<yog_core::domain::PoolHistoryBucket>> {
-        if self.fail {
-            return Err(RepositoryError::Integrity("analytics boom".into()));
-        }
-        Ok(Vec::new())
-    }
-
-    async fn top_pool_addresses(
-        &self,
-        _metric: yog_core::domain::PoolRankMetric,
-        limit: i64,
-    ) -> RepositoryResult<Vec<Pubkey>> {
-        if self.fail {
-            return Err(RepositoryError::Integrity("analytics boom".into()));
-        }
-        Ok(self
-            .top_ranked
-            .iter()
-            .take(limit.max(0) as usize)
-            .copied()
-            .collect())
     }
 }
 
@@ -397,133 +227,6 @@ impl TokenPriceLookup for MockPriceRepo {
             return Err(RepositoryError::Integrity("price boom".into()));
         }
         Ok(self.by_mint.get(mint).cloned())
-    }
-}
-
-pub(crate) struct MockPoolCurrentStateRepo {
-    by_address: Mutex<Option<RepositoryResult<Option<PoolCurrentState>>>>,
-    side_values: PoolSideValues,
-}
-
-impl MockPoolCurrentStateRepo {
-    pub(crate) fn found(state: PoolCurrentState) -> Self {
-        Self {
-            by_address: Mutex::new(Some(Ok(Some(state)))),
-            side_values: PoolSideValues::default(),
-        }
-    }
-    pub(crate) fn not_found() -> Self {
-        Self {
-            by_address: Mutex::new(Some(Ok(None))),
-            side_values: PoolSideValues::default(),
-        }
-    }
-    pub(crate) fn failing() -> Self {
-        Self {
-            by_address: Mutex::new(Some(Err(RepositoryError::Integrity("state boom".into())))),
-            side_values: PoolSideValues::default(),
-        }
-    }
-    pub(crate) fn with_side_values(mut self, side_values: PoolSideValues) -> Self {
-        self.side_values = side_values;
-        self
-    }
-}
-
-#[async_trait]
-impl PoolCurrentStateLookup for MockPoolCurrentStateRepo {
-    async fn get_by_address(&self, _: &str) -> RepositoryResult<Option<PoolCurrentState>> {
-        take(&self.by_address)
-    }
-    async fn side_values_usd(&self, _: &Pubkey) -> RepositoryResult<PoolSideValues> {
-        Ok(self.side_values)
-    }
-    async fn list_most_recent(
-        &self,
-        _limit: u32,
-        _before: Option<DateTime<Utc>>,
-    ) -> RepositoryResult<Vec<PoolCurrentState>> {
-        unreachable!()
-    }
-}
-
-pub(crate) struct MockSwapEventRepo {
-    find_paginated: Mutex<Option<RepositoryResult<Page<MeteoraDammV2SwapEvent>>>>,
-}
-
-impl MockSwapEventRepo {
-    pub(crate) fn with_page(page: Page<MeteoraDammV2SwapEvent>) -> Self {
-        Self {
-            find_paginated: Mutex::new(Some(Ok(page))),
-        }
-    }
-    pub(crate) fn empty() -> Self {
-        Self::with_page(Page {
-            items: vec![],
-            next_cursor: None,
-            prev_cursor: None,
-            is_first: true,
-            is_last: true,
-        })
-    }
-    pub(crate) fn failing() -> Self {
-        Self {
-            find_paginated: Mutex::new(Some(Err(RepositoryError::Integrity("swap boom".into())))),
-        }
-    }
-}
-
-#[async_trait]
-impl MeteoraDammV2SwapEventFeed for MockSwapEventRepo {
-    async fn find_by_pool_paginated(
-        &self,
-        _pool_address: &Pubkey,
-        _cursor: Option<MeteoraDammV2SwapEventCursor>,
-        _direction: PageDirection,
-        _position: Option<PagePosition>,
-        _limit: i64,
-    ) -> RepositoryResult<Page<MeteoraDammV2SwapEvent>> {
-        take(&self.find_paginated)
-    }
-}
-
-pub(crate) struct MockLiquidityEventRepo {
-    find_paginated: Mutex<Option<RepositoryResult<Page<MeteoraDammV2LiquidityEventValued>>>>,
-}
-
-impl MockLiquidityEventRepo {
-    pub(crate) fn with_page(page: Page<MeteoraDammV2LiquidityEventValued>) -> Self {
-        Self {
-            find_paginated: Mutex::new(Some(Ok(page))),
-        }
-    }
-    pub(crate) fn empty() -> Self {
-        Self::with_page(Page {
-            items: vec![],
-            next_cursor: None,
-            prev_cursor: None,
-            is_first: true,
-            is_last: true,
-        })
-    }
-    pub(crate) fn failing() -> Self {
-        Self {
-            find_paginated: Mutex::new(Some(Err(RepositoryError::Integrity("liq boom".into())))),
-        }
-    }
-}
-
-#[async_trait]
-impl MeteoraDammV2LiquidityEventFeed for MockLiquidityEventRepo {
-    async fn find_by_pool_paginated(
-        &self,
-        _pool_address: &Pubkey,
-        _cursor: Option<MeteoraDammV2LiquidityEventCursor>,
-        _direction: PageDirection,
-        _position: Option<PagePosition>,
-        _limit: i64,
-    ) -> RepositoryResult<Page<MeteoraDammV2LiquidityEventValued>> {
-        take(&self.find_paginated)
     }
 }
 
@@ -611,51 +314,6 @@ impl EventFreshnessRepository for MockEventFreshnessRepo {
     }
 }
 
-pub(crate) fn make_swap_event(pool_address: Pubkey) -> MeteoraDammV2SwapEvent {
-    use yog_core::domain::TradeDirection;
-
-    MeteoraDammV2SwapEvent {
-        pool_address,
-        signature: sig_for_pool(pool_address, 1),
-        timestamp: ts(1_500),
-        slot: 1,
-        transaction_index: None,
-        event_index: 0,
-        trade_direction: TradeDirection::AtoB,
-        amount_a: 1_000_000,
-        amount_b: 2_000_000,
-        reserve_a_after: 10_000_000,
-        reserve_b_after: 20_000_000,
-        next_sqrt_price: 1_000_000_000_000_000_000u128,
-        claiming_fee: 0,
-        protocol_fee: 100,
-        compounding_fee: 50,
-        referral_fee: 0,
-        fee_token_is_a: true,
-    }
-}
-
-pub(crate) fn make_liquidity_event(pool_address: Pubkey) -> MeteoraDammV2LiquidityEvent {
-    use yog_core::domain::MeteoraDammV2LiquidityEventKind;
-
-    MeteoraDammV2LiquidityEvent {
-        pool_address,
-        signature: sig_for_pool(pool_address, 1),
-        timestamp: ts(1_600),
-        slot: 1,
-        transaction_index: None,
-        event_index: 0,
-        liquidity_event_kind: MeteoraDammV2LiquidityEventKind::Add,
-        amount_a: 5_000_000,
-        amount_b: 10_000_000,
-        reserve_a_after: 15_000_000,
-        reserve_b_after: 30_000_000,
-        liquidity_delta: 30_000_000,
-        position: pool_address,
-        owner: pool_address,
-    }
-}
-
 pub(crate) fn make_network_status() -> NetworkStatus {
     NetworkStatus {
         slot: 300_000_000,
@@ -676,120 +334,10 @@ pub(crate) fn make_announcement(id: i64) -> Announcement {
     }
 }
 
-pub(crate) fn make_swap_page(
-    events: Vec<MeteoraDammV2SwapEvent>,
-    is_first: bool,
-    is_last: bool,
-) -> Page<MeteoraDammV2SwapEvent> {
-    use yog_core::domain::MeteoraDammV2SwapEventCursor;
-
-    let prev = if is_first {
-        None
-    } else {
-        events.first().map(|e| {
-            Cursor::MeteoraDammV2SwapEvent(MeteoraDammV2SwapEventCursor {
-                timestamp: e.timestamp,
-                signature: e.signature,
-                event_index: e.event_index,
-            })
-        })
-    };
-    let next = if is_last {
-        None
-    } else {
-        events.last().map(|e| {
-            Cursor::MeteoraDammV2SwapEvent(MeteoraDammV2SwapEventCursor {
-                timestamp: e.timestamp,
-                signature: e.signature,
-                event_index: e.event_index,
-            })
-        })
-    };
-    Page {
-        items: events,
-        next_cursor: next,
-        prev_cursor: prev,
-        is_first,
-        is_last,
-    }
-}
-
-pub(crate) fn make_liquidity_page(
-    events: Vec<MeteoraDammV2LiquidityEvent>,
-    is_first: bool,
-    is_last: bool,
-) -> Page<MeteoraDammV2LiquidityEventValued> {
-    use yog_core::domain::MeteoraDammV2LiquidityEventCursor;
-
-    let prev = if is_first {
-        None
-    } else {
-        events.first().map(|e| {
-            Cursor::MeteoraDammV2LiquidityEvent(MeteoraDammV2LiquidityEventCursor {
-                timestamp: e.timestamp,
-                signature: e.signature,
-                event_index: e.event_index,
-            })
-        })
-    };
-    let next = if is_last {
-        None
-    } else {
-        events.last().map(|e| {
-            Cursor::MeteoraDammV2LiquidityEvent(MeteoraDammV2LiquidityEventCursor {
-                timestamp: e.timestamp,
-                signature: e.signature,
-                event_index: e.event_index,
-            })
-        })
-    };
-    let items = events
-        .into_iter()
-        .map(|event| MeteoraDammV2LiquidityEventValued {
-            event,
-            value_usd: None,
-        })
-        .collect();
-    Page {
-        items,
-        next_cursor: next,
-        prev_cursor: prev,
-        is_first,
-        is_last,
-    }
-}
-
-pub(crate) fn make_pool_current_state(pool_address: Pubkey) -> PoolCurrentState {
-    PoolCurrentState {
-        pool_address,
-        protocol: Protocol::MeteoraDammV2,
-        reserve_a: 10_000_000,
-        reserve_b: 20_000_000,
-        last_sqrt_price: Some(1_000_000_000_000_000_000u128),
-        last_swap_at: Some(ts(1_500)),
-        last_event_at: ts(1_600),
-        last_event_kind: yog_core::domain::LastEventKind::LiquidityAdd,
-        last_signature: sig_for_pool(pool_address, 1),
-        updated_at: ts(1_600),
-    }
-}
-
-/// A deterministic `Signature`: the pool's pubkey, then `tag` to tell kinds apart.
-pub(crate) fn sig_for_pool(pool_address: Pubkey, tag: u8) -> Signature {
-    let mut bytes = [0u8; 64];
-    bytes[..32].copy_from_slice(&pool_address.to_bytes());
-    bytes[63] = tag;
-    Signature::from(bytes)
-}
-
-/// What `recent_by_pools` yields: each pool's recent signals.
-pub(crate) type RecentSignalsByPool = HashMap<Pubkey, Vec<SignalRecord>>;
-
 pub(crate) struct MockSignalRepo {
     list: Mutex<Option<RepositoryResult<Page<SignalRecord>>>>,
     latest_cursor: Mutex<Option<RepositoryResult<Option<SignalCursor>>>>,
     newer_than: Mutex<Option<RepositoryResult<Vec<SignalRecord>>>>,
-    recent_by_pools: Mutex<Option<RepositoryResult<RecentSignalsByPool>>>,
 }
 
 impl MockSignalRepo {
@@ -798,7 +346,6 @@ impl MockSignalRepo {
             list: Mutex::new(Some(Ok(page))),
             latest_cursor: Mutex::new(None),
             newer_than: Mutex::new(None),
-            recent_by_pools: Mutex::new(None),
         }
     }
     pub(crate) fn empty() -> Self {
@@ -809,7 +356,6 @@ impl MockSignalRepo {
             list: Mutex::new(Some(Err(RepositoryError::Integrity("signal boom".into())))),
             latest_cursor: Mutex::new(None),
             newer_than: Mutex::new(None),
-            recent_by_pools: Mutex::new(None),
         }
     }
     /// Seed the streaming lens (poller tests): what `latest_cursor` and
@@ -822,22 +368,7 @@ impl MockSignalRepo {
             list: Mutex::new(None),
             latest_cursor: Mutex::new(Some(latest_cursor)),
             newer_than: Mutex::new(Some(newer_than)),
-            recent_by_pools: Mutex::new(None),
         }
-    }
-    /// Seed the pools-list indicator lens: what `recent_by_pools` will
-    /// yield, once.
-    pub(crate) fn with_recent(map: RecentSignalsByPool) -> Self {
-        Self {
-            list: Mutex::new(None),
-            latest_cursor: Mutex::new(None),
-            newer_than: Mutex::new(None),
-            recent_by_pools: Mutex::new(Some(Ok(map))),
-        }
-    }
-    /// The common pool-service case: no signal in the window.
-    pub(crate) fn recent_empty() -> Self {
-        Self::with_recent(HashMap::new())
     }
 }
 
@@ -863,14 +394,6 @@ impl SignalFeed for MockSignalRepo {
         _limit: i64,
     ) -> RepositoryResult<Vec<SignalRecord>> {
         take(&self.newer_than)
-    }
-    async fn recent_by_pools(
-        &self,
-        _pools: &[Pubkey],
-        _since: DateTime<Utc>,
-        _per_pool_limit: i64,
-    ) -> RepositoryResult<RecentSignalsByPool> {
-        take(&self.recent_by_pools)
     }
 }
 

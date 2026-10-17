@@ -1,10 +1,9 @@
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
-use solana_signature::Signature;
 use sqlx::Error as SqlxError;
 use sqlx::types::BigDecimal;
 use std::str::FromStr;
-use yog_core::{RepositoryError, RepositoryResult, domain::MeteoraDammV2LiquidityEventKind};
+use yog_core::{RepositoryError, RepositoryResult};
 
 /// Parses a stored pubkey; a malformed one is `RepositoryError::Integrity`.
 pub(crate) fn convert_string_to_pubkey(key: String, field: &str) -> RepositoryResult<Pubkey> {
@@ -27,19 +26,7 @@ pub(crate) fn convert_i16_to_u8(v: i16, field: &str) -> RepositoryResult<u8> {
     u8::try_from(v).map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {v}")))
 }
 
-/// Narrows an `INTEGER` into a `u16`, which does not fit `SMALLINT`; fails
-/// rather than truncates outside its range.
-pub(crate) fn convert_i32_to_u16(v: i32, field: &str) -> RepositoryResult<u16> {
-    u16::try_from(v).map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {v}")))
-}
-
-/// Narrows a `BIGINT` into a `u32`, which does not fit `INTEGER`.
-pub(crate) fn convert_i64_to_u32(v: i64, field: &str) -> RepositoryResult<u32> {
-    u32::try_from(v).map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {v}")))
-}
-
-/// Lifts any converter above over `Option`, for a nullable column:
-/// `convert_optional(row.bin_step, "bin_step", convert_i32_to_u16)?`.
+/// Lifts any converter above over `Option`, for a nullable column.
 pub(crate) fn convert_optional<T, U>(
     value: Option<T>,
     field: &str,
@@ -57,15 +44,6 @@ pub(crate) fn convert_bigdecimal_to_u128(
         .to_string()
         .parse::<u128>()
         .map_err(|e| RepositoryError::Integrity(format!("{field} parse error: {e}")))
-}
-
-pub(crate) fn parse_string_to_liquidity_event_kind(
-    liquidity_event_kind: String,
-    field: &str,
-) -> RepositoryResult<MeteoraDammV2LiquidityEventKind> {
-    liquidity_event_kind
-        .parse::<MeteoraDammV2LiquidityEventKind>()
-        .map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {liquidity_event_kind}")))
 }
 
 /// Maps a [`sqlx::Error`] to its `RepositoryError`, coarsely: refine a variant
@@ -98,11 +76,6 @@ const QUERY_CANCELED: &str = "57014";
 /// Converts a `u128` for a `NUMERIC(39, 0)` column, lossless.
 pub(crate) fn convert_u128_to_bigdecimal(v: u128, _field: &str) -> BigDecimal {
     BigDecimal::from_str(&v.to_string()).expect("u128 string is always valid BigDecimal")
-}
-
-pub(crate) fn convert_string_to_signature(key: String, field: &str) -> RepositoryResult<Signature> {
-    Signature::from_str(&key)
-        .map_err(|e| RepositoryError::Integrity(format!("invalid {field} signature: {e}")))
 }
 
 /// Converts a `NUMERIC` into a `Decimal`; one too large fails instead of truncating.

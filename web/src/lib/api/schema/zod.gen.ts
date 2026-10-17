@@ -60,29 +60,6 @@ export const zIngestionResponse = z.object({
 
 export type IngestionResponse = z.infer<typeof zIngestionResponse>;
 
-export const zLastEventKindResponse = z.enum([
-    'swap',
-    'liquidity_add',
-    'liquidity_remove'
-]);
-
-export type LastEventKindResponse = z.infer<typeof zLastEventKindResponse>;
-
-export const zLiquidityEventKindResponse = z.enum(['add', 'remove']);
-
-export type LiquidityEventKindResponse = z.infer<typeof zLiquidityEventKindResponse>;
-
-export const zMeteoraDlmmPropertiesResponse = z.object({
-    baseFactor: z.int().gte(0).lte(65535).nullable(),
-    baseFeePowerFactor: z.int().gte(0).lte(255).nullable(),
-    binStep: z.int().gte(0).lte(65535).nullable(),
-    maxVolatilityAccumulator: z.int().gte(0).lte(4294967295).nullable(),
-    protocolShare: z.int().gte(0).lte(65535).nullable(),
-    variableFeeControl: z.int().gte(0).lte(4294967295).nullable()
-});
-
-export type MeteoraDlmmPropertiesResponse = z.infer<typeof zMeteoraDlmmPropertiesResponse>;
-
 export const zPriceProviderResponse = z.enum([
     'jupiter',
     'helius',
@@ -112,21 +89,9 @@ export const zSeverityResponse = z.enum([
 
 export type SeverityResponse = z.infer<typeof zSeverityResponse>;
 
-export const zPoolSignalResponse = z.object({
-    detector: z.string().min(1),
-    severity: zSeverityResponse,
-    triggeredAt: z.iso.datetime({ offset: true })
-});
-
-export type PoolSignalResponse = z.infer<typeof zPoolSignalResponse>;
-
 export const zSignedDecimal = z.string().regex(/^-?\d+(\.\d+)?$/);
 
 export type SignedDecimal = z.infer<typeof zSignedDecimal>;
-
-export const zTradeDirectionResponse = z.enum(['a_to_b', 'b_to_a']);
-
-export type TradeDirectionResponse = z.infer<typeof zTradeDirectionResponse>;
 
 export const zU128String = z.string().regex(/^\d+$/);
 
@@ -140,147 +105,9 @@ export const zNetworkResponse = z.object({
 
 export type NetworkResponse = z.infer<typeof zNetworkResponse>;
 
-export const zPageResponseSwapEventResponse = z.object({
-    isFirst: z.boolean(),
-    isLast: z.boolean(),
-    items: z.array(z.object({
-        amountA: zU128String,
-        amountB: zU128String,
-        claimingFee: zU128String,
-        compoundingFee: zU128String,
-        eventIndex: z.int().gte(0).lte(65535),
-        feeTokenIsA: z.boolean(),
-        nextSqrtPrice: zU128String,
-        poolAddress: z.string().min(1),
-        protocol: zProtocolResponse,
-        protocolFee: zU128String,
-        referralFee: zU128String,
-        reserveAAfter: zU128String,
-        reserveBAfter: zU128String,
-        signature: z.string().min(1),
-        timestamp: z.iso.datetime({ offset: true }),
-        tradeDirection: zTradeDirectionResponse
-    })),
-    nextCursor: z.string().nullable(),
-    prevCursor: z.string().nullable()
-});
-
-export type PageResponseSwapEventResponse = z.infer<typeof zPageResponseSwapEventResponse>;
-
-export const zSwapEventResponse = z.object({
-    amountA: zU128String,
-    amountB: zU128String,
-    claimingFee: zU128String,
-    compoundingFee: zU128String,
-    eventIndex: z.int().gte(0).lte(65535),
-    feeTokenIsA: z.boolean(),
-    nextSqrtPrice: zU128String,
-    poolAddress: z.string().min(1),
-    protocol: zProtocolResponse,
-    protocolFee: zU128String,
-    referralFee: zU128String,
-    reserveAAfter: zU128String,
-    reserveBAfter: zU128String,
-    signature: z.string().min(1),
-    timestamp: z.iso.datetime({ offset: true }),
-    tradeDirection: zTradeDirectionResponse
-});
-
-export type SwapEventResponse = z.infer<typeof zSwapEventResponse>;
-
 export const zUnsignedDecimal = z.string().regex(/^\d+(\.\d+)?$/);
 
 export type UnsignedDecimal = z.infer<typeof zUnsignedDecimal>;
-
-export const zFeeTierResponse = z.object({
-    feeBps: zUnsignedDecimal,
-    poolCount: zCount
-});
-
-export type FeeTierResponse = z.infer<typeof zFeeTierResponse>;
-
-export const zLiquidityEventResponse = z.object({
-    amountA: zU128String,
-    amountB: zU128String,
-    eventIndex: z.int().gte(0).lte(65535),
-    liquidityDelta: zU128String,
-    liquidityEventKind: zLiquidityEventKindResponse,
-    owner: z.string().min(1),
-    poolAddress: z.string().min(1),
-    position: z.string().min(1),
-    protocol: zProtocolResponse,
-    reserveAAfter: zU128String,
-    reserveBAfter: zU128String,
-    signature: z.string().min(1),
-    timestamp: z.iso.datetime({ offset: true }),
-    valueUsd: zUnsignedDecimal.nullable()
-});
-
-export type LiquidityEventResponse = z.infer<typeof zLiquidityEventResponse>;
-
-export const zMeteoraDammV2PropertiesResponse = z.object({
-    baseFeeKind: z.string().nullable(),
-    currentFeeBps: zUnsignedDecimal.nullable(),
-    feeSchedulerExpired: z.boolean().nullable(),
-    hasDynamicFee: z.boolean().nullable(),
-    protocolFeePercent: z.int().gte(0).lte(100).nullable(),
-    referralFeePercent: z.int().gte(0).lte(100).nullable()
-});
-
-export type MeteoraDammV2PropertiesResponse = z.infer<typeof zMeteoraDammV2PropertiesResponse>;
-
-export const zPageResponseLiquidityEventResponse = z.object({
-    isFirst: z.boolean(),
-    isLast: z.boolean(),
-    items: z.array(z.object({
-        amountA: zU128String,
-        amountB: zU128String,
-        eventIndex: z.int().gte(0).lte(65535),
-        liquidityDelta: zU128String,
-        liquidityEventKind: zLiquidityEventKindResponse,
-        owner: z.string().min(1),
-        poolAddress: z.string().min(1),
-        position: z.string().min(1),
-        protocol: zProtocolResponse,
-        reserveAAfter: zU128String,
-        reserveBAfter: zU128String,
-        signature: z.string().min(1),
-        timestamp: z.iso.datetime({ offset: true }),
-        valueUsd: zUnsignedDecimal.nullable()
-    })),
-    nextCursor: z.string().nullable(),
-    prevCursor: z.string().nullable()
-});
-
-export type PageResponseLiquidityEventResponse = z.infer<typeof zPageResponseLiquidityEventResponse>;
-
-export const zPageResponsePoolResponse = z.object({
-    isFirst: z.boolean(),
-    isLast: z.boolean(),
-    items: z.array(z.object({
-        effectiveFeeBps: zUnsignedDecimal.nullable(),
-        feeBps: zUnsignedDecimal.nullable(),
-        fees24hUsd: zUnsignedDecimal.nullable(),
-        firstSeenAt: z.iso.datetime({ offset: true }),
-        lastSeenAt: z.iso.datetime({ offset: true }),
-        lpFees24hUsd: zUnsignedDecimal.nullable(),
-        poolAddress: z.string().min(1),
-        protocol: zProtocolResponse,
-        protocolFees24hUsd: zUnsignedDecimal.nullable(),
-        referralFees24hUsd: zUnsignedDecimal.nullable(),
-        signals24h: z.array(zPoolSignalResponse),
-        swapBuckets24h: zCount,
-        swapBucketsPriced24h: zCount,
-        tokenA: zEmbeddedTokenResponse,
-        tokenB: zEmbeddedTokenResponse,
-        tvlUsd: zUnsignedDecimal.nullable(),
-        volume24hUsd: zUnsignedDecimal.nullable()
-    })),
-    nextCursor: z.string().nullable(),
-    prevCursor: z.string().nullable()
-});
-
-export type PageResponsePoolResponse = z.infer<typeof zPageResponsePoolResponse>;
 
 export const zPageResponseSignalResponse = z.object({
     isFirst: z.boolean(),
@@ -303,77 +130,6 @@ export const zPageResponseSignalResponse = z.object({
 });
 
 export type PageResponseSignalResponse = z.infer<typeof zPageResponseSignalResponse>;
-
-export const zPoolCurrentStateResponse = z.object({
-    lastEventAt: z.iso.datetime({ offset: true }),
-    lastEventKind: zLastEventKindResponse,
-    lastSignature: z.string().min(1),
-    lastSqrtPrice: zU128String.nullable(),
-    lastSwapAt: z.iso.datetime({ offset: true }).nullable(),
-    poolAddress: z.string().min(1),
-    protocol: zProtocolResponse,
-    reserveA: zU128String,
-    reserveB: zU128String,
-    spotPriceAInB: zUnsignedDecimal.nullable(),
-    updatedAt: z.iso.datetime({ offset: true }),
-    valueAUsd: zUnsignedDecimal.nullable(),
-    valueBUsd: zUnsignedDecimal.nullable()
-});
-
-export type PoolCurrentStateResponse = z.infer<typeof zPoolCurrentStateResponse>;
-
-export const zPoolHistoryBucketResponse = z.object({
-    bucket: z.iso.datetime({ offset: true }),
-    effectiveFeeBps: zUnsignedDecimal.nullable(),
-    feesClaimedUsd: zUnsignedDecimal.nullable(),
-    feesUsd: zUnsignedDecimal.nullable(),
-    liquidityAddedUsd: zUnsignedDecimal.nullable(),
-    liquidityRemovedUsd: zUnsignedDecimal.nullable(),
-    lpFeesUsd: zUnsignedDecimal.nullable(),
-    protocolFeesUsd: zUnsignedDecimal.nullable(),
-    referralFeesUsd: zUnsignedDecimal.nullable(),
-    rewardsClaimedUsd: zUnsignedDecimal.nullable(),
-    swapCount: zCount.nullable(),
-    volumeUsd: zUnsignedDecimal.nullable()
-});
-
-export type PoolHistoryBucketResponse = z.infer<typeof zPoolHistoryBucketResponse>;
-
-export const zPoolPageResponsePoolResponse = zPageResponsePoolResponse.and(z.object({
-    asOf: z.iso.datetime({ offset: true }).nullable(),
-    touchedSince: zCount
-}));
-
-export type PoolPageResponsePoolResponse = z.infer<typeof zPoolPageResponsePoolResponse>;
-
-export const zPoolResponse = z.object({
-    effectiveFeeBps: zUnsignedDecimal.nullable(),
-    feeBps: zUnsignedDecimal.nullable(),
-    fees24hUsd: zUnsignedDecimal.nullable(),
-    firstSeenAt: z.iso.datetime({ offset: true }),
-    lastSeenAt: z.iso.datetime({ offset: true }),
-    lpFees24hUsd: zUnsignedDecimal.nullable(),
-    poolAddress: z.string().min(1),
-    protocol: zProtocolResponse,
-    protocolFees24hUsd: zUnsignedDecimal.nullable(),
-    referralFees24hUsd: zUnsignedDecimal.nullable(),
-    signals24h: z.array(zPoolSignalResponse),
-    swapBuckets24h: zCount,
-    swapBucketsPriced24h: zCount,
-    tokenA: zEmbeddedTokenResponse,
-    tokenB: zEmbeddedTokenResponse,
-    tvlUsd: zUnsignedDecimal.nullable(),
-    volume24hUsd: zUnsignedDecimal.nullable()
-});
-
-export type PoolResponse = z.infer<typeof zPoolResponse>;
-
-export const zPoolDetailResponse = zPoolResponse.and(z.object({
-    meteoraDammV2: zMeteoraDammV2PropertiesResponse.optional(),
-    meteoraDlmm: zMeteoraDlmmPropertiesResponse.optional()
-}));
-
-export type PoolDetailResponse = z.infer<typeof zPoolDetailResponse>;
 
 export const zSignalResponse = z.object({
     detector: z.string().min(1),
@@ -430,89 +186,6 @@ export const zListActiveAnnouncementsResponse = z.array(zAnnouncementResponse);
 export const zGetIngestionResponse = zIngestionResponse;
 
 export const zGetNetworkResponse = zNetworkResponse;
-
-export const zListPoolsQuery = z.object({
-    cursor: z.string().nullish(),
-    dir: z.enum(['next', 'prev']).optional(),
-    position: z.union([
-        z.literal('first'),
-        z.literal('last')
-    ]).nullish(),
-    sort: z.enum([
-        'first_seen_desc',
-        'first_seen_asc',
-        'last_seen_desc',
-        'last_seen_asc'
-    ]).optional(),
-    q: z.string().max(100).nullish(),
-    fee_bps: z.string().nullish(),
-    limit: z.int().gte(1).lte(200).optional()
-});
-
-export const zListPoolsResponse = zPoolPageResponsePoolResponse;
-
-export const zListFeeTiersResponse = z.array(zFeeTierResponse);
-
-export const zListTopPoolsQuery = z.object({
-    metric: z.enum(['volume_24h', 'tvl']).optional(),
-    limit: z.int().gte(1).lte(20).optional()
-});
-
-export const zListTopPoolsResponse = z.array(zPoolResponse);
-
-export const zGetPoolPath = z.object({
-    address: z.string()
-});
-
-export const zGetPoolResponse = zPoolDetailResponse;
-
-export const zGetPoolHistoryPath = z.object({
-    address: z.string()
-});
-
-export const zGetPoolHistoryQuery = z.object({
-    days: z.int().gte(1).lte(90).optional()
-});
-
-export const zGetPoolHistoryResponse = z.array(zPoolHistoryBucketResponse);
-
-export const zGetPoolLatestStatePath = z.object({
-    address: z.string()
-});
-
-export const zGetPoolLatestStateResponse = zPoolCurrentStateResponse;
-
-export const zListPoolLiquidityEventsPath = z.object({
-    address: z.string()
-});
-
-export const zListPoolLiquidityEventsQuery = z.object({
-    cursor: z.string().nullish(),
-    dir: z.enum(['next', 'prev']).optional(),
-    position: z.union([
-        z.literal('first'),
-        z.literal('last')
-    ]).nullish(),
-    limit: z.int().gte(1).lte(200).optional()
-});
-
-export const zListPoolLiquidityEventsResponse = zPageResponseLiquidityEventResponse;
-
-export const zListPoolSwapsPath = z.object({
-    address: z.string()
-});
-
-export const zListPoolSwapsQuery = z.object({
-    cursor: z.string().nullish(),
-    dir: z.enum(['next', 'prev']).optional(),
-    position: z.union([
-        z.literal('first'),
-        z.literal('last')
-    ]).nullish(),
-    limit: z.int().gte(1).lte(200).optional()
-});
-
-export const zListPoolSwapsResponse = zPageResponseSwapEventResponse;
 
 export const zListSignalsQuery = z.object({
     cursor: z.string().nullish(),

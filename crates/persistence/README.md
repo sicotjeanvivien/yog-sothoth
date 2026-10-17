@@ -35,7 +35,7 @@ persistence/
 │   │   │                     plus the cp-amm pool-properties satellite)
 │   │   ├── meteora/dlmm/    (the DLMM pool-properties satellite; no event
 │   │   │                     repositories yet)
-│   │   ├── pool/, pool_current_state/, pool_analytics/, global_analytics/
+│   │   ├── pool/, pool_current_state/, global_analytics/
 │   │   ├── signal/, swap_flow/, liquidity_flow/, pool_price_snapshot/
 │   │   ├── token_metadata/, token_price/, network_status/, watched_pool/
 │   │   ├── announcement/
@@ -164,8 +164,7 @@ WHERE (last_slot, COALESCE(last_transaction_index, 0), last_event_index)
     < (EXCLUDED…)
 ```
 
-`last_event_at` is still written — it is what `/latest-state` displays — but it
-stopped ordering anything. It came from `blockTime`, so a second, and 56 % of
+`last_event_at` is still written, but it stopped ordering anything. It came from `blockTime`, so a second, and 56 % of
 swaps share theirs with another swap of the same pool: ordering on it rejected
 **a third of all state updates**, and labelled them `stale` as though they were
 healthy concurrency.
@@ -195,22 +194,14 @@ query shape:
 
 - **Simple / static** → `sqlx::query!` / `query_as!` inline. The default.
 - **Big but static** → prefer a **SQL VIEW** in a migration when the query is
-  reusable or decomposable (e.g. `meteora_damm_v2_pool_hourly_activity`,
-  baseline §15, shared by `history` and `pool_analytics`; or
-  `meteora_damm_v2_swap_events_hourly_priced`, migration 002, which factors the
-  valuation rule out of it); the slim `SELECT … FROM <view>` stays a checked
-  `query!`. Otherwise `query_file!("….sql")`.
+  reusable or decomposable (e.g. `meteora_damm_v2_swap_events_hourly_priced`,
+  migration 002, which factors the per-`(pool, hour)` effective prices shared
+  by the analytic writer's facts upsert and the activity view); the slim
+  `SELECT … FROM <view>` stays a checked `query!`. Otherwise
+  `query_file!("….sql")`.
 - **Dynamic** (shape varies from user input) → `QueryBuilder`, covered by
-  integration tests. The lone case today is `repositories/pool/query.rs`.
-
-  It builds two queries that must agree: the page, and the `touched_since`
-  count beside it. Both go through the same `push_filters`, on purpose — the
-  count means "how many pools *the reader is looking at* have left the
-  traversal", so a copy that drifted would report pools they filtered out.
-  That module also owns the **snapshot fence** (`as_of`) which makes a keyset
-  cursor legal over `last_seen_at`, a column the indexer rewrites on every
-  event; the contract is on `yog_core::domain::PoolPage`, and the fence is
-  minted in `find_paginated` rather than by callers so it cannot be omitted.
+  integration tests. No read takes this shape today: `QueryBuilder` only builds
+  the runtime-sized `VALUES` lists of the batch inserts.
 
 A plain VIEW gives **no** performance gain — Postgres inlines it. Choose a
 VIEW for readability; the perf tool is materialization (the hourly continuous
@@ -449,10 +440,8 @@ The rule and its boundary:
 
 **Valuability is decided per bucket, not per figure** — `valuation_complete` on
 the same view. Volume and the fee figures draw on different amounts, so deciding
-figure by figure let them stop being NULL together, and three consumers assume
-they are: the fee split (whose LP share is a subtraction, and would go negative),
-`effectiveFeeBps` (which then divides two disjoint sets of hours), and the
-coverage counters (keyed on `volume_usd` alone). A side is *required*
+figure by figure let them stop being NULL together, and the fee split assumes
+they are: its LP share is a subtraction, and would go negative. A side is *required*
 when it carries any amount at all, and a required side needs **both** a price
 and a scale — an observed price without a `token_metadata` row still yields
 `POWER(10, NULL)`. A side carrying nothing is not required, which is what lets a

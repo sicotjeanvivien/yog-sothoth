@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use serde_json::json;
 
 use super::{document, finish};
-use crate::http::query::{MAX_HISTORY_DAYS, MAX_LIMIT, MAX_SEARCH_LEN, MAX_TOP_LIMIT};
+use crate::http::query::MAX_LIMIT;
 
 const COMMITTED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/openapi.json");
 
@@ -95,7 +95,7 @@ fn file_name(path: &Path) -> String {
 fn every_api_route_is_in_the_document() {
     let doc = document();
     let paths = doc["paths"].as_object().expect("paths");
-    assert_eq!(paths.len(), 15, "{:?}", paths.keys().collect::<Vec<_>>());
+    assert_eq!(paths.len(), 7, "{:?}", paths.keys().collect::<Vec<_>>());
 }
 
 /// A document of one schema, as `finish` receives it.
@@ -166,7 +166,7 @@ fn only_an_operation_with_parameters_may_answer_plain_text() {
     let mut doc = json!({
         "paths": {
             "/api/stats": { "get": { "responses": {} } },
-            "/api/pools": { "get": { "parameters": [{ "name": "limit", "in": "query" }], "responses": {} } }
+            "/api/signals": { "get": { "parameters": [{ "name": "limit", "in": "query" }], "responses": {} } }
         },
         "components": { "schemas": { "ProblemDetailsResponse": {} } }
     });
@@ -174,7 +174,7 @@ fn only_an_operation_with_parameters_may_answer_plain_text() {
     let content = |path: &str| doc["paths"][path]["get"]["responses"]["default"]["content"].clone();
     assert!(content("/api/stats")["text/plain"].is_null());
     assert!(content("/api/stats")["application/problem+json"].is_object());
-    assert!(content("/api/pools")["text/plain"].is_object());
+    assert!(content("/api/signals")["text/plain"].is_object());
 }
 
 /// Red if a path item's `parameters` or `summary` is treated as an operation.
@@ -201,23 +201,15 @@ fn the_documented_bounds_are_the_validated_ones() {
     let mut seen = 0;
     for (path, item) in doc["paths"].as_object().expect("paths") {
         for param in item["get"]["parameters"].as_array().into_iter().flatten() {
-            let max = match (path.as_str(), param["name"].as_str()) {
-                (_, Some("q")) => {
-                    assert_eq!(param["schema"]["maxLength"], MAX_SEARCH_LEN, "{path}");
-                    seen += 1;
-                    continue;
-                }
-                ("/api/pools/top", Some("limit")) => MAX_TOP_LIMIT,
-                (_, Some("limit")) => MAX_LIMIT,
-                (_, Some("days")) => MAX_HISTORY_DAYS,
-                _ => continue,
-            };
+            if param["name"].as_str() != Some("limit") {
+                continue;
+            }
             assert_eq!(param["schema"]["minimum"], 1, "{path}");
-            assert_eq!(param["schema"]["maximum"], max, "{path}");
+            assert_eq!(param["schema"]["maximum"], MAX_LIMIT, "{path}");
             seen += 1;
         }
     }
-    assert_eq!(seen, 7, "limit on five routes, days and q on one each");
+    assert_eq!(seen, 1, "limit on the signal feed");
 }
 
 /// Red when `skip_serializing_if` and `nullable = false` part: without the
@@ -340,7 +332,7 @@ fn every_handler_declares_the_body_and_query_it_has() {
             checked += 1;
         }
     }
-    assert_eq!(checked, 15, "one #[utoipa::path] per /api route");
+    assert_eq!(checked, 7, "one #[utoipa::path] per /api route");
     assert!(drift.is_empty(), "{drift:?}");
 }
 

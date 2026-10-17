@@ -2,63 +2,19 @@
 //! cursors are self-contained, no repository involved.
 
 use chrono::{DateTime, TimeZone, Utc};
-use solana_pubkey::Pubkey;
-use solana_signature::Signature;
 
-use super::{
-    decode_liquidity_cursor, decode_pool_cursor, decode_swap_cursor, encode_cursor,
-    encode_cursor_opt,
-};
+use super::{decode_signal_cursor, encode_cursor, encode_cursor_opt};
 use crate::http::error::ApiError;
-use yog_core::{
-    Cursor,
-    domain::{MeteoraDammV2LiquidityEventCursor, MeteoraDammV2SwapEventCursor, PoolCursor},
-};
+use yog_core::{Cursor, domain::SignalCursor};
 
 fn ts(secs: i64) -> DateTime<Utc> {
     Utc.timestamp_opt(secs, 0).unwrap()
 }
 
-fn pk(seed: u8) -> Pubkey {
-    Pubkey::new_from_array([seed; 32])
-}
-
-fn sig(seed: u8) -> Signature {
-    Signature::from([seed; 64])
-}
-
-fn pool_cursor() -> PoolCursor {
-    PoolCursor {
-        sort_column: yog_core::PoolSortColumn::FirstSeen,
-        sort_value: ts(1_700_000_000),
-        pool_address: pk(7),
-        as_of: None,
-    }
-}
-
-/// A cursor over the mutable sort column, carrying the fence — unlike the `FirstSeen` one.
-fn fenced_pool_cursor() -> PoolCursor {
-    PoolCursor {
-        sort_column: yog_core::PoolSortColumn::LastSeen,
-        sort_value: ts(1_700_000_000),
-        pool_address: pk(7),
-        as_of: Some(ts(1_700_000_900)),
-    }
-}
-
-fn swap_cursor() -> MeteoraDammV2SwapEventCursor {
-    MeteoraDammV2SwapEventCursor {
-        timestamp: ts(1_700_000_500),
-        signature: sig(1),
-        event_index: 3,
-    }
-}
-
-fn liquidity_cursor() -> MeteoraDammV2LiquidityEventCursor {
-    MeteoraDammV2LiquidityEventCursor {
-        timestamp: ts(1_700_000_900),
-        signature: sig(1),
-        event_index: 2,
+fn signal_cursor() -> SignalCursor {
+    SignalCursor {
+        triggered_at: ts(1_700_000_123),
+        id: 42,
     }
 }
 
@@ -70,75 +26,11 @@ fn assert_bad_request<T: std::fmt::Debug>(result: Result<T, ApiError>) {
 }
 
 #[test]
-fn pool_cursor_round_trip() {
-    let original = pool_cursor();
-    let encoded = encode_cursor(&Cursor::Pool(original.clone())).unwrap();
-    let decoded = decode_pool_cursor(&encoded).unwrap();
+fn signal_cursor_round_trip() {
+    let original = signal_cursor();
+    let encoded = encode_cursor(&Cursor::Signal(original.clone())).unwrap();
+    let decoded = decode_signal_cursor(&encoded).unwrap();
     assert_eq!(decoded, original);
-}
-
-/// Mutation: the fence lost on the wire, which un-anchors the traversal.
-#[test]
-fn pool_cursor_round_trip_preserves_the_snapshot_fence() {
-    let original = fenced_pool_cursor();
-    let encoded = encode_cursor(&Cursor::Pool(original.clone())).unwrap();
-    let decoded = decode_pool_cursor(&encoded).unwrap();
-    assert_eq!(decoded, original);
-    assert_eq!(decoded.as_of, original.as_of);
-}
-
-/// A cursor minted before the fence existed must still decode, not 400.
-#[test]
-fn pool_cursor_without_as_of_decodes_as_unfenced() {
-    let blob = URL_SAFE_NO_PAD_ENCODE(
-        r#"{"sort_column":"last_seen","sort_value":"2026-05-25T12:00:00Z",
-            "pool_address":"11111111111111111111111111111111"}"#,
-    );
-    let decoded = decode_pool_cursor(&blob).expect("legacy cursor should still decode");
-    assert_eq!(decoded.as_of, None);
-}
-
-/// A tampered fence is a 400, never a panic nor a silently dropped anchor.
-#[test]
-fn rejects_malformed_as_of() {
-    let blob = URL_SAFE_NO_PAD_ENCODE(
-        r#"{"sort_column":"last_seen","sort_value":"2026-05-25T12:00:00Z",
-            "pool_address":"11111111111111111111111111111111","as_of":"yesterday"}"#,
-    );
-    assert_bad_request(decode_pool_cursor(&blob));
-}
-
-#[test]
-fn swap_cursor_round_trip() {
-    let original = swap_cursor();
-    let encoded = encode_cursor(&Cursor::MeteoraDammV2SwapEvent(original.clone())).unwrap();
-    let decoded = decode_swap_cursor(&encoded).unwrap();
-    assert_eq!(decoded.timestamp, original.timestamp);
-    assert_eq!(decoded.signature, original.signature);
-    // The third key makes the order total across the hops of a routed transaction.
-    assert_eq!(decoded.event_index, original.event_index);
-}
-
-#[test]
-fn liquidity_cursor_round_trip() {
-    let original = liquidity_cursor();
-    let encoded = encode_cursor(&Cursor::MeteoraDammV2LiquidityEvent(original.clone())).unwrap();
-    let decoded = decode_liquidity_cursor(&encoded).unwrap();
-    assert_eq!(decoded.timestamp, original.timestamp);
-    assert_eq!(decoded.signature, original.signature);
-    assert_eq!(decoded.event_index, original.event_index);
-}
-
-#[test]
-fn timestamp_survives_round_trip_to_the_second() {
-    let original = MeteoraDammV2SwapEventCursor {
-        timestamp: Utc.timestamp_opt(1_700_000_123, 0).unwrap(),
-        signature: sig(1),
-        event_index: 7,
-    };
-    let encoded = encode_cursor(&Cursor::MeteoraDammV2SwapEvent(original.clone())).unwrap();
-    let decoded = decode_swap_cursor(&encoded).unwrap();
-    assert_eq!(decoded.timestamp, original.timestamp);
 }
 
 #[test]
@@ -149,7 +41,7 @@ fn encode_cursor_opt_none_yields_none() {
 
 #[test]
 fn encode_cursor_opt_some_yields_some() {
-    let cursor = Cursor::Pool(pool_cursor());
+    let cursor = Cursor::Signal(signal_cursor());
     let result = encode_cursor_opt(Some(&cursor)).unwrap();
     assert!(result.is_some());
 }
@@ -157,7 +49,7 @@ fn encode_cursor_opt_some_yields_some() {
 #[test]
 fn encoded_cursor_is_url_safe_base64() {
     // No '+', '/' or '=': safe in a query string without percent-encoding.
-    let encoded = encode_cursor(&Cursor::Pool(pool_cursor())).unwrap();
+    let encoded = encode_cursor(&Cursor::Signal(signal_cursor())).unwrap();
     assert!(!encoded.contains('+'));
     assert!(!encoded.contains('/'));
     assert!(!encoded.contains('='));
@@ -168,78 +60,37 @@ fn encoded_cursor_is_url_safe_base64() {
     );
 }
 
-// Decoding one cursor variant as another must fail on the missing fields.
-
-#[test]
-fn pool_blob_does_not_decode_as_swap() {
-    let encoded = encode_cursor(&Cursor::Pool(pool_cursor())).unwrap();
-    // PoolCursorWire has no `timestamp`/`signature` → serde rejects.
-    assert_bad_request(decode_swap_cursor(&encoded));
-}
-
-#[test]
-fn swap_blob_does_not_decode_as_pool() {
-    let encoded = encode_cursor(&Cursor::MeteoraDammV2SwapEvent(swap_cursor())).unwrap();
-    // EventCursorWire has no `first_seen_at`/`pool_address` → serde rejects.
-    assert_bad_request(decode_pool_cursor(&encoded));
-}
-
-// A swap blob and a liquidity blob share `EventCursorWire`: they decode as each other by design.
-
-#[test]
-fn swap_blob_decodes_as_liquidity_by_shape() {
-    let encoded = encode_cursor(&Cursor::MeteoraDammV2SwapEvent(swap_cursor())).unwrap();
-    let decoded = decode_liquidity_cursor(&encoded).unwrap();
-    assert_eq!(decoded.signature, swap_cursor().signature);
-}
-
 #[test]
 fn rejects_non_base64() {
     // '!' is outside the base64url alphabet.
-    assert_bad_request(decode_pool_cursor("not!base64!"));
-    assert_bad_request(decode_swap_cursor("not!base64!"));
-    assert_bad_request(decode_liquidity_cursor("not!base64!"));
+    assert_bad_request(decode_signal_cursor("not!base64!"));
 }
 
 #[test]
 fn rejects_valid_base64_but_not_json() {
     // "hello" base64url-encoded — decodes to bytes, but not to JSON.
     let garbage = URL_SAFE_NO_PAD_ENCODE("hello");
-    assert_bad_request(decode_pool_cursor(&garbage));
+    assert_bad_request(decode_signal_cursor(&garbage));
 }
 
 #[test]
 fn rejects_json_with_wrong_shape() {
     // Valid JSON, valid base64, but missing the expected fields.
     let blob = URL_SAFE_NO_PAD_ENCODE(r#"{"foo":"bar"}"#);
-    assert_bad_request(decode_pool_cursor(&blob));
-    assert_bad_request(decode_swap_cursor(&blob));
+    assert_bad_request(decode_signal_cursor(&blob));
 }
 
 #[test]
 fn rejects_malformed_timestamp() {
     // ⚠️ The real wire field names, or serde rejects a missing field before the timestamp parses.
-    let blob = URL_SAFE_NO_PAD_ENCODE(
-        r#"{"sort_column":"first_seen","sort_value":"yesterday",
-            "pool_address":"11111111111111111111111111111111"}"#,
-    );
-    assert_bad_request(decode_pool_cursor(&blob));
-}
-
-#[test]
-fn rejects_malformed_pool_address() {
-    // Correct shape and timestamp, but the address is not valid base58.
-    let blob = URL_SAFE_NO_PAD_ENCODE(
-        r#"{"sort_column":"first_seen","sort_value":"2026-05-25T12:00:00Z",
-            "pool_address":"not-a-pubkey!"}"#,
-    );
-    assert_bad_request(decode_pool_cursor(&blob));
+    let blob = URL_SAFE_NO_PAD_ENCODE(r#"{"triggered_at":"yesterday","id":1}"#);
+    assert_bad_request(decode_signal_cursor(&blob));
 }
 
 #[test]
 fn rejects_empty_string() {
     // Empty string is valid base64 (empty bytes) but not valid JSON.
-    assert_bad_request(decode_pool_cursor(""));
+    assert_bad_request(decode_signal_cursor(""));
 }
 
 #[allow(nonstandard_style)]

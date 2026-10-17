@@ -1,90 +1,19 @@
-//! Query-parameter parsing, validation and normalization for the
-//! pool endpoints. Pure HTTP-layer plumbing: translates raw query
-//! strings into clean inputs, with no business logic.
+//! Query-parameter parsing and validation. Pure HTTP-layer plumbing:
+//! translates raw query strings into clean inputs, with no business logic.
 
-use rust_decimal::Decimal;
 use serde::Deserialize;
 use solana_pubkey::Pubkey;
 use std::str::FromStr;
 use utoipa::{IntoParams, ToSchema};
-use yog_core::{
-    PageDirection, PagePosition, PoolSort,
-    domain::{PoolCursor, PoolRankMetric, Severity},
-};
+use yog_core::{PageDirection, PagePosition, domain::Severity};
 
 use crate::http::error::ApiError;
 
 pub(crate) const DEFAULT_LIMIT: i64 = 50;
 pub(crate) const MAX_LIMIT: i64 = 200;
-pub(crate) const MAX_SEARCH_LEN: usize = 100;
-
-pub(crate) const DEFAULT_TOP_LIMIT: i64 = 10;
-/// The service computes the shared ranking at this size.
-pub(crate) const MAX_TOP_LIMIT: i64 = crate::application::TOP_POOLS_MAX;
-
-#[derive(Debug, Deserialize, IntoParams)]
-pub(crate) struct PageQuery {
-    pub(crate) cursor: Option<String>,
-    #[serde(default)]
-    #[param(inline)]
-    pub(crate) dir: PageDirectionParam,
-    #[param(inline)]
-    pub(crate) position: Option<PagePositionParam>,
-    #[serde(default)]
-    #[param(inline)]
-    pub(crate) sort: PoolSortParam,
-    #[param(max_length = 100)]
-    pub(crate) q: Option<String>,
-    /// Exact base-fee tier filter (basis points), as a decimal string on the
-    /// wire (e.g. `fee_bps=25`). Parsed and validated in the request DTO.
-    pub(crate) fee_bps: Option<String>,
-    #[serde(default = "default_limit")]
-    #[param(value_type = u8, minimum = 1, maximum = 200)]
-    pub(crate) limit: i64,
-}
 
 pub(crate) fn default_limit() -> i64 {
     DEFAULT_LIMIT
-}
-
-/// The pagination of a pool's event feed: no sort, no search, no filter.
-#[derive(Debug, Deserialize, IntoParams)]
-pub(crate) struct EventPageQuery {
-    pub(crate) cursor: Option<String>,
-    #[serde(default)]
-    #[param(inline)]
-    pub(crate) dir: PageDirectionParam,
-    #[param(inline)]
-    pub(crate) position: Option<PagePositionParam>,
-    #[serde(default = "default_limit")]
-    #[param(value_type = u8, minimum = 1, maximum = 200)]
-    pub(crate) limit: i64,
-}
-
-pub(crate) const DEFAULT_HISTORY_DAYS: i64 = 7;
-pub(crate) const MAX_HISTORY_DAYS: i64 = 90;
-
-/// Query params for the pool history endpoint: a single `days` window.
-#[derive(Debug, Deserialize, IntoParams)]
-pub(crate) struct HistoryQuery {
-    #[serde(default = "default_history_days")]
-    #[param(value_type = u8, minimum = 1, maximum = 90)]
-    pub(crate) days: i64,
-}
-
-pub(crate) fn default_history_days() -> i64 {
-    DEFAULT_HISTORY_DAYS
-}
-
-/// Reject an out-of-range window rather than clamp it — a client asking for
-/// `days=9999` has a bug worth surfacing, consistent with `validate_limit`.
-pub(crate) fn validate_history_days(days: i64) -> Result<(), ApiError> {
-    if !(1..=MAX_HISTORY_DAYS).contains(&days) {
-        return Err(ApiError::BadRequest(format!(
-            "days must be between 1 and {MAX_HISTORY_DAYS}"
-        )));
-    }
-    Ok(())
 }
 
 #[derive(Debug, Default, Deserialize, Clone, Copy, ToSchema)]
@@ -116,27 +45,6 @@ impl From<PagePositionParam> for PagePosition {
         match value {
             PagePositionParam::First => PagePosition::First,
             PagePositionParam::Last => PagePosition::Last,
-        }
-    }
-}
-
-#[derive(Debug, Default, Deserialize, Clone, Copy, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum PoolSortParam {
-    FirstSeenDesc,
-    FirstSeenAsc,
-    #[default]
-    LastSeenDesc,
-    LastSeenAsc,
-}
-
-impl From<PoolSortParam> for PoolSort {
-    fn from(value: PoolSortParam) -> Self {
-        match value {
-            PoolSortParam::FirstSeenDesc => PoolSort::FirstSeenDesc,
-            PoolSortParam::FirstSeenAsc => PoolSort::FirstSeenAsc,
-            PoolSortParam::LastSeenDesc => PoolSort::LastSeenDesc,
-            PoolSortParam::LastSeenAsc => PoolSort::LastSeenAsc,
         }
     }
 }
@@ -180,52 +88,6 @@ impl From<SeverityParam> for Severity {
     }
 }
 
-/// Query params for `GET /api/pools/top`: the ranking metric and how many
-/// rows. Non-paginated — a small capped ranking, not a navigable list.
-#[derive(Debug, Deserialize, IntoParams)]
-pub(crate) struct TopPoolsQuery {
-    #[serde(default)]
-    #[param(inline)]
-    pub(crate) metric: PoolRankMetricParam,
-    #[serde(default = "default_top_limit")]
-    #[param(value_type = u8, minimum = 1, maximum = 20)]
-    pub(crate) limit: i64,
-}
-
-pub(crate) fn default_top_limit() -> i64 {
-    DEFAULT_TOP_LIMIT
-}
-
-/// Wire form of the ranking metric. An unknown value fails serde
-/// deserialization → axum returns 400 before the handler runs.
-#[derive(Debug, Default, Deserialize, Clone, Copy, ToSchema)]
-pub(crate) enum PoolRankMetricParam {
-    #[default]
-    #[serde(rename = "volume_24h")]
-    Volume24h,
-    #[serde(rename = "tvl")]
-    Tvl,
-}
-
-impl From<PoolRankMetricParam> for PoolRankMetric {
-    fn from(value: PoolRankMetricParam) -> Self {
-        match value {
-            PoolRankMetricParam::Volume24h => PoolRankMetric::Volume24h,
-            PoolRankMetricParam::Tvl => PoolRankMetric::Tvl,
-        }
-    }
-}
-
-/// Validate the top-N `limit` against its (smaller) accepted range.
-pub(crate) fn validate_top_limit(limit: i64) -> Result<(), ApiError> {
-    if !(1..=MAX_TOP_LIMIT).contains(&limit) {
-        return Err(ApiError::BadRequest(format!(
-            "`limit` must be between 1 and {MAX_TOP_LIMIT}, got {limit}"
-        )));
-    }
-    Ok(())
-}
-
 /// Validate the `limit` query param against the accepted range.
 pub(crate) fn validate_limit(limit: i64) -> Result<(), ApiError> {
     if !(1..=MAX_LIMIT).contains(&limit) {
@@ -237,12 +99,6 @@ pub(crate) fn validate_limit(limit: i64) -> Result<(), ApiError> {
 }
 
 /// Reject `position` combined with `cursor` (contradictory directives).
-pub(crate) fn validate_pagination_query(query: &PageQuery) -> Result<(), ApiError> {
-    validate_cursor_position_exclusive(query.cursor.is_some(), query.position.is_some())
-}
-
-/// The rule behind [`validate_pagination_query`], shared with query
-/// types that don't use `PageQuery` (e.g. `SignalsQuery`).
 pub(crate) fn validate_cursor_position_exclusive(
     has_cursor: bool,
     has_position: bool,
@@ -255,62 +111,7 @@ pub(crate) fn validate_cursor_position_exclusive(
     Ok(())
 }
 
-/// Reject an over-long search term (cheap DoS guard on `ILIKE`).
-pub(crate) fn validate_search(q: Option<&str>) -> Result<(), ApiError> {
-    if let Some(raw) = q
-        && raw.chars().count() > MAX_SEARCH_LEN
-    {
-        return Err(ApiError::BadRequest(format!(
-            "`q` must be at most {MAX_SEARCH_LEN} characters"
-        )));
-    }
-    Ok(())
-}
-
-/// Rejects a cursor built under another `sort` than the active one, which would
-/// otherwise give a silently wrong page.
-pub(crate) fn validate_cursor_sort_consistency(
-    cursor: Option<&PoolCursor>,
-    sort: PoolSort,
-) -> Result<(), ApiError> {
-    if let Some(c) = cursor
-        && c.sort_column != sort.column()
-    {
-        return Err(ApiError::BadRequest(
-            "cursor does not match the requested sort".to_string(),
-        ));
-    }
-
-    Ok(())
-}
-
-/// Trims a search term and collapses a blank one to `None`. ⚠️ A blank string would
-/// match everything through `%%`.
-pub(crate) fn normalize_search(raw: Option<String>) -> Option<String> {
-    raw.map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
-}
-
-/// Parses the optional `fee_bps` filter. A blank value is no filter — the UI clearing its
-/// selection — and a non-numeric or negative one a 400.
-pub(crate) fn parse_fee_bps(raw: Option<String>) -> Result<Option<Decimal>, ApiError> {
-    let Some(trimmed) = raw.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) else {
-        return Ok(None);
-    };
-
-    let value = Decimal::from_str(&trimmed)
-        .map_err(|_| ApiError::BadRequest(format!("`fee_bps` must be a number, got {trimmed}")))?;
-
-    if value.is_sign_negative() {
-        return Err(ApiError::BadRequest(
-            "`fee_bps` must not be negative".to_string(),
-        ));
-    }
-
-    Ok(Some(value))
-}
-
-/// Parses a base58 pool address from the path, or returns a 400 — one message for every
-/// pool route.
+/// Parses a base58 pool address, or returns a 400.
 pub(crate) fn parse_pool_address(raw: &str) -> Result<Pubkey, ApiError> {
     Pubkey::from_str(raw).map_err(|_| ApiError::BadRequest(format!("invalid pool address: {raw}")))
 }

@@ -4,8 +4,6 @@ pub(crate) mod schema;
 pub(crate) mod response;
 
 pub(crate) use response::{
-    AnnouncementResponse, FeeTierResponse, IngestionResponse, LiquidityEventResponse,
-    NetworkResponse, PageResponse, PoolCurrentStateResponse, PoolDetailResponse,
-    PoolHistoryBucketResponse, PoolPageResponse, PoolResponse, SignalResponse, StatsResponse,
-    SwapEventResponse, TokenResponse,
+    AnnouncementResponse, IngestionResponse, NetworkResponse, PageResponse, SignalResponse,
+    StatsResponse, TokenResponse,
 };

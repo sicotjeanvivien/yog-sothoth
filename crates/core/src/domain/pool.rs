@@ -2,6 +2,4 @@ mod model;
 mod repository;
 
 pub use model::Pool;
-pub use repository::{
-    FeeTier, PoolCatalog, PoolCounts, PoolCursor, PoolListQuery, PoolPage, PoolRepository,
-};
+pub use repository::{PoolCatalog, PoolCounts, PoolRepository};

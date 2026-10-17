@@ -1,7 +1,7 @@
 /**
- * The Overview, a Server Component: the header renders at once, then the protocol KPI strip,
- * the top pools and the latest signals stream in, each in its own `<Suspense>` and each
- * degrading to a `BlockError` on its own.
+ * The Overview, a Server Component: the header renders at once, then the protocol KPI strip
+ * and the latest signals stream in, each in its own `<Suspense>` and each degrading to a
+ * `BlockError` on its own.
  */
 
 import { Suspense } from "react";
@@ -13,18 +13,10 @@ import { LiveIndicator } from "@/components/dashboard/live-status/live-indicator
 import { InfoPopover } from "@/components/shared/info-popover";
 import { OverviewLatestSignals } from "@/components/dashboard/overview/overview-latest-signals";
 import { OverviewStats } from "@/components/dashboard/overview/overview-stats";
-import { OverviewTopPools } from "@/components/dashboard/overview/overview-top-pools";
-import type { PoolRankMetric } from "@/lib/api/server/top-pools";
 
 type OverviewPageProps = {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
-
-// Anything but `tvl` is the volume default: a bad URL must not break the page.
-function parseRank(raw: string | string[] | undefined): PoolRankMetric {
-  return raw === "tvl" ? "tvl" : "volume_24h";
-}
 
 export async function generateMetadata({
   params,
@@ -40,15 +32,9 @@ export async function generateMetadata({
   };
 }
 
-export default async function OverviewPage({
-  params,
-  searchParams,
-}: OverviewPageProps) {
+export default async function OverviewPage({ params }: OverviewPageProps) {
   const { locale } = await params;
   setRequestLocale(locale);
-
-  const sp = await searchParams;
-  const rankMetric = parseRank(sp["rank"]);
 
   const t = await getTranslations("Dashboard.Overview.page");
   const tShell = await getTranslations("Dashboard.shell");
@@ -82,10 +68,7 @@ export default async function OverviewPage({
         <OverviewStats />
       </Suspense>
 
-      <section className="mt-8 grid items-start gap-8 px-6 pb-10 lg:px-10 xl:grid-cols-2">
-        <Suspense fallback={<BlockPlaceholder className="h-[520px]" />}>
-          <OverviewTopPools metric={rankMetric} searchParams={sp} />
-        </Suspense>
+      <section className="mt-8 px-6 pb-10 lg:px-10">
         <Suspense fallback={<BlockPlaceholder className="h-[520px]" />}>
           <OverviewLatestSignals />
         </Suspense>

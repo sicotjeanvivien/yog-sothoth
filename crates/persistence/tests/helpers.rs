@@ -156,3 +156,47 @@ pub async fn allow_zero_prices(pool: &PgPool) {
         .await
         .expect("migration 009 must have created the constraint this fixture removes");
 }
+
+/// One bucket of `meteora_damm_v2_pool_hourly_activity`, its swap columns only.
+#[derive(Debug)]
+pub struct SwapActivity {
+    pub swap_count: Option<i64>,
+    pub volume_usd: Option<Decimal>,
+    pub fees_usd: Option<Decimal>,
+    pub protocol_fees_usd: Option<Decimal>,
+    pub referral_fees_usd: Option<Decimal>,
+    pub lp_fees_usd: Option<Decimal>,
+}
+
+/// Every bucket of a pool in the activity view, oldest first.
+pub async fn swap_activity(pool: &PgPool, pool_addr: &str) -> Vec<SwapActivity> {
+    use sqlx::Row;
+    sqlx::query(
+        "SELECT swap_count, volume_usd, fees_usd, protocol_fees_usd, referral_fees_usd,
+                lp_fees_usd
+           FROM meteora_damm_v2_pool_hourly_activity
+          WHERE pool_address = $1
+          ORDER BY bucket",
+    )
+    .bind(pool_addr)
+    .fetch_all(pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|r| SwapActivity {
+        swap_count: r.get("swap_count"),
+        volume_usd: r.get("volume_usd"),
+        fees_usd: r.get("fees_usd"),
+        protocol_fees_usd: r.get("protocol_fees_usd"),
+        referral_fees_usd: r.get("referral_fees_usd"),
+        lp_fees_usd: r.get("lp_fees_usd"),
+    })
+    .collect()
+}
+
+/// The pool's only bucket in the activity view; the test dies on any other count.
+pub async fn the_only_bucket(pool: &PgPool, pool_addr: &str) -> SwapActivity {
+    let mut buckets = swap_activity(pool, pool_addr).await;
+    assert_eq!(buckets.len(), 1, "expected one bucket: {buckets:?}");
+    buckets.remove(0)
+}

@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
 
-use super::pool::ProtocolResponse;
+use super::protocol::ProtocolResponse;
 use super::token::EmbeddedTokenResponse;
 use crate::application::EnrichedSignal;
 use crate::http::dto::schema::{Count, SignedDecimal, UnsignedDecimal};

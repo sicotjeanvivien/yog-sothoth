@@ -1,10 +1,7 @@
 //! Latest observed on-chain state per pool, upserted by the indexer after each
 //! swap or liquidity event it persists.
 
-use chrono::{DateTime, Utc};
-use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
-use solana_signature::Signature;
 
 use crate::domain::{EventPosition, MeteoraDammV2LiquidityEventKind, Protocol};
 
@@ -26,16 +23,6 @@ impl LastEventKind {
             LastEventKind::LiquidityRemove => "liquidity_remove",
         }
     }
-
-    /// Parse the wire string; `None` is a data-integrity error, the CHECK forbids it.
-    pub fn from_wire(value: &str) -> Option<Self> {
-        match value {
-            "swap" => Some(LastEventKind::Swap),
-            "liquidity_add" => Some(LastEventKind::LiquidityAdd),
-            "liquidity_remove" => Some(LastEventKind::LiquidityRemove),
-            _ => None,
-        }
-    }
 }
 
 impl std::fmt::Display for LastEventKind {
@@ -52,35 +39,6 @@ impl From<MeteoraDammV2LiquidityEventKind> for LastEventKind {
             MeteoraDammV2LiquidityEventKind::Remove => LastEventKind::LiquidityRemove,
         }
     }
-}
-
-/// Latest known state of a pool. Reserves in the pool's own A/B order;
-/// `last_sqrt_price` is `None` until the first swap.
-/// ⚠️ No liquidity L: no cp-amm event emits the pool's L.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PoolCurrentState {
-    pub pool_address: Pubkey,
-    pub protocol: Protocol,
-
-    pub last_event_at: DateTime<Utc>,
-    pub last_event_kind: LastEventKind,
-    pub last_signature: Signature,
-
-    pub reserve_a: u64,
-    pub reserve_b: u64,
-
-    pub last_sqrt_price: Option<u128>,
-    pub last_swap_at: Option<DateTime<Utc>>,
-
-    pub updated_at: DateTime<Utc>,
-}
-
-/// The USD value of each side of a pool's reserves, under the price bound of its
-/// TVL: a side whose price is missing or stale is `None`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct PoolSideValues {
-    pub value_a_usd: Option<Decimal>,
-    pub value_b_usd: Option<Decimal>,
 }
 
 /// A state change for [`crate::domain::PoolCurrentStateRepository::upsert`]: only

@@ -10,10 +10,8 @@ use sqlx::PgPool;
 use yog_core::RepositoryError;
 use yog_core::amm::damm_v2::{BaseFeeKind, FeeSchedulerParams};
 use yog_core::domain::{
-    MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolProperties,
-    MeteoraDlmmPoolAccountProperties, MeteoraDlmmPoolProperties, PoolAccountProperties,
-    PoolAccountResolver, PoolProperties, PoolPropertiesLookup, PoolRegistryProperties,
-    PoolRepository, Protocol,
+    MeteoraDammV2PoolAccountProperties, MeteoraDlmmPoolAccountProperties, PoolAccountProperties,
+    PoolAccountResolver, PoolRegistryProperties, PoolRepository, Protocol,
 };
 use yog_persistence::{
     PgMeteoraDammV2PoolPropertiesRepository, PgMeteoraDlmmPoolPropertiesRepository,
@@ -24,32 +22,75 @@ fn ts(secs: i64) -> DateTime<Utc> {
     Utc.timestamp_opt(secs, 0).unwrap()
 }
 
-/// Reads one pool's cp-amm satellite row, unwrapped from [`PoolProperties`].
-async fn read_properties(
-    repo: &PgMeteoraDammV2PoolPropertiesRepository,
-    addr: &Pubkey,
-) -> Option<MeteoraDammV2PoolProperties> {
-    repo.find_by_pool(addr)
-        .await
-        .expect("find_by_pool failed")
-        .map(|properties| match properties {
-            PoolProperties::MeteoraDammV2(properties) => properties,
-            other => panic!("expected cp-amm properties, got {other:?}"),
-        })
+/// One pool's cp-amm satellite row, as stored.
+#[derive(Debug)]
+struct DammV2Row {
+    protocol_fee_percent: Option<i16>,
+    referral_fee_percent: Option<i16>,
+    base_fee_kind: Option<String>,
+    has_dynamic_fee: Option<bool>,
+    /// How many of the six fee-scheduler columns are set.
+    curve_columns: i32,
 }
 
-/// The DLMM equivalent of [`read_properties`].
-async fn read_dlmm_properties(
-    repo: &PgMeteoraDlmmPoolPropertiesRepository,
-    addr: &Pubkey,
-) -> Option<MeteoraDlmmPoolProperties> {
-    repo.find_by_pool(addr)
-        .await
-        .expect("find_by_pool failed")
-        .map(|properties| match properties {
-            PoolProperties::MeteoraDlmm(properties) => properties,
-            other => panic!("expected DLMM properties, got {other:?}"),
-        })
+async fn read_properties(pool: &PgPool, addr: &Pubkey) -> Option<DammV2Row> {
+    sqlx::query_as::<_, (Option<i16>, Option<i16>, Option<String>, Option<bool>, i32)>(
+        "SELECT protocol_fee_percent, referral_fee_percent, base_fee_kind, has_dynamic_fee,
+                num_nonnulls(cliff_fee_numerator, number_of_period, period_frequency,
+                             reduction_factor, activation_point, activation_type)
+           FROM meteora_damm_v2_pool_properties WHERE pool_address = $1",
+    )
+    .bind(addr.to_string())
+    .fetch_optional(pool)
+    .await
+    .expect("read of the cp-amm satellite failed")
+    .map(|r| DammV2Row {
+        protocol_fee_percent: r.0,
+        referral_fee_percent: r.1,
+        base_fee_kind: r.2,
+        has_dynamic_fee: r.3,
+        curve_columns: r.4,
+    })
+}
+
+/// One pool's DLMM satellite row, as stored, every column widened to `BIGINT`.
+#[derive(Debug)]
+struct DlmmRow {
+    bin_step: Option<i64>,
+    base_factor: Option<i64>,
+    base_fee_power_factor: Option<i64>,
+    variable_fee_control: Option<i64>,
+    max_volatility_accumulator: Option<i64>,
+    protocol_share: Option<i64>,
+}
+
+async fn read_dlmm_properties(pool: &PgPool, addr: &Pubkey) -> Option<DlmmRow> {
+    type Columns = (
+        Option<i64>,
+        Option<i64>,
+        Option<i64>,
+        Option<i64>,
+        Option<i64>,
+        Option<i64>,
+    );
+    sqlx::query_as::<_, Columns>(
+        "SELECT bin_step::BIGINT, base_factor::BIGINT, base_fee_power_factor::BIGINT,
+                variable_fee_control::BIGINT, max_volatility_accumulator::BIGINT,
+                protocol_share::BIGINT
+           FROM meteora_dlmm_pool_properties WHERE pool_address = $1",
+    )
+    .bind(addr.to_string())
+    .fetch_optional(pool)
+    .await
+    .expect("read of the DLMM satellite failed")
+    .map(|r| DlmmRow {
+        bin_step: r.0,
+        base_factor: r.1,
+        base_fee_power_factor: r.2,
+        variable_fee_control: r.3,
+        max_volatility_accumulator: r.4,
+        protocol_share: r.5,
+    })
 }
 
 /// Inserts a bare pool row, as discovery would. `seq` drives `first_seen_at`, so
@@ -137,7 +178,7 @@ async fn a_resolution_fills_the_registry_and_the_satellite(pool: PgPool) {
     assert_eq!(row.0.as_deref(), Some(pk(10).to_string().as_str()));
     assert_eq!(row.1, Some(Decimal::new(25, 0)));
 
-    let props = read_properties(&satellite, &pk(1))
+    let props = read_properties(&pool, &pk(1))
         .await
         .expect("satellite row should have been created");
     assert_eq!(props.protocol_fee_percent, Some(20));
@@ -166,7 +207,7 @@ async fn set_pool_account_for_an_unknown_pool_writes_nothing(pool: PgPool) {
 #[sqlx::test]
 async fn list_unresolved_returns_a_freshly_discovered_damm_v2_pool(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
-    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool);
+    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
 
     let unresolved = repo.list_unresolved(100).await.expect("query failed");
 
@@ -243,7 +284,7 @@ async fn an_unmappable_fee_mode_does_not_erase_a_known_kind(pool: PgPool) {
         .await
         .expect("second resolution failed");
 
-    let props = read_properties(&repo, &pk(1))
+    let props = read_properties(&pool, &pk(1))
         .await
         .expect("row should exist");
     assert_eq!(
@@ -260,7 +301,7 @@ async fn list_unresolved_never_returns_a_pool_of_another_protocol(pool: PgPool) 
     // The foreign pools are the oldest, so without the filter they head the queue.
     seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
     seed_pool(&pool, pk(3), Protocol::MeteoraDammV2, 3).await;
-    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool);
+    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
 
     let unresolved = repo.list_unresolved(100).await.expect("query failed");
 
@@ -278,7 +319,7 @@ async fn list_unresolved_is_not_starved_by_older_foreign_pools(pool: PgPool) {
         seed_pool(&pool, pk(seq as u8), Protocol::MeteoraDlmm, seq).await;
     }
     seed_pool(&pool, pk(50), Protocol::MeteoraDammV2, 99).await;
-    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool);
+    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
 
     let unresolved = repo.list_unresolved(2).await.expect("query failed");
 
@@ -293,13 +334,13 @@ async fn list_unresolved_is_not_starved_by_older_foreign_pools(pool: PgPool) {
 #[sqlx::test]
 async fn the_dlmm_satellite_round_trips_every_column(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
-    let repo = PgMeteoraDlmmPoolPropertiesRepository::new(pool);
+    let repo = PgMeteoraDlmmPoolPropertiesRepository::new(pool.clone());
 
     repo.set_pool_account(&pk(1), &dlmm_properties_only())
         .await
         .expect("set_pool_account failed");
 
-    let props = read_dlmm_properties(&repo, &pk(1))
+    let props = read_dlmm_properties(&pool, &pk(1))
         .await
         .expect("row should exist");
     assert_eq!(props.bin_step, Some(1));
@@ -314,7 +355,7 @@ async fn the_dlmm_satellite_round_trips_every_column(pool: PgPool) {
 #[sqlx::test]
 async fn the_dlmm_satellite_round_trips_the_top_of_each_unsigned_range(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
-    let repo = PgMeteoraDlmmPoolPropertiesRepository::new(pool);
+    let repo = PgMeteoraDlmmPoolPropertiesRepository::new(pool.clone());
 
     let extreme = PoolAccountProperties::MeteoraDlmm(MeteoraDlmmPoolAccountProperties {
         bin_step: u16::MAX,
@@ -328,22 +369,22 @@ async fn the_dlmm_satellite_round_trips_the_top_of_each_unsigned_range(pool: PgP
         .await
         .expect("set_pool_account failed");
 
-    let props = read_dlmm_properties(&repo, &pk(1))
+    let props = read_dlmm_properties(&pool, &pk(1))
         .await
         .expect("row should exist");
-    assert_eq!(props.bin_step, Some(u16::MAX));
-    assert_eq!(props.base_factor, Some(u16::MAX));
-    assert_eq!(props.base_fee_power_factor, Some(u8::MAX));
-    assert_eq!(props.variable_fee_control, Some(u32::MAX));
-    assert_eq!(props.max_volatility_accumulator, Some(u32::MAX));
-    assert_eq!(props.protocol_share, Some(u16::MAX));
+    assert_eq!(props.bin_step, Some(i64::from(u16::MAX)));
+    assert_eq!(props.base_factor, Some(i64::from(u16::MAX)));
+    assert_eq!(props.base_fee_power_factor, Some(i64::from(u8::MAX)));
+    assert_eq!(props.variable_fee_control, Some(i64::from(u32::MAX)));
+    assert_eq!(props.max_volatility_accumulator, Some(i64::from(u32::MAX)));
+    assert_eq!(props.protocol_share, Some(i64::from(u16::MAX)));
 }
 
 /// Mutation: a `COALESCE` on a DLMM column — an `update_fee_parameters` must take effect.
 #[sqlx::test]
 async fn a_second_dlmm_resolution_overwrites_every_column(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
-    let repo = PgMeteoraDlmmPoolPropertiesRepository::new(pool);
+    let repo = PgMeteoraDlmmPoolPropertiesRepository::new(pool.clone());
 
     repo.set_pool_account(&pk(1), &dlmm_properties_only())
         .await
@@ -360,7 +401,7 @@ async fn a_second_dlmm_resolution_overwrites_every_column(pool: PgPool) {
         .await
         .expect("second resolution failed");
 
-    let props = read_dlmm_properties(&repo, &pk(1))
+    let props = read_dlmm_properties(&pool, &pk(1))
         .await
         .expect("row should exist");
     assert_eq!(props.base_factor, Some(20_000), "the new fee must land");
@@ -388,10 +429,10 @@ async fn each_resolver_rejects_the_other_protocols_payload(pool: PgPool) {
         .expect_err("the cp-amm resolver must refuse a DLMM payload");
 
     assert!(
-        read_dlmm_properties(&dlmm, &pk(1)).await.is_none(),
+        read_dlmm_properties(&pool, &pk(1)).await.is_none(),
         "a rejected payload must leave no row behind"
     );
-    assert!(read_properties(&damm, &pk(2)).await.is_none());
+    assert!(read_properties(&pool, &pk(2)).await.is_none());
 }
 
 /// Each queue proposes only its own pools, in both directions.
@@ -422,7 +463,7 @@ async fn the_dlmm_queue_is_not_starved_by_older_cp_amm_pools(pool: PgPool) {
         seed_pool(&pool, pk(seq as u8), Protocol::MeteoraDammV2, seq).await;
     }
     seed_pool(&pool, pk(50), Protocol::MeteoraDlmm, 99).await;
-    let repo = PgMeteoraDlmmPoolPropertiesRepository::new(pool);
+    let repo = PgMeteoraDlmmPoolPropertiesRepository::new(pool.clone());
 
     let unresolved = repo.list_unresolved(2).await.expect("query failed");
 
@@ -463,7 +504,7 @@ async fn a_resolved_dlmm_pool_leaves_its_queue(pool: PgPool) {
 
 #[sqlx::test]
 async fn a_dlmm_write_for_an_unknown_pool_fails(pool: PgPool) {
-    let repo = PgMeteoraDlmmPoolPropertiesRepository::new(pool);
+    let repo = PgMeteoraDlmmPoolPropertiesRepository::new(pool.clone());
 
     repo.set_pool_account(&pk(99), &dlmm_properties_only())
         .await
@@ -559,8 +600,8 @@ async fn a_resolver_write_onto_a_foreign_pool_is_refused_by_the_schema(pool: PgP
         .expect_err("a DLMM payload on a cp-amm pool must be refused by the database");
     assert!(matches!(err, RepositoryError::Conflict(_)), "got {err:?}");
 
-    assert!(read_properties(&damm, &pk(1)).await.is_none());
-    assert!(read_dlmm_properties(&dlmm, &pk(2)).await.is_none());
+    assert!(read_properties(&pool, &pk(1)).await.is_none());
+    assert!(read_dlmm_properties(&pool, &pk(2)).await.is_none());
 }
 
 /// Once a dependent row exists, the registry can no longer relabel the pool.
@@ -612,8 +653,8 @@ async fn deleting_a_pool_still_cascades_to_its_dependents(pool: PgPool) {
         .await
         .expect("delete failed");
 
-    assert!(read_properties(&damm, &pk(1)).await.is_none());
-    assert!(read_dlmm_properties(&dlmm, &pk(2)).await.is_none());
+    assert!(read_properties(&pool, &pk(1)).await.is_none());
+    assert!(read_dlmm_properties(&pool, &pk(2)).await.is_none());
     let orphans: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pool_current_state")
         .fetch_one(&pool)
         .await
@@ -658,7 +699,7 @@ async fn the_refresh_flag_puts_a_resolved_pool_back_in_the_queue(pool: PgPool) {
         satellite.list_unresolved(100).await.unwrap().is_empty(),
         "the refresh must lower the flag"
     );
-    let props = read_properties(&satellite, &pk(1))
+    let props = read_properties(&pool, &pk(1))
         .await
         .expect("row should exist");
     assert_eq!(props.base_fee_kind.as_deref(), Some("rate_limiter"));
@@ -806,14 +847,14 @@ async fn an_out_of_range_curve_costs_the_curve_and_nothing_else(pool: PgPool) {
         .await
         .expect("an unstorable curve must not fail the write");
 
-    let stored = read_properties(&repo, &pk(1))
+    let stored = read_properties(&pool, &pk(1))
         .await
         .expect("the satellite row must exist");
     assert_eq!(stored.protocol_fee_percent, Some(20));
     assert_eq!(stored.base_fee_kind.as_deref(), Some("scheduler_linear"));
     assert_eq!(stored.has_dynamic_fee, Some(true));
-    assert!(
-        stored.fee_scheduler.is_none(),
+    assert_eq!(
+        stored.curve_columns, 0,
         "the curve is what is lost, and all that is lost"
     );
 }
