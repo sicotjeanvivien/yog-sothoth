@@ -26,7 +26,7 @@ export default async function ChangelogPage({ params }: ChangelogPageProps) {
   setRequestLocale(locale);
 
   return (
-    <main>
+    <main className="mx-auto max-w-[1280px] px-4 rail:px-8">
       <ChangelogHeader />
       <ChangelogList />
     </main>

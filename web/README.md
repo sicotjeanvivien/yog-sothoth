@@ -273,6 +273,14 @@ re-check against the prod when a fact changes. Its text stays in Geist's
 `latin` subset: one character outside it (a superscript `ᵉʳ`) makes the
 browser fetch another 17 KB font file.
 
+The changelog's source is `changelog/releases.ts`, written in the PR that
+ships each release, in English only. Every line is marked `technical` or not:
+a technical line is folded under "Technical details" and left out of the
+filters, and a release with no visible line reads "Internal improvements
+only." in place of its summary. The page is server-rendered whole; the
+filter (the only client island) sets `data-filter` on its frame, and CSS
+hides the rest.
+
 ## Pools list, watchlist, pool detail
 
 The `/pools` page is a Server Component that reads its whole state from the

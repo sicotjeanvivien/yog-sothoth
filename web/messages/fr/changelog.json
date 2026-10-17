@@ -5,10 +5,18 @@
       "description": "Historique des versions de Yog-Scope : nouveaux détecteurs, fonctionnalités du dashboard et corrections, un bloc par version."
     },
     "header": {
-      "eyebrow": "Versions",
+      "eyebrow": "Produit",
       "title": "Changelog",
-      "lead": "Ce qui a été livré, version par version. Les annonces de release du dashboard pointent ici."
+      "lead": "Ce qui a été livré, version par version."
     },
+    "filter": {
+      "label": "Filtrer les changements",
+      "all": "Tout"
+    },
+    "caption": "{count, plural, one {# version} other {# versions}} · depuis le {date}",
+    "latest": "Dernière version",
+    "internalOnly": "Améliorations internes uniquement.",
+    "technical": "Détails techniques ({count})",
     "sections": {
       "features": "Nouveautés",
       "fixes": "Corrections"
