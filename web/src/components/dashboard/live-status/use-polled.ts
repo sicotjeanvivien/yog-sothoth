@@ -38,8 +38,11 @@ export function usePolled<T>(fetcher: () => Promise<T>): Half<T> {
       }
     };
     const timer = setInterval(() => void load(), POLL_INTERVAL_MS);
-    setTimeout(() => void load(), 0);
-    return () => clearInterval(timer);
+    const first = setTimeout(() => void load(), 0);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(first);
+    };
   }, [fetcher]);
 
   return state;

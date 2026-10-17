@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * The operator announcement banner. The server layout picks it from the cookie, so the first
- * paint is right; this island only dismisses. Its severity styling is its own, not the
- * signals' vocabulary: an announcement is editorial, not a detector's conclusion.
+ * The operator announcement banner, picked by the server from the cookie; this island only
+ * dismisses. Its severity styling is its own, not the signals' vocabulary: an announcement is
+ * editorial, not a detector's conclusion.
  */
 
 import { useState } from "react";
@@ -69,7 +69,7 @@ export function AnnouncementBanner({
   // ⚠️ Sticky, not in-flow: a reload restores the scroll, which would leave an in-flow banner
   // out of view. z-20 stays under the header, drawer and overlay.
   return (
-    <div className="sticky top-14 z-20 border-b border-dash-rule bg-dash-surface font-dash-sans lg:top-0">
+    <div className="sticky top-14 z-20 border-b border-dash-rule bg-dash-surface font-dash-sans rail:top-0">
       <div
         role="status"
         className={`flex items-start gap-3 border-l-2 px-6 py-3 lg:px-10 ${BANNER_RULE[announcement.severity]}`}

@@ -11,7 +11,7 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { ChevronDownIcon } from "@/components/shared/icon";
 import { Link, usePathname } from "@/i18n/navigation";
-import { routing } from "@/i18n/routing";
+import { routing, type Locale } from "@/i18n/routing";
 
 import {
   PREFERENCES_COOKIE_MAX_AGE_S,
@@ -19,7 +19,7 @@ import {
 } from "./preferences-state";
 
 // Each language is named in itself, whatever the page's language.
-const LANGUAGE_NAMES: Record<(typeof routing.locales)[number], string> = {
+const LANGUAGE_NAMES: Record<Locale, string> = {
   en: "English",
   fr: "Français",
 };

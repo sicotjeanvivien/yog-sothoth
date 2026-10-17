@@ -75,7 +75,7 @@ export default async function OverviewPage({
       <Suspense
         fallback={
           <section className="px-6 lg:px-10">
-            <BlockPlaceholder className="h-[124px]" />
+            <BlockPlaceholder className="h-[415px] sm:h-[210px] lg:h-[140px]" />
           </section>
         }
       >

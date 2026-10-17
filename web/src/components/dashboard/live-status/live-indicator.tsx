@@ -22,7 +22,6 @@ export function LiveIndicator() {
   const t = useTranslations("Dashboard.liveStatus");
   const locale = useLocale();
   const ingestion = useIngestion();
-  const network = usePolled(fetchNetworkBrowser);
   const now = useEverySecond();
 
   const [open, setOpen] = useState(false);
@@ -38,12 +37,6 @@ export function LiveIndicator() {
   const age = lastEventAt
     ? formatRelativeTime(lastEventAt, locale, { now, style: "short" })
     : null;
-  const networkValue = (pick: (data: NetworkResponse) => string) =>
-    network.phase === "ready"
-      ? pick(network.data)
-      : network.phase === "error"
-        ? t("states.offline")
-        : "—";
 
   return (
     <span ref={rootRef} className="relative inline-flex">
@@ -86,16 +79,7 @@ export function LiveIndicator() {
 
           <dl className="flex flex-col gap-1.5 text-[12px]">
             <Row label={t("lastEvent")} value={age ?? "—"} />
-            <Row
-              label={t("slot")}
-              value={networkValue((data) => data.slot)}
-              down={network.phase === "error"}
-            />
-            <Row
-              label={t("latency")}
-              value={networkValue((data) => `${data.rpcLatencyMs} ms`)}
-              down={network.phase === "error"}
-            />
+            <NetworkRows />
           </dl>
 
           <ul className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1.5 border-t border-dash-rule pt-2.5 text-[11px] text-dash-ink-2">
@@ -109,6 +93,30 @@ export function LiveIndicator() {
         </div>
       )}
     </span>
+  );
+}
+
+/** Slot and RPC latency, polled only while the panel is open. */
+function NetworkRows() {
+  const t = useTranslations("Dashboard.liveStatus");
+  const network = usePolled(fetchNetworkBrowser);
+  const down = network.phase === "error";
+  const value = (pick: (data: NetworkResponse) => string) =>
+    network.phase === "ready"
+      ? pick(network.data)
+      : down
+        ? t("states.offline")
+        : "—";
+
+  return (
+    <>
+      <Row label={t("slot")} value={value((data) => data.slot)} down={down} />
+      <Row
+        label={t("latency")}
+        value={value((data) => `${data.rpcLatencyMs} ms`)}
+        down={down}
+      />
+    </>
   );
 }
 
