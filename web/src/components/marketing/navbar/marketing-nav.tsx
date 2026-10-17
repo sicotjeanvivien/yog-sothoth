@@ -9,13 +9,11 @@ import { useCallback, useEffect, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { Link, usePathname } from "@/i18n/navigation";
+import { RAIL_BREAKPOINT } from "@/components/shared/breakpoints";
 import { CloseIcon, HamburgerIcon } from "@/components/shared/icon";
 import { DashboardButton } from "@/components/shared/dashboard-button";
 import { SiteBrand } from "@/components/marketing/site-brand";
 import { MARKETING_NAV_LINKS } from "./marketing-nav-links";
-
-// ⚠️ `--breakpoint-rail` of globals.css, repeated for the resize listener.
-const RAIL_BREAKPOINT = "45.0625rem";
 
 export function MarketingNav() {
   const t = useTranslations("Marketing");
@@ -69,7 +67,10 @@ export function MarketingNav() {
           className={`${isOpen ? "flex" : "hidden"} basis-full flex-col border-t border-dash-rule pb-3 rail:flex rail:basis-auto rail:flex-row rail:flex-wrap rail:items-center rail:gap-x-7 rail:border-t-0 rail:pb-0`}
         >
           <MarketingNavLinks onNavigate={close} />
-          <DashboardButton className="hidden rail:inline-flex" />
+          {/* ⚠️ A wrapper: the button's own `inline-flex` would beat a `hidden` passed to it. */}
+          <div className="hidden rail:block">
+            <DashboardButton />
+          </div>
         </nav>
       </div>
     </header>

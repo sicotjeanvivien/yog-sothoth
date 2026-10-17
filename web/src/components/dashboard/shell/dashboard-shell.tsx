@@ -13,10 +13,8 @@ import {
   SIDEBAR_COLLAPSED_COOKIE,
   SIDEBAR_COOKIE_MAX_AGE_S,
 } from "@/components/dashboard/sidebar/sidebar-state";
+import { RAIL_BREAKPOINT } from "@/components/shared/breakpoints";
 import { HamburgerIcon } from "@/components/shared/icon";
-
-// ⚠️ `--breakpoint-rail` of globals.css, repeated for the resize listener.
-const RAIL_BREAKPOINT = "45.0625rem";
 
 export function DashboardShell({
   children,

@@ -209,16 +209,6 @@ export const CloseIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-export const ArrowRightIcon: React.FC<IconProps> = ({
-  size = 14,
-  strokeWidth = 1.6,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <path d="M4 10h12M11 5l5 5-5 5" />
-  </svg>
-);
-
 export const EyeIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
