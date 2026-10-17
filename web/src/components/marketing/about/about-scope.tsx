@@ -2,16 +2,12 @@
 
 import { useTranslations } from "next-intl";
 
-import { SIDEBAR_NAV, type SidebarNavEntry } from "@/components/dashboard/sidebar/sidebar-nav";
+import { PROTOCOL_ENTRIES } from "@/components/dashboard/sidebar/sidebar-nav";
 import type { ClosedNavKey, OpenNavKey } from "@/components/dashboard/sidebar/sidebar-keys";
 import { SITE_LABEL_CLASS } from "@/components/marketing/site-label";
 
 /** Ingested today, whether or not the dashboard has its page yet. */
 const OBSERVED: ReadonlySet<OpenNavKey | ClosedNavKey> = new Set(["meteoraDammV2"]);
-
-const PROTOCOLS: readonly SidebarNavEntry[] = SIDEBAR_NAV.flatMap((item) =>
-  item.kind === "group" && item.labelKey === "protocol" ? item.entries : [],
-);
 
 const TAG_CLASS =
   "px-[7px] py-0.5 font-dash-mono text-[10px] font-semibold tracking-[0.1em] whitespace-nowrap uppercase";
@@ -24,7 +20,7 @@ export function AboutScope() {
     <div>
       <span className={SITE_LABEL_CLASS}>{t("scope")}</span>
       <ul className="mt-2.5 border-t border-dash-rule">
-        {PROTOCOLS.map((entry) => {
+        {PROTOCOL_ENTRIES.map((entry) => {
           const observed = OBSERVED.has(entry.key);
           return (
             <li

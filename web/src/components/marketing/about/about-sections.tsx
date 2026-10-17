@@ -14,7 +14,7 @@ const AWSD_URL = "https://awsd.fr/";
 /** ⚠️ The target of the hero's "Who is behind it" link. */
 export const BEHIND_ID = "awsd";
 
-// DAMM v2 instruction names, as the code spells them: not translated.
+// cp-amm's instruction names: not translated.
 const EVENT_KINDS = [
   "swap",
   "add_liquidity",
@@ -28,7 +28,6 @@ const AUDIENCE_KEYS = ["lp", "market", "api"] as const;
 const TERM_KEYS = ["license", "code", "dashboard"] as const;
 
 const BODY_CLASS = "max-w-[64ch] text-[16px] leading-[1.6] text-dash-ink-2";
-/** A grid of bordered cells: the outer border comes from the cells' right and bottom edges. */
 const CELLS_CLASS = "grid grid-cols-1 border-t border-l border-dash-rule";
 const CELL_CLASS = "flex flex-col border-r border-b border-dash-rule bg-dash-surface";
 
@@ -92,12 +91,12 @@ export function AboutSections() {
         <p className={BODY_CLASS}>{t("availability.premium")}</p>
       </AboutRow>
 
-      <AboutRow index={5} id="about-behind" title={t("behind.title")} anchor={BEHIND_ID} last>
+      <AboutRow index={5} id="about-behind" title={t("behind.title")} anchor={BEHIND_ID}>
         <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-4 border border-dash-rule bg-dash-surface p-6">
           <div className="flex items-center gap-5">
             <Image
               src="/logo-tampon-sombre.svg"
-              alt="AWSD"
+              alt=""
               width={72}
               height={72}
               // ⚠️ The optimizer rejects SVG.
@@ -124,7 +123,6 @@ function AboutRow({
   id,
   title,
   anchor,
-  last = false,
   children,
 }: {
   index: number;
@@ -132,14 +130,13 @@ function AboutRow({
   id: string;
   title: string;
   anchor?: string;
-  last?: boolean;
   children: ReactNode;
 }) {
   return (
     <section
       id={anchor}
       aria-labelledby={id}
-      className={`grid grid-cols-12 gap-x-8 gap-y-4 py-10 rail:py-14 ${last ? "" : "border-b border-dash-rule"}`}
+      className="grid grid-cols-12 gap-x-8 gap-y-4 border-b border-dash-rule py-10 last:border-b-0 rail:py-14"
     >
       <div className="col-span-12 flex flex-col gap-2.5 wide:col-span-4">
         <span className="font-dash-mono text-[12px] tracking-[0.08em] text-dash-accent">
