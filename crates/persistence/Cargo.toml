@@ -50,7 +50,6 @@ tokio = { workspace = true }
 
 # Solana
 solana-pubkey = { workspace = true }
-solana-signature = { workspace = true }
 
 # Errors / logging / config
 thiserror = { workspace = true }
@@ -75,3 +74,4 @@ tokio = { workspace = true, features = ["test-util", "macros"] }
 # Shared with the source adapters, so this test and they cannot disagree about
 # what that transaction is.
 yog-core = { path = "../core", features = ["test-support"] }
+solana-signature = { workspace = true }

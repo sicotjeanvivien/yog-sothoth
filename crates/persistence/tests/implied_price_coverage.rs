@@ -150,7 +150,7 @@ async fn single_sided_bucket_is_valued_through_its_own_trade_rate(pool: PgPool) 
         close_to(volume, "270"),
         "expected the token B notional ($270), got {volume}"
     );
-    assert!(a.swap_count.is_some());
+    assert_eq!(a.swap_count, Some(2));
 }
 
 #[sqlx::test]
@@ -199,7 +199,7 @@ async fn bucket_with_no_priced_side_stays_null(pool: PgPool) {
         "with neither side priced there is nothing to anchor a rate on — \
          'we don't know' must survive the fix"
     );
-    assert!(a.swap_count.is_some(), "the hour did trade");
+    assert_eq!(a.swap_count, Some(2), "the hour did trade");
 
     let implied: bool = sqlx::query_scalar(
         "SELECT price_a_implied OR price_b_implied
@@ -280,7 +280,7 @@ async fn a_liquidity_only_bucket_carries_no_swap_count(pool: PgPool) {
         "the liquidity-only hour carries no swap count — a reader would count \
          it as an unvalued trading hour"
     );
-    assert!(buckets[1].swap_count.is_some());
+    assert_eq!(buckets[1].swap_count, Some(2));
     assert!(buckets[1].volume_usd.is_some());
 }
 
@@ -370,8 +370,9 @@ async fn a_pool_with_unresolved_mints_counts_as_uncovered_not_as_absent(pool: Pg
         a.volume_usd, None,
         "no decimals and no mints — nothing can be valued"
     );
-    assert!(
-        a.swap_count.is_some(),
+    assert_eq!(
+        a.swap_count,
+        Some(2),
         "the hour traded and must stay countable: with the INNER join the \
          bucket was absent, i.e. the same answer as a pool that never traded"
     );
@@ -387,8 +388,9 @@ async fn a_swap_without_its_pool_row_still_counts_as_uncovered(pool: PgPool) {
     let a = the_only_bucket(&pool, &pool_addr).await;
 
     assert_eq!(a.volume_usd, None, "nothing identifies the tokens");
-    assert!(
-        a.swap_count.is_some(),
+    assert_eq!(
+        a.swap_count,
+        Some(2),
         "the hour traded: it belongs in the view even with no pool row"
     );
 }
@@ -424,7 +426,7 @@ async fn a_bucket_that_moved_no_token_b_is_not_valued(pool: PgPool) {
         "no token B moved, so no rate can be implied for token A — a zero here \
          is not a valuation, it is an invention"
     );
-    assert!(a.swap_count.is_some());
+    assert_eq!(a.swap_count, Some(1));
 
     let implied: bool = sqlx::query_scalar(
         "SELECT price_a_implied FROM meteora_damm_v2_swap_events_hourly_priced
@@ -461,7 +463,7 @@ async fn a_price_rounded_to_zero_does_not_value_the_bucket(pool: PgPool) {
         a.volume_usd, None,
         "a zero price anchors nothing — valuing at 0 would be an invention"
     );
-    assert!(a.swap_count.is_some());
+    assert_eq!(a.swap_count, Some(2));
 }
 
 #[sqlx::test]
@@ -579,7 +581,7 @@ async fn volume_and_every_fee_share_are_null_together(pool: PgPool) {
         "the volume sits on a token that cannot be valued, so the whole bucket \
          is unvaluable — a fee figure surviving alone would make the split lie"
     );
-    assert!(a.swap_count.is_some());
+    assert_eq!(a.swap_count, Some(1));
 }
 
 #[sqlx::test]

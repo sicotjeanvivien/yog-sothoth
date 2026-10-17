@@ -79,7 +79,7 @@ cargo clippy -p yog-analytic -p yog-api -p yog-archive -p yog-bootstrap -p yog-c
 # empty library, which cargo then documents in place of the binary.
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
 
-# Test — workspace unit tests, DB-free (870 tests, listed 17 Oct 2026)
+# Test — workspace unit tests, DB-free
 cargo test --workspace
 cargo test -p yog-core extraction          # a single crate / filter
 cargo test -p yog-core -- --exact <test>   # one exact test
@@ -91,11 +91,9 @@ cargo test -p yog-core -- --exact <test>   # one exact test
 cargo test -p yog-indexer                  # the fixture suites and the oracle
 
 # ⚠️ `--all-features` is NOT DB-free: it turns on `integration-tests`, which
-# un-gates the 160 DB-backed tests and needs everything the section below does.
-# `cargo test --workspace --all-features` therefore reports 1030, not 870 — the
-# integration tests are INCLUDED in that total, not additional to it. All three
-# counts were listed 17 Oct 2026 with `-- --list`, which compiles every target
-# but runs none, so it needs no Postgres.
+# un-gates the DB-backed tests and needs everything the section below does. Its
+# total INCLUDES them. `-- --list` compiles every target but runs none, so it
+# counts them without Postgres.
 cargo test --workspace --all-features
 
 # Integration tests are DB-backed and gated on the `integration-tests` feature

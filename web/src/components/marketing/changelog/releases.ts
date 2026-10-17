@@ -49,7 +49,11 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "A signal card shows its pool's pair without linking to a pool page.",
+            text: "A signal card shows its pool's pair without linking to a pool page; hovering it shows the pool address.",
+            technical: false,
+          },
+          {
+            text: "The About page no longer promises to watch pools or query their history.",
             technical: false,
           },
           {

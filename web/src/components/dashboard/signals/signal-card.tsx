@@ -197,7 +197,7 @@ function PairLabel({ signal }: { signal: SignalResponse }) {
     signal.tokenA.symbol !== null && signal.tokenB.symbol !== null;
 
   return (
-    <div className="min-w-0">
+    <div className="min-w-0" title={signal.poolAddress}>
       {pairResolved ? (
         <PoolPairCell tokenA={signal.tokenA} tokenB={signal.tokenB} />
       ) : (

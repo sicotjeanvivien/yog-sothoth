@@ -58,8 +58,8 @@ If the query already exists, skip to Step 3.
 ## Step 3 — `api`: service, handler, DTOs, route
 
 - **Service** — add/extend a module under
-  `crates/api/src/application/services/<platform>_<product>_<event_kind>_service.rs`
-  (template: `meteora_damm_v2_swap_service.rs`). The service holds the repo trait object
+  `crates/api/src/application/services/<resource>_service.rs`
+  (template: `token_service.rs`). The service holds the repo trait object
   and contains the read logic; the handler stays thin.
 - **DTOs** — request DTO under `crates/api/src/http/dto/request/`, response DTO under
   `crates/api/src/http/dto/response/`, named and placed as *Where a response type goes*

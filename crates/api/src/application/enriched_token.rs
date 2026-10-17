@@ -16,7 +16,6 @@ pub(crate) struct EnrichedToken {
 }
 
 impl EnrichedToken {
-    /// The unresolved side: nothing to look up, nothing looked up.
     pub(crate) fn unresolved() -> Self {
         Self {
             mint: None,
@@ -24,10 +23,6 @@ impl EnrichedToken {
         }
     }
 
-    /// Resolve one token side from its mint. A `None` mint short-circuits
-    /// to [`unresolved`].
-    ///
-    /// [`unresolved`]: Self::unresolved
     pub(crate) async fn resolve(
         mint: Option<solana_pubkey::Pubkey>,
         metadata_repo: &dyn TokenMetadataLookup,

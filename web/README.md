@@ -68,8 +68,6 @@ lib/api/
 │                        # fetchStats, fetchSignals, fetchActiveAnnouncements
 ├── browser/             # browser-side fetchers for Client Component flows
 │                        # (signals refill on reconnect, network status)
-├── type/                # pagination types shared by fetchers
-├── pool-address.ts      # isValidPoolAddress, for the signal feed's pool filter
 └── errors.ts            # ApiClientError — discriminated union
 ```
 
