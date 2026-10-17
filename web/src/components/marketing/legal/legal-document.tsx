@@ -5,9 +5,8 @@ import type { ReactNode } from "react";
 
 import { Link } from "@/i18n/navigation";
 import { PRIMARY_BUTTON_CLASS } from "@/components/shared/dashboard-button";
+import { CONTACT_EMAIL_HREF } from "@/components/marketing/contact";
 import { SITE_LABEL_CLASS } from "@/components/marketing/site-label";
-
-export const CONTACT_EMAIL_HREF = "mailto:awsd.contact@gmail.com";
 
 export const LEGAL_LINK_CLASS =
   "text-dash-accent-2 underline decoration-dash-accent-2/40 underline-offset-4 hover:decoration-dash-accent-2";

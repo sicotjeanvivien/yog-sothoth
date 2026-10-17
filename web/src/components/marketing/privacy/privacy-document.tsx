@@ -5,11 +5,8 @@
 
 import { useTranslations } from "next-intl";
 
-import {
-  CONTACT_EMAIL_HREF,
-  LEGAL_LINK_CLASS,
-  LegalDocument,
-} from "@/components/marketing/legal/legal-document";
+import { CONTACT_EMAIL_HREF } from "@/components/marketing/contact";
+import { LEGAL_LINK_CLASS, LegalDocument } from "@/components/marketing/legal/legal-document";
 
 const SECTION_KEYS = [
   "inShort",
@@ -23,8 +20,6 @@ const SECTION_KEYS = [
   "changes",
 ] as const;
 
-const WITH_EMAIL: ReadonlySet<string> = new Set(["responsible", "rights"]);
-
 export function PrivacyDocument() {
   const t = useTranslations("Privacy.prose");
 
@@ -37,15 +32,13 @@ export function PrivacyDocument() {
         brief: key === "inShort",
         body: (
           <p>
-            {WITH_EMAIL.has(key)
-              ? t.rich(`${key}.body`, {
-                  email: (chunks) => (
-                    <a href={CONTACT_EMAIL_HREF} className={LEGAL_LINK_CLASS}>
-                      {chunks}
-                    </a>
-                  ),
-                })
-              : t(`${key}.body`)}
+            {t.rich(`${key}.body`, {
+              email: (chunks) => (
+                <a href={CONTACT_EMAIL_HREF} className={LEGAL_LINK_CLASS}>
+                  {chunks}
+                </a>
+              ),
+            })}
           </p>
         ),
       }))}

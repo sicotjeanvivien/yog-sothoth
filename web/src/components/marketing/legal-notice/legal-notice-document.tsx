@@ -6,11 +6,8 @@
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
-import {
-  CONTACT_EMAIL_HREF,
-  LEGAL_LINK_CLASS,
-  LegalDocument,
-} from "@/components/marketing/legal/legal-document";
+import { CONTACT_EMAIL_HREF } from "@/components/marketing/contact";
+import { LEGAL_LINK_CLASS, LegalDocument } from "@/components/marketing/legal/legal-document";
 
 /** Field keys in display order: a new field needs a code and a translation change. */
 const FIELD_SECTIONS = [
@@ -35,7 +32,7 @@ export function LegalNoticeDocument() {
         <dl className="divide-y divide-dash-rule border-y border-dash-rule">
           {fields.map((field) => (
             <Field key={field} label={t(`${key}.fields.${field}Label`)}>
-              {key === "contact" ? (
+              {field === "email" ? (
                 <a href={CONTACT_EMAIL_HREF} className={LEGAL_LINK_CLASS}>
                   {t(`${key}.fields.${field}`)}
                 </a>
