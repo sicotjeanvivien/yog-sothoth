@@ -1,7 +1,7 @@
 /**
  * The security headers of every dashboard response (`next.config.ts`). The CSP leaves out
  * `script-src`, which would need a per-request nonce and lose the pre-rendered cache, and
- * `img-src`, since token logos come from any host. HSTS belongs to `docker/Caddyfile`.
+ * `img-src`, since token logos come from any host. HSTS belongs to the server's entry proxy.
  */
 
 export type SecurityHeader = { key: string; value: string };

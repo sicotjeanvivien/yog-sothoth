@@ -40,6 +40,10 @@
 #   would stay published here.
 # - Images are still built in place (`build:` from the base file). Pulling
 #   them from a registry belongs with the deployment pipeline, not here.
+# - The external network `edge` (`docker network create edge`, once per
+#   server). The server's entry proxy, a Caddy in its own stack shared by
+#   every site on the machine, publishes 80/443 and reaches yog-web and
+#   yog-api over it; this stack publishes no port.
 #
 # Variables this file requires (each refuses the command when unset):
 #   POSTGRES_PASSWORD  the admin password of the Postgres container
@@ -74,7 +78,7 @@
 # api 6.3, signals 4.7, archive 31 with its pg_dump) — except the API's, which
 # is sized against its capacity bounds rather than a peak (see below), and
 # yog-analytic's, not yet measured in production. The limits add up to
-# 1536 MiB, inside the 2.5 GB the machine reserves for this stack.
+# 1472 MiB, inside the 2.5 GB the machine reserves for this stack.
 #
 # Postgres's memory and connection settings are written here, not left to
 # `timescaledb-tune`. The image runs it once, when the volume is created, and
@@ -155,6 +159,7 @@ services:
     environment:
       API_CORS_ALLOWED_ORIGINS: https://${YOG_WEB_DOMAIN:?set it in the server's .env (e.g. yog-scope.xyz)}
     ports: !reset []
+    networks: [default, edge]
     # Sized against the API's own bounds, not its idle peak: with at most
     # MAX_CONNECTIONS (400) connections and MALLOC_ARENA_MAX=2 (both in
     # crates/api/src/http/middleware/capacity.rs and the yog-api image),
@@ -189,11 +194,12 @@ services:
       args:
         NEXT_PUBLIC_YOG_API_URL: https://${YOG_API_DOMAIN:?set it in the server's .env (e.g. api.yog-scope.xyz)}
     ports: !reset []
+    networks: [default, edge]
     mem_limit: 128m
 
   # The backup daemon: a pg_dump every six hours, streamed to the bucket and
-  # checked, then signalled to Healthchecks.io. Production only, like Caddy:
-  # without a real bucket and a real check it has nothing to do in dev.
+  # checked, then signalled to Healthchecks.io. Production only: without a
+  # real bucket and a real check it has nothing to do in dev.
   yog-archive:
     profiles: ["full"]
     build:
@@ -229,31 +235,6 @@ services:
     mem_limit: 256m
     restart: unless-stopped
 
-  # The only service that publishes a port. The browser calls the API
-  # directly, so Caddy serves two sites: the dashboard and the API.
-  caddy:
-    profiles: ["full"]
-    # Pinned like the database: `2-alpine` would move the proxy on any pull.
-    image: caddy:2.11.4-alpine
-    environment:
-      YOG_WEB_DOMAIN: ${YOG_WEB_DOMAIN:?set it in the server's .env (e.g. yog-scope.xyz)}
-      YOG_API_DOMAIN: ${YOG_API_DOMAIN:?set it in the server's .env (e.g. api.yog-scope.xyz)}
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    volumes:
-      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
-      # Certificates and ACME account: losing them means re-issuing, and
-      # Let's Encrypt rate-limits re-issuance.
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - yog-web
-      - yog-api
-    mem_limit: 64m
-    restart: unless-stopped
-
-volumes:
-  caddy_data:
-  caddy_config:
+networks:
+  edge:
+    external: true
