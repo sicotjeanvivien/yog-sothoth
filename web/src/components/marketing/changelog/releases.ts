@@ -41,7 +41,7 @@ export const RELEASES: readonly Release[] = [
         kind: "features",
         items: [
           {
-            text: "The dashboard menu marks the pages still to come as \"Soon\" instead of a lock, which read as a paid feature. Its new Preferences hold the language switch, and under 720 px the menu becomes a drawer.",
+            text: "The dashboard menu marks the pages still to come as \"Soon\" instead of a lock, which read as a paid feature. Its new Preferences hold the language switch, and up to 720 px the menu becomes a drawer.",
             technical: false,
           },
           {

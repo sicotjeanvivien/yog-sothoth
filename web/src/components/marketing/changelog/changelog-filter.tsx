@@ -37,8 +37,8 @@ export function ChangelogFilter({
                 onClick={() => setFilter(value)}
                 className={`min-h-11 min-w-11 border-r border-dash-rule px-3.5 text-[13px] last:border-r-0 ${on ? "bg-dash-accent font-semibold text-dash-surface" : "text-dash-ink-2 hover:text-dash-ink"}`}
               >
-                {t(value === "all" ? "filter.all" : `sections.${value}`)}
-                <span className="ml-1.5 font-dash-mono text-[11px] opacity-80">
+                {t(value === "all" ? "filter.all" : `sections.${value}`)}{" "}
+                <span className="ml-0.5 font-dash-mono text-[11px] opacity-80">
                   {counts[value]}
                 </span>
               </button>
