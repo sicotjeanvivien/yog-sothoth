@@ -225,9 +225,9 @@ icon, which is all the collapsed rail shows. `/pools`, `/signals`, `/watchlist`
 and the pool detail are no longer in the menu.
 
 **Preferences** — at the foot of the menu, under the collapse toggle: the
-language, FR | EN, each a link to the same page and query in that language.
-Whether they are open is the `yog_prefs_open` cookie, read by the layout so the
-first paint is right.
+language, FR | EN (`shared/locale-switch.tsx`, also the site footer's), each a
+link to the same page and query in that language. Whether they are open is the
+`yog_prefs_open` cookie, read by the layout so the first paint is right.
 
 **Live status** — `live-status/`: `LiveIndicator` polls `/api/ingestion` and
 `liveStatusOf` maps it to four states — live (green), delayed (yellow), stale
@@ -236,10 +236,10 @@ Overview only) and opens on click, with the slot and RPC latency of
 `/api/network`.
 
 **Fonts** — Geist (text) and Geist Mono (figures, addresses, times) are loaded
-by the dashboard layout alone (`next/font/google`), so the marketing never
-downloads them. They are applied through `font-dash-sans` / `font-dash-mono`.
-Cinzel, loaded for the whole site, serves the frame only for the wordmark;
-page contents not yet redone (the Overview's titles among them) still use it.
+by the locale layout (`next/font/google`), for the dashboard and the site
+alike. They are applied through `font-dash-sans` / `font-dash-mono`. Cinzel
+serves the frame only for the wordmark; page contents not yet redone (the
+Overview's titles among them) still use it.
 
 **Colours** — the dashboard has one colour per role, declared once as
 `--color-dash-*` in `globals.css`: `bg`, `surface`, `surface-2`, `rule`,
@@ -253,6 +253,19 @@ behind the pages that left the menu, with no glow and no text shadow. The
 older palette (`cosmos-*`, `sothoth-*`, `slate-*`) remains in use for the
 marketing site and for page contents not yet moved to the roles, the Overview
 included.
+
+## Site
+
+The `(marketing)` layout wraps every page in `site-root`: the dashboard's
+`dash-*` tokens and fonts, a flat `dash-bg`, the same keyboard focus. Its
+header (`navbar/`) folds its links behind "Menu" up to 720 px (`rail:`), the
+short "Dashboard" button staying out; its grids drop columns up to 1100 px
+(`wide:`). The footer ends on the version (the first entry of
+`changelog/releases.ts`) and the FR | EN switch, which leads to the same page
+in the other language. The logo is `public/logo_yog_scope.svg`, in the accent
+colour, through `shared/logo-mark.tsx`, on the site and in the dashboard menu.
+Page contents move to the tokens page by page and still use the older
+palette until then.
 
 ## Pools list, watchlist, pool detail
 
@@ -421,8 +434,8 @@ web/
 │   │   ├── globals.css
 │   │   ├── layout.tsx               # root layout (passthrough)
 │   │   └── [locale]/
-│   │       ├── layout.tsx           # html/body, intl provider
-│   │       ├── (dashboard)/         # app shell: menu, network status, fonts
+│   │       ├── layout.tsx           # html/body, intl provider, fonts
+│   │       ├── (dashboard)/         # app shell: menu, network status
 │   │       │   ├── overview/        # global KPIs, top pools (volume | TVL),
 │   │       │   │                    # latest signals (live over SSE)
 │   │       │   ├── pools/           # pools listing (search, fee filter,

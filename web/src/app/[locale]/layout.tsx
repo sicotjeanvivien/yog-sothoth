@@ -4,12 +4,23 @@ import { notFound } from "next/navigation";
 import { routing } from "../../../i18n/routing";
 import "../globals.css";
 
-import { Cinzel } from "next/font/google";
+import { Cinzel, Geist, Geist_Mono } from "next/font/google";
 
 const cinzel = Cinzel({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
   variable: "--font-display",  // exposes a CSS variable
+  display: "swap",
+});
+// Read by the `--font-dash-*` theme tokens, on the site and the dashboard alike.
+const geist = Geist({
+  subsets: ["latin"],
+  variable: "--font-geist",
+  display: "swap",
+});
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-geist-mono",
   display: "swap",
 });
 
@@ -38,7 +49,10 @@ export default async function LocaleLayout({
   setRequestLocale(locale);
 
   return (
-    <html lang={locale} className={cinzel.variable}>
+    <html
+      lang={locale}
+      className={`${cinzel.variable} ${geist.variable} ${geistMono.variable}`}
+    >
       <body>
         <NextIntlClientProvider>{children}</NextIntlClientProvider>
       </body>

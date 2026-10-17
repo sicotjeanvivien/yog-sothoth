@@ -3,12 +3,11 @@
  * different things.
  */
 
-/** `kind`: a locale `route` (next-intl Link), an in-page `anchor`, or an `external` URL in a new tab. */
+/** `href` is a locale-free path, an in-page anchor of the home page included. */
 export type FooterLink = {
   key: string;
   labelKey: string;
   href: string;
-  kind: "route" | "anchor" | "external";
 };
 
 /** `headingKey` and each `labelKey` resolve against `namespace`. */
@@ -22,25 +21,10 @@ const PRODUCT_COLUMN: FooterColumn = {
   key: "product",
   namespace: "Marketing.footer.product",
   links: [
-    { key: "overview", labelKey: "overview", href: "/overview", kind: "route" },
-    {
-      key: "features",
-      labelKey: "features",
-      href: "/#features",
-      kind: "anchor",
-    },
-    {
-      key: "changelog",
-      labelKey: "changelog",
-      href: "/changelog",
-      kind: "route",
-    },
-    {
-      key: "support-us",
-      labelKey: "support-us",
-      href: "/support-us",
-      kind: "route",
-    },
+    { key: "dashboard", labelKey: "dashboard", href: "/overview" },
+    { key: "features", labelKey: "features", href: "/#features" },
+    { key: "changelog", labelKey: "changelog", href: "/changelog" },
+    { key: "support-us", labelKey: "support-us", href: "/support-us" },
   ],
 };
 
@@ -48,15 +32,10 @@ const COMPANY_COLUMN: FooterColumn = {
   key: "company",
   namespace: "Marketing.footer.company",
   links: [
-    { key: "about", labelKey: "about", href: "/about", kind: "route" },
-    { key: "privacy", labelKey: "privacy", href: "/privacy", kind: "route" },
-    {
-      key: "legal-notice",
-      labelKey: "legal-notice",
-      href: "/legal-notice",
-      kind: "route",
-    },
-    { key: "terms", labelKey: "terms", href: "/terms", kind: "route" },
+    { key: "about", labelKey: "about", href: "/about" },
+    { key: "privacy", labelKey: "privacy", href: "/privacy" },
+    { key: "legal-notice", labelKey: "legal-notice", href: "/legal-notice" },
+    { key: "terms", labelKey: "terms", href: "/terms" },
   ],
 };
 
@@ -64,25 +43,20 @@ export const FOOTER_COLUMNS: readonly FooterColumn[] = [
   PRODUCT_COLUMN,
   COMPANY_COLUMN,
 ] as const;
+
+/** `label` is the visible text: a brand name, not translated. */
 export type FooterSocial = {
   key: string;
   label: string;
   href: string;
-  icon: "x" | "github";
 };
 
 export const FOOTER_SOCIALS: readonly FooterSocial[] = [
-  {
-    key: "x",
-    label: "X",
-    href: "https://x.com/AWSD_JV",
-    icon: "x",
-  },
+  { key: "x", label: "X", href: "https://x.com/AWSD_JV" },
   {
     key: "github",
     label: "GitHub",
     href: "https://github.com/sicotjeanvivien/yog-sothoth",
-    icon: "github",
   },
 ] as const;
 

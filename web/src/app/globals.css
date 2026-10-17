@@ -38,18 +38,20 @@
   --color-dash-ink-2: #aaa5c8;
   --color-dash-ink-3: #8f8aae;
   --color-dash-accent: #a78bfa;
+  --color-dash-accent-2: #c4b2fc;
   --color-dash-up: #25a877;
   --color-dash-down: #f87171;
   --color-dash-warn: #fbbf24;
 
-  /* 721 px: the dashboard menu is a drawer up to 720 px, a fixed rail from here. */
+  /* 721 px: up to 720 px is the phone — the dashboard menu a drawer, the
+     site menu folded behind "Menu". */
   --breakpoint-rail: 45.0625rem;
+  /* 1101 px: the site's grids drop to fewer columns up to 1100 px. */
+  --breakpoint-wide: 68.8125rem;
 }
 
-/* `inline`, or Geist never applies: --font-geist(-mono) are set by
-   next/font on the dashboard's wrapper, not on :root, so a plain @theme
-   variable would resolve them at :root, where they are unset. Inlined,
-   they resolve on the element that uses them. */
+/* `inline`: resolved on the element that uses them, wherever next/font
+   sets --font-geist(-mono). */
 @theme inline {
   --font-dash-sans: var(--font-geist, ui-sans-serif), ui-sans-serif, system-ui,
     sans-serif;
@@ -115,11 +117,11 @@
   }
 }
 
-/* The dashboard's keyboard focus. In `base`, so a component's own
-   `focus-visible:` utility (an inset outline where a scroll box would clip
-   this one) still wins. */
+/* The keyboard focus of the dashboard and the site. In `base`, so a
+   component's own `focus-visible:` utility (an inset outline where a scroll
+   box would clip this one) still wins. */
 @layer base {
-  .dash-root :is(a, button, input, select, [tabindex]):focus-visible {
+  :is(.dash-root, .site-root) :is(a, button, input, select, [tabindex]):focus-visible {
     outline: 2px solid var(--color-dash-accent);
     outline-offset: 2px;
   }

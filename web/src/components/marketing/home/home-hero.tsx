@@ -40,7 +40,7 @@ export function HomeHero() {
           </p>
 
           <div className="mt-8.5 flex items-center gap-3.5">
-            <DashboardButton size="lg" />
+            <DashboardButton />
             <CtaLink href="#features" label={t("ctaSecondary")} />
           </div>
 

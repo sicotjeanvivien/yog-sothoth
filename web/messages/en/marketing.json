@@ -1,10 +1,14 @@
 {
   "Marketing": {
-    "dashboardButton": "Open Analytics",
+    "dashboardButton": "Open the dashboard",
+    "dashboardShort": "Dashboard",
+    "home": "Yog-Scope, home",
     "nav": {
-      "overview": "Overview",
+      "label": "Site navigation",
+      "features": "Features",
       "support-us": "Support Us",
-      "github": "GitHub"
+      "github": "GitHub",
+      "menu": "Menu"
     },
     "hero": {
       "title": "Real-time liquidity intelligence",
@@ -43,7 +47,7 @@
       "description": "Real-time liquidity intelligence on Meteora · Solana.",
       "product": {
         "heading": "Product",
-        "overview": "Overview",
+        "dashboard": "Dashboard",
         "features": "Features",
         "changelog": "Changelog",
         "support-us": "Support Us"
@@ -56,10 +60,12 @@
         "terms": "Terms"
       },
       "awsd": {
-        "title": "Built by AWSD",
+        "title": "Built by",
+        "label": "AWSD, awsd.fr",
         "tagline": "An independent software company. Crafted in France."
       },
-      "copyright": "© {year} Yog-Scope. All rights reserved."
+      "copyright": "© {year} Yog-Scope. All rights reserved.",
+      "language": "Language"
     }
   }
 }
