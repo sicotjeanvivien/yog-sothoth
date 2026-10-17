@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 
 import { DashboardButton } from "@/components/shared/dashboard-button";
 import { SecondaryButton } from "@/components/shared/secondary-button";
+import { SITE_GRID_CLASS } from "@/components/marketing/site-grid";
 import { SITE_LABEL_CLASS } from "@/components/marketing/site-label";
 import { HomePreview } from "./home-preview";
 
@@ -15,7 +16,7 @@ export function HomeHero() {
   return (
     <section
       aria-labelledby="hero-title"
-      className="grid grid-cols-12 items-center gap-x-8 gap-y-12 pt-12 pb-14 rail:pt-[88px] rail:pb-24"
+      className={`${SITE_GRID_CLASS} items-center gap-y-12 pt-12 pb-14 rail:pt-[88px] rail:pb-24`}
     >
       <div className="col-span-12 flex flex-col gap-6 wide:col-span-7">
         <span className={`${SITE_LABEL_CLASS} inline-flex items-center gap-2`}>

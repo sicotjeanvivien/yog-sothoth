@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 
 import { Link } from "@/i18n/navigation";
 import { SiteBrand } from "@/components/marketing/site-brand";
+import { SITE_GRID_CLASS } from "@/components/marketing/site-grid";
 import { SITE_LABEL_CLASS } from "@/components/marketing/site-label";
 import { RELEASES } from "@/components/marketing/changelog/releases";
 import { FooterLocaleSwitch } from "./footer-locale-switch";
@@ -25,7 +26,7 @@ export function MarketingFooter() {
   return (
     <footer className="pt-14 pb-8">
       <div className="mx-auto max-w-[1280px] px-4 rail:px-8">
-        <div className="grid grid-cols-12 gap-8">
+        <div className={`${SITE_GRID_CLASS} gap-y-8`}>
           <BrandBlock />
           {FOOTER_COLUMNS.map((column) => (
             <LinksColumn key={column.key} column={column} />

@@ -1,5 +1,6 @@
 /** A home section's heading: eyebrow and title on the left, the intro on the right. */
 
+import { SITE_GRID_CLASS } from "@/components/marketing/site-grid";
 import { SITE_LABEL_CLASS } from "@/components/marketing/site-label";
 
 export const HOME_TITLE_CLASS =
@@ -18,7 +19,7 @@ export function HomeSectionHead({
   intro: string;
 }) {
   return (
-    <div className="mb-10 grid grid-cols-12 items-end gap-x-8 gap-y-4">
+    <div className={`${SITE_GRID_CLASS} mb-10 items-end gap-y-4`}>
       <div className="col-span-12 flex flex-col gap-3.5 wide:col-span-7">
         <span className={SITE_LABEL_CLASS}>{eyebrow}</span>
         <h2 id={id} className={HOME_TITLE_CLASS}>

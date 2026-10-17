@@ -6,6 +6,7 @@
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { ChevronDownIcon } from "@/components/shared/icon";
+import { SITE_GRID_CLASS } from "@/components/marketing/site-grid";
 import { ChangelogFilter } from "./changelog-filter";
 import { HIDDEN_ON } from "./changelog-filter-values";
 import { releaseView } from "./release-view";
@@ -41,7 +42,7 @@ export async function ChangelogList() {
           key={release.version}
           id={release.version}
           aria-labelledby={`${release.version}-title`}
-          className={`grid grid-cols-12 gap-x-8 gap-y-4 border-b border-dash-rule py-7 rail:py-10 ${view.features.length === 0 ? HIDDEN_ON.features : ""} ${view.fixes.length === 0 ? HIDDEN_ON.fixes : ""}`}
+          className={`${SITE_GRID_CLASS} gap-y-4 border-b border-dash-rule py-7 rail:py-10 ${view.features.length === 0 ? HIDDEN_ON.features : ""} ${view.fixes.length === 0 ? HIDDEN_ON.fixes : ""}`}
         >
           <div className="col-span-12 flex flex-row flex-wrap items-baseline gap-x-4 gap-y-2 wide:col-span-3 wide:flex-col wide:items-start">
             <h2
