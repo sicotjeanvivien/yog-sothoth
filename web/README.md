@@ -273,6 +273,10 @@ re-check against the prod when a fact changes. Its text stays in Geist's
 `latin` subset: one character outside it (a superscript `ᵉʳ`) makes the
 browser fetch another 17 KB font file.
 
+The About page (`about/`) is static too. Its scope lists the protocol group
+of the dashboard menu (`dashboard/sidebar/sidebar-nav.ts`), each one observed
+or "Soon"; its facts are re-checked against the prod like the home page's.
+
 The changelog's source is `changelog/releases.ts`, written in the PR that
 ships each release, in English only. Every line is marked `technical` or not:
 a technical line is folded under "Technical details" and left out of the

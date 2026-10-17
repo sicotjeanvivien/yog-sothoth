@@ -1,13 +1,10 @@
-/**
- * The About page: what Yog-Sothoth is, its principles, its scope and who is behind it — factual,
- * no marketing copy. Copy under `About` in `messages/{en,fr}/about.json`.
- */
+/** The About page: what Yog-Scope is, its approach, its scope and who is behind it. Fully static. */
 
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import type { Metadata } from "next";
 
 import { AboutHero } from "@/components/marketing/about/about-hero";
-import { AboutProse } from "@/components/marketing/about/about-prose";
+import { AboutSections } from "@/components/marketing/about/about-sections";
 
 type AboutPageProps = {
   params: Promise<{ locale: string }>;
@@ -29,9 +26,9 @@ export default async function AboutPage({ params }: AboutPageProps) {
   setRequestLocale(locale);
 
   return (
-    <main>
+    <main className="mx-auto max-w-[1280px] px-4 rail:px-8">
       <AboutHero />
-      <AboutProse />
+      <AboutSections />
     </main>
   );
 }
