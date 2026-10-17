@@ -5,15 +5,32 @@
 
 import { getTranslations } from "next-intl/server";
 
+import { BlockError } from "@/components/dashboard/block-error";
+import { ApiClientError } from "@/lib/api/errors";
 import type { StatsResponse } from "@/lib/api/schema/zod.gen";
+import { fetchStats } from "@/lib/api/server/stats";
 import { formatCount } from "@/lib/format/format-count";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { volumeCoverage } from "@/lib/coverage/volume-coverage";
 
 import { StatCard } from "./stat-card";
 
-export async function OverviewStats({ stats }: { stats: StatsResponse }) {
+export async function OverviewStats() {
   const t = await getTranslations("Dashboard.Overview.kpis");
+
+  let stats: StatsResponse;
+  try {
+    stats = await fetchStats();
+  } catch (err) {
+    if (err instanceof ApiClientError) {
+      return (
+        <section className="px-6 lg:px-10">
+          <BlockError title={t("title")} kind={err.details.kind} />
+        </section>
+      );
+    }
+    throw err;
+  }
 
   // Over the global counters, pool-hours across all pools.
   const coverage = volumeCoverage(stats);

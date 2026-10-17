@@ -10,11 +10,13 @@ export type OpenNavEntry = {
   labelKey: string;
 };
 
-/** An entry without a page, shown with a lock, never a link. */
+/** An entry without a page yet, tagged "Soon", never a link. */
 export type ClosedNavEntry = {
   kind: "closed";
   key: ClosedNavKey;
   labelKey: string;
+  /** A protocol already indexed: its row carries the live dot. */
+  observed?: true;
 };
 
 export type SidebarNavEntry = OpenNavEntry | ClosedNavEntry;
@@ -38,6 +40,7 @@ export const SIDEBAR_NAV: readonly SidebarNavItem[] = [
         kind: "closed",
         key: "meteoraDammV2",
         labelKey: "meteoraDammV2",
+        observed: true,
       },
       {
         kind: "closed",

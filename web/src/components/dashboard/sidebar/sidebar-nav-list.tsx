@@ -3,18 +3,16 @@
 /**
  * The sidebar's menu. ⚠️ A closed entry is a `<span role="link" aria-disabled>` with no `href`,
  * `tabindex` or handler. The collapsed rail keeps only the open entries' icons; every collapsed
- * style is `lg:`-scoped. The `__tests__` hold both rules.
+ * style is `rail:`-scoped. The `__tests__` hold both rules.
  */
 
 import { useId, type FC } from "react";
 import { useTranslations } from "next-intl";
 
 import { Link, usePathname } from "@/i18n/navigation";
-import {
-  LockIcon,
-  OverviewIcon,
-  type IconProps,
-} from "@/components/shared/icon";
+import { OverviewIcon, type IconProps } from "@/components/shared/icon";
+import { useIngestion } from "@/components/dashboard/live-status/live-status-provider";
+import { liveStatusOf } from "@/components/dashboard/live-status/live-status";
 
 import type { OpenNavKey } from "./sidebar-keys";
 import {
@@ -30,7 +28,7 @@ const NAV_ICONS: Record<OpenNavKey, FC<IconProps>> = {
 };
 
 function rowClass(nested: boolean): string {
-  return `flex min-h-9 items-center justify-between gap-2 pr-[10px] ${
+  return `flex min-h-11 rail:min-h-9 items-center justify-between gap-2 pr-[10px] ${
     nested ? "pl-[22px] text-[13px]" : "pl-[10px] text-[14px]"
   }`;
 }
@@ -46,7 +44,7 @@ export function SidebarNavList({ collapsed, onNavigate }: SidebarNavListProps) {
   const t = useTranslations("Dashboard.Sidebar.nav");
   const groupIdPrefix = useId();
 
-  const hiddenWhenCollapsed = collapsed ? "lg:hidden" : undefined;
+  const hiddenWhenCollapsed = collapsed ? "rail:hidden" : undefined;
 
   const renderEntry = (entry: SidebarNavEntry, nested: boolean) =>
     entry.kind === "open" ? (
@@ -63,7 +61,12 @@ export function SidebarNavList({ collapsed, onNavigate }: SidebarNavListProps) {
       </li>
     ) : (
       <li key={entry.key} className={hiddenWhenCollapsed}>
-        <ClosedEntry label={t(entry.labelKey)} nested={nested} />
+        <ClosedEntry
+          label={t(entry.labelKey)}
+          soon={t("soon")}
+          observed={entry.observed === true}
+          nested={nested}
+        />
       </li>
     );
 
@@ -133,17 +136,27 @@ function OpenEntry({
       // overlaps the page.
       title={collapsed ? label : undefined}
       // Inset outline: the scrolling nav would clip one drawn outside.
-      className={`${rowClass(nested)} transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-dash-accent ${state} ${collapsed ? "lg:justify-center lg:px-0" : ""}`}
+      className={`${rowClass(nested)} transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-dash-accent ${state} ${collapsed ? "rail:justify-center rail:px-0" : ""}`}
     >
-      <span className={collapsed ? "lg:sr-only" : undefined}>{label}</span>
+      <span className={collapsed ? "rail:sr-only" : undefined}>{label}</span>
       {collapsed && (
-        <Icon size={18} className="hidden shrink-0 lg:block" />
+        <Icon size={18} className="hidden shrink-0 rail:block" />
       )}
     </Link>
   );
 }
 
-function ClosedEntry({ label, nested }: { label: string; nested: boolean }) {
+function ClosedEntry({
+  label,
+  soon,
+  observed,
+  nested,
+}: {
+  label: string;
+  soon: string;
+  observed: boolean;
+  nested: boolean;
+}) {
   return (
     <span
       role="link"
@@ -151,7 +164,25 @@ function ClosedEntry({ label, nested }: { label: string; nested: boolean }) {
       className={`${rowClass(nested)} cursor-default text-dash-ink-3`}
     >
       <span>{label}</span>
-      <LockIcon size={11} />
+      <span className="flex items-center gap-2">
+        {observed && <ObservedDot />}
+        <span className="border border-dashed border-dash-ink-3 px-1.5 py-px font-dash-mono text-[11px] tracking-[0.08em] whitespace-nowrap uppercase">
+          {soon}
+        </span>
+      </span>
     </span>
+  );
+}
+
+/** Shown only while the ingestion is live; the text alternative says so, not the colour. */
+function ObservedDot() {
+  const t = useTranslations("Dashboard.liveStatus.states");
+  const status = liveStatusOf(useIngestion());
+  if (status.state !== "live") return null;
+  return (
+    <>
+      <span aria-hidden="true" className={`h-2 w-2 ${status.dotClass}`} />
+      <span className="sr-only">{t("live")}</span>
+    </>
   );
 }

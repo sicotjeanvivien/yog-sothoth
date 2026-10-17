@@ -204,18 +204,36 @@ popover previews.
 ## Dashboard frame
 
 The `(dashboard)` layout mounts `DashboardShell`: the sidebar (a sticky rail
-from `lg`, a drawer below it, collapsible on `lg+` from the toggle at its foot,
-with a cookie), the mobile header and the announcement banner.
+from 721 px, the `rail:` breakpoint of `globals.css`; a drawer behind a thin
+"Menu" bar up to 720 px), the announcement banner and the live status. The
+rail collapses from the toggle at its foot, with a cookie.
+
+**Nothing waits for data** — the layout reads only its two cookies before
+rendering: the announcement streams in its own `<Suspense>`, and each Overview
+block in its own, behind a `BlockPlaceholder`. A failed block shows its
+`BlockError`; the status code is already sent.
 
 **Menu** — `sidebar/sidebar-nav.ts` is pure data: Overview, then the
 *Protocol* group (Meteora DAMM v2, Meteora DLMM, Raydium, Orca), then Token.
-An entry is `open` (it has a page and an `href`) or `closed` (shown with a lock,
-no `href`). `SidebarNavList` renders a closed entry as a plain
-`<span>`, never a link; its test fails as soon as one becomes a link. To open
-an entry once its page exists, move its key from `ClosedNavKey` to
-`OpenNavKey` (`sidebar-keys.ts`) and give it an `href`. The compiler then asks
-for its icon, which is all the collapsed rail shows. `/pools`, `/signals`,
-`/watchlist` and the pool detail are no longer in the menu.
+An entry is `open` (it has a page and an `href`) or `closed` (tagged "Soon", no
+`href`; `observed` adds the live dot while the ingestion is live).
+`SidebarNavList` renders a closed entry as a plain `<span>`, never a link; its
+test fails as soon as one becomes a link or loses its tag. To open an entry
+once its page exists, move its key from `ClosedNavKey` to `OpenNavKey`
+(`sidebar-keys.ts`) and give it an `href`. The compiler then asks for its
+icon, which is all the collapsed rail shows. `/pools`, `/signals`, `/watchlist`
+and the pool detail are no longer in the menu.
+
+**Preferences** — at the foot of the menu, under the collapse toggle: the
+language, FR | EN, each a link to the same page and query in that language.
+Whether they are open is the `yog_prefs_open` cookie, read by the layout so the
+first paint is right.
+
+**Live status** — `live-status/`: `LiveStatusProvider` polls
+`/api/ingestion` once for the page; `liveStatusOf` maps it to four states —
+live (green), delayed (yellow), stale (grey), offline (light red, the call
+failed). `LiveIndicator` sits in the page header (the Overview only); it opens
+on click, with the slot and RPC latency of `/api/network`.
 
 **Fonts** — Geist (text) and Geist Mono (figures, addresses, times) are loaded
 by the dashboard layout alone (`next/font/google`), so the marketing never
@@ -224,16 +242,17 @@ Cinzel, loaded for the whole site, serves the frame only for the wordmark;
 page contents not yet redone (the Overview's titles among them) still use it.
 
 **Colours** — the dashboard has one colour per role, declared once as
-`--color-dash-*` in `globals.css`: `bg`, `surface`, `rule`, `ink`, `ink-2`,
-`ink-3`, `accent`, `up`, `down`, `warn`. Every text colour reaches at least
-4.5:1 on `dash-bg` and `dash-surface`. Violet (`accent`) marks the brand: the
-active entry and the live state. Green and red carry a meaning, never the
-brand. The frame (`shell/`, `sidebar/`, `announcements/`) uses these tokens
-only, with no hex values and no Tailwind palette. The background is a flat
-`dash-bg`, which also sits behind the pages that left the menu, with no glow
-and no text shadow. The older palette (`cosmos-*`, `sothoth-*`, `slate-*`)
-remains in use for the marketing site and for page contents not yet moved to
-the roles, the Overview included.
+`--color-dash-*` in `globals.css`: `bg`, `surface`, `surface-2`, `rule`,
+`ink`, `ink-2`, `ink-3`, `accent`, `up`, `down`, `warn`. Every text colour
+reaches at least 4.5:1 on `dash-bg` and `dash-surface`. Violet (`accent`)
+marks the brand: the active entry, the keyboard focus. Green says live; green
+and red carry a meaning, never the brand. The frame (`shell/`, `sidebar/`,
+`live-status/`, `announcements/`) uses these tokens only, with no hex values
+and no Tailwind palette. The background is a flat `dash-bg`, which also sits
+behind the pages that left the menu, with no glow and no text shadow. The
+older palette (`cosmos-*`, `sothoth-*`, `slate-*`) remains in use for the
+marketing site and for page contents not yet moved to the roles, the Overview
+included.
 
 ## Pools list, watchlist, pool detail
 

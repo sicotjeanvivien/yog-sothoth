@@ -1,31 +1,38 @@
 "use client";
 
 /**
- * The dashboard chrome: below `lg` the sidebar is a drawer behind a hamburger, above it a
+ * The dashboard chrome: up to 720 px the sidebar is a drawer behind "Menu", from 721 px a
  * fixed rail. The switch is CSS; React only tracks `isOpen`. No focus trap in the drawer.
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import Image from "next/image";
+
+import { LiveStatusProvider } from "@/components/dashboard/live-status/live-status-provider";
 import { Sidebar } from "@/components/dashboard/sidebar/sidebar";
 import {
   SIDEBAR_COLLAPSED_COOKIE,
   SIDEBAR_COOKIE_MAX_AGE_S,
 } from "@/components/dashboard/sidebar/sidebar-state";
 import { HamburgerIcon } from "@/components/shared/icon";
+import { Link } from "@/i18n/navigation";
 
-// ⚠️ Tailwind's `lg:`, repeated for the resize listener.
-const LG_BREAKPOINT_PX = 1024;
+// ⚠️ `--breakpoint-rail` of globals.css, repeated for the resize listener.
+const RAIL_BREAKPOINT = "45.0625rem";
 
 export function DashboardShell({
   children,
   initialCollapsed = false,
+  initialPreferencesOpen = false,
   fontVariables,
 }: {
   children: React.ReactNode;
   /** Read from the cookie by the server layout, so the first paint has the right width. */
   initialCollapsed?: boolean;
+  /** Read from its cookie by the server layout, like `initialCollapsed`. */
+  initialPreferencesOpen?: boolean;
   /** next/font classes declaring `--font-geist` and `--font-geist-mono`. */
   fontVariables: string;
 }) {
@@ -63,9 +70,9 @@ export function DashboardShell({
     };
   }, [isOpen]);
 
-  // Reset to closed at `lg`, or the scroll-lock and overlay linger after a resize.
+  // Reset to closed on the rail, or the scroll-lock and overlay linger after a resize.
   useEffect(() => {
-    const query = window.matchMedia(`(min-width: ${LG_BREAKPOINT_PX}px)`);
+    const query = window.matchMedia(`(min-width: ${RAIL_BREAKPOINT})`);
     function onChange(event: MediaQueryListEvent) {
       if (event.matches) close();
     }
@@ -76,40 +83,63 @@ export function DashboardShell({
   return (
     // Solid background over the cosmic one of `body` — behind the pages
     // that left the menu too.
-    <div className={`${fontVariables} flex min-h-screen items-start bg-dash-bg`}>
-      <MobileHeader onOpen={open} menuLabel={t("openMenu")} />
+    <LiveStatusProvider>
+      <div
+        className={`${fontVariables} dash-root flex min-h-screen items-start bg-dash-bg [color-scheme:dark]`}
+      >
+        <MobileHeader onOpen={open} isOpen={isOpen} menu={t("menu")} />
 
-      {isOpen && <Overlay onClick={close} label={t("closeMenu")} />}
+        {isOpen && <Overlay onClick={close} label={t("closeMenu")} />}
 
-      <Sidebar
-        isOpen={isOpen}
-        onNavigate={close}
-        collapsed={collapsed}
-        onToggleCollapsed={toggleCollapsed}
-      />
+        <Sidebar
+          isOpen={isOpen}
+          onNavigate={close}
+          collapsed={collapsed}
+          onToggleCollapsed={toggleCollapsed}
+          initialPreferencesOpen={initialPreferencesOpen}
+        />
 
-      {/* `pt-14` below `lg` makes room for the fixed mobile header. */}
-      <main className="min-w-0 flex-1 pt-14 lg:pt-0">{children}</main>
-    </div>
+        {/* `pt-14` up to 720 px makes room for the fixed mobile header. */}
+        <main className="min-w-0 flex-1 pt-14 rail:pt-0">{children}</main>
+      </div>
+    </LiveStatusProvider>
   );
 }
 
 function MobileHeader({
   onOpen,
-  menuLabel,
+  isOpen,
+  menu,
 }: {
   onOpen: () => void;
-  menuLabel: string;
+  isOpen: boolean;
+  menu: string;
 }) {
+  const tBrand = useTranslations("Brand");
+
   return (
-    <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center border-b border-dash-rule bg-dash-bg px-4 font-dash-sans lg:hidden">
+    <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-dash-rule bg-dash-bg px-4 font-dash-sans text-dash-ink rail:hidden">
+      <Link href="/" className="flex items-center gap-3">
+        <Image
+          src="/logo_ys.png"
+          alt=""
+          width={30}
+          height={34}
+          className="h-[34px] w-[30px] shrink-0 object-contain"
+        />
+        <span className="font-display text-[16px] font-semibold tracking-[0.16em] uppercase">
+          {tBrand("name")}
+        </span>
+      </Link>
       <button
         type="button"
         onClick={onOpen}
-        aria-label={menuLabel}
-        className="flex h-9 w-9 items-center justify-center text-dash-ink-2 transition-colors hover:bg-dash-surface hover:text-dash-ink"
+        aria-expanded={isOpen}
+        aria-controls="dashboard-menu"
+        className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 border border-dash-rule px-3 text-[14px] text-dash-ink transition-colors hover:bg-dash-surface"
       >
-        <HamburgerIcon />
+        <HamburgerIcon size={16} />
+        {menu}
       </button>
     </header>
   );
@@ -121,7 +151,7 @@ function Overlay({ onClick, label }: { onClick: () => void; label: string }) {
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="fixed inset-0 z-30 bg-dash-bg/70 lg:hidden"
+      className="fixed inset-0 z-30 bg-dash-bg/70 rail:hidden"
     />
   );
 }
