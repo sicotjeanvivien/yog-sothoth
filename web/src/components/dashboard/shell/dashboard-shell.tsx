@@ -13,24 +13,19 @@ import {
   SIDEBAR_COLLAPSED_COOKIE,
   SIDEBAR_COOKIE_MAX_AGE_S,
 } from "@/components/dashboard/sidebar/sidebar-state";
+import { RAIL_BREAKPOINT } from "@/components/shared/breakpoints";
 import { HamburgerIcon } from "@/components/shared/icon";
-
-// ⚠️ `--breakpoint-rail` of globals.css, repeated for the resize listener.
-const RAIL_BREAKPOINT = "45.0625rem";
 
 export function DashboardShell({
   children,
   initialCollapsed = false,
   initialPreferencesOpen = false,
-  fontVariables,
 }: {
   children: React.ReactNode;
   /** Read from the cookie by the server layout, so the first paint has the right width. */
   initialCollapsed?: boolean;
   /** Read from its cookie by the server layout, like `initialCollapsed`. */
   initialPreferencesOpen?: boolean;
-  /** next/font classes declaring `--font-geist` and `--font-geist-mono`. */
-  fontVariables: string;
 }) {
   const t = useTranslations("Dashboard.shell");
   const [isOpen, setIsOpen] = useState(false);
@@ -80,7 +75,7 @@ export function DashboardShell({
     // Solid background over the cosmic one of `body` — behind the pages
     // that left the menu too.
     <div
-      className={`${fontVariables} dash-root flex min-h-screen items-start bg-dash-bg [color-scheme:dark]`}
+      className="dash-root flex min-h-screen items-start bg-dash-bg [color-scheme:dark]"
     >
       <MobileHeader onOpen={open} isOpen={isOpen} menu={t("menu")} />
 

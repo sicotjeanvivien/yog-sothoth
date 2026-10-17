@@ -1,5 +1,6 @@
 /** The About page's prose cards, copy under `About.prose` in `messages/{en,fr}/about.json`. */
 
+import Image from "next/image";
 import { getTranslations } from "next-intl/server";
 import type { FC, ReactNode } from "react";
 
@@ -8,7 +9,6 @@ import {
   OpenSourceIcon,
   PulseIcon,
   SignalsIcon,
-  UsersIcon,
   type IconProps,
 } from "@/components/shared/icon";
 
@@ -31,7 +31,8 @@ const BODY_CLASS = "mt-3 text-[17px] leading-[1.7] text-slate-300";
 
 type CardConfig = {
   key: string;
-  Icon: FC<IconProps>;
+  /** `null`: the AWSD stamp in place of an icon. */
+  Icon: FC<IconProps> | null;
 };
 
 const CARDS: readonly CardConfig[] = [
@@ -39,7 +40,7 @@ const CARDS: readonly CardConfig[] = [
   { key: "approach", Icon: PulseIcon },
   { key: "audience", Icon: SignalsIcon },
   { key: "availability", Icon: OpenSourceIcon },
-  { key: "behind", Icon: UsersIcon },
+  { key: "behind", Icon: null },
 ] as const;
 
 export async function AboutProse() {
@@ -49,7 +50,26 @@ export async function AboutProse() {
     <section className="mx-auto max-w-[1800px] px-6 pb-24 lg:px-12">
       <div className="mx-auto max-w-[128ch] space-y-4">
         {CARDS.map(({ key, Icon }) => (
-          <ProseCard key={key} Icon={Icon} title={t(`${key}.title`)}>
+          <ProseCard
+            key={key}
+            badge={
+              Icon ? (
+                <div className={ICON_BADGE_CLASS}>
+                  <Icon size={32} />
+                </div>
+              ) : (
+                <Image
+                  src="/logo-tampon-sombre.svg"
+                  alt=""
+                  width={64}
+                  height={64}
+                  unoptimized
+                  className="shrink-0"
+                />
+              )
+            }
+            title={t(`${key}.title`)}
+          >
             {key === "behind"
               ? t.rich(`${key}.body`, {
                   awsd: (chunks) => (
@@ -82,19 +102,17 @@ export async function AboutProse() {
 }
 
 function ProseCard({
-  Icon,
+  badge,
   title,
   children,
 }: {
-  Icon: FC<IconProps>;
+  badge: ReactNode;
   title: string;
   children: ReactNode;
 }) {
   return (
     <article className={CARD_CLASS}>
-      <div className={ICON_BADGE_CLASS}>
-        <Icon size={32} />
-      </div>
+      {badge}
       <div>
         <h2 className={TITLE_CLASS}>{title}</h2>
         <p className={BODY_CLASS}>{children}</p>

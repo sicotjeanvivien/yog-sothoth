@@ -1,49 +1,47 @@
 "use client";
 
 /**
- * The marketing nav, above the hero rather than over it. Below `lg` the links and CTA
- * collapse behind a hamburger: the switch is CSS, React only tracks `isOpen`.
+ * The site header. Up to 720 px the links fold behind "Menu", in the flow under the bar, and
+ * the short "Dashboard" button stays out. The switch is CSS; React only tracks `isOpen`.
  */
 
-import { useCallback, useEffect, useState } from "react";
-import Image from "next/image";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { Link } from "@/i18n/navigation";
-import { MARKETING_NAV_LINKS } from "./marketing-nav-links";
+import { Link, usePathname } from "@/i18n/navigation";
+import { RAIL_BREAKPOINT } from "@/components/shared/breakpoints";
 import { CloseIcon, HamburgerIcon } from "@/components/shared/icon";
 import { DashboardButton } from "@/components/shared/dashboard-button";
-
-// ⚠️ Tailwind's `lg:`, repeated for the resize listener.
-const LG_BREAKPOINT_PX = 1024;
+import { SiteBrand } from "@/components/marketing/site-brand";
+import { MARKETING_NAV_LINKS } from "./marketing-nav-links";
 
 export function MarketingNav() {
-  const [isOpen, setIsOpen] = useState(false);
+  const t = useTranslations("Marketing");
+  const pathname = usePathname();
+  // The page it was opened on: the layout outlives a navigation, any link closes it.
+  const [openOn, setOpenOn] = useState<string | null>(null);
+  const isOpen = openOn === pathname;
+  const navId = useId();
+  const toggleRef = useRef<HTMLButtonElement>(null);
 
-  const close = useCallback(() => setIsOpen(false), []);
-  const toggle = useCallback(() => setIsOpen((v) => !v), []);
+  const close = useCallback(() => setOpenOn(null), []);
+  const toggle = () => setOpenOn(isOpen ? null : pathname);
 
   useEffect(() => {
     if (!isOpen) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") close();
+      if (event.key !== "Escape") return;
+      close();
+      // ⚠️ Focus may sit on a link of the panel being hidden.
+      toggleRef.current?.focus();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isOpen, close]);
 
+  // Reset to closed from the rail width, or the state sticks after a resize.
   useEffect(() => {
-    if (!isOpen) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, [isOpen]);
-
-  // Reset to closed at `lg`, or the state sticks after a resize.
-  useEffect(() => {
-    const query = window.matchMedia(`(min-width: ${LG_BREAKPOINT_PX}px)`);
+    const query = window.matchMedia(`(min-width: ${RAIL_BREAKPOINT})`);
     function onChange(event: MediaQueryListEvent) {
       if (event.matches) close();
     }
@@ -52,107 +50,48 @@ export function MarketingNav() {
   }, [close]);
 
   return (
-    <nav className="relative z-40 border-b border-sothoth-500/15 bg-cosmos-950">
-      <div className="relative z-40 mx-auto flex max-w-[1800px] items-center justify-between px-6 py-4.5 lg:px-12">
-        <BrandMark />
+    <header className="border-b border-dash-rule">
+      <div className="mx-auto flex min-h-16 max-w-[1280px] flex-wrap items-center justify-between gap-x-3 gap-y-2 rail:gap-x-8 px-4 rail:min-h-18 rail:px-8">
+        <SiteBrand priority compact />
 
-        <div className="hidden items-center gap-9 lg:flex">
-          <MarketingNavLinks orientation="row" />
+        <div className="flex items-center gap-2 rail:hidden">
+          <DashboardButton label={t("dashboardShort")} />
+          <button
+            ref={toggleRef}
+            type="button"
+            onClick={toggle}
+            aria-expanded={isOpen}
+            aria-controls={navId}
+            aria-label={t("nav.menu")}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center border border-dash-rule text-dash-ink"
+          >
+            {isOpen ? <CloseIcon size={16} /> : <HamburgerIcon size={16} />}
+          </button>
         </div>
 
-        <div className="hidden lg:block">
-          <DashboardButton />
-        </div>
-
-        <button
-          type="button"
-          onClick={toggle}
-          aria-expanded={isOpen}
-          aria-label="Toggle navigation menu"
-          className="flex h-9 w-9 items-center justify-center rounded-[3px] text-slate-300 transition-colors hover:bg-sothoth-500/10 hover:text-slate-100 lg:hidden"
+        <nav
+          id={navId}
+          aria-label={t("nav.label")}
+          className={`${isOpen ? "flex" : "hidden"} basis-full flex-col border-t border-dash-rule pb-3 rail:flex rail:basis-auto rail:flex-row rail:flex-wrap rail:items-center rail:gap-x-7 rail:border-t-0 rail:pb-0`}
         >
-          {isOpen ? <CloseIcon /> : <HamburgerIcon />}
-        </button>
-      </div>
-
-      <MobileMenu isOpen={isOpen} onClose={close} />
-    </nav>
-  );
-}
-
-/** The dropdown panel below `lg`, removed from the DOM when closed. */
-function MobileMenu({
-  isOpen,
-  onClose,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-}) {
-  if (!isOpen) return null;
-
-  return (
-    <div className="lg:hidden">
-      {/* ⚠️ z-30, under the z-40 <nav>: the bar stays usable above the overlay. */}
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close navigation menu"
-        className="fixed inset-0 z-30 bg-cosmos-950/70 backdrop-blur-[2px]"
-      />
-
-      <div className="relative z-40 border-b border-sothoth-500/15 bg-cosmos-950">
-        <div className="flex flex-col gap-1 px-6 py-4">
-          <MarketingNavLinks orientation="column" onNavigate={onClose} />
-          <div className="mt-3">
-            <DashboardButton className="w-full justify-center" />
+          <MarketingNavLinks onNavigate={close} />
+          {/* ⚠️ A wrapper: the button's own `inline-flex` would beat a `hidden` passed to it. */}
+          <div className="hidden rail:block">
+            <DashboardButton />
           </div>
-        </div>
+        </nav>
       </div>
-    </div>
+    </header>
   );
 }
 
-/** Logo + wordmark, links to the marketing home. */
-function BrandMark() {
-  const t = useTranslations("Brand");
-  return (
-    <Link href="/" className="flex items-center gap-2.75">
-      <div className="flex items-center text-letf">
-        <Image
-          src="/logo_ys.png"
-          alt={t("name")}
-          width={48}
-          height={54}
-          priority
-          className="h-13.5 w-12 object-contain filter-[drop-shadow(0_0_14px_rgba(139,92,246,0.55))]"
-        />
-        <div className="flex flex-col ml-2">
-          <p className="font-display text-[24px] font-semibold tracking-[0.22em] text-[#f1ecff] indent-[0.22em] [text-shadow:0_0_16px_rgba(139,92,246,0.75)]">
-            {t("name")}
-          </p>
-          <p className="text-[14px] font-semibold tracking-[0.34em] text-sothoth-500 uppercase indent-[0.34em]">
-            {t("tagline")}
-          </p>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-/** The nav links of both the desktop row and the mobile panel; `onNavigate` closes the panel. */
-export function MarketingNavLinks({
-  orientation,
-  onNavigate,
-}: {
-  orientation: "row" | "column";
-  onNavigate?: () => void;
-}) {
+/** One row per link up to 720 px, inline from there; the current page is underlined. */
+function MarketingNavLinks({ onNavigate }: { onNavigate: () => void }) {
   const t = useTranslations("Marketing.nav");
+  const pathname = usePathname();
 
   const itemClass =
-    orientation === "row"
-      ? "text-[17px] font-medium text-slate-100 transition-colors hover:text-sothoth-400"
-      : "rounded-[3px] px-3 py-[11px] text-[17px] font-medium text-slate-300 transition-colors hover:bg-sothoth-500/10 hover:text-[#f1ecff]";
+    "inline-flex min-h-12 items-center border-b border-dash-rule text-[16px] transition-colors hover:text-dash-ink rail:min-h-11 rail:border-b-0 rail:text-[14px]";
 
   return (
     <>
@@ -167,19 +106,21 @@ export function MarketingNavLinks({
               target="_blank"
               rel="noopener noreferrer"
               onClick={onNavigate}
-              className={itemClass}
+              className={`${itemClass} text-dash-ink-2`}
             >
               {label}
             </a>
           );
         }
 
+        const current = pathname === link.href;
         return (
           <Link
             key={link.key}
             href={link.href}
             onClick={onNavigate}
-            className={itemClass}
+            aria-current={current ? "page" : undefined}
+            className={`${itemClass} ${current ? "text-dash-ink shadow-[inset_0_-2px_0_var(--color-dash-accent)]" : "text-dash-ink-2"}`}
           >
             {label}
           </Link>

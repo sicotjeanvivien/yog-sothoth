@@ -5,10 +5,10 @@
  * pins it only if no ancestor creates an `overflow` scroll context.
  */
 
-import Image from "next/image";
 import { useTranslations } from "next-intl";
 
 import { Link } from "@/i18n/navigation";
+import { LogoMark } from "@/components/shared/logo-mark";
 import {
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
@@ -83,14 +83,7 @@ export function Brand({
   return (
     <div className={`flex ${collapsed ? "rail:justify-center" : ""}`}>
       <Link href="/" className="flex items-center gap-3">
-        <Image
-          src="/logo_ys.png"
-          alt=""
-          width={small ? 30 : 48}
-          height={small ? 34 : 54}
-          priority
-          className={`shrink-0 object-contain ${small ? "h-[34px] w-[30px]" : "h-13.5 w-12"}`}
-        />
+        <LogoMark width={small ? 30 : 48} priority />
         <span
           className={`font-display text-[16px] font-semibold tracking-[0.16em] whitespace-nowrap uppercase ${collapsed ? "rail:sr-only" : ""}`}
         >

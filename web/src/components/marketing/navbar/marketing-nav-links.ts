@@ -9,7 +9,7 @@ export type MarketingNavLink = {
 };
 
 export const MARKETING_NAV_LINKS: readonly MarketingNavLink[] = [
-  { key: "overview", labelKey: "overview", href: "/overview", external: false },
+  { key: "features", labelKey: "features", href: "/#features", external: false },
   { key: "support-us", labelKey: "support-us", href: "/support-us", external: false },
   {
     key: "github",

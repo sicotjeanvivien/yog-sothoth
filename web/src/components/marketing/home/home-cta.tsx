@@ -1,8 +1,8 @@
 /** The homepage's closing call to action, before the footer. */
 
-import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { DashboardButton } from "@/components/shared/dashboard-button";
+import { LogoMark } from "@/components/shared/logo-mark";
 
 export function HomeCta() {
   const t = useTranslations("Marketing.cta");
@@ -16,13 +16,7 @@ export function HomeCta() {
         />
 
         <div className="relative z-1 flex flex-col items-center">
-          <Image
-            src="/logo_ys.png"
-            alt=""
-            width={64}
-            height={71}
-            className="h-17.75 w-16 object-contain filter-[drop-shadow(0_0_16px_rgba(139,92,246,0.55))]"
-          />
+          <LogoMark width={64} />
 
           <h2 className="mt-6 font-display text-[28px] font-bold tracking-[0.04em] text-[#f5f2ff] lg:text-[36px]">
             {t("title")}
@@ -33,7 +27,7 @@ export function HomeCta() {
           </p>
 
           <div className="mt-8">
-            <DashboardButton size="lg" />
+            <DashboardButton />
           </div>
         </div>
       </div>

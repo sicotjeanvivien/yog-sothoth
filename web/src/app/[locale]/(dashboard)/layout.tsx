@@ -3,13 +3,12 @@ export const dynamic = "force-dynamic";
 
 /**
  * The `(dashboard)` layout: the chrome is `DashboardShell`'s; this prepares only what the first
- * paint needs — the two frame cookies and the fonts. ⚠️ No API call before rendering: the
- * announcement streams in its own `<Suspense>`.
+ * paint needs — the two frame cookies. ⚠️ No API call before rendering: the announcement
+ * streams in its own `<Suspense>`.
  */
 
 import { Suspense } from "react";
 import { cookies } from "next/headers";
-import { Geist, Geist_Mono } from "next/font/google";
 
 import { AnnouncementBanner } from "@/components/dashboard/announcements/announcement-banner";
 import { PREFERENCES_OPEN_COOKIE } from "@/components/dashboard/sidebar/preferences-state";
@@ -22,19 +21,6 @@ import {
   parseDismissedIds,
   pickAnnouncement,
 } from "@/lib/announcements/announcement-state";
-
-// Declared here, not in the locale layout: the marketing must not
-// download them. The `--font-dash-*` theme tokens read these variables.
-const geist = Geist({
-  subsets: ["latin"],
-  variable: "--font-geist",
-  display: "swap",
-});
-const geistMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-geist-mono",
-  display: "swap",
-});
 
 /** Any failure is no banner: announcements must never take the dashboard down. */
 async function safeActiveAnnouncements(): Promise<AnnouncementResponse[]> {
@@ -75,7 +61,6 @@ export default async function DashboardLayout({
     <DashboardShell
       initialCollapsed={initialCollapsed}
       initialPreferencesOpen={initialPreferencesOpen}
-      fontVariables={`${geist.variable} ${geistMono.variable}`}
     >
       <Suspense fallback={null}>
         <AnnouncementSlot />

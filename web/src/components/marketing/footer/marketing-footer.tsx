@@ -1,37 +1,46 @@
 /**
  * The marketing footer, a Server Component: brand, the `FOOTER_COLUMNS` link columns, the
- * AWSD credit, then the copyright bar.
+ * AWSD credit, then the copyright, the version and the language.
  */
 
 import Image from "next/image";
 import { useTranslations } from "next-intl";
 
 import { Link } from "@/i18n/navigation";
+import { SiteBrand } from "@/components/marketing/site-brand";
+import { RELEASES } from "@/components/marketing/changelog/releases";
+import { FooterLocaleSwitch } from "./footer-locale-switch";
 import {
   FOOTER_AWSD,
   FOOTER_COLUMNS,
   FOOTER_SOCIALS,
   type FooterColumn,
 } from "./marketing-footer-links";
-import { GithubIcon, XIcon } from "@/components/shared/icon";
+
+const HEADING_CLASS =
+  "font-dash-mono text-[11px] font-medium tracking-[0.12em] text-dash-ink-3 uppercase";
 
 export function MarketingFooter() {
   const t = useTranslations("Marketing.footer");
   const year = new Date().getFullYear();
 
   return (
-    <footer className="border-t border-sothoth-500/15 bg-cosmos-950">
-      <div className="mx-auto max-w-[1800px] px-6 lg:px-12">
-        <div className="grid grid-cols-1 gap-10 py-14 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1.4fr]">
+    <footer className="pt-14 pb-8">
+      <div className="mx-auto max-w-[1280px] px-4 rail:px-8">
+        <div className="grid grid-cols-12 gap-8">
           <BrandBlock />
           {FOOTER_COLUMNS.map((column) => (
             <LinksColumn key={column.key} column={column} />
           ))}
-          <AwsdBox />
+          <AwsdColumn />
         </div>
 
-        <div className="border-t border-sothoth-500/10 py-6 text-center text-[12px] text-slate-500">
-          {t("copyright", { year })}
+        <div className="mt-12 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-dash-rule pt-5 text-[12px] text-dash-ink-3">
+          <span>{t("copyright", { year })}</span>
+          <span className="inline-flex items-center gap-4">
+            <span className="font-dash-mono">{RELEASES[0]?.version}</span>
+            <FooterLocaleSwitch label={t("language")} />
+          </span>
         </div>
       </div>
     </footer>
@@ -40,46 +49,23 @@ export function MarketingFooter() {
 
 function BrandBlock() {
   const t = useTranslations("Marketing.footer");
-  const tBrand = useTranslations("Brand");
 
   return (
-    <div>
-      <Link href="/" className="flex items-center gap-2.75">
-        <div className="flex items-center text-letf">
-          <Image
-            src="/logo_ys.png"
-            alt={tBrand("name")}
-            width={48}
-            height={54}
-            priority
-            className="h-13.5 w-12 object-contain filter-[drop-shadow(0_0_14px_rgba(139,92,246,0.55))]"
-          />
-          <div className="flex flex-col ml-2">
-            <p className="font-display text-[24px] font-semibold tracking-[0.22em] text-[#f1ecff] indent-[0.22em] [text-shadow:0_0_16px_rgba(139,92,246,0.75)]">
-              {tBrand("name")}
-            </p>
-            <p className="text-[14px] font-semibold tracking-[0.34em] text-sothoth-500 uppercase indent-[0.34em]">
-              {tBrand("tagline")}
-            </p>
-          </div>
-        </div>
-      </Link>
-
-      <p className="mt-4 max-w-70 text-[17px] leading-[1.6] text-slate-400">
-        {t("description")}
-      </p>
-
-      <div className="mt-5 flex items-center gap-3">
+    <div className="col-span-12 flex flex-col gap-4 wide:col-span-5">
+      <div>
+        <SiteBrand />
+      </div>
+      <p className="max-w-[36ch] text-dash-ink-2">{t("description")}</p>
+      <div className="flex gap-2">
         {FOOTER_SOCIALS.map((social) => (
           <a
             key={social.key}
             href={social.href}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label={social.label}
-            className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-sothoth-500/15 text-slate-400 transition-colors hover:border-sothoth-500/35 hover:text-[#f1ecff]"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center border border-dash-rule px-3 font-dash-mono text-[12px] text-dash-ink-2 transition-colors hover:border-dash-ink-3 hover:text-dash-ink"
           >
-            {social.icon === "x" ? <XIcon /> : <GithubIcon />}
+            {social.label}
           </a>
         ))}
       </div>
@@ -90,75 +76,52 @@ function BrandBlock() {
 function LinksColumn({ column }: { column: FooterColumn }) {
   const t = useTranslations(column.namespace);
 
-  const itemClass =
-    "text-[17px] font-medium text-slate-100 transition-colors hover:text-sothoth-400";
-
   return (
-    <div>
-      <h3 className="text-[14px] font-semibold tracking-[0.20em] text-slate-500 uppercase">
-        {t("heading")}
-      </h3>
-
-      <ul className="mt-4 flex flex-col gap-2.5">
-        {column.links.map((link) => {
-          const label = t(link.labelKey);
-
-          if (link.kind === "anchor" || link.kind === "external") {
-            const external = link.kind === "external";
-            return (
-              <li key={link.key}>
-                <a
-                  href={link.href}
-                  className={itemClass}
-                  {...(external
-                    ? { target: "_blank", rel: "noopener noreferrer" }
-                    : {})}
-                >
-                  {label}
-                </a>
-              </li>
-            );
-          }
-
-          return (
-            <li key={link.key}>
-              <Link href={link.href} className={itemClass}>
-                {label}
-              </Link>
-            </li>
-          );
-        })}
+    <nav
+      aria-label={t("heading")}
+      className="col-span-12 flex flex-col gap-1 rail:col-span-4 wide:col-span-2"
+    >
+      <h3 className={HEADING_CLASS}>{t("heading")}</h3>
+      <ul className="mt-2 flex flex-col">
+        {column.links.map((link) => (
+          <li key={link.key}>
+            <Link
+              href={link.href}
+              className="inline-flex min-h-11 items-center text-[14px] text-dash-ink-2 transition-colors hover:text-dash-ink rail:min-h-8"
+            >
+              {t(link.labelKey)}
+            </Link>
+          </li>
+        ))}
       </ul>
-    </div>
+    </nav>
   );
 }
 
-function AwsdBox() {
+function AwsdColumn() {
   const t = useTranslations("Marketing.footer.awsd");
 
   return (
-    <a
-      href={FOOTER_AWSD.href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="group flex flex-col justify-center rounded-lg border border-sothoth-500/15 bg-cosmos-900/50 p-6 transition-colors hover:border-sothoth-500/35"
-    >
-      <div className="flex items-center gap-3">
-        <Image
-          src="/awsd-logo.png"
-          alt="AWSD"
-          width={40}
-          height={40}
-          className="h-[40] w-[40] object-contain"
-        />
-        <span className="font-display text-[20px] font-semibold tracking-[0.14em] text-[#f1ecff]">
-          {t("title")}
-        </span>
+    <div className="col-span-12 flex flex-col gap-1 rail:col-span-4 wide:col-span-3">
+      <h3 className={HEADING_CLASS}>{t("title")}</h3>
+      <div className="mt-2.5 flex flex-col items-start gap-2">
+        <a
+          href={FOOTER_AWSD.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={t("label")}
+          className="inline-flex min-h-11 items-center"
+        >
+          <Image
+            src="/logo-horizontal-sombre.svg"
+            alt=""
+            width={105}
+            height={36}
+            unoptimized
+          />
+        </a>
+        <p className="text-[14px] text-dash-ink-2">{t("tagline")}</p>
       </div>
-
-      <p className="mt-3 text-[17px] leading-[1.6] text-slate-400">
-        {t("tagline")}
-      </p>
-    </a>
+    </div>
   );
 }
