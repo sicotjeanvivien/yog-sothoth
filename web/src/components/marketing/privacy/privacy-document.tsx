@@ -1,7 +1,4 @@
-/**
- * The privacy policy: one section per processing, since GDPR article 13 asks the same
- * questions of each. Copy under `Privacy.prose` in `messages/{en,fr}/privacy.json`.
- */
+/** The privacy policy: one section per processing, since GDPR article 13 asks the same questions of each. */
 
 import { useTranslations } from "next-intl";
 

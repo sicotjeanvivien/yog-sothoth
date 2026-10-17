@@ -1,7 +1,4 @@
-/**
- * The legal notice, copy under `LegalNotice.cards` in `messages/{en,fr}/legal-notice.json`.
- * The editor section carries the registration number and phone LCEN article 1-1 requires.
- */
+/** The legal notice. Its editor section carries the registration number and phone LCEN article 1-1 requires. */
 
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";

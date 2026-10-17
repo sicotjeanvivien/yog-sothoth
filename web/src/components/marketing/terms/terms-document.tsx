@@ -1,5 +1,3 @@
-/** The terms of service. Copy under `Terms.prose` in `messages/{en,fr}/terms.json`. */
-
 import { useTranslations } from "next-intl";
 
 import { LegalDocument } from "@/components/marketing/legal/legal-document";

@@ -1,5 +1,5 @@
 /**
- * The privacy policy, one section per processing. ⚠️ Its copy states Cloudflare dashboard facts:
+ * The privacy policy. ⚠️ Its copy states Cloudflare dashboard facts:
  * both hosts proxied; Bot Fight Mode, rate limiting, Always Online and Web Analytics off;
  * Challenge Passage at 30 min. Changing one makes the page false. A new
  * `document.cookie` in `web/src` belongs in the cookies section.

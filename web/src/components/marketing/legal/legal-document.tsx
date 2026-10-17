@@ -46,14 +46,14 @@ export function LegalDocument({
     <>
       <nav
         aria-label={t("tabs")}
-        className="flex gap-x-8 overflow-x-auto border-b border-dash-rule [scrollbar-width:none]"
+        className="flex flex-wrap gap-x-5 border-b border-dash-rule rail:gap-x-8"
       >
         {DOCUMENTS.map(({ key, href }) => (
           <Link
             key={key}
             href={href}
             aria-current={key === current ? "page" : undefined}
-            className={`shrink-0 pt-[18px] pb-3.5 text-[15px] font-medium whitespace-nowrap ${
+            className={`pt-[18px] pb-3.5 text-[14px] font-medium whitespace-nowrap rail:text-[15px] ${
               key === current
                 ? "text-dash-ink shadow-[inset_0_-2px_0_var(--color-dash-accent)]"
                 : "text-dash-ink-2 hover:text-dash-ink"
