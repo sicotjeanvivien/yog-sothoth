@@ -18,7 +18,7 @@ export function HomeSectionHead({
   intro: string;
 }) {
   return (
-    <div className="mb-10 grid grid-cols-12 items-end gap-x-8 gap-y-4">
+    <div className="mb-10 grid grid-cols-12 items-end gap-x-4 gap-y-4 rail:gap-x-8">
       <div className="col-span-12 flex flex-col gap-3.5 wide:col-span-7">
         <span className={SITE_LABEL_CLASS}>{eyebrow}</span>
         <h2 id={id} className={HOME_TITLE_CLASS}>

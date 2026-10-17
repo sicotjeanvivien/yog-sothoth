@@ -25,7 +25,7 @@ export function MarketingFooter() {
   return (
     <footer className="pt-14 pb-8">
       <div className="mx-auto max-w-[1280px] px-4 rail:px-8">
-        <div className="grid grid-cols-12 gap-8">
+        <div className="grid grid-cols-12 gap-x-4 gap-y-8 rail:gap-x-8">
           <BrandBlock />
           {FOOTER_COLUMNS.map((column) => (
             <LinksColumn key={column.key} column={column} />

@@ -135,7 +135,7 @@ function AboutRow({
     <section
       id={anchor}
       aria-labelledby={id}
-      className="grid grid-cols-12 gap-x-8 gap-y-4 border-b border-dash-rule py-10 last:border-b-0 rail:py-14"
+      className="grid grid-cols-12 gap-x-4 gap-y-4 border-b border-dash-rule py-10 last:border-b-0 rail:gap-x-8 rail:py-14"
     >
       <div className="col-span-12 flex flex-col gap-2.5 wide:col-span-4">
         <span className="font-dash-mono text-[12px] tracking-[0.08em] text-dash-accent">

@@ -15,7 +15,7 @@ export function HomeHero() {
   return (
     <section
       aria-labelledby="hero-title"
-      className="grid grid-cols-12 items-center gap-x-8 gap-y-12 pt-12 pb-14 rail:pt-[88px] rail:pb-24"
+      className="grid grid-cols-12 items-center gap-x-4 gap-y-12 rail:gap-x-8 pt-12 pb-14 rail:pt-[88px] rail:pb-24"
     >
       <div className="col-span-12 flex flex-col gap-6 wide:col-span-7">
         <span className={`${SITE_LABEL_CLASS} inline-flex items-center gap-2`}>

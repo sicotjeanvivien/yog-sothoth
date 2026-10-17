@@ -13,7 +13,7 @@ export function AboutHero() {
   return (
     <section
       aria-labelledby="about-title"
-      className="grid grid-cols-12 gap-x-8 border-b border-dash-rule pt-12 pb-12 rail:pt-[88px] rail:pb-20"
+      className="grid grid-cols-12 gap-x-4 border-b border-dash-rule pt-12 pb-12 rail:gap-x-8 rail:pt-[88px] rail:pb-20"
     >
       <div className="col-span-12 flex flex-col gap-6 wide:col-span-9">
         <span className={SITE_LABEL_CLASS}>{t("eyebrow")}</span>

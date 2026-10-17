@@ -75,7 +75,7 @@ export function LegalDocument({
         </p>
       </header>
 
-      <div className="grid grid-cols-12 gap-8 pt-12">
+      <div className="grid grid-cols-12 gap-x-4 gap-y-8 pt-12 rail:gap-x-8">
         <nav
           aria-labelledby={TOC_ID}
           className="col-span-12 flex flex-col gap-2.5 self-start wide:col-span-3"

@@ -12,7 +12,7 @@ export function SitePageHeader({
   lead: string;
 }) {
   return (
-    <header className="grid grid-cols-12 items-end gap-x-8 gap-y-5 pt-12 pb-8 rail:pt-[88px] rail:pb-10">
+    <header className="grid grid-cols-12 items-end gap-x-4 gap-y-5 rail:gap-x-8 pt-12 pb-8 rail:pt-[88px] rail:pb-10">
       <div className="col-span-12 flex flex-col gap-4.5 wide:col-span-7">
         <span className={SITE_LABEL_CLASS}>{eyebrow}</span>
         <h1 className="text-[42px] leading-none font-semibold tracking-[-0.035em] rail:text-[64px]">
