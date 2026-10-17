@@ -91,7 +91,7 @@ main() {
 
   dc=(docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full)
   db_daemons=(yog-indexer yog-context yog-signals yog-api yog-archive yog-analytic)
-  services=(postgres "${db_daemons[@]}" yog-web caddy)
+  services=(postgres "${db_daemons[@]}" yog-web)
   state=$(git rev-parse --absolute-git-dir)/yog-update
   mkdir -p "$state/logs"
   local -r stable_secs="${UPDATE_STABLE_SECS:-60}"
@@ -368,16 +368,16 @@ checks() { # <stable_secs>
     fi
   done
 
-  # From inside the compose network, through caddy's busybox wget (which
+  # From inside the compose network, through yog-web's busybox wget (which
   # fails on any non-2xx). A service just started may not listen yet: keep
   # trying for 60 s before calling it a failure.
   local api="" web="" body="" deadline=$(( $(date +%s) + 60 ))
   while :; do
     if [ "$api" != ok ]; then
-      body=$("${dc[@]}" exec -T caddy wget -q -O - -T 5 http://yog-api:5000/readyz 2>&1) || body=""
+      body=$("${dc[@]}" exec -T yog-web wget -q -O - -T 5 http://yog-api:5000/readyz 2>&1) || body=""
       [[ $body == *'"ready"'* ]] && api=ok
     fi
-    [ "$web" = ok ] || web=$("${dc[@]}" exec -T caddy wget -q -O /dev/null -T 5 http://yog-web:3000/ 2>&1 && echo ok || true)
+    [ "$web" = ok ] || web=$("${dc[@]}" exec -T yog-web wget -q -O /dev/null -T 5 http://yog-web:3000/ 2>&1 && echo ok || true)
     if { [ "$api" = ok ] && [ "$web" = ok ]; } || [ "$(date +%s)" -ge "$deadline" ]; then break; fi
     sleep 3
   done

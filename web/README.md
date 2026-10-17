@@ -572,7 +572,7 @@ connect-src 'self' <API origin>`. Two things it leaves out on purpose:
 The API origin in `connect-src` comes from `NEXT_PUBLIC_YOG_API_URL`, so,
 like the client bundle, it is **fixed at build time**: an image built for one
 API origin blocks every other. HSTS is set by the TLS edge,
-`docker/Caddyfile`, not here.
+the server's entry proxy, not here.
 
 ## Note on the `proxy.ts` naming
 
