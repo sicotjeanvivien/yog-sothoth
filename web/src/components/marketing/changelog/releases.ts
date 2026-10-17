@@ -32,6 +32,60 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.1.8",
+    date: "2026-10-17",
+    summary:
+      "The site's About, Support us, changelog and legal pages take the dashboard's look, and the site no longer scrolls sideways on small phones.",
+    sections: [
+      {
+        kind: "features",
+        items: [
+          {
+            text: "The changelog shows one block per release, with an All / Features / Fixes filter. Changes that only concern the code are folded under the technical details.",
+            technical: false,
+          },
+          {
+            text: "The About page is rebuilt in five numbered sections. Its list of covered protocols follows the dashboard menu: DAMM v2 observed; DLMM, Raydium and Orca soon.",
+            technical: false,
+          },
+          {
+            text: "Support us lists three free ways to help (a star on GitHub, a share on X or LinkedIn, feedback) and a Solana donation address with a Copy button.",
+            technical: false,
+          },
+          {
+            text: "The privacy policy, legal notice and terms share one layout: tabs between the three, the update date, a table of contents and numbered sections. Their texts are unchanged, except as noted below.",
+            technical: false,
+          },
+        ],
+      },
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "Support us no longer offers GitHub Sponsors: its button led to a GitHub profile, and no sponsorship exists. The privacy policy no longer mentions it either.",
+            technical: false,
+          },
+          {
+            text: "The About page now says how Yog-Scope works: a continuous stream from a Solana node rather than a WebSocket connection, one decoder per protocol, and tens of thousands of pools rather than hundreds.",
+            technical: false,
+          },
+          {
+            text: "On screens narrower than 375 px, the site's pages no longer scroll sideways.",
+            technical: false,
+          },
+          {
+            text: "Release dates in the changelog no longer show the previous day west of UTC.",
+            technical: false,
+          },
+          {
+            text: "The database gets more memory: its daily compression no longer slows the whole database down, indexing included.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.1.7",
     date: "2026-10-17",
     summary:
