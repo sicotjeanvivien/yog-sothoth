@@ -195,7 +195,7 @@ export const RELEASES: readonly Release[] = [
         items: [
           {
             text: "Raw swap events are kept for 7 days instead of 30, and compressed one day after their day ends instead of seven: since every DAMM v2 pool is observed, they were outgrowing the disk. The hourly swap history that charts and analytics read is unaffected and still kept in full; a pool's list of individual swaps now goes back 7 days.",
-            technical: true,
+            technical: false,
           },
           {
             text: "Next.js is updated to 16.3.8, following five advisories published on 7 October. None of them applied to this site's configuration.",
@@ -216,7 +216,7 @@ export const RELEASES: readonly Release[] = [
         items: [
           {
             text: "Requests to Jupiter are spaced under the configured rate limit (60 per minute by default) instead of sent in bursts, which Jupiter refused (HTTP 429) and which left tokens that have a price without one, round after round.",
-            technical: true,
+            technical: false,
           },
           {
             text: "A token Jupiter answers without a price is asked again less and less often — up to every 15 minutes at the default 30-second cadence — instead of at every round; the next price it gets puts it back on every round. A request in which none of its 50 tokens gets a price is read as a failed answer, and changes no token's turn.",

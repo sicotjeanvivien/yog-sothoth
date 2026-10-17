@@ -7,12 +7,9 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { ChevronDownIcon } from "@/components/shared/icon";
 import { ChangelogFilter } from "./changelog-filter";
+import { HIDDEN_ON } from "./changelog-filter-values";
 import { releaseView } from "./release-view";
 import { RELEASES } from "./releases";
-
-// Literal, for Tailwind to find them.
-const HIDDEN_ON_FEATURES = "group-data-[filter=features]/changelog:hidden";
-const HIDDEN_ON_FIXES = "group-data-[filter=fixes]/changelog:hidden";
 
 const KIND_CLASS = {
   features: "border-dash-accent text-dash-accent",
@@ -44,7 +41,7 @@ export async function ChangelogList() {
           key={release.version}
           id={release.version}
           aria-labelledby={`${release.version}-title`}
-          className={`grid grid-cols-12 gap-x-8 gap-y-4 border-b border-dash-rule py-7 rail:py-10 ${view.features.length === 0 ? HIDDEN_ON_FEATURES : ""} ${view.fixes.length === 0 ? HIDDEN_ON_FIXES : ""}`}
+          className={`grid grid-cols-12 gap-x-8 gap-y-4 border-b border-dash-rule py-7 rail:py-10 ${view.features.length === 0 ? HIDDEN_ON.features : ""} ${view.fixes.length === 0 ? HIDDEN_ON.fixes : ""}`}
         >
           <div className="col-span-12 flex flex-row flex-wrap items-baseline gap-x-4 gap-y-2 wide:col-span-3 wide:flex-col wide:items-start">
             <h2
@@ -72,7 +69,7 @@ export async function ChangelogList() {
                 label={t("sections.features")}
                 kindClass={KIND_CLASS.features}
                 items={view.features}
-                className={HIDDEN_ON_FIXES}
+                className={HIDDEN_ON.fixes}
               />
             )}
             {view.fixes.length > 0 && (
@@ -80,11 +77,11 @@ export async function ChangelogList() {
                 label={t("sections.fixes")}
                 kindClass={KIND_CLASS.fixes}
                 items={view.fixes}
-                className={HIDDEN_ON_FEATURES}
+                className={HIDDEN_ON.features}
               />
             )}
             {view.technical.length > 0 && (
-              <details className={`group/tech ${HIDDEN_ON_FEATURES} ${HIDDEN_ON_FIXES}`}>
+              <details className={`group/tech ${HIDDEN_ON.features} ${HIDDEN_ON.fixes}`}>
                 <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 font-dash-mono text-[12px] text-dash-ink-3 hover:text-dash-ink group-open/tech:text-dash-ink rail:min-h-9 [&::-webkit-details-marker]:hidden">
                   {t("technical", { count: view.technical.length })}
                   <ChevronDownIcon size={12} className="shrink-0 transition-transform group-open/tech:rotate-180" />
@@ -127,9 +124,9 @@ function ItemGroup({
 function ItemList({ items, className }: { items: readonly string[]; className: string }) {
   return (
     <ul className={`border-t border-dash-rule ${className}`}>
-      {items.map((item) => (
+      {items.map((item, index) => (
         <li
-          key={item}
+          key={index}
           className="grid grid-cols-[20px_minmax(0,1fr)] gap-2 border-b border-dash-rule py-2.5"
         >
           <span aria-hidden="true" className="text-dash-ink-3">

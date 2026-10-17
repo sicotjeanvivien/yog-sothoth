@@ -9,10 +9,7 @@ import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import { SITE_LABEL_CLASS } from "@/components/marketing/site-label";
-
-export type ChangelogFilterValue = "all" | "features" | "fixes";
-
-const FILTERS: readonly ChangelogFilterValue[] = ["all", "features", "fixes"];
+import { FILTERS, type ChangelogFilterValue } from "./changelog-filter-values";
 
 export function ChangelogFilter({
   counts,
