@@ -5,10 +5,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import messages from "@/messages/fr/dashboard.json";
 
-import { IngestionContextProvider } from "@/components/dashboard/live-status/live-status-provider";
-import type { Half } from "@/components/dashboard/live-status/use-polled";
-import type { IngestionResponse } from "@/lib/api/schema/zod.gen";
-
 import { SIDEBAR_NAV, type SidebarNavEntry } from "../sidebar-nav";
 import { SidebarNavList } from "../sidebar-nav-list";
 
@@ -31,17 +27,10 @@ const CLOSED_LABELS = [
   "Token",
 ];
 
-const LIVE: Half<IngestionResponse> = {
-  phase: "ready",
-  data: { freshness: "live", lastEventAt: null },
-};
-
-function render(ingestion: Half<IngestionResponse> = LIVE): string {
+function render(): string {
   return renderToStaticMarkup(
     <NextIntlClientProvider locale="fr" timeZone="UTC" messages={messages}>
-      <IngestionContextProvider value={ingestion}>
-        <SidebarNavList collapsed={false} onNavigate={() => {}} />
-      </IngestionContextProvider>
+      <SidebarNavList collapsed={false} onNavigate={() => {}} />
     </NextIntlClientProvider>,
   );
 }
@@ -54,8 +43,6 @@ function row(html: string, label: string): string {
   if (found === undefined) throw new Error(`no row for ${label}`);
   return found.slice(0, found.indexOf("</li>"));
 }
-
-const DOT = /aria-hidden="true" class="h-2 w-2/;
 
 function flatten(): SidebarNavEntry[] {
   return SIDEBAR_NAV.flatMap((item) =>
@@ -91,35 +78,6 @@ describe("SidebarNavList", () => {
 
     expect(closed).toMatch(/>Bientôt</);
     expect(closed).not.toMatch(/<svg\b/);
-  });
-
-  // Mutation: the dot shown on any state, or never.
-  it.each([
-    ["live", true],
-    ["delayed", false],
-    ["stale", false],
-  ] as const)("shows the DAMM v2 dot when the ingestion is %s: %s", (freshness, shown) => {
-    const damm = row(
-      render({ phase: "ready", data: { freshness, lastEventAt: null } }),
-      "Meteora DAMM v2",
-    );
-
-    expect(DOT.test(damm)).toBe(shown);
-  });
-
-  it.each([{ phase: "error" }, { phase: "loading" }] as const)(
-    "hides the DAMM v2 dot while the ingestion is $phase",
-    (ingestion) => {
-      expect(DOT.test(row(render(ingestion), "Meteora DAMM v2"))).toBe(false);
-    },
-  );
-
-  it("gives the dot to DAMM v2 alone", () => {
-    const html = render();
-
-    for (const label of CLOSED_LABELS.filter((l) => l !== "Meteora DAMM v2")) {
-      expect(DOT.test(row(html, label))).toBe(false);
-    }
   });
 
   it("gives nothing focusable besides the link", () => {

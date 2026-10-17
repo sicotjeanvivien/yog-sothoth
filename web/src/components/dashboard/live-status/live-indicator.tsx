@@ -17,17 +17,17 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { ChevronDownIcon } from "@/components/shared/icon";
 import { useDismiss } from "@/components/shared/use-dismiss";
+import { fetchIngestionBrowser } from "@/lib/api/browser/ingestion";
 import { fetchNetworkBrowser } from "@/lib/api/browser/network";
 import type { NetworkResponse } from "@/lib/api/schema/zod.gen";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 
 import { LIVE_LEGEND, liveStatusOf } from "./live-status";
-import { useIngestion } from "./live-status-provider";
 import { usePolled } from "./use-polled";
 
 export function LiveIndicator() {
   const t = useTranslations("Dashboard.liveStatus");
-  const ingestion = useIngestion();
+  const ingestion = usePolled(fetchIngestionBrowser);
 
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement>(null);

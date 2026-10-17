@@ -8,7 +8,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { LiveStatusProvider } from "@/components/dashboard/live-status/live-status-provider";
 import { Brand, Sidebar } from "@/components/dashboard/sidebar/sidebar";
 import {
   SIDEBAR_COLLAPSED_COOKIE,
@@ -80,26 +79,24 @@ export function DashboardShell({
   return (
     // Solid background over the cosmic one of `body` — behind the pages
     // that left the menu too.
-    <LiveStatusProvider>
-      <div
-        className={`${fontVariables} dash-root flex min-h-screen items-start bg-dash-bg [color-scheme:dark]`}
-      >
-        <MobileHeader onOpen={open} isOpen={isOpen} menu={t("menu")} />
+    <div
+      className={`${fontVariables} dash-root flex min-h-screen items-start bg-dash-bg [color-scheme:dark]`}
+    >
+      <MobileHeader onOpen={open} isOpen={isOpen} menu={t("menu")} />
 
-        {isOpen && <Overlay onClick={close} label={t("closeMenu")} />}
+      {isOpen && <Overlay onClick={close} label={t("closeMenu")} />}
 
-        <Sidebar
-          isOpen={isOpen}
-          onNavigate={close}
-          collapsed={collapsed}
-          onToggleCollapsed={toggleCollapsed}
-          initialPreferencesOpen={initialPreferencesOpen}
-        />
+      <Sidebar
+        isOpen={isOpen}
+        onNavigate={close}
+        collapsed={collapsed}
+        onToggleCollapsed={toggleCollapsed}
+        initialPreferencesOpen={initialPreferencesOpen}
+      />
 
-        {/* `pt-14` up to 720 px makes room for the fixed mobile header. */}
-        <main className="min-w-0 flex-1 pt-14 rail:pt-0">{children}</main>
-      </div>
-    </LiveStatusProvider>
+      {/* `pt-14` up to 720 px makes room for the fixed mobile header. */}
+      <main className="min-w-0 flex-1 pt-14 rail:pt-0">{children}</main>
+    </div>
   );
 }
 

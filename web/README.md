@@ -216,7 +216,7 @@ block in its own, behind a `BlockPlaceholder`. A failed block shows its
 **Menu** — `sidebar/sidebar-nav.ts` is pure data: Overview, then the
 *Protocol* group (Meteora DAMM v2, Meteora DLMM, Raydium, Orca), then Token.
 An entry is `open` (it has a page and an `href`) or `closed` (tagged "Soon", no
-`href`; `observed` adds the live dot while the ingestion is live).
+`href`).
 `SidebarNavList` renders a closed entry as a plain `<span>`, never a link; its
 test fails as soon as one becomes a link or loses its tag. To open an entry
 once its page exists, move its key from `ClosedNavKey` to `OpenNavKey`
@@ -229,11 +229,11 @@ language, FR | EN, each a link to the same page and query in that language.
 Whether they are open is the `yog_prefs_open` cookie, read by the layout so the
 first paint is right.
 
-**Live status** — `live-status/`: `LiveStatusProvider` polls
-`/api/ingestion` once for the page; `liveStatusOf` maps it to four states —
-live (green), delayed (yellow), stale (grey), offline (light red, the call
-failed). `LiveIndicator` sits in the page header (the Overview only); it opens
-on click, with the slot and RPC latency of `/api/network`.
+**Live status** — `live-status/`: `LiveIndicator` polls `/api/ingestion` and
+`liveStatusOf` maps it to four states — live (green), delayed (yellow), stale
+(grey), offline (light red, the call failed). It sits in the page header (the
+Overview only) and opens on click, with the slot and RPC latency of
+`/api/network`.
 
 **Fonts** — Geist (text) and Geist Mono (figures, addresses, times) are loaded
 by the dashboard layout alone (`next/font/google`), so the marketing never

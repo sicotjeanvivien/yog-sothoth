@@ -11,8 +11,6 @@ import { useTranslations } from "next-intl";
 
 import { Link, usePathname } from "@/i18n/navigation";
 import { OverviewIcon, type IconProps } from "@/components/shared/icon";
-import { useIngestion } from "@/components/dashboard/live-status/live-status-provider";
-import { liveStatusOf } from "@/components/dashboard/live-status/live-status";
 
 import type { OpenNavKey } from "./sidebar-keys";
 import {
@@ -61,12 +59,7 @@ export function SidebarNavList({ collapsed, onNavigate }: SidebarNavListProps) {
       </li>
     ) : (
       <li key={entry.key} className={hiddenWhenCollapsed}>
-        <ClosedEntry
-          label={t(entry.labelKey)}
-          soon={t("soon")}
-          observed={entry.observed === true}
-          nested={nested}
-        />
+        <ClosedEntry label={t(entry.labelKey)} soon={t("soon")} nested={nested} />
       </li>
     );
 
@@ -149,12 +142,10 @@ function OpenEntry({
 function ClosedEntry({
   label,
   soon,
-  observed,
   nested,
 }: {
   label: string;
   soon: string;
-  observed: boolean;
   nested: boolean;
 }) {
   return (
@@ -164,25 +155,9 @@ function ClosedEntry({
       className={`${rowClass(nested)} cursor-default text-dash-ink-3`}
     >
       <span>{label}</span>
-      <span className="flex items-center gap-2">
-        {observed && <ObservedDot />}
-        <span className="border border-dashed border-dash-ink-3 px-1.5 py-px font-dash-mono text-[11px] tracking-[0.08em] whitespace-nowrap uppercase">
-          {soon}
-        </span>
+      <span className="border border-dashed border-dash-ink-3 px-1.5 py-px font-dash-mono text-[11px] tracking-[0.08em] whitespace-nowrap uppercase">
+        {soon}
       </span>
     </span>
-  );
-}
-
-/** Shown only while the ingestion is live; the text alternative says so, not the colour. */
-function ObservedDot() {
-  const t = useTranslations("Dashboard.liveStatus.states");
-  const status = liveStatusOf(useIngestion());
-  if (status.state !== "live") return null;
-  return (
-    <>
-      <span aria-hidden="true" className={`h-2 w-2 ${status.dotClass}`} />
-      <span className="sr-only">{t("live")}</span>
-    </>
   );
 }

@@ -15,8 +15,6 @@ export type ClosedNavEntry = {
   kind: "closed";
   key: ClosedNavKey;
   labelKey: string;
-  /** A protocol already indexed: its row carries the live dot. */
-  observed?: true;
 };
 
 export type SidebarNavEntry = OpenNavEntry | ClosedNavEntry;
@@ -40,7 +38,6 @@ export const SIDEBAR_NAV: readonly SidebarNavItem[] = [
         kind: "closed",
         key: "meteoraDammV2",
         labelKey: "meteoraDammV2",
-        observed: true,
       },
       {
         kind: "closed",
