@@ -155,7 +155,7 @@ function ClosedEntry({
       className={`${rowClass(nested)} cursor-default text-dash-ink-3`}
     >
       <span>{label}</span>
-      <span className="border border-dashed border-dash-ink-3 px-1.5 py-px font-dash-mono text-[11px] tracking-[0.08em] whitespace-nowrap uppercase">
+      <span className="border border-dashed border-dash-ink-3 px-1 py-px font-dash-mono text-[11px] whitespace-nowrap uppercase">
         {soon}
       </span>
     </span>
