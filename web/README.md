@@ -251,8 +251,7 @@ and red carry a meaning, never the brand. The frame (`shell/`, `sidebar/`,
 and no Tailwind palette. The background is a flat `dash-bg`, which also sits
 behind the pages that left the menu, with no glow and no text shadow. The
 older palette (`cosmos-*`, `sothoth-*`, `slate-*`) remains in use for
-page contents not yet moved to the roles, the Overview and the site's pages
-included.
+page contents not yet moved to the roles, the Overview included.
 
 ## Site
 
@@ -264,8 +263,6 @@ short "Dashboard" button staying out; its grids drop columns up to 1100 px
 `changelog/releases.ts`) and the FR | EN switch, which leads to the same page
 in the other language. The logo is `public/logo_yog_scope.svg`, in the accent
 colour, through `shared/logo-mark.tsx`, on the site and in the dashboard menu.
-Page contents move to the tokens page by page and still use the older
-palette until then.
 
 The home page (`home/`) is static and calls no API: its dashboard preview is
 an illustration with fixed figures, and its facts strip is plain text, to
@@ -278,6 +275,11 @@ of the dashboard menu (`dashboard/sidebar/sidebar-nav.ts`), each one observed
 or "Soon"; its facts are re-checked against the prod like the home page's.
 
 The support page (`support-us/`) offers a donation in SOL only.
+
+The three legal pages share one template (`legal/legal-document.tsx`): tabs
+between them, a table of contents, numbered sections. Each page builds its
+sections from its own bundle (`privacy.json`, `legal-notice.json`,
+`terms.json`); the template's own words live under `Legal`.
 
 The changelog's source is `changelog/releases.ts`, written in the PR that
 ships each release, in English only. Every line is marked `technical` or not:

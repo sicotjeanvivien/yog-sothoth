@@ -32,6 +32,7 @@ import enAbout from "@/messages/en/about.json";
 import enPrivacy from "@/messages/en/privacy.json";
 import enLegalNotice from "@/messages/en/legal-notice.json";
 import enTerms from "@/messages/en/terms.json";
+import enLegal from "@/messages/en/legal.json";
 import enSupportUs from "@/messages/en/support-us.json";
 import enChangelog from "@/messages/en/changelog.json";
 import enCommon from "@/messages/en/common.json";
@@ -46,6 +47,7 @@ import frAbout from "@/messages/fr/about.json";
 import frPrivacy from "@/messages/fr/privacy.json";
 import frLegalNotice from "@/messages/fr/legal-notice.json";
 import frTerms from "@/messages/fr/terms.json";
+import frLegal from "@/messages/fr/legal.json";
 import frSupportUs from "@/messages/fr/support-us.json";
 import frChangelog from "@/messages/fr/changelog.json";
 import frCommon from "@/messages/fr/common.json";
@@ -66,6 +68,7 @@ const BUNDLES: Record<Locale, AbstractIntlMessages> = {
     ...enPrivacy,
     ...enLegalNotice,
     ...enTerms,
+    ...enLegal,
     ...enSupportUs,
     ...enChangelog,
     ...enCommon,
@@ -79,6 +82,7 @@ const BUNDLES: Record<Locale, AbstractIntlMessages> = {
     ...frPrivacy,
     ...frLegalNotice,
     ...frTerms,
+    ...frLegal,
     ...frSupportUs,
     ...frChangelog,
     ...frCommon,

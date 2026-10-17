@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
 import { PRIMARY_BUTTON_CLASS } from "@/components/shared/dashboard-button";
+import { CONTACT_EMAIL_HREF } from "@/components/marketing/contact";
 import { StarIcon } from "@/components/shared/icon";
 import {
   SECONDARY_BUTTON_CLASS,
@@ -13,7 +14,6 @@ import {
 const GITHUB_REPO_URL = "https://github.com/sicotjeanvivien/yog-sothoth";
 const GITHUB_ISSUES_URL = `${GITHUB_REPO_URL}/issues`;
 const SITE_URL = "https://yog-scope.xyz";
-const CONTACT_EMAIL_HREF = "mailto:awsd.contact@gmail.com";
 
 export function SupportUsWays() {
   const t = useTranslations("SupportUs.ways");

@@ -1,15 +1,14 @@
 /**
- * The privacy policy, one card per processing. ⚠️ Its copy states Cloudflare dashboard facts:
+ * The privacy policy. ⚠️ Its copy states Cloudflare dashboard facts:
  * both hosts proxied; Bot Fight Mode, rate limiting, Always Online and Web Analytics off;
  * Challenge Passage at 30 min. Changing one makes the page false. A new
- * `document.cookie` in `web/src` belongs on the cookie card.
+ * `document.cookie` in `web/src` belongs in the cookies section.
  */
 
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import type { Metadata } from "next";
 
-import { PrivacyHeader } from "@/components/marketing/privacy/privacy-header";
-import { PrivacyProse } from "@/components/marketing/privacy/privacy-prose";
+import { PrivacyDocument } from "@/components/marketing/privacy/privacy-document";
 
 type PrivacyPageProps = {
   params: Promise<{ locale: string }>;
@@ -31,9 +30,8 @@ export default async function PrivacyPage({ params }: PrivacyPageProps) {
   setRequestLocale(locale);
 
   return (
-    <main>
-      <PrivacyHeader />
-      <PrivacyProse />
+    <main className="mx-auto max-w-[1280px] px-4 rail:px-8">
+      <PrivacyDocument />
     </main>
   );
 }

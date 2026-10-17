@@ -3,8 +3,7 @@
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import type { Metadata } from "next";
 
-import { TermsHeader } from "@/components/marketing/terms/terms-header";
-import { TermsProse } from "@/components/marketing/terms/terms-prose";
+import { TermsDocument } from "@/components/marketing/terms/terms-document";
 
 type TermsPageProps = {
   params: Promise<{ locale: string }>;
@@ -26,9 +25,8 @@ export default async function TermsPage({ params }: TermsPageProps) {
   setRequestLocale(locale);
 
   return (
-    <main>
-      <TermsHeader />
-      <TermsProse />
+    <main className="mx-auto max-w-[1280px] px-4 rail:px-8">
+      <TermsDocument />
     </main>
   );
 }

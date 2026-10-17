@@ -158,52 +158,6 @@ export const CloseIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-export const EyeIcon: React.FC<IconProps> = ({
-  size = 18,
-  strokeWidth = 1.6,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <path d="M2 12c3-5.5 7-8 10-8s7 2.5 10 8c-3 5.5-7 8-10 8s-7-2.5-10-8z" />
-    <circle cx="12" cy="12" r="3.2" />
-  </svg>
-);
-
-export const PulseIcon: React.FC<IconProps> = ({
-  size = 18,
-  strokeWidth = 1.6,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <path d="M2 12h5l3-7 4 14 3-7h5" />
-  </svg>
-);
-
-export const OpenSourceIcon: React.FC<IconProps> = ({
-  size = 18,
-  strokeWidth = 1.6,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <rect x="4" y="11" width="14" height="9" rx="1.5" />
-    <path d="M7 11V8a4 4 0 0 1 7.5-2" />
-    <circle cx="11" cy="15.5" r="1.2" fill="currentColor" stroke="none" />
-  </svg>
-);
-
-export const UsersIcon: React.FC<IconProps> = ({
-  size = 18,
-  strokeWidth = 1.6,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <circle cx="9" cy="8" r="3" />
-    <path d="M3 20v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1" />
-    <path d="M16 11a3 3 0 1 0-2-5.2" />
-    <path d="M16.5 14h.5a4 4 0 0 1 4 4v1" />
-  </svg>
-);
-
 export const InfoIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
@@ -213,81 +167,6 @@ export const InfoIcon: React.FC<IconProps> = ({
     <circle cx="12" cy="12" r="9" />
     <path d="M12 11v5" />
     <circle cx="12" cy="8" r="0.6" fill="currentColor" stroke="none" />
-  </svg>
-);
-
-export const UserCardIcon: React.FC<IconProps> = ({
-  size = 18,
-  strokeWidth = 1.6,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <rect x="3" y="5" width="18" height="14" rx="1.5" />
-    <circle cx="9" cy="11" r="2" />
-    <path d="M6 16.5a3.5 3.5 0 0 1 6 0" />
-    <path d="M14 10h4" />
-    <path d="M14 13h3" />
-  </svg>
-);
-
-export const CookieIcon: React.FC<IconProps> = ({
-  size = 18,
-  strokeWidth = 1.6,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <path d="M12 3a9 9 0 1 0 9 9 4 4 0 0 1-4-4 4 4 0 0 1-5-5z" />
-    <circle cx="9" cy="11" r="0.8" fill="currentColor" stroke="none" />
-    <circle cx="14" cy="14" r="0.8" fill="currentColor" stroke="none" />
-    <circle cx="10" cy="15.5" r="0.6" fill="currentColor" stroke="none" />
-  </svg>
-);
-
-export const ShieldIcon: React.FC<IconProps> = ({
-  size = 18,
-  strokeWidth = 1.6,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <path d="M12 3 4 6v6c0 4.5 3.4 7.8 8 9 4.6-1.2 8-4.5 8-9V6z" />
-  </svg>
-);
-
-export const RefreshIcon: React.FC<IconProps> = ({
-  size = 18,
-  strokeWidth = 1.6,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <path d="M21 12a9 9 0 1 1-3-6.7" />
-    <path d="M21 4v5h-5" />
-  </svg>
-);
-
-export const ServerIcon: React.FC<IconProps> = ({
-  size = 18,
-  strokeWidth = 1.6,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <rect x="3" y="5" width="18" height="6" rx="1.5" />
-    <rect x="3" y="13" width="18" height="6" rx="1.5" />
-    <circle cx="7" cy="8" r="0.7" fill="currentColor" stroke="none" />
-    <circle cx="7" cy="16" r="0.7" fill="currentColor" stroke="none" />
-    <path d="M11 8h6" />
-    <path d="M11 16h6" />
-  </svg>
-);
-
-export const EditIcon: React.FC<IconProps> = ({
-  size = 18,
-  strokeWidth = 1.6,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <path d="M4 6a2 2 0 0 1 2-2h7l5 5v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />
-    <path d="M13 4v5h5" />
-    <path d="m10.5 17 5-5 1.5 1.5-5 5H10.5z" />
   </svg>
 );
 
@@ -313,17 +192,6 @@ export const AlertOctagonIcon: React.FC<IconProps> = ({
     <path d="M8.2 3h7.6L21 8.2v7.6L15.8 21H8.2L3 15.8V8.2z" />
     <path d="M12 7.5v5" />
     <circle cx="12" cy="16" r="0.7" fill="currentColor" stroke="none" />
-  </svg>
-);
-
-export const MailIcon: React.FC<IconProps> = ({
-  size = 18,
-  strokeWidth = 1.6,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <rect x="3" y="5" width="18" height="14" rx="1.5" />
-    <path d="m3.5 6.5 8.5 6 8.5-6" />
   </svg>
 );
 
