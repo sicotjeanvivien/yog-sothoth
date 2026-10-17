@@ -6,6 +6,7 @@ import { DashboardButton } from "@/components/shared/dashboard-button";
 import { SecondaryButton } from "@/components/shared/secondary-button";
 import { SITE_LABEL_CLASS } from "@/components/marketing/site-label";
 import { BEHIND_ID, GITHUB_REPO_URL } from "./about-sections";
+import { SITE_GRID_CLASS } from "@/components/marketing/site-grid";
 
 export function AboutHero() {
   const t = useTranslations("About.hero");
@@ -13,7 +14,7 @@ export function AboutHero() {
   return (
     <section
       aria-labelledby="about-title"
-      className="grid grid-cols-12 gap-x-4 border-b border-dash-rule pt-12 pb-12 rail:gap-x-8 rail:pt-[88px] rail:pb-20"
+      className={`${SITE_GRID_CLASS} border-b border-dash-rule pt-12 pb-12 rail:pt-[88px] rail:pb-20`}
     >
       <div className="col-span-12 flex flex-col gap-6 wide:col-span-9">
         <span className={SITE_LABEL_CLASS}>{t("eyebrow")}</span>

@@ -17,6 +17,7 @@ import {
   FOOTER_SOCIALS,
   type FooterColumn,
 } from "./marketing-footer-links";
+import { SITE_GRID_CLASS } from "@/components/marketing/site-grid";
 
 export function MarketingFooter() {
   const t = useTranslations("Marketing.footer");
@@ -25,7 +26,7 @@ export function MarketingFooter() {
   return (
     <footer className="pt-14 pb-8">
       <div className="mx-auto max-w-[1280px] px-4 rail:px-8">
-        <div className="grid grid-cols-12 gap-x-4 gap-y-8 rail:gap-x-8">
+        <div className={`${SITE_GRID_CLASS} gap-y-8`}>
           <BrandBlock />
           {FOOTER_COLUMNS.map((column) => (
             <LinksColumn key={column.key} column={column} />

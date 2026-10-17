@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { Link } from "@/i18n/navigation";
 import { PRIMARY_BUTTON_CLASS } from "@/components/shared/dashboard-button";
 import { CONTACT_EMAIL_HREF } from "@/components/marketing/contact";
+import { SITE_GRID_CLASS } from "@/components/marketing/site-grid";
 import { SITE_LABEL_CLASS } from "@/components/marketing/site-label";
 
 export const LEGAL_LINK_CLASS =
@@ -75,7 +76,7 @@ export function LegalDocument({
         </p>
       </header>
 
-      <div className="grid grid-cols-12 gap-x-4 gap-y-8 pt-12 rail:gap-x-8">
+      <div className={`${SITE_GRID_CLASS} gap-y-8 pt-12`}>
         <nav
           aria-labelledby={TOC_ID}
           className="col-span-12 flex flex-col gap-2.5 self-start wide:col-span-3"
