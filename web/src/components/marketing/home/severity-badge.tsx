@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import type { SeverityResponse } from "@/lib/api/schema/zod.gen";
 
 const SEVERITY_CLASS: Record<SeverityResponse, string> = {
-  critical: "bg-dash-crit text-dash-surface",
+  critical: "bg-dash-down text-dash-surface",
   warning: "bg-dash-warn text-dash-surface",
   info: "text-dash-ink-2 shadow-[inset_0_0_0_1px_var(--color-dash-ink-2)]",
 };

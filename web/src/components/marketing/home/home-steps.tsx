@@ -1,7 +1,4 @@
-/**
- * "How it works": five numbered steps on one line, joined by a rule; up to 1100 px, a
- * column with the rule down the left.
- */
+/** "How it works": the five steps from the chain to the screen. */
 
 import { useTranslations } from "next-intl";
 

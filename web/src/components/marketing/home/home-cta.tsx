@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 
 import { DashboardButton } from "@/components/shared/dashboard-button";
 import { LogoMark } from "@/components/shared/logo-mark";
+import { HOME_TITLE_CLASS } from "./home-section-head";
 
 export function HomeCta() {
   const t = useTranslations("Marketing.cta");
@@ -17,10 +18,7 @@ export function HomeCta() {
         <div className="flex items-center gap-7">
           <LogoMark width={72} />
           <div>
-            <h2
-              id="cta-title"
-              className="text-[32px] leading-[1.05] font-semibold tracking-[-0.03em] rail:text-[44px]"
-            >
+            <h2 id="cta-title" className={HOME_TITLE_CLASS}>
               {t("title")}
             </h2>
             <p className="mt-2 max-w-[52ch] text-[15px] text-dash-ink-2">

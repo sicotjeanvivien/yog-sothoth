@@ -1,7 +1,4 @@
-/**
- * The dashboard preview of the hero, an illustration: fixed figures, no API call, so the
- * site stays static. One `role="img"` with a label, its parts hidden from screen readers.
- */
+/** The dashboard preview of the hero, an illustration with fixed figures. */
 
 import { useTranslations } from "next-intl";
 
