@@ -22,16 +22,6 @@ pub(crate) struct CachePolicy {
     pub(crate) max_capacity: u64,
 }
 
-/// `/api/pools/top`: one ranking per metric, computed at the largest `limit`
-/// and cut to each request's.
-pub(crate) const TOP_POOLS: CachePolicy = CachePolicy {
-    name: "top_pools",
-    ttl: SHARED_RESULT_TTL,
-    // ⚠️ One per `PoolRankMetric` variant: moka admits by frequency, so an undersized
-    // cache keeps turning rankings away.
-    max_capacity: 2,
-};
-
 /// `/api/stats`: one aggregate for the whole protocol.
 pub(crate) const STATS: CachePolicy = CachePolicy {
     name: "stats",

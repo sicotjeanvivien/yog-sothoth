@@ -2,4 +2,4 @@
 
 mod pool_properties;
 
-pub use pool_properties::{MeteoraDlmmPoolAccountProperties, MeteoraDlmmPoolProperties};
+pub use pool_properties::MeteoraDlmmPoolAccountProperties;

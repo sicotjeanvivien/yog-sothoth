@@ -2,34 +2,7 @@
 use crate::http::error::ApiError;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
-use solana_signature::Signature;
-use std::str::FromStr;
-use yog_core::{
-    Cursor, PoolSortColumn,
-    domain::{
-        MeteoraDammV2LiquidityEventCursor, MeteoraDammV2SwapEventCursor, PoolCursor, SignalCursor,
-    },
-};
-
-#[derive(Debug, Serialize, Deserialize)]
-struct PoolCursorWire {
-    sort_column: String,
-    sort_value: String,
-    pool_address: String,
-    /// The traversal's snapshot fence, RFC 3339. Absent on an immutable sort column and on a
-    /// cursor minted before the field: the repository then mints a fresh fence.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    as_of: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct EventCursorWire {
-    timestamp: String,
-    signature: String,
-    /// A cursor minted before the field decodes with 0: the first hop of its transaction.
-    #[serde(default)]
-    event_index: u16,
-}
+use yog_core::{Cursor, domain::SignalCursor};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SignalCursorWire {
@@ -43,22 +16,6 @@ pub(crate) fn encode_cursor_opt(cursor: Option<&Cursor>) -> Result<Option<String
 
 pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
     match cursor {
-        Cursor::Pool(c) => encode_b64_json(&PoolCursorWire {
-            sort_column: sort_column_to_wire(c.sort_column).to_string(),
-            sort_value: c.sort_value.to_rfc3339(),
-            pool_address: c.pool_address.to_string(),
-            as_of: c.as_of.map(|t| t.to_rfc3339()),
-        }),
-        Cursor::MeteoraDammV2SwapEvent(c) => encode_b64_json(&EventCursorWire {
-            timestamp: c.timestamp.to_rfc3339(),
-            signature: c.signature.to_string(),
-            event_index: c.event_index,
-        }),
-        Cursor::MeteoraDammV2LiquidityEvent(c) => encode_b64_json(&EventCursorWire {
-            timestamp: c.timestamp.to_rfc3339(),
-            signature: c.signature.to_string(),
-            event_index: c.event_index,
-        }),
         Cursor::Signal(c) => encode_b64_json(&SignalCursorWire {
             triggered_at: c.triggered_at.to_rfc3339(),
             id: c.id,
@@ -66,13 +23,13 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
     }
 }
 
-pub(crate) fn encode_b64_json<T: Serialize>(value: &T) -> Result<String, ApiError> {
+fn encode_b64_json<T: Serialize>(value: &T) -> Result<String, ApiError> {
     let json = serde_json::to_vec(value)
         .map_err(|e| ApiError::Internal(format!("failed to encode cursor: {e}")))?;
     Ok(URL_SAFE_NO_PAD.encode(json))
 }
 
-pub(crate) fn decode_b64_json<T: for<'de> Deserialize<'de>>(raw: &str) -> Result<T, ApiError> {
+fn decode_b64_json<T: for<'de> Deserialize<'de>>(raw: &str) -> Result<T, ApiError> {
     let bytes = URL_SAFE_NO_PAD
         .decode(raw)
         .map_err(|_| ApiError::BadRequest("invalid cursor: not valid base64".to_string()))?;
@@ -80,49 +37,10 @@ pub(crate) fn decode_b64_json<T: for<'de> Deserialize<'de>>(raw: &str) -> Result
         .map_err(|_| ApiError::BadRequest("invalid cursor: malformed payload".to_string()))
 }
 
-pub(crate) fn parse_rfc3339(raw: &str) -> Result<chrono::DateTime<chrono::Utc>, ApiError> {
+fn parse_rfc3339(raw: &str) -> Result<chrono::DateTime<chrono::Utc>, ApiError> {
     chrono::DateTime::parse_from_rfc3339(raw)
         .map(|dt| dt.with_timezone(&chrono::Utc))
         .map_err(|_| ApiError::BadRequest("invalid cursor: malformed timestamp".to_string()))
-}
-
-pub(crate) fn decode_pool_cursor(raw: &str) -> Result<PoolCursor, ApiError> {
-    let wire: PoolCursorWire = decode_b64_json(raw)?;
-    let sort_column = sort_column_from_wire(&wire.sort_column)?;
-    let sort_value = parse_rfc3339(&wire.sort_value)?;
-    let pool_address = solana_pubkey::Pubkey::from_str(&wire.pool_address)
-        .map_err(|_| ApiError::BadRequest("invalid cursor: malformed pool address".to_string()))?;
-    let as_of = wire.as_of.as_deref().map(parse_rfc3339).transpose()?;
-    Ok(PoolCursor {
-        sort_column,
-        sort_value,
-        pool_address,
-        as_of,
-    })
-}
-
-pub(crate) fn decode_swap_cursor(raw: &str) -> Result<MeteoraDammV2SwapEventCursor, ApiError> {
-    let wire: EventCursorWire = decode_b64_json(raw)?;
-    let signature = Signature::from_str(&wire.signature)
-        .map_err(|_| ApiError::BadRequest("invalid cursor: malformed signature".to_string()))?;
-    Ok(MeteoraDammV2SwapEventCursor {
-        timestamp: parse_rfc3339(&wire.timestamp)?,
-        signature,
-        event_index: wire.event_index,
-    })
-}
-
-pub(crate) fn decode_liquidity_cursor(
-    raw: &str,
-) -> Result<MeteoraDammV2LiquidityEventCursor, ApiError> {
-    let wire: EventCursorWire = decode_b64_json(raw)?;
-    let signature = Signature::from_str(&wire.signature)
-        .map_err(|_| ApiError::BadRequest("invalid cursor: malformed signature".to_string()))?;
-    Ok(MeteoraDammV2LiquidityEventCursor {
-        timestamp: parse_rfc3339(&wire.timestamp)?,
-        signature,
-        event_index: wire.event_index,
-    })
 }
 
 pub(crate) fn decode_signal_cursor(raw: &str) -> Result<SignalCursor, ApiError> {
@@ -131,23 +49,6 @@ pub(crate) fn decode_signal_cursor(raw: &str) -> Result<SignalCursor, ApiError> 
         triggered_at: parse_rfc3339(&wire.triggered_at)?,
         id: wire.id,
     })
-}
-
-fn sort_column_to_wire(c: PoolSortColumn) -> &'static str {
-    match c {
-        PoolSortColumn::FirstSeen => "first_seen",
-        PoolSortColumn::LastSeen => "last_seen",
-    }
-}
-
-fn sort_column_from_wire(raw: &str) -> Result<PoolSortColumn, ApiError> {
-    match raw {
-        "first_seen" => Ok(PoolSortColumn::FirstSeen),
-        "last_seen" => Ok(PoolSortColumn::LastSeen),
-        _ => Err(ApiError::BadRequest(
-            "invalid cursor: unknown sort column".to_string(),
-        )),
-    }
 }
 
 #[cfg(test)]

@@ -79,7 +79,7 @@ cargo clippy -p yog-analytic -p yog-api -p yog-archive -p yog-bootstrap -p yog-c
 # empty library, which cargo then documents in place of the binary.
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
 
-# Test — workspace unit tests, DB-free (988 tests, listed 1 Oct 2026)
+# Test — workspace unit tests, DB-free (870 tests, listed 17 Oct 2026)
 cargo test --workspace
 cargo test -p yog-core extraction          # a single crate / filter
 cargo test -p yog-core -- --exact <test>   # one exact test
@@ -91,10 +91,10 @@ cargo test -p yog-core -- --exact <test>   # one exact test
 cargo test -p yog-indexer                  # the fixture suites and the oracle
 
 # ⚠️ `--all-features` is NOT DB-free: it turns on `integration-tests`, which
-# un-gates the 176 DB-backed tests and needs everything the section below does.
-# `cargo test --workspace --all-features` therefore reports 1164, not 988 — the
+# un-gates the 160 DB-backed tests and needs everything the section below does.
+# `cargo test --workspace --all-features` therefore reports 1030, not 870 — the
 # integration tests are INCLUDED in that total, not additional to it. All three
-# counts were listed 1 Oct 2026 with `-- --list`, which compiles every target
+# counts were listed 17 Oct 2026 with `-- --list`, which compiles every target
 # but runs none, so it needs no Postgres.
 cargo test --workspace --all-features
 
@@ -139,8 +139,8 @@ cd crates/persistence && cargo sqlx prepare -- --all-targets --all-features
 A query-builder/ORM migration of the persistence layer (SeaQuery et al.) was evaluated and **rejected**: it builds SQL at runtime, losing the `query!` compile-time schema check, and is *worse* on the CTE/LATERAL queries that actually hurt. Pick by query shape instead:
 
 - **Simple / static** → `sqlx::query!` / `query_as!` **inline**. The default. Compile-time checked.
-- **Big but static** → prefer a **SQL VIEW** when the query is reusable or decomposable (define it in a migration; the slim `SELECT … FROM <view>` over it stays a checked `query!`). This *reduces and de-duplicates* the SQL, it doesn't just relocate it — e.g. `meteora_damm_v2_pool_hourly_activity` (baseline §15) factors the per-`(pool, hour)` USD valuation shared by `history` and `pool_analytics`. If it isn't view-able, use `query_file!("…​.sql")` to move the big SQL into a tooled `.sql` file (still compile-checked).
-- **Dynamic** (shape varies from user input — `WHERE`/`ORDER BY`/search) → `QueryBuilder` (runtime, *not* macro-checked → cover with integration tests). Neither `query!`/`query_file!` (need static SQL) nor a VIEW expresses a runtime-variable shape; a VIEW can still be the base table the dynamic query reads. The lone case today is `repositories/pool/query.rs`.
+- **Big but static** → prefer a **SQL VIEW** when the query is reusable or decomposable (define it in a migration; the slim `SELECT … FROM <view>` over it stays a checked `query!`). This *reduces and de-duplicates* the SQL, it doesn't just relocate it — e.g. `meteora_damm_v2_swap_events_hourly_priced` (migration 002) factors the per-`(pool, hour)` effective prices shared by the analytic writer's facts upsert and the activity view. If it isn't view-able, use `query_file!("…​.sql")` to move the big SQL into a tooled `.sql` file (still compile-checked).
+- **Dynamic** (shape varies from user input — `WHERE`/`ORDER BY`/search) → `QueryBuilder` (runtime, *not* macro-checked → cover with integration tests). Neither `query!`/`query_file!` (need static SQL) nor a VIEW expresses a runtime-variable shape; a VIEW can still be the base table the dynamic query reads. No read takes this shape today: `QueryBuilder` only builds the runtime-sized `VALUES` lists of the batch inserts.
 
 **Perf note:** a plain VIEW gives **no** performance gain — Postgres inlines it, same plan. Choose a VIEW for readability, never for speed. The perf tool is **materialization** (a continuous aggregate or `MATERIALIZED VIEW`), which precomputes at the cost of staleness/refresh — that's what the hourly CAs already do.
 
@@ -160,7 +160,7 @@ Everything is typed per `(platform, protocol, event_kind)`, all the way down: do
 
 - Each table holds only columns relevant to its protocol — no NULL columns for incompatible fields, no JSONB blob.
 - Cross-protocol reads ("all swaps for a pool") go through SQL **VIEW**s (`swap_events`, `liquidity_events`, …) defined at the bottom of the baseline migration, each a `UNION ALL` with a synthesised `protocol` column. Protocol-specific columns are *not* in the VIEWs — read the underlying table when you need them.
-- Adding a protocol touches a short, fixed list of **dispatch points** — one branch or one line each: `ExtractionDispatcher::extract`, `ExtractionDispatcher::implemented_protocols` (⚠️ a stub answers `false`, or the ingestion subscribes to its program id and pays a firehose for zero rows) and `decode_pool_account` (`core`), the facts upsert in `PgAnalyticRepository::write_cycle` (`persistence`), `EventPersistor::persist` and the persistor wiring in `init_event_persistor` (`indexer/src/bootstrap/daemon/init.rs`), the `pool_account_resolvers` vec (`context/src/bootstrap/daemon.rs`), the `PoolProperties` match in `api/src/http/dto/response/pool_detail.rs`, and the `From<domain::Protocol>` of `ProtocolResponse` (`api/src/http/dto/response/pool/protocol_response.rs`, then regenerate the contract). Everything else is isolated per-protocol code; the full recipe is in `crates/README.md`. Cross-protocol concepts (`Pool`, `PoolCurrentState`, `TokenMetadata`, `TokenPrice`, `Signal`) stay generic, single-table — but per-protocol *pool properties* live in a satellite table keyed on `pool_address`, never in `pools`.
+- Adding a protocol touches a short, fixed list of **dispatch points** — one branch or one line each: `ExtractionDispatcher::extract`, `ExtractionDispatcher::implemented_protocols` (⚠️ a stub answers `false`, or the ingestion subscribes to its program id and pays a firehose for zero rows) and `decode_pool_account` (`core`), the facts upsert in `PgAnalyticRepository::write_cycle` (`persistence`), `EventPersistor::persist` and the persistor wiring in `init_event_persistor` (`indexer/src/bootstrap/daemon/init.rs`), the `pool_account_resolvers` vec (`context/src/bootstrap/daemon.rs`), and the `From<domain::Protocol>` of `ProtocolResponse` (`api/src/http/dto/response/protocol.rs`, then regenerate the contract). Everything else is isolated per-protocol code; the full recipe is in `crates/README.md`. Cross-protocol concepts (`Pool`, the `pool_current_state` projection, `TokenMetadata`, `TokenPrice`, `Signal`) stay generic, single-table — but per-protocol *pool properties* live in a satellite table keyed on `pool_address`, never in `pools`.
 
 ## Database privilege model
 

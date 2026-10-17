@@ -9,9 +9,6 @@ declare global {
 
       DATABASE_URL?: string;
 
-      NEXT_PUBLIC_FEATURE_POOLS_LIST?: string;
-      NEXT_PUBLIC_FEATURE_POOL_DETAIL?: string;
-      NEXT_PUBLIC_FEATURE_POOL_PRICE_IMBALANCE?: string;
       NEXT_PUBLIC_FEATURE_TRANSACTION_FEED?: string;
 
       NEXT_PUBLIC_FEATURE_TVL_TOTAL?: string;

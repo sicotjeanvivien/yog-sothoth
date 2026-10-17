@@ -12,9 +12,9 @@ Scope: this is for endpoints that **read existing data** — no new tables, no n
 types, no new protocol. If you need a new protocol/product end-to-end, use `/add-protocol`
 instead.
 
-Templates to copy: the swap/pool read path —
-`crates/api/src/application/services/meteora_damm_v2_swap_service.rs`,
-`crates/api/src/http/handlers/pools.rs`, and the matching DTOs under
+Templates to copy: the token read path —
+`crates/api/src/application/services/token_service.rs`,
+`crates/api/src/http/handlers/token.rs`, and the matching DTOs under
 `crates/api/src/http/dto/`.
 
 ## Before you start — clarify scope
@@ -23,7 +23,7 @@ Read the rules first — `crates/api/README.md` → *What a route may return*: w
 may return, how it is named, and the 2 s it must answer in.
 
 Confirm with the user (don't assume):
-- The **route** (e.g. `GET /api/pools/{address}/liquidity`) and its path/query params.
+- The **route** (e.g. `GET /api/tokens/{mint}`) and its path/query params.
 - Whether the data is **cross-protocol** (read a VIEW: `swap_events`, `liquidity_events`, …)
   or **protocol-specific** (read the per-protocol table directly).
 - Whether the query it needs **already exists** on a repository trait, or must be added.

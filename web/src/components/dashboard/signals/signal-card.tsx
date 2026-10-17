@@ -8,7 +8,6 @@
 
 import { useLocale, useTranslations } from "next-intl";
 
-import { Link } from "@/i18n/navigation";
 import type { SeverityResponse, SignalResponse } from "@/lib/api/schema/zod.gen";
 import {
   formatPercent,
@@ -18,7 +17,7 @@ import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatShortAddress } from "@/lib/format/format-short-address";
 
-import { PoolPairCell } from "../pools/pool-pair-cell";
+import { PoolPairCell } from "./pool-pair-cell";
 import {
   KNOWN_DETECTORS,
   SEVERITY_COLOR,
@@ -129,7 +128,7 @@ export function SignalCard({
       >
         {severityColumn}
         <div className="flex min-w-0 flex-col gap-0.5">
-          <PairLink signal={signal} />
+          <PairLabel signal={signal} />
           {/* Relative to now: the SSR text may lag the client by a minute. */}
           <time
             dateTime={signal.triggeredAt}
@@ -152,7 +151,7 @@ export function SignalCard({
 
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex items-center gap-3">
-          <PairLink signal={signal} />
+          <PairLabel signal={signal} />
           <span className="whitespace-nowrap text-[13px] text-slate-500">
             {formatProtocolLabel(signal.protocol)}
           </span>
@@ -193,15 +192,12 @@ export function SignalCard({
 }
 
 /** The pair, or the short pool address while a symbol is unresolved. */
-function PairLink({ signal }: { signal: SignalResponse }) {
+function PairLabel({ signal }: { signal: SignalResponse }) {
   const pairResolved =
     signal.tokenA.symbol !== null && signal.tokenB.symbol !== null;
 
   return (
-    <Link
-      href={`/pools/${signal.poolAddress}`}
-      className="group inline-block min-w-0 underline-offset-4 hover:underline"
-    >
+    <div className="min-w-0">
       {pairResolved ? (
         <PoolPairCell tokenA={signal.tokenA} tokenB={signal.tokenB} />
       ) : (
@@ -209,6 +205,6 @@ function PairLink({ signal }: { signal: SignalResponse }) {
           {formatShortAddress(signal.poolAddress)}
         </span>
       )}
-    </Link>
+    </div>
   );
 }

@@ -31,9 +31,6 @@ describe("parseStrictBoolean", () => {
 describe("isFeatureEnabled (default registry values)", () => {
   // ⚠️ `RAW_VALUES` is captured at import: overrides are tested below by re-importing.
   it("returns true for flags declared as defaultEnabled = true", () => {
-    expect(isFeatureEnabled("poolsList")).toBe(true);
-    expect(isFeatureEnabled("poolDetail")).toBe(true);
-    expect(isFeatureEnabled("poolPriceImbalance")).toBe(true);
     expect(isFeatureEnabled("transactionFeed")).toBe(true);
   });
 
@@ -103,9 +100,9 @@ describe("isFeatureEnabled (env-var override)", () => {
 
   it("flips a default-on flag to off when env var is 'false'", async () => {
     const mod = await loadModuleWithEnv({
-      NEXT_PUBLIC_FEATURE_POOLS_LIST: "false",
+      NEXT_PUBLIC_FEATURE_TRANSACTION_FEED: "false",
     });
-    expect(mod.isFeatureEnabled("poolsList")).toBe(false);
+    expect(mod.isFeatureEnabled("transactionFeed")).toBe(false);
   });
 
   it("flips a default-off flag to on when env var is 'true'", async () => {
@@ -124,25 +121,22 @@ describe("isFeatureEnabled (env-var override)", () => {
 
   it("treats an unset env var as the registry default", async () => {
     const mod = await loadModuleWithEnv({
-      NEXT_PUBLIC_FEATURE_POOLS_LIST: undefined,
+      NEXT_PUBLIC_FEATURE_TRANSACTION_FEED: undefined,
     });
-    expect(mod.isFeatureEnabled("poolsList")).toBe(true);
+    expect(mod.isFeatureEnabled("transactionFeed")).toBe(true);
   });
 
   it("treats an empty-string override as off (explicit but falsy)", async () => {
     const mod = await loadModuleWithEnv({
-      NEXT_PUBLIC_FEATURE_POOLS_LIST: "",
+      NEXT_PUBLIC_FEATURE_TRANSACTION_FEED: "",
     });
-    expect(mod.isFeatureEnabled("poolsList")).toBe(false);
+    expect(mod.isFeatureEnabled("transactionFeed")).toBe(false);
   });
 });
 
 describe("FeatureName exhaustiveness", () => {
   it("covers every key of FEATURE_REGISTRY", () => {
     const seen: Record<FeatureName, true> = {
-      poolsList: true,
-      poolDetail: true,
-      poolPriceImbalance: true,
       transactionFeed: true,
       tvlTotal: true,
       volume24h: true,

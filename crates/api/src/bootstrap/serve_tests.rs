@@ -34,7 +34,7 @@ fn idle_poller() -> SignalStreamPoller {
 fn unused_signal_service() -> Arc<SignalService> {
     Arc::new(SignalService::new(
         Arc::new(MockSignalRepo::empty()),
-        Arc::new(PoolRepoOnce::with_pool(None)),
+        Arc::new(PoolRepoOnce::with_pools(vec![])),
         Arc::new(MockMetadataRepo::empty()),
     ))
 }

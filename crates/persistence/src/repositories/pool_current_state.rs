@@ -2,22 +2,14 @@
 //! `(slot, transaction_index, event_index)` is strictly after the stored one; a liquidity
 //! event keeps `last_sqrt_price` and `last_swap_at` through `COALESCE`.
 
-mod rows;
-
-use crate::repositories::helper::{
-    convert_bigdecimal_to_decimal, convert_optional, convert_u64_to_i64,
-    convert_u128_to_bigdecimal, map_sqlx_error,
-};
+use crate::repositories::helper::{convert_u64_to_i64, convert_u128_to_bigdecimal, map_sqlx_error};
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
-use rows::PoolCurrentStateRow;
-use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
-    RepositoryError, RepositoryResult,
+    RepositoryResult,
     domain::{
-        LastEventKind, PoolCurrentState, PoolCurrentStateLookup, PoolCurrentStateRepository,
-        PoolCurrentStateUpsert, PoolCurrentStateUpsertOutcome, PoolSideValues,
+        LastEventKind, PoolCurrentStateRepository, PoolCurrentStateUpsert,
+        PoolCurrentStateUpsertOutcome,
     },
 };
 
@@ -95,7 +87,7 @@ impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
                     last_event_index       = EXCLUDED.last_event_index,
                     last_transaction_index = EXCLUDED.last_transaction_index
                 -- Lexicographic tuple comparison. `last_event_at` is still
-                -- written above, for display, but no longer orders anything:
+                -- written above, but no longer orders anything:
                 -- it has second granularity and 56 % of swaps share theirs.
                 -- The COALESCE lets gRPC make this a total order later by
                 -- filling `transaction_index`, with no further migration.
@@ -153,111 +145,5 @@ impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
             applied: row.applied,
             same_slot_ambiguity,
         })
-    }
-}
-
-#[async_trait]
-impl PoolCurrentStateLookup for PgPoolCurrentStateRepository {
-    async fn get_by_address(
-        &self,
-        pool_address: &str,
-    ) -> RepositoryResult<Option<PoolCurrentState>> {
-        let row = sqlx::query_as!(
-            PoolCurrentStateRow,
-            r#"
-            SELECT
-                pool_address,
-                protocol,
-                last_event_at,
-                last_event_kind,
-                last_signature,
-                reserve_a,
-                reserve_b,
-                last_sqrt_price,
-                last_swap_at,
-                updated_at
-            FROM pool_current_state
-            WHERE pool_address = $1
-            "#,
-            pool_address,
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        row.map(PoolCurrentState::try_from).transpose()
-    }
-
-    async fn side_values_usd(&self, pool_address: &Pubkey) -> RepositoryResult<PoolSideValues> {
-        let row = sqlx::query!(
-            r#"
-            SELECT value_a_usd, value_b_usd
-            FROM pool_current_tvl
-            WHERE pool_address = $1
-            "#,
-            pool_address.to_string(),
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        let Some(row) = row else {
-            return Ok(PoolSideValues::default());
-        };
-        Ok(PoolSideValues {
-            value_a_usd: convert_optional(
-                row.value_a_usd,
-                "value_a_usd",
-                convert_bigdecimal_to_decimal,
-            )?,
-            value_b_usd: convert_optional(
-                row.value_b_usd,
-                "value_b_usd",
-                convert_bigdecimal_to_decimal,
-            )?,
-        })
-    }
-
-    async fn list_most_recent(
-        &self,
-        limit: u32,
-        before_last_event_at: Option<DateTime<Utc>>,
-    ) -> RepositoryResult<Vec<PoolCurrentState>> {
-        if limit == 0 {
-            return Err(RepositoryError::Integrity(
-                "limit must be greater than 0".to_string(),
-            ));
-        }
-
-        // Cap defensively to keep the i64 cast safe for absurd inputs.
-        let limit_i64 = i64::from(limit.min(1_000));
-
-        let rows = sqlx::query_as!(
-            PoolCurrentStateRow,
-            r#"
-            SELECT
-                pool_address,
-                protocol,
-                last_event_at,
-                last_event_kind,
-                last_signature,
-                reserve_a,
-                reserve_b,
-                last_sqrt_price,
-                last_swap_at,
-                updated_at
-            FROM pool_current_state
-            WHERE ($1::TIMESTAMPTZ IS NULL OR last_event_at < $1)
-            ORDER BY last_event_at DESC, pool_address ASC
-            LIMIT $2
-            "#,
-            before_last_event_at,
-            limit_i64,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        rows.into_iter().map(PoolCurrentState::try_from).collect()
     }
 }

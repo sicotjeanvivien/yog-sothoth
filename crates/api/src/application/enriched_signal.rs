@@ -1,7 +1,4 @@
-//! A signal composed with the token context of its pool, in `yog-core` types, as
-//! [`EnrichedPool`] is.
-//!
-//! [`EnrichedPool`]: crate::application::EnrichedPool
+//! A signal composed with the token context of its pool, in `yog-core` types.
 
 use yog_core::domain::SignalRecord;
 

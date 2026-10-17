@@ -6,8 +6,8 @@ use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 use sqlx::PgPool;
 use yog_core::domain::{
-    EventPosition, LastEventKind, MeteoraDammV2LiquidityEventKind, PoolCurrentStateLookup,
-    PoolCurrentStateRepository, PoolCurrentStateUpsert, Protocol,
+    EventPosition, LastEventKind, MeteoraDammV2LiquidityEventKind, PoolCurrentStateRepository,
+    PoolCurrentStateUpsert, Protocol,
 };
 use yog_persistence::PgPoolCurrentStateRepository;
 
@@ -48,12 +48,43 @@ async fn seed_pool(pool: &PgPool) {
         .unwrap();
 }
 
-async fn stored_sqrt_price(repo: &PgPoolCurrentStateRepository, pool: Pubkey) -> Option<u128> {
-    repo.get_by_address(&pool.to_string())
+/// The projection row of a pool, read back in SQL.
+struct Stored {
+    last_event_at: DateTime<Utc>,
+    last_event_kind: String,
+    reserve_a: u64,
+    reserve_b: u64,
+    last_sqrt_price: Option<u128>,
+    last_swap_at: Option<DateTime<Utc>>,
+}
+
+async fn read_state(pool: &PgPool, pool_address: Pubkey) -> Stored {
+    type Row = (
+        DateTime<Utc>,
+        String,
+        i64,
+        i64,
+        Option<String>,
+        Option<DateTime<Utc>>,
+    );
+    let (last_event_at, last_event_kind, reserve_a, reserve_b, last_sqrt_price, last_swap_at) =
+        sqlx::query_as::<_, Row>(
+            "SELECT last_event_at, last_event_kind, reserve_a, reserve_b,
+                    last_sqrt_price::TEXT, last_swap_at
+               FROM pool_current_state WHERE pool_address = $1",
+        )
+        .bind(pool_address.to_string())
+        .fetch_one(pool)
         .await
-        .unwrap()
-        .expect("the projection row must exist")
-        .last_sqrt_price
+        .expect("the projection row must exist");
+    Stored {
+        last_event_at,
+        last_event_kind,
+        reserve_a: u64::try_from(reserve_a).unwrap(),
+        reserve_b: u64::try_from(reserve_b).unwrap(),
+        last_sqrt_price: last_sqrt_price.map(|p| p.parse().unwrap()),
+        last_swap_at,
+    }
 }
 
 async fn stored_event_at(pool: &PgPool) -> DateTime<Utc> {
@@ -84,7 +115,7 @@ async fn a_later_event_of_the_same_second_wins(pool: PgPool) {
         "same signature, same second, higher event_index: this is the second \
          hop of one transaction and it must win"
     );
-    assert_eq!(stored_sqrt_price(&repo, pk(1)).await, Some(2_222));
+    assert_eq!(read_state(&pool, pk(1)).await.last_sqrt_price, Some(2_222));
 }
 
 /// Mutation: a guard that accepts everything, which would also pass the test above.
@@ -110,7 +141,7 @@ async fn an_earlier_event_of_the_same_second_is_rejected(pool: PgPool) {
          overwrite the state"
     );
     assert_eq!(
-        stored_sqrt_price(&repo, pk(1)).await,
+        read_state(&pool, pk(1)).await.last_sqrt_price,
         Some(5_555),
         "the rejected upsert must have left the stored state untouched"
     );
@@ -137,7 +168,7 @@ async fn a_later_slot_wins_over_a_higher_event_index(pool: PgPool) {
         next_block.applied,
         "slot 301 comes after slot 300 whatever the event_index says"
     );
-    assert_eq!(stored_sqrt_price(&repo, pk(1)).await, Some(1_000));
+    assert_eq!(read_state(&pool, pk(1)).await.last_sqrt_price, Some(1_000));
 }
 
 /// Mutation: `same_slot_ambiguity` always false. `transaction_index` is empty on this path,
@@ -185,7 +216,7 @@ async fn same_slot_different_signature_is_reported_as_ambiguous(pool: PgPool) {
     assert!(!same_tx.same_slot_ambiguity);
 }
 
-/// `last_event_at` is still written — `/latest-state` displays it — though it decides nothing.
+/// `last_event_at` is still written, though it decides nothing.
 #[sqlx::test]
 async fn last_event_at_is_still_recorded_though_it_no_longer_orders(pool: PgPool) {
     seed_pool(&pool).await;
@@ -233,12 +264,7 @@ async fn the_liquidity_path_shares_the_same_ordering(pool: PgPool) {
          the swap path"
     );
 
-    let stored = repo
-        .get_by_address(&pk(1).to_string())
-        .await
-        .unwrap()
-        .expect("row")
-        .reserve_a;
+    let stored = read_state(&pool, pk(1)).await.reserve_a;
     assert_eq!(stored, 20, "the second write must be the one that stuck");
 }
 
@@ -269,11 +295,7 @@ async fn a_liquidity_event_preserves_the_price_left_by_the_last_swap(pool: PgPoo
             .applied
     );
 
-    let stored = repo
-        .get_by_address(&pk(1).to_string())
-        .await
-        .unwrap()
-        .expect("row");
+    let stored = read_state(&pool, pk(1)).await;
 
     assert_eq!(
         stored.last_sqrt_price,
@@ -288,7 +310,7 @@ async fn a_liquidity_event_preserves_the_price_left_by_the_last_swap(pool: PgPoo
     );
     // The liquidity event's own columns landed: the write was not merely rejected.
     assert_eq!(stored.reserve_a, 42);
-    assert_eq!(stored.last_event_kind, LastEventKind::LiquidityAdd);
+    assert_eq!(stored.last_event_kind, LastEventKind::LiquidityAdd.as_str());
     assert_eq!(
         stored.last_event_at, liquidity_at,
         "the projection's own clock does follow the latest event"
@@ -345,11 +367,7 @@ async fn a_routed_transaction_leaves_its_result_not_its_first_hop(pool: PgPool) 
         );
     }
 
-    let state = repo
-        .get_by_address(&pool_address.to_string())
-        .await
-        .unwrap()
-        .expect("the projection row must exist");
+    let state = read_state(&pool, pool_address).await;
     let last = &swaps[1];
     assert_eq!(state.last_sqrt_price, Some(last.next_sqrt_price));
     assert_eq!(state.reserve_a, last.reserve_a_after);

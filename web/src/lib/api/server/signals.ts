@@ -5,7 +5,7 @@
 
 import { assertInBounds } from "../client/client-core";
 import { apiGet } from "../client/server";
-import { isValidPoolAddress } from "../server/pool";
+import { isValidPoolAddress } from "../pool-address";
 import {
   zListSignalsQuery,
   zListSignalsResponse,

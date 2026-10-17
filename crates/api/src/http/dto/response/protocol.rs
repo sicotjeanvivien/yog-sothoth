@@ -18,3 +18,7 @@ impl From<domain::Protocol> for ProtocolResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/protocol_tests.rs"]
+mod tests;

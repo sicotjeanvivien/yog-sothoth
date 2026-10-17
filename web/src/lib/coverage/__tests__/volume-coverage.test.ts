@@ -22,7 +22,6 @@ describe("volumeCoverage", () => {
   });
 
   it("is partial when no hour at all could be valued", () => {
-    // Absent from the ranking, but shown in `/pools` with an empty figure that needs qualifying.
     expect(
       volumeCoverage({ swapBuckets24h: 3, swapBucketsPriced24h: 0 }),
     ).toEqual({ priced: 0, total: 3, partial: true });

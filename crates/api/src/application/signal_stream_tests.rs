@@ -258,16 +258,6 @@ impl yog_core::domain::SignalFeed for StuckFeed {
     ) -> yog_core::RepositoryResult<Vec<SignalRecord>> {
         std::future::pending().await
     }
-    async fn recent_by_pools(
-        &self,
-        _pools: &[solana_pubkey::Pubkey],
-        _since: chrono::DateTime<chrono::Utc>,
-        _per_pool_limit: i64,
-    ) -> yog_core::RepositoryResult<
-        std::collections::HashMap<solana_pubkey::Pubkey, Vec<SignalRecord>>,
-    > {
-        unreachable!("the poller never reads recent signals")
-    }
 }
 
 /// Mutation: the tick awaited outside the `select!` — a stop mid-tick hangs the poller.

@@ -157,7 +157,7 @@ cargo run -p yog-indexer    # or yog-api, yog-context, yog-signals, yog-analytic
 
 # Hit the api
 curl http://127.0.0.1:5000/healthz
-curl http://127.0.0.1:5000/api/pools | jq
+curl http://127.0.0.1:5000/api/signals | jq
 ```
 
 **Port gotcha:** the `.env` URLs use `localhost:5433` (the host-side Docker
@@ -233,7 +233,7 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 
 - Decode the pool account in `application/decoder/<platform>/<product>.rs`, returning a `DecodedPoolAccount` from the account bytes alone. It guards on the Anchor discriminator; the program id is guarded by the dispatch in `decode_pool_account` — neither is redundant (see [`core/README.md`](./core/README.md#responsibilities)).
 - Add a branch to `decode_pool_account` (`application/decoder.rs`) routing the new `Protocol`.
-- Add the matching variants to the two-level `PoolAccountProperties` (write side, `domain/pool_account/`) and `PoolProperties` (read side, `domain/pool_properties/`). Both are matched exhaustively downstream, so the compiler points at every site that must follow.
+- Add the matching variant to the two-level `PoolAccountProperties` (`domain/pool_account/`). It is matched exhaustively downstream, so the compiler points at every site that must follow.
 - Ground the decoder on **real mainnet accounts** before trusting it: a synthetic test builds the buffer with the same constants the decoder reads it with, so both agree on a wrong offset. Fixtures go under `core/tests/fixtures/<product>/accounts/` (`damm_v2/`, `dlmm/`).
 
 ### 2. In `persistence`
@@ -243,7 +243,7 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 - Add every new table's line to the privilege matrix in `tests/privileges.rs`. The suite asserts in both directions, so a missing GRANT and an extra one both fail — read the failure as a question before editing either side.
 - Extend the cross-protocol VIEWs with a new `UNION ALL` branch per VIEW (in a new migration redefining them), the `protocol` literal injected.
 - Implement the new `Pg<Platform><Product><EventKind>EventRepository` traits in `persistence/src/repositories/<platform>/<product>/`. Follow the `Row + TryFrom<XxxRow> for XxxDomain` convention.
-- Implement the satellite's `PoolAccountResolver` (write + queue) and `PoolPropertiesLookup` (read) on the same `Pg*` struct. ⚠️ Its `list_unresolved` **must** filter on its own protocol: "has no satellite row yet" is one of the candidate conditions, and that is permanently true of every pool of every *other* protocol — get it wrong and the queue starves behind pools this resolver can never store.
+- Implement the satellite's `PoolAccountResolver` (write + queue) on a `Pg*` struct. ⚠️ Its `list_unresolved` **must** filter on its own protocol: "has no satellite row yet" is one of the candidate conditions, and that is permanently true of every pool of every *other* protocol — get it wrong and the queue starves behind pools this resolver can never store.
 - Give the analytic writer the protocol's swaps: a module beside `repositories/analytic/meteora_damm_v2.rs` that upserts their facts, called from `PgAnalyticRepository::write_cycle`. It needs no freeze guard of its own: `CycleWrite::without_frozen` has already taken the frozen hours out of its range.
 - Regenerate `.sqlx/` (`cd crates/persistence && cargo sqlx prepare -- --all-targets --all-features`).
 - Re-export the new repositories from `lib.rs`.
@@ -262,7 +262,6 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 
 - If the protocol introduces new event kinds the API wants to expose, add a service under `application/services/`. A service goes under `services/<platform>/<product>/` only when its repository, params and result are irreducibly that product's; cross-protocol services stay at the root and must not name a protocol in their constructor.
 - Add handlers and DTOs as needed. For a cross-protocol read surface, point the handler at the matching VIEW; for protocol-specific detail, point at the table directly.
-- Add the protocol's block to `http/dto/response/pool_detail.rs` — an optional field named after the protocol, alongside its siblings, its properties type in `pool_detail/`. The `PoolProperties` `match` there is exhaustive with no wildcard arm, so this one is compiler-forced rather than optional.
 
 ### 6. Tests
 
@@ -280,10 +279,9 @@ There is no central registry. A protocol is added by writing isolated per-protoc
 | `EventPersistor::persist` | `indexer` | event → sub-persistor |
 | `init_event_persistor` (`bootstrap/daemon/init.rs`) | `indexer` | sub-persistor instantiation |
 | `pool_account_resolvers` vec (`bootstrap/daemon.rs`) | `context` | property backfill |
-| `PoolProperties` match in `http/dto/response/pool_detail.rs` | `api` | detail wire shape |
-| `From<domain::Protocol>` in `http/dto/response/pool/protocol_response.rs` | `api` | protocol name in the contract (then regenerate it) |
+| `From<domain::Protocol>` in `http/dto/response/protocol.rs` | `api` | protocol name in the contract (then regenerate it) |
 
-The two-level enums (`DomainEvent`, `PoolAccountProperties`, `PoolProperties`) are matched exhaustively, so adding a variant breaks the build at each site that must follow instead of silently dropping the protocol.
+The two-level enums (`DomainEvent`, `PoolAccountProperties`) are matched exhaustively, so adding a variant breaks the build at each site that must follow instead of silently dropping the protocol.
 
 ---
 

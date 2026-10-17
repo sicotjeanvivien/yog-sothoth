@@ -1,3 +1,3 @@
 mod model;
 
-pub use model::{MeteoraDlmmPoolAccountProperties, MeteoraDlmmPoolProperties};
+pub use model::MeteoraDlmmPoolAccountProperties;

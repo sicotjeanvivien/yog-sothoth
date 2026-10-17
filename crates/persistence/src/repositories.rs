@@ -9,7 +9,6 @@ mod materialization_backlog;
 mod meteora;
 mod network_status;
 mod pool;
-mod pool_analytics;
 mod pool_current_state;
 mod pool_price_snapshot;
 mod signal;
@@ -40,7 +39,6 @@ pub use meteora::{
 };
 pub use network_status::PgNetworkStatusRepository;
 pub use pool::PgPoolRepository;
-pub use pool_analytics::PgPoolAnalyticsRepository;
 pub use pool_current_state::PgPoolCurrentStateRepository;
 pub use pool_price_snapshot::PgPoolPriceSnapshotRepository;
 pub use signal::PgSignalRepository;

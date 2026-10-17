@@ -1,16 +1,12 @@
-//! The realized-fee split of `meteora_damm_v2_pool_hourly_activity`, read back through the
-//! repository. ⚠️ The LP share is `claiming + compounding`, not `fees − protocol`: cp-amm takes
+//! The realized-fee split of `meteora_damm_v2_pool_hourly_activity`. ⚠️ The LP share is `claiming + compounding`, not `fees − protocol`: cp-amm takes
 //! the referral out of the protocol share. Every fixture number defeats one wrong
 //! implementation: four distinct components per side, a fee in each token with different
 //! decimals and prices, an unvaluable bucket priced on one side only.
 
-use super::helpers::{pk, price_mint};
+use super::helpers::{pk, price_mint, the_only_bucket};
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
-
-use yog_core::domain::PoolAnalyticsRepository;
-use yog_persistence::PgPoolAnalyticsRepository;
 
 // Token scales and prices, different on the two sides.
 const DEC_A: i32 = 0;
@@ -166,67 +162,32 @@ async fn seed_pool_with_both_fee_sides(pool: &PgPool) -> String {
 }
 
 #[sqlx::test]
-async fn batch_compute_excludes_the_referral_from_the_lp_share(pool: PgPool) {
+async fn the_split_excludes_the_referral_from_the_lp_share(pool: PgPool) {
     let addr = seed_pool_with_both_fee_sides(&pool).await;
-    let repo = PgPoolAnalyticsRepository::new(pool);
-
-    let result = repo
-        .batch_compute(&[addr.parse().unwrap()])
-        .await
-        .expect("batch_compute should succeed");
-    let a = result
-        .get(&addr.parse().unwrap())
-        .expect("the seeded pool must be in the batch result");
+    let a = the_only_bucket(&pool, &addr).await;
 
     assert_eq!(
-        a.fees_24h_usd,
+        a.fees_usd,
         Some(expected_fees()),
         "the total is the sum of the four components — unchanged by this fix"
     );
-    assert_eq!(a.protocol_fees_24h_usd, Some(expected_protocol()));
+    assert_eq!(a.protocol_fees_usd, Some(expected_protocol()));
     assert_eq!(
-        a.referral_fees_24h_usd,
+        a.referral_fees_usd,
         Some(expected_referral()),
         "both fee sides must be summed on their own scale and price"
     );
     assert_eq!(
-        a.lp_fees_24h_usd,
+        a.lp_fees_usd,
         Some(expected_lp()),
         "the LP share is claiming + compounding; `fees - protocol` gives {}",
         expected_fees() - expected_protocol()
     );
 
     assert_eq!(
-        a.lp_fees_24h_usd.unwrap()
-            + a.protocol_fees_24h_usd.unwrap()
-            + a.referral_fees_24h_usd.unwrap(),
-        a.fees_24h_usd.unwrap(),
+        a.lp_fees_usd.unwrap() + a.protocol_fees_usd.unwrap() + a.referral_fees_usd.unwrap(),
+        a.fees_usd.unwrap(),
         "the three shares must partition the total exactly"
-    );
-}
-
-#[sqlx::test]
-async fn history_publishes_the_same_split_as_the_24h_analytics(pool: PgPool) {
-    let addr = seed_pool_with_both_fee_sides(&pool).await;
-    let repo = PgPoolAnalyticsRepository::new(pool);
-
-    let buckets = repo
-        .history(&addr.parse().unwrap(), 1)
-        .await
-        .expect("history should succeed");
-
-    let bucket = buckets
-        .iter()
-        .find(|b| b.fees_usd.is_some())
-        .expect("the seeded swaps must produce a valued bucket");
-
-    assert_eq!(bucket.fees_usd, Some(expected_fees()));
-    assert_eq!(bucket.protocol_fees_usd, Some(expected_protocol()));
-    assert_eq!(bucket.referral_fees_usd, Some(expected_referral()));
-    assert_eq!(
-        bucket.lp_fees_usd,
-        Some(expected_lp()),
-        "the per-bucket split must match the windowed one — they read one view"
     );
 }
 
@@ -260,28 +221,22 @@ async fn an_unvaluable_bucket_nulls_every_share(pool: PgPool) {
     )
     .await;
 
-    let repo = PgPoolAnalyticsRepository::new(pool);
-    let result = repo
-        .batch_compute(&[addr.parse().unwrap()])
-        .await
-        .expect("batch_compute should succeed");
-    let a = result.get(&addr.parse().unwrap()).unwrap();
+    let a = the_only_bucket(&pool, &addr).await;
 
     assert_eq!(
         (
-            a.volume_24h_usd,
-            a.fees_24h_usd,
-            a.protocol_fees_24h_usd,
-            a.referral_fees_24h_usd,
-            a.lp_fees_24h_usd,
+            a.volume_usd,
+            a.fees_usd,
+            a.protocol_fees_usd,
+            a.referral_fees_usd,
+            a.lp_fees_usd,
         ),
         (None, None, None, None, None),
-        "a share surviving alone would make the split, effectiveFeeBps and the \
-         coverage counters lie at once"
+        "a share surviving alone would make the split lie"
     );
     assert_eq!(
-        a.swap_buckets_24h, 1,
-        "the hour traded, and the coverage counters must still say so"
+        a.swap_count,
+        Some(1),
+        "the hour traded, and the bucket must still say so"
     );
-    assert_eq!(a.swap_buckets_priced_24h, 0);
 }

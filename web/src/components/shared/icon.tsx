@@ -34,18 +34,6 @@ export const OverviewIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-export const PoolsIcon: React.FC<IconProps> = ({
-  size = 18,
-  strokeWidth = 1.6,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <path d="M12 3 21 7.5 12 12 3 7.5Z" />
-    <path d="M3 12 12 16.5 21 12" />
-    <path d="M3 16.5 12 21 21 16.5" />
-  </svg>
-);
-
 export const LiquidityIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
@@ -80,16 +68,6 @@ export const AlertsIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-export const WatchlistIcon: React.FC<IconProps> = ({
-  size = 18,
-  strokeWidth = 1.6,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <path d="m12 3.7 2.65 5.37 5.93.86-4.29 4.18 1.01 5.9L12 17.22 6.7 20l1.01-5.9-4.29-4.18 5.93-.86z" />
-  </svg>
-);
-
 export const SettingsIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
@@ -108,33 +86,6 @@ export const ChevronDownIcon: React.FC<IconProps> = ({
 }) => (
   <svg {...base(size, strokeWidth)} className={className}>
     <path d="m6 9 6 6 6-6" />
-  </svg>
-);
-
-/**
- * Solscan's brand mark, in its own colours. ⚠️ The source's full-bounds `<clipPath>` is
- * dropped: it clips nothing and would emit a duplicate DOM id per rendered row.
- */
-export const SolscanIcon: React.FC<{ size?: number; className?: string }> = ({
-  size = 14,
-  className,
-}) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 316 315"
-    fill="none"
-    className={className ? `shrink-0 ${className}` : "shrink-0"}
-    aria-hidden
-  >
-    <path
-      d="M157.501 -0.375009C158.243 -0.3738 158.986 -0.372592 159.751 -0.371347C200.901 -0.19058 238.327 15.5969 268.001 44C268.795 44.7309 269.589 45.4618 270.407 46.2148C299.639 74.0132 314.085 114.372 316.001 154C316.043 154.866 316.086 155.732 316.129 156.625C317.036 195.299 303.157 231.777 277.001 260C272.034 255.884 267.588 251.579 263.251 246.812C258.943 242.131 254.59 237.533 250.063 233.062C245.827 228.877 241.829 224.56 238.001 220C239.494 215.902 241.505 212.358 243.751 208.625C258.049 184.089 261.052 157.294 253.876 130C247.036 105.774 231.076 84.526 209.251 71.875C185.025 58.3674 158.112 53.5756 131.001 61C105.763 68.7927 83.7433 84.5134 70.9019 108.01C58.1815 132.403 54.1314 159.243 62.1256 185.875C70.2872 211.566 87.1832 233.11 111.001 246C136.273 258.52 161.194 259.401 188.125 252.452C190.247 251.941 192.193 251.796 194.376 251.75C195.47 251.711 195.47 251.711 196.587 251.672C203.77 252.648 208.21 257.811 213.024 262.73C213.77 263.481 214.516 264.231 215.285 265.004C217.656 267.392 220.016 269.789 222.376 272.188C223.986 273.813 225.596 275.437 227.208 277.061C231.147 281.033 235.077 285.013 239.001 289C237.172 293.096 234.662 294.969 230.938 297.312C230.016 297.897 230.016 297.897 229.075 298.493C208.561 311.04 185.304 315.442 161.563 315.375C160.771 315.374 159.978 315.373 159.162 315.371C119.658 315.208 81.7949 301.088 52.0006 275C51.1511 274.283 50.3016 273.567 49.4264 272.828C43.1832 267.436 38.0125 261.54 33.0006 255C32.3212 254.125 31.6419 253.249 30.942 252.348C14.9048 231.058 4.95175 206.294 1.00058 180C0.816245 178.802 0.631909 177.605 0.441987 176.371C-4.60214 134.33 7.93634 92.1714 33.7896 58.9648C59.598 26.653 96.2021 6.05584 137.122 0.414542C143.913 -0.311258 150.679 -0.395715 157.501 -0.375009Z"
-      fill="#00E8B5"
-    />
-    <path
-      d="M197.996 108.172C209.455 118.008 217.931 131.94 220 147C221.423 167.213 218.076 184.808 204.625 200.5C192.888 212.619 177.288 219.847 160.402 220.354C142.737 220.513 127.002 215.572 114.062 203.26C101.611 190.821 95.117 175.085 94.625 157.5C95.1486 140.845 100.967 125.086 112.727 113.105C137.096 90.5362 171.111 88.6825 197.996 108.172Z"
-      fill="#C74AE3"
-    />
   </svg>
 );
 
@@ -195,50 +146,6 @@ export const AlertOctagonIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-export const CopyIcon: React.FC<IconProps> = ({
-  size = 16,
-  strokeWidth = 1.6,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <rect x="9" y="9" width="11" height="11" rx="2" />
-    <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
-  </svg>
-);
-
-export const CheckIcon: React.FC<IconProps> = ({
-  size = 16,
-  strokeWidth = 1.8,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <path d="M4 12l5 5L20 6" />
-  </svg>
-);
-
-export const ExternalLinkIcon: React.FC<IconProps> = ({
-  size = 14,
-  strokeWidth = 1.6,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <path d="M14 5h5v5" />
-    <path d="M19 5l-9 9" />
-    <path d="M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" />
-  </svg>
-);
-
-export const ArrowLeftIcon: React.FC<IconProps> = ({
-  size = 16,
-  strokeWidth = 1.6,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <path d="M19 12H5" />
-    <path d="M12 5l-7 7 7 7" />
-  </svg>
-);
-
 export const ArrowRightIcon: React.FC<IconProps> = ({
   size = 16,
   strokeWidth = 1.6,
@@ -279,96 +186,5 @@ export const ChevronDoubleRightIcon: React.FC<IconProps> = ({
   <svg {...base(size, strokeWidth)} className={className}>
     <polyline points="13 17 18 12 13 7" />
     <polyline points="6 17 11 12 6 7" />
-  </svg>
-);
-
-export const ChevronLeftIcon: React.FC<IconProps> = ({
-  size = 24,
-  strokeWidth = 2,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <polyline points="15 18 9 12 15 6" />
-  </svg>
-);
-
-export const ChevronRightIcon: React.FC<IconProps> = ({
-  size = 24,
-  strokeWidth = 2,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <polyline points="9 18 15 12 9 6" />
-  </svg>
-);
-
-export const SearchIcon: React.FC<IconProps> = ({
-  size = 24,
-  strokeWidth = 2,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
-
-export const ChevronUpSortableIcon: React.FC<IconProps> = ({
-  size = 14,
-  strokeWidth = 1.8,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <polyline points="18 15 12 9 6 15" />
-  </svg>
-);
-
-export const ChevronDownSortableIcon: React.FC<IconProps> = ({
-  size = 14,
-  strokeWidth = 1.8,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <polyline points="6 9 12 15 18 9" />
-  </svg>
-);
-
-// Brand marks: filled paths in their own colours, outside `base()`.
-
-/**
- * Meteora's mark, on a 24×26 source: the width derives from `size`, the height. The gradient
- * id is shared by every instance, which all render the same gradient.
- */
-export const MeteoraIcon: React.FC<{ size?: number; className?: string }> = ({
-  size = 16,
-  className,
-}) => (
-  <svg
-    width={(size * 24) / 26}
-    height={size}
-    viewBox="0 0 24 26"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-    aria-hidden="true"
-  >
-    <path
-      d="M20.5156 6.03175C20.9503 5.59712 21.6239 5.62327 21.9023 6.08351C22.2033 6.57776 22.4308 7.11185 22.5927 7.6714C22.6835 7.98943 22.5783 8.36135 22.3144 8.6255L13.7998 17.1402C13.2855 17.6544 12.6458 18.0099 11.9668 18.1548L11.2597 18.3052C10.5835 18.4529 9.93811 18.8084 9.42672 19.3198L2.88961 25.8569C2.61119 24.783 2.48909 24.0582 3.36129 23.186L20.5156 6.03175ZM22.3603 9.7007C22.6443 9.41673 23.0808 9.58085 23.0527 9.95558C22.8765 12.2512 21.7829 14.6697 19.8339 16.6187C18.3478 18.2466 14.1543 20.7352 11.1572 22.4028C10.5436 22.7434 10.044 22.016 10.5468 21.5132L22.3574 9.70363L22.3603 9.7007ZM18.4414 2.58937C18.7112 2.31954 19.1091 2.26239 19.3818 2.44972C19.9499 2.83605 20.4811 3.39576 20.7539 4.07179C20.8561 4.33313 20.7683 4.65399 20.5439 4.87843L11.373 14.0503C10.8589 14.5643 10.2197 14.9191 9.54097 15.064L8.83297 15.2144C8.15688 15.3621 7.51227 15.7177 7.00093 16.229L1.34371 21.8853C1.06542 20.8116 1.19935 19.8315 2.07125 18.9595L18.4414 2.58937ZM14.5546 0.958511C15.0659 0.447256 15.7991 0.248121 16.4013 0.475112C16.7792 0.620007 17.1435 0.79701 17.4873 1.00441C17.9415 1.27729 17.9641 1.94165 17.538 2.36769L9.15132 10.7544C8.67118 11.2346 8.01757 11.4903 7.39254 11.4448C6.73629 11.3966 6.04558 11.6668 5.53707 12.1753L0.943317 16.7691C0.664923 15.6951 1.0262 14.4879 1.8984 13.6157L3.38668 12.1265L14.5546 0.958511ZM13.2119 0.143081C13.615 0.137675 13.7713 0.617574 13.4648 0.924331L5.47261 8.91652L4.54879 9.83937L3.14254 11.2456L3.13472 11.2544C2.83925 11.5499 2.40158 11.2828 2.56636 10.9077L3.94136 7.78273C4.01807 7.59238 4.10347 7.39868 4.19722 7.20265L4.20504 7.18312C4.99769 5.50406 6.27369 3.72287 7.47261 2.52394C9.39602 0.600534 11.1237 0.162968 13.2119 0.143081Z"
-      fill="url(#meteora-logo-gradient)"
-    />
-    <defs>
-      <linearGradient
-        id="meteora-logo-gradient"
-        x1="27.194"
-        y1="0.173687"
-        x2="5.03706"
-        y2="25.7927"
-        gradientUnits="userSpaceOnUse"
-      >
-        <stop stopColor="#F5BD00" />
-        <stop offset="0.364891" stopColor="#F54B00" />
-        <stop offset="1" stopColor="#6E45FF" />
-      </linearGradient>
-    </defs>
   </svg>
 );

@@ -1,3 +1,6 @@
+use chrono::{DateTime, Utc};
+use solana_signature::Signature;
+
 use super::*;
 
 fn sig(seed: u8) -> Signature {
@@ -16,23 +19,6 @@ fn position(now: DateTime<Utc>) -> EventPosition {
         transaction_index: None,
         event_index: 2,
     }
-}
-
-#[test]
-fn last_event_kind_roundtrip() {
-    for kind in [
-        LastEventKind::Swap,
-        LastEventKind::LiquidityAdd,
-        LastEventKind::LiquidityRemove,
-    ] {
-        assert_eq!(LastEventKind::from_wire(kind.as_str()), Some(kind));
-    }
-}
-
-#[test]
-fn last_event_kind_rejects_unknown() {
-    assert_eq!(LastEventKind::from_wire("unknown"), None);
-    assert_eq!(LastEventKind::from_wire(""), None);
 }
 
 #[test]

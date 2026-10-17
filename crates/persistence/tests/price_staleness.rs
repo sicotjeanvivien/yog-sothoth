@@ -5,11 +5,7 @@
 use super::helpers::{pk, price_at};
 use chrono::{DateTime, Duration, DurationRound, Utc};
 use rust_decimal::Decimal;
-use solana_pubkey::Pubkey;
 use sqlx::PgPool;
-use std::str::FromStr;
-use yog_core::domain::PoolCurrentStateLookup;
-use yog_persistence::PgPoolCurrentStateRepository;
 
 /// The pool and its two tokens: A with 6 decimals, B with 9.
 async fn seed_pool(pool: &PgPool) -> (String, String, String) {
@@ -242,15 +238,18 @@ async fn a_side_value_goes_absent_on_its_own_stale_price(pool: PgPool) {
     price_at(&pool, &mint_a, "2.0", now - Duration::minutes(5)).await;
     price_at(&pool, &mint_b, "100.0", now - Duration::minutes(30)).await;
 
-    let values = PgPoolCurrentStateRepository::new(pool.clone())
-        .side_values_usd(&Pubkey::from_str(&pool_addr).unwrap())
-        .await
-        .unwrap();
+    let (value_a_usd, value_b_usd): (Option<Decimal>, Option<Decimal>) = sqlx::query_as(
+        "SELECT value_a_usd, value_b_usd FROM pool_current_tvl WHERE pool_address = $1",
+    )
+    .bind(&pool_addr)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
 
     // Mutation: the bound dropped from B's price join in the view.
-    assert_eq!(values.value_a_usd, Some(Decimal::from(20)));
+    assert_eq!(value_a_usd, Some(Decimal::from(20)));
     assert_eq!(
-        values.value_b_usd, None,
+        value_b_usd, None,
         "a side priced more than 15 minutes ago must not be valued"
     );
 }

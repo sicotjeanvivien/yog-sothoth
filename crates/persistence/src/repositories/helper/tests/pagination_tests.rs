@@ -1,16 +1,14 @@
 use super::*;
 use chrono::{TimeZone, Utc};
-use solana_signature::Signature;
-use yog_core::domain::MeteoraDammV2SwapEventCursor;
+use yog_core::domain::SignalCursor;
 
 #[derive(Debug, Clone, PartialEq)]
 struct Item(u32);
 
 fn cursor(_item: &Item) -> Cursor {
-    Cursor::MeteoraDammV2SwapEvent(MeteoraDammV2SwapEventCursor {
-        timestamp: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
-        signature: Signature::from([2; 64]),
-        event_index: 0,
+    Cursor::Signal(SignalCursor {
+        triggered_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
+        id: 2,
     })
 }
 

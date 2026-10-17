@@ -1,26 +1,12 @@
-//! DAMM v2 swap events repository: inserts new events and paginates them by
-//! pool, with one static query per traversal mode.
+//! DAMM v2 swap events repository: inserts new events.
 
-mod rows;
-
-use crate::repositories::helper::{
-    PageBuilder, QueryMode, convert_u64_to_i64, convert_u128_to_bigdecimal, map_sqlx_error,
-    resolve_query_mode,
-};
+use crate::repositories::helper::{convert_u64_to_i64, convert_u128_to_bigdecimal, map_sqlx_error};
 use async_trait::async_trait;
-use rows::MeteoraDammV2SwapEventRow;
-use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
-    Cursor, Page, PageDirection, PagePosition, RepositoryResult,
-    domain::{
-        InsertOutcome, MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor,
-        MeteoraDammV2SwapEventFeed, MeteoraDammV2SwapEventRepository,
-    },
+    RepositoryResult,
+    domain::{InsertOutcome, MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventRepository},
 };
-
-/// Page size cap, whatever the caller's `limit`.
-const MAX_PAGE_SIZE: i64 = 200;
 
 pub struct PgMeteoraDammV2SwapEventRepository {
     pool: PgPool,
@@ -80,114 +66,5 @@ impl MeteoraDammV2SwapEventRepository for PgMeteoraDammV2SwapEventRepository {
         .map_err(map_sqlx_error)?;
 
         Ok(InsertOutcome::from_rows_affected(result.rows_affected()))
-    }
-}
-
-#[async_trait]
-impl MeteoraDammV2SwapEventFeed for PgMeteoraDammV2SwapEventRepository {
-    /// Newest first. A backward query reverses the
-    /// ORDER BY, then the vector, to return the page in display order.
-    async fn find_by_pool_paginated(
-        &self,
-        pool_address: &Pubkey,
-        cursor: Option<MeteoraDammV2SwapEventCursor>,
-        direction: PageDirection,
-        position: Option<PagePosition>,
-        limit: i64,
-    ) -> RepositoryResult<Page<MeteoraDammV2SwapEvent>> {
-        let effective_limit = limit.clamp(1, MAX_PAGE_SIZE);
-        let fetch_limit = effective_limit + 1;
-
-        let mode = resolve_query_mode(position, &cursor, direction);
-
-        let active_cursor = if position.is_some() { None } else { cursor };
-        let had_cursor = active_cursor.is_some();
-        let (cursor_timestamp, cursor_signature, cursor_event_index) = match active_cursor {
-            Some(c) => (
-                Some(c.timestamp),
-                Some(c.signature.to_string()),
-                Some(i32::from(c.event_index)),
-            ),
-            None => (None, None, None),
-        };
-
-        let rows: Vec<MeteoraDammV2SwapEventRow> = match mode {
-            QueryMode::Forward => sqlx::query_as!(
-                MeteoraDammV2SwapEventRow,
-                r#"
-                SELECT pool_address, signature,
-                       trade_direction, amount_a, amount_b,
-                       reserve_a_after, reserve_b_after, next_sqrt_price,
-                       claiming_fee, protocol_fee, compounding_fee, referral_fee,
-                       fee_token_is_a,
-                       timestamp,
-                       slot, event_index, transaction_index
-                FROM meteora_damm_v2_swap_events
-                WHERE pool_address = $1
-                  AND (
-                      $2::TIMESTAMPTZ IS NULL
-                      OR timestamp < $2
-                      OR (timestamp = $2 AND signature > $3)
-                      OR (timestamp = $2 AND signature = $3 AND event_index > $5)
-                  )
-                ORDER BY timestamp DESC, signature ASC, event_index ASC
-                LIMIT $4
-                "#,
-                pool_address.to_string(),
-                cursor_timestamp,
-                cursor_signature,
-                fetch_limit,
-                cursor_event_index,
-            )
-            .fetch_all(&self.pool)
-            .await
-            .map_err(map_sqlx_error)?,
-
-            QueryMode::Backward => sqlx::query_as!(
-                MeteoraDammV2SwapEventRow,
-                r#"
-                SELECT pool_address, signature,
-                       trade_direction, amount_a, amount_b,
-                       reserve_a_after, reserve_b_after, next_sqrt_price,
-                       claiming_fee, protocol_fee, compounding_fee, referral_fee,
-                       fee_token_is_a,
-                       timestamp,
-                       slot, event_index, transaction_index
-                FROM meteora_damm_v2_swap_events
-                WHERE pool_address = $1
-                  AND (
-                      $2::TIMESTAMPTZ IS NULL
-                      OR timestamp > $2
-                      OR (timestamp = $2 AND signature < $3)
-                      OR (timestamp = $2 AND signature = $3 AND event_index < $5)
-                  )
-                ORDER BY timestamp ASC, signature DESC, event_index DESC
-                LIMIT $4
-                "#,
-                pool_address.to_string(),
-                cursor_timestamp,
-                cursor_signature,
-                fetch_limit,
-                cursor_event_index,
-            )
-            .fetch_all(&self.pool)
-            .await
-            .map_err(map_sqlx_error)?,
-        };
-
-        let events: Vec<MeteoraDammV2SwapEvent> = rows
-            .into_iter()
-            .map(MeteoraDammV2SwapEvent::try_from)
-            .collect::<Result<_, _>>()?;
-
-        Ok(
-            PageBuilder::new(events, effective_limit, mode, had_cursor).finalize(|e| {
-                Cursor::MeteoraDammV2SwapEvent(MeteoraDammV2SwapEventCursor {
-                    timestamp: e.timestamp,
-                    signature: e.signature,
-                    event_index: e.event_index,
-                })
-            }),
-        )
     }
 }

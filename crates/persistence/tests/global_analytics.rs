@@ -9,11 +9,8 @@ use sqlx::PgPool;
 
 use yog_core::domain::{
     AnalyticRepository, CycleWrite, GlobalAnalytics, GlobalAnalyticsRepository,
-    PoolAnalyticsRepository,
 };
-use yog_persistence::{
-    PgAnalyticRepository, PgGlobalAnalyticsRepository, PgPoolAnalyticsRepository,
-};
+use yog_persistence::{PgAnalyticRepository, PgGlobalAnalyticsRepository};
 
 fn hour_of(at: DateTime<Utc>) -> DateTime<Utc> {
     at.duration_trunc(Duration::hours(1)).unwrap()
@@ -212,42 +209,6 @@ async fn global_coverage_is_zero_zero_on_an_empty_universe(pool: PgPool) {
     assert_eq!(analytics.swap_buckets_priced_24h, 0);
     assert_eq!(analytics.volume_24h_usd, None);
     assert_eq!((analytics.total_tvl_usd, analytics.pools_priced), (None, 0));
-}
-
-/// Against the aggregate and the activity view, read per pool, counting
-/// different buckets of the same hours.
-#[sqlx::test]
-async fn the_global_counters_agree_with_the_per_pool_ones(pool: PgPool) {
-    let priced = setup_pool(&pool, 1, Some("180.0")).await;
-    let unpriced = setup_pool(&pool, 2, None).await;
-
-    insert_bucket(&pool, &priced, "p1", 1).await;
-    insert_bucket(&pool, &priced, "p2", 3).await;
-    insert_bucket(&pool, &unpriced, "u1", 2).await;
-    write_facts(&pool).await;
-
-    let global = read(&pool).await;
-
-    let per_pool = PgPoolAnalyticsRepository::new(pool.clone())
-        .batch_compute(&[pk(1), pk(2)])
-        .await
-        .unwrap();
-    let summed_total: i64 = per_pool.values().map(|a| a.swap_buckets_24h).sum();
-    let summed_priced: i64 = per_pool.values().map(|a| a.swap_buckets_priced_24h).sum();
-
-    assert_eq!(
-        global.swap_buckets_24h, summed_total,
-        "the protocol-wide denominator must be the sum of the per-pool ones"
-    );
-    assert_eq!(
-        global.swap_buckets_priced_24h, summed_priced,
-        "…and so must the numerator, or /api/stats and /api/pools tell two \
-         different stories about the same hours"
-    );
-    assert_eq!(
-        (global.swap_buckets_24h, global.swap_buckets_priced_24h),
-        (3, 2)
-    );
 }
 
 /// Against a sum read off the wrong column: the LP or protocol share for the

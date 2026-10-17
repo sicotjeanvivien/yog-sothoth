@@ -1,13 +1,10 @@
-//! The swap volume continuous aggregate and `volume_24h_usd` in `PgPoolAnalyticsRepository`:
-//! each swap's input side valued at the bucket's trade-time price, over the trailing 24 h.
+//! The swap volume continuous aggregate and `volume_usd` in the activity view: each swap's
+//! input side valued at the bucket's trade-time price.
 
-use super::helpers::{pk, price_mint_since};
+use super::helpers::{pk, price_mint_since, the_only_bucket};
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
-
-use yog_core::domain::PoolAnalyticsRepository;
-use yog_persistence::PgPoolAnalyticsRepository;
 
 async fn insert_swap(
     pool: &PgPool,
@@ -37,7 +34,7 @@ async fn insert_swap(
 }
 
 #[sqlx::test]
-async fn volume_24h_reads_cagg_with_trade_time_pricing(pool: PgPool) {
+async fn volume_reads_cagg_with_trade_time_pricing(pool: PgPool) {
     let pool_addr = pk(1).to_string();
     let mint_a = pk(2).to_string();
     let mint_b = pk(3).to_string();
@@ -96,27 +93,12 @@ async fn volume_24h_reads_cagg_with_trade_time_pricing(pool: PgPool) {
         now - Duration::hours(1),
     )
     .await;
-    // Outside the 24h window — must be excluded from the total.
-    insert_swap(
-        &pool,
-        &pool_addr,
-        "sig_old",
-        "a_to_b",
-        999_000_000,
-        0,
-        now - Duration::hours(30),
-    )
-    .await;
+    let volume = the_only_bucket(&pool, &pool_addr)
+        .await
+        .volume_usd
+        .expect("volume should be Some for a bucket with priced swaps");
 
-    let repo = PgPoolAnalyticsRepository::new(pool.clone());
-    let result = repo.batch_compute(&[pk(1)]).await.unwrap();
-
-    let analytics = result.get(&pk(1)).expect("requested pool must be present");
-    let volume = analytics
-        .volume_24h_usd
-        .expect("volume should be Some for a pool with priced swaps in window");
-
-    // $2 (a_to_b) + $200 (b_to_a); the 30h-old swap is excluded.
+    // $2 (a_to_b) + $200 (b_to_a).
     let expected = Decimal::from(202);
     assert!(
         (volume - expected).abs() < Decimal::new(1, 4),

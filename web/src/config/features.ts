@@ -12,21 +12,6 @@ export type FeatureStatus =
 
 /** Every flag the app knows, with its rationale. */
 export const FEATURE_REGISTRY = {
-  poolsList: {
-    description: "List of pools observed by the indexer.",
-    status: "available-v0.1",
-    defaultEnabled: true,
-  },
-  poolDetail: {
-    description: "Pool detail page: mints, first_seen, last_seen.",
-    status: "available-v0.1",
-    defaultEnabled: true,
-  },
-  poolPriceImbalance: {
-    description: "Current price and imbalance derived from latest reserves.",
-    status: "available-v0.1",
-    defaultEnabled: true,
-  },
   transactionFeed: {
     description:
       "Live transaction feed (polling-based until WebSocket push arrives).",
@@ -105,9 +90,6 @@ export type FeatureName = keyof typeof FEATURE_REGISTRY;
  * accesses, and `process.env[name]` is `undefined` on the client.
  */
 const RAW_VALUES: Record<FeatureName, string | undefined> = {
-  poolsList: process.env.NEXT_PUBLIC_FEATURE_POOLS_LIST,
-  poolDetail: process.env.NEXT_PUBLIC_FEATURE_POOL_DETAIL,
-  poolPriceImbalance: process.env.NEXT_PUBLIC_FEATURE_POOL_PRICE_IMBALANCE,
   transactionFeed: process.env.NEXT_PUBLIC_FEATURE_TRANSACTION_FEED,
   tvlTotal: process.env.NEXT_PUBLIC_FEATURE_TVL_TOTAL,
   volume24h: process.env.NEXT_PUBLIC_FEATURE_VOLUME_24H,

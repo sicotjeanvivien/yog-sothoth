@@ -18,7 +18,7 @@ Comments follow the absolute rule of `CLAUDE.md` (*Comments — absolute rule*).
   in `src/app/globals.css` and the plugin is wired through PostCSS
 - **next-intl 4** — i18n with always-visible locale prefix (`/en/...`, `/fr/...`)
 - **zod** — runtime validation of every payload returned by `yog-api`
-- **visx** — low-level chart primitives for the pool time-series charts
+- **visx** — low-level chart primitives for the dashboard's charts
 - **Vitest** — unit tests in Node environment
 
 ## Architecture
@@ -65,13 +65,12 @@ lib/api/
 ├── schema/zod.gen.ts    # generated: one zod schema and one type per wire
 │                        # shape, from crates/api/openapi.json — never edited
 ├── server/              # one fetcher per resource for Server Components:
-│                        # fetchPools, fetchPool, fetchStats, fetchSignals,
-│                        # fetchPoolHistory, fetchTopPools, …
+│                        # fetchStats, fetchSignals, fetchActiveAnnouncements
 ├── browser/             # browser-side fetchers for Client Component flows
 │                        # (signals refill on reconnect, network status)
 ├── type/                # pagination types shared by fetchers
-├── errors.ts            # ApiClientError — discriminated union
-└── safe-fetch.ts        # safeFetch() — Result-like wrapper for components
+├── pool-address.ts      # isValidPoolAddress, for the signal feed's pool filter
+└── errors.ts            # ApiClientError — discriminated union
 ```
 
 Every response body is validated with zod before it reaches a
@@ -83,11 +82,11 @@ not a rendering surprise.
 The schemas are **generated**, not written: `npm run gen:api` rewrites
 `schema/zod.gen.ts` from `crates/api/openapi.json`, the OpenAPI document the API
 derives from its routes ([`crates/api/README.md`](../crates/api/README.md#the-contract)).
-The names are the Rust ones — `zPoolResponse` and its type `PoolResponse`,
-`EmbeddedTokenResponse` for a token inside a pool or a signal — and each route
-has its response schema, named after the handler (`zListTopPoolsResponse`). A
-fetcher passes that one to `apiGet`. The values of the query parameters
-(`PoolSort`, `PageDir`, `PoolRankMetric`) are derived from the generated query
+The names are the Rust ones — `zSignalResponse` and its type `SignalResponse`,
+`EmbeddedTokenResponse` for a token inside a signal — and each route has its
+response schema, named after the handler (`zListSignalsResponse`). A fetcher
+passes that one to `apiGet`. The values of the query parameters (`PageDir`,
+`PagePosition`) are derived from the generated query
 schemas, so a value renamed server-side breaks `tsc`. CI's `contract` job fails
 when the file is not what the committed document generates.
 
@@ -100,11 +99,7 @@ What the schemas cannot say, and a component must still know:
   `/api/network` is shown as is.
 - **Closed sets fail loudly.** A protocol, a severity, an announcement or event
   kind, a provider or a freshness outside its enum is a `validation` error, never
-  an unknown tag reaching the UI. `baseFeeKind` is the exception: a string.
-- **A fee share is read, never derived.** `lpFees24hUsd` is not
-  `fees24hUsd − protocolFees24hUsd`: cp-amm takes the referral out of the
-  protocol share, so that formula credits it to the LPs. Same for `lpFeesUsd`
-  in the history.
+  an unknown tag reaching the UI.
 - **An announcement's `linkUrl` is usually a relative path** (`/changelog#v0.1.0`),
   so it is not a URL; its `severity` is an editorial scale, distinct from a
   signal's even though the tags coincide.
@@ -117,21 +112,17 @@ What the schemas cannot say, and a component must still know:
 
 ### The schemas are strict, so the API deploys first
 
-Required fields are required. `eventIndex` on the swap and liquidity events
-is the live example: it identifies which hop of a routed
-transaction a row is (several rows share a signature and a timestamp), so
-making it optional would silently default it to `0` and bring back the
-duplicate React keys it exists to remove. A schema that tolerates a missing
-field is how a field ends up missing for good.
+Required fields are required: a schema that tolerates a missing field is how a
+field ends up missing for good.
 
 The price is an ordering constraint: **ship the API before the web**. A web
-container newer than the API fails validation on every swap/liquidity list
-rather than degrading. Today `docker compose --profile full` starts both from
+container newer than the API fails validation on every payload whose shape
+changed rather than degrading. Today `docker compose --profile full` starts both from
 the same commit, so the deployment unit enforces it; the constraint only
 becomes real the day the two ship separately.
 
-`ApiClientError` has four kinds, and Server Components branch on them
-through `safeFetch` instead of try/catch:
+`ApiClientError` has four kinds, and Server Components catch it and branch on
+its kind:
 
 | Kind         | Meaning                                            |
 | ------------ | -------------------------------------------------- |
@@ -141,11 +132,14 @@ through `safeFetch` instead of try/catch:
 | `validation` | 2xx but the body violated the zod schema           |
 
 ```tsx
-const outcome = await safeFetch(() => fetchPools());
-if (outcome.kind === "error") {
-  return <PageError reason={outcome.reason} />;
+try {
+  stats = await fetchStats();
+} catch (err) {
+  if (err instanceof ApiClientError) {
+    return <BlockError title={t("title")} kind={err.details.kind} />;
+  }
+  throw err;
 }
-return <PoolsTable pools={outcome.data.items} />;
 ```
 
 Anything that is *not* an `ApiClientError` is re-thrown so it surfaces
@@ -186,21 +180,6 @@ and a detail footer (exact value, threshold, raw detector tag). A
 detector unknown to the UI falls back to `message`, so a new detector
 ships readable before its wording lands here.
 
-The pool detail page has an **Alerts tab** (`?tab=alerts`) showing the
-same cards for one pool: the pool-filtered feed (`GET
-/api/signals?pool=`), statically paginated behind namespaced URL params
-(`alertsCursor`/`alertsDir`/`alertsPosition`) like the swaps and
-liquidity tabs. No SSE there — the tab is a per-pool history; the live
-tail stays on `/signals`.
-
-The `/pools` table surfaces a per-pool **signal indicator**
-(`PoolSignalsCell`): the worst-severity icon of the pool's last-24h
-signals (`signals24h`, embedded in `PoolResponse`), a hover/focus
-popover listing them (severity icon + detector tag), and a click
-through to the Alerts tab. Hover-only is acceptable there because on
-touch the tap lands on the Alerts tab — the full version of what the
-popover previews.
-
 ## Dashboard frame
 
 The `(dashboard)` layout mounts `DashboardShell`: the sidebar (a sticky rail
@@ -221,8 +200,8 @@ An entry is `open` (it has a page and an `href`) or `closed` (tagged "Soon", no
 test fails as soon as one becomes a link or loses its tag. To open an entry
 once its page exists, move its key from `ClosedNavKey` to `OpenNavKey`
 (`sidebar-keys.ts`) and give it an `href`. The compiler then asks for its
-icon, which is all the collapsed rail shows. `/pools`, `/signals`, `/watchlist`
-and the pool detail are no longer in the menu.
+icon, which is all the collapsed rail shows. `/signals` is no longer in the
+menu.
 
 **Preferences** — at the foot of the menu, under the collapse toggle: the
 language, FR | EN (`shared/locale-switch.tsx`, also the site footer's), each a
@@ -289,53 +268,6 @@ filters, and a release with no visible line reads "Internal improvements
 only." in place of its summary. The page is server-rendered whole; the
 filter (the only client island) sets `data-filter` on its frame, and CSS
 hides the rest.
-
-## Pools list, watchlist, pool detail
-
-The `/pools` page is a Server Component that reads its whole state from the
-URL — `q`, `fee_bps`, `sort`, plus the pagination params — and forwards it to
-`GET /api/pools`. The controls only rewrite those params:
-
-- **Search** (`PoolsSearch`) — client island, 300 ms debounce. Free text, or a
-  pair with a slash (`SOL/USDC`), which the API reads as "one token on each
-  side, either way round".
-- **Fee filter** (`PoolsFeeFilter`) — client island, a custom popover rather
-  than a `<select>` (an `<option>` cannot lay out fee-left / count-right). Its
-  options come from `GET /api/pools/fee-tiers`, so it can never offer a tier
-  matching nothing.
-- **Sort** (`SortableHeader`) — no client state at all: a `<Link>` with a
-  precomputed href, rendered on the server. First-seen / last-seen, asc or
-  desc, defaulting to **last seen descending** — most recently active first.
-
-Every control drops the `cursor` / `dir` / `position` params, since a cursor
-into the previous result set is meaningless once the ordering or filter
-changes, and preserves the unrelated ones. The two islands use `replace` rather
-than `push`: search-as-you-type would otherwise stack one history entry per
-debounced keystroke.
-
-**Watchlist** (`/watchlist`) — pools the visitor stars, stored in LocalStorage:
-no account, no backend. `lib/watchlist/` splits the store (plain module, no
-React) from the `useWatchlist` hook, which sits on `useSyncExternalStore` so it
-is SSR-safe and stays in sync across tabs. The page renders the same
-`PoolsTableRow` as `/pools` (shared vocabulary in `pools-table-shared.ts`), the
-star living in the row's actions column. A future server-side watchlist can
-replace the store behind the hook without touching a component.
-
-**Overview** — the top-N strip ranks by `?rank=volume_24h` (default, param
-dropped) or `?rank=tvl`. The header is a Server Component link, not client
-state; the active metric is deliberately *not* a link, since ranking is always
-descending and re-picking it would be a no-op click that reads as broken.
-
-**Pool detail** — tabs for swaps, liquidity and alerts, plus the fee block. The
-generated schema (`zPoolDetailResponse`) carries the detail payload's optional
-`meteoraDammV2` block (protocol/referral fee percents, `baseFeeKind`,
-`hasDynamicFee`, `currentFeeBps`, `feeSchedulerExpired`), surfaced as the
-`FeeTypeBadge` and, for a pool whose fee decays, a "current fee" row under the
-tier. That row uses `formatComputedFeeBps`, not `formatFeeBps`: a tier is
-human-chosen and clean, a decayed fee is the chain's integer arithmetic and
-renders as `4.000006%` if trimmed rather than rounded. The API also serves a
-`meteoraDlmm` sibling block, which the schema carries and the dashboard does not
-display yet — no DLMM pool reaches `pools` until DLMM event extraction lands.
 
 ## Operator announcements
 
@@ -408,9 +340,9 @@ Each flag maps to a `NEXT_PUBLIC_FEATURE_*` environment variable using
 the camelCase → SCREAMING_SNAKE_CASE convention. Examples:
 
 ```
-poolsList    → NEXT_PUBLIC_FEATURE_POOLS_LIST
-tvlTotal     → NEXT_PUBLIC_FEATURE_TVL_TOTAL
-alertsPanel  → NEXT_PUBLIC_FEATURE_ALERTS_PANEL
+transactionFeed → NEXT_PUBLIC_FEATURE_TRANSACTION_FEED
+tvlTotal        → NEXT_PUBLIC_FEATURE_TVL_TOTAL
+alertsPanel     → NEXT_PUBLIC_FEATURE_ALERTS_PANEL
 ```
 
 Only the literal string `true` enables a flag. Any other value
@@ -459,12 +391,7 @@ web/
 │   │   └── [locale]/
 │   │       ├── layout.tsx           # html/body, intl provider, fonts
 │   │       ├── (dashboard)/         # app shell: menu, network status
-│   │       │   ├── overview/        # global KPIs, top pools (volume | TVL),
-│   │       │   │                    # latest signals (live over SSE)
-│   │       │   ├── pools/           # pools listing (search, fee filter,
-│   │       │   │                    # sort, cursor pagination)
-│   │       │   ├── pools/[address]/ # pool detail: state, fees, charts, tabs
-│   │       │   ├── watchlist/       # LocalStorage favourites
+│   │       │   ├── overview/        # global KPIs, latest signals (live over SSE)
 │   │       │   └── signals/         # live signal feed (SSR + SSE)
 │   │       └── (marketing)/         # public pages: home, about, terms,
 │   │                                # privacy, legal-notice, support-us,
@@ -473,11 +400,9 @@ web/
 │   │   ├── feature-gate.tsx         # <FeatureGate flag="..."> wrapper
 │   │   ├── dashboard/               # per-page sections + shell, sidebar,
 │   │   │                            # signals (SignalFeed, useSignalStream),
-│   │   │                            # pools (table, filters, shared row),
-│   │   │                            # watchlist, announcements,
-│   │   │                            # pool-detail/charts (visx)
+│   │   │                            # announcements
 │   │   ├── marketing/               # navbar, footer, per-page sections
-│   │   └── shared/                  # pagination, buttons, icons, popovers, …
+│   │   └── shared/                  # buttons, icons, popovers, …
 │   ├── config/
 │   │   └── features.ts              # feature flag registry + helpers
 │   ├── lib/
@@ -485,10 +410,8 @@ web/
 │   │   ├── announcements/           # pickAnnouncement + dismiss cookie
 │   │   ├── config/                  # zod-validated env (server + client)
 │   │   ├── coverage/                # volumeCoverage (pure, tested)
-│   │   ├── format/                  # pubkey, date, number, fee formatters
-│   │   ├── signals/                 # mergeSignals, filterSignals,
-│   │   │                            # worstSeverity (pure, tested)
-│   │   └── watchlist/               # LocalStorage store + useWatchlist
+│   │   ├── format/                  # pubkey, date, number formatters
+│   │   └── signals/                 # mergeSignals, filterSignals (pure, tested)
 │   ├── types/
 │   │   └── env.d.ts                 # process.env type augmentation
 │   └── proxy.ts                     # locale negotiation (Next 16)
