@@ -50,11 +50,6 @@
       },
       "seeAll": "See everything in the dashboard"
     },
-    "severity": {
-      "critical": "Critical",
-      "warning": "Warning",
-      "info": "Info"
-    },
     "facts": {
       "label": "Yog-Scope at a glance",
       "capture": {

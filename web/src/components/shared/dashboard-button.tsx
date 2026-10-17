@@ -1,7 +1,4 @@
-/**
- * The one call-to-action into the product, used by every "enter the app" link: the accent
- * fill, its text dark, never white.
- */
+/** The call-to-action into the product: the accent fill, its text dark, never white. */
 
 import { useTranslations } from "next-intl";
 

@@ -50,11 +50,6 @@
       },
       "seeAll": "Voir tout dans le dashboard"
     },
-    "severity": {
-      "critical": "Critique",
-      "warning": "Alerte",
-      "info": "Info"
-    },
     "facts": {
       "label": "Yog-Scope en bref",
       "capture": {

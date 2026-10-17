@@ -2,16 +2,16 @@
 
 import { useTranslations } from "next-intl";
 
-export type Severity = "critical" | "warning" | "info";
+import type { SeverityResponse } from "@/lib/api/schema/zod.gen";
 
-const SEVERITY_CLASS: Record<Severity, string> = {
+const SEVERITY_CLASS: Record<SeverityResponse, string> = {
   critical: "bg-dash-crit text-dash-surface",
   warning: "bg-dash-warn text-dash-surface",
   info: "text-dash-ink-2 shadow-[inset_0_0_0_1px_var(--color-dash-ink-2)]",
 };
 
-export function SeverityBadge({ severity }: { severity: Severity }) {
-  const t = useTranslations("Marketing.severity");
+export function SeverityBadge({ severity }: { severity: SeverityResponse }) {
+  const t = useTranslations("Dashboard.Signals.feed.severity");
 
   return (
     <span

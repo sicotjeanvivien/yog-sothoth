@@ -8,17 +8,18 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { ArrowRightIcon } from "@/components/shared/icon";
 import { SITE_LABEL_CLASS } from "@/components/marketing/site-label";
-import { SeverityBadge, type Severity } from "./severity-badge";
+import type { SeverityResponse } from "@/lib/api/schema/zod.gen";
+import { SeverityBadge } from "./severity-badge";
 
 const KPI_KEYS = ["tvl", "volume", "fees", "pools"] as const;
 
-// 24 hours, in px of a 72 px band.
+// 24 hours, in px.
 const BAR_HEIGHTS = [
   39, 37, 47, 39, 40, 31, 35, 22, 34, 35, 23, 36, 25, 33, 42, 39, 44, 48, 49,
   54, 43, 51, 42, 40,
 ] as const;
 
-const SIGNALS: readonly { key: string; severity: Severity; time: string }[] = [
+const SIGNALS: readonly { key: string; severity: SeverityResponse; time: string }[] = [
   { key: "drain", severity: "critical", time: "21:14" },
   { key: "imbalance", severity: "warning", time: "20:37" },
   { key: "oracle", severity: "info", time: "16:03" },
