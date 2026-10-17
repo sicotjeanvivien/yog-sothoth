@@ -11,27 +11,88 @@
       "menu": "Menu"
     },
     "hero": {
-      "title": "Real-time liquidity intelligence",
-      "subtitle": "On Meteora · Solana",
-      "lead": "Observe, reconstruct and analyze liquidity movements as they happen. Detect signals, understand flows, and stay ahead of the market.",
+      "label": "On Meteora · Solana",
+      "title": "Liquidity intelligence <accent>in real time.</accent>",
+      "lead": "Yog-Scope observes, reconstructs and analyzes the liquidity movements of Meteora pools as they happen.",
       "ctaSecondary": "See features",
-      "builtOn": "Built on Solana"
+      "meta": {
+        "chain": "Built on Solana",
+        "design": "Powerful by design",
+        "access": "Public code · free dashboard"
+      }
     },
-    "pillars": {
-      "eyebrow": "Powerful by design",
-      "title": "All the insights, in real time",
+    "preview": {
+      "label": "Dashboard preview: TVL, volume, fees, active pools, hourly volume and latest signals",
+      "title": "Dashboard preview",
+      "tag": "illustration",
+      "kpis": {
+        "tvl": {
+          "label": "TVL",
+          "value": "$18.30M"
+        },
+        "volume": {
+          "label": "Volume 24h",
+          "value": "$12.4M"
+        },
+        "fees": {
+          "label": "Fees 24h",
+          "value": "$41.2k"
+        },
+        "pools": {
+          "label": "Active pools",
+          "value": "142"
+        }
+      },
+      "signals": {
+        "drain": "TVL drain on SOL / USDC: −12.4% in 1h",
+        "imbalance": "Sells 3.2 × buys on JitoSOL / SOL",
+        "oracle": "Spot / oracle gap of 2.1% on JUP / USDC"
+      },
+      "seeAll": "See everything in the dashboard"
+    },
+    "severity": {
+      "critical": "Critical",
+      "warning": "Warning",
+      "info": "Info"
+    },
+    "facts": {
+      "label": "Yog-Scope at a glance",
+      "capture": {
+        "label": "Capture",
+        "value": "Real time, as a continuous stream"
+      },
+      "history": {
+        "label": "History",
+        "value": "Since 1 Oct 2026"
+      },
+      "signals": {
+        "label": "Signals",
+        "value": "3 automatic detectors"
+      },
+      "access": {
+        "label": "Access",
+        "value": "Free · public code"
+      }
+    },
+    "features": {
+      "eyebrow": "Features",
+      "title": "All the market insight, in real time",
+      "intro": "Four moves, from the first on-chain event to the alert.",
       "items": {
         "observe": {
           "title": "Observe",
-          "body": "Track pools, liquidity changes and market activity across Meteora in real time."
+          "body": "Track pools, liquidity changes and market activity across Meteora, in real time.",
+          "events": "swap · add_liquidity<br></br>remove_liquidity · claim_position_fee"
         },
         "reconstruct": {
           "title": "Reconstruct",
-          "body": "Rebuild liquidity history, replay movements and understand what really happened."
+          "body": "Rebuild liquidity history and replay movements, hour by hour.",
+          "events": "hourly TVL<br></br>hourly adds and removals"
         },
         "analyze": {
           "title": "Analyze",
-          "body": "Detect anomalies, identify patterns and get actionable signals instantly."
+          "body": "Detect anomalies and patterns, and surface the signals that matter.",
+          "events": "flow_imbalance<br></br>price_oracle_deviation · tvl_drain"
         },
         "signal": {
           "title": "Signal",
@@ -39,9 +100,36 @@
         }
       }
     },
+    "steps": {
+      "eyebrow": "How it works",
+      "title": "From the chain to the screen",
+      "intro": "A dedicated decoder per protocol, starting with Meteora. The history builds up over time.",
+      "items": {
+        "listen": {
+          "title": "Listen",
+          "body": "A permanent stream from a Solana node captures Meteora's events as soon as they are emitted."
+        },
+        "decode": {
+          "title": "Decode",
+          "body": "Each event is decoded: swaps, liquidity, fees, positions, locks."
+        },
+        "enrich": {
+          "title": "Enrich",
+          "body": "Token metadata and USD prices are added to each event."
+        },
+        "store": {
+          "title": "Store",
+          "body": "Everything lands in a queryable time-series database."
+        },
+        "expose": {
+          "title": "Expose",
+          "body": "A typed HTTP API and a public dashboard, in English and French."
+        }
+      }
+    },
     "cta": {
       "title": "Ready to see everything?",
-      "subtitle": "Join Yog-Scope and unlock the full power of liquidity intelligence."
+      "subtitle": "The dashboard is public and free. Open it and watch Meteora's liquidity move."
     },
     "footer": {
       "description": "Real-time liquidity intelligence on Meteora · Solana.",

@@ -1,54 +1,51 @@
-/**
- * The homepage hero: copy over the left half of a full-bleed artwork composed empty on the
- * left, under a light scrim. A Server Component.
- */
+/** The homepage hero: the pitch and its two buttons, beside the dashboard preview. */
 
-import Image from "next/image";
 import { useTranslations } from "next-intl";
+
 import { DashboardButton } from "@/components/shared/dashboard-button";
-import { SolanaGlyph } from "@/components/shared/icon";
-import { CtaLink } from "@/components/shared/cta-link";
+import { SecondaryButton } from "@/components/shared/secondary-button";
+import { SITE_LABEL_CLASS } from "@/components/marketing/site-label";
+import { HomePreview } from "./home-preview";
+
+const META_KEYS = ["chain", "design", "access"] as const;
 
 export function HomeHero() {
   const t = useTranslations("Marketing.hero");
 
   return (
-    <section className="relative flex min-h-[86vh] items-center overflow-hidden">
-      <Image
-        src="/hero-visual.png"
-        alt=""
-        fill
-        priority
-        sizes="100vw"
-        className="object-cover object-center"
-      />
-
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,3,13,0.80)_0%,rgba(5,3,13,0.55)_30%,rgba(5,3,13,0.15)_50%,transparent_66%)]" />
-
-      <div className="relative z-1 mx-auto w-full max-w-[1800px] px-6 lg:px-12">
-        <div className="max-w-full lg:max-w-[50%]">
-          <h1 className="font-display text-[36px] leading-[1.13] font-bold tracking-[0.04em] text-[#f5f2ff] [text-shadow:0_0_36px_rgba(139,92,246,0.4)] lg:text-[52px]">
-            {t("title")}
-          </h1>
-
-          <p className="mt-4 font-display text-[20px] font-medium tracking-[0.34em] text-slate-400 uppercase indent-[0.34em]">
-            {t("subtitle")}
-          </p>
-
-          <p className="mt-6 max-w-105 text-[17px] leading-[1.7] text-slate-300">
-            {t("lead")}
-          </p>
-
-          <div className="mt-8.5 flex items-center gap-3.5">
-            <DashboardButton />
-            <CtaLink href="#features" label={t("ctaSecondary")} />
-          </div>
-
-          <div className="mt-8 flex items-center gap-2.25 text-[11px] font-semibold tracking-[0.16em] text-slate-500 uppercase">
-            <SolanaGlyph />
-            {t("builtOn")}
-          </div>
+    <section
+      aria-labelledby="hero-title"
+      className="grid grid-cols-12 items-center gap-x-8 gap-y-12 pt-12 pb-14 rail:pt-[88px] rail:pb-24"
+    >
+      <div className="col-span-12 flex flex-col gap-6 wide:col-span-7">
+        <span className={`${SITE_LABEL_CLASS} inline-flex items-center gap-2`}>
+          <span aria-hidden="true" className="size-2 shrink-0 bg-dash-up" />
+          {t("label")}
+        </span>
+        <h1
+          id="hero-title"
+          className="text-[44px] leading-none font-semibold tracking-[-0.035em] rail:text-[72px]"
+        >
+          {t.rich("title", {
+            accent: (chunks) => <em className="text-dash-accent not-italic">{chunks}</em>,
+          })}
+        </h1>
+        <p className="max-w-[54ch] text-[16px] leading-[1.55] text-dash-ink-2 rail:text-[18px]">
+          {t("lead")}
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <DashboardButton arrow />
+          <SecondaryButton href="/#features" label={t("ctaSecondary")} />
         </div>
+        <ul className="flex flex-wrap gap-x-5 gap-y-2 font-dash-mono text-[12px] text-dash-ink-3">
+          {META_KEYS.map((key) => (
+            <li key={key}>{t(`meta.${key}`)}</li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="col-span-12 min-w-0 wide:col-span-5">
+        <HomePreview />
       </div>
     </section>
   );
