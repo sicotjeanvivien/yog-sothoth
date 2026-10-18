@@ -45,7 +45,7 @@ export const RELEASES: readonly Release[] = [
             technical: true,
           },
           {
-            text: "The hourly volume and fees are summed from five-minute slices kept up to date as swaps arrive, instead of re-reading every swap of the open hour every five minutes: that read grew through the hour, up to a minute and a half, close to the two minutes after which the database cancels a query.",
+            text: "The hourly volume and fees are summed from five-minute slices refreshed every five minutes, instead of re-reading every swap of the open hour every five minutes: that read grew through the hour, up to a minute and a half, close to the two minutes after which the database cancels a query.",
             technical: true,
           },
         ],

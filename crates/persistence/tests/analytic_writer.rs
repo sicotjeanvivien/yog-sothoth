@@ -290,6 +290,32 @@ async fn facts_summed_from_the_tranches_equal_the_hourly_view(pool: PgPool) {
     assert_eq!(fact_pool_hours(&pool, open).await, view);
 }
 
+/// ☠️ Pins the loss the READMEs warn about: a late swap in a tranche already
+/// materialised, frozen before the next refresh. If it stops, so must the warning.
+#[sqlx::test]
+async fn a_late_swap_in_a_materialised_tranche_misses_its_frozen_hour(pool: PgPool) {
+    let hour = hours_before(now(), 3);
+    let address = setup_pool(&pool, 1, Some("180.0")).await;
+    trade(&pool, &address, "on_time", hour + Duration::minutes(20)).await;
+    sqlx::query("CALL refresh_continuous_aggregate('meteora_damm_v2_swap_events_5min', $1, $2)")
+        .bind(hour)
+        .bind(hour + Duration::hours(1))
+        .execute(&pool)
+        .await
+        .unwrap();
+    trade(&pool, &address, "late", hour + Duration::minutes(20)).await;
+
+    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    let outcome = repository
+        .write_cycle(&cycle_from(hour + Duration::minutes(80), hour))
+        .await
+        .unwrap();
+    assert_eq!(outcome.hours_frozen, 1);
+
+    assert_eq!(view_pool_hours(&pool, hour).await[0].2, 4);
+    assert_eq!(fact_pool_hours(&pool, hour).await[0].2, 2);
+}
+
 /// Against the freeze guard of `write_cycle` removed: the frozen hour would
 /// be rewritten with the late swap.
 #[sqlx::test]

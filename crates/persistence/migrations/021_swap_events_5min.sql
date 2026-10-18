@@ -1,6 +1,6 @@
 -- 021_swap_events_5min.sql — the swaps per pool and 5 minutes, under the
 -- analytic facts: a cycle reads its hours from these tranches, and the raw
--- swaps only past the last one materialised. The hourly aggregate is untouched.
+-- swaps only past the last one materialised.
 
 -- ⚠️ The sums of the hourly aggregate (007), one for one: the facts read their
 -- hours from here, and must equal what the hourly views value.
@@ -29,9 +29,11 @@ WITH NO DATA;
 -- ⚠️ `end_offset` is the freeze margin: a row landing in a materialised tranche
 -- stays unseen until the next refresh. `start_offset` stays under the raw 7 days (008).
 SELECT add_continuous_aggregate_policy('meteora_damm_v2_swap_events_5min',
-    start_offset      => INTERVAL '6 days',
-    end_offset        => INTERVAL '10 minutes',
-    schedule_interval => INTERVAL '5 minutes');
+    start_offset         => INTERVAL '6 days',
+    end_offset           => INTERVAL '10 minutes',
+    schedule_interval    => INTERVAL '5 minutes',
+    -- ⚠️ Newest first, the watermark leads while older tranches are still empty.
+    refresh_newest_first => false);
 
 -- ⚠️ Past the raw 7 days: an hour caught up after a week-long outage reads its tranches.
 SELECT add_retention_policy('meteora_damm_v2_swap_events_5min', INTERVAL '30 days');

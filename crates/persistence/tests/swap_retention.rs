@@ -143,24 +143,34 @@ async fn no_other_hypertable_moves(pool: PgPool) {
     });
 }
 
+/// `start_offset`, `end_offset`, schedule, newest batch first, `drop_after` — seconds.
+type TrancheSettings = (
+    Option<i64>,
+    Option<i64>,
+    Option<i64>,
+    Option<bool>,
+    Option<i64>,
+);
+
 /// Mutation this is written against: any setting of 021 changed, its policy removed, or the
 /// freeze margin moved without its `end_offset`.
 #[sqlx::test]
 async fn the_5_minute_tranches_take_their_settings(pool: PgPool) {
-    let row: (Option<i64>, Option<i64>, Option<i64>, Option<i64>) = sqlx::query_as(
-        "SELECT
-           (SELECT extract(epoch FROM (config->>'start_offset')::interval)::BIGINT
-              FROM timescaledb_information.jobs
-             WHERE proc_name = 'policy_refresh_continuous_aggregate' AND hypertable_name = $1),
-           (SELECT extract(epoch FROM (config->>'end_offset')::interval)::BIGINT
-              FROM timescaledb_information.jobs
-             WHERE proc_name = 'policy_refresh_continuous_aggregate' AND hypertable_name = $1),
-           (SELECT extract(epoch FROM schedule_interval)::BIGINT
-              FROM timescaledb_information.jobs
-             WHERE proc_name = 'policy_refresh_continuous_aggregate' AND hypertable_name = $1),
-           (SELECT extract(epoch FROM (config->>'drop_after')::interval)::BIGINT
-              FROM timescaledb_information.jobs
-             WHERE proc_name = 'policy_retention' AND hypertable_name = $1)",
+    let row: TrancheSettings = sqlx::query_as(
+        "WITH rf AS (
+                 SELECT config, schedule_interval
+                   FROM timescaledb_information.jobs
+                  WHERE proc_name = 'policy_refresh_continuous_aggregate'
+                    AND hypertable_name = $1
+             )
+             SELECT
+               (SELECT extract(epoch FROM (config->>'start_offset')::interval)::BIGINT FROM rf),
+               (SELECT extract(epoch FROM (config->>'end_offset')::interval)::BIGINT FROM rf),
+               (SELECT extract(epoch FROM schedule_interval)::BIGINT FROM rf),
+               (SELECT (config->>'refresh_newest_first')::BOOLEAN FROM rf),
+               (SELECT extract(epoch FROM (config->>'drop_after')::interval)::BIGINT
+                  FROM timescaledb_information.jobs
+                 WHERE proc_name = 'policy_retention' AND hypertable_name = $1)",
     )
     .bind(SWAPS_5MIN)
     .fetch_one(&pool)
@@ -173,6 +183,7 @@ async fn the_5_minute_tranches_take_their_settings(pool: PgPool) {
             Some(6 * DAY),
             Some(FREEZE_MARGIN.num_seconds()),
             Some(5 * 60),
+            Some(false),
             Some(30 * DAY)
         )
     );
