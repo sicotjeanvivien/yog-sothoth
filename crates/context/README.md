@@ -18,9 +18,9 @@ context/src/
 │   └── workers/     ← use cases: MetadataWorker, PriceWorker, PoolAccountWorker,
 │                      one <worker>.rs each, its own modules in <worker>/ —
 │                      metrics, log lines (log.rs, one function per line) and
-│                      tests, and price/tick_outcome.rs: TickOutcome, the ways
-│                      a pricing cycle ends — returning one is what makes a
-│                      silent exit fail to compile
+│                      tests, and a tick_outcome.rs (price/, metadata/):
+│                      TickOutcome, the ways a cycle ends — returning one is
+│                      what makes a silent exit fail to compile
 ├── infra/           ← adapters: HeliusDasClient, JupiterPriceClient,
 │                      SolanaAccountClient (+ provider metrics; jupiter_price/
 │                      log.rs holds the client's log lines; infra.rs holds
