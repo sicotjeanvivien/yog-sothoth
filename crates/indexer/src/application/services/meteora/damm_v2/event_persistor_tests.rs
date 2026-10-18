@@ -865,11 +865,27 @@ fn a_same_slot_ambiguity_is_counted_on_the_applied_path() {
 
 // ── a failed pool upsert is counted, not merely logged ───────────────────────
 
-/// Mutation this is written against: dropping `record_pool_upsert_failure` from `discover_pool`,
-/// which leaves the `warn!` alone. Not `#[tokio::test]`: `with_local_recorder` binds the thread.
+/// Mutations this is written against: dropping `record_pool_upsert_failure` from `discover_pool`,
+/// or a label that diverges from `kind()`. Not `#[tokio::test]`: `with_local_recorder` binds the thread.
 #[test]
 fn a_failed_pool_upsert_is_counted_per_event_kind_and_the_event_still_persists() {
     use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    let cases = [
+        (
+            MeteoraDammV2Event::Swap(swap()),
+            &["pool:upsert", "insert:swap", "pcs:upsert"][..],
+        ),
+        (
+            MeteoraDammV2Event::Liquidity(liquidity()),
+            &["pool:upsert", "insert:liquidity", "pcs:upsert"][..],
+        ),
+        (
+            MeteoraDammV2Event::InitializePool(initialize_pool(vec![0u8; 31])),
+            &["pool:upsert", "insert:initialize_pool"][..],
+        ),
+    ];
+    let kinds: Vec<&'static str> = cases.iter().map(|(event, _)| event.kind()).collect();
 
     let recorder = DebuggingRecorder::new();
     let snapshotter = recorder.snapshotter();
@@ -881,20 +897,7 @@ fn a_failed_pool_upsert_is_counted_per_event_kind_and_the_event_still_persists()
             .block_on(async {
                 let calls: Calls = Arc::new(Mutex::new(Vec::new()));
                 let p = build_with_failing_pool_upsert(calls.clone());
-                for (event, recipe) in [
-                    (
-                        MeteoraDammV2Event::Swap(swap()),
-                        &["pool:upsert", "insert:swap", "pcs:upsert"][..],
-                    ),
-                    (
-                        MeteoraDammV2Event::Liquidity(liquidity()),
-                        &["pool:upsert", "insert:liquidity", "pcs:upsert"][..],
-                    ),
-                    (
-                        MeteoraDammV2Event::InitializePool(initialize_pool(vec![0u8; 31])),
-                        &["pool:upsert", "insert:initialize_pool"][..],
-                    ),
-                ] {
+                for (event, recipe) in cases {
                     assert_eq!(route(&p, &calls, event).await, recipe);
                 }
             });
@@ -902,7 +905,7 @@ fn a_failed_pool_upsert_is_counted_per_event_kind_and_the_event_still_persists()
 
     // One snapshot: `Snapshotter::snapshot` swaps counters to 0.
     let snapshot = snapshotter.snapshot().into_vec();
-    for kind in ["swap", "liquidity", "initialize_pool"] {
+    for kind in kinds {
         let counted = snapshot
             .iter()
             .find(|(key, _, _, _)| {

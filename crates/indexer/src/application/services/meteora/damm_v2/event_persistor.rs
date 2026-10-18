@@ -78,8 +78,8 @@ impl MeteoraDammV2EventPersistor {
         let start = Instant::now();
 
         let result = match event {
-            MeteoraDammV2Event::Swap(e) => self.persist_swap(e).await,
-            MeteoraDammV2Event::Liquidity(e) => self.persist_liquidity(e).await,
+            MeteoraDammV2Event::Swap(e) => self.persist_swap(e, kind).await,
+            MeteoraDammV2Event::Liquidity(e) => self.persist_liquidity(e, kind).await,
             MeteoraDammV2Event::ClaimPositionFee(e) => self.persist_claim_position_fee(e).await,
             MeteoraDammV2Event::ClaimProtocolFee(e) => self.persist_claim_protocol_fee(e).await,
             MeteoraDammV2Event::ClaimReward(e) => self.persist_claim_reward(e).await,
@@ -101,10 +101,10 @@ impl MeteoraDammV2EventPersistor {
             MeteoraDammV2Event::PermanentLockPosition(e) => {
                 self.persist_permanent_lock_position(e).await
             }
-            MeteoraDammV2Event::InitializePool(e) => self.persist_initialize_pool(e).await,
+            MeteoraDammV2Event::InitializePool(e) => self.persist_initialize_pool(e, kind).await,
             MeteoraDammV2Event::SetPoolStatus(e) => self.persist_set_pool_status(e).await,
             MeteoraDammV2Event::SplitPosition(e) => self.persist_split_position(e).await,
-            MeteoraDammV2Event::UpdatePoolFees(e) => self.persist_update_pool_fees(e).await,
+            MeteoraDammV2Event::UpdatePoolFees(e) => self.persist_update_pool_fees(e, kind).await,
         };
 
         let elapsed = start.elapsed().as_secs_f64();
@@ -136,9 +136,13 @@ impl MeteoraDammV2EventPersistor {
         }
     }
 
-    async fn persist_swap(&self, event: &MeteoraDammV2SwapEvent) -> anyhow::Result<InsertOutcome> {
+    async fn persist_swap(
+        &self,
+        event: &MeteoraDammV2SwapEvent,
+        kind: &'static str,
+    ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
-            .discover_pool(Self::PROTOCOL, event.pool_address, "swap")
+            .discover_pool(Self::PROTOCOL, event.pool_address, kind)
             .await;
         let insert_result = self
             .repos
@@ -157,9 +161,10 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_liquidity(
         &self,
         event: &MeteoraDammV2LiquidityEvent,
+        kind: &'static str,
     ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
-            .discover_pool(Self::PROTOCOL, event.pool_address, "liquidity")
+            .discover_pool(Self::PROTOCOL, event.pool_address, kind)
             .await;
         let insert_result = self
             .repos
@@ -372,9 +377,10 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_initialize_pool(
         &self,
         event: &MeteoraDammV2InitializePoolEvent,
+        kind: &'static str,
     ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
-            .discover_pool(Self::PROTOCOL, event.pool_address, "initialize_pool")
+            .discover_pool(Self::PROTOCOL, event.pool_address, kind)
             .await;
         // Fee columns are yog-context's, read from the account; `discover_pool` leaves them NULL,
         // which queues the pool for enrichment. The blob is stored verbatim by the insert.
@@ -417,6 +423,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_update_pool_fees(
         &self,
         event: &MeteoraDammV2UpdatePoolFeesEvent,
+        kind: &'static str,
     ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
@@ -428,7 +435,7 @@ impl MeteoraDammV2EventPersistor {
             .mark_needs_refresh(Self::PROTOCOL, &event.pool_address)
             .await
         {
-            warn!(error = %err, kind = "update_pool_fees", "mark_needs_refresh failed");
+            warn!(error = %err, kind, "mark_needs_refresh failed");
         }
         self.repos
             .update_pool_fees
