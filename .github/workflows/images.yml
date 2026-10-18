@@ -49,7 +49,7 @@ jobs:
           set -euo pipefail
           compose=$(docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full \
             config --no-interpolate --images | grep ':prod$' | sort)
-          bake=$(REVISION=$(git rev-parse HEAD) docker buildx bake -f docker/docker-bake.hcl --print 2>/dev/null \
+          bake=$(REVISION=$(git rev-parse HEAD) docker buildx bake -f docker/docker-bake.hcl --print \
             | jq -r '.target | keys[] + ":prod"' | sort)
           diff <(echo "$compose") <(echo "$bake") \
             || { echo "docker-compose.prod.yml et docker/docker-bake.hcl ne nomment pas les mêmes images" >&2; exit 1; }

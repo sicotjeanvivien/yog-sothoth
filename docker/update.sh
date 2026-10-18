@@ -34,8 +34,7 @@
 #    then hand over to the script as it is in that commit: a deploy always
 #    runs the procedure it ships with.
 # 3. Pull the images while the previous version still serves: the outage
-#    lasts only for steps 4-6. Ours are built from the tag by the `images`
-#    workflow; docker/pull-images.sh checks each against the commit.
+#    lasts only for steps 4-6. Ours are built by the `images` workflow.
 # 4. Stop every daemon that talks to the database. `up -d` alone is not
 #    enough: it runs yog-migrate before STARTING services, but services
 #    already running keep running through the migration, the old code

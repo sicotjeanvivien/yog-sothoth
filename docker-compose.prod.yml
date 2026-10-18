@@ -2,8 +2,8 @@
 #
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full up -d
 #
-# Nothing of ours is built here (`build: !reset null`): the images come from
-# GHCR, renamed `yog-*:prod` by docker/pull-images.sh (docker/README.md).
+# Our images come from GHCR, renamed `yog-*:prod` by docker/pull-images.sh
+# (docker/README.md).
 #
 # On the server, put the two selectors in its .env and the command shrinks
 # back to `docker compose up -d`:
