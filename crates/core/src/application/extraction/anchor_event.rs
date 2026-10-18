@@ -20,20 +20,29 @@ pub const EVENT_IX_TAG: [u8; EVENT_IX_TAG_LEN] = [0xe4, 0x45, 0xa5, 0x2e, 0x51, 
 // ---------------------------------------------------------------------------
 
 /// Split an Anchor `event_cpi` payload into its discriminator and borsh body;
-/// `NotAnAnchorEvent` marks a self-CPI that is not an event.
+/// `NotAnAnchorEvent` marks an ordinary instruction to the program.
 pub(crate) fn decode_anchor_event_cpi(
     data: &[u8],
 ) -> Result<([u8; DISCRIMINATOR_LEN], Vec<u8>), AnchorDecodeError> {
+    // Shorter than an instruction discriminator: not even an ordinary instruction.
+    if data.len() < DISCRIMINATOR_LEN {
+        return Err(AnchorDecodeError::PayloadTooShort {
+            min: DISCRIMINATOR_LEN,
+            got: data.len(),
+        });
+    }
+
+    // ⚠️ Tag before length: an argument-less instruction (8 bytes) would otherwise be a failure.
+    if !data.starts_with(&EVENT_IX_TAG) {
+        return Err(AnchorDecodeError::NotAnAnchorEvent);
+    }
+
     let min_len = EVENT_IX_TAG_LEN + DISCRIMINATOR_LEN;
     if data.len() < min_len {
         return Err(AnchorDecodeError::PayloadTooShort {
             min: min_len,
             got: data.len(),
         });
-    }
-
-    if data[..EVENT_IX_TAG_LEN] != EVENT_IX_TAG {
-        return Err(AnchorDecodeError::NotAnAnchorEvent);
     }
 
     let mut disc = [0u8; DISCRIMINATOR_LEN];

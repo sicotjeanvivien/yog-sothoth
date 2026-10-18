@@ -30,15 +30,50 @@ fn decodes_event_with_empty_payload() {
     assert!(got_payload.is_empty());
 }
 
+/// Mutation: testing the length before the tag, which makes these a decoding failure.
 #[test]
-fn rejects_payload_below_minimum_size() {
-    // Just a few bytes — not even enough for the tag.
-    let bytes = vec![1u8, 2, 3];
-    let err = decode_anchor_event_cpi(&bytes).unwrap_err();
-    assert!(matches!(
-        err,
-        AnchorDecodeError::PayloadTooShort { got: 3, .. }
-    ));
+fn short_untagged_data_is_not_an_event() {
+    // 8 bytes: an argument-less instruction, a bare discriminator; 9: one `u8` argument.
+    for bytes in [
+        vec![0xb4, 0x26, 0x9a, 0x11, 0x85, 0x21, 0xa2, 0xd3],
+        vec![0xb4, 0x26, 0x9a, 0x11, 0x85, 0x21, 0xa2, 0xd3, 1],
+    ] {
+        let err = decode_anchor_event_cpi(&bytes).unwrap_err();
+        assert!(
+            matches!(err, AnchorDecodeError::NotAnAnchorEvent),
+            "{} bytes: {err:?}",
+            bytes.len()
+        );
+    }
+}
+
+/// Mutation: dropping the length check that runs before the tag, which makes these ordinary
+/// instructions, skipped without being counted.
+#[test]
+fn data_shorter_than_any_instruction_is_too_short() {
+    for bytes in [vec![], vec![1u8, 2, 3], EVENT_IX_TAG[..7].to_vec()] {
+        let err = decode_anchor_event_cpi(&bytes).unwrap_err();
+        assert!(
+            matches!(err, AnchorDecodeError::PayloadTooShort { min: 8, got } if got == bytes.len()),
+            "{} bytes: {err:?}",
+            bytes.len()
+        );
+    }
+}
+
+/// Mutation: treating anything below 16 bytes as an ordinary instruction.
+#[test]
+fn tagged_but_truncated_payload_is_too_short() {
+    for (bytes, len) in [
+        (EVENT_IX_TAG.to_vec(), 8),
+        ([&EVENT_IX_TAG[..], &[1, 2, 3]].concat(), 11),
+    ] {
+        let err = decode_anchor_event_cpi(&bytes).unwrap_err();
+        assert!(
+            matches!(err, AnchorDecodeError::PayloadTooShort { min: 16, got } if got == len),
+            "{len} bytes: {err:?}"
+        );
+    }
 }
 
 #[test]

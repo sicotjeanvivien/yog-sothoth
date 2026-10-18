@@ -64,7 +64,7 @@ pub struct UnknownEvent {
 /// A failed extraction attempt and its reason.
 #[derive(Debug, thiserror::Error)]
 pub enum ExtractFailure {
-    /// Addressed to cp-amm but not a valid Anchor event_cpi payload.
+    /// Neither an ordinary instruction nor a decodable event_cpi payload.
     #[error("anchor event_cpi decode failed: {source}")]
     AnchorDecode {
         #[source]
@@ -144,9 +144,7 @@ pub fn extract_wire_events(tx: &OnChainTransaction, program_id: &Pubkey) -> Extr
                     });
                 }
             },
-            Err(AnchorDecodeError::NotAnAnchorEvent) => {
-                // A non-event self-CPI from cp-amm: not a failure.
-            }
+            Err(AnchorDecodeError::NotAnAnchorEvent) => {}
             Err(e) => {
                 out.failures
                     .push(ExtractFailure::AnchorDecode { source: e });

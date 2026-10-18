@@ -6,8 +6,9 @@ use solana_transaction_status_client_types::EncodedConfirmedTransactionWithStatu
 use std::path::PathBuf;
 
 use yog_core::{
+    AnchorDecodeError,
     application::extraction::{
-        EventExtractor, MeteoraDammV2, OnChainTransaction,
+        EventExtractor, ExtractionFailure, MeteoraDammV2, OnChainTransaction,
         meteora::damm_v2::{
             events::DammV2WireEvent,
             extractor::{ExtractFailure, extract_wire_events},
@@ -859,14 +860,9 @@ fn decodes_lock_position_fixture() {
 fn decodes_permanent_lock_position_fixture() {
     let tx = load_fixture("damm_v2/permanent_lock_position.json");
     let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
-    // A tag-only self-CPI here trips the anchor decoder, a known skip; a Borsh failure would mean
-    // a recognised event decoded wrong.
     assert!(
-        !extracted
-            .failures
-            .iter()
-            .any(|f| matches!(f, ExtractFailure::Borsh { .. })),
-        "unexpected Borsh failures: {:?}",
+        extracted.failures.is_empty(),
+        "unexpected extraction failures: {:?}",
         extracted.failures
     );
 
@@ -913,6 +909,75 @@ fn decodes_permanent_lock_position_fixture() {
             d.total_permanent_locked_liquidity,
         )
     );
+}
+
+/// `permanent_lock_position.json` also invokes cp-amm with a bare 8-byte discriminator, an
+/// ordinary instruction. Mutation: testing the length before the `event_cpi` tag.
+#[test]
+fn an_ordinary_cp_amm_instruction_is_not_an_extraction_failure() {
+    let tx = load_fixture("damm_v2/permanent_lock_position.json");
+    assert!(
+        cp_amm_payloads(&tx).any(|data| data.len() == 8),
+        "the fixture no longer carries the 8-byte instruction this test is about"
+    );
+
+    let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+    assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
+    assert!(
+        outcome.events.iter().any(|e| matches!(
+            e,
+            DomainEvent::MeteoraDammV2(MeteoraDammV2Event::PermanentLockPosition(_))
+        )),
+        "no PermanentLockPosition domain event"
+    );
+}
+
+/// The same instruction made a tagged, truncated event stays a counted failure.
+/// Mutation: treating anything below 16 bytes as an ordinary instruction.
+#[test]
+fn a_tagged_but_truncated_payload_stays_an_extraction_failure() {
+    let mut tx = load_fixture("damm_v2/permanent_lock_position.json");
+    let before = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
+
+    let tagged = cp_amm_payloads(&tx)
+        .nth(usize::from(before.events[0].event_index))
+        .expect("the first event's payload");
+    let truncated = [&tagged[..8], &[1, 2, 3]].concat();
+    let ordinary = tx
+        .inner_instructions
+        .iter_mut()
+        .find(|ix| ix.program_id == CP_AMM_PROGRAM_ID && ix.data.len() == 8)
+        .expect("the fixture's 8-byte instruction");
+    ordinary.data = truncated;
+
+    let after = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
+    assert!(
+        matches!(
+            after.failures.as_slice(),
+            [ExtractFailure::AnchorDecode {
+                source: AnchorDecodeError::PayloadTooShort { got: 11, .. }
+            }]
+        ),
+        "{:?}",
+        after.failures
+    );
+
+    let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+    assert!(
+        matches!(
+            outcome.failures.as_slice(),
+            [ExtractionFailure::AnchorDecode(_)]
+        ),
+        "{:?}",
+        outcome.failures
+    );
+}
+
+fn cp_amm_payloads(tx: &OnChainTransaction) -> impl Iterator<Item = &[u8]> {
+    tx.inner_instructions
+        .iter()
+        .filter(|ix| ix.program_id == CP_AMM_PROGRAM_ID)
+        .map(|ix| ix.data.as_slice())
 }
 
 /// `EvtClaimPositionFee` on a real claim: decoded, field-preserving translation.
