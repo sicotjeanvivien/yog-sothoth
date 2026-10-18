@@ -20,7 +20,7 @@ pub const EVENT_IX_TAG: [u8; EVENT_IX_TAG_LEN] = [0xe4, 0x45, 0xa5, 0x2e, 0x51, 
 // ---------------------------------------------------------------------------
 
 /// Split an Anchor `event_cpi` payload into its discriminator and borsh body;
-/// `NotAnAnchorEvent` marks an ordinary instruction to the program, whatever its length.
+/// `NotAnAnchorEvent` marks an ordinary instruction to the program.
 pub(crate) fn decode_anchor_event_cpi(
     data: &[u8],
 ) -> Result<([u8; DISCRIMINATOR_LEN], Vec<u8>), AnchorDecodeError> {
