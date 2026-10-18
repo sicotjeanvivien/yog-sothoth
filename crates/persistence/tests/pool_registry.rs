@@ -158,14 +158,22 @@ async fn first_seen_of(pool: &PgPool, addr: Pubkey) -> DateTime<Utc> {
 
 #[sqlx::test]
 async fn no_index_of_pools_covers_last_seen_at(pool: PgPool) {
-    let covering: Vec<String> = sqlx::query_scalar(
-        "SELECT indexname::TEXT FROM pg_indexes
-          WHERE schemaname = 'public' AND tablename = 'pools'
-            AND indexdef LIKE '%last_seen_at%'",
+    let indexes: Vec<(String, String)> = sqlx::query_as(
+        "SELECT indexname::TEXT, indexdef FROM pg_indexes
+          WHERE schemaname = 'public' AND tablename = 'pools'",
     )
     .fetch_all(&pool)
     .await
     .unwrap();
+    assert!(
+        indexes.iter().any(|(name, _)| name == "pools_pkey"),
+        "the lookup must see the indexes of pools, or an empty answer would pass: {indexes:?}"
+    );
+    let covering: Vec<&str> = indexes
+        .iter()
+        .filter(|(_, def)| def.contains("last_seen_at"))
+        .map(|(name, _)| name.as_str())
+        .collect();
     assert!(
         covering.is_empty(),
         "an index naming last_seen_at, in its key, an expression or its predicate, keeps \
