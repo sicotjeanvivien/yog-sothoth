@@ -137,13 +137,9 @@ impl MeteoraDammV2EventPersistor {
     }
 
     async fn persist_swap(&self, event: &MeteoraDammV2SwapEvent) -> anyhow::Result<InsertOutcome> {
-        if let Err(err) = self
-            .pool_maintenance
-            .discover_pool(Self::PROTOCOL, event.pool_address)
-            .await
-        {
-            warn!(error = %err, kind = "swap", "pool upsert failed");
-        }
+        self.pool_maintenance
+            .discover_pool(Self::PROTOCOL, event.pool_address, "swap")
+            .await;
         let insert_result = self
             .repos
             .swap_event
@@ -162,13 +158,9 @@ impl MeteoraDammV2EventPersistor {
         &self,
         event: &MeteoraDammV2LiquidityEvent,
     ) -> anyhow::Result<InsertOutcome> {
-        if let Err(err) = self
-            .pool_maintenance
-            .discover_pool(Self::PROTOCOL, event.pool_address)
-            .await
-        {
-            warn!(error = %err, kind = "liquidity", "pool upsert failed");
-        }
+        self.pool_maintenance
+            .discover_pool(Self::PROTOCOL, event.pool_address, "liquidity")
+            .await;
         let insert_result = self
             .repos
             .liquidity_event
@@ -381,13 +373,9 @@ impl MeteoraDammV2EventPersistor {
         &self,
         event: &MeteoraDammV2InitializePoolEvent,
     ) -> anyhow::Result<InsertOutcome> {
-        if let Err(err) = self
-            .pool_maintenance
-            .discover_pool(Self::PROTOCOL, event.pool_address)
-            .await
-        {
-            warn!(error = %err, kind = "initialize_pool", "pool upsert failed");
-        }
+        self.pool_maintenance
+            .discover_pool(Self::PROTOCOL, event.pool_address, "initialize_pool")
+            .await;
         // Fee columns are yog-context's, read from the account; `discover_pool` leaves them NULL,
         // which queues the pool for enrichment. The blob is stored verbatim by the insert.
         self.repos

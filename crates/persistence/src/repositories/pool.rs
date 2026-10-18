@@ -30,19 +30,32 @@ fn fee_bps_to_numeric(fee_bps: rust_decimal::Decimal) -> RepositoryResult<sqlx::
 
 #[async_trait]
 impl PoolRepository for PgPoolRepository {
-    /// Keeps the later of the stored and incoming `last_seen_at`, both clamped to `NOW()`.
+    /// Never lowers `last_seen_at`, nor stores it past `NOW()`.
+    /// ⚠️ Not `ON CONFLICT … DO UPDATE`: its target arbitrates one of the two unique indexes, and
+    /// a concurrent insert fails or deadlocks on the other; untargeted, `DO NOTHING` arbitrates both.
     async fn upsert(&self, pool: &Pool) -> RepositoryResult<()> {
+        let updated = sqlx::query!(
+            r#"
+            UPDATE pools
+               SET last_seen_at = GREATEST(LEAST(last_seen_at, NOW()), LEAST($2, NOW()))
+             WHERE pool_address = $1
+            "#,
+            pool.pool_address.to_string(),
+            pool.last_seen_at,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+        if updated.rows_affected() > 0 {
+            return Ok(());
+        }
         sqlx::query!(
             r#"
             INSERT INTO pools
                 (pool_address, protocol, token_a_mint, token_b_mint,
                  first_seen_at, last_seen_at)
             VALUES ($1, $2, $3, $4, LEAST($5, NOW()), LEAST($5, NOW()))
-            ON CONFLICT (pool_address) DO UPDATE
-                SET last_seen_at = GREATEST(
-                        LEAST(pools.last_seen_at, NOW()),
-                        EXCLUDED.last_seen_at
-                    )
+            ON CONFLICT DO NOTHING
             "#,
             pool.pool_address.to_string(),
             pool.protocol.as_str(),

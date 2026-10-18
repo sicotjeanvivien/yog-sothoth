@@ -4,13 +4,13 @@ use chrono::DateTime;
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 use std::sync::Mutex;
-use yog_core::RepositoryResult;
 use yog_core::domain::{
     InsertOutcome, MeteoraDammV2LiquidityEventKind, MeteoraDammV2SplitAmounts,
     MeteoraDammV2SplitNumerators, MeteoraDammV2SplitPositionState, Pool,
     PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolCurrentStateUpsertOutcome,
     PoolRepository, TradeDirection,
 };
+use yog_core::{RepositoryError, RepositoryResult};
 
 type Calls = Arc<Mutex<Vec<&'static str>>>;
 
@@ -161,11 +161,15 @@ impl MeteoraDammV2ClaimRewardEventRepository for MockClaimReward {
 }
 
 // PoolMaintenance's two repos: `pool:touch` is touch_pool, `pcs:upsert` the current-state projection.
-struct MockPoolRepo(Calls);
+// The flag makes `upsert` fail.
+struct MockPoolRepo(Calls, bool);
 #[async_trait]
 impl PoolRepository for MockPoolRepo {
     async fn upsert(&self, _p: &Pool) -> RepositoryResult<()> {
         rec(&self.0, "pool:upsert");
+        if self.1 {
+            return Err(RepositoryError::Backend("deadlock detected".into()));
+        }
         Ok(())
     }
     async fn touch_last_seen(&self, _: &Pubkey) -> RepositoryResult<()> {
@@ -232,6 +236,24 @@ fn build_with(
     swap_outcome: InsertOutcome,
     pcs_outcome: PoolCurrentStateUpsertOutcome,
 ) -> MeteoraDammV2EventPersistor {
+    build_all(calls, swap_outcome, pcs_outcome, false)
+}
+
+fn build_with_failing_pool_upsert(calls: Calls) -> MeteoraDammV2EventPersistor {
+    build_all(
+        calls,
+        InsertOutcome::Inserted,
+        applied_without_ambiguity(),
+        true,
+    )
+}
+
+fn build_all(
+    calls: Calls,
+    swap_outcome: InsertOutcome,
+    pcs_outcome: PoolCurrentStateUpsertOutcome,
+    pool_upsert_fails: bool,
+) -> MeteoraDammV2EventPersistor {
     let repos = DammV2Repos {
         swap_event: Arc::new(MockSwap(calls.clone(), swap_outcome)),
         liquidity_event: Arc::new(MockLiquidity(calls.clone())),
@@ -254,7 +276,7 @@ fn build_with(
         update_pool_fees: Arc::new(MockUpdateFees(calls.clone())),
     };
     let pm = Arc::new(PoolMaintenance::new(
-        Arc::new(MockPoolRepo(calls.clone())),
+        Arc::new(MockPoolRepo(calls.clone(), pool_upsert_fails)),
         Arc::new(MockPcsRepo(calls.clone(), pcs_outcome)),
     ));
     MeteoraDammV2EventPersistor::new(repos, pm)
@@ -341,6 +363,37 @@ fn liquidity() -> MeteoraDammV2LiquidityEvent {
         reserve_b_after: 20,
         position: pk(4),
         owner: pk(5),
+    }
+}
+
+fn initialize_pool(pool_fees_raw: Vec<u8>) -> MeteoraDammV2InitializePoolEvent {
+    MeteoraDammV2InitializePoolEvent {
+        pool_address: pk(1),
+        signature: sg(),
+        timestamp: ts(),
+        slot: 1,
+        transaction_index: None,
+        event_index: 0,
+        token_a_mint: pk(2),
+        token_b_mint: pk(3),
+        creator: pk(9),
+        payer: pk(10),
+        alpha_vault: pk(11),
+        sqrt_min_price: 1,
+        sqrt_max_price: 100,
+        sqrt_price: 50,
+        liquidity: 1000,
+        activation_type: 0,
+        activation_point: 0,
+        collect_fee_mode: 0,
+        pool_type: 0,
+        token_a_flag: 0,
+        token_b_flag: 0,
+        token_a_amount: 1,
+        token_b_amount: 2,
+        total_amount_a: 1,
+        total_amount_b: 2,
+        pool_fees_raw,
     }
 }
 
@@ -662,34 +715,7 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
         route(
             &p,
             &calls,
-            MeteoraDammV2Event::InitializePool(MeteoraDammV2InitializePoolEvent {
-                pool_address: pk(1),
-                signature: sg(),
-                timestamp: ts(),
-                slot: 1,
-                transaction_index: None,
-                event_index: 0,
-                token_a_mint: pk(2),
-                token_b_mint: pk(3),
-                creator: pk(9),
-                payer: pk(10),
-                alpha_vault: pk(11),
-                sqrt_min_price: 1,
-                sqrt_max_price: 100,
-                sqrt_price: 50,
-                liquidity: 1000,
-                activation_type: 0,
-                activation_point: 0,
-                collect_fee_mode: 0,
-                pool_type: 0,
-                token_a_flag: 0,
-                token_b_flag: 0,
-                token_a_amount: 1,
-                token_b_amount: 2,
-                total_amount_a: 1,
-                total_amount_b: 2,
-                pool_fees_raw: fee_blob,
-            })
+            MeteoraDammV2Event::InitializePool(initialize_pool(fee_blob))
         )
         .await,
         ["pool:upsert", "insert:initialize_pool"]
@@ -835,4 +861,62 @@ fn a_same_slot_ambiguity_is_counted_on_the_applied_path() {
          — an ambiguity that wrongly accepts costs as much as one that wrongly \
          rejects"
     );
+}
+
+// ── a failed pool upsert is counted, not merely logged ───────────────────────
+
+/// Mutation this is written against: dropping `record_pool_upsert_failure` from `discover_pool`,
+/// which leaves the `warn!` alone. Not `#[tokio::test]`: `with_local_recorder` binds the thread.
+#[test]
+fn a_failed_pool_upsert_is_counted_per_event_kind_and_the_event_still_persists() {
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("current-thread runtime")
+            .block_on(async {
+                let calls: Calls = Arc::new(Mutex::new(Vec::new()));
+                let p = build_with_failing_pool_upsert(calls.clone());
+                for (event, recipe) in [
+                    (
+                        MeteoraDammV2Event::Swap(swap()),
+                        &["pool:upsert", "insert:swap", "pcs:upsert"][..],
+                    ),
+                    (
+                        MeteoraDammV2Event::Liquidity(liquidity()),
+                        &["pool:upsert", "insert:liquidity", "pcs:upsert"][..],
+                    ),
+                    (
+                        MeteoraDammV2Event::InitializePool(initialize_pool(vec![0u8; 31])),
+                        &["pool:upsert", "insert:initialize_pool"][..],
+                    ),
+                ] {
+                    assert_eq!(route(&p, &calls, event).await, recipe);
+                }
+            });
+    });
+
+    // One snapshot: `Snapshotter::snapshot` swaps counters to 0.
+    let snapshot = snapshotter.snapshot().into_vec();
+    for kind in ["swap", "liquidity", "initialize_pool"] {
+        let counted = snapshot
+            .iter()
+            .find(|(key, _, _, _)| {
+                key.key().name() == "yog_indexer_pool_upsert_failure_total"
+                    && key
+                        .key()
+                        .labels()
+                        .any(|l| l.key() == "event_kind" && l.value() == kind)
+            })
+            .map(|(_, _, _, value)| value);
+        assert_eq!(
+            counted,
+            Some(&DebugValue::Counter(1)),
+            "a failed pool upsert on a {kind} event must be counted, not only logged"
+        );
+    }
 }

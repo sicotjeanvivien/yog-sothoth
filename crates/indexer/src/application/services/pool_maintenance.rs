@@ -28,12 +28,13 @@ impl PoolMaintenance {
     }
 
     /// Record a pool seen in the stream, with `None` mints: yog-context resolves them from the
-    /// on-chain account.
+    /// on-chain account. A failure is logged and counted, never aborts the caller.
     pub(crate) async fn discover_pool(
         &self,
         protocol: Protocol,
         pool_address: solana_pubkey::Pubkey,
-    ) -> anyhow::Result<()> {
+        event_kind: &'static str,
+    ) {
         let now = chrono::Utc::now();
         let pool = Pool {
             pool_address,
@@ -45,13 +46,19 @@ impl PoolMaintenance {
             last_seen_at: now,
         };
         let start = Instant::now();
-        self.pool_repo.upsert(&pool).await?;
-        EventPersistorMetrics::record_persist_duration(
-            &protocol,
-            "pool_upsert",
-            start.elapsed().as_secs_f64(),
-        );
-        Ok(())
+        match self.pool_repo.upsert(&pool).await {
+            Ok(()) => {
+                EventPersistorMetrics::record_persist_duration(
+                    &protocol,
+                    "pool_upsert",
+                    start.elapsed().as_secs_f64(),
+                );
+            }
+            Err(err) => {
+                warn!(error = %err, kind = event_kind, "pool upsert failed");
+                EventPersistorMetrics::record_pool_upsert_failure(&protocol, event_kind);
+            }
+        }
     }
 
     /// Flag a pool whose account-derived properties an event just invalidated, so yog-context
