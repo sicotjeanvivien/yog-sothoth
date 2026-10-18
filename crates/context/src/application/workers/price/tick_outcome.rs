@@ -16,7 +16,7 @@ use yog_core::RepositoryError;
 pub(super) enum TickOutcome {
     /// The candidate list could not be read, so the tick never started.
     ListFailed(RepositoryError),
-    /// No mint moved or was priced within the window — a cold start, or a stalled indexer.
+    /// No mint moved or was priced within the window.
     NoCandidates,
     /// Every candidate is waiting its turn (`UnpricedMints`).
     NothingDue,

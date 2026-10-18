@@ -68,7 +68,8 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   **without a price** waits before it is asked again — 1, 2, 4, 8, then 15
   minutes at the default cadence — and goes back to every tick at its first
   price. The rule is `UnpricedMints` in `yog-core`, in memory and empty at
-  boot; a mint that leaves the candidates leaves it too. Where half the universe never has a price, it halves the requests.
+  boot; a mint that leaves the candidates leaves it too. Where half the
+  universe never has a price, it halves the requests.
 
   ⚠️ **Only an answer without a price counts.** A chunk given up on 429 was
   never answered, and neither was a chunk without a single price (`{}`, an

@@ -31,8 +31,8 @@ impl PriceWorkerMetrics {
         describe_gauge!(
             CANDIDATE_MINTS,
             "Number of candidate mints at the last tick: known mints (token_metadata) that one \
-             of their pools moved, or that the source priced, in the last 24 hours. A mint \
-             quiet on both counts is not asked"
+             of their pools moved, or that the source priced, within PRICE_CANDIDATE_WINDOW. \
+             A mint quiet on both counts is not asked"
         );
         describe_gauge!(
             REQUESTED_MINTS,

@@ -217,3 +217,15 @@ async fn a_mint_out_of_the_window_is_asked_again_after_an_event_on_its_pool(pool
     expected.sort();
     assert_eq!(candidates(&pool, since).await, expected);
 }
+
+/// Against the `token_metadata` restriction dropped: a price never exists without its metadata row.
+#[sqlx::test]
+async fn an_active_mint_without_metadata_is_not_asked(pool: PgPool) {
+    let since = window_start();
+    let (addr, known, unknown) = (pk(1).to_string(), pk(30).to_string(), pk(31).to_string());
+    insert_resolved_pool(&pool, &addr, &known, &unknown).await;
+    insert_pool_state(&pool, &addr, since + Duration::minutes(1)).await;
+    insert_metadata(&pool, &known).await;
+
+    assert_eq!(candidates(&pool, since).await, vec![known]);
+}

@@ -89,18 +89,15 @@ impl PriceWorker {
     /// ⚠️ A stop cuts the fetch short, not the cycle: what came back goes through the same filters
     /// and the same single insert.
     async fn price_once(&mut self, shutdown: &CancellationToken) -> TickOutcome {
-        let asked_at = Utc::now();
-        let candidates = match self
-            .metadata_repository
-            .list_price_candidates(asked_at - PRICE_CANDIDATE_WINDOW)
-            .await
-        {
+        let since = Utc::now() - PRICE_CANDIDATE_WINDOW;
+        let candidates = match self.metadata_repository.list_price_candidates(since).await {
             Ok(mints) => mints,
             Err(e) => return TickOutcome::ListFailed(e),
         };
         self.unpriced.retain_only(&candidates);
 
         // Only the mints worth asking — see `UnpricedMints`.
+        let asked_at = Utc::now();
         let mints: Vec<Pubkey> = candidates
             .iter()
             .filter(|mint| self.unpriced.is_due(mint, asked_at))
