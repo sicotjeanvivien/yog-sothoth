@@ -53,7 +53,7 @@ export const RELEASES: readonly Release[] = [
             technical: true,
           },
           {
-            text: "The signal engine gets 64 MB of memory instead of 32: it needed about 40, so it lived on swap, reading back what it had just been made to set aside, and restarted once in an afternoon.",
+            text: "The signal engine gets 64 MB of memory instead of 32: it needed about 40, so it lived on swap, reading back what it had just been made to set aside.",
             technical: true,
           },
         ],
