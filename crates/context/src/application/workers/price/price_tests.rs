@@ -4,7 +4,7 @@
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::{Duration, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use std::str::FromStr;
@@ -50,8 +50,8 @@ struct FakeMetadataRepository {
     /// Lists served one per call before falling back to `candidates`.
     candidates_per_call: Mutex<Vec<Vec<Pubkey>>>,
     list_error: Mutex<Option<RepositoryError>>,
-    /// The `since` of every call, in order.
-    asked_since: Mutex<Vec<DateTime<Utc>>>,
+    /// The `window` of every call, in order.
+    asked_windows: Mutex<Vec<Duration>>,
 }
 
 impl FakeMetadataRepository {
@@ -76,15 +76,15 @@ impl FakeMetadataRepository {
         *self.list_error.lock().unwrap() = Some(err);
     }
 
-    fn asked_since(&self) -> Vec<DateTime<Utc>> {
-        self.asked_since.lock().unwrap().clone()
+    fn asked_windows(&self) -> Vec<Duration> {
+        self.asked_windows.lock().unwrap().clone()
     }
 }
 
 #[async_trait]
 impl TokenMetadataRepository for FakeMetadataRepository {
-    async fn list_price_candidates(&self, since: DateTime<Utc>) -> RepositoryResult<Vec<Pubkey>> {
-        self.asked_since.lock().unwrap().push(since);
+    async fn list_price_candidates(&self, window: Duration) -> RepositoryResult<Vec<Pubkey>> {
+        self.asked_windows.lock().unwrap().push(window);
         if let Some(err) = self.list_error.lock().unwrap().take() {
             return Err(err);
         }
@@ -202,7 +202,7 @@ impl PriceSource for StoppedDuringFetch {
 
 // ── Tests ─────────────────────────────────────────────────────────────
 
-/// Against a window other than `PRICE_CANDIDATE_WINDOW`, or one not counted back from the tick.
+/// Against a window other than `PRICE_CANDIDATE_WINDOW`.
 #[tokio::test]
 async fn the_candidates_are_the_mints_alive_in_the_last_24_hours() {
     let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![]));
@@ -213,18 +213,9 @@ async fn the_candidates_are_the_mints_alive_in_the_last_24_hours() {
         std::time::Duration::from_secs(30),
     );
 
-    let before = Utc::now();
     worker.run_one_cycle(&CancellationToken::new()).await;
-    let after = Utc::now();
 
-    let asked = metadata_repo.asked_since();
-    assert_eq!(asked.len(), 1);
-    let window = chrono::Duration::hours(24);
-    assert!(
-        before - window <= asked[0] && asked[0] <= after - window,
-        "since = {}, expected 24 h before the tick ({before} … {after})",
-        asked[0]
-    );
+    assert_eq!(metadata_repo.asked_windows(), vec![Duration::hours(24)]);
 }
 
 #[tokio::test]

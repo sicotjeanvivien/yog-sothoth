@@ -54,10 +54,14 @@ decoded at this boundary and never reaches `core`, which stays free of it.
 
   **A candidate is a known mint still alive somewhere.** One of its pools had
   an event in the last 24 hours (`pool_current_state.last_event_at`), or
-  Jupiter priced it in the last 24 hours (`token_last_price.fetched_at`):
-  `TokenMetadataRepository::list_price_candidates`, over
-  `PRICE_CANDIDATE_WINDOW` in `yog-core`. A mint quiet on both counts is not
-  asked again until an event on one of its pools brings it back.
+  Jupiter priced it in the 24 hours before the last price written
+  (`token_last_price.fetched_at`): `TokenMetadataRepository::list_price_candidates`,
+  over `PRICE_CANDIDATE_WINDOW` in `yog-core`. A mint quiet on both counts is
+  not asked again until an event on one of its pools brings it back.
+
+  ⚠️ **The price window counts back from the last write, not from now.** After
+  an outage longer than the window, every price is older than 24 hours, and a
+  window counted from now would drop the mints of every quiet pool for good.
 
   ⚠️ **Asking the whole of `token_metadata` empties the TVL.** Most known mints
   never get a price, and when they all fall due at once the tick outlasts the

@@ -111,7 +111,6 @@ async fn both_mints_are_proposed_once_each(pool: PgPool) {
     assert_eq!(missing, expected);
 }
 
-/// The last event of `addr` happened at `at`.
 async fn insert_pool_state(pool: &PgPool, addr: &str, at: DateTime<Utc>) {
     sqlx::query(
         "INSERT INTO pool_current_state (
@@ -145,9 +144,15 @@ async fn insert_last_price(pool: &PgPool, mint: &str, at: DateTime<Utc>) {
         .unwrap();
 }
 
-async fn candidates(pool: &PgPool, since: DateTime<Utc>) -> Vec<String> {
+/// The price worker wrote just now, through a mint without metadata: it anchors the price
+/// window without being a candidate itself.
+async fn prices_written_just_now(pool: &PgPool) {
+    insert_last_price(pool, &pk(99).to_string(), Utc::now()).await;
+}
+
+async fn candidates(pool: &PgPool) -> Vec<String> {
     let mut mints: Vec<String> = PgTokenMetadataRepository::new(pool.clone())
-        .list_price_candidates(since)
+        .list_price_candidates(WINDOW)
         .await
         .unwrap()
         .into_iter()
@@ -157,7 +162,6 @@ async fn candidates(pool: &PgPool, since: DateTime<Utc>) -> Vec<String> {
     mints
 }
 
-/// A known pair `(mint_a, mint_b)` in one pool whose last event is at `last_event`.
 async fn known_pair_last_moved_at(pool: &PgPool, last_event: DateTime<Utc>) -> (String, String) {
     let (addr, mint_a, mint_b) = (pk(1).to_string(), pk(30).to_string(), pk(31).to_string());
     insert_resolved_pool(pool, &addr, &mint_a, &mint_b).await;
@@ -167,8 +171,10 @@ async fn known_pair_last_moved_at(pool: &PgPool, last_event: DateTime<Utc>) -> (
     (mint_a, mint_b)
 }
 
+const WINDOW: Duration = Duration::hours(24);
+
 fn window_start() -> DateTime<Utc> {
-    Utc::now() - Duration::hours(24)
+    Utc::now() - WINDOW
 }
 
 /// Against the activity bound moved later, the activity branch dropped, or one pool side left out.
@@ -179,7 +185,7 @@ async fn a_mint_active_within_the_window_without_a_price_is_asked(pool: PgPool) 
 
     let mut expected = vec![mint_a, mint_b];
     expected.sort();
-    assert_eq!(candidates(&pool, since).await, expected);
+    assert_eq!(candidates(&pool).await, expected);
 }
 
 /// Against the price bound moved later, or the price branch dropped.
@@ -188,8 +194,9 @@ async fn a_quiet_mint_priced_within_the_window_is_asked(pool: PgPool) {
     let since = window_start();
     let (mint_a, _) = known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
     insert_last_price(&pool, &mint_a, since + Duration::minutes(1)).await;
+    prices_written_just_now(&pool).await;
 
-    assert_eq!(candidates(&pool, since).await, vec![mint_a]);
+    assert_eq!(candidates(&pool).await, vec![mint_a]);
 }
 
 /// Against either bound moved earlier.
@@ -198,8 +205,9 @@ async fn a_quiet_mint_whose_price_is_older_than_the_window_is_not_asked(pool: Pg
     let since = window_start();
     let (mint_a, _) = known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
     insert_last_price(&pool, &mint_a, since - Duration::minutes(1)).await;
+    prices_written_just_now(&pool).await;
 
-    let asked = candidates(&pool, since).await;
+    let asked = candidates(&pool).await;
     assert!(asked.is_empty(), "quiet on both counts, got {asked:?}");
 }
 
@@ -209,13 +217,31 @@ async fn a_mint_out_of_the_window_is_asked_again_after_an_event_on_its_pool(pool
     let since = window_start();
     let (mint_a, mint_b) = known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
     insert_last_price(&pool, &mint_a, since - Duration::minutes(1)).await;
-    assert!(candidates(&pool, since).await.is_empty());
+    prices_written_just_now(&pool).await;
+    assert!(candidates(&pool).await.is_empty());
 
     set_last_event(&pool, &pk(1).to_string(), Utc::now()).await;
 
     let mut expected = vec![mint_a, mint_b];
     expected.sort();
-    assert_eq!(candidates(&pool, since).await, expected);
+    assert_eq!(candidates(&pool).await, expected);
+}
+
+/// Against the price window counted from now, or from the oldest price: after an outage longer
+/// than the window, the mints priced at the last write come back, the older ones do not.
+#[sqlx::test]
+async fn after_an_outage_the_price_window_counts_back_from_the_last_write(pool: PgPool) {
+    let last_write = Utc::now() - Duration::days(3);
+    let (fresh_then, stale_then) = known_pair_last_moved_at(&pool, last_write).await;
+    insert_last_price(&pool, &fresh_then, last_write).await;
+    insert_last_price(
+        &pool,
+        &stale_then,
+        last_write - WINDOW - Duration::minutes(1),
+    )
+    .await;
+
+    assert_eq!(candidates(&pool).await, vec![fresh_then]);
 }
 
 /// Against the `token_metadata` restriction dropped: a price never exists without its metadata row.
@@ -227,5 +253,5 @@ async fn an_active_mint_without_metadata_is_not_asked(pool: PgPool) {
     insert_pool_state(&pool, &addr, since + Duration::minutes(1)).await;
     insert_metadata(&pool, &known).await;
 
-    assert_eq!(candidates(&pool, since).await, vec![known]);
+    assert_eq!(candidates(&pool).await, vec![known]);
 }

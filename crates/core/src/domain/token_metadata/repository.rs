@@ -1,7 +1,7 @@
 //! Contracts of the `token_metadata` table.
 
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use chrono::Duration;
 use solana_pubkey::Pubkey;
 
 use crate::{RepositoryResult, domain::TokenMetadata};
@@ -16,9 +16,10 @@ pub trait TokenMetadataRepository: Send + Sync {
     /// Insert or update the metadata of a mint.
     async fn upsert(&self, metadata: &TokenMetadata) -> RepositoryResult<()>;
 
-    /// The mints with a metadata row that one of their pools moved, or that the
-    /// source priced, since `since`: what the price worker asks.
-    async fn list_price_candidates(&self, since: DateTime<Utc>) -> RepositoryResult<Vec<Pubkey>>;
+    /// The mints with a metadata row that one of their pools moved within `window` of now, or
+    /// that the source priced within `window` of the last price written: what the price worker asks.
+    /// ⚠️ Counted from now, the price window would drop every quiet pool after a longer outage.
+    async fn list_price_candidates(&self, window: Duration) -> RepositoryResult<Vec<Pubkey>>;
 
     /// The mints of `pools` without a metadata row: the metadata worker's queue.
     async fn list_missing_mints(&self) -> RepositoryResult<Vec<Pubkey>>;
