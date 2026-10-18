@@ -485,9 +485,9 @@ The two URLs arrive at different moments, and that is not a choice:
 - `YOG_API_INTERNAL_URL` is read by the server **at run time**.
 
 `docker-compose.yml` passes both — the build argument defaults to
-`http://localhost:5000`, and in production `docker-compose.prod.yml`
-derives it from `YOG_API_DOMAIN`, under its own image name so that a dev
-image is never reused (rebuild with `up -d --build` after every change).
+`http://localhost:5000`. The production image is built by the `images`
+workflow from `docker/docker-bake.hcl`, which derives it from the repository
+variable `YOG_API_DOMAIN` (`docker/README.md`, *The registry*).
 `src/lib/config/__tests__/compose-env.test.ts`
 runs the server schema on the compose's values, and checks every build
 argument the compose passes is declared in the Dockerfile.

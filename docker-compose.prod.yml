@@ -1,20 +1,18 @@
 # docker-compose.prod.yml — the production shape, as an overlay.
 #
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full up -d --build
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full up -d
 #
-# `--build` is not optional after a code change: compose builds an image only
-# when none exists yet, and the dashboard's API URL is written into the web
-# image at build time. yog-web below has its own image name, so an image
-# built from the base file alone (with http://localhost:5000 baked in) is
-# never reused here.
+# Nothing of ours is built here (`build: !reset null`): the images come from
+# GHCR, renamed `yog-*:prod` by docker/pull-images.sh (docker/README.md).
 #
 # On the server, put the two selectors in its .env and the command shrinks
-# back to `docker compose up -d --build`:
+# back to `docker compose up -d`:
 #
 #   COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
 #   COMPOSE_PROFILES=full
 #
-# That command starts a server. To UPDATE one already in service, run
+# That command starts a server whose images are pulled (docker/README.md,
+# "A new server"). To UPDATE one already in service, run
 # docker/update.sh instead: a bare `up -d` migrates while the previous
 # daemons are still running, and its header says what that costs.
 #
@@ -38,8 +36,6 @@
 # - Compose >= 2.24 for `!reset`. Compose MERGES list fields such as `ports`
 #   across files: without `!reset`, every port published by the base file
 #   would stay published here.
-# - Images are still built in place (`build:` from the base file). Pulling
-#   them from a registry belongs with the deployment pipeline, not here.
 # - The external network `edge` (`docker network create edge`, once per
 #   server). The server's entry proxy, a Caddy in its own stack shared by
 #   every site on the machine, publishes 80/443 and reaches yog-web and
@@ -48,7 +44,6 @@
 # Variables this file requires (each refuses the command when unset):
 #   POSTGRES_PASSWORD  the admin password of the Postgres container
 #   YOG_WEB_DOMAIN     the dashboard's host name, e.g. yog-scope.xyz
-#   YOG_API_DOMAIN     the API's host name, e.g. api.yog-scope.xyz
 #   DATABASE_URL_ARCHIVE, ARCHIVE_STORE_URL, ARCHIVE_STORE_BUCKET,
 #   ARCHIVE_STORE_REGION, ARCHIVE_STORE_ACCESS_KEY, ARCHIVE_STORE_SECRET_KEY,
 #   ARCHIVE_HEARTBEAT_URL
@@ -66,8 +61,8 @@
 #   ANALYTIC_HEARTBEAT_URL
 #                      the check yog-analytic pings after each cycle and fails
 #                      when one fails (period 5 min); crates/analytic/README.md
-# The CORS origin and the browser's API URL are derived from the two domains
-# rather than set separately: three values that must agree are one value.
+# The CORS origin is derived from the domain rather than set separately: two
+# values that must agree are one value.
 #
 # Memory
 # ------
@@ -144,9 +139,13 @@ services:
     restart: unless-stopped
 
   yog-migrate:
+    image: yog-migrate:prod
+    build: !reset null
     mem_limit: 32m
 
   yog-indexer:
+    image: yog-indexer:prod
+    build: !reset null
     ports: !reset []
     # The ingestion alarm's dead man's switch. Required here, as the other two
     # are: without it an ingestion that stops writing is logged in a container
@@ -156,6 +155,8 @@ services:
     mem_limit: 64m
 
   yog-api:
+    image: yog-api:prod
+    build: !reset null
     environment:
       API_CORS_ALLOWED_ORIGINS: https://${YOG_WEB_DOMAIN:?set it in the server's .env (e.g. yog-scope.xyz)}
     ports: !reset []
@@ -169,10 +170,14 @@ services:
     mem_limit: 64m
 
   yog-context:
+    image: yog-context:prod
+    build: !reset null
     ports: !reset []
     mem_limit: 32m
 
   yog-signals:
+    image: yog-signals:prod
+    build: !reset null
     ports: !reset []
     # The materialisation alarm's dead man's switch. Required here, as the
     # archive's is: without it a stalled continuous aggregate is logged in a
@@ -182,17 +187,16 @@ services:
     mem_limit: 64m
 
   yog-analytic:
+    image: yog-analytic:prod
+    build: !reset null
     ports: !reset []
     environment:
       ANALYTIC_HEARTBEAT_URL: ${ANALYTIC_HEARTBEAT_URL:?set it in the server's .env}
     mem_limit: 32m
 
   yog-web:
-    # Not the base file's implicit name: see the header, on `--build`.
-    image: yog-sothoth-web:prod
-    build:
-      args:
-        NEXT_PUBLIC_YOG_API_URL: https://${YOG_API_DOMAIN:?set it in the server's .env (e.g. api.yog-scope.xyz)}
+    image: yog-web:prod
+    build: !reset null
     ports: !reset []
     networks: [default, edge]
     mem_limit: 128m
@@ -202,10 +206,7 @@ services:
   # real bucket and a real check it has nothing to do in dev.
   yog-archive:
     profiles: ["full"]
-    build:
-      context: .
-      dockerfile: docker/backend.Dockerfile
-      target: yog-archive
+    image: yog-archive:prod
     environment:
       DATABASE_URL_ARCHIVE: ${DATABASE_URL_ARCHIVE:?set it in the server's .env}
       ARCHIVE_STORE_URL: ${ARCHIVE_STORE_URL:?set it in the server's .env}
