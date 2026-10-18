@@ -35,7 +35,7 @@ export const RELEASES: readonly Release[] = [
     version: "v0.1.10",
     date: "2026-10-18",
     summary:
-      "The pool registry writes lighter, the hourly volume and fees no longer re-read every swap of the hour at each refresh, and new token names no longer re-read every pool.",
+      "The pool registry writes lighter, the hourly volume and fees no longer re-read every swap of the hour at each refresh, new token names no longer re-read every pool, and the signal engine gets the memory it needs.",
     sections: [
       {
         kind: "fixes",
@@ -50,6 +50,10 @@ export const RELEASES: readonly Release[] = [
           },
           {
             text: "New tokens get their names looking only at the pools discovered in the last hour, instead of re-reading every pool known every ten seconds; every pool is still swept once an hour, for the tokens learned late.",
+            technical: true,
+          },
+          {
+            text: "The signal engine gets 64 MB of memory instead of 32: it needed about 40, so it lived on swap, reading back what it had just been made to set aside.",
             technical: true,
           },
         ],
