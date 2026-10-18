@@ -154,3 +154,18 @@ fn the_bound_stated_at_startup_is_the_cap_or_the_cadence() {
         "above the cap, every tick asks"
     );
 }
+
+/// Against `retain_only` doing nothing, or keeping the wrong side.
+#[test]
+fn a_mint_outside_the_candidates_is_forgotten_and_the_others_keep_their_wait() {
+    let mut rule = UnpricedMints::new(TICK);
+    let gone = mint(1);
+    let kept = mint(2);
+    rule.record([], &[gone, kept], t0() + ANSWER_DELAY);
+
+    rule.retain_only(&[kept]);
+
+    let soon = t0() + ANSWER_DELAY;
+    assert!(rule.is_due(&gone, soon), "a forgotten mint is due at once");
+    assert!(!rule.is_due(&kept, soon), "a candidate keeps its wait");
+}

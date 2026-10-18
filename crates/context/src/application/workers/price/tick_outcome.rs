@@ -14,11 +14,11 @@ use yog_core::RepositoryError;
 
 /// How one pricing cycle ended.
 pub(super) enum TickOutcome {
-    /// The known-mint list could not be read, so the tick never started.
+    /// The candidate list could not be read, so the tick never started.
     ListFailed(RepositoryError),
-    /// Nothing to price yet — an empty `token_metadata`, i.e. a cold start.
-    NoKnownMints,
-    /// Every known mint is waiting its turn (`UnpricedMints`).
+    /// No mint moved or was priced within the window.
+    NoCandidates,
+    /// Every candidate is waiting its turn (`UnpricedMints`).
     NothingDue,
     /// The source returned a hard error rather than a partial answer.
     SourceFailed(SourceError),
@@ -40,16 +40,16 @@ impl TickOutcome {
         let mut written = 0;
         let outcome = match self {
             TickOutcome::ListFailed(e) => {
-                warn!(error = %e, "price worker: list_known_mints failed");
+                warn!(error = %e, "price worker: list_price_candidates failed");
                 "list_failed"
             }
-            TickOutcome::NoKnownMints => {
-                debug!("price worker: no known mints yet — sleeping");
+            TickOutcome::NoCandidates => {
+                debug!("price worker: no candidate mints — sleeping");
                 no_coverage();
                 "no_work"
             }
             TickOutcome::NothingDue => {
-                debug!("price worker: every known mint is waiting its turn — nothing asked");
+                debug!("price worker: every candidate is waiting its turn — nothing asked");
                 // Coverage 0 is the truth; `no_prices` would be the wrong alarm.
                 no_coverage();
                 "nothing_due"
@@ -96,7 +96,7 @@ impl TickOutcome {
     }
 }
 
-/// The coverage numerator falls with its denominator, or `priced / known` reads
+/// The coverage numerator falls with its denominator, or `priced / candidate` reads
 /// a stale ratio.
 fn no_coverage() {
     PriceWorkerMetrics::set_priced_mints(0);

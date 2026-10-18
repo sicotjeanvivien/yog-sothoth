@@ -48,15 +48,32 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   `pools` but absent from `token_metadata`, and fetches symbol / name /
   decimals / logo via Helius DAS.
 - **`PriceWorker`** — every `CONTEXT_PRICE_INTERVAL_SECS` (default 30 s), or
-  back to back when a tick outlasts it, lists the known mints and asks Jupiter
-  Price V3 for current USD prices, inserting them with a single shared
+  back to back when a tick outlasts it, lists the candidate mints and asks
+  Jupiter Price V3 for current USD prices, inserting them with a single shared
   `fetched_at` per tick.
 
-  **It asks only for the mints worth asking.** A mint Jupiter answers
+  **A candidate is a known mint still alive somewhere.** One of its pools had
+  an event in the last 24 hours (`pool_current_state.last_event_at`), or
+  Jupiter priced it in the 24 hours before the last price written
+  (`token_last_price.fetched_at`): `TokenMetadataRepository::list_price_candidates`,
+  over `PRICE_CANDIDATE_WINDOW` in `yog-core`. A mint quiet on both counts is
+  not asked again until an event on one of its pools brings it back.
+
+  ⚠️ **The price window counts back from the last write, not from now.** After
+  an outage longer than the window, every price is older than 24 hours, and a
+  window counted from now would drop the mints of every quiet pool for good.
+
+  ⚠️ **Asking the whole of `token_metadata` empties the TVL.** Most known mints
+  never get a price, and when they all fall due at once the tick outlasts the
+  15-minute bound on prices (`yog_price_max_age_latest()`), during which every
+  pool loses its valuation.
+
+  **It asks only for the candidates worth asking.** A mint Jupiter answers
   **without a price** waits before it is asked again — 1, 2, 4, 8, then 15
   minutes at the default cadence — and goes back to every tick at its first
   price. The rule is `UnpricedMints` in `yog-core`, in memory and empty at
-  boot. Where half the universe never has a price, it halves the requests.
+  boot; a mint that leaves the candidates leaves it too. Where half the
+  universe never has a price, it halves the requests.
 
   ⚠️ **Only an answer without a price counts.** A chunk given up on 429 was
   never answered, and neither was a chunk without a single price (`{}`, an
@@ -79,7 +96,7 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   The filter is not a nicety: `insert_batch` sends the whole tick as one
   statement, and `ON CONFLICT DO NOTHING` covers neither SQLSTATE, so **either**
   failure aborts the insert for every other mint — every tick, for as long as
-  that mint stays known, leaving an as-of gap that migration 005 established
+  that mint stays a candidate, leaving an as-of gap that migration 005 established
   never heals. The database is the guarantee; this filter is what keeps it from
   ever firing.
 
@@ -260,7 +277,7 @@ tick/upsert/failure counters and per-provider request counters and durations.
 **Price coverage** is the one gauge pair worth alerting on:
 
 ```promql
-yog_context_price_priced_mints / yog_context_price_known_mints
+yog_context_price_priced_mints / yog_context_price_candidate_mints
 ```
 
 Everything USD-denominated downstream — pool TVL, 24h volume, realized fees,
@@ -273,16 +290,16 @@ A tick that reached Jupiter but priced nothing sets the gauge to 0 and records
 `yog_context_price_tick_total{outcome="no_prices"}` — it must not look like a
 tick that never ran.
 
-**Requested mints** say how much of the universe is still worth asking:
+**Requested mints** say how much of the candidates is due this tick:
 
 ```promql
-yog_context_price_requested_mints / yog_context_price_known_mints
+yog_context_price_requested_mints / yog_context_price_candidate_mints
 ```
 
 The gap is the mints waiting their turn, for at most the
 `unpriced_asked_again_at_most_every_secs` of the startup line plus one cycle. A
 mint that regains its price while it waits counts as unpriced until its turn. A
-tick where **every** known mint waits asks nothing and records
+tick where **every** candidate waits asks nothing and records
 `outcome="nothing_due"`, never `no_prices`.
 
 A tick that priced everything and wrote nothing because nothing moved records
@@ -296,7 +313,7 @@ price refused as unstorable is, downstream, exactly as absent as one the source
 never sent, so counting it would inflate the coverage the gauge exists to
 measure. `outcome="no_prices"` therefore also covers a tick whose every price was
 refused; `yog_context_price_rejected_total` tells the two apart and should sit
-flat at 0 — a rising count means a very-high-supply mint entered the known set,
+flat at 0 — a rising count means a very-high-supply mint entered the candidates,
 and that its USD figures will be **absent rather than wrong**. But it counts
 them *before* the redundancy filter, for the opposite reason: a price suppressed
 as unchanged is still valued downstream, by the row that already carries it.
@@ -321,7 +338,7 @@ filter inert without failing anything.
 ⚠️ **`rate()` on both sides, not the bare counters.** A ratio of lifetime
 counters is a process-lifetime average: it moves far too slowly to show the
 collapse this expression exists to detect, and the cold-start batch — every
-known mint inserted on the first tick after a restart — biases it downwards for
+candidate priced on the first tick after a restart — biases it downwards for
 good.
 
 ## Configuration

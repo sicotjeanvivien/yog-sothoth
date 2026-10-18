@@ -1,6 +1,7 @@
-//! Price worker: every `price_interval`, or back to back when a tick outlasts it, lists the mints
-//! worth asking (`UnpricedMints`), fetches their USD price, drops the unstorable and the repeated
-//! (`KeptPrices`) and inserts the rest in one statement. A failed tick is one missing sample.
+//! Price worker: every `price_interval`, or back to back when a tick outlasts it, lists the
+//! candidate mints, keeps those worth asking (`UnpricedMints`), fetches their USD price, drops
+//! the unstorable and the repeated (`KeptPrices`) and inserts the rest in one statement. A failed
+//! tick is one missing sample.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -10,7 +11,8 @@ use solana_pubkey::Pubkey;
 use tokio_util::sync::CancellationToken;
 
 use yog_core::domain::{
-    KeptPrices, TokenMetadataRepository, TokenPrice, TokenPriceRepository, UnpricedMints,
+    KeptPrices, PRICE_CANDIDATE_WINDOW, TokenMetadataRepository, TokenPrice, TokenPriceRepository,
+    UnpricedMints,
 };
 
 use crate::application::source::{FetchedPrice, PriceSource};
@@ -23,7 +25,7 @@ mod tick_outcome;
 pub(crate) use metrics::PriceWorkerMetrics;
 use tick_outcome::TickOutcome;
 
-/// Worker that records a USD price for the known mints worth asking, on a fixed interval.
+/// Worker that records a USD price for the candidate mints worth asking, on a fixed interval.
 pub struct PriceWorker {
     metadata_repository: Arc<dyn TokenMetadataRepository>,
     price_repository: Arc<dyn TokenPriceRepository>,
@@ -87,29 +89,34 @@ impl PriceWorker {
     /// ⚠️ A stop cuts the fetch short, not the cycle: what came back goes through the same filters
     /// and the same single insert.
     async fn price_once(&mut self, shutdown: &CancellationToken) -> TickOutcome {
-        let known = match self.metadata_repository.list_known_mints().await {
+        let candidates = match self
+            .metadata_repository
+            .list_price_candidates(PRICE_CANDIDATE_WINDOW)
+            .await
+        {
             Ok(mints) => mints,
             Err(e) => return TickOutcome::ListFailed(e),
         };
+        self.unpriced.retain_only(&candidates);
 
         // Only the mints worth asking — see `UnpricedMints`.
         let asked_at = Utc::now();
-        let mints: Vec<Pubkey> = known
+        let mints: Vec<Pubkey> = candidates
             .iter()
             .filter(|mint| self.unpriced.is_due(mint, asked_at))
             .copied()
             .collect();
-        PriceWorkerMetrics::set_known_mints(known.len());
+        PriceWorkerMetrics::set_candidate_mints(candidates.len());
         PriceWorkerMetrics::set_requested_mints(mints.len());
 
-        if known.is_empty() {
-            return TickOutcome::NoKnownMints;
+        if candidates.is_empty() {
+            return TickOutcome::NoCandidates;
         }
         if mints.is_empty() {
             return TickOutcome::NothingDue;
         }
 
-        log::pricing(mints.len(), known.len());
+        log::pricing(mints.len(), candidates.len());
 
         let answer = match self.source.fetch_prices(&mints, shutdown).await {
             Ok(answer) => answer,

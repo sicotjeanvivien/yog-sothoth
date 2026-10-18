@@ -4,6 +4,7 @@ mod rows;
 
 use crate::repositories::helper::{convert_string_to_pubkey, map_sqlx_error};
 use async_trait::async_trait;
+use chrono::Duration;
 use rows::TokenMetadataRow;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
@@ -59,11 +60,27 @@ impl TokenMetadataRepository for PgTokenMetadataRepository {
         Ok(())
     }
 
-    async fn list_known_mints(&self) -> RepositoryResult<Vec<Pubkey>> {
-        let mints = sqlx::query_scalar!("SELECT mint FROM token_metadata")
-            .fetch_all(&self.pool)
-            .await
-            .map_err(map_sqlx_error)?;
+    async fn list_price_candidates(&self, window: Duration) -> RepositoryResult<Vec<Pubkey>> {
+        let mints = sqlx::query_scalar!(
+            r#"
+            SELECT mint FROM token_metadata
+            WHERE mint IN (
+                SELECT mint FROM token_last_price
+                WHERE fetched_at >= (SELECT LEAST(max(fetched_at), now()) FROM token_last_price)
+                                    - $1::BIGINT * INTERVAL '1 second'
+                UNION ALL
+                SELECT side.mint
+                FROM pool_current_state pcs
+                JOIN pools p ON p.pool_address = pcs.pool_address
+                CROSS JOIN LATERAL (VALUES (p.token_a_mint), (p.token_b_mint)) AS side(mint)
+                WHERE pcs.last_event_at >= now() - $1::BIGINT * INTERVAL '1 second'
+            )
+            "#,
+            window.num_seconds(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
 
         mints
             .into_iter()

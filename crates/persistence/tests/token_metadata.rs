@@ -1,7 +1,8 @@
-//! `PgTokenMetadataRepository::list_missing_mints`, which feeds yog-context's metadata worker.
+//! `PgTokenMetadataRepository`: `list_missing_mints` feeds yog-context's metadata worker,
+//! `list_price_candidates` its price worker.
 
-use super::helpers::pk;
-use chrono::Utc;
+use super::helpers::{pk, price_at};
+use chrono::{DateTime, Duration, Utc};
 use sqlx::PgPool;
 
 use yog_core::domain::TokenMetadataRepository;
@@ -108,4 +109,158 @@ async fn both_mints_are_proposed_once_each(pool: PgPool) {
     let mut expected = vec![mint_a, mint_b];
     expected.sort();
     assert_eq!(missing, expected);
+}
+
+async fn insert_pool_state(pool: &PgPool, addr: &str, at: DateTime<Utc>) {
+    sqlx::query(
+        "INSERT INTO pool_current_state (
+             pool_address, protocol, last_event_at, last_event_kind, last_signature,
+             reserve_a, reserve_b, last_slot, last_event_index
+         )
+         VALUES ($1, 'meteora_damm_v2', $2, 'swap', 'sig', 1, 1, 1, 0)",
+    )
+    .bind(addr)
+    .bind(at)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn set_last_event(pool: &PgPool, addr: &str, at: DateTime<Utc>) {
+    sqlx::query("UPDATE pool_current_state SET last_event_at = $2 WHERE pool_address = $1")
+        .bind(addr)
+        .bind(at)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+/// The price worker wrote just now, through a mint without metadata: it anchors the price
+/// window without being a candidate itself.
+async fn prices_written_just_now(pool: &PgPool) {
+    price_at(pool, &pk(99).to_string(), "1", Utc::now()).await;
+}
+
+async fn candidates(pool: &PgPool) -> Vec<String> {
+    let mut mints: Vec<String> = PgTokenMetadataRepository::new(pool.clone())
+        .list_price_candidates(WINDOW)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|m| m.to_string())
+        .collect();
+    mints.sort();
+    mints
+}
+
+async fn known_pair_last_moved_at(pool: &PgPool, last_event: DateTime<Utc>) -> (String, String) {
+    let (addr, mint_a, mint_b) = (pk(1).to_string(), pk(30).to_string(), pk(31).to_string());
+    insert_resolved_pool(pool, &addr, &mint_a, &mint_b).await;
+    insert_pool_state(pool, &addr, last_event).await;
+    insert_metadata(pool, &mint_a).await;
+    insert_metadata(pool, &mint_b).await;
+    (mint_a, mint_b)
+}
+
+const WINDOW: Duration = Duration::hours(24);
+
+fn window_start() -> DateTime<Utc> {
+    Utc::now() - WINDOW
+}
+
+/// Against the activity bound moved later, the activity branch dropped, or one pool side left out.
+#[sqlx::test]
+async fn a_mint_active_within_the_window_without_a_price_is_asked(pool: PgPool) {
+    let since = window_start();
+    let (mint_a, mint_b) = known_pair_last_moved_at(&pool, since + Duration::minutes(1)).await;
+
+    let mut expected = vec![mint_a, mint_b];
+    expected.sort();
+    assert_eq!(candidates(&pool).await, expected);
+}
+
+/// Against the price bound moved later, or the price branch dropped.
+#[sqlx::test]
+async fn a_quiet_mint_priced_within_the_window_is_asked(pool: PgPool) {
+    let since = window_start();
+    let (mint_a, _) = known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
+    price_at(&pool, &mint_a, "1", since + Duration::minutes(1)).await;
+    prices_written_just_now(&pool).await;
+
+    assert_eq!(candidates(&pool).await, vec![mint_a]);
+}
+
+/// Against either bound moved earlier.
+#[sqlx::test]
+async fn a_quiet_mint_whose_price_is_older_than_the_window_is_not_asked(pool: PgPool) {
+    let since = window_start();
+    let (mint_a, _) = known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
+    price_at(&pool, &mint_a, "1", since - Duration::minutes(1)).await;
+    prices_written_just_now(&pool).await;
+
+    let asked = candidates(&pool).await;
+    assert!(asked.is_empty(), "quiet on both counts, got {asked:?}");
+}
+
+/// Against a mint that, once out, stays out: a new event on its pool brings it back.
+#[sqlx::test]
+async fn a_mint_out_of_the_window_is_asked_again_after_an_event_on_its_pool(pool: PgPool) {
+    let since = window_start();
+    let (mint_a, mint_b) = known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
+    price_at(&pool, &mint_a, "1", since - Duration::minutes(1)).await;
+    prices_written_just_now(&pool).await;
+    assert!(candidates(&pool).await.is_empty());
+
+    set_last_event(&pool, &pk(1).to_string(), Utc::now()).await;
+
+    let mut expected = vec![mint_a, mint_b];
+    expected.sort();
+    assert_eq!(candidates(&pool).await, expected);
+}
+
+/// Against the price window counted from now, or from the oldest price: after an outage longer
+/// than the window, the mints priced at the last write come back, the older ones do not.
+#[sqlx::test]
+async fn after_an_outage_the_price_window_counts_back_from_the_last_write(pool: PgPool) {
+    let last_write = Utc::now() - Duration::days(3);
+    let (fresh_then, stale_then) = known_pair_last_moved_at(&pool, last_write).await;
+    price_at(&pool, &fresh_then, "1", last_write).await;
+    price_at(
+        &pool,
+        &stale_then,
+        "1",
+        last_write - WINDOW - Duration::minutes(1),
+    )
+    .await;
+
+    assert_eq!(candidates(&pool).await, vec![fresh_then]);
+}
+
+/// Against an anchor not capped at now: one future-dated price would empty the price window.
+#[sqlx::test]
+async fn a_future_dated_price_does_not_move_the_window(pool: PgPool) {
+    let since = window_start();
+    let (mint_a, _) = known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
+    price_at(&pool, &mint_a, "1", Utc::now() - Duration::hours(1)).await;
+    price_at(
+        &pool,
+        &pk(98).to_string(),
+        "1",
+        Utc::now() + Duration::days(2),
+    )
+    .await;
+
+    assert_eq!(candidates(&pool).await, vec![mint_a]);
+}
+
+/// Against the `token_metadata` restriction dropped: a price never exists without its metadata row.
+#[sqlx::test]
+async fn an_active_mint_without_metadata_is_not_asked(pool: PgPool) {
+    let since = window_start();
+    let (addr, known, unknown) = (pk(1).to_string(), pk(30).to_string(), pk(31).to_string());
+    insert_resolved_pool(&pool, &addr, &known, &unknown).await;
+    insert_pool_state(&pool, &addr, since + Duration::minutes(1)).await;
+    insert_metadata(&pool, &known).await;
+
+    assert_eq!(candidates(&pool).await, vec![known]);
 }

@@ -21,9 +21,9 @@ pub(super) fn stopping() {
     info!("shutdown requested — price worker stopping");
 }
 
-/// A tick asks the source for `count` of the `known` mints.
-pub(super) fn pricing(count: usize, known: usize) {
-    debug!(count, known, "price worker: pricing mints");
+/// A tick asks the source for `count` of the `candidates`.
+pub(super) fn pricing(count: usize, candidates: usize) {
+    debug!(count, candidates, "price worker: pricing mints");
 }
 
 /// Prices the column cannot hold were dropped before the insert.
