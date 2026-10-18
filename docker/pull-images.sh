@@ -27,5 +27,7 @@ done
 
 for i in "${!remotes[@]}"; do
   docker tag "${remotes[$i]}" "${locals[$i]}"
+  # Untagged, the version left behind by the next deploy is prunable.
+  docker image rm "${remotes[$i]}" >/dev/null
 done
 log "pulled ${#remotes[@]} images of $version (${commit:0:7})"

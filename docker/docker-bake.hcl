@@ -1,8 +1,6 @@
 # docker/docker-bake.hcl — the eight production images of a version, as the
 # `images` workflow builds and pushes them (docker/README.md, "Deploying").
 # One bake session: the seven backend targets share one cargo-chef builder.
-# The compose files cannot stand in for it: the production overlay refuses
-# to load without the server's variables.
 
 variable "REGISTRY" {
   default = "ghcr.io/sicotjeanvivien"
@@ -56,7 +54,7 @@ target "backend" {
   cache-from = CACHE == "" ? [] : ["type=registry,ref=${CACHE}:backend"]
   # ⚠️ One exporter only: each of the seven would write the whole builder,
   # gigabytes, to the same reference.
-  cache-to = CACHE == "" || svc != "yog-migrate" ? [] : ["type=registry,ref=${CACHE}:backend,mode=max"]
+  cache-to = CACHE == "" || svc != "yog-migrate" ? [] : ["type=registry,ref=${CACHE}:backend,mode=max,ignore-error=true"]
 }
 
 target "yog-web" {
@@ -66,5 +64,5 @@ target "yog-web" {
   args       = { NEXT_PUBLIC_YOG_API_URL = NEXT_PUBLIC_YOG_API_URL }
   tags       = ["${REGISTRY}/yog-web:${VERSION}"]
   cache-from = CACHE == "" ? [] : ["type=registry,ref=${CACHE}:web"]
-  cache-to   = CACHE == "" ? [] : ["type=registry,ref=${CACHE}:web,mode=max"]
+  cache-to   = CACHE == "" ? [] : ["type=registry,ref=${CACHE}:web,mode=max,ignore-error=true"]
 }

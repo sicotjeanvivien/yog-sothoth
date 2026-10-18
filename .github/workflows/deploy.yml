@@ -54,7 +54,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: production
-    # ~4 min de construction, la migration (sans borne), 1 min de
+    # Le pull des images, la migration (sans borne), 1 min de
     # vérifications, jusqu'à 10 de drain. Un job coupé par ce délai ne coupe
     # pas le déploiement, détaché sur le serveur : relancer en `check`.
     timeout-minutes: 60
