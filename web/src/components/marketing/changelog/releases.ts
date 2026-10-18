@@ -32,6 +32,22 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.1.10",
+    date: "2026-10-18",
+    summary: "The pool registry writes lighter: it drops an index that nothing read anymore.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "The pool registry drops its index on the last time a pool was seen, 345 MB that no query read since the pool list went away: refreshing that time on every event no longer has to write into every index of the table.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.1.9",
     date: "2026-10-18",
     summary:
