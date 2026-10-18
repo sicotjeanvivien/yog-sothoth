@@ -217,7 +217,7 @@ whatever the source delivered
 ExtractionOutcome { events, unknown, failures }
 ```
 
-Three failure types are distinguished in `ExtractionFailure` and counted as separate metric labels: `AnchorDecode` (prefix or payload-size mismatch), `Borsh` (schema mismatch), `Translation` (invalid enum value).
+Three failure types are distinguished in `ExtractionFailure` and counted as separate metric labels: `AnchorDecode` (a tagged payload too short to hold a discriminator), `Borsh` (schema mismatch), `Translation` (invalid enum value). A payload that does not start with `EVENT_IX_TAG` is an ordinary instruction to the program, whatever its length, and is skipped without being counted.
 
 ## The `SignalDetector` trait
 

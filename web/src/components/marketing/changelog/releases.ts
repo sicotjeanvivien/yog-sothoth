@@ -35,7 +35,7 @@ export const RELEASES: readonly Release[] = [
     version: "v0.1.10",
     date: "2026-10-18",
     summary:
-      "The pool registry writes lighter, the hourly volume and fees no longer re-read every swap of the hour at each refresh, new token names no longer re-read every pool, the signal engine gets the memory it needs, and two discoveries of the same pool no longer collide.",
+      "The pool registry writes lighter, the hourly volume and fees no longer re-read every swap of the hour at each refresh, new token names no longer re-read every pool, the signal engine gets the memory it needs, two discoveries of the same pool no longer collide, and an ordinary instruction no longer counts as a reading failure.",
     sections: [
       {
         kind: "fixes",
@@ -58,6 +58,10 @@ export const RELEASES: readonly Release[] = [
           },
           {
             text: "Two transactions discovering the same new pool at the same moment no longer make one of them fail, or deadlock in the database: the pool is recorded on its first event instead of its next one, and a failure that remains is now counted instead of only logged.",
+            technical: true,
+          },
+          {
+            text: "An ordinary instruction sent to the DAMM v2 program without arguments is no longer counted as an event the indexer failed to read: nothing was lost, but the failure counter, the one that would show a misread of the stream, was never at zero. A truncated event is still counted.",
             technical: true,
           },
         ],

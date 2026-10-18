@@ -145,7 +145,7 @@ pub fn extract_wire_events(tx: &OnChainTransaction, program_id: &Pubkey) -> Extr
                 }
             },
             Err(AnchorDecodeError::NotAnAnchorEvent) => {
-                // A non-event self-CPI from cp-amm: not a failure.
+                // An ordinary cp-amm instruction, not an event: not a failure.
             }
             Err(e) => {
                 out.failures
