@@ -4,7 +4,7 @@
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use std::str::FromStr;
@@ -46,46 +46,53 @@ fn priced(mint: Pubkey, price: &str) -> FetchedPrice {
 
 #[derive(Default)]
 struct FakeMetadataRepository {
-    known: Mutex<Vec<Pubkey>>,
-    /// Lists served one per call before falling back to `known`.
-    known_per_call: Mutex<Vec<Vec<Pubkey>>>,
-    list_known_error: Mutex<Option<RepositoryError>>,
+    candidates: Mutex<Vec<Pubkey>>,
+    /// Lists served one per call before falling back to `candidates`.
+    candidates_per_call: Mutex<Vec<Vec<Pubkey>>>,
+    list_error: Mutex<Option<RepositoryError>>,
+    /// The `since` of every call, in order.
+    asked_since: Mutex<Vec<DateTime<Utc>>>,
 }
 
 impl FakeMetadataRepository {
-    fn with_known(mints: Vec<Pubkey>) -> Self {
+    fn with_candidates(mints: Vec<Pubkey>) -> Self {
         Self {
-            known: Mutex::new(mints),
+            candidates: Mutex::new(mints),
             ..Self::default()
         }
     }
 
     /// One list per tick, the last one repeated after that.
-    fn with_known_per_call(mut lists: Vec<Vec<Pubkey>>) -> Self {
+    fn with_candidates_per_call(mut lists: Vec<Vec<Pubkey>>) -> Self {
         let last = lists.pop().unwrap_or_default();
         Self {
-            known: Mutex::new(last),
-            known_per_call: Mutex::new(lists),
+            candidates: Mutex::new(last),
+            candidates_per_call: Mutex::new(lists),
             ..Self::default()
         }
     }
 
-    fn fail_list_known_once(&self, err: RepositoryError) {
-        *self.list_known_error.lock().unwrap() = Some(err);
+    fn fail_list_once(&self, err: RepositoryError) {
+        *self.list_error.lock().unwrap() = Some(err);
+    }
+
+    fn asked_since(&self) -> Vec<DateTime<Utc>> {
+        self.asked_since.lock().unwrap().clone()
     }
 }
 
 #[async_trait]
 impl TokenMetadataRepository for FakeMetadataRepository {
-    async fn list_known_mints(&self) -> RepositoryResult<Vec<Pubkey>> {
-        if let Some(err) = self.list_known_error.lock().unwrap().take() {
+    async fn list_price_candidates(&self, since: DateTime<Utc>) -> RepositoryResult<Vec<Pubkey>> {
+        self.asked_since.lock().unwrap().push(since);
+        if let Some(err) = self.list_error.lock().unwrap().take() {
             return Err(err);
         }
-        let mut per_call = self.known_per_call.lock().unwrap();
+        let mut per_call = self.candidates_per_call.lock().unwrap();
         if !per_call.is_empty() {
             return Ok(per_call.remove(0));
         }
-        Ok(self.known.lock().unwrap().clone())
+        Ok(self.candidates.lock().unwrap().clone())
     }
 
     async fn upsert(&self, _metadata: &TokenMetadata) -> RepositoryResult<()> {
@@ -195,9 +202,34 @@ impl PriceSource for StoppedDuringFetch {
 
 // ── Tests ─────────────────────────────────────────────────────────────
 
+/// Against a window other than `PRICE_CANDIDATE_WINDOW`, or one not counted back from the tick.
 #[tokio::test]
-async fn no_known_mints_skips_source_and_insert() {
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![]));
+async fn the_candidates_are_the_mints_alive_in_the_last_24_hours() {
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![]));
+    let mut worker = PriceWorker::new(
+        metadata_repo.clone(),
+        Arc::new(FakePriceRepository::default()),
+        Arc::new(FakePriceSource::with_responses(vec![])),
+        std::time::Duration::from_secs(30),
+    );
+
+    let before = Utc::now();
+    worker.run_one_cycle(&CancellationToken::new()).await;
+    let after = Utc::now();
+
+    let asked = metadata_repo.asked_since();
+    assert_eq!(asked.len(), 1);
+    let window = chrono::Duration::hours(24);
+    assert!(
+        before - window <= asked[0] && asked[0] <= after - window,
+        "since = {}, expected 24 h before the tick ({before} … {after})",
+        asked[0]
+    );
+}
+
+#[tokio::test]
+async fn no_candidates_skips_source_and_insert() {
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![]));
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_responses(vec![]));
 
@@ -220,7 +252,7 @@ async fn inserts_prices_for_all_priced_mints_with_uniform_timestamp() {
     let mint_b = pk(2);
     let mint_c = pk(3);
 
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![
         mint_a, mint_b, mint_c,
     ]));
     let price_repo = Arc::new(FakePriceRepository::default());
@@ -280,7 +312,7 @@ async fn inserts_only_what_source_priced() {
     let mint_b = pk(2);
     let mint_c = pk(3);
 
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![
         mint_a, mint_b, mint_c,
     ]));
     let price_repo = Arc::new(FakePriceRepository::default());
@@ -317,7 +349,7 @@ async fn unstorable_price_is_dropped_before_the_batch() {
     let mint_dust = pk(2);
     let mint_c = pk(3);
 
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![
         mint_a, mint_dust, mint_c,
     ]));
     let price_repo = Arc::new(FakePriceRepository::default());
@@ -352,7 +384,7 @@ async fn a_tick_of_only_unstorable_prices_inserts_nothing() {
     // The empty check sits after the filter: no insert at all.
     let mint_dust = pk(1);
 
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint_dust]));
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![mint_dust]));
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_responses(vec![Ok(vec![priced(
         mint_dust,
@@ -382,7 +414,7 @@ async fn an_overflowing_price_is_dropped_before_the_batch() {
     let mint_absurd = pk(2);
     let mint_c = pk(3);
 
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![
         mint_a,
         mint_absurd,
         mint_c,
@@ -417,7 +449,7 @@ async fn midpoint_price_is_kept() {
     // 5e-19 rounds away from zero and stores as 1e-18: it must be kept.
     let mint = pk(1);
 
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint]));
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![mint]));
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_responses(vec![Ok(vec![priced(
         mint,
@@ -440,9 +472,9 @@ async fn midpoint_price_is_kept() {
 }
 
 #[tokio::test]
-async fn list_known_mints_error_skips_cycle_silently() {
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![pk(1)]));
-    metadata_repo.fail_list_known_once(RepositoryError::Integrity("DB down".into()));
+async fn list_error_skips_cycle_silently() {
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![pk(1)]));
+    metadata_repo.fail_list_once(RepositoryError::Integrity("DB down".into()));
 
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_responses(vec![]));
@@ -463,7 +495,7 @@ async fn list_known_mints_error_skips_cycle_silently() {
 #[tokio::test]
 async fn no_insert_when_no_chunk_yields_a_price() {
     // The source prices nothing: no insert is attempted.
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![pk(1), pk(2)]));
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![pk(1), pk(2)]));
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_responses(vec![Ok(vec![])]));
 
@@ -485,7 +517,7 @@ async fn no_insert_when_no_chunk_yields_a_price() {
 
 #[tokio::test]
 async fn insert_batch_error_does_not_panic() {
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![pk(1)]));
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![pk(1)]));
     let price_repo = Arc::new(FakePriceRepository::default());
     price_repo.fail_insert_once(RepositoryError::Integrity("disk full".into()));
 
@@ -512,7 +544,7 @@ async fn a_price_that_repeats_is_written_once() {
     // Two ticks milliseconds apart, one unchanged price, one row: only the
     // value comparison can suppress the second, not the floor.
     let mint = pk(1);
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint]));
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![mint]));
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_responses(vec![
         Ok(vec![priced(mint, "1.0")]),
@@ -543,7 +575,7 @@ async fn a_price_that_repeats_is_written_once() {
 async fn a_price_that_moved_is_written_on_the_next_tick() {
     // The counterpart: a worker that stopped writing would pass the test above.
     let mint = pk(1);
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint]));
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![mint]));
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_responses(vec![
         Ok(vec![priced(mint, "1.0")]),
@@ -570,7 +602,7 @@ async fn a_failed_insert_leaves_nothing_remembered() {
     // `KeptPrices::record` after a successful insert only: a refused batch
     // must be retried at the next tick, not wait for the floor.
     let mint = pk(1);
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint]));
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![mint]));
     let price_repo = Arc::new(FakePriceRepository::default());
     price_repo.fail_insert_once(RepositoryError::Integrity("disk full".into()));
 
@@ -604,7 +636,7 @@ async fn a_failed_insert_leaves_nothing_remembered() {
 #[tokio::test]
 async fn a_mint_answered_without_a_price_is_not_asked_on_the_next_tick() {
     let (live, dead) = (pk(1), pk(2));
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![live, dead]));
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![live, dead]));
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_answers(vec![
         answer(vec![priced(live, "1.0")], vec![dead]),
@@ -639,7 +671,7 @@ async fn a_mint_whose_request_failed_is_asked_on_the_next_tick() {
     // Nothing was said about `silent` (a chunk given up on 429): it must not
     // be held back.
     let (live, silent) = (pk(1), pk(2));
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![live, silent]));
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![live, silent]));
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_answers(vec![
         answer(vec![priced(live, "1.0")], vec![]),
@@ -667,7 +699,7 @@ async fn a_mint_whose_request_failed_is_asked_on_the_next_tick() {
 async fn an_unstorable_price_resets_the_wait_like_any_price() {
     // The rule is fed before the storability filter.
     let mint = pk(1);
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint]));
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![mint]));
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_answers(vec![
         answer(vec![priced(mint, "0.0000000000000000001")], vec![]),
@@ -709,7 +741,7 @@ async fn an_unstorable_price_resets_the_wait_like_any_price() {
 #[tokio::test]
 async fn a_stop_during_a_tick_writes_what_was_received() {
     let (answered, never_asked) = (pk(1), pk(2));
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![
         answered,
         never_asked,
     ]));
@@ -820,7 +852,7 @@ fn tick_outcome<'a>(
 #[test]
 fn partial_price_coverage_is_reported_by_the_two_gauges() {
     // Two of three mints priced: only the pair of gauges says 2/3.
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![
         pk(1),
         pk(2),
         pk(3),
@@ -839,9 +871,9 @@ fn partial_price_coverage_is_reported_by_the_two_gauges() {
     ));
 
     assert_eq!(
-        value(&snapshot, "yog_context_price_known_mints"),
+        value(&snapshot, "yog_context_price_candidate_mints"),
         Some(&DebugValue::Gauge(3.0.into())),
-        "the denominator: every known mint"
+        "the denominator: every candidate"
     );
     assert_eq!(
         value(&snapshot, "yog_context_price_priced_mints"),
@@ -855,7 +887,7 @@ fn partial_price_coverage_is_reported_by_the_two_gauges() {
 fn a_tick_that_priced_nothing_reports_zero_and_its_outcome() {
     // The source prices nothing: the gauge drops to 0 and `no_prices` is
     // emitted.
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![pk(1), pk(2)]));
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![pk(1), pk(2)]));
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_responses(vec![Ok(vec![])]));
 
@@ -881,9 +913,9 @@ fn a_tick_that_priced_nothing_reports_zero_and_its_outcome() {
 }
 
 #[test]
-fn a_tick_with_no_known_mints_zeroes_both_gauges() {
-    // Cold start: both gauges at 0, or `priced / known` reads +Inf.
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![]));
+fn a_tick_with_no_candidates_zeroes_both_gauges() {
+    // Cold start: both gauges at 0, or `priced / candidate` reads +Inf.
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![]));
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_responses(vec![]));
 
@@ -895,7 +927,7 @@ fn a_tick_with_no_known_mints_zeroes_both_gauges() {
     ));
 
     assert_eq!(
-        value(&snapshot, "yog_context_price_known_mints"),
+        value(&snapshot, "yog_context_price_candidate_mints"),
         Some(&DebugValue::Gauge(0.0.into()))
     );
     assert_eq!(
@@ -909,7 +941,7 @@ fn a_tick_with_no_known_mints_zeroes_both_gauges() {
 #[test]
 fn a_hard_source_error_also_zeroes_the_priced_gauge() {
     // A hard source error zeroes the numerator too.
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![pk(1), pk(2)]));
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![pk(1), pk(2)]));
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_responses(vec![Err(
         SourceError::Http("boom".into()),
@@ -923,7 +955,7 @@ fn a_hard_source_error_also_zeroes_the_priced_gauge() {
     ));
 
     assert_eq!(
-        value(&snapshot, "yog_context_price_known_mints"),
+        value(&snapshot, "yog_context_price_candidate_mints"),
         Some(&DebugValue::Gauge(2.0.into()))
     );
     assert_eq!(
@@ -939,7 +971,7 @@ fn a_tick_that_changed_nothing_is_not_a_tick_that_priced_nothing() {
     // `unchanged` (the normal case) must not be labelled `no_prices` (an
     // alarm), and a suppressed price still counts in the coverage.
     let mint = pk(1);
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint]));
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates(vec![mint]));
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_responses(vec![
         Ok(vec![priced(mint, "1.0")]),
@@ -1017,9 +1049,9 @@ fn every_counter_of_the_readme_ratios_is_published_before_any_tick() {
 #[test]
 fn a_tick_that_asks_nothing_says_why_and_zeroes_its_gauges() {
     // The second tick finds only `dead`, waiting its turn: no call, and the first tick's coverage
-    // does not stand. The known list shrinks between ticks, the only way to observe this reset.
+    // does not stand. The candidate list shrinks between ticks, the only way to observe this reset.
     let (live, dead) = (pk(1), pk(2));
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known_per_call(vec![
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_candidates_per_call(vec![
         vec![live, dead],
         vec![dead],
     ]));
@@ -1053,13 +1085,13 @@ fn a_tick_that_asks_nothing_says_why_and_zeroes_its_gauges() {
         "asking nothing is not pricing nothing"
     );
     assert_eq!(
-        value(&snapshot, "yog_context_price_known_mints"),
+        value(&snapshot, "yog_context_price_candidate_mints"),
         Some(&DebugValue::Gauge(1.0.into()))
     );
     assert_eq!(
         value(&snapshot, "yog_context_price_requested_mints"),
         Some(&DebugValue::Gauge(0.0.into())),
-        "known but not requested: the share still worth asking is readable"
+        "a candidate not requested: the share still worth asking is readable"
     );
     assert_eq!(
         value(&snapshot, "yog_context_price_priced_mints"),

@@ -60,6 +60,14 @@ export const RELEASES: readonly Release[] = [
             text: "The API drops its eight /api/pools routes and every read only they used; the contract and the dashboard's schemas are regenerated.",
             technical: true,
           },
+          {
+            text: "The DAMM v2 TVL no longer drops to nothing, or to a third, about one hour in two.",
+            technical: false,
+          },
+          {
+            text: "The price worker asks Jupiter only for the tokens one of our pools moved, or that Jupiter priced, in the last 24 hours — about 20,000 instead of 95,000 — so a price round no longer outlasts the 15-minute freshness bound.",
+            technical: true,
+          },
         ],
       },
     ],

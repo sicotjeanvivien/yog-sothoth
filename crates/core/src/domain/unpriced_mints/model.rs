@@ -1,7 +1,7 @@
 //! Which mints the price source answered without a price, and when to ask it
 //! again — the source's answer is the signal, whatever the reason behind it.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Duration, Utc};
 use solana_pubkey::Pubkey;
@@ -83,6 +83,12 @@ impl UnpricedMints {
                 },
             );
         }
+    }
+
+    /// Forget every mint outside `candidates`: one that comes back is due at once.
+    pub fn retain_only(&mut self, candidates: &[Pubkey]) {
+        let candidates: HashSet<&Pubkey> = candidates.iter().collect();
+        self.deferred.retain(|mint, _| candidates.contains(mint));
     }
 
     /// `cadence × 2^misses`, capped at [`UNPRICED_RETRY_MAX`].

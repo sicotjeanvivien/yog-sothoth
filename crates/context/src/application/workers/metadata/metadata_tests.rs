@@ -4,7 +4,7 @@
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 
 use yog_core::{
@@ -89,7 +89,7 @@ impl TokenMetadataRepository for FakeRepository {
         Ok(self.missing.lock().unwrap().clone())
     }
 
-    async fn list_known_mints(&self) -> RepositoryResult<Vec<Pubkey>> {
+    async fn list_price_candidates(&self, _since: DateTime<Utc>) -> RepositoryResult<Vec<Pubkey>> {
         Ok(vec![])
     }
 }
