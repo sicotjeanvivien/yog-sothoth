@@ -1,5 +1,5 @@
 //! `PgPoolRepository`'s writes: `last_seen_at` never moves backwards, and never past the
-//! database clock, and no index covers it.
+//! database clock, no index covers it, and concurrent discoveries of one pool record it once.
 
 use super::helpers::pk;
 use chrono::{DateTime, TimeZone, Utc};
@@ -179,4 +179,92 @@ async fn no_index_of_pools_covers_last_seen_at(pool: PgPool) {
         "an index naming last_seen_at, in its key, an expression or its predicate, keeps \
          every rewrite of the column from being HOT: {covering:?}"
     );
+}
+
+/// Mutation: `ON CONFLICT (pool_address) DO UPDATE`, whose arbiter is one of the two unique
+/// indexes of `pools`: a racer loses on the other one, or deadlocks on it.
+#[sqlx::test]
+async fn concurrent_discoveries_of_one_pool_neither_fail_nor_deadlock(
+    _options: sqlx::postgres::PgPoolOptions,
+    connect: sqlx::postgres::PgConnectOptions,
+) {
+    use std::sync::Arc;
+    use tokio::sync::Barrier;
+    use yog_core::{RepositoryError, domain::PoolRepository};
+
+    // ⚠️ Fewer racers or rounds, and the old query's deadlock becomes likely instead of certain.
+    const RACERS: u32 = 40;
+    const ROUNDS: u16 = 500;
+
+    // ⚠️ Not the pool `sqlx::test` hands out, capped at 5 connections; and all opened before
+    // the first race, or a racer opening one starts behind the others.
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(RACERS)
+        .min_connections(RACERS)
+        .test_before_acquire(false)
+        .connect_with(connect)
+        .await
+        .unwrap();
+    let mut warm = Vec::new();
+    for _ in 0..RACERS {
+        warm.push(pool.acquire().await.unwrap());
+    }
+    drop(warm);
+
+    let repo = Arc::new(PgPoolRepository::new(pool.clone()));
+    let mut failures = Vec::new();
+    for round in 0..ROUNDS {
+        let mut address = [7u8; 32];
+        address[..2].copy_from_slice(&round.to_le_bytes());
+        let barrier = Arc::new(Barrier::new(RACERS as usize));
+        let racers: Vec<_> = (0..RACERS)
+            .map(|_| {
+                let (repo, barrier) = (repo.clone(), barrier.clone());
+                let now = Utc::now();
+                let discovered = Pool {
+                    pool_address: Pubkey::new_from_array(address),
+                    protocol: Protocol::MeteoraDammV2,
+                    token_a_mint: None,
+                    token_b_mint: None,
+                    fee_bps: None,
+                    first_seen_at: now,
+                    last_seen_at: now,
+                };
+                tokio::spawn(async move {
+                    barrier.wait().await;
+                    repo.upsert(&discovered).await
+                })
+            })
+            .collect();
+        for racer in racers {
+            if let Err(err) = racer.await.unwrap() {
+                failures.push(err);
+            }
+        }
+    }
+
+    let unique_violations = failures
+        .iter()
+        .filter(|e| {
+            matches!(e, RepositoryError::Conflict(m) if m.contains("pools_pool_address_protocol_key"))
+        })
+        .count();
+    let deadlocks = failures
+        .iter()
+        .filter(|e| matches!(e, RepositoryError::Backend(m) if m.contains("deadlock detected")))
+        .count();
+    assert!(
+        failures.is_empty(),
+        "{unique_violations} unique_violation (23505) and {deadlocks} deadlock (40P01) among \
+         {} failures over {ROUNDS} rounds of {RACERS} racers, the first: {:?}",
+        failures.len(),
+        &failures[..failures.len().min(3)]
+    );
+
+    let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM pools")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(rows, i64::from(ROUNDS), "one row per pool discovered");
+    pool.close().await;
 }

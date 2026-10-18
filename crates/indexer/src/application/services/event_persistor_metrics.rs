@@ -6,6 +6,7 @@ use yog_core::domain::Protocol;
 const INSTRUCTIONS_INDEXED: &str = "yog_indexer_instructions_indexed_total";
 const PERSIST_DURATION: &str = "yog_indexer_persist_duration_seconds";
 const PERSIST_FAILURE: &str = "yog_indexer_persist_failure_total";
+const POOL_UPSERT_FAILURE: &str = "yog_indexer_pool_upsert_failure_total";
 const INSERT_SKIPPED: &str = "yog_indexer_event_insert_skipped_total";
 const PCS_SAME_SLOT: &str = "yog_indexer_pool_current_state_same_slot_total";
 
@@ -25,6 +26,10 @@ impl EventPersistorMetrics {
         describe_counter!(
             PERSIST_FAILURE,
             "Failed persistence attempts per protocol and event kind"
+        );
+        describe_counter!(
+            POOL_UPSERT_FAILURE,
+            "Pool registry upserts that failed, the event itself persisted (label: event_kind)"
         );
         describe_counter!(
             INSERT_SKIPPED,
@@ -78,6 +83,16 @@ impl EventPersistorMetrics {
     pub(crate) fn record_persist_failure(protocol: &Protocol, event_kind: &'static str) {
         counter!(
             PERSIST_FAILURE,
+            "protocol" => protocol.as_str().to_string(),
+            "event_kind" => event_kind,
+        )
+        .increment(1);
+    }
+
+    /// Not a `persist_failure`: the event is written, only its `pools` write failed.
+    pub(crate) fn record_pool_upsert_failure(protocol: &Protocol, event_kind: &'static str) {
+        counter!(
+            POOL_UPSERT_FAILURE,
             "protocol" => protocol.as_str().to_string(),
             "event_kind" => event_kind,
         )

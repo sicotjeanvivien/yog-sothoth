@@ -382,6 +382,9 @@ the two dispatch points a new protocol touches in this crate, the other being
   `EventPersistor::persist` are logged and counted
   (`yog_indexer_persist_failure_total{event_kind}`), and the next event is
   attempted.
+- **A failed pool upsert is not a lost event** — `PoolMaintenance::discover_pool`
+  logs and counts it (`yog_indexer_pool_upsert_failure_total{event_kind}`), and
+  the event is still inserted; the pool's row waits for its next event.
 - **A successful insert that wrote nothing is not a success** — every event
   repository returns `InsertOutcome::{Inserted, Skipped}` rather than `()`, so
   an `ON CONFLICT … DO NOTHING` that matched is warned about and counted
@@ -564,6 +567,7 @@ histograms.
 - **Persistor counters** —
   `yog_indexer_instructions_indexed_total{instruction}`,
   `yog_indexer_persist_failure_total{event_kind}`,
+  `yog_indexer_pool_upsert_failure_total{event_kind}`,
   `yog_indexer_event_insert_skipped_total{event_kind}`,
   `yog_indexer_pool_current_state_same_slot_total`
 - **Reporter counter** — `yog_indexer_network_status_tick_failures_total{reason}`

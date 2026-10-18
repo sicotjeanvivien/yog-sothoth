@@ -35,7 +35,7 @@ export const RELEASES: readonly Release[] = [
     version: "v0.1.10",
     date: "2026-10-18",
     summary:
-      "The pool registry writes lighter, the hourly volume and fees no longer re-read every swap of the hour at each refresh, new token names no longer re-read every pool, and the signal engine gets the memory it needs.",
+      "The pool registry writes lighter, the hourly volume and fees no longer re-read every swap of the hour at each refresh, new token names no longer re-read every pool, the signal engine gets the memory it needs, and two discoveries of the same pool no longer collide.",
     sections: [
       {
         kind: "fixes",
@@ -54,6 +54,10 @@ export const RELEASES: readonly Release[] = [
           },
           {
             text: "The signal engine gets 64 MB of memory instead of 32: it needed about 40, so it lived on swap, reading back what it had just been made to set aside.",
+            technical: true,
+          },
+          {
+            text: "Two transactions discovering the same new pool at the same moment no longer make one of them fail, or deadlock in the database: the pool is recorded once, and a failure that remains is now counted instead of only logged.",
             technical: true,
           },
         ],
