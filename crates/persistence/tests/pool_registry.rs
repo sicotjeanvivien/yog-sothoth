@@ -1,5 +1,5 @@
 //! `PgPoolRepository`'s writes: `last_seen_at` never moves backwards, and never past the
-//! database clock, and no index covers it, so its rewrite on every event can be HOT.
+//! database clock, and no index covers it.
 
 use super::helpers::pk;
 use chrono::{DateTime, TimeZone, Utc};
@@ -158,21 +158,17 @@ async fn first_seen_of(pool: &PgPool, addr: Pubkey) -> DateTime<Utc> {
 
 #[sqlx::test]
 async fn no_index_of_pools_covers_last_seen_at(pool: PgPool) {
-    let indexes: Vec<String> = sqlx::query_scalar(
+    let covering: Vec<String> = sqlx::query_scalar(
         "SELECT indexname::TEXT FROM pg_indexes
-          WHERE tablename = 'pools' ORDER BY indexname",
+          WHERE schemaname = 'public' AND tablename = 'pools'
+            AND indexdef LIKE '%last_seen_at%'",
     )
     .fetch_all(&pool)
     .await
     .unwrap();
-    assert_eq!(
-        indexes,
-        vec![
-            "idx_pools_needs_refresh".to_string(),
-            "idx_pools_protocol".to_string(),
-            "pools_pkey".to_string(),
-            "pools_pool_address_protocol_key".to_string(),
-        ],
-        "`idx_pools_last_seen_at` must be gone, and the four other indexes must still be there"
+    assert!(
+        covering.is_empty(),
+        "an index naming last_seen_at, in its key, an expression or its predicate, keeps \
+         every rewrite of the column from being HOT: {covering:?}"
     );
 }

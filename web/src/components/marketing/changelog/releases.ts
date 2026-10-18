@@ -40,7 +40,7 @@ export const RELEASES: readonly Release[] = [
         kind: "fixes",
         items: [
           {
-            text: "The pool registry drops its index on the last time a pool was seen, 345 MB that no query read since the pool list went away: refreshing that time on every event now rewrites the row in place instead of every index of the table.",
+            text: "The pool registry drops its index on the last time a pool was seen, 345 MB that no query read since the pool list went away: refreshing that time on every event no longer has to write into every index of the table.",
             technical: true,
           },
         ],
