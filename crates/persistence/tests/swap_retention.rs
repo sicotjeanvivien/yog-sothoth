@@ -3,12 +3,14 @@
 //! ⚠️ The policies never fire here: this is what is declared, not what a scheduler does.
 
 use sqlx::{PgPool, Row};
+use yog_core::domain::FREEZE_MARGIN;
 
 const HOUR: i64 = 3_600;
 const DAY: i64 = 24 * HOUR;
 
 const SWAPS: &str = "meteora_damm_v2_swap_events";
 const SWAPS_HOURLY: &str = "meteora_damm_v2_swap_events_hourly";
+const SWAPS_5MIN: &str = "meteora_damm_v2_swap_events_5min";
 
 /// The storage settings of the raw swaps, in seconds. `None` is a policy that
 /// does not exist.
@@ -132,7 +134,59 @@ async fn no_other_hypertable_moves(pool: PgPool) {
         SWAPS_HOURLY,
     )
     .await;
-    assert_house("start_offset", &refresh, |_| 29 * DAY);
+    assert_house("start_offset", &refresh, |table| {
+        if table == SWAPS_5MIN {
+            6 * DAY
+        } else {
+            29 * DAY
+        }
+    });
+}
+
+/// `start_offset`, `end_offset`, schedule, newest batch first, `drop_after` — seconds.
+type TrancheSettings = (
+    Option<i64>,
+    Option<i64>,
+    Option<i64>,
+    Option<bool>,
+    Option<i64>,
+);
+
+/// Mutation this is written against: any setting of 021 changed, its policy removed, or the
+/// freeze margin moved without its `end_offset`.
+#[sqlx::test]
+async fn the_5_minute_tranches_take_their_settings(pool: PgPool) {
+    let row: TrancheSettings = sqlx::query_as(
+        "WITH rf AS (
+                 SELECT config, schedule_interval
+                   FROM timescaledb_information.jobs
+                  WHERE proc_name = 'policy_refresh_continuous_aggregate'
+                    AND hypertable_name = $1
+             )
+             SELECT
+               (SELECT extract(epoch FROM (config->>'start_offset')::interval)::BIGINT FROM rf),
+               (SELECT extract(epoch FROM (config->>'end_offset')::interval)::BIGINT FROM rf),
+               (SELECT extract(epoch FROM schedule_interval)::BIGINT FROM rf),
+               (SELECT (config->>'refresh_newest_first')::BOOLEAN FROM rf),
+               (SELECT extract(epoch FROM (config->>'drop_after')::interval)::BIGINT
+                  FROM timescaledb_information.jobs
+                 WHERE proc_name = 'policy_retention' AND hypertable_name = $1)",
+    )
+    .bind(SWAPS_5MIN)
+    .fetch_one(&pool)
+    .await
+    .expect("the 5-minute settings must be readable, one policy of each kind");
+
+    assert_eq!(
+        row,
+        (
+            Some(6 * DAY),
+            Some(FREEZE_MARGIN.num_seconds()),
+            Some(5 * 60),
+            Some(false),
+            Some(30 * DAY)
+        )
+    );
 }
 
 /// `(table, seconds)` for every row of `sql`, which leaves out `$1`.

@@ -543,23 +543,31 @@ unless the hours written span the window through the previous hour, the TVL
 unless measured since then: a stopped, catching-up or new writer shows, as
 `pool_current_tvl` does for a stale price.
 
-The DAMM v2 facts read `meteora_damm_v2_swap_events_hourly_priced` with the
-formulas of `swap_parts` (010). That view reads the swap aggregate in real
-time: an hour frozen ten minutes after its close is not materialised yet, so it
-is read from the raw rows, whole. ⚠️ An hour caught up after an outage may be
-materialised already, and is then read as materialised: a swap written into it
-since the last refresh is not in its facts.
+The DAMM v2 facts sum their hours from the 5-minute tranches of
+`meteora_damm_v2_swap_events_5min` (021), refreshed every 5 minutes up to
+10 minutes ago and read in real time past that: a cycle reads about its last
+twenty minutes from the raw rows — more if a refresh runs late — never a whole
+open hour. The tranches are kept 30 days, past the raw 7, so an hour caught up
+after a long outage still reads them. They price as
+`meteora_damm_v2_swap_events_hourly_priced` prices and value with the formulas
+of `swap_parts` (010). The pricing is written a second time in
+`repositories/analytic/meteora_damm_v2_swap_facts.sql`, because the range must
+filter the tranches: through a view grouped by hour it would not reach the
+chunk scans. `tests/analytic_writer.rs` holds the two equal on an open hour and
+a freezing one, half materialised. ⚠️ A swap written into a tranche already
+materialised — it is then more than 10 minutes late — is missing from the facts
+until the next refresh, and for good if its hour freezes in between.
 
-`yog_analytic` reads through explicit grants (015). ⚠️ The swap aggregate is granted as well as the priced view over it: TimescaleDB
-checks a continuous aggregate as the reader, not as the owner of the view on
-top.
+`yog_analytic` reads through explicit grants (015, 021). ⚠️ An aggregate is
+granted as well as any view over it: TimescaleDB checks a continuous aggregate
+as the reader, not as the owner of the view on top.
 
 ### A refresh policy must stay inside its retention policy
 
-The four hourly continuous aggregates each sit on a raw hypertable with a
-retention: 7 days for the swaps (`014_swap_raw_sized_to_its_readers.sql`,
-which also cuts them into 1-day chunks, each compressed a day after it closes),
-30 days for the three others. The relation between the two policies is a
+The continuous aggregates each sit on a raw hypertable with a retention:
+7 days for the swaps under the hourly and the 5-minute aggregates
+(`014_swap_raw_sized_to_its_readers.sql`, which also cuts them into 1-day
+chunks, each compressed a day after it closes), 30 days for the three others. The relation between the two policies is a
 **rule, not a preference**:
 
 ```
@@ -587,8 +595,8 @@ in [`migrations/README.md`](./migrations/README.md).
 Three integration tests hold the line (`tests/cagg_retention.rs`): one reads the
 pairs out of the TimescaleDB catalog and asserts the inequality, one reproduces
 the destruction the inequality prevents, and one pins the destruction that
-survives it — asserting a loss, so the warning above stays falsifiable. Adding a
-fifth aggregate means adding its refresh policy; the first test counts the
+survives it — asserting a loss, so the warning above stays falsifiable. Adding an
+aggregate means adding its refresh policy; the first test counts the
 aggregates separately from the join, so one that never declares a policy fails
 loudly instead of silently opting out. A source hypertable with **no** retention
 policy is fine and exempt (`signals` is the precedent): nothing clears its rows,

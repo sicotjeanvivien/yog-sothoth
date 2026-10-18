@@ -227,6 +227,95 @@ async fn facts_and_aggregate_equal_the_activity_view_on_closed_hours(pool: PgPoo
     assert_eq!(aggregate_protocol_hours(&pool, closed).await, by_protocol);
 }
 
+/// Against a 5-minute tranche lost (the last of an hour), a sum dropped from
+/// the rollup, or the raw swaps past the watermark left out.
+#[sqlx::test]
+async fn facts_summed_from_the_tranches_equal_the_hourly_view(pool: PgPool) {
+    let open = hours_before(now(), 3);
+    let freezing = open - Duration::hours(1);
+    let implied = setup_pool(&pool, 1, Some("180.0")).await;
+    let unvalued = setup_pool(&pool, 2, None).await;
+    for (hour, tag) in [(freezing, "f"), (open, "o")] {
+        for minute in [0, 25, 55] {
+            let at = hour + Duration::minutes(minute) + Duration::seconds(30);
+            trade(&pool, &implied, &format!("{tag}{minute}"), at).await;
+        }
+        trade(
+            &pool,
+            &unvalued,
+            &format!("{tag}u"),
+            hour + Duration::minutes(30),
+        )
+        .await;
+    }
+    sqlx::query("CALL refresh_continuous_aggregate('meteora_damm_v2_swap_events_5min', $1, $2)")
+        .bind(freezing)
+        .bind(freezing + Duration::minutes(30))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let watermark: Option<DateTime<Utc>> = sqlx::query_scalar(
+        "SELECT watermark FROM yog_cagg_materialization_backlog()
+          WHERE aggregate = 'meteora_damm_v2_swap_events_5min'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(watermark, Some(freezing + Duration::minutes(30)));
+
+    let flags: (bool, bool, i64) = sqlx::query_as(
+        "SELECT bool_and(price_a_implied) FILTER (WHERE pool_address = $1),
+                bool_and(NOT valuation_complete) FILTER (WHERE pool_address = $2),
+                count(*)
+           FROM meteora_damm_v2_swap_events_hourly_priced",
+    )
+    .bind(&implied)
+    .bind(&unvalued)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(flags, (true, true, 4));
+
+    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    let outcome = repository
+        .write_cycle(&cycle_from(open + Duration::minutes(20), freezing))
+        .await
+        .unwrap();
+    assert_eq!((outcome.pool_hours, outcome.hours_frozen), (4, 1));
+
+    let view = view_pool_hours(&pool, open).await;
+    let mut counts: Vec<i64> = view.iter().map(|h| h.2).collect();
+    counts.sort();
+    assert_eq!(counts, [2, 2, 6, 6], "{view:?}");
+    assert_eq!(fact_pool_hours(&pool, open).await, view);
+}
+
+/// ☠️ Pins the loss the READMEs warn about: a late swap in a tranche already
+/// materialised, frozen before the next refresh. If it stops, so must the warning.
+#[sqlx::test]
+async fn a_late_swap_in_a_materialised_tranche_misses_its_frozen_hour(pool: PgPool) {
+    let hour = hours_before(now(), 3);
+    let address = setup_pool(&pool, 1, Some("180.0")).await;
+    trade(&pool, &address, "on_time", hour + Duration::minutes(20)).await;
+    sqlx::query("CALL refresh_continuous_aggregate('meteora_damm_v2_swap_events_5min', $1, $2)")
+        .bind(hour)
+        .bind(hour + Duration::hours(1))
+        .execute(&pool)
+        .await
+        .unwrap();
+    trade(&pool, &address, "late", hour + Duration::minutes(20)).await;
+
+    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    let outcome = repository
+        .write_cycle(&cycle_from(hour + Duration::minutes(80), hour))
+        .await
+        .unwrap();
+    assert_eq!(outcome.hours_frozen, 1);
+
+    assert_eq!(view_pool_hours(&pool, hour).await[0].2, 4);
+    assert_eq!(fact_pool_hours(&pool, hour).await[0].2, 2);
+}
+
 /// Against the freeze guard of `write_cycle` removed: the frozen hour would
 /// be rewritten with the late swap.
 #[sqlx::test]

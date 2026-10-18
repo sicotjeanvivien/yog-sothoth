@@ -3,7 +3,7 @@
 
 use chrono::{DateTime, DurationRound, TimeDelta, Utc};
 
-/// How long after its close an hour still takes the events written late.
+/// How long after its close an hour is still rewritten.
 pub const FREEZE_MARGIN: TimeDelta = TimeDelta::minutes(10);
 
 /// The most hours one cycle rewrites: hours missed during an outage are caught

@@ -49,8 +49,8 @@ in `persistence` (`repositories/analytic.rs`).
   oldest first, instead of in one long transaction.
 - **Frozen**: every hour `H` of the range such that `H + 1 h + FREEZE_MARGIN`
   (10 min) has passed — the first cycle after that point freezes it. An hour
-  freezes only on a cycle that rewrote it, so its last write sees everything
-  that arrived within the margin.
+  freezes only on a cycle that rewrote it, so its last write sees every swap
+  that arrived within the margin and at most ten minutes late.
 - **TVL**: measured into the hour of the cycle, as long as that hour is not
   frozen.
 
@@ -66,6 +66,10 @@ What the freeze costs, by design:
 
 - a swap written after its hour froze — an indexer catching up after a long
   outage — is not in the facts;
+- a swap written into a 5-minute tranche already materialised — it is then
+  more than ten minutes late — is read only from the next refresh on: if its
+  hour freezes in between, it is not in the facts either
+  ([`persistence/README.md`](../persistence/README.md#the-analytic-tables-migration-015));
 - a token without a price, or without decimals, when its hour freezes leaves
   that pool-hour unvalued for good. It is counted (`valued = false`,
   `active_pools_valued`), never filled with a guess.
