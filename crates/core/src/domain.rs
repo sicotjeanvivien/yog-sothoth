@@ -77,8 +77,8 @@ pub use signals::{
 };
 pub use swap_flow::{PoolSwapFlow, SwapFlowRepository};
 pub use token_metadata::{
-    MetadataProvider, PRICE_CANDIDATE_WINDOW, TokenMetadata, TokenMetadataLookup,
-    TokenMetadataRepository,
+    MISSING_MINT_DISCOVERY_WINDOW, MetadataProvider, PRICE_CANDIDATE_WINDOW, TokenMetadata,
+    TokenMetadataLookup, TokenMetadataRepository,
 };
 pub use token_price::{
     PRICE_STORAGE_PRECISION, PRICE_STORAGE_SCALE, PriceProvider, TokenPrice, TokenPriceLookup,

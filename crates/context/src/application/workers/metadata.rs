@@ -1,27 +1,36 @@
-//! Metadata worker: every poll, lists the mints in `pools` missing from `token_metadata`, fetches
-//! their identity from Helius DAS and upserts each row.
+//! Metadata worker: every poll, lists the mints missing from `token_metadata` of the recent pools
+//! (of every pool once an hour), fetches their identity from Helius DAS and upserts each row.
 //! A failed tick or row is logged and stepped over: a stopped enrichment would lose token names.
 
 use std::sync::Arc;
-use std::time::Instant;
 
 use chrono::Utc;
+use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
 
-use yog_core::domain::{TokenMetadata, TokenMetadataRepository};
+use yog_core::domain::{MISSING_MINT_DISCOVERY_WINDOW, TokenMetadata, TokenMetadataRepository};
 
 use crate::application::source::{FetchedMetadata, MetadataSource};
 use crate::error::WorkerError;
 
+mod log;
 mod metrics;
+mod scope;
+mod tick_outcome;
 
 pub(crate) use metrics::MetadataWorkerMetrics;
+use scope::Scope;
+use tick_outcome::TickOutcome;
+
+/// How long the worker searches only the recent pools before it sweeps all of them again.
+const FULL_SWEEP_INTERVAL: std::time::Duration = std::time::Duration::from_secs(3600);
 
 pub struct MetadataWorker {
     repository: Arc<dyn TokenMetadataRepository>,
     source: Arc<dyn MetadataSource>,
     poll_interval: std::time::Duration,
+    /// When the last listed sweep started; `None` sweeps at the first tick.
+    last_full_sweep: Option<Instant>,
 }
 
 impl MetadataWorker {
@@ -35,11 +44,12 @@ impl MetadataWorker {
             repository,
             source,
             poll_interval,
+            last_full_sweep: None,
         }
     }
 
-    pub async fn run(self, shutdown: CancellationToken) -> Result<(), WorkerError> {
-        info!("MetadataWorker started");
+    pub async fn run(mut self, shutdown: CancellationToken) -> Result<(), WorkerError> {
+        log::started();
 
         let mut ticker = tokio::time::interval(self.poll_interval);
 
@@ -50,7 +60,7 @@ impl MetadataWorker {
             biased;
 
                 _ = shutdown.cancelled() => {
-                    info!("shutdown requested — metadata worker stopping");
+                    log::stopping();
                     return Ok(());
                 }
                 _ = ticker.tick() => {
@@ -60,42 +70,51 @@ impl MetadataWorker {
         }
     }
 
-    async fn run_one_cycle(&self) {
-        let start = Instant::now();
-        let missing = match self.repository.list_missing_mints().await {
-            Ok(missing) => missing,
-            Err(e) => {
-                warn!(error = %e, "metadata worker: list_missing_mints failed");
-                MetadataWorkerMetrics::record_tick("list_failed", start.elapsed().as_secs_f64());
-                return;
-            }
-        };
-        MetadataWorkerMetrics::set_missing_mints(missing.len());
-        if missing.is_empty() {
-            debug!("metadata worker: no missing mints — sleeping");
-            MetadataWorkerMetrics::record_tick("no_work", start.elapsed().as_secs_f64());
+    fn scope_due(&self) -> Scope {
+        match self.last_full_sweep {
+            Some(at) if at.elapsed() < FULL_SWEEP_INTERVAL => Scope::RecentPools,
+            _ => Scope::AllPools,
+        }
+    }
 
-            return;
+    async fn run_one_cycle(&mut self) {
+        let start = Instant::now();
+        let scope = self.scope_due();
+        self.enrich_once(scope, start).await.record(scope, start);
+    }
+
+    /// The tick itself, its ending told by [`TickOutcome`].
+    async fn enrich_once(&mut self, scope: Scope, start: Instant) -> TickOutcome {
+        let listed = match scope {
+            Scope::RecentPools => {
+                self.repository
+                    .list_missing_mints_of_recent_pools(MISSING_MINT_DISCOVERY_WINDOW)
+                    .await
+            }
+            Scope::AllPools => self.repository.list_missing_mints_of_all_pools().await,
+        };
+        let missing = match listed {
+            Ok(missing) => missing,
+            Err(e) => return TickOutcome::ListFailed(e),
+        };
+        if scope == Scope::AllPools {
+            self.last_full_sweep = Some(start);
+        }
+        MetadataWorkerMetrics::set_missing_mints(scope.as_label(), missing.len());
+        if missing.is_empty() {
+            return TickOutcome::NoWork;
         }
 
-        debug!(count = missing.len(), "metadata worker: enriching mints");
+        log::enriching(missing.len(), scope);
 
         // One call: the source chunks and absorbs partial failures.
         let fetched = match self.source.fetch_metadata(&missing).await {
             Ok(fetched) => fetched,
-            Err(e) => {
-                // Hard failures only; partial results do not come here.
-                warn!(error = %e, "metadata worker: source returned a hard error");
-                MetadataWorkerMetrics::record_tick(
-                    "source_hard_error",
-                    start.elapsed().as_secs_f64(),
-                );
-                return;
-            }
+            Err(e) => return TickOutcome::SourceFailed(e),
         };
 
         self.upsert_all(fetched).await;
-        MetadataWorkerMetrics::record_tick("ok", start.elapsed().as_secs_f64());
+        TickOutcome::Enriched
     }
 
     /// Upsert every fetched row, logging individual failures without aborting the batch.
@@ -117,15 +136,11 @@ impl MetadataWorker {
             match self.repository.upsert(&metadata).await {
                 Ok(()) => {
                     MetadataWorkerMetrics::record_upsert("ok");
-                    debug!(mint = %metadata.mint, "metadata worker: upserted");
+                    log::upserted(&metadata.mint);
                 }
                 Err(e) => {
                     MetadataWorkerMetrics::record_upsert("error");
-                    warn!(
-                        mint = %metadata.mint,
-                        error = %e,
-                        "metadata worker: upsert failed",
-                    );
+                    log::upsert_failed(&metadata.mint, &e);
                 }
             }
         }

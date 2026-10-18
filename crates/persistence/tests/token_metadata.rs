@@ -1,11 +1,12 @@
-//! `PgTokenMetadataRepository`: `list_missing_mints` feeds yog-context's metadata worker,
-//! `list_price_candidates` its price worker.
+//! `PgTokenMetadataRepository`: the two `list_missing_mints_*` feed yog-context's metadata
+//! worker, `list_price_candidates` its price worker.
 
 use super::helpers::{pk, price_at};
 use chrono::{DateTime, Duration, Utc};
+use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 
-use yog_core::domain::TokenMetadataRepository;
+use yog_core::domain::{MISSING_MINT_DISCOVERY_WINDOW, TokenMetadataRepository};
 use yog_persistence::PgTokenMetadataRepository;
 
 /// A pool discovered from the event stream, both mints still NULL.
@@ -54,7 +55,7 @@ async fn unresolved_mints_are_ignored_when_no_metadata_exists_yet(pool: PgPool) 
 
     let repo = PgTokenMetadataRepository::new(pool.clone());
     let missing = repo
-        .list_missing_mints()
+        .list_missing_mints_of_all_pools()
         .await
         .expect("an unresolved pool must not make the query fail — it has nothing to enrich yet");
 
@@ -75,7 +76,7 @@ async fn unresolved_mints_are_ignored_alongside_resolved_ones(pool: PgPool) {
     insert_metadata(&pool, &mint_a).await;
 
     let repo = PgTokenMetadataRepository::new(pool.clone());
-    let missing = repo.list_missing_mints().await.unwrap();
+    let missing = repo.list_missing_mints_of_all_pools().await.unwrap();
 
     let missing: Vec<String> = missing.into_iter().map(|m| m.to_string()).collect();
     assert_eq!(
@@ -98,7 +99,7 @@ async fn both_mints_are_proposed_once_each(pool: PgPool) {
 
     let repo = PgTokenMetadataRepository::new(pool.clone());
     let mut missing: Vec<String> = repo
-        .list_missing_mints()
+        .list_missing_mints_of_all_pools()
         .await
         .unwrap()
         .into_iter()
@@ -109,6 +110,104 @@ async fn both_mints_are_proposed_once_each(pool: PgPool) {
     let mut expected = vec![mint_a, mint_b];
     expected.sort();
     assert_eq!(missing, expected);
+}
+
+async fn insert_pool_discovered_at(
+    pool: &PgPool,
+    addr: &str,
+    mints: Option<(&str, &str)>,
+    at: DateTime<Utc>,
+) {
+    sqlx::query(
+        "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint,
+                            first_seen_at, last_seen_at)
+         VALUES ($1, 'meteora_damm_v2', $2, $3, $4, $4)",
+    )
+    .bind(addr)
+    .bind(mints.map(|(a, _)| a))
+    .bind(mints.map(|(_, b)| b))
+    .bind(at)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+fn discovery_window_start() -> DateTime<Utc> {
+    Utc::now() - MISSING_MINT_DISCOVERY_WINDOW
+}
+
+fn sorted(mints: Vec<Pubkey>) -> Vec<String> {
+    let mut mints: Vec<String> = mints.into_iter().map(|m| m.to_string()).collect();
+    mints.sort();
+    mints
+}
+
+async fn missing_of_recent_pools(pool: &PgPool) -> Vec<String> {
+    let repo = PgTokenMetadataRepository::new(pool.clone());
+    sorted(
+        repo.list_missing_mints_of_recent_pools(MISSING_MINT_DISCOVERY_WINDOW)
+            .await
+            .expect("the recent search must not fail"),
+    )
+}
+
+async fn missing_of_all_pools(pool: &PgPool) -> Vec<String> {
+    let repo = PgTokenMetadataRepository::new(pool.clone());
+    sorted(repo.list_missing_mints_of_all_pools().await.unwrap())
+}
+
+/// Against the discovery bound moved later, or one pool side left out.
+#[sqlx::test]
+async fn the_mints_of_a_pool_discovered_within_the_window_are_asked(pool: PgPool) {
+    let (mint_a, mint_b) = (pk(40).to_string(), pk(41).to_string());
+    let at = discovery_window_start() + Duration::minutes(1);
+    insert_pool_discovered_at(&pool, &pk(1).to_string(), Some((&mint_a, &mint_b)), at).await;
+
+    let mut expected = vec![mint_a, mint_b];
+    expected.sort();
+    assert_eq!(missing_of_recent_pools(&pool).await, expected);
+}
+
+/// Against the discovery bound moved earlier or dropped, and against a sweep that filters too.
+#[sqlx::test]
+async fn the_mints_of_a_pool_discovered_before_the_window_wait_for_the_sweep(pool: PgPool) {
+    let (mint_a, mint_b) = (pk(40).to_string(), pk(41).to_string());
+    let at = discovery_window_start() - Duration::minutes(1);
+    insert_pool_discovered_at(&pool, &pk(1).to_string(), Some((&mint_a, &mint_b)), at).await;
+
+    let recent = missing_of_recent_pools(&pool).await;
+    assert!(
+        recent.is_empty(),
+        "discovered before the window, got {recent:?}"
+    );
+
+    let mut expected = vec![mint_a, mint_b];
+    expected.sort();
+    assert_eq!(missing_of_all_pools(&pool).await, expected);
+}
+
+/// Against the `token_metadata` restriction dropped from either query.
+#[sqlx::test]
+async fn a_mint_with_metadata_is_asked_by_neither(pool: PgPool) {
+    let (known, unknown) = (pk(40).to_string(), pk(41).to_string());
+    let at = discovery_window_start() + Duration::minutes(1);
+    insert_pool_discovered_at(&pool, &pk(1).to_string(), Some((&known, &unknown)), at).await;
+    insert_metadata(&pool, &known).await;
+
+    assert_eq!(missing_of_recent_pools(&pool).await, vec![unknown.clone()]);
+    assert_eq!(missing_of_all_pools(&pool).await, vec![unknown]);
+}
+
+/// Against `side.mint IS NOT NULL` dropped from the recent search.
+#[sqlx::test]
+async fn the_null_mints_of_a_recent_unresolved_pool_are_ignored(pool: PgPool) {
+    let (mint_a, mint_b) = (pk(40).to_string(), pk(41).to_string());
+    let at = discovery_window_start() + Duration::minutes(1);
+    insert_pool_discovered_at(&pool, &pk(1).to_string(), None, at).await;
+    insert_pool_discovered_at(&pool, &pk(2).to_string(), Some((&mint_a, &mint_b)), at).await;
+    insert_metadata(&pool, &mint_a).await;
+
+    assert_eq!(missing_of_recent_pools(&pool).await, vec![mint_b]);
 }
 
 async fn insert_pool_state(pool: &PgPool, addr: &str, at: DateTime<Utc>) {

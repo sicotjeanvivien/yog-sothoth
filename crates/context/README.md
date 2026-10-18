@@ -18,9 +18,9 @@ context/src/
 │   └── workers/     ← use cases: MetadataWorker, PriceWorker, PoolAccountWorker,
 │                      one <worker>.rs each, its own modules in <worker>/ —
 │                      metrics, log lines (log.rs, one function per line) and
-│                      tests, and price/tick_outcome.rs: TickOutcome, the ways
-│                      a pricing cycle ends — returning one is what makes a
-│                      silent exit fail to compile
+│                      tests, and a tick_outcome.rs (price/, metadata/):
+│                      TickOutcome, the ways a cycle ends — returning one is
+│                      what makes a silent exit fail to compile
 ├── infra/           ← adapters: HeliusDasClient, JupiterPriceClient,
 │                      SolanaAccountClient (+ provider metrics; jupiter_price/
 │                      log.rs holds the client's log lines; infra.rs holds
@@ -44,9 +44,18 @@ decoded at this boundary and never reaches `core`, which stays free of it.
 ## Three workers, two cadences
 
 - **`MetadataWorker`** — every `CONTEXT_METADATA_POLL_SECS` (default 10 s),
-  queries `TokenMetadataRepository::list_missing_mints` for mints present in
-  `pools` but absent from `token_metadata`, and fetches symbol / name /
-  decimals / logo via Helius DAS.
+  lists the mints absent from `token_metadata` and fetches symbol / name /
+  decimals / logo via Helius DAS. A tick reads only the pools discovered in
+  the last hour (`list_missing_mints_of_recent_pools`, over
+  `MISSING_MINT_DISCOVERY_WINDOW` and `idx_pools_first_seen_at`); the first
+  tick, then one an hour, sweeps every pool (`list_missing_mints_of_all_pools`).
+
+  ⚠️ **Only the sweep sees the mints filled in late.** The `PoolAccountWorker`
+  writes the mints of pools seen without them, whose `first_seen_at` is old;
+  so do mints Helius left unresolved past the hour. Either waits up to an hour.
+  A sweep counts as done once listed: only a failed listing sweeps again at the
+  next tick, a Helius failure waits for the next sweep. Its metrics carry a
+  `scope=recent_pools|all_pools` label.
 - **`PriceWorker`** — every `CONTEXT_PRICE_INTERVAL_SECS` (default 30 s), or
   back to back when a tick outlasts it, lists the candidate mints and asks
   Jupiter Price V3 for current USD prices, inserting them with a single shared

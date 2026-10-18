@@ -99,7 +99,14 @@ impl TokenMetadataRepository for FakeMetadataRepository {
         Ok(())
     }
 
-    async fn list_missing_mints(&self) -> RepositoryResult<Vec<Pubkey>> {
+    async fn list_missing_mints_of_recent_pools(
+        &self,
+        _window: Duration,
+    ) -> RepositoryResult<Vec<Pubkey>> {
+        Ok(vec![])
+    }
+
+    async fn list_missing_mints_of_all_pools(&self) -> RepositoryResult<Vec<Pubkey>> {
         Ok(vec![])
     }
 }

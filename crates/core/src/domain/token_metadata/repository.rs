@@ -10,6 +10,10 @@ use crate::{RepositoryResult, domain::TokenMetadata};
 /// mint worth asking: one quiet on both counts waits for its pools to move.
 pub const PRICE_CANDIDATE_WINDOW: Duration = Duration::hours(24);
 
+/// How recently a pool was discovered for its mints to be looked up at every metadata tick;
+/// older pools wait for the sweep over all of them.
+pub const MISSING_MINT_DISCOVERY_WINDOW: Duration = Duration::hours(1);
+
 /// Enrichment side of token metadata, yog-context's lens.
 #[async_trait]
 pub trait TokenMetadataRepository: Send + Sync {
@@ -20,8 +24,14 @@ pub trait TokenMetadataRepository: Send + Sync {
     /// that the source priced within `window` of the last price written: what the price worker asks.
     async fn list_price_candidates(&self, window: Duration) -> RepositoryResult<Vec<Pubkey>>;
 
-    /// The mints of `pools` without a metadata row: the metadata worker's queue.
-    async fn list_missing_mints(&self) -> RepositoryResult<Vec<Pubkey>>;
+    /// The mints without a metadata row of the pools discovered within `window` of now.
+    async fn list_missing_mints_of_recent_pools(
+        &self,
+        window: Duration,
+    ) -> RepositoryResult<Vec<Pubkey>>;
+
+    /// The mints without a metadata row of every pool. ⚠️ Reads the whole of `pools`.
+    async fn list_missing_mints_of_all_pools(&self) -> RepositoryResult<Vec<Pubkey>>;
 }
 
 /// Metadata reads by mint, the api's lens.

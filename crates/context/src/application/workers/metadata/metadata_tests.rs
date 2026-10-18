@@ -37,14 +37,16 @@ fn fetched(mint: Pubkey, symbol: &str, decimals: u8) -> FetchedMetadata {
 
 #[derive(Default)]
 struct FakeRepository {
-    /// Mints returned by `list_missing_mints` (when no error is set).
+    /// Mints returned by either listing (when no error is set).
     missing: Mutex<Vec<Pubkey>>,
-    /// If `Some`, `list_missing_mints` returns this error once, then `None`.
+    /// If `Some`, the next listing returns this error, then `None`.
     list_missing_error: Mutex<Option<RepositoryError>>,
     /// Mints whose `upsert` must fail (returned in error order).
     upsert_failures: Mutex<Vec<Pubkey>>,
     /// Every `upsert` call recorded in order.
     upserts: Mutex<Vec<TokenMetadata>>,
+    /// Every listing in order: its scope, and the window of a recent one.
+    listings: Mutex<Vec<(Scope, Option<Duration>)>>,
 }
 
 impl FakeRepository {
@@ -66,6 +68,18 @@ impl FakeRepository {
     fn upserts(&self) -> Vec<TokenMetadata> {
         self.upserts.lock().unwrap().clone()
     }
+
+    fn listings(&self) -> Vec<(Scope, Option<Duration>)> {
+        self.listings.lock().unwrap().clone()
+    }
+
+    fn list(&self, scope: Scope, window: Option<Duration>) -> RepositoryResult<Vec<Pubkey>> {
+        self.listings.lock().unwrap().push((scope, window));
+        if let Some(err) = self.list_missing_error.lock().unwrap().take() {
+            return Err(err);
+        }
+        Ok(self.missing.lock().unwrap().clone())
+    }
 }
 
 #[async_trait]
@@ -82,11 +96,15 @@ impl TokenMetadataRepository for FakeRepository {
         Ok(())
     }
 
-    async fn list_missing_mints(&self) -> RepositoryResult<Vec<Pubkey>> {
-        if let Some(err) = self.list_missing_error.lock().unwrap().take() {
-            return Err(err);
-        }
-        Ok(self.missing.lock().unwrap().clone())
+    async fn list_missing_mints_of_recent_pools(
+        &self,
+        window: Duration,
+    ) -> RepositoryResult<Vec<Pubkey>> {
+        self.list(Scope::RecentPools, Some(window))
+    }
+
+    async fn list_missing_mints_of_all_pools(&self) -> RepositoryResult<Vec<Pubkey>> {
+        self.list(Scope::AllPools, None)
     }
 
     async fn list_price_candidates(&self, _window: Duration) -> RepositoryResult<Vec<Pubkey>> {
@@ -135,7 +153,7 @@ async fn no_missing_mints_skips_source_and_upsert() {
     let repository = Arc::new(FakeRepository::with_missing(vec![]));
     let source = Arc::new(FakeSource::with_responses(vec![]));
 
-    let worker = MetadataWorker::new(
+    let mut worker = MetadataWorker::new(
         repository.clone(),
         source.clone(),
         std::time::Duration::from_secs(10),
@@ -160,7 +178,7 @@ async fn enriches_all_mints_in_single_chunk() {
         fetched(mint_c, "CCC", 8),
     ])]));
 
-    let worker = MetadataWorker::new(
+    let mut worker = MetadataWorker::new(
         repository.clone(),
         source.clone(),
         std::time::Duration::from_secs(10),
@@ -211,7 +229,7 @@ async fn upserts_only_what_source_returned() {
         fetched(mint_c, "CCC", 8),
     ])]));
 
-    let worker = MetadataWorker::new(
+    let mut worker = MetadataWorker::new(
         repository.clone(),
         source.clone(),
         std::time::Duration::from_secs(10),
@@ -234,7 +252,7 @@ async fn list_missing_error_skips_cycle_silently() {
 
     let source = Arc::new(FakeSource::with_responses(vec![]));
 
-    let worker = MetadataWorker::new(
+    let mut worker = MetadataWorker::new(
         repository.clone(),
         source.clone(),
         std::time::Duration::from_secs(10),
@@ -255,7 +273,7 @@ async fn source_error_skips_upserts_for_that_chunk() {
         "boom".into(),
     ))]));
 
-    let worker = MetadataWorker::new(
+    let mut worker = MetadataWorker::new(
         repository.clone(),
         source.clone(),
         std::time::Duration::from_secs(10),
@@ -282,7 +300,7 @@ async fn upsert_error_does_not_stop_the_batch() {
         fetched(mint_c, "CCC", 8),
     ])]));
 
-    let worker = MetadataWorker::new(
+    let mut worker = MetadataWorker::new(
         repository.clone(),
         source.clone(),
         std::time::Duration::from_secs(10),
@@ -297,4 +315,52 @@ async fn upsert_error_does_not_stop_the_batch() {
     assert_eq!(upserts[0].mint, mint_a);
     assert_eq!(upserts[1].mint, mint_b);
     assert_eq!(upserts[2].mint, mint_c);
+}
+
+fn idle_worker(repository: Arc<FakeRepository>, source: Arc<FakeSource>) -> MetadataWorker {
+    MetadataWorker::new(repository, source, std::time::Duration::from_secs(10))
+}
+
+const RECENT: (Scope, Option<Duration>) = (Scope::RecentPools, Some(MISSING_MINT_DISCOVERY_WINDOW));
+const SWEEP: (Scope, Option<Duration>) = (Scope::AllPools, None);
+
+/// Against a first tick that reads only the recent pools, a sweep at every tick, or a window
+/// other than `MISSING_MINT_DISCOVERY_WINDOW`.
+#[tokio::test(start_paused = true)]
+async fn the_first_tick_sweeps_every_pool_and_the_next_reads_the_recent_ones() {
+    let repository = Arc::new(FakeRepository::with_missing(vec![]));
+    let mut worker = idle_worker(repository.clone(), Arc::new(FakeSource::default()));
+
+    worker.run_one_cycle().await;
+    worker.run_one_cycle().await;
+
+    assert_eq!(repository.listings(), vec![SWEEP, RECENT]);
+}
+
+/// Against a sweep due before `FULL_SWEEP_INTERVAL` has passed, or not due once it has.
+#[tokio::test(start_paused = true)]
+async fn the_sweep_comes_back_once_the_interval_has_passed() {
+    let repository = Arc::new(FakeRepository::with_missing(vec![]));
+    let mut worker = idle_worker(repository.clone(), Arc::new(FakeSource::default()));
+
+    worker.run_one_cycle().await;
+    tokio::time::advance(FULL_SWEEP_INTERVAL - std::time::Duration::from_secs(1)).await;
+    worker.run_one_cycle().await;
+    tokio::time::advance(std::time::Duration::from_secs(1)).await;
+    worker.run_one_cycle().await;
+
+    assert_eq!(repository.listings(), vec![SWEEP, RECENT, SWEEP]);
+}
+
+/// Against a sweep counted as done before its listing succeeded.
+#[tokio::test(start_paused = true)]
+async fn a_sweep_whose_listing_failed_is_done_again_at_the_next_tick() {
+    let repository = Arc::new(FakeRepository::with_missing(vec![]));
+    repository.fail_list_missing_once(RepositoryError::Integrity("DB down".into()));
+    let mut worker = idle_worker(repository.clone(), Arc::new(FakeSource::default()));
+
+    worker.run_one_cycle().await;
+    worker.run_one_cycle().await;
+
+    assert_eq!(repository.listings(), vec![SWEEP, SWEEP]);
 }

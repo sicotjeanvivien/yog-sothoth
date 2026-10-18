@@ -88,7 +88,33 @@ impl TokenMetadataRepository for PgTokenMetadataRepository {
             .collect()
     }
 
-    async fn list_missing_mints(&self) -> RepositoryResult<Vec<Pubkey>> {
+    async fn list_missing_mints_of_recent_pools(
+        &self,
+        window: Duration,
+    ) -> RepositoryResult<Vec<Pubkey>> {
+        // ⚠️ `IS NOT NULL` is load-bearing: `NOT EXISTS` keeps a NULL mint, which fails the `!`.
+        let mints = sqlx::query_scalar!(
+            r#"
+            SELECT DISTINCT side.mint AS "mint!: String"
+            FROM pools p
+            CROSS JOIN LATERAL (VALUES (p.token_a_mint), (p.token_b_mint)) AS side(mint)
+            WHERE p.first_seen_at >= now() - $1::BIGINT * INTERVAL '1 second'
+              AND side.mint IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM token_metadata tm WHERE tm.mint = side.mint)
+            "#,
+            window.num_seconds(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        mints
+            .into_iter()
+            .map(|mint| convert_string_to_pubkey(mint, "mint"))
+            .collect()
+    }
+
+    async fn list_missing_mints_of_all_pools(&self) -> RepositoryResult<Vec<Pubkey>> {
         // ⚠️ `IS NOT NULL` is load-bearing: `x NOT IN ()` is TRUE even for a NULL x, so on an empty
         // `token_metadata` an unresolved pool's NULL mint would fail the `!` and stall the worker.
         let mints = sqlx::query_scalar!(
