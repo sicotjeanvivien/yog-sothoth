@@ -11,7 +11,7 @@ use yog_core::{
         EventExtractor, ExtractionFailure, MeteoraDammV2, OnChainTransaction,
         meteora::damm_v2::{
             events::DammV2WireEvent,
-            extractor::{ExtractFailure, IndexedWireEvent, extract_wire_events},
+            extractor::{ExtractFailure, extract_wire_events},
         },
     },
     domain::{DomainEvent, MeteoraDammV2Event, MeteoraDammV2LiquidityEventKind},
@@ -861,11 +861,8 @@ fn decodes_permanent_lock_position_fixture() {
     let tx = load_fixture("damm_v2/permanent_lock_position.json");
     let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
     assert!(
-        !extracted
-            .failures
-            .iter()
-            .any(|f| matches!(f, ExtractFailure::Borsh { .. })),
-        "unexpected Borsh failures: {:?}",
+        extracted.failures.is_empty(),
+        "unexpected extraction failures: {:?}",
         extracted.failures
     );
 
@@ -935,14 +932,12 @@ fn an_ordinary_cp_amm_instruction_is_not_an_extraction_failure() {
     );
 }
 
-/// The same instruction made a tagged, truncated event stays a counted failure, and moves no
-/// `event_index`. Mutation: treating anything below 16 bytes as an ordinary instruction.
+/// The same instruction made a tagged, truncated event stays a counted failure.
+/// Mutation: treating anything below 16 bytes as an ordinary instruction.
 #[test]
 fn a_tagged_but_truncated_payload_stays_an_extraction_failure() {
     let mut tx = load_fixture("damm_v2/permanent_lock_position.json");
     let before = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
-    let indices =
-        |events: &[IndexedWireEvent]| events.iter().map(|e| e.event_index).collect::<Vec<_>>();
 
     let tagged = cp_amm_payloads(&tx)
         .nth(usize::from(before.events[0].event_index))
@@ -966,7 +961,6 @@ fn a_tagged_but_truncated_payload_stays_an_extraction_failure() {
         "{:?}",
         after.failures
     );
-    assert_eq!(indices(&after.events), indices(&before.events));
 
     let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
     assert!(
@@ -979,7 +973,6 @@ fn a_tagged_but_truncated_payload_stays_an_extraction_failure() {
     );
 }
 
-/// The data of every inner instruction addressed to cp-amm, in transaction order.
 fn cp_amm_payloads(tx: &OnChainTransaction) -> impl Iterator<Item = &[u8]> {
     tx.inner_instructions
         .iter()

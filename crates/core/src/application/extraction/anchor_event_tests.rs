@@ -33,10 +33,11 @@ fn decodes_event_with_empty_payload() {
 /// Mutation: testing the length before the tag, which makes these a decoding failure.
 #[test]
 fn short_untagged_data_is_not_an_event() {
-    // 8 bytes: an argument-less instruction, a bare discriminator.
+    // 8 bytes: an argument-less instruction, a bare discriminator; 9: one `u8` argument.
     for bytes in [
         vec![1u8, 2, 3],
         vec![0xb4, 0x26, 0x9a, 0x11, 0x85, 0x21, 0xa2, 0xd3],
+        vec![0xb4, 0x26, 0x9a, 0x11, 0x85, 0x21, 0xa2, 0xd3, 1],
     ] {
         let err = decode_anchor_event_cpi(&bytes).unwrap_err();
         assert!(
