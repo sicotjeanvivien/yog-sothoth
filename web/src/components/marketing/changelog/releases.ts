@@ -35,7 +35,7 @@ export const RELEASES: readonly Release[] = [
     version: "v0.1.9",
     date: "2026-10-17",
     summary:
-      "The dashboard drops its pool pages, which timed out in production, ahead of the pages built around protocols and tokens.",
+      "The dashboard drops its pool pages, which timed out in production, ahead of the pages built around protocols and tokens, and the DAMM v2 TVL no longer drops to nothing one hour in two.",
     sections: [
       {
         kind: "fixes",

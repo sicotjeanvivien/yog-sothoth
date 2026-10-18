@@ -1,7 +1,7 @@
 //! `PgTokenMetadataRepository`: `list_missing_mints` feeds yog-context's metadata worker,
 //! `list_price_candidates` its price worker.
 
-use super::helpers::pk;
+use super::helpers::{pk, price_at};
 use chrono::{DateTime, Duration, Utc};
 use sqlx::PgPool;
 
@@ -135,19 +135,10 @@ async fn set_last_event(pool: &PgPool, addr: &str, at: DateTime<Utc>) {
         .unwrap();
 }
 
-async fn insert_last_price(pool: &PgPool, mint: &str, at: DateTime<Utc>) {
-    sqlx::query("INSERT INTO token_last_price (mint, price_usd, fetched_at) VALUES ($1, 1, $2)")
-        .bind(mint)
-        .bind(at)
-        .execute(pool)
-        .await
-        .unwrap();
-}
-
 /// The price worker wrote just now, through a mint without metadata: it anchors the price
 /// window without being a candidate itself.
 async fn prices_written_just_now(pool: &PgPool) {
-    insert_last_price(pool, &pk(99).to_string(), Utc::now()).await;
+    price_at(pool, &pk(99).to_string(), "1", Utc::now()).await;
 }
 
 async fn candidates(pool: &PgPool) -> Vec<String> {
@@ -193,7 +184,7 @@ async fn a_mint_active_within_the_window_without_a_price_is_asked(pool: PgPool) 
 async fn a_quiet_mint_priced_within_the_window_is_asked(pool: PgPool) {
     let since = window_start();
     let (mint_a, _) = known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
-    insert_last_price(&pool, &mint_a, since + Duration::minutes(1)).await;
+    price_at(&pool, &mint_a, "1", since + Duration::minutes(1)).await;
     prices_written_just_now(&pool).await;
 
     assert_eq!(candidates(&pool).await, vec![mint_a]);
@@ -204,7 +195,7 @@ async fn a_quiet_mint_priced_within_the_window_is_asked(pool: PgPool) {
 async fn a_quiet_mint_whose_price_is_older_than_the_window_is_not_asked(pool: PgPool) {
     let since = window_start();
     let (mint_a, _) = known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
-    insert_last_price(&pool, &mint_a, since - Duration::minutes(1)).await;
+    price_at(&pool, &mint_a, "1", since - Duration::minutes(1)).await;
     prices_written_just_now(&pool).await;
 
     let asked = candidates(&pool).await;
@@ -216,7 +207,7 @@ async fn a_quiet_mint_whose_price_is_older_than_the_window_is_not_asked(pool: Pg
 async fn a_mint_out_of_the_window_is_asked_again_after_an_event_on_its_pool(pool: PgPool) {
     let since = window_start();
     let (mint_a, mint_b) = known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
-    insert_last_price(&pool, &mint_a, since - Duration::minutes(1)).await;
+    price_at(&pool, &mint_a, "1", since - Duration::minutes(1)).await;
     prices_written_just_now(&pool).await;
     assert!(candidates(&pool).await.is_empty());
 
@@ -233,15 +224,33 @@ async fn a_mint_out_of_the_window_is_asked_again_after_an_event_on_its_pool(pool
 async fn after_an_outage_the_price_window_counts_back_from_the_last_write(pool: PgPool) {
     let last_write = Utc::now() - Duration::days(3);
     let (fresh_then, stale_then) = known_pair_last_moved_at(&pool, last_write).await;
-    insert_last_price(&pool, &fresh_then, last_write).await;
-    insert_last_price(
+    price_at(&pool, &fresh_then, "1", last_write).await;
+    price_at(
         &pool,
         &stale_then,
+        "1",
         last_write - WINDOW - Duration::minutes(1),
     )
     .await;
 
     assert_eq!(candidates(&pool).await, vec![fresh_then]);
+}
+
+/// Against an anchor not capped at now: one future-dated price would empty the price window.
+#[sqlx::test]
+async fn a_future_dated_price_does_not_move_the_window(pool: PgPool) {
+    let since = window_start();
+    let (mint_a, _) = known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
+    price_at(&pool, &mint_a, "1", Utc::now() - Duration::hours(1)).await;
+    price_at(
+        &pool,
+        &pk(98).to_string(),
+        "1",
+        Utc::now() + Duration::days(2),
+    )
+    .await;
+
+    assert_eq!(candidates(&pool).await, vec![mint_a]);
 }
 
 /// Against the `token_metadata` restriction dropped: a price never exists without its metadata row.

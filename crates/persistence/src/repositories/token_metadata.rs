@@ -66,7 +66,7 @@ impl TokenMetadataRepository for PgTokenMetadataRepository {
             SELECT mint FROM token_metadata
             WHERE mint IN (
                 SELECT mint FROM token_last_price
-                WHERE fetched_at >= (SELECT max(fetched_at) FROM token_last_price)
+                WHERE fetched_at >= (SELECT LEAST(max(fetched_at), now()) FROM token_last_price)
                                     - $1::BIGINT * INTERVAL '1 second'
                 UNION ALL
                 SELECT side.mint

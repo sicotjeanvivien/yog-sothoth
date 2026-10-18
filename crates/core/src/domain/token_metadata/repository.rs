@@ -18,7 +18,6 @@ pub trait TokenMetadataRepository: Send + Sync {
 
     /// The mints with a metadata row that one of their pools moved within `window` of now, or
     /// that the source priced within `window` of the last price written: what the price worker asks.
-    /// ⚠️ Counted from now, the price window would drop every quiet pool after a longer outage.
     async fn list_price_candidates(&self, window: Duration) -> RepositoryResult<Vec<Pubkey>>;
 
     /// The mints of `pools` without a metadata row: the metadata worker's queue.
