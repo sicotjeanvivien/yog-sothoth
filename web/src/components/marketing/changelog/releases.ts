@@ -57,7 +57,7 @@ export const RELEASES: readonly Release[] = [
             technical: true,
           },
           {
-            text: "Two transactions discovering the same new pool at the same moment no longer make one of them fail, or deadlock in the database: the pool is recorded once, and a failure that remains is now counted instead of only logged.",
+            text: "Two transactions discovering the same new pool at the same moment no longer make one of them fail, or deadlock in the database: the pool is recorded on its first event instead of its next one, and a failure that remains is now counted instead of only logged.",
             technical: true,
           },
         ],
