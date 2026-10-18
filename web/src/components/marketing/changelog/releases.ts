@@ -35,7 +35,7 @@ export const RELEASES: readonly Release[] = [
     version: "v0.1.10",
     date: "2026-10-18",
     summary:
-      "The pool registry writes lighter, and the hourly volume and fees no longer re-read every swap of the hour at each refresh.",
+      "The pool registry writes lighter, the hourly volume and fees no longer re-read every swap of the hour at each refresh, and new token names no longer re-read every pool.",
     sections: [
       {
         kind: "fixes",
@@ -46,6 +46,10 @@ export const RELEASES: readonly Release[] = [
           },
           {
             text: "The hourly volume and fees are summed from five-minute slices refreshed every five minutes, instead of re-reading every swap of the open hour every five minutes: that read grew through the hour, up to a minute and a half, close to the two minutes after which the database cancels a query.",
+            technical: true,
+          },
+          {
+            text: "New tokens get their names looking only at the pools discovered in the last hour, instead of re-reading every pool known every ten seconds; every pool is still swept once an hour, for the tokens learned late.",
             technical: true,
           },
         ],

@@ -53,3 +53,5 @@ metrics-util = { workspace = true, features = ["debugging"] }
 # as a normal dependency would let production code build a `SecretKey`
 # without going through `required_secret_key`.
 yog-bootstrap = { path = "../bootstrap", features = ["test-support"] }
+# `start_paused`: lets a test reach the hourly sweep without waiting an hour.
+tokio = { workspace = true, features = ["test-util"] }
