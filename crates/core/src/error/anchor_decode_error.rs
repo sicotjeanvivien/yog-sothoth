@@ -5,7 +5,8 @@ pub enum AnchorDecodeError {
     #[error("invalid base58 in instruction data: {0}")]
     InvalidBase58(String),
 
-    /// Carries the `event_cpi` tag, but too short to hold a discriminator after it.
+    /// Shorter than an instruction discriminator (`min` 8), or tagged but too short to hold an
+    /// event discriminator after the tag (`min` 16).
     #[error("payload too short: expected at least {min} bytes, got {got}")]
     PayloadTooShort { min: usize, got: usize },
 

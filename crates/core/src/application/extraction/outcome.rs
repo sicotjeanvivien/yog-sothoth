@@ -28,7 +28,7 @@ pub struct UnknownEventInfo {
 /// A failed extraction attempt, paired with the reason why.
 #[derive(Debug, Error)]
 pub enum ExtractionFailure {
-    /// Carries the event_cpi tag but does not decode.
+    /// Neither an ordinary instruction nor a decodable event_cpi payload.
     #[error("anchor decoding: {0}")]
     AnchorDecode(String),
 

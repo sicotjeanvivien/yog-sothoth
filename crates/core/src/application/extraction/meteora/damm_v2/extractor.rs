@@ -64,7 +64,7 @@ pub struct UnknownEvent {
 /// A failed extraction attempt and its reason.
 #[derive(Debug, thiserror::Error)]
 pub enum ExtractFailure {
-    /// Carries the event_cpi tag but does not decode.
+    /// Neither an ordinary instruction nor a decodable event_cpi payload.
     #[error("anchor event_cpi decode failed: {source}")]
     AnchorDecode {
         #[source]

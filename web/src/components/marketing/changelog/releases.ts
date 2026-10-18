@@ -61,7 +61,7 @@ export const RELEASES: readonly Release[] = [
             technical: true,
           },
           {
-            text: "An ordinary instruction sent to the DAMM v2 program with few or no arguments is no longer counted as an event the indexer failed to read: nothing was lost, but the failure counter, the one that would show a misread of the stream, was never at zero. A truncated event is still counted.",
+            text: "An ordinary instruction sent to the DAMM v2 program with few or no arguments is no longer counted as an event the indexer failed to read: nothing was lost, but the failure counter, the one that would show a misread of the stream, was never at zero. A truncated event is still counted, and so is data too short to be any instruction.",
             technical: true,
           },
         ],
