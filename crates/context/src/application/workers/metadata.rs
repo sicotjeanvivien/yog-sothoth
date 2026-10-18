@@ -110,7 +110,6 @@ impl MetadataWorker {
         // One call: the source chunks and absorbs partial failures.
         let fetched = match self.source.fetch_metadata(&missing).await {
             Ok(fetched) => fetched,
-            // Hard failures only; partial results do not come here.
             Err(e) => return TickOutcome::SourceFailed(e),
         };
 
