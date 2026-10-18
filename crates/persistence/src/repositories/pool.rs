@@ -30,7 +30,7 @@ fn fee_bps_to_numeric(fee_bps: rust_decimal::Decimal) -> RepositoryResult<sqlx::
 
 #[async_trait]
 impl PoolRepository for PgPoolRepository {
-    /// Keeps the later of the stored and incoming `last_seen_at`, both clamped to `NOW()`.
+    /// Never lowers `last_seen_at`, nor stores it past `NOW()`.
     /// ⚠️ Not `ON CONFLICT … DO UPDATE`: its target arbitrates one of the two unique indexes, and
     /// a concurrent insert fails or deadlocks on the other; untargeted, `DO NOTHING` arbitrates both.
     async fn upsert(&self, pool: &Pool) -> RepositoryResult<()> {

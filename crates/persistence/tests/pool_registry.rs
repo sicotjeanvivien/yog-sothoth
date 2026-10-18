@@ -192,7 +192,7 @@ async fn concurrent_discoveries_of_one_pool_neither_fail_nor_deadlock(
     use tokio::sync::Barrier;
     use yog_core::{RepositoryError, domain::PoolRepository};
 
-    // ⚠️ Fewer racers or rounds, and the old query's deadlock becomes likely instead of certain.
+    // ⚠️ The old query's deadlock needs this many racers and rounds to show up.
     const RACERS: u32 = 40;
     const ROUNDS: u16 = 500;
 

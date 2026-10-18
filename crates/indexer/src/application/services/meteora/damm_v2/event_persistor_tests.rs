@@ -161,7 +161,7 @@ impl MeteoraDammV2ClaimRewardEventRepository for MockClaimReward {
 }
 
 // PoolMaintenance's two repos: `pool:touch` is touch_pool, `pcs:upsert` the current-state projection.
-// The flag makes `upsert` fail, as a concurrent discovery of the same pool can.
+// The flag makes `upsert` fail.
 struct MockPoolRepo(Calls, bool);
 #[async_trait]
 impl PoolRepository for MockPoolRepo {

@@ -29,7 +29,7 @@ impl EventPersistorMetrics {
         );
         describe_counter!(
             POOL_UPSERT_FAILURE,
-            "Pool registry upserts that failed, the event itself persisted (label: event_kind)"
+            "Failed pool registry upserts; the event insert runs regardless"
         );
         describe_counter!(
             INSERT_SKIPPED,
@@ -89,7 +89,7 @@ impl EventPersistorMetrics {
         .increment(1);
     }
 
-    /// Not a `persist_failure`: the event is written, only its `pools` write failed.
+    /// Not a `persist_failure`: the event insert still runs, only the `pools` write failed.
     pub(crate) fn record_pool_upsert_failure(protocol: &Protocol, event_kind: &'static str) {
         counter!(
             POOL_UPSERT_FAILURE,

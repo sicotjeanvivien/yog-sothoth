@@ -384,7 +384,7 @@ the two dispatch points a new protocol touches in this crate, the other being
   attempted.
 - **A failed pool upsert is not a lost event** — `PoolMaintenance::discover_pool`
   logs and counts it (`yog_indexer_pool_upsert_failure_total{event_kind}`), and
-  the event is still inserted; the pool's row waits for its next event.
+  the event insert still runs; the pool's row waits for its next event.
 - **A successful insert that wrote nothing is not a success** — every event
   repository returns `InsertOutcome::{Inserted, Skipped}` rather than `()`, so
   an `ON CONFLICT … DO NOTHING` that matched is warned about and counted
