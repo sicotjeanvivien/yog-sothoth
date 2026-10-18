@@ -3,9 +3,9 @@
 //! A failed tick or row is logged and stepped over: a stopped enrichment would lose token names.
 
 use std::sync::Arc;
-use std::time::Instant;
 
 use chrono::Utc;
+use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
@@ -41,8 +41,8 @@ pub struct MetadataWorker {
     repository: Arc<dyn TokenMetadataRepository>,
     source: Arc<dyn MetadataSource>,
     poll_interval: std::time::Duration,
-    /// When the last sweep the source answered started; `None` sweeps at the first tick.
-    last_full_sweep: Option<tokio::time::Instant>,
+    /// When the last listed sweep started; `None` sweeps at the first tick.
+    last_full_sweep: Option<Instant>,
 }
 
 impl MetadataWorker {
@@ -91,7 +91,6 @@ impl MetadataWorker {
 
     async fn run_one_cycle(&mut self) {
         let start = Instant::now();
-        let started_at = tokio::time::Instant::now();
         let scope = self.scope_due();
         let listed = match scope {
             Scope::RecentPools => {
@@ -117,9 +116,11 @@ impl MetadataWorker {
                 return;
             }
         };
+        if scope == Scope::AllPools {
+            self.last_full_sweep = Some(start);
+        }
         MetadataWorkerMetrics::set_missing_mints(scope.as_label(), missing.len());
         if missing.is_empty() {
-            self.answered(scope, started_at);
             debug!(
                 scope = scope.as_label(),
                 "metadata worker: no missing mints — sleeping"
@@ -158,17 +159,8 @@ impl MetadataWorker {
             }
         };
 
-        self.answered(scope, started_at);
         self.upsert_all(fetched).await;
         MetadataWorkerMetrics::record_tick("ok", scope.as_label(), start.elapsed().as_secs_f64());
-    }
-
-    /// ⚠️ Only once the source answered: a sweep lost to a failure would leave the old pools'
-    /// mints an hour more without metadata.
-    fn answered(&mut self, scope: Scope, started_at: tokio::time::Instant) {
-        if scope == Scope::AllPools {
-            self.last_full_sweep = Some(started_at);
-        }
     }
 
     /// Upsert every fetched row, logging individual failures without aborting the batch.

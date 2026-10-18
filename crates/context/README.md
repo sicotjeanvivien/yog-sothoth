@@ -53,8 +53,8 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   ⚠️ **Only the sweep sees the mints filled in late.** The `PoolAccountWorker`
   writes the mints of pools seen without them, whose `first_seen_at` is old;
   so do mints Helius left unresolved past the hour. Either waits up to an hour.
-  A sweep counts as done once the source answered: a failed listing or a hard
-  Helius error sweeps again at the next tick. Its metrics carry a
+  A sweep counts as done once listed: only a failed listing sweeps again at the
+  next tick, a Helius failure waits for the next sweep. Its metrics carry a
   `scope=recent_pools|all_pools` label.
 - **`PriceWorker`** — every `CONTEXT_PRICE_INTERVAL_SECS` (default 30 s), or
   back to back when a tick outlasts it, lists the candidate mints and asks

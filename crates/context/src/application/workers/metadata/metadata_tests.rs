@@ -37,9 +37,9 @@ fn fetched(mint: Pubkey, symbol: &str, decimals: u8) -> FetchedMetadata {
 
 #[derive(Default)]
 struct FakeRepository {
-    /// Mints returned by `list_missing_mints` (when no error is set).
+    /// Mints returned by either listing (when no error is set).
     missing: Mutex<Vec<Pubkey>>,
-    /// If `Some`, `list_missing_mints` returns this error once, then `None`.
+    /// If `Some`, the next listing returns this error, then `None`.
     list_missing_error: Mutex<Option<RepositoryError>>,
     /// Mints whose `upsert` must fail (returned in error order).
     upsert_failures: Mutex<Vec<Pubkey>>,
@@ -363,21 +363,4 @@ async fn a_sweep_whose_listing_failed_is_done_again_at_the_next_tick() {
     worker.run_one_cycle().await;
 
     assert_eq!(repository.listings(), vec![SWEEP, SWEEP]);
-}
-
-/// Against a sweep counted as done before the source answered.
-#[tokio::test(start_paused = true)]
-async fn a_sweep_the_source_failed_is_done_again_at_the_next_tick() {
-    let repository = Arc::new(FakeRepository::with_missing(vec![pk(1)]));
-    let source = Arc::new(FakeSource::with_responses(vec![
-        Err(SourceError::Http("boom".into())),
-        Ok(vec![fetched(pk(1), "AAA", 6)]),
-    ]));
-    let mut worker = idle_worker(repository.clone(), source);
-
-    worker.run_one_cycle().await;
-    worker.run_one_cycle().await;
-    worker.run_one_cycle().await;
-
-    assert_eq!(repository.listings(), vec![SWEEP, SWEEP, RECENT]);
 }
