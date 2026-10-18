@@ -1,4 +1,4 @@
-//! The four retention policies against the four cagg refresh policies. ⚠️ `drop_chunks`
+//! The retention policies against the cagg refresh policies. ⚠️ `drop_chunks`
 //! logs an invalidation, so a refresh reaching back past the retention recomputes a dropped
 //! range from nothing and deletes its buckets: `start_offset < drop_after`. Asserted in the
 //! catalog, reproduced at the instant the daily retention cuts, and — ☠️ on purpose — shown
@@ -9,11 +9,12 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use sqlx::Row;
 
-/// The four aggregates, by view name. Written out, so a fifth or a lost one fails here.
-const EXPECTED_CAGGS: [&str; 4] = [
+/// The aggregates, by view name. Written out, so a new or a lost one fails here.
+const EXPECTED_CAGGS: [&str; 5] = [
     "meteora_damm_v2_claim_position_fee_events_hourly",
     "meteora_damm_v2_claim_reward_events_hourly",
     "meteora_damm_v2_liquidity_events_hourly",
+    "meteora_damm_v2_swap_events_5min",
     "meteora_damm_v2_swap_events_hourly",
 ];
 

@@ -176,7 +176,7 @@ The values, per raw hypertable:
 
 | raw hypertable | chunk | compressed after | `drop_after` | its aggregate's `start_offset` | set by |
 |---|---|---|---|---|---|
-| `meteora_damm_v2_swap_events` | 1 day | 1 day | **7 days** | **6 days** | `014` |
+| `meteora_damm_v2_swap_events` | 1 day | 1 day | **7 days** | **6 days**, hourly and 5-minute | `014`, `021` |
 | `meteora_damm_v2_liquidity_events`, `…_claim_position_fee_events`, `…_claim_reward_events` | 7 days | 7 days | 30 days | 29 days | `001`, `008` |
 
 ⚠️ `001_baseline.sql:827-837` still declares the swaps at 7 / 7 / 30 days, and
@@ -203,7 +203,7 @@ in seven beyond the 30-day line. On the swaps' 1-day chunks, that would be every
 day.
 
 Both directions are asserted by `tests/cagg_retention.rs`: the rule itself, read
-out of the TimescaleDB catalog for all four pairs, and the behaviour it exists
+out of the TimescaleDB catalog for every pair, and the behaviour it exists
 for. ⚠️ `001_baseline.sql:1664` still carries the reasoning that produced the
 bug — *"start_offset spans the full 30d retention window (raw rows never live
 longer)"* — and forward-only means it cannot be corrected there.

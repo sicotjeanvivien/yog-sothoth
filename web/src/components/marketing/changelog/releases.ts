@@ -34,13 +34,18 @@ export const RELEASES: readonly Release[] = [
   {
     version: "v0.1.10",
     date: "2026-10-18",
-    summary: "The pool registry writes lighter: it drops an index that nothing read anymore.",
+    summary:
+      "The pool registry writes lighter, and the hourly volume and fees no longer re-read every swap of the hour at each refresh.",
     sections: [
       {
         kind: "fixes",
         items: [
           {
             text: "The pool registry drops its index on the last time a pool was seen, 345 MB that no query read since the pool list went away: refreshing that time on every event no longer has to write into every index of the table.",
+            technical: true,
+          },
+          {
+            text: "The hourly volume and fees are summed from five-minute slices kept up to date as swaps arrive, instead of re-reading every swap of the open hour every five minutes: that read grew through the hour, up to a minute and a half, close to the two minutes after which the database cancels a query.",
             technical: true,
           },
         ],

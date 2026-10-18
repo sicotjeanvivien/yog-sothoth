@@ -183,6 +183,10 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
         ],
     ),
     (
+        "meteora_damm_v2_swap_events_5min",
+        &[("yog_analytic", &["SELECT"])],
+    ),
+    (
         "meteora_damm_v2_swap_events_hourly",
         &[("yog_analytic", &["SELECT"]), ("yog_api", &["SELECT"])],
     ),
@@ -281,6 +285,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     (
         "token_metadata",
         &[
+            ("yog_analytic", &["SELECT"]),
             ("yog_api", &["SELECT"]),
             ("yog_context", &["INSERT", "SELECT", "UPDATE"]),
         ],
@@ -288,6 +293,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     (
         "token_prices",
         &[
+            ("yog_analytic", &["SELECT"]),
             ("yog_api", &["SELECT"]),
             ("yog_context", &["INSERT", "SELECT"]),
         ],

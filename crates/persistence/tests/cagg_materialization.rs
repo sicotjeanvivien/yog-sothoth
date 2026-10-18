@@ -84,6 +84,7 @@ async fn every_aggregate_is_reported_and_an_empty_one_has_nothing_pending(pool: 
             "meteora_damm_v2_claim_position_fee_events_hourly",
             "meteora_damm_v2_claim_reward_events_hourly",
             "meteora_damm_v2_liquidity_events_hourly",
+            "meteora_damm_v2_swap_events_5min",
             "meteora_damm_v2_swap_events_hourly",
         ]
     );
@@ -175,7 +176,7 @@ async fn only_yog_signals_may_read_the_backlogs(pool: PgPool) {
         .fetch_one(&mut *conn)
         .await
         .expect("yog_signals must be able to read the backlogs");
-    assert_eq!(rows, 4);
+    assert_eq!(rows, 5);
 
     sqlx::query("SET ROLE yog_api")
         .execute(&mut *conn)
