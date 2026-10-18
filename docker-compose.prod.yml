@@ -75,10 +75,10 @@
 # and without limits the first service to grow gets Postgres killed by the
 # OOM killer. The binaries' limits are about 4x to 8x their measured peaks
 # (September 2026: web 62 MiB under HTTP load, indexer 7.7, context 9.9,
-# api 6.3, signals 4.7, archive 31 with its pg_dump) — except the API's, which
+# api 6.3, archive 31 with its pg_dump) — except the API's, which
 # is sized against its capacity bounds rather than a peak (see below), and
 # yog-analytic's, not yet measured in production. The limits add up to
-# 2640 MiB of a 4 GB machine; the binaries use a fraction of theirs.
+# 2672 MiB of a 4 GB machine; the binaries use a fraction of theirs.
 #
 # Postgres's memory and connection settings are written here, not left to
 # `timescaledb-tune`. The image runs it once, when the volume is created, and
@@ -183,7 +183,7 @@ services:
     # container nobody reads, and the whole point is that someone is told.
     environment:
       SIGNALS_MATERIALIZATION_HEARTBEAT_URL: ${SIGNALS_MATERIALIZATION_HEARTBEAT_URL:?set it in the server's .env}
-    mem_limit: 32m
+    mem_limit: 64m
 
   yog-analytic:
     ports: !reset []

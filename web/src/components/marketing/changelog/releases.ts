@@ -52,6 +52,10 @@ export const RELEASES: readonly Release[] = [
             text: "New tokens get their names looking only at the pools discovered in the last hour, instead of re-reading every pool known every ten seconds; every pool is still swept once an hour, for the tokens learned late.",
             technical: true,
           },
+          {
+            text: "The signal engine gets 64 MB of memory instead of 32: it needed about 40, so it lived on swap, reading back what it had just been made to set aside, and restarted once in an afternoon.",
+            technical: true,
+          },
         ],
       },
     ],
