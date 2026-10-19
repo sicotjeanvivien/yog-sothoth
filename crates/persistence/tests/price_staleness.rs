@@ -1,11 +1,11 @@
 //! A price observation has a validity window, and outside it there is no price: the as-of
 //! bound (one hour) and the latest bound (15 minutes), asserted through the views
-//! themselves. `yog_price_asof` alone reads `token_prices`, and every price reader bounds its age.
+//! themselves. In the schema, `yog_price_asof` alone reads `token_prices`; every price reader bounds its age.
 
-use super::helpers::{catalog_definitions, pk, price_at};
+use super::helpers::{DEPENDENT_OBJECTS_STILL_EXIST, catalog_definitions, pk, price_at, sqlstate};
 use chrono::{DateTime, Duration, DurationRound, Utc};
 use rust_decimal::Decimal;
-use sqlx::{AssertSqlSafe, PgPool};
+use sqlx::{AssertSqlSafe, PgPool, postgres::PgDatabaseError};
 
 /// The pool and its two tokens: A with 6 decimals, B with 9.
 async fn seed_pool(pool: &PgPool) -> (String, String, String) {
@@ -327,7 +327,6 @@ fn policy_breaches(readers: &[(String, String)]) -> Vec<String> {
 async fn every_price_reader_follows_the_policy(pool: PgPool) {
     let readers = price_readers(&pool).await;
 
-    // A reader that stops reading prices may leave this list; one that still reads them may not.
     for known in [AS_OF, "pool_current_tvl", EXEMPT] {
         assert!(
             readers.iter().any(|(name, _)| name == known),
@@ -379,6 +378,29 @@ async fn the_guard_catches_the_lookup_written_out_in_a_view(pool: PgPool) {
                 .to_string()
         ),
         "a bounded copy of the lookup must still be reported: {breaches:?}"
+    );
+}
+
+#[sqlx::test]
+async fn the_lookup_holds_token_prices_as_a_dependency(pool: PgPool) {
+    // Mutation: a string body for `yog_price_asof` — it records no dependency, and the table
+    // drops from under every valued view.
+    let err = sqlx::query("DROP TABLE token_prices")
+        .execute(&pool)
+        .await
+        .expect_err("yog_price_asof depends on token_prices");
+    assert_eq!(sqlstate(&err), DEPENDENT_OBJECTS_STILL_EXIST);
+    let detail = err
+        .as_database_error()
+        .and_then(|e| e.try_downcast_ref::<PgDatabaseError>())
+        .and_then(PgDatabaseError::detail)
+        .unwrap_or_default()
+        .to_owned();
+    assert!(
+        detail.contains(
+            "function yog_price_asof(text,timestamp with time zone) depends on table token_prices"
+        ),
+        "{detail}"
     );
 }
 

@@ -4,17 +4,18 @@
 
 -- ⚠️ Inlined by Postgres only as one SELECT in LANGUAGE sql, neither STRICT nor
 -- SECURITY DEFINER nor with a SET clause; it reads token_prices as the caller.
+-- ⚠️ BEGIN ATOMIC, not a string: token_prices stays a dependency, bound at creation.
+-- ⚠️ Qualified parameters: a column of token_prices would shadow them.
 CREATE FUNCTION yog_price_asof(mint TEXT, at TIMESTAMPTZ)
 RETURNS TABLE (price_usd NUMERIC)
 LANGUAGE sql STABLE PARALLEL SAFE
-AS $$
-    -- ⚠️ Qualified: in a SQL function a column of token_prices would shadow a parameter.
+BEGIN ATOMIC
     SELECT tp.price_usd FROM token_prices tp
     WHERE tp.mint = yog_price_asof.mint
       AND tp.fetched_at <= yog_price_asof.at
       AND tp.fetched_at >= yog_price_asof.at - yog_price_max_age_asof()
-    ORDER BY tp.fetched_at DESC LIMIT 1
-$$;
+    ORDER BY tp.fetched_at DESC LIMIT 1;
+END;
 
 CREATE OR REPLACE FUNCTION meteora_damm_v2_swap_hour_prices(
     bucket      TIMESTAMPTZ,
