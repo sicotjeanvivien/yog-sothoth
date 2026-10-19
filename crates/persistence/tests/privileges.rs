@@ -296,6 +296,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
             ("yog_analytic", &["SELECT"]),
             ("yog_api", &["SELECT"]),
             ("yog_context", &["INSERT", "SELECT"]),
+            ("yog_signals", &["SELECT"]),
         ],
     ),
     ("update_reward_duration_events", &[("yog_api", &["SELECT"])]),

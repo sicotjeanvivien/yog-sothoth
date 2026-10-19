@@ -548,15 +548,15 @@ The DAMM v2 facts sum their hours from the 5-minute tranches of
 10 minutes ago and read in real time past that: a cycle reads about its last
 twenty minutes from the raw rows — more if a refresh runs late — never a whole
 open hour. The tranches are kept 30 days, past the raw 7, so an hour caught up
-after a long outage still reads them. They price as
-`meteora_damm_v2_swap_events_hourly_priced` prices and value with the formulas
-of `swap_parts` (010). The pricing is written a second time in
-`repositories/analytic/meteora_damm_v2_swap_facts.sql`, because the range must
-filter the tranches: through a view grouped by hour it would not reach the
-chunk scans. `tests/analytic_writer.rs` holds the two equal on an open hour and
-a freezing one, half materialised. ⚠️ A swap written into a tranche already
-materialised — it is then more than 10 minutes late — is missing from the facts
-until the next refresh, and for good if its hour freezes in between.
+after a long outage still reads them. They value with the formulas of
+`swap_parts` (010), at the prices of `meteora_damm_v2_swap_hour_prices` (023),
+the function `meteora_damm_v2_swap_events_hourly_priced` calls too. The facts
+cannot read that view: the range must filter the tranches, and through a view
+grouped by hour it would not reach the chunk scans. `tests/analytic_writer.rs`
+holds the facts equal to the view on an open hour and a freezing one, half
+materialised. ⚠️ A swap written into a tranche already materialised — it is
+then more than 10 minutes late — is missing from the facts until the next
+refresh, and for good if its hour freezes in between.
 
 `yog_analytic` reads through explicit grants (015, 021). ⚠️ An aggregate is
 granted as well as any view over it: TimescaleDB checks a continuous aggregate

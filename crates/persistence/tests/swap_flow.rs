@@ -1,7 +1,7 @@
 //! The directional swap flow view and `PgSwapFlowRepository`: each direction valued at the
 //! bucket's trade-time price on its input side, without collapsing them, summed over the window.
 
-use super::helpers::{pk, price_mint_since};
+use super::helpers::{as_role, pk, price_mint_since};
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
@@ -265,4 +265,31 @@ async fn an_empty_direction_is_zero_not_unknown(pool: PgPool) {
         .expect("the B side carries everything and B is priced");
     let close = |got: Decimal, want: i64| (got - Decimal::from(want)).abs() < Decimal::new(1, 4);
     assert!(close(b_to_a, 200), "2.0 B at $100 is $200, got {b_to_a}");
+}
+
+/// Against the grant on `token_prices` lost: the pricing function reads it as the
+/// caller, not as the view's owner, so `yog_signals` needs its own SELECT.
+#[sqlx::test]
+async fn yog_signals_values_the_flow_under_its_own_role(pool: PgPool) {
+    let now = Utc::now();
+    let pool_addr = seed_pool_with_unpriced_a(&pool, 4).await;
+    insert_swap(
+        &pool,
+        &pool_addr,
+        "sig_signals",
+        "b_to_a",
+        0,
+        1_000_000_000,
+        now - Duration::hours(1),
+    )
+    .await;
+
+    let repo = PgSwapFlowRepository::new(as_role(&pool, "yog_signals").await);
+    let flows = repo
+        .directional_volume_since(now - Duration::hours(24))
+        .await
+        .unwrap();
+    let flow = flows.iter().find(|f| f.pool_address == pk(1)).unwrap();
+
+    assert_eq!(flow.volume_b_to_a_usd, Some(Decimal::from(100)));
 }
