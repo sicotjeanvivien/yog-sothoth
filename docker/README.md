@@ -79,21 +79,21 @@ change of the server's `.env`, for instance.
 
 ## The registry
 
-The images are public packages of GHCR, `ghcr.io/sicotjeanvivien/yog-*`: the
-server pulls them without credentials. They hold nothing the public repository
-does not: no `.env` reaches a build (`.dockerignore`), and the one build
-argument, the browser's API URL, is public by nature.
+The images are public packages of GHCR, `ghcr.io/sicotjeanvivien/yog-*`, the
+build cache `yog-buildcache` included: a package pushed by the workflow of this
+public repository is born public, and a public package cannot be made private
+again. The server pulls them without credentials.
 
-Set up once:
+⚠️ Whatever enters a build is published the moment it is pushed. A build sees a
+checkout of the repository, so no `.env` reaches it (`.dockerignore` keeps it
+out of a local build too); no secret is passed to it; and its one build
+argument, the browser's API URL, is public by nature. A secret must never be
+given to a build, as an argument, a variable or a mounted file.
 
-- the repository variable `YOG_API_DOMAIN` (Settings → Secrets and variables
-  → Actions → Variables), e.g. `api.yog-scope.xyz`. The dashboard's API URL
-  is written into its image at build time: changing the domain takes a new
-  version.
-- after the first `images` run, each of the eight packages made **public**
-  (package settings → Change visibility). A package is born private, and the
-  change cannot be undone. `yog-buildcache`, the build cache, stays private:
-  only the workflow reads it.
+Set up once: the repository variable `YOG_API_DOMAIN` (Settings → Secrets and
+variables → Actions → Variables), e.g. `api.yog-scope.xyz`. The dashboard's API
+URL is written into its image at build time: changing the domain takes a new
+version.
 
 ### A new server
 
