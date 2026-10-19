@@ -122,9 +122,9 @@ Filling it is this crate's job, one module per source:
   would miss a burst. They are process-wide because the buffer dies with its
   session. The gRPC listener exports them, at 0 until they rise. The lag peak
   includes a reconnection's replay, which arrives behind a live head, and the
-  slot bound has to hold that too. The payload peak stops one past its bound:
-  `yog_indexer_grpc_untimestamped_transactions_total` says how far a crossing
-  went, and what it cost.
+  slot bound has to hold that too. The payload peak stops one past its bound;
+  `yog_indexer_grpc_untimestamped_transactions_total` says what a crossing
+  cost.
 
 - `infra/endpoint/` is the endpoint's **configuration, verified once at
   start-up**: the two modules below sit together because neither fault they
