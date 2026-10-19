@@ -67,7 +67,6 @@ impl ListSignalsRequest {
     }
 }
 
-/// Validate the `limit` query param against the accepted range.
 fn validate_limit(limit: i64) -> Result<(), ApiError> {
     if !(1..=MAX_LIMIT).contains(&limit) {
         return Err(ApiError::BadRequest(format!(
@@ -77,7 +76,6 @@ fn validate_limit(limit: i64) -> Result<(), ApiError> {
     Ok(())
 }
 
-/// Reject `position` combined with `cursor` (contradictory directives).
 fn validate_cursor_position_exclusive(
     has_cursor: bool,
     has_position: bool,

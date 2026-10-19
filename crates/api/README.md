@@ -77,11 +77,13 @@ with no wildcard arm, so adding a variant breaks the build there.
   `every_schema_is_a_response_or_a_wire_form` fails on a schema of the
   contract named otherwise. On the request side, `*Request` is what a route
   takes once validated, `*Query` the raw query string it parses, `*Param` an
-  enum value of that query.
+  enum of that query, named like the domain type it translates
+  (`domain::Severity` → `SeverityParam`).
 - **Place.** One type per file. At the top level, what a route returns — its
   body, or the item of a page — or takes, its `*Request`. A part lives in its
-  owner's folder, one level deep; its file drops the owner's prefix, its type
-  keeps it (`announcement/kind_response.rs` holds `AnnouncementKindResponse`).
+  owner's folder, one level deep; a response part's file drops the owner's
+  prefix, its type keeps it (`announcement/kind_response.rs` holds
+  `AnnouncementKindResponse`).
   A part several share lives with the one it is about, and the others reach
   it through it: `signal/severity_response.rs`,
   `token/embedded_token_response.rs`. The query of `GET /api/signals` and its
