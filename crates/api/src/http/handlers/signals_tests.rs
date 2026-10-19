@@ -8,7 +8,7 @@ use super::open_signal_stream;
 use crate::application::EnrichedSignal;
 use crate::testing::get;
 
-/// Mutation: the handler extracts a bare `Query`, whose refusal is plain text.
+/// Mutation: the router without its Problem Details layer, axum's refusal left in plain text.
 #[tokio::test]
 async fn a_query_the_api_cannot_parse_is_refused_in_problem_details() {
     for (uri, field, reason) in [

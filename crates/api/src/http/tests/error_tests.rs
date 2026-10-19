@@ -39,17 +39,3 @@ fn a_backend_failure_stays_a_500() {
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     assert!(!response.headers().contains_key(header::RETRY_AFTER));
 }
-
-/// Mutation: every rejection mapped to `BadRequest` — a server-side path rejection would
-/// then tell the client its request was wrong.
-#[test]
-fn a_server_side_rejection_stays_internal() {
-    let err = ApiError::rejected(StatusCode::INTERNAL_SERVER_ERROR, "no path params".into());
-    assert!(matches!(err, ApiError::Internal(m) if m == "no path params"));
-}
-
-#[test]
-fn a_client_rejection_is_a_400_with_its_text() {
-    let err = ApiError::rejected(StatusCode::BAD_REQUEST, "limit: invalid digit".into());
-    assert!(matches!(err, ApiError::BadRequest(m) if m == "limit: invalid digit"));
-}

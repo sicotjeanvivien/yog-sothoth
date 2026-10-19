@@ -1,5 +1,4 @@
 use axum::{
-    extract::rejection::{PathRejection, QueryRejection},
     http::{HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
@@ -16,7 +15,13 @@ pub(crate) enum ApiError {
     NotFound(String),
     Unavailable(&'static str),
     Internal(String),
+    /// What axum answered outside `ApiError` — an extractor's refusal, an unknown route — its
+    /// status kept. A `5xx`'s text is logged, never sent.
+    Framework(StatusCode, String),
 }
+
+/// The only `detail` a `5xx` ever carries.
+const INTERNAL_DETAIL: &str = "internal server error";
 
 /// What `Retry-After` tells a refused client, in seconds: about the time a slot takes to free.
 const RETRY_AFTER_SECS: &str = "5";
@@ -42,8 +47,19 @@ impl IntoResponse for ApiError {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Internal Server Error",
-                    "internal server error".to_string(),
+                    INTERNAL_DETAIL.to_string(),
                 )
+            }
+            ApiError::Framework(status, text) => {
+                let title = status.canonical_reason().unwrap_or("Error");
+                if status.is_server_error() {
+                    error!(%status, error = %text, "framework error");
+                    (status, title, INTERNAL_DETAIL.to_string())
+                } else if text.is_empty() {
+                    (status, title, title.to_string())
+                } else {
+                    (status, title, text)
+                }
             }
         };
 
@@ -88,30 +104,6 @@ impl From<yog_core::RepositoryError> for ApiError {
 
 /// What a client is told when the database ran out of time or connections.
 const TIMEOUT_REASON: &str = "the database is over capacity; retry shortly";
-
-impl From<QueryRejection> for ApiError {
-    fn from(rejection: QueryRejection) -> Self {
-        Self::rejected(rejection.status(), rejection.body_text())
-    }
-}
-
-impl From<PathRejection> for ApiError {
-    fn from(rejection: PathRejection) -> Self {
-        Self::rejected(rejection.status(), rejection.body_text())
-    }
-}
-
-impl ApiError {
-    /// An extractor's refusal, its text as the `detail`. ⚠️ Not all `400`: a path rejection
-    /// can be a routing bug (`500`), which stays internal.
-    fn rejected(status: StatusCode, text: String) -> Self {
-        if status.is_client_error() {
-            ApiError::BadRequest(text)
-        } else {
-            ApiError::Internal(text)
-        }
-    }
-}
 
 #[cfg(test)]
 #[path = "tests/error_tests.rs"]

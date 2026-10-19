@@ -36,7 +36,8 @@ api/src/
 │   ├── tests/contract.rs  ← test-only: the OpenAPI document, as committed in openapi.json
 │   ├── cursor.rs          ← base64/JSON cursor codec
 │   ├── middleware.rs      ← CORS, security headers, request-id tracing,
-│   │                        capacity bounds (middleware/capacity.rs)
+│   │                        capacity bounds (middleware/capacity.rs), every
+│   │                        error as Problem Details (middleware/problem_details.rs)
 │   ├── state.rs           ← AppState — what every handler reads through `State`
 │   └── error.rs           ← ApiError, IntoResponse (RFC 9457, 503 + Retry-After)
 ├── testing.rs             ← test-only: fixtures and repository mocks
@@ -341,11 +342,15 @@ served as `application/problem+json`:
 A parameter absent is not provided; present and empty (`?pool=`), it is an
 invalid value — `400`, like any value that does not parse.
 
-⚠️ A handler extracts its query and path through `WithRejection<Query<_>,
-ApiError>` (`Path` alike): axum's bare extractors refuse in plain text. Behind
-the wrapper, utoipa no longer infers where a parameter lives — a query struct
-says `#[into_params(parameter_in = Query)]`, a path parameter is listed in
-`params(...)`.
+What axum answers on its own — an extractor's refusal, an unknown route (`404`),
+a wrong method (`405`) — is rewritten at the router's edge
+(`middleware/problem_details.rs`): any error response that is not JSON becomes
+Problem Details with its status and headers kept, and a `5xx` keeps only the
+generic `detail`, its text logged. Nothing to do per route.
+
+⚠️ An error body in JSON passes as is: it is the route's own answer (`ApiError`,
+the readiness report of `/readyz`). A route that answers an error in JSON must
+answer it as Problem Details.
 
 ## Cursor wire format
 

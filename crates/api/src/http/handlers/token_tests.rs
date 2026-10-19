@@ -2,8 +2,8 @@ use axum::http::StatusCode;
 
 use crate::testing::get;
 
-/// Mutation: the handler extracts a bare `Path`, whose refusal of a non-UTF-8 segment is
-/// plain text.
+/// Mutation: the router without its Problem Details layer, axum's refusal of a non-UTF-8
+/// segment left in plain text.
 #[tokio::test]
 async fn a_path_the_api_cannot_parse_is_refused_in_problem_details() {
     let (status, content_type, detail) = get("/api/tokens/%FF").await;

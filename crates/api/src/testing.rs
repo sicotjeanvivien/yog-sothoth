@@ -29,11 +29,11 @@ use crate::application::{
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
-use axum::http::{Request, StatusCode, header};
+use axum::http::{HeaderMap, Method, Request, StatusCode, header};
 use tower::ServiceExt;
 
 /// A state for one request through the router: an empty signal feed, no known token, every
-/// other read failing. ⚠️ Its mocks answer once; its database pool never connects.
+/// other read failing. ⚠️ Its mocks answer once; its database pool is refused at once.
 pub(crate) fn app_state() -> AppState {
     let work_slots = WorkSlots::new(1, Duration::from_secs(1));
     AppState {
@@ -64,31 +64,42 @@ pub(crate) fn app_state() -> AppState {
             MockAnnouncementRepo::failing(),
         ))),
         health_checker: Arc::new(PgHealthChecker::new(
-            PgPool::connect_lazy("postgres://unused/unused").expect("a well-formed URL"),
+            PgPool::connect_lazy("postgres://unused@127.0.0.1:1/unused")
+                .expect("a well-formed URL"),
         )),
         shutdown: CancellationToken::new(),
     }
 }
 
-/// `GET uri` through the whole router on [`app_state`]: the status, the content type, and
-/// the `detail` of a Problem Details body (else the body as text).
-pub(crate) async fn get(uri: &str) -> (StatusCode, String, String) {
+/// `method uri` through the whole router on [`app_state`]: the status, the headers, and the
+/// `detail` of a Problem Details body (else the body as text).
+pub(crate) async fn call(method: Method, uri: &str) -> (StatusCode, HeaderMap, String) {
+    let request = Request::builder()
+        .method(method)
+        .uri(uri)
+        .body(Body::empty())
+        .unwrap();
     let response = build_router(app_state(), vec![])
-        .oneshot(Request::get(uri).body(Body::empty()).unwrap())
+        .oneshot(request)
         .await
         .unwrap();
-    let status = response.status();
-    let content_type = response.headers()[header::CONTENT_TYPE]
-        .to_str()
-        .unwrap()
-        .to_string();
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
+    let (parts, body) = response.into_parts();
+    let body = axum::body::to_bytes(body, usize::MAX).await.unwrap();
     let detail = serde_json::from_slice::<serde_json::Value>(&body)
         .ok()
         .and_then(|json| json["detail"].as_str().map(str::to_string))
         .unwrap_or_else(|| String::from_utf8_lossy(&body).into_owned());
+    (parts.status, parts.headers, detail)
+}
+
+/// [`call`] with `GET`, its `Content-Type` read out — empty when there is none.
+pub(crate) async fn get(uri: &str) -> (StatusCode, String, String) {
+    let (status, headers, detail) = call(Method::GET, uri).await;
+    let content_type = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_string();
     (status, content_type, detail)
 }
 

@@ -28,7 +28,12 @@ pub(crate) use middleware::capacity::{
 
 use std::net::SocketAddr;
 
-use axum::{Router, http::HeaderValue, middleware::from_fn_with_state, routing::get};
+use axum::{
+    Router,
+    http::HeaderValue,
+    middleware::{from_fn_with_state, map_response},
+    routing::get,
+};
 use tower_http::{
     request_id::{PropagateRequestIdLayer, SetRequestIdLayer},
     trace::TraceLayer,
@@ -76,6 +81,10 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
         .merge(probes)
         .merge(app)
         .with_state(state)
+        // Wraps the default fallback too: an unknown route is answered here.
+        .layer(map_response(
+            middleware::problem_details::answer_in_problem_details,
+        ))
         // Security headers and CORS apply to everything, probes included.
         .layer(middleware::security_headers_layer())
         .layer(middleware::frame_options_layer())

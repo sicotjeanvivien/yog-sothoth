@@ -14,9 +14,6 @@ pub(super) fn default_limit() -> i64 {
 /// optional exact severity and pool filters. No sort (the feed ordering
 /// is fixed by contract) and no free-text search.
 #[derive(Debug, Deserialize, IntoParams)]
-// ⚠️ Stated, not inferred: behind `WithRejection`, utoipa no longer sees the `Query`
-// extractor and would place these in the path, required.
-#[into_params(parameter_in = Query)]
 pub(crate) struct SignalsQuery {
     pub(super) cursor: Option<String>,
     #[serde(default)]

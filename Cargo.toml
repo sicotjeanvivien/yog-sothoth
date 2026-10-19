@@ -128,7 +128,6 @@ rust_decimal = "1.43"
 
 # Axum
 axum = "0.8.9"
-axum-extra = { version = "0.12.6", default-features = false, features = ["with-rejection"] }
 # ⚠️ No `decimal` feature: without it, a `Decimal` field of a DTO does not
 # compile until its wire form is named (`value_type`), signed or not.
 utoipa = { version = "6.0.0", features = ["axum_extras", "chrono", "non_strict_integers"] }
