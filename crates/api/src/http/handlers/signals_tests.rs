@@ -1,36 +1,12 @@
 use std::sync::Arc;
 
-use axum::body::Body;
-use axum::http::{Request, StatusCode, header};
+use axum::http::{StatusCode, header};
 use tokio::sync::{Semaphore, broadcast};
 use tokio_util::sync::CancellationToken;
-use tower::ServiceExt;
 
 use super::open_signal_stream;
 use crate::application::EnrichedSignal;
-use crate::http::build_router;
-use crate::testing::app_state;
-
-/// The status, content type and `detail` of `GET uri` through the whole router.
-async fn get(uri: &str) -> (StatusCode, String, String) {
-    let response = build_router(app_state(), vec![])
-        .oneshot(Request::get(uri).body(Body::empty()).unwrap())
-        .await
-        .unwrap();
-    let status = response.status();
-    let content_type = response.headers()[header::CONTENT_TYPE]
-        .to_str()
-        .unwrap()
-        .to_string();
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let detail = serde_json::from_slice::<serde_json::Value>(&body)
-        .ok()
-        .and_then(|json| json["detail"].as_str().map(str::to_string))
-        .unwrap_or_else(|| String::from_utf8_lossy(&body).into_owned());
-    (status, content_type, detail)
-}
+use crate::testing::get;
 
 /// Mutation: the handler extracts a bare `Query`, whose refusal is plain text.
 #[tokio::test]

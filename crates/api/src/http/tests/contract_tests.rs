@@ -253,8 +253,7 @@ fn every_schema_is_a_response_or_a_wire_form() {
     );
 }
 
-/// Red when an operation is declared to answer a failure in any other form, such as the
-/// plain text of axum's own extractors.
+/// Red if the finish declares a failure in another form than Problem Details.
 #[test]
 fn every_operation_answers_its_failures_as_problem_details() {
     let doc = document();
@@ -299,11 +298,50 @@ fn every_response_has_a_description() {
 /// than its signature returns and extracts: nothing else ties the two.
 #[test]
 fn every_handler_declares_the_body_and_query_it_has() {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/http/handlers");
+    let routes = handlers();
     let mut drift = Vec::new();
-    let mut checked = 0;
+    for (name, attr, sig) in &routes {
+        let body = between(attr, "body=", ')').unwrap_or_default();
+        let query = between(attr, "params(", ')')
+            .filter(|params| !params.starts_with('('))
+            .unwrap_or_default();
+        let returned = generic_of(sig, "Json<").unwrap_or("String");
+        let extracted = generic_of(sig, "Query<").unwrap_or_default();
+        if body != returned || query != extracted {
+            drift.push(format!(
+                "{name}: body {body} for {returned}, params {query} for {extracted}"
+            ));
+        }
+    }
+    assert_eq!(routes.len(), 7, "one #[utoipa::path] per /api route");
+    assert!(drift.is_empty(), "{drift:?}");
+}
+
+/// Red when a handler extracts a bare `Query` or `Path`: axum refuses those in plain
+/// text, outside the Problem Details the contract declares.
+#[test]
+fn every_handler_extracts_through_with_rejection() {
+    let bare: Vec<String> = handlers()
+        .into_iter()
+        .filter(|(_, _, sig)| {
+            ["Query<", "Path<"].iter().any(|extractor| {
+                sig.match_indices(extractor)
+                    .any(|(at, _)| !sig[..at].ends_with("WithRejection<"))
+            })
+        })
+        .map(|(name, _, _)| name)
+        .collect();
+    assert!(
+        bare.is_empty(),
+        "extract through WithRejection<_, ApiError>: {bare:?}"
+    );
+}
+
+/// Each `#[utoipa::path]` handler: its file, its attribute and its signature, whitespace removed.
+fn handlers() -> Vec<(String, String, String)> {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/http/handlers");
+    let mut found = Vec::new();
     for path in source_files(&dir) {
-        let name = shown(&path);
         let source = fs::read_to_string(&path).expect("readable source file");
         for (at, _) in source.match_indices("#[utoipa::path(") {
             let rest = &source[at..];
@@ -313,22 +351,10 @@ fn every_handler_declares_the_body_and_query_it_has() {
             let fn_at = rest.find("async fn ").expect("the annotated handler");
             let fn_end = fn_at + rest[fn_at..].find('{').expect("a body");
             let sig: String = rest[fn_at..fn_end].split_whitespace().collect();
-            let body = between(&attr, "body=", ')').unwrap_or_default();
-            let query = between(&attr, "params(", ')')
-                .filter(|params| !params.starts_with('('))
-                .unwrap_or_default();
-            let returned = generic_of(&sig, "Json<").unwrap_or("String");
-            let extracted = generic_of(&sig, "Query<").unwrap_or_default();
-            if body != returned || query != extracted {
-                drift.push(format!(
-                    "{name}: body {body} for {returned}, params {query} for {extracted}"
-                ));
-            }
-            checked += 1;
+            found.push((shown(&path), attr, sig));
         }
     }
-    assert_eq!(checked, 7, "one #[utoipa::path] per /api route");
-    assert!(drift.is_empty(), "{drift:?}");
+    found
 }
 
 fn between<'a>(text: &'a str, start: &str, end: char) -> Option<&'a str> {

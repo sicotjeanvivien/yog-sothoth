@@ -27,10 +27,13 @@ use crate::application::{
     AnnouncementService, IngestionService, NetworkService, SignalService, StatsService,
     TokenService, WorkSlots,
 };
-use crate::http::AppState;
+use crate::http::{AppState, build_router};
+use axum::body::Body;
+use axum::http::{Request, StatusCode, header};
+use tower::ServiceExt;
 
-/// A state for driving the router: an empty signal feed, no known token, every other read
-/// failing. Its database pool never connects: `/readyz` answers 503.
+/// A state for one request through the router: an empty signal feed, no known token, every
+/// other read failing. ⚠️ Its mocks answer once; its database pool never connects.
 pub(crate) fn app_state() -> AppState {
     let work_slots = WorkSlots::new(1, Duration::from_secs(1));
     AppState {
@@ -65,6 +68,28 @@ pub(crate) fn app_state() -> AppState {
         )),
         shutdown: CancellationToken::new(),
     }
+}
+
+/// `GET uri` through the whole router on [`app_state`]: the status, the content type, and
+/// the `detail` of a Problem Details body (else the body as text).
+pub(crate) async fn get(uri: &str) -> (StatusCode, String, String) {
+    let response = build_router(app_state(), vec![])
+        .oneshot(Request::get(uri).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    let status = response.status();
+    let content_type = response.headers()[header::CONTENT_TYPE]
+        .to_str()
+        .unwrap()
+        .to_string();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let detail = serde_json::from_slice::<serde_json::Value>(&body)
+        .ok()
+        .and_then(|json| json["detail"].as_str().map(str::to_string))
+        .unwrap_or_else(|| String::from_utf8_lossy(&body).into_owned());
+    (status, content_type, detail)
 }
 
 /// Deterministic pubkey from a single byte, for readable tests.
