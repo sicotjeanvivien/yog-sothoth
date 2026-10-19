@@ -1,13 +1,12 @@
 mod rows;
 
-use crate::repositories::helper::map_sqlx_error;
+use crate::repositories::helper::{convert_decimal_to_bigdecimal, map_sqlx_error};
 use async_trait::async_trait;
 use rows::PoolRow;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
-use std::str::FromStr;
 use yog_core::{
-    RepositoryError, RepositoryResult,
+    RepositoryResult,
     domain::{Pool, PoolCatalog, PoolCounts, PoolRegistryProperties, PoolRepository},
 };
 
@@ -19,13 +18,6 @@ impl PgPoolRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
-}
-
-/// Converts a domain `fee_bps` to the `BigDecimal` NUMERIC binds to, through
-/// its exact decimal string.
-fn fee_bps_to_numeric(fee_bps: rust_decimal::Decimal) -> RepositoryResult<sqlx::types::BigDecimal> {
-    sqlx::types::BigDecimal::from_str(&fee_bps.to_string())
-        .map_err(|e| RepositoryError::Integrity(format!("invalid fee_bps decimal: {e}")))
 }
 
 #[async_trait]
@@ -101,7 +93,7 @@ impl PoolRepository for PgPoolRepository {
         pool_address: &Pubkey,
         core: &PoolRegistryProperties,
     ) -> RepositoryResult<()> {
-        let fee_bps = fee_bps_to_numeric(core.fee_bps)?;
+        let fee_bps = convert_decimal_to_bigdecimal(core.fee_bps, "fee_bps")?;
         sqlx::query!(
             r#"
             UPDATE pools

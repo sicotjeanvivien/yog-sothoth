@@ -34,7 +34,8 @@ export const RELEASES: readonly Release[] = [
   {
     version: "v0.1.11",
     date: "2026-10-19",
-    summary: "Deploying a new version no longer slows the site down.",
+    summary:
+      "Deploying a new version no longer slows the site down, and the price gap signal no longer floods the feed with shallow pools.",
     sections: [
       {
         kind: "fixes",
@@ -42,6 +43,14 @@ export const RELEASES: readonly Release[] = [
           {
             text: "A new version is built on GitHub when it is tagged, and the server only downloads it: it used to compile it itself, for 13 to 41 minutes, while still serving the site and the API, which slowed both down.",
             technical: false,
+          },
+          {
+            text: "The signal comparing a pool's price with the market price only looks at pools holding at least $10,000: below that, a pool's price strays from the market by nature, and those pools made 98% of all signals, about 12,700 a day.",
+            technical: false,
+          },
+          {
+            text: "The signal engine reads fewer pools at each round: the price gap signal only those above its value floor, instead of every pool ever priced, and the swap flow signal only the active pools above its volume floor, plus those it cannot value, to count them. Its memory no longer follows every pool discovered.",
+            technical: true,
           },
         ],
       },

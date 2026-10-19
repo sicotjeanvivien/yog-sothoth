@@ -73,6 +73,15 @@ pub(crate) fn map_sqlx_error(err: SqlxError) -> RepositoryError {
 /// SQLSTATE `57014` (`query_canceled`), what `statement_timeout` raises.
 const QUERY_CANCELED: &str = "57014";
 
+/// Converts a `Decimal` to the `BigDecimal` a `NUMERIC` binds to, through its exact string.
+pub(crate) fn convert_decimal_to_bigdecimal(
+    value: Decimal,
+    field: &str,
+) -> RepositoryResult<BigDecimal> {
+    BigDecimal::from_str(&value.to_string())
+        .map_err(|e| RepositoryError::Integrity(format!("invalid {field} decimal: {e}")))
+}
+
 /// Converts a `u128` for a `NUMERIC(39, 0)` column, lossless.
 pub(crate) fn convert_u128_to_bigdecimal(v: u128, _field: &str) -> BigDecimal {
     BigDecimal::from_str(&v.to_string()).expect("u128 string is always valid BigDecimal")

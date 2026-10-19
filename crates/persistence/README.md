@@ -297,7 +297,11 @@ Two consequences worth knowing before you touch a valuation view:
   policy's boundary rather than an oversight: it publishes no USD figure, only
   raw inputs with their `fetched_at`, and `price_oracle_deviation` gates on them
   in Rust alongside its `max_spot_age` guard. **The policy binds valuation, not
-  comparison.**
+  comparison.** Its reader's TVL floor (migration 024 exposes the reserves) values
+  the pool at the last known prices, whatever their age: through
+  `pool_current_tvl`, a stale price would drop the pool before the detector
+  counts it `stale`. Both value a reserve through `yog_amount_usd` (024): they
+  share the arithmetic, not the prices.
 
 `price_staleness.rs` enumerates the views reading `token_prices` or
 `token_last_price` from `pg_views` and fails on any whose **bound count differs

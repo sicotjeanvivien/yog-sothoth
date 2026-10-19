@@ -28,6 +28,8 @@ pub struct PriceOracleDeviationSettings {
     pub max_price_age: ChronoDuration,
     /// Oldest acceptable last swap: a pool quiet for longer is skipped.
     pub max_spot_age: ChronoDuration,
+    /// TVL at the last known prices below which a pool is not read at all.
+    pub min_tvl_usd: Decimal,
     /// `|deviation|` at or above which a signal is emitted.
     pub threshold: Decimal,
     /// `|deviation|` at or above which the signal escalates to Critical; above `threshold`, by config.
@@ -91,7 +93,7 @@ impl SignalDetector for PriceOracleDeviationDetector {
     }
 
     async fn evaluate(&self, ctx: &EvalContext) -> Result<Vec<Signal>, DetectorError> {
-        let snapshots = self.snapshot_repo.latest().await?;
+        let snapshots = self.snapshot_repo.latest(self.settings.min_tvl_usd).await?;
         DetectorMetrics::record_considered(self.name(), snapshots.len());
 
         let price_cutoff = ctx.evaluated_at - self.settings.max_price_age;

@@ -5,10 +5,11 @@
 
 mod rows;
 
-use crate::repositories::helper::map_sqlx_error;
+use crate::repositories::helper::{convert_decimal_to_bigdecimal, map_sqlx_error};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use rows::PoolSwapFlowRow;
+use rust_decimal::Decimal;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
@@ -30,7 +31,9 @@ impl SwapFlowRepository for PgSwapFlowRepository {
     async fn directional_volume_since(
         &self,
         since: DateTime<Utc>,
+        min_volume_usd: Decimal,
     ) -> RepositoryResult<Vec<PoolSwapFlow>> {
+        let min_volume_usd = convert_decimal_to_bigdecimal(min_volume_usd, "min_volume_usd")?;
         // ⚠️ No COALESCE: one unpriced side read as 0 gives `flow_imbalance` a −1.0. And `bool_and`
         // too: `SUM` skips NULLs, so a partly priced window would publish a sub-total as a total.
         let rows = sqlx::query_as!(
@@ -45,8 +48,11 @@ impl SwapFlowRepository for PgSwapFlowRepository {
             FROM meteora_damm_v2_pool_hourly_flow
             WHERE bucket > $1
             GROUP BY pool_address
+            HAVING NOT bool_and(valuation_complete)
+                OR SUM(volume_a_to_b_usd) + SUM(volume_b_to_a_usd) >= $2
             "#,
             since,
+            min_volume_usd,
         )
         .fetch_all(&self.pool)
         .await

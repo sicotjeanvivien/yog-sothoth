@@ -1,5 +1,7 @@
-//! Unit tests for the flow-imbalance math, threshold and volume floor.
+//! Unit tests for the flow-imbalance math and threshold, and the volume floor handed to the read.
 //! DB-free: a hand-written mock `SwapFlowRepository` feeds fixed flows.
+
+use std::sync::Mutex;
 
 use super::*;
 use chrono::Utc;
@@ -15,16 +17,30 @@ fn usd(v: i64) -> Decimal {
     Decimal::from(v)
 }
 
-/// Mock returning a fixed set of flows, ignoring `since`.
-struct MockFlowRepo(Vec<PoolSwapFlow>);
+/// Mock returning a fixed set of flows, ignoring `since` and recording the floor it was asked for.
+struct MockFlowRepo {
+    flows: Vec<PoolSwapFlow>,
+    floors: Mutex<Vec<Decimal>>,
+}
+
+impl MockFlowRepo {
+    fn new(flows: Vec<PoolSwapFlow>) -> Arc<Self> {
+        Arc::new(Self {
+            flows,
+            floors: Mutex::new(Vec::new()),
+        })
+    }
+}
 
 #[async_trait]
 impl SwapFlowRepository for MockFlowRepo {
     async fn directional_volume_since(
         &self,
         _since: chrono::DateTime<Utc>,
+        min_volume_usd: Decimal,
     ) -> RepositoryResult<Vec<PoolSwapFlow>> {
-        Ok(self.0.clone())
+        self.floors.lock().unwrap().push(min_volume_usd);
+        Ok(self.flows.clone())
     }
 }
 
@@ -45,20 +61,24 @@ fn unvaluable_flow(seed: u8) -> PoolSwapFlow {
     }
 }
 
-/// Build a detector over the mock; the cooldown is engine-level and does not affect `evaluate`.
-fn detector(flows: Vec<PoolSwapFlow>) -> FlowImbalanceDetector {
+/// Build a detector over `repo`; the cooldown is engine-level and does not affect `evaluate`.
+fn detector_with_floor(repo: Arc<MockFlowRepo>, min_volume_usd: Decimal) -> FlowImbalanceDetector {
     FlowImbalanceDetector::new(
-        Arc::new(MockFlowRepo(flows)),
+        repo,
         Protocol::MeteoraDammV2,
         FlowImbalanceSettings {
             window: ChronoDuration::hours(24),
             interval: Duration::from_secs(300),
             cooldown: Duration::from_secs(6 * 3600),
-            min_volume_usd: usd(1000),
+            min_volume_usd,
             threshold: Decimal::new(3, 1), // 0.3
             critical: Decimal::new(9, 1),  // 0.9
         },
     )
+}
+
+fn detector(flows: Vec<PoolSwapFlow>) -> FlowImbalanceDetector {
+    detector_with_floor(MockFlowRepo::new(flows), usd(1000))
 }
 
 async fn run(det: &FlowImbalanceDetector) -> Vec<Signal> {
@@ -102,10 +122,18 @@ async fn one_sided_flow_is_critical_with_imbalance_one() {
 }
 
 #[tokio::test]
-async fn below_volume_floor_is_skipped_even_if_lopsided() {
-    // Total $100 < $1000 floor, despite a perfect one-sided flow.
-    let signals = run(&detector(vec![flow(1, 100, 0)])).await;
-    assert!(signals.is_empty());
+async fn the_configured_volume_floor_is_handed_to_the_read() {
+    // Mutation: the read handed a constant instead of `min_volume_usd`.
+    let repo = MockFlowRepo::new(Vec::new());
+    run(&detector_with_floor(Arc::clone(&repo), usd(1234))).await;
+    assert_eq!(*repo.floors.lock().unwrap(), vec![usd(1234)]);
+}
+
+#[tokio::test]
+async fn a_zero_total_under_a_zero_floor_emits_nothing() {
+    // Mutation: the `total.is_zero()` guard removed — `Decimal` division by zero panics.
+    let det = detector_with_floor(MockFlowRepo::new(vec![flow(1, 0, 0)]), Decimal::ZERO);
+    assert!(run(&det).await.is_empty());
 }
 
 #[tokio::test]
@@ -121,7 +149,6 @@ async fn mixed_batch_emits_only_qualifying_pools() {
         flow(1, 5000, 5000), // balanced → no
         flow(2, 9000, 1000), // 0.8 → Warning
         flow(3, 10_000, 0),  // 1.0 → Critical
-        flow(4, 50, 0),      // below floor → no
     ]))
     .await;
     assert_eq!(signals.len(), 2);
@@ -198,30 +225,5 @@ fn an_unvaluable_pool_is_counted_not_just_silently_dropped() {
         Some(2),
         "two of them could not be valued, and the metric has to say so — \
          'no signal' and 'cannot see' must not read alike on a dashboard"
-    );
-}
-
-#[test]
-fn a_pool_below_the_volume_floor_is_not_counted_as_a_skip() {
-    // Below the floor is evaluated and judged immaterial, not unseen: counted as a skip, it would
-    // make a coverage alert fire on a quiet market.
-    let snapshot = snapshot_one_evaluation(detector(vec![flow(1, 50, 0)]));
-
-    assert_eq!(
-        counter(
-            &snapshot,
-            "yog_signals_considered_total",
-            &[("detector", "flow_imbalance")]
-        ),
-        Some(1)
-    );
-    assert_eq!(
-        counter(
-            &snapshot,
-            "yog_signals_skipped_total",
-            &[("detector", "flow_imbalance"), ("reason", "unpriced")]
-        ),
-        None,
-        "a pool below the volume floor was seen, not missed"
     );
 }

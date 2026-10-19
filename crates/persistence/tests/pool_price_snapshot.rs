@@ -40,16 +40,19 @@ async fn insert_current_state(
     pool_addr: &str,
     sqrt_price: Option<&str>,
     swap_at: Option<DateTime<Utc>>,
+    (reserve_a, reserve_b): (i64, i64),
 ) {
     sqlx::query(
         "INSERT INTO pool_current_state
            (pool_address, protocol, last_event_at, last_event_kind, last_signature,
             reserve_a, reserve_b, last_sqrt_price, last_swap_at, last_slot, last_event_index)
-         VALUES ($1,'meteora_damm_v2',NOW(),'swap','sig',0,0,$2::NUMERIC,$3,1,0)",
+         VALUES ($1,'meteora_damm_v2',NOW(),'swap','sig',$4,$5,$2::NUMERIC,$3,1,0)",
     )
     .bind(pool_addr)
     .bind(sqrt_price)
     .bind(swap_at)
+    .bind(reserve_a)
+    .bind(reserve_b)
     .execute(pool)
     .await
     .unwrap();
@@ -68,6 +71,7 @@ async fn seed_swapped_pool(pool: &PgPool, swap_at: DateTime<Utc>) -> (String, St
         &pool_addr,
         Some("18446744073709551616"),
         Some(swap_at),
+        (0, 0),
     )
     .await;
     (mint_a, mint_b)
@@ -86,7 +90,7 @@ async fn snapshot_joins_state_decimals_and_latest_prices(pool: PgPool) {
     price_at(&pool, &mint_b, "100.0", now - Duration::minutes(2)).await;
 
     let repo = PgPoolPriceSnapshotRepository::new(pool.clone());
-    let snapshots = repo.latest().await.unwrap();
+    let snapshots = repo.latest(Decimal::ZERO).await.unwrap();
 
     assert_eq!(snapshots.len(), 1);
     let snap = &snapshots[0];
@@ -113,7 +117,7 @@ async fn a_stale_price_is_still_published(pool: PgPool) {
     price_at(&pool, &mint_b, "80.0", fetched_at).await;
 
     let snapshots = PgPoolPriceSnapshotRepository::new(pool.clone())
-        .latest()
+        .latest(Decimal::ZERO)
         .await
         .unwrap();
 
@@ -139,7 +143,7 @@ async fn incomparable_pools_are_absent(pool: PgPool) {
     insert_metadata(&pool, &mint_b1, 6, now).await;
     price_at(&pool, &mint_a1, "1.0", now).await;
     price_at(&pool, &mint_b1, "1.0", now).await;
-    insert_current_state(&pool, &no_swap, None, None).await;
+    insert_current_state(&pool, &no_swap, None, None, (0, 0)).await;
 
     // Pool 2: complete except token B has no price observation.
     let unpriced = pk(4).to_string();
@@ -148,8 +152,63 @@ async fn incomparable_pools_are_absent(pool: PgPool) {
     insert_metadata(&pool, &mint_a2, 6, now).await;
     insert_metadata(&pool, &mint_b2, 6, now).await;
     price_at(&pool, &mint_a2, "1.0", now).await;
-    insert_current_state(&pool, &unpriced, Some("18446744073709551616"), Some(now)).await;
+    insert_current_state(
+        &pool,
+        &unpriced,
+        Some("18446744073709551616"),
+        Some(now),
+        (0, 0),
+    )
+    .await;
 
     let repo = PgPoolPriceSnapshotRepository::new(pool.clone());
-    assert!(repo.latest().await.unwrap().is_empty());
+    assert!(repo.latest(Decimal::ZERO).await.unwrap().is_empty());
+}
+
+#[sqlx::test]
+async fn only_pools_deep_enough_at_their_last_prices_are_read(pool: PgPool) {
+    // Mutations: `>` for `>=` drops the pool at the floor; the floor read from `pool_current_tvl`
+    // drops the deep pool, whose TVL goes NULL there on its 2-hour-old prices.
+    let now = Utc::now().trunc_subsecs(6);
+    let (mint_a, mint_b) = (pk(2).to_string(), pk(3).to_string());
+    let (stale_a, stale_b) = (pk(6).to_string(), pk(7).to_string());
+    for (mint, decimals) in [(&mint_a, 6), (&mint_b, 9), (&stale_a, 6), (&stale_b, 6)] {
+        insert_metadata(&pool, mint, decimals, now).await;
+    }
+    price_at(&pool, &mint_b, "100.0", now - Duration::minutes(1)).await;
+    price_at(&pool, &mint_a, "2.0", now - Duration::minutes(1)).await;
+    price_at(&pool, &stale_a, "1.0", now - Duration::hours(2)).await;
+    price_at(&pool, &stale_b, "1.0", now - Duration::hours(2)).await;
+
+    // B at $100 and 9 decimals: 100 B is exactly the $10 000 floor.
+    for (seed, a, b, reserves) in [
+        (1, &mint_a, &mint_b, (0, 99_999_999_999)),
+        (4, &mint_a, &mint_b, (0, 100_000_000_000)),
+        (5, &stale_a, &stale_b, (1_000_000_000_000, 0)),
+    ] {
+        let pool_addr = pk(seed).to_string();
+        insert_pool(&pool, &pool_addr, a, b).await;
+        insert_current_state(
+            &pool,
+            &pool_addr,
+            Some("18446744073709551616"),
+            Some(now),
+            reserves,
+        )
+        .await;
+    }
+
+    let snapshots = PgPoolPriceSnapshotRepository::new(pool.clone())
+        .latest(Decimal::from(10_000))
+        .await
+        .unwrap();
+    let mut read: Vec<_> = snapshots.iter().map(|s| s.pool_address).collect();
+    read.sort();
+
+    assert_eq!(
+        read,
+        vec![pk(4), pk(5)],
+        "$9 999.99 is under the floor, $10 000 is on it, and a $1M pool stays \
+         whatever its prices' age — the detector counts it `stale`"
+    );
 }

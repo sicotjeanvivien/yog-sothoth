@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                pool_address       AS \"pool_address!\",\n                protocol           AS \"protocol!\",\n                last_sqrt_price    AS \"last_sqrt_price!\",\n                last_swap_at       AS \"last_swap_at!\",\n                decimals_a         AS \"decimals_a!\",\n                decimals_b         AS \"decimals_b!\",\n                price_a_usd        AS \"price_a_usd!\",\n                price_a_fetched_at AS \"price_a_fetched_at!\",\n                price_b_usd        AS \"price_b_usd!\",\n                price_b_fetched_at AS \"price_b_fetched_at!\"\n            FROM pool_price_snapshot\n            ",
+  "query": "\n            SELECT\n                pool_address       AS \"pool_address!\",\n                protocol           AS \"protocol!\",\n                last_sqrt_price    AS \"last_sqrt_price!\",\n                last_swap_at       AS \"last_swap_at!\",\n                decimals_a         AS \"decimals_a!\",\n                decimals_b         AS \"decimals_b!\",\n                price_a_usd        AS \"price_a_usd!\",\n                price_a_fetched_at AS \"price_a_fetched_at!\",\n                price_b_usd        AS \"price_b_usd!\",\n                price_b_fetched_at AS \"price_b_fetched_at!\"\n            FROM pool_price_snapshot\n            WHERE yog_amount_usd(reserve_a, decimals_a, price_a_usd)\n                + yog_amount_usd(reserve_b, decimals_b, price_b_usd) >= $1\n            ",
   "describe": {
     "columns": [
       {
@@ -115,7 +115,9 @@
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Numeric"
+      ]
     },
     "nullable": [
       true,
@@ -130,5 +132,5 @@
       true
     ]
   },
-  "hash": "f691d6d27b19125bf4e59b56a90edb251832272e977923e0dfeaaa8c17031bfa"
+  "hash": "95a6497c5ea6efbdedda33db9947027b5989b414d34966db21d07b3221a0a6d1"
 }
