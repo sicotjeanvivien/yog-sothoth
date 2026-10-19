@@ -1,5 +1,3 @@
--- ⚠️ The pricing is `meteora_damm_v2_swap_events_hourly_priced`'s (007), copied:
--- a migration that changes one changes the other.
 WITH hours AS (
     SELECT time_bucket('1 hour', s.bucket) AS bucket,
            s.pool_address,
@@ -23,48 +21,17 @@ priced AS (
     SELECT h.*,
            tma.decimals AS dec_a,
            tmb.decimals AS dec_b,
-           e.eff_price_a,
-           e.eff_price_b,
-           NOT (
-               (COALESCE(h.volume_in_a, 0) + COALESCE(h.fee_in_a, 0) > 0
-                   AND (e.eff_price_a IS NULL OR tma.decimals IS NULL))
-               OR
-               (COALESCE(h.volume_in_b, 0) + COALESCE(h.fee_in_b, 0) > 0
-                   AND (e.eff_price_b IS NULL OR tmb.decimals IS NULL))
-           ) AS valuation_complete
+           f.eff_price_a,
+           f.eff_price_b,
+           f.valuation_complete
       FROM hours h
       LEFT JOIN pools p ON p.pool_address = h.pool_address
       LEFT JOIN token_metadata tma ON tma.mint = p.token_a_mint::TEXT
       LEFT JOIN token_metadata tmb ON tmb.mint = p.token_b_mint::TEXT
-      LEFT JOIN LATERAL (
-          SELECT price_usd FROM token_prices
-          WHERE mint = p.token_a_mint::TEXT AND fetched_at <= h.bucket
-            AND fetched_at >= h.bucket - yog_price_max_age_asof()
-          ORDER BY fetched_at DESC LIMIT 1
-      ) pa ON true
-      LEFT JOIN LATERAL (
-          SELECT price_usd FROM token_prices
-          WHERE mint = p.token_b_mint::TEXT AND fetched_at <= h.bucket
-            AND fetched_at >= h.bucket - yog_price_max_age_asof()
-          ORDER BY fetched_at DESC LIMIT 1
-      ) pb ON true
-      CROSS JOIN LATERAL (
-          SELECT NULLIF(pa.price_usd, 0) AS obs_a,
-                 NULLIF(pb.price_usd, 0) AS obs_b
-      ) o
-      CROSS JOIN LATERAL (
-          SELECT
-              ((NULLIF(h.traded_b, 0)::NUMERIC / POWER(10::NUMERIC, tmb.decimals)) * o.obs_b)
-                  / NULLIF(h.traded_a::NUMERIC / POWER(10::NUMERIC, tma.decimals), 0)
-                  AS implied_a,
-              ((NULLIF(h.traded_a, 0)::NUMERIC / POWER(10::NUMERIC, tma.decimals)) * o.obs_a)
-                  / NULLIF(h.traded_b::NUMERIC / POWER(10::NUMERIC, tmb.decimals), 0)
-                  AS implied_b
-      ) i
-      CROSS JOIN LATERAL (
-          SELECT COALESCE(o.obs_a, i.implied_a) AS eff_price_a,
-                 COALESCE(o.obs_b, i.implied_b) AS eff_price_b
-      ) e
+      CROSS JOIN LATERAL meteora_damm_v2_swap_hour_prices(
+          h.bucket, p.token_a_mint::TEXT, p.token_b_mint::TEXT, tma.decimals, tmb.decimals,
+          h.volume_in_a, h.volume_in_b, h.fee_in_a, h.fee_in_b, h.traded_a, h.traded_b
+      ) f
 )
 INSERT INTO analytic_pool_hourly (
     pool_address, bucket, protocol, swap_count, valued,

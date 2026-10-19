@@ -228,7 +228,8 @@ async fn facts_and_aggregate_equal_the_activity_view_on_closed_hours(pool: PgPoo
 }
 
 /// Against a 5-minute tranche lost (the last of an hour), a sum dropped from
-/// the rollup, or the raw swaps past the watermark left out.
+/// the rollup, the raw swaps past the watermark left out, or the implied price
+/// dropped from the pricing both read.
 #[sqlx::test]
 async fn facts_summed_from_the_tranches_equal_the_hourly_view(pool: PgPool) {
     let open = hours_before(now(), 3);
@@ -287,7 +288,12 @@ async fn facts_summed_from_the_tranches_equal_the_hourly_view(pool: PgPool) {
     let mut counts: Vec<i64> = view.iter().map(|h| h.2).collect();
     counts.sort();
     assert_eq!(counts, [2, 2, 6, 6], "{view:?}");
-    assert_eq!(fact_pool_hours(&pool, open).await, view);
+    let facts = fact_pool_hours(&pool, open).await;
+    assert!(
+        facts.iter().all(|h| h.3.is_some() == (h.0 == implied)),
+        "the implied price values its pool's facts, and only those: {facts:?}"
+    );
+    assert_eq!(facts, view);
 }
 
 /// ☠️ Pins the loss the READMEs warn about: a late swap in a tranche already

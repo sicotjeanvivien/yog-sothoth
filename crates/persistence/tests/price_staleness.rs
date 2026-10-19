@@ -269,10 +269,12 @@ fn unbounded_lookups(definition: &str) -> Option<(usize, usize)> {
     (lookups == 0 || bounds != lookups).then_some((bounds, lookups))
 }
 
-/// Every relation in `public` that reads `token_prices` or `token_last_price`.
+/// Every view, aggregate or function in `public` reading `token_prices` or `token_last_price`.
 ///
-/// ⚠️ `pg_matviews` too: a continuous aggregate escapes a `pg_views`-only guard.
-async fn price_reading_views(pool: &PgPool) -> Vec<(String, String)> {
+/// ⚠️ `pg_matviews` and `pg_proc` too: a price read moved there escapes a `pg_views` guard.
+async fn price_readers(pool: &PgPool) -> Vec<(String, String)> {
+    // ⚠️ `pg_get_functiondef`, not `prosrc`: a `BEGIN ATOMIC` body leaves `prosrc` empty.
+    // It raises on an aggregate, hence `prokind`.
     sqlx::query_as(
         "SELECT viewname, definition FROM pg_views
          WHERE schemaname = 'public'
@@ -281,6 +283,10 @@ async fn price_reading_views(pool: &PgPool) -> Vec<(String, String)> {
          SELECT matviewname, definition FROM pg_matviews
          WHERE schemaname = 'public'
            AND (definition LIKE '%token_prices%' OR definition LIKE '%token_last_price%')
+         UNION ALL
+         SELECT proname, def FROM pg_proc, pg_get_functiondef(oid) AS def
+         WHERE pronamespace = 'public'::regnamespace AND prokind <> 'a'
+           AND (def LIKE '%token_prices%' OR def LIKE '%token_last_price%')
          ORDER BY 1",
     )
     .fetch_all(pool)
@@ -290,14 +296,14 @@ async fn price_reading_views(pool: &PgPool) -> Vec<(String, String)> {
 
 #[sqlx::test]
 async fn every_view_reading_a_price_bounds_its_age(pool: PgPool) {
-    let views = price_reading_views(&pool).await;
+    let views = price_readers(&pool).await;
 
     // A view that stops reading prices may leave this list; one that still reads them may not.
     assert!(
         views.len() >= 6,
-        "expected the six known price-reading views, found {} — if a view was \
-         removed, update this test deliberately rather than letting the guard \
-         quietly cover less",
+        "expected the six known price readers (views and functions), found {} — \
+         if one was removed, update this test deliberately rather than letting \
+         the guard quietly cover less",
         views.len()
     );
 
@@ -318,8 +324,8 @@ async fn every_view_reading_a_price_bounds_its_age(pool: PgPool) {
 
     assert!(
         unbounded.is_empty(),
-        "these views read prices without applying the staleness policy to \
-         every lookup: {unbounded:?}. Add `fetched_at >= <reference> - \
+        "these price readers do not apply the staleness policy to every \
+         lookup: {unbounded:?}. Add `fetched_at >= <reference> - \
          yog_price_max_age_asof()` (or the _latest() variant for a current-price \
          lookup) — the rule used to live at one site out of seventeen, which is \
          how it got lost"
@@ -338,7 +344,7 @@ async fn the_guard_catches_a_price_read_that_is_not_a_lateral(pool: PgPool) {
     .await
     .unwrap();
 
-    let views = price_reading_views(&pool).await;
+    let views = price_readers(&pool).await;
     let (_, definition) = views
         .iter()
         .find(|(name, _)| name == "_guard_probe_plain_join")

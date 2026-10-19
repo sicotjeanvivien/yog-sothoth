@@ -631,3 +631,21 @@ async fn a_zero_price_yields_to_the_implied_rate_instead_of_winning(pool: PgPool
         "expected the full $270; $180 would mean the A leg was valued at zero"
     );
 }
+
+/// Against the pricing function no longer inlined (`STRICT`, a `SET`, plpgsql…): Postgres
+/// would then call it once per hour, outside the plan of the view and of the facts.
+#[sqlx::test]
+async fn the_hour_pricing_is_inlined_into_the_view(pool: PgPool) {
+    let plan: Vec<String> =
+        sqlx::query_scalar("EXPLAIN SELECT * FROM meteora_damm_v2_swap_events_hourly_priced")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    let plan = plan.join("\n");
+
+    assert!(
+        plan.contains("fetched_at"),
+        "no price lookup in the plan: {plan}"
+    );
+    assert!(!plan.contains("Function Scan"), "{plan}");
+}
