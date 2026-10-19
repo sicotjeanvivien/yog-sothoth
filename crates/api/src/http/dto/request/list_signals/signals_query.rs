@@ -15,6 +15,7 @@ pub(super) fn default_limit() -> i64 {
 /// is fixed by contract) and no free-text search.
 #[derive(Debug, Deserialize, IntoParams)]
 pub(crate) struct SignalsQuery {
+    #[param(min_length = 1)]
     pub(super) cursor: Option<String>,
     #[serde(default)]
     #[param(inline)]
@@ -23,6 +24,7 @@ pub(crate) struct SignalsQuery {
     pub(super) position: Option<PagePositionParam>,
     #[param(inline)]
     pub(super) severity: Option<SeverityParam>,
+    #[param(min_length = 1)]
     pub(super) pool: Option<String>,
     #[serde(default = "default_limit")]
     #[param(value_type = u8, minimum = 1, maximum = 200)]

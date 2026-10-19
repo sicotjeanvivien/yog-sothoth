@@ -6,7 +6,11 @@ use async_trait::async_trait;
 use chrono::{DateTime, TimeZone, Utc};
 use solana_pubkey::Pubkey;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tokio::sync::{Semaphore, broadcast};
+use tokio_util::sync::CancellationToken;
+use yog_persistence::{PgHealthChecker, PgPool};
 
 use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
@@ -18,6 +22,87 @@ use yog_core::{
         TokenPriceLookup,
     },
 };
+
+use crate::application::{
+    AnnouncementService, IngestionService, NetworkService, SignalService, StatsService,
+    TokenService, WorkSlots,
+};
+use crate::http::{AppState, build_router};
+use axum::body::Body;
+use axum::http::{HeaderMap, Method, Request, StatusCode, header};
+use tower::ServiceExt;
+
+/// A state for one request through the router: an empty signal feed, no known token, every
+/// other read failing. ⚠️ Its mocks answer once; its database never answers, so `/readyz`
+/// waits out its probe.
+pub(crate) fn app_state() -> AppState {
+    let work_slots = WorkSlots::new(1, Duration::from_secs(1));
+    AppState {
+        network_service: Arc::new(NetworkService::new(Arc::new(
+            MockNetworkStatusRepo::failing(),
+        ))),
+        ingestion_service: Arc::new(IngestionService::new(Arc::new(
+            MockEventFreshnessRepo::failing(),
+        ))),
+        signal_service: Arc::new(SignalService::new(
+            Arc::new(MockSignalRepo::empty()),
+            Arc::new(PoolRepoOnce::with_pools(vec![])),
+            Arc::new(MockMetadataRepo::empty()),
+        )),
+        signal_stream: broadcast::channel(1).0,
+        stream_slots: Arc::new(Semaphore::new(1)),
+        stats_service: Arc::new(StatsService::new(
+            Arc::new(MockGlobalAnalyticsRepo::failing()),
+            Arc::new(PoolCountsRepo::failing()),
+            work_slots.clone(),
+        )),
+        work_slots,
+        token_service: Arc::new(TokenService::new(
+            Arc::new(MockMetadataRepo::empty()),
+            Arc::new(MockPriceRepo::empty()),
+        )),
+        announcement_service: Arc::new(AnnouncementService::new(Arc::new(
+            MockAnnouncementRepo::failing(),
+        ))),
+        health_checker: Arc::new(PgHealthChecker::new(
+            PgPool::connect_lazy("postgres://unused@127.0.0.1:1/unused")
+                .expect("a well-formed URL"),
+        )),
+        shutdown: CancellationToken::new(),
+    }
+}
+
+/// `method uri` through the whole router on [`app_state`]: the status, the headers, and the
+/// `detail` of a Problem Details body (else the body as text).
+pub(crate) async fn call(method: Method, uri: &str) -> (StatusCode, HeaderMap, String) {
+    let request = Request::builder()
+        .method(method)
+        .uri(uri)
+        .body(Body::empty())
+        .unwrap();
+    let response = build_router(app_state(), vec![])
+        .oneshot(request)
+        .await
+        .unwrap();
+    let (parts, body) = response.into_parts();
+    let body = axum::body::to_bytes(body, usize::MAX).await.unwrap();
+    let detail = serde_json::from_slice::<serde_json::Value>(&body)
+        .ok()
+        .and_then(|json| json["detail"].as_str().map(str::to_string))
+        .unwrap_or_else(|| String::from_utf8_lossy(&body).into_owned());
+    (parts.status, parts.headers, detail)
+}
+
+/// [`call`] with `GET`, its `Content-Type` read out — empty when there is none.
+pub(crate) async fn get(uri: &str) -> (StatusCode, String, String) {
+    let (status, headers, detail) = call(Method::GET, uri).await;
+    let content_type = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_string();
+    (status, content_type, detail)
+}
 
 /// Deterministic pubkey from a single byte, for readable tests.
 pub(crate) fn pk(seed: u8) -> Pubkey {

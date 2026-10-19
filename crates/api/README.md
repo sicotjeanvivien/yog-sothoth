@@ -36,7 +36,8 @@ api/src/
 │   ├── tests/contract.rs  ← test-only: the OpenAPI document, as committed in openapi.json
 │   ├── cursor.rs          ← base64/JSON cursor codec
 │   ├── middleware.rs      ← CORS, security headers, request-id tracing,
-│   │                        capacity bounds (middleware/capacity.rs)
+│   │                        capacity bounds (middleware/capacity.rs), every
+│   │                        error as Problem Details (middleware/problem_details.rs)
 │   ├── state.rs           ← AppState — what every handler reads through `State`
 │   └── error.rs           ← ApiError, IntoResponse (RFC 9457, 503 + Retry-After)
 ├── testing.rs             ← test-only: fixtures and repository mocks
@@ -203,9 +204,8 @@ What the derive cannot say is said once:
 - **The finish** (`http/tests/contract.rs`), applied to the whole document: a nullable
   property is required — `null` is written, never omitted, and a key that may be
   absent says `#[schema(nullable = false)]` (a test fails on a
-  `skip_serializing_if` without it); every operation declares its failures —
-  Problem Details, and plain text too on an operation with parameters, which
-  axum refuses that way when it cannot parse them; an `int64` (or `u64`) anywhere fails the document, because the generated
+  `skip_serializing_if` without it); every operation declares its failures as
+  Problem Details; an `int64` (or `u64`) anywhere fails the document, because the generated
   zod would read it as a `BigInt` (point it at `Count`); so does a `$ref` to an
   undeclared schema, which the generator would skip in silence.
 - **Integers carry their Rust range**: utoipa's `non_strict_integers` writes a
@@ -334,14 +334,22 @@ served as `application/problem+json`:
 
 | Status | `title` | Common causes |
 |--------|---------|---------------|
-| 400 | `Bad Request` | Invalid address, malformed cursor, limit out of range, mutually exclusive params |
-| 404 | `Not Found` | Token unknown |
+| 400 | `Bad Request` | A query or path that does not parse, an empty value, invalid address, malformed cursor, limit out of range, mutually exclusive params |
+| 404 | `Not Found` | Token unknown, no such route |
+| 405 | `Method Not Allowed` | A method the route does not serve; carries `Allow` |
 | 503 | `Service Unavailable` | Over capacity: no work slot within 2 s, too many open signal streams, the request past its deadline, or the database out of connections or past `statement_timeout`. Carries `Retry-After`; see [Capacity bounds](#capacity-bounds) |
 | 500 | `Internal Server Error` | DB failure, encoding bug. `detail` is always the generic message; the real cause is logged server-side under a `request_id` correlatable via the `x-request-id` response header |
 
-⚠️ A query string axum cannot parse — an unknown `severity`, a
-non-numeric `limit` — is refused **400 in plain text** by the extractor, before
-any `ApiError` exists.
+A parameter absent is not provided; present and empty (`?pool=`), it is an
+invalid value — `400`, like any value that does not parse.
+
+Every `/api` route answers its errors through one layer
+(`middleware/problem_details.rs`): any error response that is not already
+Problem Details — an extractor's refusal, a wrong method (`405`), a JSON body —
+is rewritten with its status and headers kept, and a `5xx` keeps only its
+canonical reason as `detail`, its text logged in the request's span. An unknown
+route is the router's fallback, an `ApiError::NotFound`. Nothing to do per
+route. The probes stand outside the layer: `/readyz` answers its own report.
 
 ## Cursor wire format
 

@@ -674,6 +674,7 @@
             "name": "cursor",
             "required": false,
             "schema": {
+              "minLength": 1,
               "type": [
                 "string",
                 "null"
@@ -718,7 +719,6 @@
             "schema": {
               "oneOf": [
                 {
-                  "description": "Wire form of the severity filter. An unknown value fails serde\ndeserialization → axum returns 400 before the handler runs.",
                   "enum": [
                     "info",
                     "warning",
@@ -737,6 +737,7 @@
             "name": "pool",
             "required": false,
             "schema": {
+              "minLength": 1,
               "type": [
                 "string",
                 "null"
@@ -772,14 +773,9 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
-              },
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
               }
             },
-            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
+            "description": "A failure: RFC 9457 Problem Details."
           }
         }
       }
@@ -872,14 +868,9 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
-              },
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
               }
             },
-            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
+            "description": "A failure: RFC 9457 Problem Details."
           }
         }
       }

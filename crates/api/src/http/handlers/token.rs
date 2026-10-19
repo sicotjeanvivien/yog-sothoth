@@ -34,3 +34,7 @@ pub(crate) async fn get_token(
 
     Ok(Json(TokenResponse::new(agg.metadata, agg.price)))
 }
+
+#[cfg(test)]
+#[path = "token_tests.rs"]
+mod tests;

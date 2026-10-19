@@ -50,8 +50,7 @@ const HTTP_METHODS: [&str; 8] = [
     "get", "put", "post", "delete", "options", "head", "patch", "trace",
 ];
 
-/// Every operation answers its failures as RFC 9457 Problem Details — except
-/// a query string or a path axum cannot parse, which it refuses in plain text.
+/// Every operation answers its failures as RFC 9457 Problem Details.
 fn answer_problems(doc: &mut Value) {
     let problem = json!({
         "description": "A failure: RFC 9457 Problem Details.",
@@ -59,30 +58,16 @@ fn answer_problems(doc: &mut Value) {
             PROBLEM_CONTENT_TYPE: { "schema": { "$ref": "#/components/schemas/ProblemDetailsResponse" } }
         }
     });
-    let mut unparsed = problem.clone();
-    unparsed["description"] = json!(
-        "A failure: RFC 9457 Problem Details, or plain text when the query string or the \
-         path cannot be parsed."
-    );
-    unparsed["content"]["text/plain"] = json!({ "schema": { "type": "string" } });
-    let has_parameters =
-        |node: &Value| node["parameters"].as_array().is_some_and(|p| !p.is_empty());
     let Some(paths) = doc["paths"].as_object_mut() else {
         return;
     };
     for item in paths.values_mut() {
-        let shared = has_parameters(item);
         let Some(item) = item.as_object_mut() else {
             continue;
         };
         for (method, operation) in item.iter_mut() {
             if HTTP_METHODS.contains(&method.as_str()) {
-                let answer = if shared || has_parameters(operation) {
-                    &unparsed
-                } else {
-                    &problem
-                };
-                operation["responses"]["default"] = answer.clone();
+                operation["responses"]["default"] = problem.clone();
             }
         }
     }

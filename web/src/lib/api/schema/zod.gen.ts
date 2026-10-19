@@ -188,7 +188,7 @@ export const zGetIngestionResponse = zIngestionResponse;
 export const zGetNetworkResponse = zNetworkResponse;
 
 export const zListSignalsQuery = z.object({
-    cursor: z.string().nullish(),
+    cursor: z.string().min(1).nullish(),
     dir: z.enum(['next', 'prev']).optional(),
     position: z.union([
         z.literal('first'),
@@ -199,7 +199,7 @@ export const zListSignalsQuery = z.object({
         z.literal('warning'),
         z.literal('critical')
     ]).nullish(),
-    pool: z.string().nullish(),
+    pool: z.string().min(1).nullish(),
     limit: z.int().gte(1).lte(200).optional()
 });
 

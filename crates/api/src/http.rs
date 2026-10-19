@@ -28,7 +28,12 @@ pub(crate) use middleware::capacity::{
 
 use std::net::SocketAddr;
 
-use axum::{Router, http::HeaderValue, middleware::from_fn_with_state, routing::get};
+use axum::{
+    Router,
+    http::HeaderValue,
+    middleware::{from_fn_with_state, map_response},
+    routing::get,
+};
 use tower_http::{
     request_id::{PropagateRequestIdLayer, SetRequestIdLayer},
     trace::TraceLayer,
@@ -37,15 +42,16 @@ use tracing::info;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::application::WorkSlots;
+use crate::http::error::ApiError;
 
 use crate::http::middleware::capacity::{REQUEST_TIMEOUT, request_deadline, work_slot_limit};
 use crate::http::middleware::tracing::{
     GenerateRequestId, REQUEST_ID_HEADER, make_request_span, on_failure, on_request, on_response,
 };
 
-/// The probes (`/healthz`, `/readyz`, untraced) merged with [`api_routes`],
-/// which is traced, request-id'd and bounded by [`REQUEST_TIMEOUT`]; both get
-/// the security and CORS headers. The bounds are in [`middleware::capacity`].
+/// The probes (`/healthz`, `/readyz`, untraced, their own JSON) merged with [`api_routes`],
+/// traced, request-id'd, bounded by [`REQUEST_TIMEOUT`] and answering every error as Problem
+/// Details; both get the security and CORS headers. The bounds are in [`middleware::capacity`].
 pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValue>) -> Router {
     let probes = Router::new()
         .route("/healthz", get(handlers::health::healthz))
@@ -54,7 +60,13 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
     let (api, _contract) = api_routes(state.work_slots.clone()).split_for_parts();
 
     let app = api
-        // Innermost, so the tracing span records its 503.
+        // Under the layers below: an unknown route is traced and request-id'd like any other.
+        .fallback(no_such_route)
+        // ⚠️ Innermost: `request_deadline` bounds its read of an error body.
+        .layer(map_response(
+            middleware::problem_details::answer_in_problem_details,
+        ))
+        // Inside TraceLayer, so the tracing span records its 503.
         .layer(from_fn_with_state(REQUEST_TIMEOUT, request_deadline))
         .layer(PropagateRequestIdLayer::new(
             axum::http::HeaderName::from_static(REQUEST_ID_HEADER),
@@ -80,6 +92,10 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
         .layer(middleware::security_headers_layer())
         .layer(middleware::frame_options_layer())
         .layer(middleware::cors_layer(cors_allowed_origins))
+}
+
+async fn no_such_route() -> ApiError {
+    ApiError::NotFound("no such route".to_string())
 }
 
 /// Every `/api` route, each mounted with its contract (`#[utoipa::path]`). The
