@@ -1,7 +1,6 @@
 -- 025_moved_amount_usd.sql — the USD value of a moved amount, written once as
 -- yog_moved_amount_usd: an amount that moved nothing is worth zero without a
--- price or a scale. The four views that wrote both rules by hand call the two
--- functions instead; nothing else in them changes.
+-- price or a scale. The four valued views call it, or yog_amount_usd.
 
 -- ⚠️ Inlined by Postgres only as one SELECT in LANGUAGE sql, neither STRICT nor
 -- SECURITY DEFINER nor with a SET clause.

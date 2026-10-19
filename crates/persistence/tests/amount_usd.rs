@@ -6,6 +6,8 @@ use std::path::Path;
 
 use sqlx::PgPool;
 
+use super::helpers::catalog_definitions;
+
 /// Lowercase, without whitespace, and with Postgres's deparsed `(10)::numeric` and
 /// `(0)::numeric` brought back to `10` and `0`, so a source and a catalog read alike.
 fn normalize(text: &str) -> String {
@@ -25,20 +27,10 @@ fn rewrites_the_empty_leg(text: &str) -> bool {
     normalize(text).contains("then0elseyog_amount_usd(")
 }
 
-/// Every view, materialized view and function of `public`, then every `.rs` and `.sql` under
-/// this crate's `src/`, as `(name, text)`.
+/// The catalog's definitions, then every `.rs` and `.sql` under this crate's `src/`, as
+/// `(name, text)`.
 async fn sources(pool: &PgPool) -> Vec<(String, String)> {
-    let mut sources: Vec<(String, String)> = sqlx::query_as(
-        "SELECT viewname::TEXT, definition FROM pg_views WHERE schemaname = 'public'
-         UNION ALL
-         SELECT matviewname::TEXT, definition FROM pg_matviews WHERE schemaname = 'public'
-         UNION ALL
-         SELECT proname::TEXT, pg_get_functiondef(oid) FROM pg_proc
-         WHERE pronamespace = 'public'::regnamespace AND prokind <> 'a'",
-    )
-    .fetch_all(pool)
-    .await
-    .unwrap();
+    let mut sources = catalog_definitions(pool).await;
 
     let mut dirs = vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("src")];
     while let Some(dir) = dirs.pop() {
