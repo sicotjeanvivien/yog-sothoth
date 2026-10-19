@@ -252,6 +252,14 @@ though both halves are correct: a "turnover = volume / TVL" — a natural produc
 ask — would divide a trade-time numerator by a current-price denominator. If
 such a metric is ever added, pick one convention for both halves.
 
+**One definition per rule** (migrations 024–026). `yog_token_amount` is the
+only place a raw amount is divided by `10^decimals`. `yog_amount_usd` values it
+at a price. `yog_moved_amount_usd` adds the **empty leg** for an
+amount that moved: zero moved is worth zero without a price or a scale.
+Postgres inlines all three. `tests/amount_usd.rs` reads every view, function
+and SQL file of `src/`, and fails on any other `POWER(10`, or on the empty leg
+written around `yog_amount_usd`.
+
 ### How old a price may be (migration 005)
 
 A price observation has a **validity window**; outside it there is no price, only
