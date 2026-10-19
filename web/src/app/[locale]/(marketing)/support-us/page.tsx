@@ -6,6 +6,7 @@ import type { Metadata } from "next";
 import { SitePageHeader } from "@/components/marketing/site-page-header";
 import { SupportUsWays } from "@/components/marketing/support-us/support-us-ways";
 import { SupportUsSponsor } from "@/components/marketing/support-us/support-us-sponsor";
+import { pageMetadata } from "@/lib/seo/page-metadata";
 
 type SupportUsPageProps = {
   params: Promise<{ locale: string }>;
@@ -16,10 +17,12 @@ export async function generateMetadata({
 }: SupportUsPageProps): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "SupportUs.meta" });
-  return {
+  return pageMetadata({
+    locale,
+    path: "/support-us",
     title: t("title"),
     description: t("description"),
-  };
+  });
 }
 
 export default async function SupportUsPage({ params }: SupportUsPageProps) {

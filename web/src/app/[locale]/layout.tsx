@@ -1,7 +1,9 @@
+import type { Metadata } from "next";
 import { NextIntlClientProvider, hasLocale } from "next-intl";
 import { setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "../../../i18n/routing";
+import { SITE_NAME, SITE_URL } from "@/config/site";
 import "../globals.css";
 
 import { Cinzel, Geist, Geist_Mono } from "next/font/google";
@@ -28,6 +30,12 @@ const geistMono = Geist_Mono({
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
 }
+
+/** The site's frame: absolute URLs, and the one place the title suffix is written. */
+export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
+  title: { template: "%s — Yog-Scope", default: SITE_NAME },
+};
 
 type LocaleLayoutProps = {
   children: React.ReactNode;

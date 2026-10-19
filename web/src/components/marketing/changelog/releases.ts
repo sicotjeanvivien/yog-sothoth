@@ -38,6 +38,15 @@ export const RELEASES: readonly Release[] = [
       "Deploying a new version no longer slows the site down, and the price gap signal no longer floods the feed with shallow pools.",
     sections: [
       {
+        kind: "features",
+        items: [
+          {
+            text: "Shared links and search engines now get a title, a description and a preview image, in each page's language, and a sitemap lists every public page in both languages.",
+            technical: false,
+          },
+        ],
+      },
+      {
         kind: "fixes",
         items: [
           {
@@ -51,6 +60,14 @@ export const RELEASES: readonly Release[] = [
           {
             text: "The signal engine reads fewer pools at each round: the price gap signal only those above its value floor, instead of every pool ever priced, and the swap flow signal only the active pools above its volume floor, plus those it cannot value, to count them. Its memory no longer follows every pool discovered.",
             technical: true,
+          },
+          {
+            text: "Every API error is now answered in RFC 9457 Problem Details, like all the others: a query or path the API cannot read (an unknown severity, a non-numeric limit), an unknown route (404) and a wrong method (405) used to get plain text or an empty body.",
+            technical: false,
+          },
+          {
+            text: "An empty pool or cursor parameter on /api/signals (?pool=) is now refused with a 400 naming the parameter: it used to be read as absent and return the unfiltered feed.",
+            technical: false,
           },
         ],
       },

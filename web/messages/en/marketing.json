@@ -1,5 +1,9 @@
 {
   "Marketing": {
+    "meta": {
+      "title": "Yog-Scope — Liquidity intelligence in real time",
+      "description": "Yog-Scope observes, reconstructs and analyzes the liquidity movements of Meteora pools as they happen."
+    },
     "dashboardButton": "Open the dashboard",
     "dashboardShort": "Dashboard",
     "home": "Yog-Scope, home",

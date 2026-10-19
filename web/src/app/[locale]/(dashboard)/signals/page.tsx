@@ -11,6 +11,7 @@ import { InfoPopover } from "@/components/shared/info-popover";
 import { SignalFeed } from "@/components/dashboard/signals/signal-feed";
 import { ApiClientError } from "@/lib/api/errors";
 import { fetchSignals } from "@/lib/api/server/signals";
+import { pageMetadata } from "@/lib/seo/page-metadata";
 
 type SignalsPageProps = {
   params: Promise<{ locale: string }>;
@@ -24,10 +25,12 @@ export async function generateMetadata({
     locale,
     namespace: "Dashboard.Signals.page",
   });
-  return {
-    title: `${t("title")} — Yog-Scope`,
+  return pageMetadata({
+    locale,
+    path: "/signals",
+    title: t("title"),
     description: t("description"),
-  };
+  });
 }
 
 export default async function SignalsPage({ params }: SignalsPageProps) {

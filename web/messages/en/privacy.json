@@ -1,7 +1,7 @@
 {
   "Privacy": {
     "meta": {
-      "title": "Privacy — Yog-Scope",
+      "title": "Privacy",
       "description": "How Yog-Scope handles your data: no account, no analytics, no IP address in our logs, and Cloudflare in front for protection."
     },
     "header": {
