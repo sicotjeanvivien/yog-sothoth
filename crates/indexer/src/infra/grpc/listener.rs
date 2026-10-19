@@ -23,7 +23,9 @@ use crate::{
     error::GrpcListenerError,
     infra::{
         Credential,
-        grpc::{interceptor::CredentialInterceptor, subscription::build_request},
+        grpc::{
+            interceptor::CredentialInterceptor, metrics::WAITING_PEAKS, subscription::build_request,
+        },
     },
 };
 
@@ -77,6 +79,7 @@ impl GrpcListener {
         let request = self.subscribe_request(None).await?;
 
         log::starting(self.connector.endpoint(), credential.name(), &request);
+        WAITING_PEAKS.export();
 
         let mut budget = RetryBudget::new(self.max_attempts);
         let mut resume_from: Option<u64> = None;

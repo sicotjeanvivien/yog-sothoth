@@ -33,6 +33,13 @@ impl WaitingPeaks {
         }
     }
 
+    /// Export both peaks as stored, so one never raised still reads 0 rather than an absent series.
+    /// ⚠️ Called by the gRPC listener, not at registration: a WebSocket indexer would show them too.
+    pub(crate) fn export(&self) {
+        gauge!(PENDING_PAYLOADS_PEAK).set(self.payloads.load(Ordering::Relaxed) as f64);
+        gauge!(PENDING_SLOT_LAG_PEAK).set(self.slot_lag.load(Ordering::Relaxed) as f64);
+    }
+
     /// Take what the buffer holds now; a gauge moves only when its peak rises.
     pub(crate) fn record(&self, payloads: usize, slot_lag: u64) {
         raise(&self.payloads, payloads as u64, PENDING_PAYLOADS_PEAK);
@@ -89,9 +96,6 @@ impl GrpcBufferMetrics {
             PENDING_SLOT_LAG_PEAK,
             "The most slots the oldest waiting transaction has trailed the stream's head since start"
         );
-        // ⚠️ Set at 0 here, or a peak never raised is an absent series, read as unwired.
-        gauge!(PENDING_PAYLOADS_PEAK).set(0.0);
-        gauge!(PENDING_SLOT_LAG_PEAK).set(0.0);
     }
 
     pub(crate) fn record_evicted(count: usize, reason: EvictionReason) {

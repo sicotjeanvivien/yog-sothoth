@@ -818,6 +818,40 @@ fn a_stalled_stream_is_resubscribed_at_its_mark() {
     );
 }
 
+/// ⚠️ Against the peaks exported nowhere, or at registration, which runs whichever source: a
+/// quiet gRPC buffer would show no series, and a WebSocket indexer would show gRPC ones.
+#[test]
+fn a_run_exports_the_buffer_peaks() {
+    use metrics_util::debugging::DebuggingRecorder;
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("current-thread runtime")
+            .block_on(run_until_subscribed(
+                vec![ScriptedSession::Stream(vec![Action::Hold])],
+                1,
+            ))
+    });
+
+    let snapshot = snapshotter.snapshot().into_vec();
+    for name in [
+        "yog_indexer_grpc_pending_payloads_peak",
+        "yog_indexer_grpc_pending_slot_lag_peak",
+    ] {
+        assert!(
+            snapshot
+                .iter()
+                .any(|(key, _, _, _)| key.key().name() == name),
+            "{name} must exist before the stream raises it"
+        );
+    }
+}
+
 /// ⚠️ A server pings from a task of its own, so a stopped data path keeps pinging.
 /// Mutation this is written against: resetting the clock on every message rather than on a block-meta.
 #[tokio::test]

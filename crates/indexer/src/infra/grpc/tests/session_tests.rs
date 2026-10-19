@@ -13,7 +13,7 @@ use yellowstone_grpc_proto::prelude::{
 };
 
 use crate::infra::grpc::test_fixtures::{
-    PROTOCOL, at, block_meta, ping, transaction, transaction_update_with_signature,
+    PROTOCOL, Snapshot, at, block_meta, ping, transaction, transaction_update_with_signature,
     unroutable_transaction, update,
 };
 
@@ -189,14 +189,6 @@ fn a_malformed_transaction_and_an_unroutable_one_are_counted_apart() {
 
 const DROPPED: &str = "yog_indexer_grpc_dropped_transactions_total";
 const PING_REPLIES_UNSENT: &str = "yog_indexer_grpc_ping_replies_unsent_total";
-
-/// What the metrics recorder holds after a run.
-type Snapshot = Vec<(
-    metrics_util::CompositeKey,
-    Option<metrics::Unit>,
-    Option<metrics::SharedString>,
-    DebugValue,
-)>;
 
 /// Drive `future` to completion and return its output with what it counted.
 /// ⚠️ `with_local_recorder` binds the current thread, hence a current-thread runtime and `#[test]`.

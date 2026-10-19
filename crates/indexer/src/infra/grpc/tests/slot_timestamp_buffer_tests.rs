@@ -2,6 +2,7 @@
 //! the right numbers is a provider's stream's to say, through the two peaks it reports.
 
 use super::*;
+use crate::infra::grpc::test_fixtures::Snapshot;
 
 /// What the assertions read and nothing in production does, through two `#[cfg(test)]` accessors.
 impl<T> SlotTimestampBuffer<T> {
@@ -476,14 +477,6 @@ fn the_oldest_pending_slot_is_the_one_that_was_not_finished() {
     assert_eq!(buffer.oldest_pending_slot(), Some(12));
 }
 
-/// What the metrics recorder holds after a run.
-type Snapshot = [(
-    metrics_util::CompositeKey,
-    Option<metrics::Unit>,
-    Option<metrics::SharedString>,
-    metrics_util::debugging::DebugValue,
-)];
-
 /// The counter for one `reason` label, or `None` when never touched.
 fn counter_for<'a>(
     snapshot: &'a Snapshot,
@@ -645,22 +638,26 @@ fn the_payload_peak_keeps_the_overshoot_the_bound_evicted() {
     );
 }
 
-/// ⚠️ Against peaks left unset at start: a stream that never raised one would export no series,
-/// which reads as a gauge nobody wired.
+/// ⚠️ Against an export that writes 0: the listener exports once per run, and a run after a
+/// raise would hide the peak until the stream beat it again.
 #[test]
-fn the_peaks_are_exported_at_zero_from_start() {
+fn the_peaks_are_exported_as_stored() {
     use metrics_util::debugging::DebuggingRecorder;
+
+    let peaks = fresh_peaks();
+    peaks.record(3, 2);
 
     let recorder = DebuggingRecorder::new();
     let snapshotter = recorder.snapshotter();
-
-    metrics::with_local_recorder(&recorder, GrpcBufferMetrics::register_descriptions);
+    metrics::with_local_recorder(&recorder, || peaks.export());
 
     let snapshot = snapshotter.snapshot().into_vec();
-    for name in [
-        "yog_indexer_grpc_pending_payloads_peak",
-        "yog_indexer_grpc_pending_slot_lag_peak",
-    ] {
-        assert_eq!(gauge_for(&snapshot, name), Some(0.0), "{name}");
-    }
+    assert_eq!(
+        gauge_for(&snapshot, "yog_indexer_grpc_pending_payloads_peak"),
+        Some(3.0)
+    );
+    assert_eq!(
+        gauge_for(&snapshot, "yog_indexer_grpc_pending_slot_lag_peak"),
+        Some(2.0)
+    );
 }

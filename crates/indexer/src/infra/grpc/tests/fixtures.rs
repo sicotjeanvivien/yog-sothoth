@@ -1,4 +1,4 @@
-//! The updates a test puts on the wire, shared by `session_tests` and `listener_tests`.
+//! What the gRPC tests share: the updates they put on the wire, and the metrics snapshot.
 //! ⚠️ They carry our reading of the proto, not a provider's behaviour.
 //! ⚠️ [`transaction_update`] must stay one the adapter accepts: a refused one is dropped before
 //! the consumer, and the full- and vanished-consumer tests would exercise nothing.
@@ -15,6 +15,14 @@ use super::subscription::BLOCK_META_FILTER;
 
 /// The one protocol with a working extractor.
 pub(super) const PROTOCOL: Protocol = Protocol::MeteoraDammV2;
+
+/// What the metrics recorder holds after a run.
+pub(super) type Snapshot = Vec<(
+    metrics_util::CompositeKey,
+    Option<metrics::Unit>,
+    Option<metrics::SharedString>,
+    metrics_util::debugging::DebugValue,
+)>;
 
 pub(super) fn at(secs: i64) -> DateTime<Utc> {
     DateTime::from_timestamp(secs, 0).expect("a valid instant")

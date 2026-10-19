@@ -117,12 +117,14 @@ Filling it is this crate's job, one module per source:
   transactions whose block-meta was going to arrive on reconnect. A slot bound
   reads the stream itself — nothing arrives, nothing is evicted. Its default is
   a **ceiling, not an estimate**. Two gauges say how close the stream came to
-  each bound since start, or how far past it:
-  `yog_indexer_grpc_pending_payloads_peak` and
+  each bound since start: `yog_indexer_grpc_pending_payloads_peak` and
   `yog_indexer_grpc_pending_slot_lag_peak`. They are peaks because a scrape
   would miss a burst. They are process-wide because the buffer dies with its
-  session. `yog_indexer_grpc_untimestamped_transactions_total` says what the
-  bounds cost when they are crossed.
+  session. The gRPC listener exports them, at 0 until they rise. The lag peak
+  includes a reconnection's replay, which arrives behind a live head, and the
+  slot bound has to hold that too. The payload peak stops one past its bound:
+  `yog_indexer_grpc_untimestamped_transactions_total` says how far a crossing
+  went, and what it cost.
 
 - `infra/endpoint/` is the endpoint's **configuration, verified once at
   start-up**: the two modules below sit together because neither fault they
