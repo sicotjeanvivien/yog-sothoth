@@ -52,6 +52,7 @@ describe("sitemap", () => {
         expect(entry?.alternates?.languages).toEqual({
           en: `${SITE_URL}/en${path}`,
           fr: `${SITE_URL}/fr${path}`,
+          "x-default": `${SITE_URL}${path === "" ? "/" : path}`,
         });
       }
     }
@@ -80,9 +81,24 @@ describe("pageMetadata", () => {
     expect(metadata.openGraph).toMatchObject({
       title: "Signals",
       siteName: "Yog-Scope",
+      locale: "en_US",
+      alternateLocale: ["fr_FR"],
       images: [PREVIEW_IMAGE],
     });
-    expect(metadata.twitter).toMatchObject({ card: "summary_large_image" });
+    expect(metadata.twitter).toMatchObject({
+      card: "summary_large_image",
+      images: [PREVIEW_IMAGE],
+    });
+  });
+
+  // Mutation: the preview's URL kept while its file is not in `public/`, or not 1200 × 630.
+  it("points at an image that exists, at the size it declares", () => {
+    const png = readFileSync(join(WEB, "public", PREVIEW_IMAGE.url));
+    expect(png.subarray(1, 4).toString("ascii")).toBe("PNG");
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([
+      PREVIEW_IMAGE.width,
+      PREVIEW_IMAGE.height,
+    ]);
   });
 
   it("sends the home page's x-default to the root", () => {

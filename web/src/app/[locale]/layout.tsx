@@ -35,6 +35,7 @@ export function generateStaticParams() {
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: { template: "%s — Yog-Scope", default: SITE_NAME },
+  manifest: "/site.webmanifest",
 };
 
 type LocaleLayoutProps = {

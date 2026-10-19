@@ -35,7 +35,7 @@ export const RELEASES: readonly Release[] = [
     version: "v0.1.11",
     date: "2026-10-19",
     summary:
-      "Deploying a new version no longer slows the site down, and the price gap signal no longer floods the feed with shallow pools.",
+      "Shared links now show a preview, every API error answers in one format, deploying a new version no longer slows the site down, and the price gap signal no longer floods the feed with shallow pools.",
     sections: [
       {
         kind: "features",
