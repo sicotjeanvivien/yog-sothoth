@@ -18,9 +18,11 @@ use crate::application::EnrichedSignal;
 use crate::http::{
     AppState,
     cursor::encode_cursor_opt,
-    dto::{PageResponse, SignalResponse, request::ListSignalsRequest},
+    dto::{
+        PageResponse, SignalResponse,
+        request::{ListSignalsRequest, SignalsQuery},
+    },
     error::ApiError,
-    query::SignalsQuery,
 };
 
 #[utoipa::path(

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use serde_json::json;
 
 use super::{document, finish};
-use crate::http::query::MAX_LIMIT;
+use crate::http::dto::request::MAX_LIMIT;
 
 const COMMITTED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/openapi.json");
 
