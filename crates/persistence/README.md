@@ -300,7 +300,8 @@ Two consequences worth knowing before you touch a valuation view:
   comparison.** Its reader's TVL floor (migration 024 exposes the reserves) values
   the pool at the last known prices, whatever their age: through
   `pool_current_tvl`, a stale price would drop the pool before the detector
-  counts it `stale`.
+  counts it `stale`. Both value a reserve through `yog_amount_usd` (024), so
+  the floor and the published TVL cannot part.
 
 `price_staleness.rs` enumerates the views reading `token_prices` or
 `token_last_price` from `pg_views` and fails on any whose **bound count differs

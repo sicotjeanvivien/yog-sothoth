@@ -212,3 +212,43 @@ async fn only_pools_deep_enough_at_their_last_prices_are_read(pool: PgPool) {
          whatever its prices' age — the detector counts it `stale`"
     );
 }
+
+#[sqlx::test]
+async fn the_floor_values_a_pool_as_pool_current_tvl_does(pool: PgPool) {
+    // Mutation: the floor's own arithmetic in place of `yog_amount_usd` (decimals dropped on one
+    // side) — the two TVLs part, and the pool falls off its own published TVL.
+    let now = Utc::now().trunc_subsecs(6);
+    let (mint_a, mint_b) = (pk(2).to_string(), pk(3).to_string());
+    insert_metadata(&pool, &mint_a, 6, now).await;
+    insert_metadata(&pool, &mint_b, 9, now).await;
+    price_at(&pool, &mint_a, "2.0", now - Duration::minutes(1)).await;
+    price_at(&pool, &mint_b, "100.0", now - Duration::minutes(1)).await;
+
+    let pool_addr = pk(1).to_string();
+    insert_pool(&pool, &pool_addr, &mint_a, &mint_b).await;
+    // 1.5 A at $2 and 2.5 B at $100: $253.
+    insert_current_state(
+        &pool,
+        &pool_addr,
+        Some("18446744073709551616"),
+        Some(now),
+        (1_500_000, 2_500_000_000),
+    )
+    .await;
+
+    let tvl: Decimal = sqlx::query_scalar("SELECT tvl_usd FROM pool_current_tvl")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(tvl, Decimal::from(253));
+
+    let repo = PgPoolPriceSnapshotRepository::new(pool.clone());
+    assert_eq!(repo.latest(tvl).await.unwrap().len(), 1);
+    assert!(
+        repo.latest(tvl + Decimal::new(1, 6))
+            .await
+            .unwrap()
+            .is_empty(),
+        "the floor must read the pool at exactly its published TVL, not above"
+    );
+}

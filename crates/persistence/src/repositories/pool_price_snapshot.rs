@@ -46,8 +46,8 @@ impl PoolPriceSnapshotRepository for PgPoolPriceSnapshotRepository {
                 price_b_usd        AS "price_b_usd!",
                 price_b_fetched_at AS "price_b_fetched_at!"
             FROM pool_price_snapshot
-            WHERE (reserve_a::NUMERIC / POWER(10::NUMERIC, decimals_a)) * price_a_usd
-                + (reserve_b::NUMERIC / POWER(10::NUMERIC, decimals_b)) * price_b_usd >= $1
+            WHERE yog_amount_usd(reserve_a, decimals_a, price_a_usd)
+                + yog_amount_usd(reserve_b, decimals_b, price_b_usd) >= $1
             "#,
             min_tvl_usd,
         )
