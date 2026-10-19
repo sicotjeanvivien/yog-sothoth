@@ -4,7 +4,7 @@ import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import sitemap from "@/app/sitemap";
-import { INDEXABLE_PATHS, PREVIEW_IMAGE, SITE_URL } from "@/config/site";
+import { PREVIEW_IMAGE, SITE_URL, SITEMAP_PATHS, UNLISTED_PATHS } from "@/config/site";
 import { pageMetadata } from "@/lib/seo/page-metadata";
 
 const WEB = process.cwd();
@@ -29,9 +29,11 @@ function routeOf(page: string): string {
 const pages = files(PAGES).filter((path) => path.endsWith(`${sep}page.tsx`));
 
 describe("the indexable pages", () => {
-  // Mutation: a page added under `app/[locale]/` without its path in `INDEXABLE_PATHS`.
-  it("are exactly the pages under app/[locale]", () => {
-    expect(pages.map(routeOf).sort()).toEqual([...INDEXABLE_PATHS].sort());
+  // Mutation: a page added under `app/[locale]/` in neither list, or in both.
+  it("are exactly the pages under app/[locale], each in one list", () => {
+    const listed = [...SITEMAP_PATHS, ...UNLISTED_PATHS];
+    expect(new Set(listed).size).toBe(listed.length);
+    expect(pages.map(routeOf).sort()).toEqual(listed.sort());
   });
 
   // Mutation: a page whose metadata is built by hand, without its canonical and languages.
@@ -45,7 +47,7 @@ describe("sitemap", () => {
   // Mutation: a path of the list left out of the sitemap, or one language missing.
   it("lists every indexable page in both languages, each naming the other", () => {
     const entries = sitemap();
-    for (const path of INDEXABLE_PATHS) {
+    for (const path of SITEMAP_PATHS) {
       for (const locale of ["en", "fr"]) {
         const entry = entries.find((e) => e.url === `${SITE_URL}/${locale}${path}`);
         expect(entry, `${locale}${path}`).toBeDefined();
@@ -56,7 +58,15 @@ describe("sitemap", () => {
         });
       }
     }
-    expect(entries).toHaveLength(INDEXABLE_PATHS.length * 2);
+    expect(entries).toHaveLength(SITEMAP_PATHS.length * 2);
+  });
+
+  // Mutation: the dashboard pages listed, which sends crawlers onto live, slow API reads.
+  it("leaves out the unlisted pages", () => {
+    const urls = sitemap().map((entry) => entry.url);
+    for (const path of UNLISTED_PATHS) {
+      expect(urls.filter((url) => url.endsWith(path))).toEqual([]);
+    }
   });
 });
 

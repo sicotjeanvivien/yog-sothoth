@@ -4,13 +4,13 @@ import type { Metadata } from "next";
 import { hasLocale } from "next-intl";
 
 import { routing, type Locale } from "@/i18n/routing";
-import { PREVIEW_IMAGE, SITE_NAME, type IndexablePath } from "@/config/site";
+import { PREVIEW_IMAGE, SITE_NAME, type PagePath } from "@/config/site";
 
 /** Open Graph names a locale `language_TERRITORY`; a bare `fr` is read as `en_US`. */
 const OG_LOCALES: Record<Locale, string> = { en: "en_US", fr: "fr_FR" };
 
 /** The page in each language, and `x-default` to the unprefixed path, which negotiates one. */
-export function localizedAlternates(path: IndexablePath): Record<string, string> {
+export function localizedAlternates(path: PagePath): Record<string, string> {
   return {
     ...Object.fromEntries(routing.locales.map((l) => [l, `/${l}${path}`])),
     "x-default": path === "" ? "/" : path,
@@ -19,7 +19,7 @@ export function localizedAlternates(path: IndexablePath): Record<string, string>
 
 type PageMetadataInput = {
   locale: string;
-  path: IndexablePath;
+  path: PagePath;
   title: string;
   description: string;
   /** The home page names the brand itself, outside the layout's title template. */

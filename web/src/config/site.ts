@@ -6,10 +6,10 @@ export const SITE_URL = "https://yog-scope.xyz";
 export const SITE_NAME = "Yog-Scope";
 
 /**
- * Every indexable page, by its path after the locale (`""` is the home page). The sitemap and
- * the page guard read this list: a page added under `app/[locale]/` is added here.
+ * The pages the sitemap lists, by their path after the locale (`""` is the home page). A page
+ * added under `app/[locale]/` goes here or in `UNLISTED_PATHS`, or the page guard fails.
  */
-export const INDEXABLE_PATHS = [
+export const SITEMAP_PATHS = [
   "",
   "/about",
   "/changelog",
@@ -17,11 +17,12 @@ export const INDEXABLE_PATHS = [
   "/privacy",
   "/legal-notice",
   "/terms",
-  "/overview",
-  "/signals",
 ] as const;
 
-export type IndexablePath = (typeof INDEXABLE_PATHS)[number];
+/** Served with their metadata, out of the sitemap: their reads are live, slow, and fail with the API. */
+export const UNLISTED_PATHS = ["/overview", "/signals"] as const;
+
+export type PagePath = (typeof SITEMAP_PATHS)[number] | (typeof UNLISTED_PATHS)[number];
 
 /** One preview for every page and both languages, in `public/`. */
 export const PREVIEW_IMAGE = {

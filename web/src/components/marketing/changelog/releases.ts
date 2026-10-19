@@ -41,7 +41,7 @@ export const RELEASES: readonly Release[] = [
         kind: "features",
         items: [
           {
-            text: "Shared links and search engines now get a title, a description and a preview image, in each page's language, and a sitemap lists every public page in both languages.",
+            text: "Shared links and search engines now get a title, a description and a preview image, in each page's language, and a sitemap lists the site's pages in both languages.",
             technical: false,
           },
         ],

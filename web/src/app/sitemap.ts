@@ -3,11 +3,11 @@
 import type { MetadataRoute } from "next";
 
 import { routing } from "@/i18n/routing";
-import { INDEXABLE_PATHS, SITE_URL } from "@/config/site";
+import { SITEMAP_PATHS, SITE_URL } from "@/config/site";
 import { localizedAlternates } from "@/lib/seo/page-metadata";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  return INDEXABLE_PATHS.flatMap((path) => {
+  return SITEMAP_PATHS.flatMap((path) => {
     const languages = Object.fromEntries(
       Object.entries(localizedAlternates(path)).map(([lang, href]) => [
         lang,
