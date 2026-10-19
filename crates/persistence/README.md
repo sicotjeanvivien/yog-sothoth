@@ -256,9 +256,10 @@ such a metric is ever added, pick one convention for both halves.
 only place a raw amount is divided by `10^decimals`. `yog_amount_usd` values it
 at a price. `yog_moved_amount_usd` adds the **empty leg** for an
 amount that moved: zero moved is worth zero without a price or a scale.
-Postgres inlines all three. `tests/amount_usd.rs` reads every view, function
-and SQL file of `src/`, and fails on any other `POWER(10`, or on the empty leg
-written around `yog_amount_usd`.
+Postgres inlines all three. `tests/amount_usd.rs` reads every view and
+function of `public` and every `.rs` and `.sql` of `src/`, and fails on any
+other scaling by ten (`POWER(10`, `pow(10`, `10 ^`), on the empty leg written
+around `yog_amount_usd`, and on a plan where one of the three is not inlined.
 
 ### How old a price may be (migration 005)
 
@@ -376,8 +377,7 @@ published column:
 ```sql
 CASE WHEN bool_and((price IS NOT NULL AND decimals IS NOT NULL)
                    OR COALESCE(amount, 0) = 0)
-     THEN SUM(CASE WHEN COALESCE(amount, 0) = 0 THEN 0
-                   ELSE amount / 10^decimals * price END)
+     THEN SUM(yog_moved_amount_usd(amount, decimals, price))
 END
 ```
 
@@ -386,7 +386,7 @@ a bare `amount = 0` on a nullable amount hands back the sub-total the guard
 exists to forbid. Every operand of the predicate has to be an `IS NOT NULL`
 test or `COALESCE`-d, which is what makes it total.
 
-Read the two mechanisms separately: the inner `CASE` is the **empty leg** (a
+Read the two mechanisms separately: the inner `yog_moved_amount_usd` is the **empty leg** (a
 mint that paid out nothing is worth zero without any price), the outer
 `bool_and` is **completeness** (one mint that did pay out and cannot be valued
 makes the hour unknown). Neither substitutes for the other.

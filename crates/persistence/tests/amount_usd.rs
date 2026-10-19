@@ -4,23 +4,27 @@
 
 use std::path::Path;
 
-use sqlx::PgPool;
+use sqlx::{AssertSqlSafe, PgPool};
 
 use super::helpers::catalog_definitions;
 
-/// Lowercase, without whitespace, and with Postgres's deparsed `(10)::numeric` and
-/// `(0)::numeric` brought back to `10` and `0`, so a source and a catalog read alike.
+/// Lowercase, without whitespace, and with Postgres's deparsed casts of `10` and `0` brought
+/// back to the bare number, so a source and a catalog read alike.
 fn normalize(text: &str) -> String {
     text.chars()
         .filter(|c| !c.is_whitespace())
         .collect::<String>()
         .to_lowercase()
         .replace("(10)::numeric", "10")
+        .replace("(10)::doubleprecision", "10")
         .replace("(0)::numeric", "0")
 }
 
 fn scales_an_amount(text: &str) -> bool {
-    normalize(text).contains("power(10")
+    let text = normalize(text);
+    ["power(10", "pow(10", "10^"]
+        .iter()
+        .any(|spelling| text.contains(spelling))
 }
 
 fn rewrites_the_empty_leg(text: &str) -> bool {
@@ -51,11 +55,18 @@ async fn sources(pool: &PgPool) -> Vec<(String, String)> {
 async fn every_amount_scaling_goes_through_yog_token_amount(pool: PgPool) {
     // Mutations: the formula written back in one of migration 025's views, in the implied price
     // of 026, or in the analytic swap facts — each turns this red.
-    assert!(
-        scales_an_amount("(x::NUMERIC / POWER(10::NUMERIC, d))")
-            && scales_an_amount("(x / power((10)::numeric, (d)::numeric))"),
-        "the match must catch the source spelling and the one Postgres deparses"
-    );
+    for spelling in [
+        "(x::NUMERIC / POWER(10::NUMERIC, d))",
+        "(x / power((10)::numeric, (d)::numeric))",
+        "(x / power((10)::double precision, (d)::double precision))",
+        "(x / pow(10, d))",
+        "(x / ((10)::numeric ^ (d)::numeric))",
+    ] {
+        assert!(
+            scales_an_amount(spelling),
+            "the match must catch {spelling}, as written or as Postgres deparses it"
+        );
+    }
 
     let sources = sources(&pool).await;
     let definition = sources
@@ -102,4 +113,33 @@ async fn no_empty_leg_is_written_around_yog_amount_usd(pool: PgPool) {
         copies.is_empty(),
         "these write the empty leg around yog_amount_usd; call yog_moved_amount_usd: {copies:?}"
     );
+}
+
+#[sqlx::test]
+async fn the_amount_functions_are_inlined(pool: PgPool) {
+    // Mutation: a `SET` clause on `yog_token_amount` — Postgres stops inlining it, and every
+    // amount of the hourly views and the analytic facts becomes a per-row call.
+    for view in [
+        "meteora_damm_v2_pool_hourly_activity",
+        "meteora_damm_v2_pool_hourly_flow",
+        "meteora_damm_v2_pool_hourly_liquidity_flow",
+        "meteora_damm_v2_liquidity_events_valued",
+        "meteora_damm_v2_swap_events_hourly_priced",
+        "pool_current_tvl",
+    ] {
+        let plan: Vec<String> = sqlx::query_scalar(AssertSqlSafe(format!(
+            "EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM {view}"
+        )))
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        let calls: Vec<&str> = ["yog_token_amount", "yog_amount_usd", "yog_moved_amount_usd"]
+            .into_iter()
+            .filter(|function| plan.iter().any(|line| line.contains(function)))
+            .collect();
+        assert!(
+            calls.is_empty(),
+            "{view} calls {calls:?} instead of inlining them"
+        );
+    }
 }

@@ -1,6 +1,6 @@
 -- 026_token_amount.sql — a raw amount in token units, written once as
 -- yog_token_amount: yog_amount_usd values it, and the implied price of 023
--- divides by it. 10^decimals is now written nowhere else.
+-- divides by it.
 
 CREATE FUNCTION yog_token_amount(amount NUMERIC, decimals INTEGER)
 RETURNS NUMERIC
