@@ -252,14 +252,20 @@ though both halves are correct: a "turnover = volume / TVL" — a natural produc
 ask — would divide a trade-time numerator by a current-price denominator. If
 such a metric is ever added, pick one convention for both halves.
 
-**One definition per rule** (migrations 024–026). `yog_token_amount` is the
+**One definition per rule** (migrations 024–027). `yog_token_amount` is the
 only place a raw amount is divided by `10^decimals`. `yog_amount_usd` values it
 at a price. `yog_moved_amount_usd` adds the **empty leg** for an
 amount that moved: zero moved is worth zero without a price or a scale.
-Postgres inlines all three. `tests/amount_usd.rs` reads every view and
+`yog_price_asof(mint, at)` is the schema's only reader of `token_prices`: the last
+observation at or before `at`, within the as-of bound below. ⚠️ It reads the
+table as its caller, not as the owner of the view that calls it: a role reading
+a valued view needs its own `SELECT` on `token_prices`.
+Postgres inlines all four. `tests/amount_usd.rs` reads every view and
 function of `public` and every `.rs` and `.sql` of `src/`, and fails on any
 other scaling by ten (`POWER(10`, `pow(10`, `10 ^`), on the empty leg written
-around `yog_amount_usd`, and on a plan where one of the three is not inlined.
+around `yog_amount_usd`, and on a plan where one of the three amount functions
+is not inlined; `tests/price_staleness.rs` does the same for `yog_price_asof`
+on the five valued views.
 
 ### How old a price may be (migration 005)
 
@@ -288,11 +294,12 @@ a price fetched at 10:30 is rejected. Up to two bucket widths per event, not one
 it spans. Intended (a wrong number is worse than an absent one, and the coverage
 counters surface the absence), but it is a trade, not a free win.
 
-Both intervals are SQL functions, declared once in migration 005 and called from
-every valuation view. They are `IMMUTABLE`, so the planner folds them and the
-bound becomes an *index condition* on `idx_token_prices_mint_recent` rather than
-a filter. **Do not inline the interval literal** — the rule previously lived at
-one site out of seventeen, which is exactly how it got lost.
+Both intervals are SQL functions, declared once in migration 005: the as-of one
+is called by `yog_price_asof`, the latest one by the current-price views. They
+are `IMMUTABLE`, so the planner folds them and the bound becomes an *index
+condition* on `idx_token_prices_mint_recent` rather than a filter. **Do not
+inline the interval literal** — the rule previously lived at one site out of
+seventeen, which is exactly how it got lost.
 
 Two consequences worth knowing before you touch a valuation view:
 
@@ -312,14 +319,14 @@ Two consequences worth knowing before you touch a valuation view:
   counts it `stale`. Both value a reserve through `yog_amount_usd` (024): they
   share the arithmetic, not the prices.
 
-`price_staleness.rs` enumerates the views reading `token_prices` or
-`token_last_price` from `pg_views` and fails on any whose **bound count differs
-from its lookup count** — per lookup, not per
-view, so a view with five price LATERALs and one bound is caught. A view that
-reads `token_prices` without any countable lookup (a plain `JOIN` deparses
-without `FROM token_prices`) is a failure too, not a pass. So a view added later
-cannot quietly opt out. It is a tripwire for the forgotten site, not a proof:
+`price_staleness.rs` enumerates the views, materialized views and functions
+reading `token_prices` or `token_last_price`. Any reader of `token_prices` but
+`yog_price_asof` fails, even a bounded copy of its lookup. The others fail when
+their **bound count differs from their lookup count** — per lookup, not per
+view — or when no lookup can be counted at all. So a view added later cannot
+quietly opt out. It is a tripwire for the forgotten site, not a proof:
 substring counting cannot tell two bounds on one lookup from one bound each.
+The same file fails on a plan where `yog_price_asof` is not inlined.
 
 Note what this does *not* cover: a mint carries no price at all before
 `yog-context` first knows it. That is **absence**, not expiry, and no staleness

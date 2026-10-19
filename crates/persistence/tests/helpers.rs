@@ -32,6 +32,8 @@ pub const NUMERIC_OVERFLOW: &str = "22003";
 pub const UNIQUE_VIOLATION: &str = "23505";
 /// `42501` — insufficient_privilege.
 pub const INSUFFICIENT_PRIVILEGE: &str = "42501";
+/// `2BP01` — dependent_objects_still_exist.
+pub const DEPENDENT_OBJECTS_STILL_EXIST: &str = "2BP01";
 
 /// The provisioning script, which no migration runs: a test that needs the
 /// roles or what the file takes back from `PUBLIC` applies it itself.

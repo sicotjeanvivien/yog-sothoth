@@ -1,11 +1,11 @@
 //! A price observation has a validity window, and outside it there is no price: the as-of
 //! bound (one hour) and the latest bound (15 minutes), asserted through the views
-//! themselves. And every view that reads prices applies one, enumerated from the catalog.
+//! themselves. In the schema, `yog_price_asof` alone reads `token_prices`; every price reader bounds its age.
 
-use super::helpers::{catalog_definitions, pk, price_at};
+use super::helpers::{DEPENDENT_OBJECTS_STILL_EXIST, catalog_definitions, pk, price_at, sqlstate};
 use chrono::{DateTime, Duration, DurationRound, Utc};
 use rust_decimal::Decimal;
-use sqlx::PgPool;
+use sqlx::{AssertSqlSafe, PgPool, postgres::PgDatabaseError};
 
 /// The pool and its two tokens: A with 6 decimals, B with 9.
 async fn seed_pool(pool: &PgPool) -> (String, String, String) {
@@ -56,6 +56,21 @@ async fn insert_swap(pool: &PgPool, pool_addr: &str, at: DateTime<Utc>) {
     .unwrap();
 }
 
+async fn insert_liquidity_event(pool: &PgPool, pool_addr: &str, at: DateTime<Utc>) {
+    sqlx::query(
+        "INSERT INTO meteora_damm_v2_liquidity_events
+           (pool_address, signature, liquidity_event_kind, amount_a, amount_b,
+            liquidity_delta, reserve_a_after, reserve_b_after, position, owner,
+            timestamp, slot, event_index)
+         VALUES ($1,'evt_stale','add',1000000,1000000000,0::NUMERIC,0,0,'pos','own',$2,0,0)",
+    )
+    .bind(pool_addr)
+    .bind(at)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 /// `volume_a_to_b_usd` as view 023 publishes it for the pool's only bucket.
 async fn flow_a_to_b(pool: &PgPool) -> Option<f64> {
     sqlx::query_scalar(
@@ -92,6 +107,25 @@ async fn as_of_price_inside_the_window_values_the_bucket(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn as_of_price_is_the_latest_inside_the_window(pool: PgPool) {
+    // Mutation: `DESC` dropped from `yog_price_asof` — the oldest price of the window wins.
+    let (pool_addr, mint_a, _) = seed_pool(&pool).await;
+    let bucket = settled_bucket();
+
+    price_at(&pool, &mint_a, "1.0", bucket - Duration::minutes(50)).await;
+    price_at(&pool, &mint_a, "2.0", bucket - Duration::minutes(5)).await;
+    insert_swap(&pool, &pool_addr, bucket + Duration::minutes(30)).await;
+
+    let value = flow_a_to_b(&pool)
+        .await
+        .expect("two prices inside the window value the bucket");
+    assert!(
+        (value - 2.0).abs() < 1e-6,
+        "the latest price before the bucket ($2) values it, got {value}"
+    );
+}
+
+#[sqlx::test]
 async fn as_of_price_older_than_the_window_does_not_value_the_bucket(pool: PgPool) {
     let (pool_addr, mint_a, _) = seed_pool(&pool).await;
     let bucket = settled_bucket();
@@ -116,18 +150,7 @@ async fn liquidity_event_value_follows_the_same_as_of_bound(pool: PgPool) {
     price_at(&pool, &mint_a, "2.0", event_at - Duration::minutes(90)).await;
     price_at(&pool, &mint_b, "100.0", event_at - Duration::minutes(90)).await;
 
-    sqlx::query(
-        "INSERT INTO meteora_damm_v2_liquidity_events
-           (pool_address, signature, liquidity_event_kind, amount_a, amount_b,
-            liquidity_delta, reserve_a_after, reserve_b_after, position, owner,
-            timestamp, slot, event_index)
-         VALUES ($1,'evt_stale','add',1000000,1000000000,0::NUMERIC,0,0,'pos','own',$2,0,0)",
-    )
-    .bind(&pool_addr)
-    .bind(event_at)
-    .execute(&pool)
-    .await
-    .unwrap();
+    insert_liquidity_event(&pool, &pool_addr, event_at).await;
 
     let value: Option<f64> = sqlx::query_scalar(
         "SELECT value_usd::DOUBLE PRECISION
@@ -278,42 +301,141 @@ async fn price_readers(pool: &PgPool) -> Vec<(String, String)> {
         .collect()
 }
 
-#[sqlx::test]
-async fn every_view_reading_a_price_bounds_its_age(pool: PgPool) {
-    let views = price_readers(&pool).await;
+/// The one reader of `token_prices`: every as-of lookup is a call to it.
+const AS_OF: &str = "yog_price_asof";
 
-    // A view that stops reading prices may leave this list; one that still reads them may not.
-    assert!(
-        views.len() >= 6,
-        "expected the six known price readers (views and functions), found {} — \
-         if one was removed, update this test deliberately rather than letting \
-         the guard quietly cover less",
-        views.len()
-    );
-
-    let exempt_present = views.iter().any(|(name, _)| name == EXEMPT);
-    assert!(
-        exempt_present,
-        "{EXEMPT} no longer reads a price — the exemption above is now \
-         meaningless and must be removed"
-    );
-
-    let unbounded: Vec<String> = views
+/// The price readers that break the policy: any reader of `token_prices` but [`AS_OF`], and,
+/// [`EXEMPT`] aside, any reader without one bound per lookup.
+fn policy_breaches(readers: &[(String, String)]) -> Vec<String> {
+    readers
         .iter()
-        .filter(|(name, _)| name != EXEMPT)
         .filter_map(|(name, def)| {
-            unbounded_lookups(def).map(|(b, l)| format!("{name} ({b}/{l} bornés)"))
+            if name != AS_OF && def.contains("token_prices") {
+                Some(format!(
+                    "{name} (reads token_prices instead of calling {AS_OF})"
+                ))
+            } else if name == EXEMPT {
+                None
+            } else {
+                unbounded_lookups(def).map(|(b, l)| format!("{name} ({b}/{l} bornés)"))
+            }
         })
-        .collect();
+        .collect()
+}
 
+#[sqlx::test]
+async fn every_price_reader_follows_the_policy(pool: PgPool) {
+    let readers = price_readers(&pool).await;
+
+    for known in [AS_OF, "pool_current_tvl", EXEMPT] {
+        assert!(
+            readers.iter().any(|(name, _)| name == known),
+            "{known} no longer reads a price — if that is deliberate, update this test \
+             rather than letting the guard quietly cover less"
+        );
+    }
+
+    let breaches = policy_breaches(&readers);
     assert!(
-        unbounded.is_empty(),
-        "these price readers do not apply the staleness policy to every \
-         lookup: {unbounded:?}. Add `fetched_at >= <reference> - \
-         yog_price_max_age_asof()` (or the _latest() variant for a current-price \
-         lookup) — the rule used to live at one site out of seventeen, which is \
-         how it got lost"
+        breaches.is_empty(),
+        "these price readers break the policy: {breaches:?}. Look a price up as of an \
+         instant with `LEFT JOIN LATERAL {AS_OF}(mint, at)`; bound a current-price lookup \
+         with yog_price_max_age_latest()"
     );
+}
+
+#[sqlx::test]
+async fn the_guard_catches_the_lookup_written_out_in_a_view(pool: PgPool) {
+    sqlx::query(
+        "CREATE VIEW _guard_probe_written_out AS
+           SELECT p.pool_address, pa.price_usd
+           FROM pools p
+           LEFT JOIN LATERAL (
+               SELECT price_usd FROM token_prices
+               WHERE mint = p.token_a_mint AND fetched_at <= p.first_seen_at
+                 AND fetched_at >= p.first_seen_at - yog_price_max_age_asof()
+               ORDER BY fetched_at DESC LIMIT 1
+           ) pa ON true",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let readers = price_readers(&pool).await;
+    let (_, definition) = readers
+        .iter()
+        .find(|(name, _)| name == "_guard_probe_written_out")
+        .expect("the probe reads token_prices, so the enumeration must find it");
+    assert_eq!(
+        unbounded_lookups(definition),
+        None,
+        "premise of this test: the copy is bounded, so a count of bounds lets it through"
+    );
+    let breaches = policy_breaches(&readers);
+    assert!(
+        breaches.contains(
+            &"_guard_probe_written_out (reads token_prices instead of calling yog_price_asof)"
+                .to_string()
+        ),
+        "a bounded copy of the lookup must still be reported: {breaches:?}"
+    );
+}
+
+#[sqlx::test]
+async fn the_lookup_holds_token_prices_as_a_dependency(pool: PgPool) {
+    // Mutation: a string body for `yog_price_asof` — it records no dependency, and the table
+    // drops from under every valued view.
+    let err = sqlx::query("DROP TABLE token_prices")
+        .execute(&pool)
+        .await
+        .expect_err("yog_price_asof depends on token_prices");
+    assert_eq!(sqlstate(&err), DEPENDENT_OBJECTS_STILL_EXIST);
+    let detail = err
+        .as_database_error()
+        .and_then(|e| e.try_downcast_ref::<PgDatabaseError>())
+        .and_then(PgDatabaseError::detail)
+        .unwrap_or_default()
+        .to_owned();
+    assert!(
+        detail.contains(
+            "function yog_price_asof(text,timestamp with time zone) depends on table token_prices"
+        ),
+        "{detail}"
+    );
+}
+
+#[sqlx::test]
+async fn the_price_lookup_is_inlined(pool: PgPool) {
+    // Mutation: a `SET` clause on `yog_price_asof` — Postgres stops inlining it, and every
+    // price of the valued views becomes a per-row call outside their plan.
+    // ⚠️ A hypertable without a chunk leaves no scan in the plan, and the control below fails.
+    let (pool_addr, mint_a, _) = seed_pool(&pool).await;
+    price_at(&pool, &mint_a, "1.0", Utc::now()).await;
+    insert_liquidity_event(&pool, &pool_addr, Utc::now()).await;
+    for view in [
+        "meteora_damm_v2_pool_hourly_activity",
+        "meteora_damm_v2_pool_hourly_flow",
+        "meteora_damm_v2_pool_hourly_liquidity_flow",
+        "meteora_damm_v2_liquidity_events_valued",
+        "meteora_damm_v2_swap_events_hourly_priced",
+    ] {
+        let plan: Vec<String> = sqlx::query_scalar(AssertSqlSafe(format!(
+            "EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM {view}"
+        )))
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        let plan = plan.join("\n");
+
+        assert!(
+            !plan.contains(AS_OF),
+            "{view} calls {AS_OF} instead of inlining it: {plan}"
+        );
+        assert!(
+            plan.contains("token_prices"),
+            "{view}: no price lookup in the plan: {plan}"
+        );
+    }
 }
 
 #[sqlx::test]
