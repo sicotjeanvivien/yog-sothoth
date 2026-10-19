@@ -18,7 +18,6 @@ fn rejects_invalid_mint() {
         ApiError::BadRequest(m) => m,
         other => panic!("expected BadRequest, got {other:?}"),
     };
-    // The error message names "mint", not "pool address" — distinct
-    // helper used.
-    assert!(msg.contains("mint"));
+    // Red if the shared parser names the wrong subject.
+    assert_eq!(msg, "invalid mint address: not-base58");
 }

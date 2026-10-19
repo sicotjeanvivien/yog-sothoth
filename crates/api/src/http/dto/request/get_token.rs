@@ -2,7 +2,7 @@
 
 use solana_pubkey::Pubkey;
 
-use crate::http::{error::ApiError, query::parse_token_mint};
+use crate::http::error::ApiError;
 
 #[derive(Debug)]
 pub(crate) struct GetTokenRequest {
@@ -12,7 +12,7 @@ pub(crate) struct GetTokenRequest {
 impl GetTokenRequest {
     pub(crate) fn parse(mint: String) -> Result<Self, ApiError> {
         Ok(Self {
-            mint: parse_token_mint(&mint)?,
+            mint: super::parse_address(&mint, "mint")?,
         })
     }
 }

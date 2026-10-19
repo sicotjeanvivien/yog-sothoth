@@ -35,7 +35,6 @@ api/src/
 │   ├── dto/schema.rs      ← the wire forms the contract names (UnsignedDecimal, Count…)
 │   ├── tests/contract.rs  ← test-only: the OpenAPI document, as committed in openapi.json
 │   ├── cursor.rs          ← base64/JSON cursor codec
-│   ├── query.rs           ← shared query-param validation helpers
 │   ├── middleware.rs      ← CORS, security headers, request-id tracing,
 │   │                        capacity bounds (middleware/capacity.rs)
 │   ├── state.rs           ← AppState — what every handler reads through `State`
@@ -67,30 +66,36 @@ The one place the read path matches on a protocol is `ProtocolResponse`
 (`http/dto/response/protocol.rs`): its `From<domain::Protocol>` is exhaustive
 with no wildcard arm, so adding a variant breaks the build there.
 
-### Where a response type goes
+### Where a DTO goes
 
-`http/dto/response/` follows one rule throughout:
+`http/dto/request/` and `http/dto/response/` follow one rule throughout:
 
-- **Name.** Every type ends in `Response`. An enum takes the name of the domain
-  type it translates (`domain::FreshnessStatus` → `FreshnessStatusResponse`),
-  so the two never share a name — without the protocol prefix when its response
-  has none. `every_schema_is_a_response_or_a_wire_form`
-  fails on a schema of the contract named otherwise.
+- **Name.** A response type ends in `Response`. An enum takes the name of the
+  domain type it translates (`domain::FreshnessStatus` →
+  `FreshnessStatusResponse`), so the two never share a name — without the
+  protocol prefix when its response has none.
+  `every_schema_is_a_response_or_a_wire_form` fails on a schema of the
+  contract named otherwise. On the request side, `*Request` is what a route
+  takes once validated, `*Query` the raw query string it parses, `*Param` an
+  enum value of that query.
 - **Place.** One type per file. At the top level, what a route returns — its
-  body, or the item of a page. A part of a response lives in that response's
-  folder, one level deep; its file drops the owner's prefix, its type keeps it
-  (`announcement/kind_response.rs` holds `AnnouncementKindResponse`). A part several
-  responses share lives with the one it is about, and the others reach it
-  through it: `signal/severity_response.rs`, `token/embedded_token_response.rs`.
+  body, or the item of a page — or takes, its `*Request`. A part lives in its
+  owner's folder, one level deep; its file drops the owner's prefix, its type
+  keeps it (`announcement/kind_response.rs` holds `AnnouncementKindResponse`).
+  A part several share lives with the one it is about, and the others reach
+  it through it: `signal/severity_response.rs`,
+  `token/embedded_token_response.rs`. The query of `GET /api/signals` and its
+  pagination are parts of `list_signals/`, the one route that reads them.
 - **Visibility.** Each item and field declares the reach it has. A field is
   private unless something outside its file builds or reads it — the handlers
-  build `PageResponse` and the readiness types. `pub(super)`
-  is for what only its folder and that folder's tests use, `pub(in
-  crate::http::dto::response)` for a part other responses reach, `pub(crate)`
-  for what the handlers see.
-- **Conversions** live with the type they build, and a behaviour two responses
-  share is written once (`logo_uri` in `token.rs`).
-- **Tests** of a part go in its owner's file, `response/tests/<owner>_tests.rs`.
+  build `PageResponse` and the readiness types, `ListSignalsRequest::parse`
+  reads `SignalsQuery`. `pub(super)` is for what only its folder and that
+  folder's tests use, `pub(in crate::http::dto::response)` for a part other
+  responses reach, `pub(crate)` for what the handlers see.
+- **Conversions** live with the type they build, and a behaviour two DTOs
+  share is written once, in their common parent: `logo_uri` in `token.rs`,
+  `parse_address` in `request.rs`.
+- **Tests** of a part go in its owner's file, `<side>/tests/<owner>_tests.rs`.
 
 ## Endpoints
 

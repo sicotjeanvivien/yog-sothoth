@@ -5,11 +5,17 @@ use yog_core::domain::{Severity, SignalCursor};
 use yog_core::{PageDirection, PagePosition};
 
 use crate::application::SignalListParams;
-use crate::http::{
-    cursor::decode_signal_cursor,
-    error::ApiError,
-    query::{SignalsQuery, parse_pool_address, validate_cursor_position_exclusive, validate_limit},
-};
+use crate::http::{cursor::decode_signal_cursor, error::ApiError};
+
+mod page_direction_param;
+mod page_position_param;
+mod severity_param;
+mod signals_query;
+
+use page_direction_param::PageDirectionParam;
+use page_position_param::PagePositionParam;
+use severity_param::SeverityParam;
+pub(crate) use signals_query::{MAX_LIMIT, SignalsQuery};
 
 #[derive(Debug)]
 pub(crate) struct ListSignalsRequest {
@@ -22,8 +28,7 @@ pub(crate) struct ListSignalsRequest {
 }
 
 impl ListSignalsRequest {
-    /// Validates the query. No sort: the order is fixed. `severity` is validated by serde,
-    /// `pool` parsed as the pool path params are.
+    /// Validates the query. No sort: the order is fixed. `severity` is validated by serde.
     pub(crate) fn parse(query: SignalsQuery) -> Result<Self, ApiError> {
         validate_limit(query.limit)?;
         validate_cursor_position_exclusive(query.cursor.is_some(), query.position.is_some())?;
@@ -32,7 +37,7 @@ impl ListSignalsRequest {
             .pool
             .as_deref()
             .filter(|raw| !raw.is_empty())
-            .map(parse_pool_address)
+            .map(|raw| super::parse_address(raw, "pool"))
             .transpose()?;
 
         let cursor = match query.cursor.as_deref() {
@@ -60,6 +65,29 @@ impl ListSignalsRequest {
             limit: self.limit,
         }
     }
+}
+
+/// Validate the `limit` query param against the accepted range.
+fn validate_limit(limit: i64) -> Result<(), ApiError> {
+    if !(1..=MAX_LIMIT).contains(&limit) {
+        return Err(ApiError::BadRequest(format!(
+            "`limit` must be between 1 and {MAX_LIMIT}, got {limit}"
+        )));
+    }
+    Ok(())
+}
+
+/// Reject `position` combined with `cursor` (contradictory directives).
+fn validate_cursor_position_exclusive(
+    has_cursor: bool,
+    has_position: bool,
+) -> Result<(), ApiError> {
+    if has_cursor && has_position {
+        return Err(ApiError::BadRequest(
+            "`position` cannot be combined with `cursor`".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

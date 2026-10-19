@@ -9,7 +9,6 @@ mod dto;
 mod error;
 mod handlers;
 mod middleware;
-mod query;
 mod state;
 
 pub(crate) use state::AppState;

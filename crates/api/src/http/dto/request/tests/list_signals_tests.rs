@@ -1,15 +1,16 @@
-//! Unit tests for `ListSignalsRequest::parse`.
+//! Unit tests for `ListSignalsRequest::parse` and its validators.
 
 use chrono::{TimeZone, Utc};
 use yog_core::domain::{Severity, SignalCursor};
 use yog_core::{Cursor, PageDirection};
 
-use crate::http::cursor::encode_cursor;
-use crate::http::dto::request::ListSignalsRequest;
-use crate::http::error::ApiError;
-use crate::http::query::{
-    PageDirectionParam, PagePositionParam, SeverityParam, SignalsQuery, default_limit,
+use super::signals_query::default_limit;
+use super::{
+    ListSignalsRequest, MAX_LIMIT, PageDirectionParam, PagePositionParam, SeverityParam,
+    SignalsQuery, validate_cursor_position_exclusive, validate_limit,
 };
+use crate::http::cursor::encode_cursor;
+use crate::http::error::ApiError;
 
 fn valid_query() -> SignalsQuery {
     SignalsQuery {
@@ -54,7 +55,7 @@ fn rejects_an_invalid_pool_address() {
     let mut q = valid_query();
     q.pool = Some("not-a-pubkey".to_string());
     let err = ListSignalsRequest::parse(q).unwrap_err();
-    assert!(matches!(err, ApiError::BadRequest(_)));
+    assert!(matches!(err, ApiError::BadRequest(m) if m == "invalid pool address: not-a-pubkey"));
 }
 
 #[test]
@@ -103,4 +104,22 @@ fn rejects_malformed_cursor() {
     q.cursor = Some("not-base64!!".to_string());
     let err = ListSignalsRequest::parse(q).unwrap_err();
     assert!(matches!(err, ApiError::BadRequest(_)));
+}
+
+#[test]
+fn validate_limit_bounds() {
+    assert!(validate_limit(0).is_err());
+    assert!(validate_limit(1).is_ok());
+    assert!(validate_limit(MAX_LIMIT).is_ok());
+    assert!(validate_limit(MAX_LIMIT + 1).is_err());
+}
+
+#[test]
+fn validate_pagination_rejects_cursor_with_position() {
+    assert!(validate_cursor_position_exclusive(true, true).is_err());
+}
+
+#[test]
+fn validate_pagination_allows_cursor_alone() {
+    assert!(validate_cursor_position_exclusive(true, false).is_ok());
 }
