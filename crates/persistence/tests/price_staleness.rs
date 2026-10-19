@@ -2,7 +2,7 @@
 //! bound (one hour) and the latest bound (15 minutes), asserted through the views
 //! themselves. And every view that reads prices applies one, enumerated from the catalog.
 
-use super::helpers::{pk, price_at};
+use super::helpers::{catalog_definitions, pk, price_at};
 use chrono::{DateTime, Duration, DurationRound, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
@@ -270,28 +270,12 @@ fn unbounded_lookups(definition: &str) -> Option<(usize, usize)> {
 }
 
 /// Every view, aggregate or function in `public` reading `token_prices` or `token_last_price`.
-///
-/// ⚠️ `pg_matviews` and `pg_proc` too: a price read moved there escapes a `pg_views` guard.
 async fn price_readers(pool: &PgPool) -> Vec<(String, String)> {
-    // ⚠️ `pg_get_functiondef`, not `prosrc`: a `BEGIN ATOMIC` body leaves `prosrc` empty.
-    // It raises on an aggregate, hence `prokind`.
-    sqlx::query_as(
-        "SELECT viewname, definition FROM pg_views
-         WHERE schemaname = 'public'
-           AND (definition LIKE '%token_prices%' OR definition LIKE '%token_last_price%')
-         UNION ALL
-         SELECT matviewname, definition FROM pg_matviews
-         WHERE schemaname = 'public'
-           AND (definition LIKE '%token_prices%' OR definition LIKE '%token_last_price%')
-         UNION ALL
-         SELECT proname, def FROM pg_proc, pg_get_functiondef(oid) AS def
-         WHERE pronamespace = 'public'::regnamespace AND prokind <> 'a'
-           AND (def LIKE '%token_prices%' OR def LIKE '%token_last_price%')
-         ORDER BY 1",
-    )
-    .fetch_all(pool)
-    .await
-    .unwrap()
+    catalog_definitions(pool)
+        .await
+        .into_iter()
+        .filter(|(_, def)| def.contains("token_prices") || def.contains("token_last_price"))
+        .collect()
 }
 
 #[sqlx::test]

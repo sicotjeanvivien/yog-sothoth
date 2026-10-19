@@ -75,6 +75,26 @@ pub async fn as_role(pool: &PgPool, role: &str) -> PgPool {
     scoped
 }
 
+/// Every view, materialized view and function of `public`, as `(name, definition)`.
+///
+/// ⚠️ `pg_matviews` and `pg_proc` too: a definition moved there escapes a `pg_views` guard.
+pub async fn catalog_definitions(pool: &PgPool) -> Vec<(String, String)> {
+    // ⚠️ `pg_get_functiondef`, not `prosrc`: a `BEGIN ATOMIC` body leaves `prosrc` empty.
+    // It raises on an aggregate, hence `prokind`.
+    sqlx::query_as(
+        "SELECT viewname::TEXT, definition FROM pg_views WHERE schemaname = 'public'
+         UNION ALL
+         SELECT matviewname::TEXT, definition FROM pg_matviews WHERE schemaname = 'public'
+         UNION ALL
+         SELECT proname::TEXT, pg_get_functiondef(oid) FROM pg_proc
+         WHERE pronamespace = 'public'::regnamespace AND prokind <> 'a'
+         ORDER BY 1",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
 pub fn sg() -> Signature {
     Signature::from([7u8; 64])
 }

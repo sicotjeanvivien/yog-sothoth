@@ -46,30 +46,22 @@ SELECT pool_address, bucket, $3, swap_count, valued,
     SELECT h.pool_address, h.bucket, h.swap_count,
            h.valuation_complete AS valued,
            CASE WHEN NOT h.valuation_complete THEN NULL
-                WHEN COALESCE(h.volume_in_a, 0) = 0 THEN 0
-                ELSE (h.volume_in_a::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a
+                ELSE yog_moved_amount_usd(h.volume_in_a, h.dec_a, h.eff_price_a)
            END AS volume_in_a_usd,
            CASE WHEN NOT h.valuation_complete THEN NULL
-                WHEN COALESCE(h.volume_in_b, 0) = 0 THEN 0
-                ELSE (h.volume_in_b::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b
+                ELSE yog_moved_amount_usd(h.volume_in_b, h.dec_b, h.eff_price_b)
            END AS volume_in_b_usd,
            CASE WHEN NOT h.valuation_complete THEN NULL ELSE
-               CASE WHEN COALESCE(h.fee_in_a, 0) = 0 THEN 0
-                    ELSE (h.fee_in_a::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a END
-             + CASE WHEN COALESCE(h.fee_in_b, 0) = 0 THEN 0
-                    ELSE (h.fee_in_b::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b END
+               yog_moved_amount_usd(h.fee_in_a, h.dec_a, h.eff_price_a)
+             + yog_moved_amount_usd(h.fee_in_b, h.dec_b, h.eff_price_b)
            END AS fees_usd,
            CASE WHEN NOT h.valuation_complete THEN NULL ELSE
-               CASE WHEN COALESCE(h.protocol_fee_in_a, 0) = 0 THEN 0
-                    ELSE (h.protocol_fee_in_a::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a END
-             + CASE WHEN COALESCE(h.protocol_fee_in_b, 0) = 0 THEN 0
-                    ELSE (h.protocol_fee_in_b::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b END
+               yog_moved_amount_usd(h.protocol_fee_in_a, h.dec_a, h.eff_price_a)
+             + yog_moved_amount_usd(h.protocol_fee_in_b, h.dec_b, h.eff_price_b)
            END AS protocol_fees_usd,
            CASE WHEN NOT h.valuation_complete THEN NULL ELSE
-               CASE WHEN COALESCE(h.referral_fee_in_a, 0) = 0 THEN 0
-                    ELSE (h.referral_fee_in_a::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a END
-             + CASE WHEN COALESCE(h.referral_fee_in_b, 0) = 0 THEN 0
-                    ELSE (h.referral_fee_in_b::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b END
+               yog_moved_amount_usd(h.referral_fee_in_a, h.dec_a, h.eff_price_a)
+             + yog_moved_amount_usd(h.referral_fee_in_b, h.dec_b, h.eff_price_b)
            END AS referral_fees_usd
       FROM priced h
   ) valued

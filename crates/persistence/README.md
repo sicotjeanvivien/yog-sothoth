@@ -252,6 +252,15 @@ though both halves are correct: a "turnover = volume / TVL" — a natural produc
 ask — would divide a trade-time numerator by a current-price denominator. If
 such a metric is ever added, pick one convention for both halves.
 
+**One definition per rule** (migrations 024–026). `yog_token_amount` is the
+only place a raw amount is divided by `10^decimals`. `yog_amount_usd` values it
+at a price. `yog_moved_amount_usd` adds the **empty leg** for an
+amount that moved: zero moved is worth zero without a price or a scale.
+Postgres inlines all three. `tests/amount_usd.rs` reads every view and
+function of `public` and every `.rs` and `.sql` of `src/`, and fails on any
+other scaling by ten (`POWER(10`, `pow(10`, `10 ^`), on the empty leg written
+around `yog_amount_usd`, and on a plan where one of the three is not inlined.
+
 ### How old a price may be (migration 005)
 
 A price observation has a **validity window**; outside it there is no price, only
@@ -368,8 +377,7 @@ published column:
 ```sql
 CASE WHEN bool_and((price IS NOT NULL AND decimals IS NOT NULL)
                    OR COALESCE(amount, 0) = 0)
-     THEN SUM(CASE WHEN COALESCE(amount, 0) = 0 THEN 0
-                   ELSE amount / 10^decimals * price END)
+     THEN SUM(yog_moved_amount_usd(amount, decimals, price))
 END
 ```
 
@@ -378,7 +386,7 @@ a bare `amount = 0` on a nullable amount hands back the sub-total the guard
 exists to forbid. Every operand of the predicate has to be an `IS NOT NULL`
 test or `COALESCE`-d, which is what makes it total.
 
-Read the two mechanisms separately: the inner `CASE` is the **empty leg** (a
+Read the two mechanisms separately: the inner `yog_moved_amount_usd` is the **empty leg** (a
 mint that paid out nothing is worth zero without any price), the outer
 `bool_and` is **completeness** (one mint that did pay out and cannot be valued
 makes the hour unknown). Neither substitutes for the other.
@@ -552,8 +560,8 @@ The DAMM v2 facts sum their hours from the 5-minute tranches of
 10 minutes ago and read in real time past that: a cycle reads about its last
 twenty minutes from the raw rows — more if a refresh runs late — never a whole
 open hour. The tranches are kept 30 days, past the raw 7, so an hour caught up
-after a long outage still reads them. They value with the formulas of
-`swap_parts` (010), at the prices of `meteora_damm_v2_swap_hour_prices` (023),
+after a long outage still reads them. They value through `yog_moved_amount_usd`
+(025), as `swap_parts` does, at the prices of `meteora_damm_v2_swap_hour_prices` (023),
 the function `meteora_damm_v2_swap_events_hourly_priced` calls too. The facts
 cannot read that view: the range must filter the tranches, and through a view
 grouped by hour it would not reach the chunk scans. `tests/analytic_writer.rs`
