@@ -1,11 +1,57 @@
-//! Counters for the gRPC ingestion path: the slot/time buffer's, and the listener's.
+//! Metrics for the gRPC ingestion path: the slot/time buffer's, and the listener's.
 
-use metrics::{counter, describe_counter};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+use metrics::{counter, describe_counter, describe_gauge, gauge};
 
 /// Transactions dropped because their slot never received a block time.
-/// ⚠️ Counts transactions, not adapter payloads; staying at zero is what says the buffer's
-/// unmeasured bounds are generous.
+/// ⚠️ Counts transactions, not adapter payloads; staying at zero says nothing of the margin
+/// left under the bounds, which the two peaks below measure.
 const TRANSACTIONS_EVICTED: &str = "yog_indexer_grpc_untimestamped_transactions_total";
+
+/// The most payloads waiting at once since start, against `MAX_PENDING_PAYLOADS`.
+const PENDING_PAYLOADS_PEAK: &str = "yog_indexer_grpc_pending_payloads_peak";
+
+/// The furthest the oldest waiting slot has trailed the head since start, against `MAX_PENDING_SLOTS`.
+const PENDING_SLOT_LAG_PEAK: &str = "yog_indexer_grpc_pending_slot_lag_peak";
+
+/// The process-wide peaks of what the buffer holds, each exported as a gauge when it rises.
+/// ⚠️ Not held by the buffer: it dies with its session, and the next one would lower the gauges.
+pub(crate) struct WaitingPeaks {
+    payloads: AtomicU64,
+    slot_lag: AtomicU64,
+}
+
+/// The peaks every buffer of the process reports to.
+pub(crate) static WAITING_PEAKS: WaitingPeaks = WaitingPeaks::new();
+
+impl WaitingPeaks {
+    pub(crate) const fn new() -> Self {
+        Self {
+            payloads: AtomicU64::new(0),
+            slot_lag: AtomicU64::new(0),
+        }
+    }
+
+    /// Export both peaks as stored, so one never raised still reads 0 rather than an absent series.
+    /// ⚠️ Called by the gRPC listener, not at registration: a WebSocket indexer would show them too.
+    pub(crate) fn export(&self) {
+        gauge!(PENDING_PAYLOADS_PEAK).set(self.payloads.load(Ordering::Relaxed) as f64);
+        gauge!(PENDING_SLOT_LAG_PEAK).set(self.slot_lag.load(Ordering::Relaxed) as f64);
+    }
+
+    /// Take what the buffer holds now; a gauge moves only when its peak rises.
+    pub(crate) fn record(&self, payloads: usize, slot_lag: u64) {
+        raise(&self.payloads, payloads as u64, PENDING_PAYLOADS_PEAK);
+        raise(&self.slot_lag, slot_lag, PENDING_SLOT_LAG_PEAK);
+    }
+}
+
+fn raise(peak: &AtomicU64, value: u64, gauge_name: &'static str) {
+    if peak.fetch_max(value, Ordering::Relaxed) < value {
+        gauge!(gauge_name).set(value as f64);
+    }
+}
 
 /// Which bound forced the eviction, on every increment of [`TRANSACTIONS_EVICTED`].
 /// ⚠️ Unlabelled, a payload-bound eviction would read as "the slot ceiling is too small", and
@@ -41,6 +87,14 @@ impl GrpcBufferMetrics {
             TRANSACTIONS_EVICTED,
             "Transactions dropped because their slot never received a block time, \
              labelled by the bound that forced it"
+        );
+        describe_gauge!(
+            PENDING_PAYLOADS_PEAK,
+            "The most transactions waiting for their slot's block time at once since start"
+        );
+        describe_gauge!(
+            PENDING_SLOT_LAG_PEAK,
+            "The most slots the oldest waiting transaction has trailed the stream's head since start"
         );
     }
 

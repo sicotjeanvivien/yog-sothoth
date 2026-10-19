@@ -1,7 +1,8 @@
 //! Tests for the slot/time pairing: pure state, exercised exhaustively. Whether the bounds are
-//! the right numbers is a provider's stream's to say, through the eviction counter.
+//! the right numbers is a provider's stream's to say, through the two peaks it reports.
 
 use super::*;
+use crate::infra::grpc::test_fixtures::Snapshot;
 
 /// What the assertions read and nothing in production does, through two `#[cfg(test)]` accessors.
 impl<T> SlotTimestampBuffer<T> {
@@ -19,9 +20,14 @@ impl<T> SlotTimestampBuffer<T> {
 /// A payload standing in for whatever the listener carries; the buffer is generic.
 type Payload = u32;
 
+/// Peaks of this test alone: the process-wide ones would carry what other tests reached.
+fn fresh_peaks() -> &'static WaitingPeaks {
+    Box::leak(Box::new(WaitingPeaks::new()))
+}
+
 fn buffer() -> SlotTimestampBuffer<Payload> {
     // Deliberately tiny: three slots say what 256 would, faster.
-    SlotTimestampBuffer::with_bounds(3, 5, 2)
+    SlotTimestampBuffer::with_bounds(3, 5, 2, fresh_peaks())
 }
 
 fn at(secs: i64) -> DateTime<Utc> {
@@ -206,7 +212,7 @@ fn the_payload_bound_evicts_the_newest_slot_not_the_oldest() {
 #[test]
 fn the_two_bounds_evict_opposite_ends() {
     // Slot bound: the oldest goes, its block-meta is not coming.
-    let mut by_slots = SlotTimestampBuffer::with_bounds(2, 100, 2);
+    let mut by_slots = SlotTimestampBuffer::with_bounds(2, 100, 2, fresh_peaks());
     for slot in 10..=13 {
         by_slots.on_payload(slot, slot as Payload);
     }
@@ -221,7 +227,7 @@ fn the_two_bounds_evict_opposite_ends() {
     );
 
     // Payload bound: the newest goes, the oldest is due to resolve.
-    let mut by_payloads = SlotTimestampBuffer::with_bounds(100, 2, 2);
+    let mut by_payloads = SlotTimestampBuffer::with_bounds(100, 2, 2, fresh_peaks());
     for slot in 10..=13 {
         by_payloads.on_payload(slot, slot as Payload);
     }
@@ -473,12 +479,7 @@ fn the_oldest_pending_slot_is_the_one_that_was_not_finished() {
 
 /// The counter for one `reason` label, or `None` when never touched.
 fn counter_for<'a>(
-    snapshot: &'a [(
-        metrics_util::CompositeKey,
-        Option<metrics::Unit>,
-        Option<metrics::SharedString>,
-        metrics_util::debugging::DebugValue,
-    )],
+    snapshot: &'a Snapshot,
     reason: &str,
 ) -> Option<&'a metrics_util::debugging::DebugValue> {
     snapshot
@@ -538,4 +539,125 @@ fn a_stale_slot_is_evicted_by_block_metas_alone() {
          not survive it just because no payload arrived"
     );
     assert_eq!(buffer.pending_payloads(), 0);
+}
+
+// ── peaks ───────────────────────────────────────────────────────────
+
+/// The gauge's value under `name`, or `None` when never set.
+fn gauge_for(snapshot: &Snapshot, name: &str) -> Option<f64> {
+    snapshot.iter().find_map(|(key, _, _, value)| match value {
+        metrics_util::debugging::DebugValue::Gauge(v) if key.key().name() == name => {
+            Some(v.into_inner())
+        }
+        _ => None,
+    })
+}
+
+/// ⚠️ Against a gauge that follows the current count: a drained buffer would read 0, and the
+/// burst the bound is sized for would be gone by the next scrape.
+#[test]
+fn the_payload_peak_survives_the_buffer_draining() {
+    use metrics_util::debugging::DebuggingRecorder;
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let mut buffer = buffer();
+        for payload in 1..=4 {
+            buffer.on_payload(10, payload);
+        }
+        assert_eq!(buffer.on_block_time(10, at(100)).len(), 4);
+        assert_eq!(buffer.pending_payloads(), 0);
+    });
+
+    let snapshot = snapshotter.snapshot().into_vec();
+    assert_eq!(
+        gauge_for(&snapshot, "yog_indexer_grpc_pending_payloads_peak"),
+        Some(4.0)
+    );
+}
+
+/// ⚠️ Against a lag read from the newest slot, or before the head moves: both report 0 here.
+#[test]
+fn the_slot_lag_peak_is_the_oldest_waiting_slot_behind_the_head() {
+    use metrics_util::debugging::DebuggingRecorder;
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let mut buffer = buffer(); // window of 3 slots
+        buffer.on_payload(10, 1);
+        buffer.on_payload(12, 2);
+        buffer.on_block_time(10, at(100));
+        buffer.on_block_time(12, at(102));
+    });
+
+    let snapshot = snapshotter.snapshot().into_vec();
+    assert_eq!(
+        gauge_for(&snapshot, "yog_indexer_grpc_pending_slot_lag_peak"),
+        Some(2.0)
+    );
+}
+
+/// ⚠️ Against peaks held per buffer: each reconnection builds a new one, which would start the
+/// gauges again from its own, lower, numbers.
+#[test]
+fn every_buffer_reports_to_the_same_peaks() {
+    let first = SlotTimestampBuffer::<Payload>::new();
+    let second = SlotTimestampBuffer::<Payload>::new();
+    assert!(std::ptr::eq(first.waiting.peaks(), second.waiting.peaks()));
+}
+
+/// ⚠️ Against a peak taken after the eviction: it would stop at the bound, 5 here, and hide by
+/// how much the stream crossed it.
+#[test]
+fn the_payload_peak_keeps_the_overshoot_the_bound_evicted() {
+    use metrics_util::debugging::DebuggingRecorder;
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let mut buffer = buffer(); // 5 payloads at most
+        for payload in 1..=6 {
+            buffer.on_payload(10, payload);
+        }
+        assert_eq!(
+            buffer.pending_payloads(),
+            0,
+            "the slot over the bound was evicted"
+        );
+    });
+
+    let snapshot = snapshotter.snapshot().into_vec();
+    assert_eq!(
+        gauge_for(&snapshot, "yog_indexer_grpc_pending_payloads_peak"),
+        Some(6.0)
+    );
+}
+
+/// ⚠️ Against an export that writes 0: the listener exports once per run, and a run after a
+/// raise would hide the peak until the stream beat it again.
+#[test]
+fn the_peaks_are_exported_as_stored() {
+    use metrics_util::debugging::DebuggingRecorder;
+
+    let peaks = fresh_peaks();
+    peaks.record(3, 2);
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+    metrics::with_local_recorder(&recorder, || peaks.export());
+
+    let snapshot = snapshotter.snapshot().into_vec();
+    assert_eq!(
+        gauge_for(&snapshot, "yog_indexer_grpc_pending_payloads_peak"),
+        Some(3.0)
+    );
+    assert_eq!(
+        gauge_for(&snapshot, "yog_indexer_grpc_pending_slot_lag_peak"),
+        Some(2.0)
+    );
 }

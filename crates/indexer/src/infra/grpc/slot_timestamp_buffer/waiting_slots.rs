@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::infra::grpc::metrics::{EvictionReason, GrpcBufferMetrics};
+use crate::infra::grpc::metrics::{EvictionReason, GrpcBufferMetrics, WaitingPeaks};
 
 use super::log;
 
@@ -36,16 +36,22 @@ pub(super) struct WaitingSlots<T> {
     head_slot: Option<u64>,
     max_pending_slots: u64,
     max_pending_payloads: usize,
+    peaks: &'static WaitingPeaks,
 }
 
 impl<T> WaitingSlots<T> {
-    pub(super) fn new(max_pending_slots: u64, max_pending_payloads: usize) -> Self {
+    pub(super) fn new(
+        max_pending_slots: u64,
+        max_pending_payloads: usize,
+        peaks: &'static WaitingPeaks,
+    ) -> Self {
         Self {
             pending: BTreeMap::new(),
             count: 0,
             head_slot: None,
             max_pending_slots,
             max_pending_payloads,
+            peaks,
         }
     }
 
@@ -84,6 +90,12 @@ impl<T> WaitingSlots<T> {
         self.count
     }
 
+    /// The peaks this buffer reports to.
+    #[cfg(test)]
+    pub(super) fn peaks(&self) -> &'static WaitingPeaks {
+        self.peaks
+    }
+
     /// Drop one slot's payloads, counted and logged under `reason`; the single place a pending
     /// slot is destroyed, so no path forgets the counter. Nothing waiting is not counted.
     fn evict(&mut self, slot: u64, reason: EvictionReason) {
@@ -112,6 +124,8 @@ impl<T> WaitingSlots<T> {
     /// ⚠️ Called by every operation that moves the head, never left to a caller: block-metas alone
     /// move it on a quiet stream, and a stale slot would become the resume point.
     fn enforce_bounds(&mut self) {
+        // ⚠️ Before evicting: afterwards a peak never exceeds its bound, and the overshoot is lost.
+        self.peaks.record(self.count, self.oldest_lag());
         while let Some(bound) = self.exceeded_bound() {
             let Some(slot) = self.victim(bound) else {
                 // Unreachable while a bound is exceeded; checked so the loop cannot spin.
@@ -143,12 +157,16 @@ impl<T> WaitingSlots<T> {
         end.map(|(slot, _)| *slot)
     }
 
-    /// Whether the oldest pending slot has fallen out of the window, measured against the head
-    /// the stream has reached.
+    /// Whether the oldest pending slot has fallen out of the window.
     fn oldest_is_out_of_window(&self) -> bool {
+        self.oldest_lag() > self.max_pending_slots
+    }
+
+    /// How far the oldest pending slot trails the head the stream has reached; 0 with nothing waiting.
+    fn oldest_lag(&self) -> u64 {
         match (self.oldest(), self.head_slot) {
-            (Some(oldest), Some(head)) => head.saturating_sub(oldest) > self.max_pending_slots,
-            _ => false,
+            (Some(oldest), Some(head)) => head.saturating_sub(oldest),
+            _ => 0,
         }
     }
 }
