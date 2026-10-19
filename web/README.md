@@ -267,6 +267,23 @@ only." in place of its summary. The page is server-rendered whole; the
 filter (the only client island) sets `data-filter` on its frame, and CSS
 hides the rest.
 
+### Search engines and link previews
+
+`src/config/site.ts` holds the site's origin, the preview image
+(`public/og-image.png`, one for every page and both languages) and the pages in
+two lists: `SITEMAP_PATHS`, which `app/sitemap.ts` lists and `app/robots.ts`
+points at, and `UNLISTED_PATHS`, the dashboard, served with its metadata but
+kept out of the sitemap — its reads are live, slow, and fail with the API. The locale layout sets `metadataBase`
+and the only title template, `%s — ${SITE_NAME}`. Each page builds its metadata
+through `lib/seo/page-metadata.ts` — title, description, preview, canonical
+without parameters, its two languages and `x-default` to the unprefixed path —
+because Next merges metadata shallowly: a page setting `title` alone would keep
+the layout's `og:title`.
+
+A new page goes in one of the two lists and calls `pageMetadata`, or
+`lib/seo/__tests__/seo.test.ts` fails. Cloudflare prepends its own comments to
+`robots.txt`: check the `Sitemap:` line on the prod, after it.
+
 ## Operator announcements
 
 The dashboard layout (Server Component) fetches `GET

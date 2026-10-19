@@ -1,7 +1,7 @@
 {
   "About": {
     "meta": {
-      "title": "À propos — Yog-Scope",
+      "title": "À propos",
       "description": "Yog-Scope est une plateforme à code source public d'observation temps réel des pools de liquidité Meteora sur Solana."
     },
     "hero": {

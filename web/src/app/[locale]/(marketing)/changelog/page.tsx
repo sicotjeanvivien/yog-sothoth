@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 
 import { SitePageHeader } from "@/components/marketing/site-page-header";
 import { ChangelogList } from "@/components/marketing/changelog/changelog-list";
+import { pageMetadata } from "@/lib/seo/page-metadata";
 
 type ChangelogPageProps = {
   params: Promise<{ locale: string }>;
@@ -15,10 +16,12 @@ export async function generateMetadata({
 }: ChangelogPageProps): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "Changelog.meta" });
-  return {
+  return pageMetadata({
+    locale,
+    path: "/changelog",
     title: t("title"),
     description: t("description"),
-  };
+  });
 }
 
 export default async function ChangelogPage({ params }: ChangelogPageProps) {

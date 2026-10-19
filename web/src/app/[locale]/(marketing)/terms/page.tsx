@@ -4,6 +4,7 @@ import { setRequestLocale, getTranslations } from "next-intl/server";
 import type { Metadata } from "next";
 
 import { TermsDocument } from "@/components/marketing/terms/terms-document";
+import { pageMetadata } from "@/lib/seo/page-metadata";
 
 type TermsPageProps = {
   params: Promise<{ locale: string }>;
@@ -14,10 +15,12 @@ export async function generateMetadata({
 }: TermsPageProps): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "Terms.meta" });
-  return {
+  return pageMetadata({
+    locale,
+    path: "/terms",
     title: t("title"),
     description: t("description"),
-  };
+  });
 }
 
 export default async function TermsPage({ params }: TermsPageProps) {

@@ -1,5 +1,9 @@
 {
   "Marketing": {
+    "meta": {
+      "title": "Yog-Scope — Intelligence de liquidité en temps réel",
+      "description": "Yog-Scope observe, reconstitue et analyse les mouvements de liquidité sur Solana au moment où ils se produisent."
+    },
     "dashboardButton": "Ouvrir le dashboard",
     "dashboardShort": "Dashboard",
     "home": "Yog-Scope, accueil",
@@ -11,9 +15,9 @@
       "menu": "Menu"
     },
     "hero": {
-      "label": "Sur Meteora · Solana",
+      "label": "Sur Solana",
       "title": "Intelligence de liquidité <accent>en temps réel.</accent>",
-      "lead": "Yog-Scope observe, reconstitue et analyse les mouvements de liquidité des pools Meteora au moment où ils se produisent.",
+      "lead": "Yog-Scope observe, reconstitue et analyse les mouvements de liquidité sur Solana au moment où ils se produisent.",
       "ctaSecondary": "Voir les fonctionnalités",
       "meta": {
         "chain": "Construit sur Solana",
@@ -127,7 +131,7 @@
       "subtitle": "Le dashboard est public et gratuit. Ouvrez-le et regardez la liquidité de Meteora bouger."
     },
     "footer": {
-      "description": "Intelligence de liquidité en temps réel sur Meteora · Solana.",
+      "description": "Intelligence de liquidité en temps réel sur Solana.",
       "product": {
         "heading": "Produit",
         "dashboard": "Dashboard",

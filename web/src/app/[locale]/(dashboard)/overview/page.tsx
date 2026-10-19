@@ -13,6 +13,7 @@ import { LiveIndicator } from "@/components/dashboard/live-status/live-indicator
 import { InfoPopover } from "@/components/shared/info-popover";
 import { OverviewLatestSignals } from "@/components/dashboard/overview/overview-latest-signals";
 import { OverviewStats } from "@/components/dashboard/overview/overview-stats";
+import { pageMetadata } from "@/lib/seo/page-metadata";
 
 type OverviewPageProps = {
   params: Promise<{ locale: string }>;
@@ -26,10 +27,12 @@ export async function generateMetadata({
     locale,
     namespace: "Dashboard.Overview.page",
   });
-  return {
-    title: `${t("title")} — Yog-Scope`,
+  return pageMetadata({
+    locale,
+    path: "/overview",
+    title: t("title"),
     description: t("description"),
-  };
+  });
 }
 
 export default async function OverviewPage({ params }: OverviewPageProps) {

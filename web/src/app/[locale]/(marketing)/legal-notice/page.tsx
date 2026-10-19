@@ -4,6 +4,7 @@ import { setRequestLocale, getTranslations } from "next-intl/server";
 import type { Metadata } from "next";
 
 import { LegalNoticeDocument } from "@/components/marketing/legal-notice/legal-notice-document";
+import { pageMetadata } from "@/lib/seo/page-metadata";
 
 type LegalNoticePageProps = {
   params: Promise<{ locale: string }>;
@@ -14,10 +15,12 @@ export async function generateMetadata({
 }: LegalNoticePageProps): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "LegalNotice.meta" });
-  return {
+  return pageMetadata({
+    locale,
+    path: "/legal-notice",
     title: t("title"),
     description: t("description"),
-  };
+  });
 }
 
 export default async function LegalNoticePage({
