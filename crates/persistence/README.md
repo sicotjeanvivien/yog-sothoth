@@ -297,8 +297,9 @@ counters surface the absence), but it is a trade, not a free win.
 Both intervals are SQL functions, declared once in migration 005: the as-of one
 is called by `yog_price_asof`, the latest one by the current-price views. They
 are `IMMUTABLE`, so the planner folds them and the bound becomes an *index
-condition* on `idx_token_prices_mint_recent` rather than a filter. **Do not inline the interval literal** — the rule previously lived at
-one site out of seventeen, which is exactly how it got lost.
+condition* on `idx_token_prices_mint_recent` rather than a filter. **Do not
+inline the interval literal** — the rule previously lived at one site out of
+seventeen, which is exactly how it got lost.
 
 Two consequences worth knowing before you touch a valuation view:
 
