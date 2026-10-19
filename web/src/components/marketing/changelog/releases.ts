@@ -32,6 +32,22 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.1.11",
+    date: "2026-10-19",
+    summary: "Deploying a new version no longer slows the site down.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "A new version is built on GitHub when it is tagged, and the server only downloads it: it used to compile it itself, for 13 to 41 minutes, while still serving the site and the API, which slowed both down.",
+            technical: false,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.1.10",
     date: "2026-10-18",
     summary:

@@ -1,0 +1,77 @@
+# images — construit les huit images d'une version (un tag vX.Y.Z) et les
+# pousse dans GHCR, d'où docker/update.sh les tire au déploiement. La
+# définition de la construction est docker/docker-bake.hcl ; la procédure de
+# version, docker/README.md. Aucun secret du serveur : pas d'environnement
+# `production`, seulement le GITHUB_TOKEN du dépôt.
+
+name: images
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "la version à reconstruire, un tag vX.Y.Z"
+        type: string
+        required: true
+
+concurrency:
+  group: images-${{ inputs.version || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      VERSION: ${{ inputs.version || github.ref_name }}
+      CACHE: ghcr.io/sicotjeanvivien/yog-buildcache
+      YOG_API_DOMAIN: ${{ vars.YOG_API_DOMAIN }}
+    steps:
+      - name: Version et domaine de l'API
+        run: |
+          [[ $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+            || { echo "version invalide : « $VERSION » (attendu : vX.Y.Z)" >&2; exit 1; }
+          [ -n "$YOG_API_DOMAIN" ] \
+            || { echo "variable de dépôt YOG_API_DOMAIN absente (Settings → Variables), ex. api.yog-scope.xyz" >&2; exit 1; }
+
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.VERSION }}
+
+      - name: Le compose et le fichier bake nomment les mêmes images
+        run: |
+          set -euo pipefail
+          compose=$(docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full \
+            config --no-interpolate --images | grep ':prod$' | sort)
+          bake=$(REVISION=$(git rev-parse HEAD) docker buildx bake -f docker/docker-bake.hcl --print \
+            | jq -r '.target | keys[] + ":prod"' | sort)
+          diff <(echo "$compose") <(echo "$bake") \
+            || { echo "docker-compose.prod.yml et docker/docker-bake.hcl ne nomment pas les mêmes images" >&2; exit 1; }
+          echo "IMAGES=$(echo "$bake" | tr '\n' ' ')" >>"$GITHUB_ENV"
+
+      - name: Connexion à GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+      # ⚠️ Le pilote `docker` par défaut n'exporte pas de cache vers un registre.
+      - name: Constructeur buildx
+        run: docker buildx create --use --driver docker-container
+
+      - name: Construction et push
+        run: |
+          set -euo pipefail
+          REVISION=$(git rev-parse HEAD) NEXT_PUBLIC_YOG_API_URL="https://$YOG_API_DOMAIN" \
+            docker buildx bake -f docker/docker-bake.hcl --push
+
+      # Le contrôle que fera le serveur, sur ce qui vient d'être poussé.
+      - name: Les images poussées portent le commit du tag
+        run: |
+          # shellcheck disable=SC2086
+          docker/pull-images.sh ghcr.io/sicotjeanvivien "$VERSION" "$(git rev-parse HEAD)" $IMAGES

@@ -33,8 +33,8 @@
 # 2. Check the version out, detached — the checkout IS the version deployed —
 #    then hand over to the script as it is in that commit: a deploy always
 #    runs the procedure it ships with.
-# 3. Pull the registry images and build ours while the previous version
-#    still serves: the outage lasts only for steps 4-6.
+# 3. Pull the images while the previous version still serves: the outage
+#    lasts only for steps 4-6. Ours are built by the `images` workflow.
 # 4. Stop every daemon that talks to the database. `up -d` alone is not
 #    enough: it runs yog-migrate before STARTING services, but services
 #    already running keep running through the migration, the old code
@@ -90,6 +90,7 @@ main() {
   cd "$(dirname "$script")/.."
 
   dc=(docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full)
+  registry=ghcr.io/sicotjeanvivien
   db_daemons=(yog-indexer yog-context yog-signals yog-api yog-archive yog-analytic)
   services=(postgres "${db_daemons[@]}" yog-web)
   state=$(git rev-parse --absolute-git-dir)/yog-update
@@ -218,21 +219,25 @@ main() {
     git checkout --quiet --detach "$new"
     YOG_UPDATE_FROM=$old exec "$script" "$@"
   fi
-  old=$YOG_UPDATE_FROM
   new=$(git rev-parse HEAD)
   local -r from=$(deployed_label)
+  local -r from_version=$(cat "$state/deployed-version" 2>/dev/null || true)
 
-  # 3. Build while the previous version still serves
-  log "pulling registry images, building ours"
-  "${dc[@]}" pull --quiet --ignore-buildable
-  "${dc[@]}" build
+  # 3. Pull while the previous version still serves
+  log "pulling the images of $version"
+  "${dc[@]}" pull --quiet postgres
+  local images ours
+  images=$("${dc[@]}" config --images | grep ':prod$') \
+    || die "the compose files name no image of the form yog-x:prod"
+  mapfile -t ours <<<"$images"
+  docker/pull-images.sh "$registry" "$version" "$new" "${ours[@]}"
   local migrations_before migrations_after
   migrations_before=$(psql_admin -c "SELECT count(*) FROM _sqlx_migrations")
 
   # 4. Stop the daemons that talk to the database. The record goes first:
   #    from here on nothing is known to run, and a run that fails before
   #    step 6 must not leave one that reads as "deployed". `from` and
-  #    YOG_UPDATE_FROM were read above, so the logs keep their labels.
+  #    `from_version` were read above, so the logs keep their labels.
   rm -f "$state/deployed" "$state/deployed-version"
   local -r outage_start=$(date +%s)
   log "stopping ${db_daemons[*]}"
@@ -251,8 +256,7 @@ main() {
       log "   _sqlx_migrations (${migrations_before} rows before) with the migrations directory." >&2
     elif [ "$migrations_after" = "$migrations_before" ]; then
       log "   No migration of this deploy was applied: the previous version can" >&2
-      log "   still be served — git checkout --detach ${old:0:7}, then" >&2
-      log "   ${dc[*]} build && ${dc[*]} up -d" >&2
+      log "   still be served — docker/update.sh --force ${from_version:-<its version>} —" >&2
       log "   and fix forward on main before the next run, which would bring it back." >&2
     else
       log "   $(( migrations_after - migrations_before )) migration(s) of this deploy were applied before the" >&2
