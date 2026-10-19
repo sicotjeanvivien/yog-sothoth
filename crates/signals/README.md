@@ -177,8 +177,9 @@ it changes**, not on every check, and measured.
 
 **`flow_imbalance`** — directional swap-flow imbalance over a rolling window:
 `(a_to_b − b_to_a) / (a_to_b + b_to_a)` on USD-valued volumes read from the
-`meteora_damm_v2_pool_hourly_flow` VIEW (baseline §15). A volume floor
-filters thin pools. Warning at `|imbalance| ≥ threshold`, Critical at
+`meteora_damm_v2_pool_hourly_flow` VIEW (baseline §15). A volume floor,
+applied by the read, keeps thin pools out — but not a window that is not
+wholly valuable, which has no total to compare and stays to be counted. Warning at `|imbalance| ≥ threshold`, Critical at
 `≥ critical`.
 
 **`price_oracle_deviation`** — compares the on-chain spot price (decoded from
@@ -187,7 +188,12 @@ filters thin pools. Warning at `|imbalance| ≥ threshold`, Critical at
 `(spot − oracle) / oracle`, reading the `pool_price_snapshot` VIEW, which joins
 `token_last_price` (migration 018). **Freshness guards on both sides**: a stale
 oracle price or a pool whose last swap is too old makes the comparison
-meaningless — no signal is emitted rather than a false one. The Warning/Critical scale is validated fail-loud at
+meaningless — no signal is emitted rather than a false one. **A TVL floor**:
+only pools whose TVL reaches `min_tvl_usd` are read, a shallow pool's spot
+straying from the aggregated market price by nature. ⚠️ The TVL is taken at the
+last known prices whatever their age, not from `pool_current_tvl`, which goes
+NULL on a stale price and would drop the pool before it is counted `stale`.
+The Warning/Critical scale is validated fail-loud at
 config load (`threshold < critical`, otherwise Warning would be unreachable).
 
 **`tvl_drain`** — a pool being emptied of its liquidity (LP exodus, rug-like
@@ -224,6 +230,7 @@ SIGNALS_PRICE_DEVIATION_CRITICAL=0.2
 SIGNALS_PRICE_DEVIATION_COOLDOWN_HOURS=6
 SIGNALS_PRICE_DEVIATION_MAX_PRICE_AGE_MINS=15   # oracle freshness guard
 SIGNALS_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS=24   # last-swap freshness guard
+SIGNALS_PRICE_DEVIATION_MIN_TVL_USD=10000       # TVL floor, at the last known prices
 
 # tvl_drain
 SIGNALS_TVL_DRAIN_INTERVAL_SECS=300
@@ -268,11 +275,13 @@ per TICK, so that ratio reads "pools skipped per run" and moves with the pool
 count rather than with coverage. It would sit near 32 forever and tell you
 nothing.
 
-⚠️ `considered` counts every pool handed to the detector, including those that
-then fall below `min_volume_usd` / `min_tvl_usd`. Those are *evaluated and judged
-immaterial*, not unseen, and they are deliberately NOT counted as skips — so
-`skipped / considered` is the share we cannot see out of everything we looked at,
-not out of everything we could have signalled on.
+⚠️ `considered` counts the pools handed to the detector. `tvl_drain` is handed
+those below its `min_tvl_usd` too: *evaluated and judged immaterial*, not unseen,
+so deliberately NOT counted as skips. `flow_imbalance` and
+`price_oracle_deviation` apply their floor in the read, so a pool below it never
+reaches them: there `skipped / considered` is the share we cannot see among the
+pools active or deep enough to matter. An unvaluable flow window passes the
+floor, so it is still counted.
 
 Measured on the dev database on 7 August 2026, over a 24 h window: 68 pools of
 100 evaluated, 32 skipped — **all 32 because neither of the pool's two tokens has

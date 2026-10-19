@@ -38,6 +38,10 @@ const DEFAULT_PRICE_DEVIATION_MAX_PRICE_AGE_MINS: u64 = 15;
 /// ⚠️ A quieter pool's spot price is history, not a live quote, so it is skipped.
 const DEFAULT_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS: u64 = 24;
 
+/// Minimum TVL (USD) at the last known prices for a pool to be compared
+/// (`SIGNALS_PRICE_DEVIATION_MIN_TVL_USD`): a shallow pool's spot strays from the market by nature.
+const DEFAULT_PRICE_DEVIATION_MIN_TVL_USD: i64 = 10_000;
+
 /// How often the TVL-drain detector ticks, in seconds (`SIGNALS_TVL_DRAIN_INTERVAL_SECS`).
 const DEFAULT_TVL_DRAIN_INTERVAL_SECS: u64 = 300;
 
@@ -86,6 +90,9 @@ pub(crate) struct Config {
 
     /// Oldest acceptable last swap.
     pub(crate) price_deviation_max_spot_age: ChronoDuration,
+
+    /// Price-oracle-deviation TVL floor, in USD.
+    pub(crate) price_deviation_min_tvl_usd: Decimal,
 
     /// `|deviation|` at or above which a signal is emitted.
     pub(crate) price_deviation_threshold: Decimal,
@@ -156,6 +163,10 @@ impl Config {
                 "SIGNALS_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS",
                 DEFAULT_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS,
             )? as i64),
+            price_deviation_min_tvl_usd: decimal_var(
+                "SIGNALS_PRICE_DEVIATION_MIN_TVL_USD",
+                Decimal::from(DEFAULT_PRICE_DEVIATION_MIN_TVL_USD),
+            )?,
             // 0.05 — a 5% spot/oracle gap, past the fee band and oracle lag.
             price_deviation_threshold: decimal_var(
                 "SIGNALS_PRICE_DEVIATION_THRESHOLD",

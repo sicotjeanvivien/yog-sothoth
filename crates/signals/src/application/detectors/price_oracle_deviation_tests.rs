@@ -1,6 +1,8 @@
 //! Unit tests for the deviation math, freshness gates and severity split, against a mock
 //! `PoolPriceSnapshotRepository`.
 
+use std::sync::Mutex;
+
 use super::*;
 use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
@@ -16,13 +18,26 @@ fn pk(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
 }
 
-/// Mock returning a fixed set of snapshots.
-struct MockSnapshotRepo(Vec<PoolPriceSnapshot>);
+/// Mock returning a fixed set of snapshots and recording the floor it was asked for.
+struct MockSnapshotRepo {
+    snapshots: Vec<PoolPriceSnapshot>,
+    floors: Mutex<Vec<Decimal>>,
+}
+
+impl MockSnapshotRepo {
+    fn new(snapshots: Vec<PoolPriceSnapshot>) -> Arc<Self> {
+        Arc::new(Self {
+            snapshots,
+            floors: Mutex::new(Vec::new()),
+        })
+    }
+}
 
 #[async_trait]
 impl PoolPriceSnapshotRepository for MockSnapshotRepo {
-    async fn latest(&self) -> RepositoryResult<Vec<PoolPriceSnapshot>> {
-        Ok(self.0.clone())
+    async fn latest(&self, min_tvl_usd: Decimal) -> RepositoryResult<Vec<PoolPriceSnapshot>> {
+        self.floors.lock().unwrap().push(min_tvl_usd);
+        Ok(self.snapshots.clone())
     }
 }
 
@@ -50,25 +65,42 @@ fn snapshot(
     }
 }
 
-/// Build a detector over the mock; the cooldown is engine-level and does not affect `evaluate`.
-fn detector(snapshots: Vec<PoolPriceSnapshot>) -> PriceOracleDeviationDetector {
+/// Build a detector over `repo`; the cooldown is engine-level and does not affect `evaluate`.
+fn detector_with_floor(
+    repo: Arc<MockSnapshotRepo>,
+    min_tvl_usd: Decimal,
+) -> PriceOracleDeviationDetector {
     PriceOracleDeviationDetector::new(
-        Arc::new(MockSnapshotRepo(snapshots)),
+        repo,
         PriceOracleDeviationSettings {
             interval: Duration::from_secs(300),
             cooldown: Duration::from_secs(6 * 3600),
             max_price_age: ChronoDuration::minutes(15),
             max_spot_age: ChronoDuration::hours(24),
+            min_tvl_usd,
             threshold: Decimal::new(5, 2), // 0.05
             critical: Decimal::new(2, 1),  // 0.2
         },
     )
 }
 
+fn detector(snapshots: Vec<PoolPriceSnapshot>) -> PriceOracleDeviationDetector {
+    detector_with_floor(MockSnapshotRepo::new(snapshots), Decimal::from(10_000))
+}
+
 async fn run_at(det: &PriceOracleDeviationDetector, now: DateTime<Utc>) -> Vec<Signal> {
     det.evaluate(&EvalContext { evaluated_at: now })
         .await
         .unwrap()
+}
+
+#[tokio::test]
+async fn the_configured_tvl_floor_is_handed_to_the_read() {
+    // Mutation: the read handed a constant instead of `min_tvl_usd`.
+    let repo = MockSnapshotRepo::new(Vec::new());
+    let det = detector_with_floor(Arc::clone(&repo), Decimal::from(1234));
+    run_at(&det, Utc::now()).await;
+    assert_eq!(*repo.floors.lock().unwrap(), vec![Decimal::from(1234)]);
 }
 
 #[tokio::test]

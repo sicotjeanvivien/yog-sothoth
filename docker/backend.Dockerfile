@@ -132,6 +132,9 @@ ENTRYPOINT ["/usr/local/bin/yog-context"]
 # yog-signals — the Signal Engine daemon.
 FROM runtime AS yog-signals
 COPY --from=builder /app/target/release/yog-signals /usr/local/bin/yog-signals
+# Two malloc arenas, as for yog-api: the detectors tick together, each peak in its own
+# thread's arena, and an arena keeps its peak.
+ENV MALLOC_ARENA_MAX=2
 EXPOSE 9000
 ENTRYPOINT ["/usr/local/bin/yog-signals"]
 

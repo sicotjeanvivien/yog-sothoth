@@ -24,7 +24,7 @@ pub struct FlowImbalanceSettings {
     pub interval: Duration,
     /// Rolling per-pool suppression window (engine-level dedup).
     pub cooldown: Duration,
-    /// Minimum total USD volume in the window for a pool to be considered.
+    /// Minimum total USD volume in the window below which a valuable pool is not read at all.
     pub min_volume_usd: Decimal,
     /// `|imbalance|` at or above which a signal is emitted.
     pub threshold: Decimal,
@@ -73,7 +73,10 @@ impl SignalDetector for FlowImbalanceDetector {
 
     async fn evaluate(&self, ctx: &EvalContext) -> Result<Vec<Signal>, DetectorError> {
         let since = ctx.evaluated_at - self.settings.window;
-        let flows = self.flow_repo.directional_volume_since(since).await?;
+        let flows = self
+            .flow_repo
+            .directional_volume_since(since, self.settings.min_volume_usd)
+            .await?;
         DetectorMetrics::record_considered(self.name(), flows.len());
 
         let mut signals = Vec::new();
@@ -86,8 +89,8 @@ impl SignalDetector for FlowImbalanceDetector {
             };
 
             let total = a_to_b + b_to_a;
-            // Volume floor: too thin for the ratio to mean anything; also guards the division.
-            if total < self.settings.min_volume_usd || total.is_zero() {
+            // ⚠️ The volume floor is applied by the read; a floor set to 0 still lets a zero total in.
+            if total.is_zero() {
                 continue;
             }
 

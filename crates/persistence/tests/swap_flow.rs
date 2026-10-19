@@ -123,7 +123,7 @@ async fn directional_volume_splits_and_windows(pool: PgPool) {
 
     let repo = PgSwapFlowRepository::new(pool.clone());
     let flows = repo
-        .directional_volume_since(now - Duration::hours(24))
+        .directional_volume_since(now - Duration::hours(24), Decimal::ZERO)
         .await
         .unwrap();
 
@@ -203,7 +203,7 @@ async fn a_partly_unvaluable_window_yields_no_total(pool: PgPool) {
 
     let repo = PgSwapFlowRepository::new(pool.clone());
     let flows = repo
-        .directional_volume_since(now - Duration::hours(24))
+        .directional_volume_since(now - Duration::hours(24), Decimal::ZERO)
         .await
         .unwrap();
     let flow = flows.iter().find(|f| f.pool_address == pk(1)).unwrap();
@@ -249,7 +249,7 @@ async fn an_empty_direction_is_zero_not_unknown(pool: PgPool) {
 
     let repo = PgSwapFlowRepository::new(pool.clone());
     let flows = repo
-        .directional_volume_since(now - Duration::hours(24))
+        .directional_volume_since(now - Duration::hours(24), Decimal::ZERO)
         .await
         .unwrap();
     let flow = flows.iter().find(|f| f.pool_address == pk(1)).unwrap();
@@ -286,10 +286,82 @@ async fn yog_signals_values_the_flow_under_its_own_role(pool: PgPool) {
 
     let repo = PgSwapFlowRepository::new(as_role(&pool, "yog_signals").await);
     let flows = repo
-        .directional_volume_since(now - Duration::hours(24))
+        .directional_volume_since(now - Duration::hours(24), Decimal::ZERO)
         .await
         .unwrap();
     let flow = flows.iter().find(|f| f.pool_address == pk(1)).unwrap();
 
     assert_eq!(flow.volume_b_to_a_usd, Some(Decimal::from(100)));
+}
+
+#[sqlx::test]
+async fn the_volume_floor_keeps_the_unvaluable_windows(pool: PgPool) {
+    // Mutation: `HAVING` without its `NOT bool_and` branch — the unvaluable pool's $10 sub-total
+    // falls under the floor, and the pool leaves the detector's `unpriced` count.
+    let now = Utc::now();
+    let (mint_a, mint_b, unpriced_a) = (pk(2).to_string(), pk(3).to_string(), pk(6).to_string());
+    let (above, below, unvaluable) = (pk(1).to_string(), pk(4).to_string(), pk(5).to_string());
+
+    for (pool_addr, a) in [
+        (&above, &mint_a),
+        (&below, &mint_a),
+        (&unvaluable, &unpriced_a),
+    ] {
+        sqlx::query(
+            "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint)
+             VALUES ($1,'meteora_damm_v2',$2,$3)",
+        )
+        .bind(pool_addr)
+        .bind(a)
+        .bind(&mint_b)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    for (mint, decimals) in [(&mint_a, 6i16), (&mint_b, 9i16), (&unpriced_a, 6i16)] {
+        sqlx::query(
+            "INSERT INTO token_metadata (mint, decimals, fetched_at, last_refresh_at)
+             VALUES ($1,$2,$3,$3)",
+        )
+        .bind(mint)
+        .bind(decimals)
+        .bind(now - Duration::hours(48))
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    price_mint_since(&pool, &mint_a, "2.0", 2).await;
+    price_mint_since(&pool, &mint_b, "100.0", 2).await;
+
+    // b_to_a at $100 per B: $200, $50, and $10 valued plus an hour B had no price yet.
+    for (pool_addr, sig, amount_b, hours_ago) in [
+        (&above, "sig_above", 2_000_000_000, 1),
+        (&below, "sig_below", 500_000_000, 1),
+        (&unvaluable, "sig_valued", 100_000_000, 1),
+        (&unvaluable, "sig_unvalued", 100_000_000, 6),
+    ] {
+        insert_swap(
+            &pool,
+            pool_addr,
+            sig,
+            "b_to_a",
+            0,
+            amount_b,
+            now - Duration::hours(hours_ago),
+        )
+        .await;
+    }
+
+    let flows = PgSwapFlowRepository::new(pool.clone())
+        .directional_volume_since(now - Duration::hours(24), Decimal::from(100))
+        .await
+        .unwrap();
+    let mut read: Vec<_> = flows.iter().map(|f| f.pool_address).collect();
+    read.sort();
+
+    assert_eq!(
+        read,
+        vec![pk(1), pk(5)],
+        "the $50 pool is under the floor; the unvaluable one has no total to compare, so it stays"
+    );
 }

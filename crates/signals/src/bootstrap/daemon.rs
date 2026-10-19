@@ -73,6 +73,7 @@ impl Daemon {
                     cooldown: config.price_deviation_cooldown,
                     max_price_age: config.price_deviation_max_price_age,
                     max_spot_age: config.price_deviation_max_spot_age,
+                    min_tvl_usd: config.price_deviation_min_tvl_usd,
                     threshold: config.price_deviation_threshold,
                     critical: config.price_deviation_critical,
                 },

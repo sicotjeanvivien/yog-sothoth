@@ -5,9 +5,10 @@
 
 mod rows;
 
-use crate::repositories::helper::map_sqlx_error;
+use crate::repositories::helper::{convert_decimal_to_bigdecimal, map_sqlx_error};
 use async_trait::async_trait;
 use rows::PoolPriceSnapshotRow;
+use rust_decimal::Decimal;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
@@ -26,9 +27,12 @@ impl PgPoolPriceSnapshotRepository {
 
 #[async_trait]
 impl PoolPriceSnapshotRepository for PgPoolPriceSnapshotRepository {
-    async fn latest(&self) -> RepositoryResult<Vec<PoolPriceSnapshot>> {
+    async fn latest(&self, min_tvl_usd: Decimal) -> RepositoryResult<Vec<PoolPriceSnapshot>> {
+        let min_tvl_usd = convert_decimal_to_bigdecimal(min_tvl_usd, "min_tvl_usd")?;
         // sqlx cannot infer nullability through a view: `!` states what its INNER
         // joins and `IS NOT NULL` predicates guarantee.
+        // ⚠️ Valued at the last known prices, not through `pool_current_tvl`: its NULL on a stale
+        // price would drop the pool here instead of letting the detector count it `stale`.
         let rows = sqlx::query_as!(
             PoolPriceSnapshotRow,
             r#"
@@ -44,7 +48,10 @@ impl PoolPriceSnapshotRepository for PgPoolPriceSnapshotRepository {
                 price_b_usd        AS "price_b_usd!",
                 price_b_fetched_at AS "price_b_fetched_at!"
             FROM pool_price_snapshot
+            WHERE (reserve_a::NUMERIC / POWER(10::NUMERIC, decimals_a)) * price_a_usd
+                + (reserve_b::NUMERIC / POWER(10::NUMERIC, decimals_b)) * price_b_usd >= $1
             "#,
+            min_tvl_usd,
         )
         .fetch_all(&self.pool)
         .await
