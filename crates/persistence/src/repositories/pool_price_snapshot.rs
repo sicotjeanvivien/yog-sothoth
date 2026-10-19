@@ -31,8 +31,6 @@ impl PoolPriceSnapshotRepository for PgPoolPriceSnapshotRepository {
         let min_tvl_usd = convert_decimal_to_bigdecimal(min_tvl_usd, "min_tvl_usd")?;
         // sqlx cannot infer nullability through a view: `!` states what its INNER
         // joins and `IS NOT NULL` predicates guarantee.
-        // ⚠️ Valued at the last known prices, not through `pool_current_tvl`: its NULL on a stale
-        // price would drop the pool here instead of letting the detector count it `stale`.
         let rows = sqlx::query_as!(
             PoolPriceSnapshotRow,
             r#"

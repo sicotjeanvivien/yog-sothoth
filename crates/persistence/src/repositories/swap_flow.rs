@@ -36,7 +36,6 @@ impl SwapFlowRepository for PgSwapFlowRepository {
         let min_volume_usd = convert_decimal_to_bigdecimal(min_volume_usd, "min_volume_usd")?;
         // ⚠️ No COALESCE: one unpriced side read as 0 gives `flow_imbalance` a −1.0. And `bool_and`
         // too: `SUM` skips NULLs, so a partly priced window would publish a sub-total as a total.
-        // ⚠️ An unvaluable window passes the floor: dropped here, it would vanish from `unpriced`.
         let rows = sqlx::query_as!(
             PoolSwapFlowRow,
             r#"
