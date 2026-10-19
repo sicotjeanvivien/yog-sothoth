@@ -58,7 +58,7 @@ fn rejects_an_invalid_pool_address() {
     assert!(matches!(err, ApiError::BadRequest(m) if m == "invalid pool address: not-a-pubkey"));
 }
 
-/// Mutation: `?pool=` read as an absent filter again.
+/// Mutation: `?pool=` read as an absent filter.
 #[test]
 fn rejects_an_empty_pool() {
     let mut q = valid_query();
@@ -67,7 +67,7 @@ fn rejects_an_empty_pool() {
     assert!(matches!(err, ApiError::BadRequest(m) if m == "invalid pool address: "));
 }
 
-/// Mutation: `?cursor=` read as an absent cursor again.
+/// Mutation: `?cursor=` read as an absent cursor.
 #[test]
 fn rejects_an_empty_cursor() {
     let mut q = valid_query();

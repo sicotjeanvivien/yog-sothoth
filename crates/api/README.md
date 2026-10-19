@@ -342,16 +342,13 @@ served as `application/problem+json`:
 A parameter absent is not provided; present and empty (`?pool=`), it is an
 invalid value — `400`, like any value that does not parse.
 
-What axum answers on its own — an extractor's refusal, an unknown route (`404`),
-a wrong method (`405`) — is rewritten at the router's edge
-(`middleware/problem_details.rs`): any error response that is not JSON becomes
-Problem Details with its status and headers kept, and a `5xx` keeps only its
-canonical reason as `detail`, its text logged with the request id. Nothing to
-do per route.
-
-⚠️ An error body in JSON passes as is: it is the route's own answer (`ApiError`,
-the readiness report of `/readyz`). A route that answers an error in JSON must
-answer it as Problem Details.
+Every `/api` route answers its errors through one layer
+(`middleware/problem_details.rs`): any error response that is not already
+Problem Details — an extractor's refusal, a wrong method (`405`), a JSON body —
+is rewritten with its status and headers kept, and a `5xx` keeps only its
+canonical reason as `detail`, its text logged in the request's span. An unknown
+route is the router's fallback, an `ApiError::NotFound`. Nothing to do per
+route. The probes stand outside the layer: `/readyz` answers its own report.
 
 ## Cursor wire format
 

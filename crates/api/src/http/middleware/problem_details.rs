@@ -1,5 +1,5 @@
-//! Every error leaves as RFC 9457 Problem Details: what axum answers on its own — an
-//! extractor's refusal, an unknown route, a wrong method — is rewritten here.
+//! Every error of an `/api` route leaves as RFC 9457 Problem Details: what axum answers on
+//! its own — an extractor's refusal, a wrong method — is rewritten here.
 
 use axum::{
     body::to_bytes,
@@ -8,19 +8,19 @@ use axum::{
 };
 use tracing::error;
 
+use crate::http::dto::response::PROBLEM_CONTENT_TYPE;
 use crate::http::error::ApiError;
-use crate::http::middleware::tracing::REQUEST_ID_HEADER;
 
-/// An error body past this is not read: its text is dropped, never buffered.
+/// An error body past this is not echoed: its text is dropped.
 const MAX_ERROR_BODY: usize = 4 * 1024;
 
-/// An error response that is not JSON, rewritten as Problem Details. Its own headers win
+/// An error response that is not Problem Details, rewritten as one. Its own headers win
 /// over the rewrite's (a `Retry-After`), except the two that describe the old body.
 pub(crate) async fn answer_in_problem_details(response: Response) -> Response {
     let status = response.status();
-    // ⚠️ A JSON error body is the route's declared answer (`ApiError`, `/readyz`): it passes
-    // as is, so it must be Problem Details or the route's documented report.
-    if !(status.is_client_error() || status.is_server_error()) || is_json(response.headers()) {
+    if !(status.is_client_error() || status.is_server_error())
+        || is_problem_details(response.headers())
+    {
         return response;
     }
     let (parts, body) = response.into_parts();
@@ -29,12 +29,7 @@ pub(crate) async fn answer_in_problem_details(response: Response) -> Response {
         Err(_) => String::new(),
     };
     if status.is_server_error() {
-        // Outside the request's span: the id is read off the response to correlate the log.
-        let request_id = parts
-            .headers
-            .get(REQUEST_ID_HEADER)
-            .and_then(|v| v.to_str().ok());
-        error!(%status, request_id, error = %text, "framework error");
+        error!(%status, error = %text, "framework error");
     }
     let mut headers = parts.headers;
     headers.remove(header::CONTENT_TYPE);
@@ -47,14 +42,12 @@ pub(crate) async fn answer_in_problem_details(response: Response) -> Response {
     answer
 }
 
-/// `application/json`, or any `+json` type such as `application/problem+json`.
-fn is_json(headers: &HeaderMap) -> bool {
+fn is_problem_details(headers: &HeaderMap) -> bool {
     headers
         .get(header::CONTENT_TYPE)
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.split(';').next())
-        .map(|mime| mime.trim().to_ascii_lowercase())
-        .is_some_and(|mime| mime == "application/json" || mime.ends_with("+json"))
+        .is_some_and(|mime| mime.trim().eq_ignore_ascii_case(PROBLEM_CONTENT_TYPE))
 }
 
 #[cfg(test)]

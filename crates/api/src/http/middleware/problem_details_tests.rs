@@ -59,7 +59,7 @@ async fn an_empty_refusal_keeps_its_status_and_headers() {
     assert_eq!(answer.headers()[header::ALLOW], "GET,HEAD");
     let json = problem(answer).await;
     assert_eq!(json["title"], "Method Not Allowed");
-    assert_eq!(json["detail"], "Method Not Allowed");
+    assert_eq!(json["detail"], "method not allowed");
 }
 
 /// Mutation: a `5xx` sent with its own text, which can name the server's internals.
@@ -73,7 +73,7 @@ async fn a_server_error_is_sent_without_its_text() {
     .await;
     assert_eq!(answer.status(), StatusCode::INTERNAL_SERVER_ERROR);
     let json = problem(answer).await;
-    assert_eq!(json["detail"], "Internal Server Error");
+    assert_eq!(json["detail"], "internal server error");
 }
 
 /// Mutation: the rewrite's own `Retry-After` wins over the one the refusal carried.
@@ -85,7 +85,7 @@ async fn a_plain_text_503_keeps_its_own_retry_after() {
         .insert(header::RETRY_AFTER, HeaderValue::from_static("30"));
     let answer = answer_in_problem_details(refused).await;
     assert_eq!(answer.headers()[header::RETRY_AFTER], "30");
-    assert_eq!(problem(answer).await["detail"], "Service Unavailable");
+    assert_eq!(problem(answer).await["detail"], "service unavailable");
 }
 
 /// Mutation: an oversized error body buffered and echoed instead of dropped.
@@ -95,23 +95,33 @@ async fn an_oversized_error_body_is_not_echoed() {
     let answer =
         answer_in_problem_details(response(StatusCode::BAD_REQUEST, Some("text/plain"), &text))
             .await;
-    assert_eq!(problem(answer).await["detail"], "Bad Request");
+    assert_eq!(problem(answer).await["detail"], "bad request");
 }
 
-/// Mutation: the layer rewrites a JSON error body — the readiness report of `/readyz`, or
-/// one of our own Problem Details.
+/// Mutation: the layer rewrites one of our own Problem Details, and its `detail` with it.
 #[tokio::test]
-async fn a_json_error_body_passes_as_is() {
-    for content_type in ["application/json", "application/problem+json"] {
-        let answer = answer_in_problem_details(response(
-            StatusCode::SERVICE_UNAVAILABLE,
-            Some(content_type),
-            r#"{"status":"unavailable"}"#,
-        ))
-        .await;
-        assert_eq!(answer.headers()[header::CONTENT_TYPE], content_type);
-        assert_eq!(body(answer).await, r#"{"status":"unavailable"}"#);
-    }
+async fn a_problem_details_body_passes_as_is() {
+    let text = r#"{"title":"Service Unavailable","status":503,"detail":"at capacity"}"#;
+    let answer = answer_in_problem_details(response(
+        StatusCode::SERVICE_UNAVAILABLE,
+        Some("application/problem+json"),
+        text,
+    ))
+    .await;
+    assert_eq!(body(answer).await, text);
+}
+
+/// Mutation: any JSON error body let through — a handler's `(400, Json(dto))` would leave
+/// outside the format the contract declares.
+#[tokio::test]
+async fn a_json_error_body_that_is_not_problem_details_is_rewritten() {
+    let answer = answer_in_problem_details(response(
+        StatusCode::BAD_REQUEST,
+        Some("application/json"),
+        r#"{"error":"nope"}"#,
+    ))
+    .await;
+    assert_eq!(problem(answer).await["detail"], r#"{"error":"nope"}"#);
 }
 
 /// Mutation: the layer touches a success.
@@ -123,12 +133,13 @@ async fn a_success_passes_as_is() {
     assert_eq!(body(answer).await, "ok");
 }
 
-/// Mutation: the layer mounted inside the routes only, leaving the fallback's empty `404`.
+/// Mutation: the router without its own fallback, the `404` left to axum's default.
 #[tokio::test]
 async fn an_unknown_route_is_answered_in_problem_details() {
-    let (status, content_type, _) = get("/api/nope").await;
+    let (status, content_type, detail) = get("/api/nope").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(content_type, "application/problem+json");
+    assert_eq!(detail, "no such route");
 }
 
 #[tokio::test]
@@ -139,7 +150,7 @@ async fn a_wrong_method_is_answered_in_problem_details() {
     assert!(headers.contains_key(header::ALLOW));
 }
 
-/// Mutation: the layer rewrites `/readyz`, whose `503` carries its own report.
+/// Mutation: the probes mounted under the layer, which rewrites the report of `/readyz`.
 #[tokio::test]
 async fn readyz_keeps_its_own_report() {
     let (status, content_type, _) = get("/readyz").await;

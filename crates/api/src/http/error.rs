@@ -11,11 +11,10 @@ use crate::http::dto::response::{PROBLEM_CONTENT_TYPE, ProblemDetailsResponse};
 #[derive(Debug)]
 pub(crate) enum ApiError {
     BadRequest(String),
-    #[allow(dead_code)] // unused outside the pool/token handlers
     NotFound(String),
     Unavailable(&'static str),
     Internal(String),
-    /// What axum answered outside `ApiError` — an extractor's refusal, an unknown route — its
+    /// What axum answered outside `ApiError` — an extractor's refusal, a wrong method — its
     /// status kept. A `5xx` is sent with its canonical reason only, never its text.
     Framework(StatusCode, String),
 }
@@ -50,7 +49,7 @@ impl IntoResponse for ApiError {
             ApiError::Framework(status, text) => {
                 let title = status.canonical_reason().unwrap_or("Error");
                 let detail = if status.is_server_error() || text.is_empty() {
-                    title.to_string()
+                    title.to_ascii_lowercase()
                 } else {
                     text
                 };
