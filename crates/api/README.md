@@ -335,7 +335,8 @@ served as `application/problem+json`:
 | Status | `title` | Common causes |
 |--------|---------|---------------|
 | 400 | `Bad Request` | A query or path that does not parse, an empty value, invalid address, malformed cursor, limit out of range, mutually exclusive params |
-| 404 | `Not Found` | Token unknown |
+| 404 | `Not Found` | Token unknown, no such route |
+| 405 | `Method Not Allowed` | A method the route does not serve; carries `Allow` |
 | 503 | `Service Unavailable` | Over capacity: no work slot within 2 s, too many open signal streams, the request past its deadline, or the database out of connections or past `statement_timeout`. Carries `Retry-After`; see [Capacity bounds](#capacity-bounds) |
 | 500 | `Internal Server Error` | DB failure, encoding bug. `detail` is always the generic message; the real cause is logged server-side under a `request_id` correlatable via the `x-request-id` response header |
 

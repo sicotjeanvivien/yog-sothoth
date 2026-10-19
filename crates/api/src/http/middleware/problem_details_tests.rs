@@ -133,12 +133,14 @@ async fn a_success_passes_as_is() {
     assert_eq!(body(answer).await, "ok");
 }
 
-/// Mutation: the router without its own fallback, the `404` left to axum's default.
+/// Mutation: the fallback set outside the `/api` layers — untraced, no `x-request-id` — or
+/// left to axum's default `404`.
 #[tokio::test]
 async fn an_unknown_route_is_answered_in_problem_details() {
-    let (status, content_type, detail) = get("/api/nope").await;
+    let (status, headers, detail) = call(Method::GET, "/api/nope").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
-    assert_eq!(content_type, "application/problem+json");
+    assert_eq!(headers[header::CONTENT_TYPE], "application/problem+json");
+    assert!(headers.contains_key("x-request-id"));
     assert_eq!(detail, "no such route");
 }
 

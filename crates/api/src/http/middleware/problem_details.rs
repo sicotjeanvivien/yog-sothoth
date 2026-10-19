@@ -3,10 +3,10 @@
 
 use axum::{
     body::to_bytes,
-    http::{HeaderMap, header},
+    http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::http::dto::response::PROBLEM_CONTENT_TYPE;
 use crate::http::error::ApiError;
@@ -24,17 +24,23 @@ pub(crate) async fn answer_in_problem_details(response: Response) -> Response {
         return response;
     }
     let (parts, body) = response.into_parts();
-    let text = match to_bytes(body, MAX_ERROR_BODY).await {
-        Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
-        Err(_) => String::new(),
-    };
+    let text = to_bytes(body, MAX_ERROR_BODY)
+        .await
+        .ok()
+        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned());
     if status.is_server_error() {
-        error!(%status, error = %text, "framework error");
+        let cause = text.as_deref().unwrap_or("an error body over 4 KiB");
+        // A `503` is load, expected — `warn!`, as `ApiError::Unavailable` does.
+        if status == StatusCode::SERVICE_UNAVAILABLE {
+            warn!(%status, error = %cause, "framework error");
+        } else {
+            error!(%status, error = %cause, "framework error");
+        }
     }
     let mut headers = parts.headers;
     headers.remove(header::CONTENT_TYPE);
     headers.remove(header::CONTENT_LENGTH);
-    let mut answer = ApiError::Framework(status, text).into_response();
+    let mut answer = ApiError::Framework(status, text.unwrap_or_default()).into_response();
     for (name, value) in answer.headers() {
         headers.entry(name).or_insert_with(|| value.clone());
     }

@@ -60,12 +60,14 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
     let (api, _contract) = api_routes(state.work_slots.clone()).split_for_parts();
 
     let app = api
-        // Innermost, so the tracing span records its 503.
-        .layer(from_fn_with_state(REQUEST_TIMEOUT, request_deadline))
-        // Inside TraceLayer: a rewritten `5xx` is logged within its request's span.
+        // Under the layers below: an unknown route is traced and request-id'd like any other.
+        .fallback(no_such_route)
+        // ⚠️ Innermost: `request_deadline` bounds its read of an error body.
         .layer(map_response(
             middleware::problem_details::answer_in_problem_details,
         ))
+        // Inside TraceLayer, so the tracing span records its 503.
+        .layer(from_fn_with_state(REQUEST_TIMEOUT, request_deadline))
         .layer(PropagateRequestIdLayer::new(
             axum::http::HeaderName::from_static(REQUEST_ID_HEADER),
         ))
@@ -85,7 +87,6 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
     Router::new()
         .merge(probes)
         .merge(app)
-        .fallback(no_such_route)
         .with_state(state)
         // Security headers and CORS apply to everything, probes included.
         .layer(middleware::security_headers_layer())

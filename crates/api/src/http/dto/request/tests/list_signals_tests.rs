@@ -64,7 +64,7 @@ fn rejects_an_empty_pool() {
     let mut q = valid_query();
     q.pool = Some(String::new());
     let err = ListSignalsRequest::parse(q).unwrap_err();
-    assert!(matches!(err, ApiError::BadRequest(m) if m == "invalid pool address: "));
+    assert!(matches!(err, ApiError::BadRequest(m) if m == "`pool` must not be empty"));
 }
 
 /// Mutation: `?cursor=` read as an absent cursor.
@@ -73,7 +73,7 @@ fn rejects_an_empty_cursor() {
     let mut q = valid_query();
     q.cursor = Some(String::new());
     let err = ListSignalsRequest::parse(q).unwrap_err();
-    assert!(matches!(err, ApiError::BadRequest(m) if m == "invalid cursor: malformed payload"));
+    assert!(matches!(err, ApiError::BadRequest(m) if m == "`cursor` must not be empty"));
 }
 
 /// Mutation: the exclusivity checked before the cursor is decoded.
@@ -83,7 +83,7 @@ fn an_empty_cursor_beside_a_position_is_refused_for_the_cursor() {
     q.cursor = Some(String::new());
     q.position = Some(PagePositionParam::Last);
     let err = ListSignalsRequest::parse(q).unwrap_err();
-    assert!(matches!(err, ApiError::BadRequest(m) if m == "invalid cursor: malformed payload"));
+    assert!(matches!(err, ApiError::BadRequest(m) if m == "`cursor` must not be empty"));
 }
 
 #[test]

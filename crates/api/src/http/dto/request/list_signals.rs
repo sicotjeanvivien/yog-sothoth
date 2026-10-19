@@ -34,7 +34,9 @@ impl ListSignalsRequest {
         let pool = query
             .pool
             .as_deref()
-            .map(|raw| super::parse_address(raw, "pool"))
+            .map(|raw| {
+                super::non_empty("pool", raw).and_then(|raw| super::parse_address(raw, "pool"))
+            })
             .transpose()?;
 
         // ⚠️ Decoded before the exclusivity check: an empty `cursor` beside a `position` is
@@ -42,7 +44,7 @@ impl ListSignalsRequest {
         let cursor = query
             .cursor
             .as_deref()
-            .map(decode_signal_cursor)
+            .map(|raw| super::non_empty("cursor", raw).and_then(decode_signal_cursor))
             .transpose()?;
         validate_cursor_position_exclusive(cursor.is_some(), query.position.is_some())?;
 
