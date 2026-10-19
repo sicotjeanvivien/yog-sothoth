@@ -196,7 +196,7 @@ query shape:
 - **Big but static** → prefer a **SQL VIEW** in a migration when the query is
   reusable or decomposable (e.g. `meteora_damm_v2_swap_events_hourly_priced`,
   migration 002, which factors the per-`(pool, hour)` effective prices shared
-  by the analytic writer's facts upsert and the activity view); the slim
+  by the flow and activity views); the slim
   `SELECT … FROM <view>` stays a checked `query!`. Otherwise
   `query_file!("….sql")`.
 - **Dynamic** (shape varies from user input) → `QueryBuilder`, covered by

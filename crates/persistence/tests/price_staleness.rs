@@ -324,8 +324,8 @@ async fn every_view_reading_a_price_bounds_its_age(pool: PgPool) {
 
     assert!(
         unbounded.is_empty(),
-        "these views read prices without applying the staleness policy to \
-         every lookup: {unbounded:?}. Add `fetched_at >= <reference> - \
+        "these price readers do not apply the staleness policy to every \
+         lookup: {unbounded:?}. Add `fetched_at >= <reference> - \
          yog_price_max_age_asof()` (or the _latest() variant for a current-price \
          lookup) — the rule used to live at one site out of seventeen, which is \
          how it got lost"
