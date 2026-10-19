@@ -28,5 +28,5 @@ export const PREVIEW_IMAGE = {
   url: "/og-image.png",
   width: 1200,
   height: 630,
-  alt: "Yog-Scope — Meteora · Solana",
+  alt: "Yog-Scope — Solana",
 } as const;
