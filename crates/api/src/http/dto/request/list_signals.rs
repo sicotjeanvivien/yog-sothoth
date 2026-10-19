@@ -28,7 +28,6 @@ pub(crate) struct ListSignalsRequest {
 }
 
 impl ListSignalsRequest {
-    /// Validates the query. No sort: the order is fixed. `severity` is validated by serde.
     pub(crate) fn parse(query: SignalsQuery) -> Result<Self, ApiError> {
         validate_limit(query.limit)?;
         validate_cursor_position_exclusive(query.cursor.is_some(), query.position.is_some())?;
