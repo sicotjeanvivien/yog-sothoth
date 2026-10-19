@@ -49,7 +49,7 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "The signal engine no longer reads every pool ever seen at each round: the price gap and swap flow signals read only the pools above their floor, so its memory no longer grows with every pool discovered.",
+            text: "The signal engine reads fewer pools at each round: the price gap signal only those above its value floor, instead of every pool ever priced, and the swap flow signal only the active pools above its volume floor, plus those it cannot value, to count them. Its memory no longer follows every pool discovered.",
             technical: true,
           },
         ],

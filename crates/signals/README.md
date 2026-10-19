@@ -279,9 +279,10 @@ nothing.
 those below its `min_tvl_usd` too: *evaluated and judged immaterial*, not unseen,
 so deliberately NOT counted as skips. `flow_imbalance` and
 `price_oracle_deviation` apply their floor in the read, so a pool below it never
-reaches them: there `skipped / considered` is the share we cannot see among the
-pools active or deep enough to matter. An unvaluable flow window passes the
-floor, so it is still counted.
+reaches them and is not counted. ⚠️ `flow_imbalance` still reads every
+unvaluable window, whatever its volume: its `skipped / considered` sets all of
+them against the valued pools above the floor only, and reads higher than before
+the floor moved into the read, with no change in price coverage.
 
 Measured on the dev database on 7 August 2026, over a 24 h window: 68 pools of
 100 evaluated, 32 skipped — **all 32 because neither of the pool's two tokens has

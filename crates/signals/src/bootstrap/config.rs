@@ -21,7 +21,7 @@ const DEFAULT_FLOW_WINDOW_HOURS: u64 = 24;
 /// per cooldown (`SIGNALS_FLOW_COOLDOWN_HOURS`).
 const DEFAULT_FLOW_COOLDOWN_HOURS: u64 = 6;
 
-/// Minimum total window volume (USD) for a pool to be considered (`SIGNALS_FLOW_MIN_VOLUME_USD`).
+/// Volume floor (USD) of the flow window (`SIGNALS_FLOW_MIN_VOLUME_USD`).
 const DEFAULT_FLOW_MIN_VOLUME_USD: i64 = 10_000;
 
 /// How often the price-oracle-deviation detector ticks, in seconds (`SIGNALS_PRICE_DEVIATION_INTERVAL_SECS`).

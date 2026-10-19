@@ -296,16 +296,18 @@ async fn yog_signals_values_the_flow_under_its_own_role(pool: PgPool) {
 
 #[sqlx::test]
 async fn the_volume_floor_keeps_the_unvaluable_windows(pool: PgPool) {
-    // Mutation: `HAVING` without its `NOT bool_and` branch — the unvaluable pool's $10 sub-total
-    // falls under the floor, and the pool leaves the detector's `unpriced` count.
+    // Mutations: `HAVING` without its `NOT bool_and` branch — the unvaluable pool's $10 sub-total
+    // falls under the floor and leaves `unpriced`; `>` for `>=` drops the pool on the floor.
     let now = Utc::now();
     let (mint_a, mint_b, unpriced_a) = (pk(2).to_string(), pk(3).to_string(), pk(6).to_string());
     let (above, below, unvaluable) = (pk(1).to_string(), pk(4).to_string(), pk(5).to_string());
+    let on_floor = pk(8).to_string();
 
     for (pool_addr, a) in [
         (&above, &mint_a),
         (&below, &mint_a),
         (&unvaluable, &unpriced_a),
+        (&on_floor, &mint_a),
     ] {
         sqlx::query(
             "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint)
@@ -333,9 +335,10 @@ async fn the_volume_floor_keeps_the_unvaluable_windows(pool: PgPool) {
     price_mint_since(&pool, &mint_a, "2.0", 2).await;
     price_mint_since(&pool, &mint_b, "100.0", 2).await;
 
-    // b_to_a at $100 per B: $200, $50, and $10 valued plus an hour B had no price yet.
+    // b_to_a at $100 per B: $200, $50, $100, and $10 valued plus an hour B had no price yet.
     for (pool_addr, sig, amount_b, hours_ago) in [
         (&above, "sig_above", 2_000_000_000, 1),
+        (&on_floor, "sig_on_floor", 1_000_000_000, 1),
         (&below, "sig_below", 500_000_000, 1),
         (&unvaluable, "sig_valued", 100_000_000, 1),
         (&unvaluable, "sig_unvalued", 100_000_000, 6),
@@ -361,7 +364,8 @@ async fn the_volume_floor_keeps_the_unvaluable_windows(pool: PgPool) {
 
     assert_eq!(
         read,
-        vec![pk(1), pk(5)],
-        "the $50 pool is under the floor; the unvaluable one has no total to compare, so it stays"
+        vec![pk(1), pk(5), pk(8)],
+        "the $50 pool is under the floor, the $100 one on it; the unvaluable one has no total \
+         to compare, so it stays"
     );
 }
