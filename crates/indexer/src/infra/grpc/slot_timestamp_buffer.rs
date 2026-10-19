@@ -9,7 +9,7 @@ mod waiting_slots;
 
 use chrono::{DateTime, Utc};
 
-use super::metrics::{EvictionReason, GrpcBufferMetrics};
+use super::metrics::{EvictionReason, GrpcBufferMetrics, WAITING_PEAKS, WaitingPeaks};
 
 use known_times::{KnownTimes, SlotOutcome};
 use waiting_slots::WaitingSlots;
@@ -41,17 +41,23 @@ pub(crate) struct SlotTimestampBuffer<T> {
 
 impl<T> SlotTimestampBuffer<T> {
     pub(crate) fn new() -> Self {
-        Self::with_bounds(MAX_PENDING_SLOTS, MAX_PENDING_PAYLOADS, MAX_KNOWN_SLOTS)
+        Self::with_bounds(
+            MAX_PENDING_SLOTS,
+            MAX_PENDING_PAYLOADS,
+            MAX_KNOWN_SLOTS,
+            &WAITING_PEAKS,
+        )
     }
 
-    /// Build one with explicit bounds; only the tests pass anything but the constants.
+    /// Build one with explicit bounds and peaks; only the tests pass other values.
     pub(crate) fn with_bounds(
         max_pending_slots: u64,
         max_pending_payloads: usize,
         max_known_slots: usize,
+        peaks: &'static WaitingPeaks,
     ) -> Self {
         Self {
-            waiting: WaitingSlots::new(max_pending_slots, max_pending_payloads),
+            waiting: WaitingSlots::new(max_pending_slots, max_pending_payloads, peaks),
             known: KnownTimes::new(max_known_slots),
         }
     }

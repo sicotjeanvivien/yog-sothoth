@@ -116,9 +116,13 @@ Filling it is this crate's job, one module per source:
   so a time bound would empty the buffer during an outage and destroy
   transactions whose block-meta was going to arrive on reconnect. A slot bound
   reads the stream itself — nothing arrives, nothing is evicted. Its default is
-  a **ceiling, not an estimate**: the real lag is unmeasured until a live
-  stream exists, and `yog_indexer_grpc_untimestamped_transactions_total` is what
-  will say whether the ceiling was generous.
+  a **ceiling, not an estimate**. Two gauges say how close the stream came to
+  each bound since start, or how far past it:
+  `yog_indexer_grpc_pending_payloads_peak` and
+  `yog_indexer_grpc_pending_slot_lag_peak`. They are peaks because a scrape
+  would miss a burst. They are process-wide because the buffer dies with its
+  session. `yog_indexer_grpc_untimestamped_transactions_total` says what the
+  bounds cost when they are crossed.
 
 - `infra/endpoint/` is the endpoint's **configuration, verified once at
   start-up**: the two modules below sit together because neither fault they
@@ -519,8 +523,10 @@ histograms.
   `pong`, `other`), `yog_indexer_grpc_dropped_transactions_total{reason}`,
   `yog_indexer_grpc_transactions_emitted_total`,
   `yog_indexer_grpc_downstream_full_total` (back-pressure, not loss),
-  `yog_indexer_grpc_untimestamped_transactions_total{reason}`,
-  `yog_indexer_grpc_ping_replies_unsent_total{reason}` and
+  `yog_indexer_grpc_untimestamped_transactions_total{reason}`, the two gauges
+  `yog_indexer_grpc_pending_payloads_peak` and
+  `yog_indexer_grpc_pending_slot_lag_peak` (peaks since start, not current
+  values), `yog_indexer_grpc_ping_replies_unsent_total{reason}` and
   `yog_indexer_grpc_stalls_total{site}`. ⚠️ **`stalls_total` is the only
   trace of a server that went silent without closing**: `site="stream"` for a
   stream that stopped delivering block-metas (before it, the sign was
