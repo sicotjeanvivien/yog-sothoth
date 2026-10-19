@@ -73,7 +73,19 @@ async fn a_server_error_is_sent_without_its_text() {
     .await;
     assert_eq!(answer.status(), StatusCode::INTERNAL_SERVER_ERROR);
     let json = problem(answer).await;
-    assert_eq!(json["detail"], "internal server error");
+    assert_eq!(json["detail"], "Internal Server Error");
+}
+
+/// Mutation: the rewrite's own `Retry-After` wins over the one the refusal carried.
+#[tokio::test]
+async fn a_plain_text_503_keeps_its_own_retry_after() {
+    let mut refused = response(StatusCode::SERVICE_UNAVAILABLE, Some("text/plain"), "shed");
+    refused
+        .headers_mut()
+        .insert(header::RETRY_AFTER, HeaderValue::from_static("30"));
+    let answer = answer_in_problem_details(refused).await;
+    assert_eq!(answer.headers()[header::RETRY_AFTER], "30");
+    assert_eq!(problem(answer).await["detail"], "Service Unavailable");
 }
 
 /// Mutation: an oversized error body buffered and echoed instead of dropped.
@@ -87,21 +99,17 @@ async fn an_oversized_error_body_is_not_echoed() {
 }
 
 /// Mutation: the layer rewrites a JSON error body — the readiness report of `/readyz`, or
-/// a Problem Details whose `Retry-After` would be lost.
+/// one of our own Problem Details.
 #[tokio::test]
 async fn a_json_error_body_passes_as_is() {
     for content_type in ["application/json", "application/problem+json"] {
-        let mut answer = response(
+        let answer = answer_in_problem_details(response(
             StatusCode::SERVICE_UNAVAILABLE,
             Some(content_type),
             r#"{"status":"unavailable"}"#,
-        );
-        answer
-            .headers_mut()
-            .insert(header::RETRY_AFTER, HeaderValue::from_static("5"));
-        let answer = answer_in_problem_details(answer).await;
+        ))
+        .await;
         assert_eq!(answer.headers()[header::CONTENT_TYPE], content_type);
-        assert_eq!(answer.headers()[header::RETRY_AFTER], "5");
         assert_eq!(body(answer).await, r#"{"status":"unavailable"}"#);
     }
 }

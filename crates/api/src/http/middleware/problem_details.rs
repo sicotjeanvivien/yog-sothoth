@@ -6,17 +6,20 @@ use axum::{
     http::{HeaderMap, header},
     response::{IntoResponse, Response},
 };
+use tracing::error;
 
 use crate::http::error::ApiError;
+use crate::http::middleware::tracing::REQUEST_ID_HEADER;
 
 /// An error body past this is not read: its text is dropped, never buffered.
 const MAX_ERROR_BODY: usize = 4 * 1024;
 
-/// An error response that is not JSON, rewritten as Problem Details with its status and
-/// headers. ⚠️ A JSON error body passes as is: it is the route's declared answer (`ApiError`,
-/// `/readyz`), so it must be one.
+/// An error response that is not JSON, rewritten as Problem Details. Its own headers win
+/// over the rewrite's (a `Retry-After`), except the two that describe the old body.
 pub(crate) async fn answer_in_problem_details(response: Response) -> Response {
     let status = response.status();
+    // ⚠️ A JSON error body is the route's declared answer (`ApiError`, `/readyz`): it passes
+    // as is, so it must be Problem Details or the route's documented report.
     if !(status.is_client_error() || status.is_server_error()) || is_json(response.headers()) {
         return response;
     }
@@ -25,17 +28,22 @@ pub(crate) async fn answer_in_problem_details(response: Response) -> Response {
         Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
         Err(_) => String::new(),
     };
-    let mut answer = ApiError::Framework(status, text).into_response();
-    for name in parts.headers.keys() {
-        if name != header::CONTENT_TYPE
-            && name != header::CONTENT_LENGTH
-            && !answer.headers().contains_key(name)
-        {
-            for value in parts.headers.get_all(name) {
-                answer.headers_mut().append(name, value.clone());
-            }
-        }
+    if status.is_server_error() {
+        // Outside the request's span: the id is read off the response to correlate the log.
+        let request_id = parts
+            .headers
+            .get(REQUEST_ID_HEADER)
+            .and_then(|v| v.to_str().ok());
+        error!(%status, request_id, error = %text, "framework error");
     }
+    let mut headers = parts.headers;
+    headers.remove(header::CONTENT_TYPE);
+    headers.remove(header::CONTENT_LENGTH);
+    let mut answer = ApiError::Framework(status, text).into_response();
+    for (name, value) in answer.headers() {
+        headers.entry(name).or_insert_with(|| value.clone());
+    }
+    *answer.headers_mut() = headers;
     answer
 }
 

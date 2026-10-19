@@ -33,7 +33,8 @@ use axum::http::{HeaderMap, Method, Request, StatusCode, header};
 use tower::ServiceExt;
 
 /// A state for one request through the router: an empty signal feed, no known token, every
-/// other read failing. ⚠️ Its mocks answer once; its database pool is refused at once.
+/// other read failing. ⚠️ Its mocks answer once; its database never answers, so `/readyz`
+/// waits out its probe.
 pub(crate) fn app_state() -> AppState {
     let work_slots = WorkSlots::new(1, Duration::from_secs(1));
     AppState {

@@ -674,6 +674,7 @@
             "name": "cursor",
             "required": false,
             "schema": {
+              "minLength": 1,
               "type": [
                 "string",
                 "null"
@@ -736,6 +737,7 @@
             "name": "pool",
             "required": false,
             "schema": {
+              "minLength": 1,
               "type": [
                 "string",
                 "null"

@@ -16,12 +16,9 @@ pub(crate) enum ApiError {
     Unavailable(&'static str),
     Internal(String),
     /// What axum answered outside `ApiError` — an extractor's refusal, an unknown route — its
-    /// status kept. A `5xx`'s text is logged, never sent.
+    /// status kept. A `5xx` is sent with its canonical reason only, never its text.
     Framework(StatusCode, String),
 }
-
-/// The only `detail` a `5xx` ever carries.
-const INTERNAL_DETAIL: &str = "internal server error";
 
 /// What `Retry-After` tells a refused client, in seconds: about the time a slot takes to free.
 const RETRY_AFTER_SECS: &str = "5";
@@ -47,19 +44,17 @@ impl IntoResponse for ApiError {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Internal Server Error",
-                    INTERNAL_DETAIL.to_string(),
+                    "internal server error".to_string(),
                 )
             }
             ApiError::Framework(status, text) => {
                 let title = status.canonical_reason().unwrap_or("Error");
-                if status.is_server_error() {
-                    error!(%status, error = %text, "framework error");
-                    (status, title, INTERNAL_DETAIL.to_string())
-                } else if text.is_empty() {
-                    (status, title, title.to_string())
+                let detail = if status.is_server_error() || text.is_empty() {
+                    title.to_string()
                 } else {
-                    (status, title, text)
-                }
+                    text
+                };
+                (status, title, detail)
             }
         };
 

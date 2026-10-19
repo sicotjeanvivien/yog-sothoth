@@ -345,8 +345,9 @@ invalid value — `400`, like any value that does not parse.
 What axum answers on its own — an extractor's refusal, an unknown route (`404`),
 a wrong method (`405`) — is rewritten at the router's edge
 (`middleware/problem_details.rs`): any error response that is not JSON becomes
-Problem Details with its status and headers kept, and a `5xx` keeps only the
-generic `detail`, its text logged. Nothing to do per route.
+Problem Details with its status and headers kept, and a `5xx` keeps only its
+canonical reason as `detail`, its text logged with the request id. Nothing to
+do per route.
 
 ⚠️ An error body in JSON passes as is: it is the route's own answer (`ApiError`,
 the readiness report of `/readyz`). A route that answers an error in JSON must
