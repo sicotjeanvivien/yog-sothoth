@@ -58,14 +58,32 @@ fn rejects_an_invalid_pool_address() {
     assert!(matches!(err, ApiError::BadRequest(m) if m == "invalid pool address: not-a-pubkey"));
 }
 
+/// Mutation: `?pool=` read as an absent filter again.
 #[test]
-fn empty_pool_param_means_no_filter() {
-    // `?pool=` (present but empty) is treated like an absent param,
-    // same as the cursor's empty-string rule.
+fn rejects_an_empty_pool() {
     let mut q = valid_query();
     q.pool = Some(String::new());
-    let params = ListSignalsRequest::parse(q).unwrap().into_params();
-    assert!(params.pool.is_none());
+    let err = ListSignalsRequest::parse(q).unwrap_err();
+    assert!(matches!(err, ApiError::BadRequest(m) if m == "invalid pool address: "));
+}
+
+/// Mutation: `?cursor=` read as an absent cursor again.
+#[test]
+fn rejects_an_empty_cursor() {
+    let mut q = valid_query();
+    q.cursor = Some(String::new());
+    let err = ListSignalsRequest::parse(q).unwrap_err();
+    assert!(matches!(err, ApiError::BadRequest(m) if m == "invalid cursor: malformed payload"));
+}
+
+/// Mutation: the exclusivity checked before the cursor is decoded.
+#[test]
+fn an_empty_cursor_beside_a_position_is_refused_for_the_cursor() {
+    let mut q = valid_query();
+    q.cursor = Some(String::new());
+    q.position = Some(PagePositionParam::Last);
+    let err = ListSignalsRequest::parse(q).unwrap_err();
+    assert!(matches!(err, ApiError::BadRequest(m) if m == "invalid cursor: malformed payload"));
 }
 
 #[test]
@@ -91,11 +109,17 @@ fn rejects_invalid_limit() {
 
 #[test]
 fn rejects_cursor_position_combination() {
+    let cursor = SignalCursor {
+        triggered_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
+        id: 42,
+    };
     let mut q = valid_query();
-    q.cursor = Some("any".to_string());
+    q.cursor = Some(encode_cursor(&Cursor::Signal(cursor)).unwrap());
     q.position = Some(PagePositionParam::First);
     let err = ListSignalsRequest::parse(q).unwrap_err();
-    assert!(matches!(err, ApiError::BadRequest(_)));
+    assert!(
+        matches!(err, ApiError::BadRequest(m) if m == "`position` cannot be combined with `cursor`")
+    );
 }
 
 #[test]

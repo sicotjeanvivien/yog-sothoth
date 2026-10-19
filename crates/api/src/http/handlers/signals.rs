@@ -9,6 +9,7 @@ use axum::{
         sse::{Event, KeepAlive, Sse},
     },
 };
+use axum_extra::extract::WithRejection;
 use futures_util::{Stream, StreamExt};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, broadcast};
 use tokio_util::sync::CancellationToken;
@@ -37,7 +38,7 @@ use crate::http::{
 )]
 pub(crate) async fn list_signals(
     State(state): State<AppState>,
-    Query(query): Query<SignalsQuery>,
+    WithRejection(Query(query), _): WithRejection<Query<SignalsQuery>, ApiError>,
 ) -> Result<Json<PageResponse<SignalResponse>>, ApiError> {
     let request = ListSignalsRequest::parse(query)?;
     let page = state

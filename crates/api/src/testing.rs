@@ -6,7 +6,11 @@ use async_trait::async_trait;
 use chrono::{DateTime, TimeZone, Utc};
 use solana_pubkey::Pubkey;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tokio::sync::{Semaphore, broadcast};
+use tokio_util::sync::CancellationToken;
+use yog_persistence::{PgHealthChecker, PgPool};
 
 use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
@@ -18,6 +22,50 @@ use yog_core::{
         TokenPriceLookup,
     },
 };
+
+use crate::application::{
+    AnnouncementService, IngestionService, NetworkService, SignalService, StatsService,
+    TokenService, WorkSlots,
+};
+use crate::http::AppState;
+
+/// A state for driving the router: an empty signal feed, no known token, every other read
+/// failing. Its database pool never connects: `/readyz` answers 503.
+pub(crate) fn app_state() -> AppState {
+    let work_slots = WorkSlots::new(1, Duration::from_secs(1));
+    AppState {
+        network_service: Arc::new(NetworkService::new(Arc::new(
+            MockNetworkStatusRepo::failing(),
+        ))),
+        ingestion_service: Arc::new(IngestionService::new(Arc::new(
+            MockEventFreshnessRepo::failing(),
+        ))),
+        signal_service: Arc::new(SignalService::new(
+            Arc::new(MockSignalRepo::empty()),
+            Arc::new(PoolRepoOnce::with_pools(vec![])),
+            Arc::new(MockMetadataRepo::empty()),
+        )),
+        signal_stream: broadcast::channel(1).0,
+        stream_slots: Arc::new(Semaphore::new(1)),
+        stats_service: Arc::new(StatsService::new(
+            Arc::new(MockGlobalAnalyticsRepo::failing()),
+            Arc::new(PoolCountsRepo::failing()),
+            work_slots.clone(),
+        )),
+        work_slots,
+        token_service: Arc::new(TokenService::new(
+            Arc::new(MockMetadataRepo::empty()),
+            Arc::new(MockPriceRepo::empty()),
+        )),
+        announcement_service: Arc::new(AnnouncementService::new(Arc::new(
+            MockAnnouncementRepo::failing(),
+        ))),
+        health_checker: Arc::new(PgHealthChecker::new(
+            PgPool::connect_lazy("postgres://unused/unused").expect("a well-formed URL"),
+        )),
+        shutdown: CancellationToken::new(),
+    }
+}
 
 /// Deterministic pubkey from a single byte, for readable tests.
 pub(crate) fn pk(seed: u8) -> Pubkey {

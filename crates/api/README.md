@@ -203,9 +203,8 @@ What the derive cannot say is said once:
 - **The finish** (`http/tests/contract.rs`), applied to the whole document: a nullable
   property is required — `null` is written, never omitted, and a key that may be
   absent says `#[schema(nullable = false)]` (a test fails on a
-  `skip_serializing_if` without it); every operation declares its failures —
-  Problem Details, and plain text too on an operation with parameters, which
-  axum refuses that way when it cannot parse them; an `int64` (or `u64`) anywhere fails the document, because the generated
+  `skip_serializing_if` without it); every operation declares its failures as
+  Problem Details; an `int64` (or `u64`) anywhere fails the document, because the generated
   zod would read it as a `BigInt` (point it at `Count`); so does a `$ref` to an
   undeclared schema, which the generator would skip in silence.
 - **Integers carry their Rust range**: utoipa's `non_strict_integers` writes a
@@ -334,14 +333,19 @@ served as `application/problem+json`:
 
 | Status | `title` | Common causes |
 |--------|---------|---------------|
-| 400 | `Bad Request` | Invalid address, malformed cursor, limit out of range, mutually exclusive params |
+| 400 | `Bad Request` | A query or path that does not parse, an empty value, invalid address, malformed cursor, limit out of range, mutually exclusive params |
 | 404 | `Not Found` | Token unknown |
 | 503 | `Service Unavailable` | Over capacity: no work slot within 2 s, too many open signal streams, the request past its deadline, or the database out of connections or past `statement_timeout`. Carries `Retry-After`; see [Capacity bounds](#capacity-bounds) |
 | 500 | `Internal Server Error` | DB failure, encoding bug. `detail` is always the generic message; the real cause is logged server-side under a `request_id` correlatable via the `x-request-id` response header |
 
-⚠️ A query string axum cannot parse — an unknown `severity`, a
-non-numeric `limit` — is refused **400 in plain text** by the extractor, before
-any `ApiError` exists.
+A parameter absent is not provided; present and empty (`?pool=`), it is an
+invalid value — `400`, like any value that does not parse.
+
+⚠️ A handler extracts its query and path through `WithRejection<Query<_>,
+ApiError>` (`Path` alike): axum's bare extractors refuse in plain text. Behind
+the wrapper, utoipa no longer infers where a parameter lives — a query struct
+says `#[into_params(parameter_in = Query)]`, a path parameter is listed in
+`params(...)`.
 
 ## Cursor wire format
 

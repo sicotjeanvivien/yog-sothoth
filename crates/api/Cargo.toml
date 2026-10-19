@@ -12,6 +12,7 @@ yog-bootstrap = { path = "../bootstrap" }
 
 # HTTP server
 axum = { workspace = true }
+axum-extra = { workspace = true }
 tower-http = { workspace = true }
 utoipa = { workspace = true }
 utoipa-axum = { workspace = true }

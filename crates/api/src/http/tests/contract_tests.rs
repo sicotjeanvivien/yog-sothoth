@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::json;
 
-use super::{document, finish};
+use super::{PROBLEM_CONTENT_TYPE, document, finish};
 use crate::http::dto::request::MAX_LIMIT;
 
 const COMMITTED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/openapi.json");
@@ -160,23 +160,6 @@ fn a_ref_to_an_undeclared_schema_is_refused() {
     finish(&mut doc);
 }
 
-/// Red if plain text is promised to an operation with nothing to parse, or denied to one with parameters.
-#[test]
-fn only_an_operation_with_parameters_may_answer_plain_text() {
-    let mut doc = json!({
-        "paths": {
-            "/api/stats": { "get": { "responses": {} } },
-            "/api/signals": { "get": { "parameters": [{ "name": "limit", "in": "query" }], "responses": {} } }
-        },
-        "components": { "schemas": { "ProblemDetailsResponse": {} } }
-    });
-    finish(&mut doc);
-    let content = |path: &str| doc["paths"][path]["get"]["responses"]["default"]["content"].clone();
-    assert!(content("/api/stats")["text/plain"].is_null());
-    assert!(content("/api/stats")["application/problem+json"].is_object());
-    assert!(content("/api/signals")["text/plain"].is_object());
-}
-
 /// Red if a path item's `parameters` or `summary` is treated as an operation.
 #[test]
 fn only_the_operations_of_a_path_item_answer_problems() {
@@ -270,12 +253,22 @@ fn every_schema_is_a_response_or_a_wire_form() {
     );
 }
 
+/// Red when an operation is declared to answer a failure in any other form, such as the
+/// plain text of axum's own extractors.
 #[test]
 fn every_operation_answers_its_failures_as_problem_details() {
     let doc = document();
     for (path, item) in doc["paths"].as_object().expect("paths") {
+        let content = item["get"]["responses"]["default"]["content"]
+            .as_object()
+            .expect("content");
         assert_eq!(
-            item["get"]["responses"]["default"]["content"]["application/problem+json"]["schema"]["$ref"],
+            content.keys().collect::<Vec<_>>(),
+            [PROBLEM_CONTENT_TYPE],
+            "{path}"
+        );
+        assert_eq!(
+            content[PROBLEM_CONTENT_TYPE]["schema"]["$ref"],
             "#/components/schemas/ProblemDetailsResponse",
             "{path}"
         );
@@ -321,7 +314,9 @@ fn every_handler_declares_the_body_and_query_it_has() {
             let fn_end = fn_at + rest[fn_at..].find('{').expect("a body");
             let sig: String = rest[fn_at..fn_end].split_whitespace().collect();
             let body = between(&attr, "body=", ')').unwrap_or_default();
-            let query = between(&attr, "params(", ')').unwrap_or_default();
+            let query = between(&attr, "params(", ')')
+                .filter(|params| !params.starts_with('('))
+                .unwrap_or_default();
             let returned = generic_of(&sig, "Json<").unwrap_or("String");
             let extracted = generic_of(&sig, "Query<").unwrap_or_default();
             if body != returned || query != extracted {

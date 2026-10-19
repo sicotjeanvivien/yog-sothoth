@@ -2,8 +2,6 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 use yog_core::domain::Severity;
 
-/// Wire form of the severity filter. An unknown value fails serde
-/// deserialization → axum returns 400 before the handler runs.
 #[derive(Debug, Deserialize, Clone, Copy, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub(super) enum SeverityParam {

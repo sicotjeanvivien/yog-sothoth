@@ -30,19 +30,21 @@ pub(crate) struct ListSignalsRequest {
 impl ListSignalsRequest {
     pub(crate) fn parse(query: SignalsQuery) -> Result<Self, ApiError> {
         validate_limit(query.limit)?;
-        validate_cursor_position_exclusive(query.cursor.is_some(), query.position.is_some())?;
 
         let pool = query
             .pool
             .as_deref()
-            .filter(|raw| !raw.is_empty())
             .map(|raw| super::parse_address(raw, "pool"))
             .transpose()?;
 
-        let cursor = match query.cursor.as_deref() {
-            Some(raw) if !raw.is_empty() => Some(decode_signal_cursor(raw)?),
-            _ => None,
-        };
+        // ⚠️ Decoded before the exclusivity check: an empty `cursor` beside a `position` is
+        // refused for itself, not as a combination.
+        let cursor = query
+            .cursor
+            .as_deref()
+            .map(decode_signal_cursor)
+            .transpose()?;
+        validate_cursor_position_exclusive(cursor.is_some(), query.position.is_some())?;
 
         Ok(Self {
             severity: query.severity.map(Into::into),

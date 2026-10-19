@@ -69,7 +69,8 @@ If the query already exists, skip to Step 3.
   (`crates/api/README.md` → *The contract*).
 - **Handler** — add to `crates/api/src/http/handlers/<aggregate>.rs`. Reuse `ApiError`
   (`crates/api/src/http/error.rs`); its `From<RepositoryError>` impl maps repo failures to
-  RFC 9457 Problem Details uniformly — don't hand-roll error responses.
+  RFC 9457 Problem Details uniformly — don't hand-roll error responses. Extract the query
+  and the path through `WithRejection` (`crates/api/README.md` → *Error responses*).
 - **Wire a new service** into `AppState`: its field in `crates/api/src/http/state.rs`,
   its construction in `build_app_state` (`crates/api/src/bootstrap/app_state.rs`), where the
   concrete `Pg*` repositories are injected. Two files, two layers — the state belongs to

@@ -1,4 +1,5 @@
 use axum::{
+    extract::rejection::{PathRejection, QueryRejection},
     http::{HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
@@ -87,6 +88,30 @@ impl From<yog_core::RepositoryError> for ApiError {
 
 /// What a client is told when the database ran out of time or connections.
 const TIMEOUT_REASON: &str = "the database is over capacity; retry shortly";
+
+impl From<QueryRejection> for ApiError {
+    fn from(rejection: QueryRejection) -> Self {
+        Self::rejected(rejection.status(), rejection.body_text())
+    }
+}
+
+impl From<PathRejection> for ApiError {
+    fn from(rejection: PathRejection) -> Self {
+        Self::rejected(rejection.status(), rejection.body_text())
+    }
+}
+
+impl ApiError {
+    /// An extractor's refusal, its text as the `detail`. ⚠️ Not all `400`: a path rejection
+    /// can be a routing bug (`500`), which stays internal.
+    fn rejected(status: StatusCode, text: String) -> Self {
+        if status.is_client_error() {
+            ApiError::BadRequest(text)
+        } else {
+            ApiError::Internal(text)
+        }
+    }
+}
 
 #[cfg(test)]
 #[path = "tests/error_tests.rs"]

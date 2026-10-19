@@ -4,6 +4,7 @@ use axum::{
     Json,
     extract::{Path, State},
 };
+use axum_extra::extract::WithRejection;
 
 use crate::http::{
     AppState,
@@ -14,6 +15,7 @@ use crate::http::{
 #[utoipa::path(
     get,
     path = "/api/tokens/{mint}",
+    params(("mint" = String, Path)),
     responses((
         status = 200,
         description = "The token, with its latest price.",
@@ -22,7 +24,7 @@ use crate::http::{
 )]
 pub(crate) async fn get_token(
     State(state): State<AppState>,
-    Path(mint): Path<String>,
+    WithRejection(Path(mint), _): WithRejection<Path<String>, ApiError>,
 ) -> Result<Json<TokenResponse>, ApiError> {
     let request = GetTokenRequest::parse(mint)?;
 
@@ -34,3 +36,7 @@ pub(crate) async fn get_token(
 
     Ok(Json(TokenResponse::new(agg.metadata, agg.price)))
 }
+
+#[cfg(test)]
+#[path = "token_tests.rs"]
+mod tests;
