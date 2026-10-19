@@ -273,7 +273,7 @@ hides the rest.
 (`public/og-image.png`, one for every page and both languages) and
 `INDEXABLE_PATHS`, the one list of public pages: `app/sitemap.ts` reads it, and
 `app/robots.ts` points at the sitemap. The locale layout sets `metadataBase`
-and the only title template, `%s — Yog-Scope`. Each page builds its metadata
+and the only title template, `%s — ${SITE_NAME}`. Each page builds its metadata
 through `lib/seo/page-metadata.ts` — title, description, preview, canonical
 without parameters, its two languages and `x-default` to the unprefixed path —
 because Next merges metadata shallowly: a page setting `title` alone would keep

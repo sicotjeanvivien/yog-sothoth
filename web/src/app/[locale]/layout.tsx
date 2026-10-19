@@ -34,7 +34,7 @@ export function generateStaticParams() {
 /** The site's frame: absolute URLs, and the one place the title suffix is written. */
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: { template: "%s — Yog-Scope", default: SITE_NAME },
+  title: { template: `%s — ${SITE_NAME}`, default: SITE_NAME },
   manifest: "/site.webmanifest",
 };
 

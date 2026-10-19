@@ -62,7 +62,7 @@ export const RELEASES: readonly Release[] = [
             technical: true,
           },
           {
-            text: "Every API error is now answered in RFC 9457 Problem Details, like all the others: a query or path the API cannot read (an unknown severity, a non-numeric limit), an unknown route (404) and a wrong method (405) used to get plain text or an empty body.",
+            text: "The API now answers all its errors in one format, RFC 9457 Problem Details: a query or path it cannot read (an unknown severity, a non-numeric limit), an unknown route (404) and a wrong method (405) used to get plain text or an empty body.",
             technical: false,
           },
           {

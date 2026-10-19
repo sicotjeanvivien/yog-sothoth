@@ -109,13 +109,13 @@ describe("pageMetadata", () => {
 
 describe("the title suffix", () => {
   // Mutation: a page or a message writing « — Yog-Scope » itself, beside the layout's template.
-  it("is written once, in the layout's template", () => {
+  it("is written by the layout's template alone, from SITE_NAME", () => {
     const sources = [...files(join(WEB, "messages")), ...files(join(WEB, "src"))].filter(
       (path) => !path.includes(`${sep}__tests__${sep}`),
     );
     const writers = sources.filter((path) => readFileSync(path, "utf8").includes("— Yog-Scope"));
-    expect(writers.map((path) => relative(WEB, path))).toEqual([
-      join("src", "app", "[locale]", "layout.tsx"),
-    ]);
+    expect(writers.map((path) => relative(WEB, path))).toEqual([]);
+    const layout = readFileSync(join(PAGES, "layout.tsx"), "utf8");
+    expect(layout).toContain("template: `%s — ${SITE_NAME}`");
   });
 });
