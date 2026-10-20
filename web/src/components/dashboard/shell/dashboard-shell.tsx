@@ -5,7 +5,7 @@
  * fixed rail. The switch is CSS; React only tracks `isOpen`. No focus trap in the drawer.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
 
 import { Brand, Sidebar } from "@/components/dashboard/sidebar/sidebar";
@@ -21,6 +21,27 @@ import {
 import { RAIL_BREAKPOINT } from "@/components/shared/breakpoints";
 import { HamburgerIcon } from "@/components/shared/icon";
 
+const RAIL_QUERY = `(min-width: ${RAIL_BREAKPOINT})`;
+
+function subscribeToRail(onChange: () => void) {
+  const query = window.matchMedia(RAIL_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+/** Whether the menu is the fixed rail, not the drawer; the server paints the rail. */
+function useOnRail(): boolean {
+  return useSyncExternalStore(
+    subscribeToRail,
+    () => window.matchMedia(RAIL_QUERY).matches,
+    () => true,
+  );
+}
+
+function writeCookie(name: string, on: boolean, maxAgeS: number) {
+  document.cookie = `${name}=${on ? "1" : "0"}; path=/; max-age=${maxAgeS}; samesite=lax`;
+}
+
 export function DashboardShell({
   children,
   initialCollapsed = false,
@@ -35,33 +56,27 @@ export function DashboardShell({
   const t = useTranslations("Dashboard.shell");
   const [isOpen, setIsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(initialCollapsed);
-  // ⚠️ The folded rail hides the panel: open there, it would read as expanded to a screen reader.
-  const [preferencesOpen, setPreferencesOpen] = useState(
-    initialPreferencesOpen && !initialCollapsed,
-  );
+  const [preferencesOpen, setPreferencesOpen] = useState(initialPreferencesOpen);
+  const onRail = useOnRail();
 
   const open = useCallback(() => setIsOpen(true), []);
   const close = useCallback(() => setIsOpen(false), []);
 
   // A cookie, not localStorage: the server layout renders the right width, with no flash.
   const persistCollapsed = useCallback((next: boolean) => {
-    document.cookie = `${SIDEBAR_COLLAPSED_COOKIE}=${next ? "1" : "0"}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE_S}; samesite=lax`;
+    writeCookie(SIDEBAR_COLLAPSED_COOKIE, next, SIDEBAR_COOKIE_MAX_AGE_S);
     setCollapsed(next);
   }, []);
-  const persistPreferences = useCallback((next: boolean) => {
-    document.cookie = `${PREFERENCES_OPEN_COOKIE}=${next ? "1" : "0"}; path=/; max-age=${PREFERENCES_COOKIE_MAX_AGE_S}; samesite=lax`;
-    setPreferencesOpen(next);
-  }, []);
-  const toggleCollapsed = useCallback(() => {
-    persistCollapsed(!collapsed);
-    if (!collapsed) persistPreferences(false);
-  }, [collapsed, persistCollapsed, persistPreferences]);
+  const toggleCollapsed = useCallback(
+    () => persistCollapsed(!collapsed),
+    [collapsed, persistCollapsed],
+  );
   const togglePreferences = useCallback(() => {
-    const onRail = window.matchMedia(`(min-width: ${RAIL_BREAKPOINT})`).matches;
     const next = preferencesClick({ collapsed, onRail, open: preferencesOpen });
-    persistPreferences(next.open);
+    writeCookie(PREFERENCES_OPEN_COOKIE, next.open, PREFERENCES_COOKIE_MAX_AGE_S);
+    setPreferencesOpen(next.open);
     if (next.expand) persistCollapsed(false);
-  }, [collapsed, preferencesOpen, persistCollapsed, persistPreferences]);
+  }, [collapsed, onRail, preferencesOpen, persistCollapsed]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -81,18 +96,15 @@ export function DashboardShell({
     };
   }, [isOpen]);
 
-  // Reset to closed on the rail, or the scroll-lock and overlay linger after a resize; a
-  // folded rail closes the Preferences, as folding it does.
+  // Reset to closed on the rail, or the scroll-lock and overlay linger after a resize.
   useEffect(() => {
-    const query = window.matchMedia(`(min-width: ${RAIL_BREAKPOINT})`);
+    const query = window.matchMedia(RAIL_QUERY);
     function onChange(event: MediaQueryListEvent) {
-      if (!event.matches) return;
-      close();
-      if (collapsed) persistPreferences(false);
+      if (event.matches) close();
     }
     query.addEventListener("change", onChange);
     return () => query.removeEventListener("change", onChange);
-  }, [close, collapsed, persistPreferences]);
+  }, [close]);
 
   return (
     // Solid background over the cosmic one of `body` — behind the pages
@@ -110,6 +122,7 @@ export function DashboardShell({
         collapsed={collapsed}
         onToggleCollapsed={toggleCollapsed}
         preferencesOpen={preferencesOpen}
+        folded={collapsed && onRail}
         onTogglePreferences={togglePreferences}
       />
 

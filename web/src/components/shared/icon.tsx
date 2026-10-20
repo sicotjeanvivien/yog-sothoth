@@ -1,7 +1,7 @@
 import React from "react";
 
 /**
- * The dashboard's icon set: a 24x24 viewBox, a 1.6px `currentColor` stroke and `shrink-0`.
+ * The dashboard's icon set: a 24x24 viewBox, a `currentColor` stroke and `shrink-0`.
  * `size` is in rendered pixels; the viewBox stays 24x24 so the line weight scales evenly.
  */
 

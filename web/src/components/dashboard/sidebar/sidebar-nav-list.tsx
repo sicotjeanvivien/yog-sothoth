@@ -68,6 +68,7 @@ export function SidebarNavList({ collapsed, onNavigate }: SidebarNavListProps) {
           entry={entry}
           label={t(entry.labelKey)}
           soon={t("soon")}
+          soonTitle={t("soonTitle", { label: t(entry.labelKey) })}
           collapsed={collapsed}
         />
       )}
@@ -106,10 +107,13 @@ export function SidebarNavList({ collapsed, onNavigate }: SidebarNavListProps) {
   );
 }
 
-/** The entry's icon, or its protocol's abbreviation, in a 20 px box. */
+/** The 20 px box of a menu icon, shared with the Preferences. */
+export const ICON_BOX = "inline-flex h-5 w-5 shrink-0 items-center justify-center";
+
+/** The entry's icon, or its protocol's abbreviation. */
 function EntryIcon({ entryKey, tone }: { entryKey: NavKey; tone: string }) {
   const icon = NAV_ICONS[entryKey];
-  const box = `inline-flex h-5 w-5 shrink-0 items-center justify-center ${tone}`;
+  const box = `${ICON_BOX} ${tone}`;
 
   return icon.kind === "icon" ? (
     <span aria-hidden="true" className={box}>
@@ -188,18 +192,20 @@ function ClosedEntry({
   entry,
   label,
   soon,
+  soonTitle,
   collapsed,
 }: {
   entry: ClosedNavEntry;
   label: string;
   soon: string;
+  soonTitle: string;
   collapsed: boolean;
 }) {
   return (
     <span
       role="link"
       aria-disabled="true"
-      title={collapsed ? `${label} — ${soon}` : undefined}
+      title={collapsed ? soonTitle : undefined}
       className={`${rowClass(collapsed)} cursor-default text-dash-ink-3`}
     >
       <EntryLabel entryKey={entry.key} label={label} collapsed={collapsed} />

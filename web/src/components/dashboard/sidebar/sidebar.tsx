@@ -22,6 +22,8 @@ type SidebarProps = {
   collapsed: boolean;
   onToggleCollapsed: () => void;
   preferencesOpen: boolean;
+  /** Collapsed and on the rail: the drawer has no collapsed form. */
+  folded: boolean;
   onTogglePreferences: () => void;
 };
 
@@ -31,6 +33,7 @@ export function Sidebar({
   collapsed,
   onToggleCollapsed,
   preferencesOpen,
+  folded,
   onTogglePreferences,
 }: SidebarProps) {
   const t = useTranslations("Dashboard.shell");
@@ -67,6 +70,7 @@ export function Sidebar({
         open={preferencesOpen}
         onToggle={onTogglePreferences}
         collapsed={collapsed}
+        folded={folded}
       />
     </aside>
   );
@@ -113,7 +117,6 @@ function CollapseToggle({
       onClick={onToggle}
       aria-label={label}
       aria-expanded={!collapsed}
-      aria-controls="dashboard-menu"
       title={label}
       // ⚠️ Into the rail's right padding when unfolded: logo, wordmark and button overflow it otherwise.
       className={`hidden h-8 w-8 shrink-0 items-center justify-center border border-transparent text-dash-ink-3 transition-colors hover:border-dash-rule hover:text-dash-ink rail:inline-flex ${collapsed ? "" : "rail:-mr-4"}`}

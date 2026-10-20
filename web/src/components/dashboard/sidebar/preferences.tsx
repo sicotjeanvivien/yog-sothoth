@@ -14,15 +14,20 @@ import { ChevronDownIcon, PreferencesIcon } from "@/components/shared/icon";
 import { LocaleSwitch } from "@/components/shared/locale-switch";
 import { usePathname } from "@/i18n/navigation";
 
+import { ICON_BOX } from "./sidebar-nav-list";
+
 export function Preferences({
   open,
   onToggle,
   collapsed,
+  folded,
 }: {
   /** Owned by the shell, which also folds the rail. */
   open: boolean;
   onToggle: () => void;
   collapsed: boolean;
+  /** The folded rail hides the panel whatever `open` says. */
+  folded: boolean;
 }) {
   const t = useTranslations("Dashboard.preferences");
   const locale = useLocale();
@@ -40,7 +45,7 @@ export function Preferences({
       <button
         type="button"
         onClick={onToggle}
-        aria-expanded={open}
+        aria-expanded={open && !folded}
         aria-controls={panelId}
         title={collapsed ? t("title") : undefined}
         className={`group flex min-h-11 w-full items-center justify-between gap-2 px-[10px] text-left text-[14px] transition-colors hover:bg-dash-surface hover:text-dash-ink rail:min-h-10 ${open ? "text-dash-ink" : "text-dash-ink-2"} ${collapsed ? "rail:justify-center rail:px-0" : ""}`}
@@ -48,7 +53,7 @@ export function Preferences({
         <span className="flex items-center gap-[10px]">
           <span
             aria-hidden="true"
-            className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-dash-ink-3 group-hover:text-dash-ink"
+            className={`${ICON_BOX} text-dash-ink-3 group-hover:text-dash-ink`}
           >
             <PreferencesIcon size={16} />
           </span>
@@ -64,7 +69,7 @@ export function Preferences({
       </button>
 
       <div id={panelId} hidden={!open} className={hiddenWhenCollapsed}>
-        <div className="flex min-h-11 items-center justify-between gap-3 pt-0.5 pr-[10px] pb-1 pl-[22px] text-[14px] text-dash-ink-2 rail:min-h-9">
+        <div className="flex min-h-11 items-center justify-between gap-3 pt-0.5 pr-[10px] pb-1 pl-10 text-[14px] text-dash-ink-2 rail:min-h-9">
           <span id={labelId}>{t("language")}</span>
           <LocaleSwitch
             href={href}

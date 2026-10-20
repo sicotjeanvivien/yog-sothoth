@@ -207,9 +207,10 @@ collapsed rail keeps every entry as its icon alone, its label in `title`.
 language, FR | EN (`shared/locale-switch.tsx`, also the site footer's), each a
 link to the same page and query in that language. Whether they are open is the
 `yog_prefs_open` cookie, read by the layout so the first paint is right. On
-the collapsed rail only their icon stays; a click unfolds the rail and opens
-them, and folding the rail closes them (`preferencesClick`, state owned by
-`DashboardShell`).
+the collapsed rail only their icon stays: a click unfolds the rail and opens
+them (`preferencesClick`). The folded rail hides an open panel without closing
+it; the drawer has no folded form, whatever the collapse cookie says.
+`DashboardShell` owns both states.
 
 **Live status** — `live-status/`: `LiveIndicator` polls `/api/ingestion` and
 `liveStatusOf` maps it to four states — live (green), delayed (yellow), stale
@@ -218,16 +219,18 @@ Overview only) and opens on click, with the slot and RPC latency of
 `/api/network`.
 
 **Fonts** — Geist (text) and Geist Mono (figures, addresses, times) are loaded
-by the locale layout (`next/font/local`), for the dashboard and the site
-alike. Their files live in `src/app/fonts/`, Cinzel's too, each next to its
-OFL licence: the build fetches nothing, so it cannot fail on Google Fonts. They
-are Google Fonts' own latin files, fetched once with the user agent Next.js
-used to request them (`next/dist/compiled/@next/font/dist/google/fetch-resource.js`);
-a file fetched by a recent browser is another build of the font, and moves the
-line breaks. A new font goes the same way: its latin `.woff2` and its licence
-in that folder, one `localFont` in the layout. They are applied through `font-dash-sans` / `font-dash-mono`. Cinzel
-serves the frame only for the wordmark; page contents not yet redone (the
-Overview's titles among them) still use it.
+by the locale layout, for the dashboard and the site alike; Cinzel too. Their
+files live in `src/app/fonts/`, each family next to its OFL licence: the build
+fetches nothing, so it cannot fail on Google Fonts. They are Google Fonts' own
+files, every subset, fetched once with the user agent Next.js used to request
+them (`next/dist/compiled/@next/font/dist/google/fetch-resource.js`); a file
+fetched by a recent browser is another build of the font, and moves the line
+breaks. The latin subset goes through `next/font/local` (preload, fallback
+metrics, the CSS variable); the others are plain `@font-face` rules in
+`fonts.css`, each with its `unicode-range`. ⚠️ Every face of a family bears the
+name of its const in the layout (`geist`, `geistMono`, `cinzel`): Turbopack
+names the CSS variable after the const, and a face under another name is never
+used. `__tests__/fonts.test.ts` holds names, ranges and files together.
 
 **Colours** — the dashboard has one colour per role, declared once as
 `--color-dash-*` in `globals.css`: `bg`, `surface`, `surface-2`, `rule`,
@@ -413,7 +416,7 @@ web/
 ├── src/
 │   ├── app/
 │   │   ├── globals.css
-│   │   ├── fonts/                   # the three .woff2 and their OFL licences
+│   │   ├── fonts/                   # .woff2 per family and subset, OFL licences, fonts.css
 │   │   ├── layout.tsx               # root layout (passthrough)
 │   │   └── [locale]/
 │   │       ├── layout.tsx           # html/body, intl provider, fonts

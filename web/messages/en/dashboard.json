@@ -9,7 +9,8 @@
         "raydium": "Raydium",
         "orca": "Orca",
         "token": "Token",
-        "soon": "Soon"
+        "soon": "Soon",
+        "soonTitle": "{label} — soon"
       }
     },
     "shell": {
