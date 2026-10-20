@@ -1,13 +1,15 @@
-//! `PgProtocolActivityRepository` and `PgTokenActivityRepository`, read under
-//! `yog_api` from the tables as yog-analytic leaves them, seeded here directly.
+//! The Overview's reads under `yog_api` — `PgProtocolActivityRepository`,
+//! `PgTokenActivityRepository` and `PgPoolRepository::counts_by_protocol` —
+//! from the tables as their writers leave them, seeded here directly.
 
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use yog_core::domain::{
-    ProtocolActivityLookup, Span, TokenActivityCursor, TokenActivityFeed, Window,
+    PoolCatalog, Protocol, ProtocolActivityLookup, ProtocolPools, Span, TokenActivityCursor,
+    TokenActivityFeed, Window,
 };
-use yog_persistence::{PgProtocolActivityRepository, PgTokenActivityRepository};
+use yog_persistence::{PgPoolRepository, PgProtocolActivityRepository, PgTokenActivityRepository};
 
 use super::helpers::{as_role, pk};
 
@@ -262,4 +264,92 @@ async fn the_tvl_is_the_last_measured_at_or_before_the_hour(pool: PgPool) {
     assert_eq!(tvl.len(), 1);
     assert_eq!(tvl[0].tvl_usd, Some(Decimal::from(100)));
     assert_eq!(tvl[0].at, last() - Duration::hours(2));
+}
+
+/// Mutations: the first hour excluded (the variation loses its starting point),
+/// or the last one (the series stops an hour short); DLMM filtered out, or its
+/// value read on DAMM v2's row.
+#[sqlx::test(migrations = "./migrations")]
+async fn the_tvl_series_holds_both_ends_and_every_protocol(pool: PgPool) {
+    sqlx::query(
+        "INSERT INTO analytic_protocol_tvl (protocol, bucket, tvl_usd, pools_priced, measured_at)
+         SELECT p, h, EXTRACT(HOUR FROM h) + base, 1, h
+           FROM (VALUES ('meteora_damm_v2', 0), ('meteora_dlmm', 100)) AS v (p, base),
+                generate_series($1 - INTERVAL '3 hours', $1 + INTERVAL '1 hour',
+                                INTERVAL '1 hour') AS h",
+    )
+    .bind(last())
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repository = PgProtocolActivityRepository::new(as_role(&pool, "yog_api").await);
+
+    let series = repository
+        .tvl_hourly(last() - Duration::hours(2), last())
+        .await
+        .unwrap();
+
+    let mut read: Vec<_> = series
+        .iter()
+        .map(|t| (t.protocol.as_str(), t.at, t.tvl_usd))
+        .collect();
+    read.sort();
+    let mut expected: Vec<_> = [(Protocol::MeteoraDammV2, 0), (Protocol::MeteoraDlmm, 100)]
+        .into_iter()
+        .flat_map(|(protocol, base)| {
+            [10, 11, 12].map(|hour| {
+                let at = last() + Duration::hours(hour - 11);
+                (protocol.as_str(), at, Some(Decimal::from(base + hour)))
+            })
+        })
+        .collect();
+    expected.sort();
+    assert_eq!(read, expected);
+}
+
+async fn seen(pool: &PgPool, seed: u8, protocol: Protocol, mints: Option<(u8, u8)>) {
+    sqlx::query(
+        "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint)
+         VALUES ($1, $2, $3, $4)",
+    )
+    .bind(pk(seed).to_string())
+    .bind(protocol.as_str())
+    .bind(mints.map(|(a, _)| pk(a).to_string()))
+    .bind(mints.map(|(_, b)| pk(b).to_string()))
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// Mutations: the pools counted on their mints (a pool the context has not
+/// resolved yet vanishes), DAMM v2 alone (DLMM vanishes), or a 0 row for a
+/// protocol without a pool.
+#[sqlx::test(migrations = "./migrations")]
+async fn every_pool_seen_counts_under_its_protocol(pool: PgPool) {
+    let catalog = PgPoolRepository::new(as_role(&pool, "yog_api").await);
+    assert_eq!(catalog.counts_by_protocol().await.unwrap(), []);
+    seen(&pool, 1, Protocol::MeteoraDammV2, Some((101, 102))).await;
+    seen(&pool, 2, Protocol::MeteoraDammV2, None).await;
+    seen(&pool, 3, Protocol::MeteoraDlmm, Some((101, 103))).await;
+
+    let mut counts: Vec<_> = catalog
+        .counts_by_protocol()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(
+            |ProtocolPools {
+                 protocol,
+                 pools_seen,
+             }| (protocol.as_str(), pools_seen),
+        )
+        .collect();
+    counts.sort();
+
+    let mut expected = [
+        (Protocol::MeteoraDammV2.as_str(), 2),
+        (Protocol::MeteoraDlmm.as_str(), 1),
+    ];
+    expected.sort();
+    assert_eq!(counts, expected);
 }
