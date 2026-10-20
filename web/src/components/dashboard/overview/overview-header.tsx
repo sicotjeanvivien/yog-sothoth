@@ -1,5 +1,5 @@
 /**
- * The compact header: breadcrumb and title on one line; at the right, "Live" over the period.
+ * The compact header: the title alone; at the right, "Live" over the period and the mode.
  * ⚠️ The period selector streams in its own unkeyed `<Suspense>`: a period change keeps it.
  */
 
@@ -11,7 +11,7 @@ import { ApiClientError } from "@/lib/api/errors";
 import { fetchProtocolActivity } from "@/lib/api/server/protocols";
 import { CLOSED_PERIODS, PERIODS, type Period } from "@/lib/overview/period";
 
-import { LABEL_CLASS } from "./overview-layout";
+import { AdvancedSwitch } from "./advanced-switch";
 import { closedReason } from "./overview-parts";
 import { PeriodSelector, type PeriodAvailability } from "./period-selector";
 import { OverviewLiveRows, OverviewLiveRowsFallback } from "./overview-live-rows";
@@ -21,15 +21,9 @@ export async function OverviewHeader({ period }: { period: Period }) {
 
   return (
     <header className="flex flex-wrap items-start justify-between gap-x-8 gap-y-3 border-b border-dash-rule px-4 py-5 font-dash-sans rail:px-8 rail:pt-4 rail:pb-[14px]">
-      <div className="flex min-w-0 flex-[1_1_360px] flex-wrap items-baseline gap-x-2 gap-y-1.5">
-        <span className={LABEL_CLASS}>{t("breadcrumb")}</span>
-        <h1 className="text-[20px] leading-[1.2] font-semibold tracking-[-0.01em] text-dash-ink">
-          <span aria-hidden="true" className="font-normal text-dash-ink-3">
-            /{" "}
-          </span>
-          {t("title")}
-        </h1>
-      </div>
+      <h1 className="min-w-0 flex-[1_1_360px] text-[20px] leading-[1.2] font-semibold tracking-[-0.01em] text-dash-ink">
+        {t("title")}
+      </h1>
       <div className="flex flex-col items-start gap-2.5 rail:ml-auto rail:items-end">
         <span className="-ml-[10px] rail:-mr-[10px] rail:ml-0">
           <LiveIndicator
@@ -40,9 +34,12 @@ export async function OverviewHeader({ period }: { period: Period }) {
             }
           />
         </span>
-        <Suspense fallback={<Selector period={period} availability={null} />}>
-          <PeriodControl period={period} />
-        </Suspense>
+        <div className="flex flex-wrap items-center gap-3 rail:justify-end">
+          <Suspense fallback={<Selector period={period} availability={null} />}>
+            <PeriodControl period={period} />
+          </Suspense>
+          <AdvancedSwitch label={t("advanced")} />
+        </div>
       </div>
     </header>
   );

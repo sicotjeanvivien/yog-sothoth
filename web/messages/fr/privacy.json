@@ -8,7 +8,7 @@
       "eyebrow": "Politique de confidentialité",
       "title": "Ce que nous faisons de vos données.",
       "lead": "Yog-Scope est un dashboard public en lecture seule. Aucun compte n'est requis, aucun outil d'analytique n'est utilisé, aucun visiteur n'est tracké. Cette page explique en termes clairs les très rares données que la plateforme manipule.",
-      "lastUpdated": "Dernière mise à jour : 17 octobre 2026"
+      "lastUpdated": "Dernière mise à jour : 20 octobre 2026"
     },
     "prose": {
       "inShort": {
@@ -37,7 +37,7 @@
       },
       "cookies": {
         "title": "Cookies",
-        "body": "Le site ne dépose aucun cookie soumis à consentement. Il peut déposer quatre cookies techniques. NEXT_LOCALE mémorise la langue du site : il n'est posé que si la page que vous ouvrez est dans une langue différente de celle de votre navigateur, et il est effacé à la fermeture de celui-ci. yog_sidebar_collapsed mémorise, pendant un an, que vous avez replié ou déplié le menu latéral du dashboard. yog_prefs_open mémorise, pendant un an, que vous avez ouvert ou fermé les préférences du dashboard. yog_announcements_dismissed mémorise, pendant 90 jours, les annonces que vous avez fermées, pour ne pas vous les remontrer. Ces trois derniers ne sont posés que lorsque vous faites l'action en question. Cloudflare peut en outre déposer des cookies de sécurité lorsqu'il vérifie qu'une visite ne vient pas d'un robot, par exemple pendant une attaque : cf_clearance atteste que la vérification a été passée, pour ne pas vous la redemander à chaque page, et expire au bout de 30 minutes ; pendant la vérification elle-même, sa plateforme peut aussi poser des cookies techniques dont le nom commence par cf_chl_. Strictement nécessaires au fonctionnement et à la sécurité du site, ou servant à personnaliser son affichage à votre demande, ces cookies sont exemptés de consentement. Cette liste sera mise à jour si des cookies non essentiels venaient à être introduits."
+        "body": "Le site ne dépose aucun cookie soumis à consentement. Il peut déposer cinq cookies techniques. NEXT_LOCALE mémorise la langue du site : il n'est posé que si la page que vous ouvrez est dans une langue différente de celle de votre navigateur, et il est effacé à la fermeture de celui-ci. yog_sidebar_collapsed mémorise, pendant un an, que vous avez replié ou déplié le menu latéral du dashboard. yog_prefs_open mémorise, pendant un an, que vous avez ouvert ou fermé les préférences du dashboard. yog_announcements_dismissed mémorise, pendant 90 jours, les annonces que vous avez fermées, pour ne pas vous les remontrer. yog_overview_advanced mémorise, pendant un an, que vous avez activé ou désactivé le mode avancé de la vue d'ensemble. Ces quatre derniers ne sont posés que lorsque vous faites l'action en question. Cloudflare peut en outre déposer des cookies de sécurité lorsqu'il vérifie qu'une visite ne vient pas d'un robot, par exemple pendant une attaque : cf_clearance atteste que la vérification a été passée, pour ne pas vous la redemander à chaque page, et expire au bout de 30 minutes ; pendant la vérification elle-même, sa plateforme peut aussi poser des cookies techniques dont le nom commence par cf_chl_. Strictement nécessaires au fonctionnement et à la sécurité du site, ou servant à personnaliser son affichage à votre demande, ces cookies sont exemptés de consentement. Cette liste sera mise à jour si des cookies non essentiels venaient à être introduits."
       },
       "rights": {
         "title": "Vos droits",

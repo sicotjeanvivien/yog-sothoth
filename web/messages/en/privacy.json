@@ -8,7 +8,7 @@
       "eyebrow": "Privacy policy",
       "title": "What we do with your data.",
       "lead": "Yog-Scope is a read-only public dashboard. It does not require an account, does not use analytics, and does not track visitors. This page explains in plain terms the very limited data the platform handles.",
-      "lastUpdated": "Last updated: 17 October 2026"
+      "lastUpdated": "Last updated: 20 October 2026"
     },
     "prose": {
       "inShort": {
@@ -37,7 +37,7 @@
       },
       "cookies": {
         "title": "Cookies",
-        "body": "The site sets no cookie that requires consent. It may set four technical cookies. NEXT_LOCALE remembers the site's language: it is only set if the page you open is in a language different from your browser's, and it is deleted when you close your browser. yog_sidebar_collapsed remembers, for one year, that you collapsed or expanded the dashboard's side menu. yog_prefs_open remembers, for one year, that you opened or closed the dashboard's preferences. yog_announcements_dismissed remembers, for 90 days, the announcements you closed, so that they are not shown to you again. These last three are only set when you take that action. Cloudflare may also set security cookies when it checks that a visit does not come from a bot, for instance during an attack: cf_clearance records that the check was passed, so that you are not asked again on every page, and expires after 30 minutes; during the check itself, its platform may also set technical cookies whose names start with cf_chl_. Being strictly necessary for the site to work and stay secure, or used to personalise its display at your request, these cookies are exempt from consent. This list will be updated if non-essential cookies are ever introduced."
+        "body": "The site sets no cookie that requires consent. It may set five technical cookies. NEXT_LOCALE remembers the site's language: it is only set if the page you open is in a language different from your browser's, and it is deleted when you close your browser. yog_sidebar_collapsed remembers, for one year, that you collapsed or expanded the dashboard's side menu. yog_prefs_open remembers, for one year, that you opened or closed the dashboard's preferences. yog_announcements_dismissed remembers, for 90 days, the announcements you closed, so that they are not shown to you again. yog_overview_advanced remembers, for one year, that you turned the Overview's advanced mode on or off. These last four are only set when you take that action. Cloudflare may also set security cookies when it checks that a visit does not come from a bot, for instance during an attack: cf_clearance records that the check was passed, so that you are not asked again on every page, and expires after 30 minutes; during the check itself, its platform may also set technical cookies whose names start with cf_chl_. Being strictly necessary for the site to work and stay secure, or used to personalise its display at your request, these cookies are exempt from consent. This list will be updated if non-essential cookies are ever introduced."
       },
       "rights": {
         "title": "Your rights",

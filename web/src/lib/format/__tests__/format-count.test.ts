@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCount } from "../format-count";
+import { formatCount, formatCountCompact } from "../format-count";
 
 describe("formatCount", () => {
   it("renders a small count verbatim", () => {
@@ -21,5 +21,15 @@ describe("formatCount", () => {
 
   it("renders an em-dash on a non-finite value", () => {
     expect(formatCount(Number.NaN)).toBe("—");
+  });
+});
+
+describe("formatCountCompact", () => {
+  it("shortens millions to two decimals", () => {
+    expect(formatCountCompact(3_410_000)).toBe("3.41M");
+  });
+
+  it("renders an em-dash when the count is null", () => {
+    expect(formatCountCompact(null)).toBe("—");
   });
 });

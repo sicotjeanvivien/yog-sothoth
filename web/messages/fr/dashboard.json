@@ -46,7 +46,7 @@
       "page": {
         "title": "Vue d'ensemble",
         "description": "Ce que Yog-Scope observe, protocole par protocole : TVL, volume, fees, pools actives, tokens les plus échangés et signaux, sur la période choisie.",
-        "breadcrumb": "Tous les protocoles"
+        "advanced": "Mode avancé"
       },
       "period": {
         "label": "Période",
@@ -78,6 +78,10 @@
         "tvlChange": "sur {period}",
         "volumeChange": "vs {period} préc.",
         "feesProtocol": "dont protocole {amount}",
+        "swaps": "Swaps {period}",
+        "swapsRate": "≈ {rate} par seconde",
+        "rotation": "Rotation {period}",
+        "rotationSub": "volume ÷ TVL",
         "poolsObserved": "sur {observed} observées",
         "poolsObservedBefore": "sur",
         "poolsObservedAfter": "observées",
@@ -86,7 +90,9 @@
           "tvl": "La valeur de ce qui est déposé dans toutes les pools observées, quand les deux tokens d'une pool ont un prix connu, à la fin de la dernière heure complète. Sa variation compare à son niveau au début de la période choisie.",
           "volume": "Ce qui s'est échangé sur la période choisie, valorisé au prix du moment de chaque échange, jusqu'à la dernière heure complète. La variation compare à la période précédente de même durée.",
           "fees": "Ce que ces échanges ont payé en frais sur la période choisie : la part des déposants (LP) et celle du protocole.",
-          "pools": "Les pools qui ont eu au moins un échange sur la période choisie, parmi toutes celles que Yog-Scope a vues, et celles nées pendant la période."
+          "swaps": "Le nombre d'échanges sur la période choisie, et leur rythme moyen par seconde.",
+          "pools": "Les pools qui ont eu au moins un échange sur la période choisie, parmi toutes celles que Yog-Scope a vues, et celles nées pendant la période.",
+          "rotation": "Le volume de la période choisie divisé par la TVL : combien de fois la liquidité déposée a changé de mains. La TVL ne compte que les pools dont les deux tokens ont un prix connu."
         }
       },
       "protocols": {
@@ -96,6 +102,8 @@
         "protocol": "Protocole",
         "tvl": "TVL",
         "volume": "Volume {period}",
+        "fees": "Fees {period}",
+        "activePools": "Pools actives",
         "share": "Part du volume",
         "live": "en direct"
       },
@@ -120,7 +128,12 @@
         "invite": "Survolez ou touchez une barre pour son détail",
         "today": "aujourd'hui",
         "daysAgo": "J−{days}",
-        "noValue": "aucun volume valorisé"
+        "noValue": "aucun volume valorisé",
+        "feesHourly": "Fees par heure",
+        "feesDaily": "Fees par jour",
+        "feesTotal": "{total} au total",
+        "feesChartLabel": "Fees sur la période choisie, tous protocoles",
+        "feesNoValue": "aucune fee valorisée"
       },
       "tokens": {
         "title": "Tokens les plus échangés · {period}",

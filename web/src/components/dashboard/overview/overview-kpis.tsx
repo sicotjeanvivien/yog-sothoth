@@ -1,10 +1,10 @@
 /**
- * The four KPI cells, each fetching on its own so a slow route holds only its cell. A failed
- * secondary read (the change, the catalogue) costs only its line, never the main figure.
+ * The KPI cells, each fetching on its own so a slow route holds only its cell; swaps and
+ * rotation are the advanced mode's. A failed secondary read costs only its line.
  */
 
 import type { ReactNode } from "react";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 
 import { ApiClientError } from "@/lib/api/errors";
 import {
@@ -15,11 +15,12 @@ import {
   fetchProtocolTvlHourly,
 } from "@/lib/api/server/protocols";
 import { volumeCoverage } from "@/lib/coverage/volume-coverage";
-import { formatCount } from "@/lib/format/format-count";
+import { formatCount, formatCountCompact } from "@/lib/format/format-count";
+import { formatTimes } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { previousWindowCovered, tvlStart } from "@/lib/overview/availability";
 import type { Period } from "@/lib/overview/period";
-import { changeRatio, sumUsd } from "@/lib/overview/totals";
+import { changeRatio, rotation, sumUsd, swapsPerSecond } from "@/lib/overview/totals";
 
 import { Change, closedReason, KpiCell, Unavailable, utcMoment } from "./overview-parts";
 import { KpiFailedLine, KpiSkeleton, lateStamp } from "./overview-states";
@@ -205,11 +206,84 @@ export async function PoolsKpi({ period }: { period: Period }) {
   );
 }
 
-export async function KpiPlaceholder() {
-  return <KpiSkeleton />;
+export async function SwapsKpi({ period }: { period: Period }) {
+  const t = await getTranslations("Dashboard.Overview");
+  const label = t("kpis.swaps", { period: t(`period.short.${period}`) });
+  const info = t("kpis.info.swaps");
+
+  let now;
+  try {
+    now = await fetchProtocolActivity(period);
+  } catch (err) {
+    return kpiError(err, label, info, true);
+  }
+  const closed = await closedReason(period, now);
+  if (closed !== null) {
+    return (
+      <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} advanced />
+    );
+  }
+
+  const swaps =
+    now.items.length === 0 ? null : now.items.reduce((sum, i) => sum + i.swapCount, 0);
+
+  return (
+    <KpiCell
+      label={label}
+      info={info}
+      value={formatCountCompact(swaps)}
+      sub={
+        swaps === null
+          ? undefined
+          : t("kpis.swapsRate", { rate: formatRate(swapsPerSecond(swaps, period)) })
+      }
+      stamp={await lateStamp(now.asOf)}
+      advanced
+    />
+  );
 }
 
-/** A volume or its fees, with the mark when they leave out pool-hours that could not be valued. */
+export async function RotationKpi({ period }: { period: Period }) {
+  const t = await getTranslations("Dashboard.Overview");
+  const locale = await getLocale();
+  const label = t("kpis.rotation", { period: t(`period.short.${period}`) });
+  const info = t("kpis.info.rotation");
+
+  let now, tvl;
+  try {
+    [now, tvl] = await Promise.all([fetchProtocolActivity(period), fetchProtocolTvl()]);
+  } catch (err) {
+    return kpiError(err, label, info, true);
+  }
+  const closed = await closedReason(period, now);
+  if (closed !== null) {
+    return (
+      <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} advanced />
+    );
+  }
+
+  const ratio = rotation(
+    sumUsd(now.items.map((i) => i.volumeUsd)),
+    sumUsd(tvl.items.map((i) => i.tvlUsd)),
+  );
+
+  return (
+    <KpiCell
+      label={label}
+      info={info}
+      value={await valued(ratio === null ? "—" : formatTimes(ratio, locale), now.items)}
+      sub={t("kpis.rotationSub")}
+      stamp={await lateStamp(now.asOf)}
+      advanced
+    />
+  );
+}
+
+export async function KpiPlaceholder({ advanced = false }: { advanced?: boolean }) {
+  return <KpiSkeleton advanced={advanced} />;
+}
+
+/** A figure built on the volume, with the mark when it leaves out pool-hours not valued. */
 async function valued(
   figure: string,
   items: readonly { poolHours: number; poolHoursValued: number }[],
@@ -248,21 +322,27 @@ async function failure(err: unknown): Promise<string> {
   return t(err.details.kind);
 }
 
-function kpiError(err: unknown, label: string, info: string) {
+function kpiError(err: unknown, label: string, info: string, advanced = false) {
   if (!(err instanceof ApiClientError)) {
     throw err;
   }
-  return <KpiFailed label={label} info={info} />;
+  return <KpiFailed label={label} info={info} advanced={advanced} />;
+}
+
+/** One decimal under 10/s, or a quiet window would read "≈ 0 per second" under its swaps. */
+function formatRate(rate: number): string {
+  return rate < 10 ? rate.toFixed(1) : formatCount(Math.round(rate));
 }
 
 /** "—", "Unavailable for now" and a retry; the cause sits in the blocks' error boxes. */
-function KpiFailed({ label, info }: { label: string; info: string }) {
+function KpiFailed({ label, info, advanced }: { label: string; info: string; advanced: boolean }) {
   return (
     <KpiCell
       label={label}
       info={info}
       value={<span className="text-dash-ink-3">—</span>}
       sub={<KpiFailedLine />}
+      advanced={advanced}
     />
   );
 }

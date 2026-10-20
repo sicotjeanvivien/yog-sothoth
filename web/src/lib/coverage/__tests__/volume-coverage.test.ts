@@ -12,19 +12,24 @@ describe("volumeCoverage", () => {
   it("is not partial when every hour that traded could be valued", () => {
     expect(
       volumeCoverage({ poolHours: 8, poolHoursValued: 8 }),
-    ).toEqual({ priced: 8, total: 8, partial: false });
+    ).toEqual({ priced: 8, total: 8, partial: false, share: 1 });
   });
 
   it("is partial when one hour could not be valued", () => {
     expect(
       volumeCoverage({ poolHours: 8, poolHoursValued: 7 }),
-    ).toEqual({ priced: 7, total: 8, partial: true });
+    ).toEqual({ priced: 7, total: 8, partial: true, share: 0.87 });
   });
 
   it("is partial when no hour at all could be valued", () => {
     expect(
       volumeCoverage({ poolHours: 3, poolHoursValued: 0 }),
-    ).toEqual({ priced: 0, total: 3, partial: true });
+    ).toEqual({ priced: 0, total: 3, partial: true, share: 0 });
+  });
+
+  // Mutation: rounding to nearest shows a partial coverage as "100 %", a complete one.
+  it("never reads a partial coverage as whole", () => {
+    expect(volumeCoverage({ poolHours: 1000, poolHoursValued: 999 })?.share).toBe(0.99);
   });
 
   it("separates two pools of equal volume and unequal coverage", () => {

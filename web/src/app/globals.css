@@ -50,6 +50,10 @@
   --breakpoint-dash-wide: 73.8125rem;
 }
 
+/* The Overview's advanced mode. ⚠️ `:is`, not `:where`: the attribute's weight lets
+   `adv:dash-wide:col-span-2` beat `dash-wide:col-span-3` whatever the CSS order. */
+@custom-variant adv (&:is([data-overview-advanced] *));
+
 @theme inline {
   --font-dash-sans: var(--font-geist, ui-sans-serif), ui-sans-serif, system-ui,
     sans-serif;

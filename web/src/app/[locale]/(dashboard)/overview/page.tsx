@@ -5,6 +5,7 @@
  */
 
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
@@ -13,10 +14,14 @@ import {
   FeesKpi,
   KpiPlaceholder,
   PoolsKpi,
+  RotationKpi,
+  SwapsKpi,
   TvlKpi,
   VolumeKpi,
 } from "@/components/dashboard/overview/overview-kpis";
 import { GRID_CLASS } from "@/components/dashboard/overview/overview-layout";
+import { OverviewMode } from "@/components/dashboard/overview/overview-mode";
+import { OVERVIEW_ADVANCED_COOKIE } from "@/components/dashboard/overview/overview-mode-state";
 import { StaleBanner } from "@/components/dashboard/overview/overview-states";
 import {
   OverviewSignals,
@@ -65,9 +70,10 @@ export default async function OverviewPage({
   const { locale } = await params;
   setRequestLocale(locale);
   const period = parsePeriod((await searchParams).period);
+  const initialAdvanced = (await cookies()).get(OVERVIEW_ADVANCED_COOKIE)?.value === "1";
 
   return (
-    <>
+    <OverviewMode initialAdvanced={initialAdvanced}>
       <OverviewHeader period={period} />
       <Suspense fallback={null}>
         <StaleBanner period={period} />
@@ -83,8 +89,14 @@ export default async function OverviewPage({
         <Suspense key={`fees-${period}`} fallback={<KpiPlaceholder />}>
           <FeesKpi period={period} />
         </Suspense>
+        <Suspense key={`swaps-${period}`} fallback={<KpiPlaceholder advanced />}>
+          <SwapsKpi period={period} />
+        </Suspense>
         <Suspense key={`pools-${period}`} fallback={<KpiPlaceholder />}>
           <PoolsKpi period={period} />
+        </Suspense>
+        <Suspense key={`rotation-${period}`} fallback={<KpiPlaceholder advanced />}>
+          <RotationKpi period={period} />
         </Suspense>
       </div>
 
@@ -102,6 +114,6 @@ export default async function OverviewPage({
           <TopTokens period={period} />
         </Suspense>
       </div>
-    </>
+    </OverviewMode>
   );
 }
