@@ -11,11 +11,30 @@ use crate::http::error::ApiError;
 
 mod get_token;
 mod list_signals;
+mod list_token_activity;
+mod window_param;
 
 pub(crate) use get_token::GetTokenRequest;
-#[cfg(test)]
-pub(crate) use list_signals::MAX_LIMIT;
 pub(crate) use list_signals::{ListSignalsRequest, SignalsQuery};
+pub(crate) use list_token_activity::{ListTokenActivityRequest, TokenActivityQuery};
+pub(crate) use window_param::{ActivityQuery, WindowQuery};
+
+const DEFAULT_LIMIT: i64 = 50;
+pub(crate) const MAX_LIMIT: i64 = 200;
+
+fn default_limit() -> i64 {
+    DEFAULT_LIMIT
+}
+
+/// `limit`, or a 400 when it is outside `1..=MAX_LIMIT`.
+fn validate_limit(limit: i64) -> Result<(), ApiError> {
+    if !(1..=MAX_LIMIT).contains(&limit) {
+        return Err(ApiError::BadRequest(format!(
+            "`limit` must be between 1 and {MAX_LIMIT}, got {limit}"
+        )));
+    }
+    Ok(())
+}
 
 /// `raw`, or a 400: a parameter present without a value is invalid, never absent.
 fn non_empty<'a>(name: &str, raw: &'a str) -> Result<&'a str, ApiError> {

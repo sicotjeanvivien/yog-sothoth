@@ -1,15 +1,10 @@
-use std::str::FromStr;
-
 use crate::repositories::helper::{
     convert_bigdecimal_to_decimal, convert_bigdecimal_to_u128, convert_i16_to_u8,
-    convert_string_to_pubkey,
+    convert_string_to_pubkey, parse_protocol,
 };
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
-use yog_core::{
-    RepositoryError,
-    domain::{PoolPriceSnapshot, Protocol},
-};
+use yog_core::{RepositoryError, domain::PoolPriceSnapshot};
 
 /// Row shape of the snapshot query, non-null throughout.
 #[derive(sqlx::FromRow)]
@@ -32,8 +27,7 @@ impl TryFrom<PoolPriceSnapshotRow> for PoolPriceSnapshot {
     fn try_from(row: PoolPriceSnapshotRow) -> Result<Self, Self::Error> {
         Ok(PoolPriceSnapshot {
             pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
-            protocol: Protocol::from_str(&row.protocol)
-                .map_err(|e| RepositoryError::Integrity(format!("invalid protocol: {e}")))?,
+            protocol: parse_protocol(&row.protocol)?,
             sqrt_price: convert_bigdecimal_to_u128(row.last_sqrt_price, "last_sqrt_price")?,
             last_swap_at: row.last_swap_at,
             decimals_a: convert_i16_to_u8(row.decimals_a, "decimals_a")?,

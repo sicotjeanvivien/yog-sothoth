@@ -17,6 +17,7 @@ pub struct Page<T> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Cursor {
     Signal(crate::domain::SignalCursor),
+    TokenActivity(crate::domain::TokenActivityCursor),
 }
 
 impl<T> Page<T> {

@@ -1,10 +1,6 @@
-use crate::repositories::helper::convert_string_to_pubkey;
+use crate::repositories::helper::{convert_string_to_pubkey, parse_protocol};
 use chrono::{DateTime, Utc};
-use std::str::FromStr;
-use yog_core::{
-    RepositoryError,
-    domain::{Protocol, WatchedPool},
-};
+use yog_core::{RepositoryError, domain::WatchedPool};
 
 /// Row shape for reading `watched_pools`. Mirrors every column of
 /// the table.
@@ -23,8 +19,7 @@ impl TryFrom<WatchedPoolRow> for WatchedPool {
     fn try_from(row: WatchedPoolRow) -> Result<Self, Self::Error> {
         Ok(WatchedPool {
             pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
-            protocol: Protocol::from_str(&row.protocol)
-                .map_err(|e| RepositoryError::Integrity(format!("invalid protocol: {e}")))?,
+            protocol: parse_protocol(&row.protocol)?,
             active: row.active,
             added_at: row.added_at,
             note: row.note,

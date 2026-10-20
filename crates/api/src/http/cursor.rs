@@ -2,12 +2,26 @@
 use crate::http::error::ApiError;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
-use yog_core::{Cursor, domain::SignalCursor};
+use std::str::FromStr;
+
+use rust_decimal::Decimal;
+use solana_pubkey::Pubkey;
+use yog_core::{
+    Cursor,
+    domain::{SignalCursor, TokenActivityCursor},
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SignalCursorWire {
     triggered_at: String,
     id: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct TokenActivityCursorWire {
+    last_hour: String,
+    volume_usd: String,
+    mint: String,
 }
 
 pub(crate) fn encode_cursor_opt(cursor: Option<&Cursor>) -> Result<Option<String>, ApiError> {
@@ -19,6 +33,11 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
         Cursor::Signal(c) => encode_b64_json(&SignalCursorWire {
             triggered_at: c.triggered_at.to_rfc3339(),
             id: c.id,
+        }),
+        Cursor::TokenActivity(c) => encode_b64_json(&TokenActivityCursorWire {
+            last_hour: c.last_hour.to_rfc3339(),
+            volume_usd: c.volume_usd.to_string(),
+            mint: c.mint.to_string(),
         }),
     }
 }
@@ -48,6 +67,17 @@ pub(crate) fn decode_signal_cursor(raw: &str) -> Result<SignalCursor, ApiError> 
     Ok(SignalCursor {
         triggered_at: parse_rfc3339(&wire.triggered_at)?,
         id: wire.id,
+    })
+}
+
+pub(crate) fn decode_token_activity_cursor(raw: &str) -> Result<TokenActivityCursor, ApiError> {
+    let wire: TokenActivityCursorWire = decode_b64_json(raw)?;
+    Ok(TokenActivityCursor {
+        last_hour: parse_rfc3339(&wire.last_hour)?,
+        volume_usd: Decimal::from_str(&wire.volume_usd)
+            .map_err(|_| ApiError::BadRequest("invalid cursor: malformed volume".to_string()))?,
+        mint: Pubkey::from_str(&wire.mint)
+            .map_err(|_| ApiError::BadRequest("invalid cursor: malformed mint".to_string()))?,
     })
 }
 

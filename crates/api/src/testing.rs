@@ -16,16 +16,18 @@ use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
         Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity,
-        EventFreshnessRepository, GlobalAnalytics, GlobalAnalyticsRepository, NetworkStatus,
-        NetworkStatusLookup, Pool, PoolCatalog, PoolCounts, Protocol, Severity, Signal,
-        SignalCursor, SignalFeed, SignalRecord, TokenMetadata, TokenMetadataLookup, TokenPrice,
-        TokenPriceLookup,
+        EventFreshnessRepository, FrozenHours, GlobalAnalytics, GlobalAnalyticsRepository,
+        NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog, PoolCounts, Protocol,
+        ProtocolActivity, ProtocolActivityBar, ProtocolActivityLookup, ProtocolPools, ProtocolTvl,
+        Severity, Signal, SignalCursor, SignalFeed, SignalRecord, Span, TokenActivityCursor,
+        TokenActivityFeed, TokenActivityPage, TokenMetadata, TokenMetadataLookup, TokenPrice,
+        TokenPriceLookup, Window,
     },
 };
 
 use crate::application::{
-    AnnouncementService, IngestionService, NetworkService, SignalService, StatsService,
-    TokenService, WorkSlots,
+    ActivityService, AnnouncementService, IngestionService, NetworkService, ProtocolCatalogService,
+    SignalService, StatsService, TokenService, WorkSlots,
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
@@ -55,6 +57,15 @@ pub(crate) fn app_state() -> AppState {
             Arc::new(MockGlobalAnalyticsRepo::failing()),
             Arc::new(PoolCountsRepo::failing()),
             work_slots.clone(),
+        )),
+        protocol_catalog_service: Arc::new(ProtocolCatalogService::new(
+            Arc::new(PoolCountsRepo::failing()),
+            vec![],
+            work_slots.clone(),
+        )),
+        activity_service: Arc::new(ActivityService::new(
+            Arc::new(MockProtocolActivityRepo::new(None)),
+            Arc::new(MockTokenActivityRepo::default()),
         )),
         work_slots,
         token_service: Arc::new(TokenService::new(
@@ -184,6 +195,9 @@ impl PoolCatalog for PoolRepoOnce {
     async fn counts(&self) -> RepositoryResult<yog_core::domain::PoolCounts> {
         unreachable!("counts not used by SignalService")
     }
+    async fn counts_by_protocol(&self) -> RepositoryResult<Vec<ProtocolPools>> {
+        unreachable!("counts_by_protocol not used by SignalService")
+    }
     async fn find_by_addresses(&self, _addrs: &[Pubkey]) -> RepositoryResult<Vec<Pool>> {
         take(&self.by_addresses)
     }
@@ -215,20 +229,29 @@ impl GlobalAnalyticsRepository for MockGlobalAnalyticsRepo {
     }
 }
 
-/// A `PoolCatalog` for `StatsService`: only `counts()` answers.
+/// A `PoolCatalog` for `StatsService` and `ProtocolCatalogService`: only the counts answer.
 pub(crate) struct PoolCountsRepo {
     counts: Mutex<Option<RepositoryResult<PoolCounts>>>,
+    by_protocol: Mutex<Option<RepositoryResult<Vec<ProtocolPools>>>>,
 }
 
 impl PoolCountsRepo {
     pub(crate) fn with(counts: PoolCounts) -> Self {
         Self {
             counts: Mutex::new(Some(Ok(counts))),
+            by_protocol: Mutex::new(None),
+        }
+    }
+    pub(crate) fn by_protocol(counts: Vec<ProtocolPools>) -> Self {
+        Self {
+            counts: Mutex::new(None),
+            by_protocol: Mutex::new(Some(Ok(counts))),
         }
     }
     pub(crate) fn failing() -> Self {
         Self {
             counts: Mutex::new(Some(Err(RepositoryError::Integrity("counts boom".into())))),
+            by_protocol: Mutex::new(Some(Err(RepositoryError::Integrity("counts boom".into())))),
         }
     }
 }
@@ -238,8 +261,96 @@ impl PoolCatalog for PoolCountsRepo {
     async fn counts(&self) -> RepositoryResult<PoolCounts> {
         take(&self.counts)
     }
+    async fn counts_by_protocol(&self) -> RepositoryResult<Vec<ProtocolPools>> {
+        take(&self.by_protocol)
+    }
     async fn find_by_addresses(&self, _addrs: &[Pubkey]) -> RepositoryResult<Vec<Pool>> {
         unreachable!("find_by_addresses not used by StatsService")
+    }
+}
+
+/// A `ProtocolActivityLookup` that answers `frozen` and the seeded rows every time, and
+/// records the span of each read.
+pub(crate) struct MockProtocolActivityRepo {
+    frozen: Option<FrozenHours>,
+    pub(crate) activity: Vec<ProtocolActivity>,
+    pub(crate) bars: Vec<ProtocolActivityBar>,
+    pub(crate) tvl: Vec<ProtocolTvl>,
+    pub(crate) spans: Mutex<Vec<Span>>,
+    pub(crate) tvl_ranges: Mutex<Vec<(DateTime<Utc>, DateTime<Utc>)>>,
+}
+
+impl MockProtocolActivityRepo {
+    /// The hours `tvl_latest` was asked about, as `(hour, hour)` in [`Self::tvl_ranges`].
+    fn record_tvl(&self, first: DateTime<Utc>, last: DateTime<Utc>) -> Vec<ProtocolTvl> {
+        self.tvl_ranges.lock().unwrap().push((first, last));
+        self.tvl.clone()
+    }
+}
+
+impl MockProtocolActivityRepo {
+    pub(crate) fn new(frozen: Option<FrozenHours>) -> Self {
+        Self {
+            frozen,
+            activity: vec![],
+            bars: vec![],
+            tvl: vec![],
+            spans: Mutex::new(vec![]),
+            tvl_ranges: Mutex::new(vec![]),
+        }
+    }
+}
+
+#[async_trait]
+impl ProtocolActivityLookup for MockProtocolActivityRepo {
+    async fn frozen_hours(&self) -> RepositoryResult<Option<FrozenHours>> {
+        Ok(self.frozen)
+    }
+    async fn activity(&self, span: &Span, _: Window) -> RepositoryResult<Vec<ProtocolActivity>> {
+        self.spans.lock().unwrap().push(*span);
+        Ok(self.activity.clone())
+    }
+    async fn activity_hourly(&self, span: &Span) -> RepositoryResult<Vec<ProtocolActivityBar>> {
+        self.spans.lock().unwrap().push(*span);
+        Ok(self.bars.clone())
+    }
+    async fn activity_daily(&self, span: &Span) -> RepositoryResult<Vec<ProtocolActivityBar>> {
+        self.spans.lock().unwrap().push(*span);
+        Ok(self.bars.clone())
+    }
+    async fn tvl_latest(&self, last: DateTime<Utc>) -> RepositoryResult<Vec<ProtocolTvl>> {
+        Ok(self.record_tvl(last, last))
+    }
+    async fn tvl_hourly(
+        &self,
+        first: DateTime<Utc>,
+        last: DateTime<Utc>,
+    ) -> RepositoryResult<Vec<ProtocolTvl>> {
+        Ok(self.record_tvl(first, last))
+    }
+}
+
+/// A `TokenActivityFeed` whose last ranking was written at `ranked_at`, `None`
+/// for none: it records each window read and answers an empty page of it.
+#[derive(Default)]
+pub(crate) struct MockTokenActivityRepo {
+    pub(crate) ranked_at: Option<DateTime<Utc>>,
+    pub(crate) reads: Mutex<Vec<Window>>,
+}
+
+#[async_trait]
+impl TokenActivityFeed for MockTokenActivityRepo {
+    async fn list(
+        &self,
+        window: Window,
+        _cursor: Option<TokenActivityCursor>,
+        _limit: i64,
+    ) -> RepositoryResult<Option<TokenActivityPage>> {
+        self.reads.lock().unwrap().push(window);
+        Ok(self.ranked_at.map(|last_hour| TokenActivityPage {
+            last_hour,
+            page: Page::empty(),
+        }))
     }
 }
 

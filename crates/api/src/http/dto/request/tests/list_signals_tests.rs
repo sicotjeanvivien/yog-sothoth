@@ -4,12 +4,12 @@ use chrono::{TimeZone, Utc};
 use yog_core::domain::{Severity, SignalCursor};
 use yog_core::{Cursor, PageDirection};
 
-use super::signals_query::default_limit;
 use super::{
-    ListSignalsRequest, MAX_LIMIT, PageDirectionParam, PagePositionParam, SeverityParam,
-    SignalsQuery, validate_cursor_position_exclusive, validate_limit,
+    ListSignalsRequest, PageDirectionParam, PagePositionParam, SeverityParam, SignalsQuery,
+    validate_cursor_position_exclusive,
 };
 use crate::http::cursor::encode_cursor;
+use crate::http::dto::request::{MAX_LIMIT, default_limit, validate_limit};
 use crate::http::error::ApiError;
 
 fn valid_query() -> SignalsQuery {

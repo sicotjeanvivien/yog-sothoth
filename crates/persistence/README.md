@@ -36,6 +36,7 @@ persistence/
 │   │   ├── meteora/dlmm/    (the DLMM pool-properties satellite; no event
 │   │   │                     repositories yet)
 │   │   ├── pool/, pool_current_state/, global_analytics/
+│   │   ├── protocol_activity/, token_activity/ (the measures the API reads)
 │   │   ├── signal/, swap_flow/, liquidity_flow/, pool_price_snapshot/
 │   │   ├── token_metadata/, token_price/, network_status/, watched_pool/
 │   │   ├── announcement/
@@ -566,6 +567,23 @@ unless the hours written span the window through the previous hour, the TVL
 unless measured since then: a stopped, catching-up or new writer shows, as
 `pool_current_tvl` does for a stale price.
 
+The cycle also writes what no sum of hours gives (029): the pools born per
+protocol and hour, from each protocol's `initialize_pool` events, in their own
+table so an hour of births without a swap still counts; and, at each freeze, for
+every window ending at the frozen hour, the distinct active pools per protocol
+(`analytic_protocol_periods`, one row per protocol, window and hour, 0 included,
+so a missing row means a window never counted) and the tokens
+(`analytic_token_periods`, replaced at each freeze, their volume rounded to
+6 decimals so the page cursor, a `Decimal`, holds it exactly). Both group per
+pool before counting: a `COUNT(DISTINCT)` sorts every pool-hour, and spills. The
+tokens are read with the hour of their ranking in one statement, which a freeze
+cannot split.
+`repositories/protocol_activity.rs` and `token_activity.rs` read them, with the
+protocol aggregate and the TVL, over the span the API hands them;
+`tests/overview_periods.rs` and `tests/protocol_activity.rs` hold the rules. 030
+deletes the protocol TVL of the hours before the first complete one, so its first
+row is the floor a TVL variation starts from.
+
 The DAMM v2 tranches are those of `meteora_damm_v2_swap_events_5min` (021),
 refreshed every 5 minutes up to 10 minutes ago and read in real time past that.
 One statement per tranche (`meteora_damm_v2_tranche.sql`) prices each pool's
@@ -583,7 +601,8 @@ Still reading market prices outside the table: the liquidity
 (`meteora_damm_v2_pool_hourly_liquidity_flow`,
 `meteora_damm_v2_liquidity_events_valued`) and the TVL (`pool_current_tvl`).
 
-`yog_analytic` reads through explicit grants (015, 021, and the raw swaps in 028).
+`yog_analytic` reads through explicit grants (015, 021, the raw swaps in 028, and
+the `initialize_pool` events in 029).
 ⚠️ An aggregate is granted as well as any view over it: TimescaleDB checks a
 continuous aggregate as the reader, not as the owner of the view on top.
 

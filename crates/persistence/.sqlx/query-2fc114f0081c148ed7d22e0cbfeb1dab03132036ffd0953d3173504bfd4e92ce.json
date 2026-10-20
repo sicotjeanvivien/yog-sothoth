@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH by_pool AS (\n            SELECT w.period, f.protocol, f.pool_address,\n                   SUM(f.volume_in_a_usd + f.volume_in_b_usd) FILTER (WHERE f.valued)\n                       AS volume_usd,\n                   COUNT(*) AS pool_hours, COUNT(*) FILTER (WHERE f.valued) AS pool_hours_valued\n              FROM UNNEST($2::TEXT[], $3::INT[]) AS w (period, hours)\n              JOIN analytic_pool_hourly f\n                ON f.bucket > $1::TIMESTAMPTZ - make_interval(hours => w.hours)\n               AND f.bucket <= $1\n             GROUP BY w.period, f.protocol, f.pool_address\n        )\n        INSERT INTO analytic_token_periods (\n            period, mint, bucket, volume_usd, pools, pool_hours, pool_hours_valued\n        )\n        -- ⚠️ Rounded: the page cursor, a Decimal, must hold the volume exactly.\n        SELECT b.period, m.mint, $1, ROUND(COALESCE(SUM(b.volume_usd), 0), 6), COUNT(*),\n               SUM(b.pool_hours), SUM(b.pool_hours_valued)\n          FROM by_pool b\n          -- ⚠️ The mints joined to the pools once summed, not to each pool-hour.\n          JOIN pools p ON p.pool_address = b.pool_address AND p.protocol = b.protocol\n         CROSS JOIN LATERAL (VALUES (p.token_a_mint), (p.token_b_mint)) AS m (mint)\n         WHERE m.mint IS NOT NULL\n         GROUP BY b.period, m.mint\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "TextArray",
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2fc114f0081c148ed7d22e0cbfeb1dab03132036ffd0953d3173504bfd4e92ce"
+}

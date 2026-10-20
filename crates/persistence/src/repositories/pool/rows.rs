@@ -1,11 +1,7 @@
-use crate::repositories::helper::{convert_optional, convert_string_to_pubkey};
+use crate::repositories::helper::{convert_optional, convert_string_to_pubkey, parse_protocol};
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
-use std::str::FromStr;
-use yog_core::{
-    RepositoryError,
-    domain::{Pool, Protocol},
-};
+use yog_core::{RepositoryError, domain::Pool};
 
 /// Row shape of `pools`. Per-protocol properties are read from their satellites,
 /// such as [`PgMeteoraDammV2PoolPropertiesRepository`](crate::PgMeteoraDammV2PoolPropertiesRepository).
@@ -26,8 +22,7 @@ impl TryFrom<PoolRow> for Pool {
     fn try_from(row: PoolRow) -> Result<Self, Self::Error> {
         Ok(Pool {
             pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
-            protocol: Protocol::from_str(&row.protocol)
-                .map_err(|e| RepositoryError::Integrity(format!("invalid protocol: {e}")))?,
+            protocol: parse_protocol(&row.protocol)?,
             token_a_mint: convert_optional(
                 row.token_a_mint,
                 "token_a_mint",

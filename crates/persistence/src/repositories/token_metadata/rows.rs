@@ -10,15 +10,15 @@ use crate::repositories::helper::{convert_i16_to_u8, convert_string_to_pubkey};
 
 /// Row shape of `token_metadata`.
 #[derive(sqlx::FromRow)]
-pub(super) struct TokenMetadataRow {
-    pub(super) mint: String,
-    pub(super) symbol: Option<String>,
-    pub(super) name: Option<String>,
-    pub(super) decimals: i16,
-    pub(super) logo_uri: Option<String>,
-    pub(super) metadata_provider: String,
-    pub(super) fetched_at: DateTime<Utc>,
-    pub(super) last_refresh_at: DateTime<Utc>,
+pub(in crate::repositories) struct TokenMetadataRow {
+    pub(in crate::repositories) mint: String,
+    pub(in crate::repositories) symbol: Option<String>,
+    pub(in crate::repositories) name: Option<String>,
+    pub(in crate::repositories) decimals: i16,
+    pub(in crate::repositories) logo_uri: Option<String>,
+    pub(in crate::repositories) metadata_provider: String,
+    pub(in crate::repositories) fetched_at: DateTime<Utc>,
+    pub(in crate::repositories) last_refresh_at: DateTime<Utc>,
 }
 
 impl TryFrom<TokenMetadataRow> for TokenMetadata {

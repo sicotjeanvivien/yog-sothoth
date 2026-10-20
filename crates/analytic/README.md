@@ -5,8 +5,10 @@ two tokens of every pool **once** per closed 5-minute tranche into
 `analytic_pool_prices_5min`, and values that tranche's swaps at those prices
 into `analytic_pool_5min`; sums the tranches per pool and hour into
 `analytic_pool_hourly`, and those facts per protocol into
-`analytic_protocol_hourly`; measures the TVL of every protocol into
-`analytic_protocol_tvl`; and freezes each hour ten minutes after its close.
+`analytic_protocol_hourly`; counts the pools born per protocol and hour into
+`analytic_protocol_births_hourly`; measures the TVL of every protocol into
+`analytic_protocol_tvl`; and freezes each hour ten minutes after its close,
+writing then the distinct pools and the tokens of every window ending at it.
 A tranche is valued once, a frozen hour never written again.
 
 It exists because valuing at read time does not scale, nor holds: a reader of
@@ -14,8 +16,8 @@ the valuation VIEWs re-prices every (pool, hour) of its window on every
 request, at a market price that can be an hour old and that the pool itself
 contradicts. The writer prices each tranche once, and the readers read sums.
 
-It writes under the `yog_analytic` role, which may write the seven `analytic_*`
-tables and nothing else ([`crates/README.md`](../README.md#database-roles)).
+It writes under the `yog_analytic` role, which may write the `analytic_*` tables
+and nothing else ([`crates/README.md`](../README.md#database-roles)).
 
 ## The price of a token in a pool
 
@@ -77,6 +79,29 @@ in `persistence` (`repositories/analytic.rs`).
   valued, so its last write sees every swap that arrived within the margin.
 - **TVL**: measured into the hour of the cycle, as long as that hour is not
   frozen.
+- **Periods**: on a cycle that freezes, for each window — 24 h, 7 and 30 days
+  (`Window`, in `core`) — ending at the last hour it freezes. During a catch-up
+  only that hour gets them: the API then has no previous window to read for the
+  hours skipped.
+
+## The periods
+
+What a window cannot sum from its hours is written once per freeze:
+
+- **The active pools** of a protocol, distinct: a pool active in two hours is
+  one pool. Kept per window and hour, so the previous window is read, not
+  recounted; every protocol of the domain gets its row, 0 included.
+- **The tokens**: per token, the volume of the pools that hold it — a swap
+  counts for both its tokens, as aggregators count it, so the tokens add up to
+  twice the total — its distinct pools, and its pool-hours with the valued ones,
+  the volume's coverage. Only the last freeze's are kept, the volume rounded to
+  6 decimals.
+- **The births** are not a period: counted per protocol and hour from its
+  `initialize_pool` events, with the facts, and summed by the reader. A pool
+  first seen is not a pool born: in `protocols` scope most pools seen are old.
+
+All three cover every window, 30 days included, on whatever facts exist: the
+API decides what a window may show (`crates/api/README.md`, *The measures*).
 
 `PgAnalyticRepository::write_cycle` writes it in **one transaction**. It first
 locks `analytic_hours` against any other writer — readers go on — then lets

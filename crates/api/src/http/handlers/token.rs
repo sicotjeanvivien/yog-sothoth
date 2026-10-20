@@ -1,15 +1,50 @@
-//! `GET /api/tokens/{mint}` — token identity and latest price.
+//! `GET /api/tokens/{mint}` — token identity and latest price; and
+//! `GET /api/tokens/activity`, what each token was traded for over a window.
 
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
 };
 
+use crate::application::TokenActivityRead;
 use crate::http::{
     AppState,
-    dto::{TokenResponse, request::GetTokenRequest},
+    dto::{
+        TokenActivityPageResponse, TokenResponse,
+        request::{GetTokenRequest, ListTokenActivityRequest, TokenActivityQuery},
+    },
     error::ApiError,
 };
+
+#[utoipa::path(
+    get,
+    path = "/api/tokens/activity",
+    params(TokenActivityQuery),
+    responses((
+        status = 200,
+        description = "A page of tokens, the most traded first.",
+        body = TokenActivityPageResponse
+    ))
+)]
+pub(crate) async fn list_token_activity(
+    State(state): State<AppState>,
+    Query(query): Query<TokenActivityQuery>,
+) -> Result<Json<TokenActivityPageResponse>, ApiError> {
+    let request = ListTokenActivityRequest::parse(query)?;
+    match state
+        .activity_service
+        .token_activity(request.window, request.cursor, request.limit)
+        .await?
+    {
+        TokenActivityRead::Page(measured) => Ok(Json(TokenActivityPageResponse::new(
+            request.window,
+            measured,
+        )?)),
+        TokenActivityRead::CursorExpired => Err(ApiError::BadRequest(
+            "`cursor` belongs to a ranking rewritten since: start again without it".to_string(),
+        )),
+    }
+}
 
 #[utoipa::path(
     get,

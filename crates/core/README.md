@@ -20,7 +20,10 @@ core/src/
 │   ├── pool_current_state/(CQRS projection of the latest per-pool state)
 │   ├── global_analytics/  (GlobalAnalytics — the /api/stats read model)
 │   ├── analytic/          (CycleWrite — what one cycle of yog-analytic writes,
-│   │                       and which hours it freezes; AnalyticRepository)
+│   │                       and which hours it freezes; AnalyticRepository;
+│   │                       Window and Span — what a measure is read over)
+│   ├── protocol_activity/ (ProtocolActivity, its bars and TVL — ProtocolActivityLookup)
+│   ├── token_activity/    (TokenActivity — TokenActivityFeed, by volume)
 │   ├── signals/           (Signal, Severity, SignalDetector, EvalContext,
 │   │                       SignalRepository + SignalFeed, DetectorError)
 │   ├── swap_flow/         (PoolSwapFlow — directional volume read model)
@@ -245,8 +248,8 @@ Each domain aggregate that needs persistence declares a repository trait in its 
 
 At runtime, the connected Postgres role determines which methods actually succeed: calling `insert` from the api process fails with `permission denied` from Postgres itself, by design (see [Database roles](../README.md#database-roles)). Where a trait's write side and read side have disjoint consumers, the trait is split per consumer — one lens per process, same `Pg*` struct behind both. The write/owning side keeps the `*Repository` name; read lenses are named by intent, from a deliberately small vocabulary:
 
-- **`*Feed`** — a cursor-paginated, time-ordered listing (`SignalFeed`).
-- **`*Lookup`** — point reads by key or of a projection (`TokenMetadataLookup`, `TokenPriceLookup`, `NetworkStatusLookup`).
+- **`*Feed`** — a cursor-paginated listing in a fixed order (`SignalFeed` by time, `TokenActivityFeed` by volume).
+- **`*Lookup`** — point reads by key or of a projection (`TokenMetadataLookup`, `TokenPriceLookup`, `NetworkStatusLookup`, `ProtocolActivityLookup`).
 - **`PoolCatalog`** — the consultation surface of the pool registry (batch lookup + counts).
 - **`PoolAccountResolver`** — context's property-backfill lens, named by its capability.
 

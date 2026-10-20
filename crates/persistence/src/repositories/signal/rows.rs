@@ -1,13 +1,13 @@
 use std::str::FromStr;
 
 use crate::repositories::helper::{
-    convert_bigdecimal_to_decimal, convert_optional, convert_string_to_pubkey,
+    convert_bigdecimal_to_decimal, convert_optional, convert_string_to_pubkey, parse_protocol,
 };
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use yog_core::{
     RepositoryError,
-    domain::{Protocol, Severity, Signal, SignalRecord},
+    domain::{Severity, Signal, SignalRecord},
 };
 
 /// One `signals` row, with the storage `id` the write-side [`Signal`] does not carry.
@@ -34,8 +34,7 @@ impl TryFrom<SignalRow> for SignalRecord {
             id: row.id,
             signal: Signal {
                 detector: row.detector,
-                protocol: Protocol::from_str(&row.protocol)
-                    .map_err(|e| RepositoryError::Integrity(format!("invalid protocol: {e}")))?,
+                protocol: parse_protocol(&row.protocol)?,
                 pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
                 severity: Severity::from_str(&row.severity).map_err(|_| {
                     RepositoryError::Integrity(format!("invalid severity: {}", row.severity))

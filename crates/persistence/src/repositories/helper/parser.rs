@@ -3,7 +3,13 @@ use solana_pubkey::Pubkey;
 use sqlx::Error as SqlxError;
 use sqlx::types::BigDecimal;
 use std::str::FromStr;
-use yog_core::{RepositoryError, RepositoryResult};
+use yog_core::{RepositoryError, RepositoryResult, domain::Protocol};
+
+/// Parses a stored protocol; an unknown one is `RepositoryError::Integrity`.
+pub(crate) fn parse_protocol(raw: &str) -> RepositoryResult<Protocol> {
+    Protocol::from_str(raw)
+        .map_err(|e| RepositoryError::Integrity(format!("invalid protocol: {e}")))
+}
 
 /// Parses a stored pubkey; a malformed one is `RepositoryError::Integrity`.
 pub(crate) fn convert_string_to_pubkey(key: String, field: &str) -> RepositoryResult<Pubkey> {
