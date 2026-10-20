@@ -2,19 +2,13 @@
 //! counters over the protocol aggregate, written here by `PgAnalyticRepository`
 //! from swaps, and its TVL over the measurements as the writer leaves them.
 
-use super::helpers::{pk, price_mint};
-use chrono::{DateTime, Duration, DurationRound, Utc};
+use super::helpers::{pk, price_mint, sqrt_price_x64, write_facts_spanning};
+use chrono::{Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 
-use yog_core::domain::{
-    AnalyticRepository, CycleWrite, GlobalAnalytics, GlobalAnalyticsRepository,
-};
-use yog_persistence::{PgAnalyticRepository, PgGlobalAnalyticsRepository};
-
-fn hour_of(at: DateTime<Utc>) -> DateTime<Utc> {
-    at.duration_trunc(Duration::hours(1)).unwrap()
-}
+use yog_core::domain::{GlobalAnalytics, GlobalAnalyticsRepository};
+use yog_persistence::PgGlobalAnalyticsRepository;
 
 /// One pool, its two mints registered with decimals, optionally priced.
 async fn setup_pool(pool: &PgPool, seed: u8, price_b: Option<&str>) -> String {
@@ -56,7 +50,8 @@ async fn setup_pool(pool: &PgPool, seed: u8, price_b: Option<&str>) -> String {
     pool_addr
 }
 
-/// Two swaps in one bucket, 3 000 A against 1.5 B. ⚠️ Each fee on the OUT token and non-zero:
+/// Two swaps in one bucket, 3 000 A against 0.75 B: a square rate, so the
+/// pool's price from its square root is exact. ⚠️ Each fee on the OUT token and non-zero:
 /// `valuation_complete` reads the fee sides, and an impossible fixture fails for the wrong reason.
 async fn insert_bucket(pool: &PgPool, pool_addr: &str, tag: &str, hours_ago: i64) {
     let at = Utc::now() - Duration::hours(hours_ago);
@@ -65,7 +60,7 @@ async fn insert_bucket(pool: &PgPool, pool_addr: &str, tag: &str, hours_ago: i64
             format!("{tag}_ab"),
             "a_to_b",
             1_000_000_000i64,
-            500_000_000i64,
+            250_000_000i64,
             5_000_000i64, // 0.005 B — the out token
             false,
         ),
@@ -73,7 +68,7 @@ async fn insert_bucket(pool: &PgPool, pool_addr: &str, tag: &str, hours_ago: i64
             format!("{tag}_ba"),
             "b_to_a",
             2_000_000_000i64,
-            1_000_000_000i64,
+            500_000_000i64,
             100_000_000i64, // 100 A — the out token
             true,
         ),
@@ -84,7 +79,7 @@ async fn insert_bucket(pool: &PgPool, pool_addr: &str, tag: &str, hours_ago: i64
                 amount_a, amount_b, reserve_a_after, reserve_b_after, next_sqrt_price,
                 claiming_fee, protocol_fee, compounding_fee, referral_fee, fee_token_is_a,
                 timestamp, slot, event_index)
-             VALUES ($1,$2,$3,$4,$5,0,0,0,$6,$7,0,0,$8,$9,0,0)",
+             VALUES ($1,$2,$3,$4,$5,0,0,$10,$6,$7,0,0,$8,$9,0,0)",
         )
         .bind(pool_addr)
         .bind(&sig)
@@ -95,6 +90,7 @@ async fn insert_bucket(pool: &PgPool, pool_addr: &str, tag: &str, hours_ago: i64
         .bind(fee / 4)
         .bind(fee_is_a)
         .bind(at)
+        .bind(sqrt_price_x64(a, b))
         .execute(pool)
         .await
         .unwrap();
@@ -105,26 +101,6 @@ async fn insert_bucket(pool: &PgPool, pool_addr: &str, tag: &str, hours_ago: i64
 /// writer leaves the current one.
 async fn write_facts(pool: &PgPool) {
     write_facts_spanning(pool, 32, 0).await;
-}
-
-/// As [`write_facts`], by a writer whose first and last hours written are
-/// `first` and `last` hours back on the database's clock.
-async fn write_facts_spanning(pool: &PgPool, first: i64, last: i64) {
-    let now: DateTime<Utc> = sqlx::query_scalar("SELECT now()")
-        .fetch_one(pool)
-        .await
-        .unwrap();
-    let cycle = CycleWrite {
-        from: hour_of(now - Duration::hours(first)),
-        through: hour_of(now - Duration::hours(last)),
-        freeze_through: None,
-        tvl_hour: None,
-        at: now,
-    };
-    PgAnalyticRepository::new(pool.clone())
-        .write_cycle(&cycle)
-        .await
-        .unwrap();
 }
 
 /// A TVL measurement of the hour `hours_ago` back, by the database's clock,

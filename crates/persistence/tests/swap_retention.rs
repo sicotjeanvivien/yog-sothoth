@@ -81,6 +81,9 @@ async fn the_raw_swaps_take_the_four_settings(pool: PgPool) {
     );
 }
 
+/// The tranches valued by yog-analytic (028), kept as long as the raw swaps.
+const TRANCHES: [&str; 2] = ["analytic_pool_prices_5min", "analytic_pool_5min"];
+
 /// Mutation this is written against: one line of 014 pointed at another
 /// table, or the swap settings made the house default.
 #[sqlx::test]
@@ -94,7 +97,13 @@ async fn no_other_hypertable_moves(pool: PgPool) {
         SWAPS,
     )
     .await;
-    assert_house("chunk_time_interval", &chunks, |_| 7 * DAY);
+    assert_house("chunk_time_interval", &chunks, |table| {
+        if TRANCHES.contains(&table) {
+            DAY
+        } else {
+            7 * DAY
+        }
+    });
 
     let compression = settings(
         &pool,
@@ -122,7 +131,13 @@ async fn no_other_hypertable_moves(pool: PgPool) {
         SWAPS,
     )
     .await;
-    assert_house("drop_after", &retention, |_| 30 * DAY);
+    assert_house("drop_after", &retention, |table| {
+        if TRANCHES.contains(&table) {
+            7 * DAY
+        } else {
+            30 * DAY
+        }
+    });
 
     let refresh = settings(
         &pool,

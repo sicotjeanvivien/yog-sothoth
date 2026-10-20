@@ -195,8 +195,8 @@ query shape:
 - **Simple / static** → `sqlx::query!` / `query_as!` inline. The default.
 - **Big but static** → prefer a **SQL VIEW** in a migration when the query is
   reusable or decomposable (e.g. `meteora_damm_v2_swap_events_hourly_priced`,
-  migration 002, which factors the per-`(pool, hour)` effective prices shared
-  by the flow and activity views); the slim
+  migration 002, which factors the per-`(pool, hour)` effective prices of the
+  activity view); the slim
   `SELECT … FROM <view>` stays a checked `query!`. Otherwise
   `query_file!("….sql")`.
 - **Dynamic** (shape varies from user input) → `QueryBuilder`, covered by
@@ -545,16 +545,20 @@ implied-price rule above.
 ### The analytic tables (migration 015)
 
 `yog-analytic` is their only writer, one transaction per cycle
-(`repositories/analytic.rs`): the facts of the open hours, one row per
-(pool, hour), each protocol's from its own module; the protocol aggregate summed
-from those facts; the hours recorded, and frozen once closed; the protocol TVL,
-by the rule of `pool_current_tvl`. A frozen hour is never written again, whatever
-range the cycle was handed: the transaction locks `analytic_hours` against any
-other writer, reads the last frozen hour, and `CycleWrite::without_frozen`
-(`core`) takes it out — the guard is written once, not in each protocol's
-query. `tests/analytic_writer.rs` runs it under
-`yog_analytic` and holds the facts and the aggregate equal to
-`meteora_damm_v2_pool_hourly_activity` on the same closed hours.
+(`repositories/analytic.rs`): the closed 5-minute tranches, each protocol's from
+its own module — its pools' prices into `analytic_pool_prices_5min`, its swaps
+valued at them into `analytic_pool_5min` (028); the facts of the open hours, one
+row per (pool, hour), summed from those tranches; the protocol aggregate summed
+from the facts; the tranches and hours recorded, the hours frozen once closed;
+the protocol TVL, by the rule of `pool_current_tvl`. A tranche is valued once
+and a frozen hour never written again, whatever range the cycle was handed:
+the transaction locks `analytic_hours` against any other writer, reads its
+progress, and `CycleWrite::without_written` (`core`) takes out what is done —
+the guard is written once, not in each protocol's query.
+`tests/analytic_writer.rs` runs it under `yog_analytic` and holds the facts and
+the aggregate equal to `meteora_damm_v2_pool_hourly_activity` on closed hours
+where the pool and the market agree; `tests/analytic_prices.rs` holds the price
+rule (`crates/analytic/README.md`, *The price of a token in a pool*).
 
 `/api/stats` reads the last 24 h of the protocol aggregate and the last TVL of
 each protocol (`repositories/global_analytics.rs`). The volume reads as NULL
@@ -562,24 +566,26 @@ unless the hours written span the window through the previous hour, the TVL
 unless measured since then: a stopped, catching-up or new writer shows, as
 `pool_current_tvl` does for a stale price.
 
-The DAMM v2 facts sum their hours from the 5-minute tranches of
-`meteora_damm_v2_swap_events_5min` (021), refreshed every 5 minutes up to
-10 minutes ago and read in real time past that: a cycle reads about its last
-twenty minutes from the raw rows — more if a refresh runs late — never a whole
-open hour. The tranches are kept 30 days, past the raw 7, so an hour caught up
-after a long outage still reads them. They value through `yog_moved_amount_usd`
-(025), as `swap_parts` does, at the prices of `meteora_damm_v2_swap_hour_prices` (023),
-the function `meteora_damm_v2_swap_events_hourly_priced` calls too. The facts
-cannot read that view: the range must filter the tranches, and through a view
-grouped by hour it would not reach the chunk scans. `tests/analytic_writer.rs`
-holds the facts equal to the view on an open hour and a freezing one, half
-materialised. ⚠️ A swap written into a tranche already materialised — it is
-then more than 10 minutes late — is missing from the facts until the next
-refresh, and for good if its hour freezes in between.
+The DAMM v2 tranches are those of `meteora_damm_v2_swap_events_5min` (021),
+refreshed every 5 minutes up to 10 minutes ago and read in real time past that.
+One statement per tranche (`meteora_damm_v2_tranche.sql`) prices each pool's
+tokens — the pool's last `next_sqrt_price` of the tranche from the raw swaps, the
+market prices through `yog_price_asof` once per mint — and values the swaps at
+those prices through `yog_moved_amount_usd` (025): both read one snapshot of the
+aggregate. Nothing else in the writer reads a price, and no view a binary
+reads values a swap by the hour (`tests/analytic_prices.rs`): the hourly priced
+view (023) is left to the activity view alone. The two 5-minute tables are kept
+7 days, as the raw swaps: an older tranche has no pool price left to bound it.
+⚠️ A swap written into a tranche already valued — it is then more than 10 minutes
+late — is missing from the facts for good.
 
-`yog_analytic` reads through explicit grants (015, 021). ⚠️ An aggregate is
-granted as well as any view over it: TimescaleDB checks a continuous aggregate
-as the reader, not as the owner of the view on top.
+Still reading market prices outside the table: the liquidity
+(`meteora_damm_v2_pool_hourly_liquidity_flow`,
+`meteora_damm_v2_liquidity_events_valued`) and the TVL (`pool_current_tvl`).
+
+`yog_analytic` reads through explicit grants (015, 021, and the raw swaps in 028).
+⚠️ An aggregate is granted as well as any view over it: TimescaleDB checks a
+continuous aggregate as the reader, not as the owner of the view on top.
 
 ### A refresh policy must stay inside its retention policy
 

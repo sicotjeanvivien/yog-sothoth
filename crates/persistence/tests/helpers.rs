@@ -2,13 +2,15 @@
 
 use std::str::FromStr;
 
-use chrono::{DateTime, Duration, TimeZone, Utc};
+use chrono::{DateTime, Duration, DurationRound, TimeZone, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 use sqlx::PgPool;
-use yog_core::domain::{PriceProvider, TokenPrice, TokenPriceRepository};
-use yog_persistence::PgTokenPriceRepository;
+use yog_core::domain::{
+    AnalyticRepository, CycleWrite, PriceProvider, TokenPrice, TokenPriceRepository,
+};
+use yog_persistence::{PgAnalyticRepository, PgTokenPriceRepository};
 
 pub fn pk(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
@@ -100,6 +102,36 @@ pub async fn catalog_definitions(pool: &PgPool) -> Vec<(String, String)> {
 pub fn sg() -> Signature {
     Signature::from([7u8; 64])
 }
+/// The `next_sqrt_price` of a pool that trades `amount_a` against `amount_b`
+/// (raw units): the price, Q64.64, under its square root.
+pub fn sqrt_price_x64(amount_a: i64, amount_b: i64) -> sqlx::types::BigDecimal {
+    let sqrt = (amount_b as f64 / amount_a as f64).sqrt() * 2f64.powi(64);
+    sqlx::types::BigDecimal::from_str(&format!("{}", sqrt as u128)).unwrap()
+}
+
+/// What yog-analytic writes of every tranche and hour from `first` to `last`
+/// hours back on the database's clock, nothing frozen.
+pub async fn write_facts_spanning(pool: &PgPool, first: i64, last: i64) {
+    let now: DateTime<Utc> = sqlx::query_scalar("SELECT now()")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    let hour_of = |at: DateTime<Utc>| at.duration_trunc(Duration::hours(1)).unwrap();
+    let cycle = CycleWrite {
+        tranches_from: hour_of(now - Duration::hours(first)),
+        tranches_through: hour_of(now - Duration::hours(last)) + Duration::minutes(55),
+        from: hour_of(now - Duration::hours(first)),
+        through: hour_of(now - Duration::hours(last)),
+        freeze_through: None,
+        tvl_hour: None,
+        at: now,
+    };
+    PgAnalyticRepository::new(pool.clone())
+        .write_cycle(&cycle)
+        .await
+        .unwrap();
+}
+
 pub fn ts() -> DateTime<Utc> {
     Utc.timestamp_opt(1_700_000_000, 0).unwrap()
 }

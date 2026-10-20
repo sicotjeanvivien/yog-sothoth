@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO analytic_pool_hourly (\n            pool_address, bucket, protocol, swap_count, valued,\n            volume_in_a_usd, volume_in_b_usd, fees_usd, lp_fees_usd,\n            protocol_fees_usd, referral_fees_usd\n        )\n        SELECT pool_address, time_bucket('1 hour', bucket), protocol,\n               SUM(swap_count), bool_and(valued),\n               CASE WHEN bool_and(valued) THEN SUM(volume_in_a_usd) END,\n               CASE WHEN bool_and(valued) THEN SUM(volume_in_b_usd) END,\n               CASE WHEN bool_and(valued) THEN SUM(fees_usd) END,\n               CASE WHEN bool_and(valued) THEN SUM(lp_fees_usd) END,\n               CASE WHEN bool_and(valued) THEN SUM(protocol_fees_usd) END,\n               CASE WHEN bool_and(valued) THEN SUM(referral_fees_usd) END\n          FROM analytic_pool_5min\n         WHERE bucket >= $1 AND bucket < $2::TIMESTAMPTZ + INTERVAL '1 hour'\n         GROUP BY pool_address, time_bucket('1 hour', bucket), protocol\n        ON CONFLICT (pool_address, bucket) DO UPDATE SET\n            protocol          = EXCLUDED.protocol,\n            swap_count        = EXCLUDED.swap_count,\n            valued            = EXCLUDED.valued,\n            volume_in_a_usd   = EXCLUDED.volume_in_a_usd,\n            volume_in_b_usd   = EXCLUDED.volume_in_b_usd,\n            fees_usd          = EXCLUDED.fees_usd,\n            lp_fees_usd       = EXCLUDED.lp_fees_usd,\n            protocol_fees_usd = EXCLUDED.protocol_fees_usd,\n            referral_fees_usd = EXCLUDED.referral_fees_usd\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a129256cb6074df229c307ece4bb58d20ee631ca68358d482213b82809a16031"
+}

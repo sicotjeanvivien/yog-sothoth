@@ -32,6 +32,35 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.1.12",
+    date: "2026-10-20",
+    summary:
+      "A token sold off within the hour no longer inflates the volume: every token is now priced every five minutes, never above what its own pool pays for it.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "A token sold off within an hour used to be valued at its market price from before the fall: one pool could publish $14.5 million of volume for less than a dollar actually received. Each token is now priced every five minutes, and never above what its own pool pays for it: in each pool, the token traded in the most pools keeps its market price, and the other is bounded by the pool's rate.",
+            technical: false,
+          },
+          {
+            text: "The hourly volume and fees now start about a week back: older hours could not be valued again under the new rule, and are dropped rather than mixed with it. For about three hours after this update, the 24-hour volume shows as unavailable while it is rebuilt.",
+            technical: false,
+          },
+          {
+            text: "The swap flow signal reads the same valuation, about fifteen minutes later than before.",
+            technical: false,
+          },
+          {
+            text: "The analytic writer prices each pool's two tokens once per five-minute tranche, keeps the market price beside the price it publishes, and values the swaps from it; no reader values a swap anymore.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.1.11",
     date: "2026-10-19",
     summary:

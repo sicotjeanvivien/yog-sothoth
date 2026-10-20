@@ -244,7 +244,7 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 - Extend the cross-protocol VIEWs with a new `UNION ALL` branch per VIEW (in a new migration redefining them), the `protocol` literal injected.
 - Implement the new `Pg<Platform><Product><EventKind>EventRepository` traits in `persistence/src/repositories/<platform>/<product>/`. Follow the `Row + TryFrom<XxxRow> for XxxDomain` convention.
 - Implement the satellite's `PoolAccountResolver` (write + queue) on a `Pg*` struct. ⚠️ Its `list_unresolved` **must** filter on its own protocol: "has no satellite row yet" is one of the candidate conditions, and that is permanently true of every pool of every *other* protocol — get it wrong and the queue starves behind pools this resolver can never store.
-- Give the analytic writer the protocol's swaps: a module beside `repositories/analytic/meteora_damm_v2.rs` that upserts their facts, called from `PgAnalyticRepository::write_cycle`. It needs no freeze guard of its own: `CycleWrite::without_frozen` has already taken the frozen hours out of its range.
+- Give the analytic writer the protocol's swaps: a module beside `repositories/analytic/meteora_damm_v2.rs` that prices its pools' tokens and values its swaps for one tranche, called from `PgAnalyticRepository::write_cycle` (`crates/analytic/README.md`, *The price of a token in a pool*). ⚠️ The anchor counts a token's pools in the tranche: with two protocols, the count must span both. It needs no guard of its own: `CycleWrite::without_written` has already taken the valued tranches and frozen hours out of its range.
 - Regenerate `.sqlx/` (`cd crates/persistence && cargo sqlx prepare -- --all-targets --all-features`).
 - Re-export the new repositories from `lib.rs`.
 

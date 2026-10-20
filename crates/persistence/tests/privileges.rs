@@ -21,11 +21,20 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
         &[
             ("yog_analytic", &["INSERT", "SELECT", "UPDATE"]),
             ("yog_api", &["SELECT"]),
+            ("yog_signals", &["SELECT"]),
         ],
+    ),
+    (
+        "analytic_pool_5min",
+        &[("yog_analytic", &["INSERT", "SELECT"])],
     ),
     (
         "analytic_pool_hourly",
         &[("yog_analytic", &["INSERT", "SELECT", "UPDATE"])],
+    ),
+    (
+        "analytic_pool_prices_5min",
+        &[("yog_analytic", &["INSERT", "SELECT"])],
     ),
     (
         "analytic_protocol_hourly",
@@ -40,6 +49,10 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
             ("yog_analytic", &["INSERT", "SELECT", "UPDATE"]),
             ("yog_api", &["SELECT"]),
         ],
+    ),
+    (
+        "analytic_tranches",
+        &[("yog_analytic", &["INSERT", "SELECT"])],
     ),
     ("announcements", &[("yog_api", &["SELECT"])]),
     ("claim_position_fee_events", &[("yog_api", &["SELECT"])]),
@@ -178,6 +191,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     (
         "meteora_damm_v2_swap_events",
         &[
+            ("yog_analytic", &["SELECT"]),
             ("yog_api", &["SELECT"]),
             ("yog_indexer", &["INSERT", "SELECT", "UPDATE"]),
         ],

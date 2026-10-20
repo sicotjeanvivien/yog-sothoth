@@ -25,7 +25,7 @@ mod watched_pool;
 
 pub use analytic::{
     AnalyticProgress, AnalyticRepository, CycleOutcome, CycleWrite, FREEZE_MARGIN,
-    MAX_HOURS_PER_CYCLE,
+    MAX_HOURS_PER_CYCLE, TRANCHE,
 };
 pub use announcements::{Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity};
 pub use domain_event::DomainEvent;
