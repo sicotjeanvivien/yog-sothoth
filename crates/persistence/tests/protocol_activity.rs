@@ -6,8 +6,8 @@ use chrono::{DateTime, Duration, TimeZone, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use yog_core::domain::{
-    PoolCatalog, Protocol, ProtocolActivityLookup, ProtocolPools, Span, TokenActivityCursor,
-    TokenActivityFeed, Window,
+    PoolCatalog, Protocol, ProtocolActivityLookup, Span, TokenActivityCursor, TokenActivityFeed,
+    Window,
 };
 use yog_persistence::{PgPoolRepository, PgProtocolActivityRepository, PgTokenActivityRepository};
 
@@ -266,14 +266,14 @@ async fn the_tvl_is_the_last_measured_at_or_before_the_hour(pool: PgPool) {
     assert_eq!(tvl[0].at, last() - Duration::hours(2));
 }
 
-/// Mutations: the first hour excluded (the variation loses its starting point),
-/// or the last one (the series stops an hour short); DLMM filtered out, or its
-/// value read on DAMM v2's row.
+/// Mutations: either end excluded (the variation loses its start, or the series
+/// stops an hour short), the hours out of order, DLMM filtered out, or its
+/// values read on DAMM v2's row.
 #[sqlx::test(migrations = "./migrations")]
 async fn the_tvl_series_holds_both_ends_and_every_protocol(pool: PgPool) {
     sqlx::query(
         "INSERT INTO analytic_protocol_tvl (protocol, bucket, tvl_usd, pools_priced, measured_at)
-         SELECT p, h, EXTRACT(HOUR FROM h) + base, 1, h
+         SELECT p, h, EXTRACT(EPOCH FROM h - $1) / 3600 + base, base + 1, h
            FROM (VALUES ('meteora_damm_v2', 0), ('meteora_dlmm', 100)) AS v (p, base),
                 generate_series($1 - INTERVAL '3 hours', $1 + INTERVAL '1 hour',
                                 INTERVAL '1 hour') AS h",
@@ -289,21 +289,26 @@ async fn the_tvl_series_holds_both_ends_and_every_protocol(pool: PgPool) {
         .await
         .unwrap();
 
+    assert!(series.windows(2).all(|w| w[0].at <= w[1].at), "{series:?}");
     let mut read: Vec<_> = series
         .iter()
-        .map(|t| (t.protocol.as_str(), t.at, t.tvl_usd))
+        .map(|t| (t.protocol.as_str(), t.at, t.tvl_usd, t.pools_priced))
         .collect();
     read.sort();
-    let mut expected: Vec<_> = [(Protocol::MeteoraDammV2, 0), (Protocol::MeteoraDlmm, 100)]
+    let expected: Vec<_> = [(Protocol::MeteoraDammV2, 0), (Protocol::MeteoraDlmm, 100)]
         .into_iter()
         .flat_map(|(protocol, base)| {
-            [10, 11, 12].map(|hour| {
-                let at = last() + Duration::hours(hour - 11);
-                (protocol.as_str(), at, Some(Decimal::from(base + hour)))
+            [-2, -1, 0].map(|offset| {
+                let at = last() + Duration::hours(offset + 1);
+                (
+                    protocol.as_str(),
+                    at,
+                    Some(Decimal::from(base + offset)),
+                    base + 1,
+                )
             })
         })
         .collect();
-    expected.sort();
     assert_eq!(read, expected);
 }
 
@@ -337,19 +342,13 @@ async fn every_pool_seen_counts_under_its_protocol(pool: PgPool) {
         .await
         .unwrap()
         .into_iter()
-        .map(
-            |ProtocolPools {
-                 protocol,
-                 pools_seen,
-             }| (protocol.as_str(), pools_seen),
-        )
+        .map(|p| (p.protocol.as_str(), p.pools_seen))
         .collect();
     counts.sort();
 
-    let mut expected = [
+    let expected = [
         (Protocol::MeteoraDammV2.as_str(), 2),
         (Protocol::MeteoraDlmm.as_str(), 1),
     ];
-    expected.sort();
     assert_eq!(counts, expected);
 }
