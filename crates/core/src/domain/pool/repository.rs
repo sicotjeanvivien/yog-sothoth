@@ -6,13 +6,6 @@ use crate::{
     domain::{Pool, PoolRegistryProperties, Protocol},
 };
 
-/// Every pool ever recorded, and how many were first seen in the last 24h.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PoolCounts {
-    pub observed: i64,
-    pub discovered_24h: i64,
-}
-
 /// How many pools of one protocol were ever recorded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProtocolPools {
@@ -47,9 +40,6 @@ pub trait PoolRepository: Send + Sync {
 /// Read side of the pool registry, the api's lens.
 #[async_trait]
 pub trait PoolCatalog: Send + Sync {
-    /// See [`PoolCounts`].
-    async fn counts(&self) -> RepositoryResult<PoolCounts>;
-
     /// One row per protocol with at least one pool recorded.
     async fn counts_by_protocol(&self) -> RepositoryResult<Vec<ProtocolPools>>;
 

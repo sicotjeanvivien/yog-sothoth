@@ -6,6 +6,6 @@ pub(crate) mod response;
 pub(crate) use response::{
     AnnouncementResponse, IngestionResponse, LatestTvlResponse, NetworkResponse, PageResponse,
     ProtocolActivityBarResponse, ProtocolActivityResponse, ProtocolCatalogResponse,
-    ProtocolTvlResponse, SignalResponse, StatsResponse, TokenActivityPageResponse, TokenResponse,
+    ProtocolTvlResponse, SignalResponse, TokenActivityPageResponse, TokenResponse,
     WindowedResponse,
 };

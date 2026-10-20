@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * The page header's "Live · 2 s ago" button and its panel: the state, the last event, the
- * slot and the RPC latency, and the legend of the four states. ⚠️ Opens on click only.
+ * The page header's "Live · 2 s ago" button and its panel: state, last event, slot, RPC
+ * latency, the page's own rows, the four states' legend. ⚠️ Opens on click only.
  */
 
 import {
@@ -25,7 +25,12 @@ import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { LIVE_LEGEND, liveStatusOf } from "./live-status";
 import { usePolled } from "./use-polled";
 
-export function LiveIndicator() {
+export function LiveIndicator({
+  pageRows,
+}: {
+  /** `LiveRow`s the page streams in: what its own figures stand on. */
+  pageRows?: ReactNode;
+}) {
   const t = useTranslations("Dashboard.liveStatus");
   const ingestion = usePolled(fetchIngestionBrowser);
 
@@ -88,11 +93,12 @@ export function LiveIndicator() {
           </div>
 
           <dl className="flex flex-col gap-1.5 text-[12px]">
-            <Row
+            <LiveRow
               label={t("lastEvent")}
               value={lastEventAt ? <Age iso={lastEventAt} /> : "—"}
             />
             <NetworkRows />
+            {pageRows}
           </dl>
 
           <ul className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1.5 border-t border-dash-rule pt-2.5 text-[11px] text-dash-ink-2">
@@ -124,8 +130,8 @@ function NetworkRows() {
 
   return (
     <>
-      <Row label={t("slot")} value={value((data) => data.slot)} down={down} />
-      <Row
+      <LiveRow label={t("slot")} value={value((data) => data.slot)} down={down} />
+      <LiveRow
         label={t("latency")}
         value={value((data) => `${data.rpcLatencyMs} ms`)}
         down={down}
@@ -153,20 +159,22 @@ function Dot({ className }: { className: string }) {
   return <span aria-hidden="true" className={`h-2 w-2 shrink-0 ${className}`} />;
 }
 
-function Row({
+export function LiveRow({
   label,
   value,
   down = false,
+  late = false,
 }: {
   label: string;
   value: ReactNode;
   down?: boolean;
+  late?: boolean;
 }) {
   return (
     <div className="flex items-baseline justify-between gap-2">
       <dt className="text-dash-ink-3">{label}</dt>
       <dd
-        className={`font-dash-mono tabular-nums ${down ? "text-dash-down" : "text-dash-ink"}`}
+        className={`font-dash-mono tabular-nums ${down ? "text-dash-down" : late ? "text-dash-warn" : "text-dash-ink"}`}
       >
         {value}
       </dd>

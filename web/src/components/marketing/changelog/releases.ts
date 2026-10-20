@@ -35,8 +35,25 @@ export const RELEASES: readonly Release[] = [
     version: "v0.1.12",
     date: "2026-10-20",
     summary:
-      "A token sold off within the hour no longer inflates the volume: every token is now priced every five minutes, never above what its own pool pays for it.",
+      "The Overview now says which protocol its figures come from, over 24 hours or 7 days, with the most traded tokens; and a token sold off within the hour no longer inflates the volume.",
     sections: [
+      {
+        kind: "features",
+        items: [
+          {
+            text: "The Overview is rebuilt: TVL, volume, fees and active pools, activity protocol by protocol (DAMM v2 observed, DLMM, Raydium and Orca to come), volume by hour or by day, the most traded tokens and the latest signals. A period selector switches the whole page between 24 hours and 7 days; 30 days opens once enough data is measured.",
+            technical: false,
+          },
+          {
+            text: "Every figure of the Overview stops at the last complete hour, the same for the whole page, up to about 70 minutes behind. A period or a change that would compare with hours not yet measured shows \"—\" and says why, rather than a smaller number; figures stopped over two hours back are announced by a band at the top of the page.",
+            technical: false,
+          },
+          {
+            text: "The API serves the protocols' activity, TVL and their hourly and daily series over a window (/api/protocols/…), and the tokens by volume (/api/tokens/activity). /api/stats, which only the old Overview read, is removed.",
+            technical: true,
+          },
+        ],
+      },
       {
         kind: "fixes",
         items: [

@@ -68,3 +68,19 @@ export function formatAbsolute(input: string | Date): string | null {
 
   return `${year}-${month}-${day} ${hours}:${minutes} UTC`;
 }
+/** "13 oct., 13:00 UTC": a day and an hour, in the reader's language, always in UTC. */
+export function formatUtcMoment(input: string | Date, locale: FormatLocale): string | null {
+  const date = toDate(input);
+  if (date === null) {
+    return null;
+  }
+  const text = new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: "UTC",
+  }).format(date);
+  return `${text} UTC`;
+}

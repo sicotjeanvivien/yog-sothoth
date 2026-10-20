@@ -8,8 +8,8 @@ import {
   zAnnouncementResponse,
   zPageResponseSignalResponse,
   zProblemDetailsResponse,
+  zProtocolActivityResponse,
   zSignalResponse,
-  zStatsResponse,
 } from "../schema/zod.gen";
 
 
@@ -92,67 +92,51 @@ describe("zProblemDetailsResponse", () => {
   });
 });
 
-describe("zStatsResponse", () => {
-  const validStats = () => ({
-    totalTvlUsd: "10427935.81",
-    poolsPriced: 348,
-    volume24hUsd: "508193.05",
-    fees24hUsd: "391.03",
-    swapBuckets24h: 1246,
-    swapBucketsPriced24h: 767,
-    poolsObserved: 359,
-    poolsDiscovered24h: 52,
+describe("zProtocolActivityResponse", () => {
+  const validActivity = () => ({
+    protocol: "meteora_damm_v2",
+    volumeUsd: "508193.05",
+    feesUsd: "391.03",
+    lpFeesUsd: "312.82",
+    protocolFeesUsd: "78.21",
+    referralFeesUsd: "0",
+    swapCount: 1246,
+    activePools: 359,
+    births: 52,
+    poolHours: 1246,
+    poolHoursValued: 767,
   });
 
   it("accepts a complete valid payload", () => {
-    const parsed = zStatsResponse.parse(validStats());
-    expect(parsed.totalTvlUsd).toBe("10427935.81");
-    expect(parsed.poolsObserved).toBe(359);
-    expect(parsed.poolsDiscovered24h).toBe(52);
+    const parsed = zProtocolActivityResponse.parse(validActivity());
+    expect(parsed.volumeUsd).toBe("508193.05");
+    expect(parsed.poolHoursValued).toBe(767);
   });
 
-  it("accepts null USD aggregates (empty universe / no activity)", () => {
-    const parsed = zStatsResponse.parse({
-      ...validStats(),
-      totalTvlUsd: null,
-      volume24hUsd: null,
-      fees24hUsd: null,
-      poolsPriced: 0,
+  it("accepts the null active pools of a previous window not yet written", () => {
+    const parsed = zProtocolActivityResponse.parse({
+      ...validActivity(),
+      activePools: null,
     });
-    expect(parsed.totalTvlUsd).toBeNull();
-    expect(parsed.volume24hUsd).toBeNull();
-    expect(parsed.poolsPriced).toBe(0);
+    expect(parsed.activePools).toBeNull();
   });
 
-  it("keeps the volume coverage counters apart from the value", () => {
-    // A non-null volume covering part of the window: only the counters say so.
-    const parsed = zStatsResponse.parse(validStats());
-    expect(parsed.volume24hUsd).toBe("508193.05");
-    expect(parsed.swapBuckets24h).toBe(1246);
-    expect(parsed.swapBucketsPriced24h).toBe(767);
-  });
-
-  it("rejects a USD aggregate sent as a JS number (precision contract)", () => {
+  it("rejects a USD amount sent as a JS number (precision contract)", () => {
     expect(() =>
-      zStatsResponse.parse({ ...validStats(), totalTvlUsd: 10427935.81 }),
+      zProtocolActivityResponse.parse({ ...validActivity(), volumeUsd: 508193.05 }),
     ).toThrow();
   });
 
   it("rejects a negative or fractional count", () => {
     expect(() =>
-      zStatsResponse.parse({ ...validStats(), poolsObserved: -1 }),
+      zProtocolActivityResponse.parse({ ...validActivity(), births: -1 }),
     ).toThrow();
     expect(() =>
-      zStatsResponse.parse({ ...validStats(), poolsDiscovered24h: 1.5 }),
+      zProtocolActivityResponse.parse({ ...validActivity(), poolHours: 1.5 }),
     ).toThrow();
   });
-
-  it("rejects a missing field", () => {
-    const { poolsObserved, ...rest } = validStats();
-    void poolsObserved;
-    expect(() => zStatsResponse.parse(rest)).toThrow();
-  });
 });
+
 // The shape of both the list items and the SSE events.
 function validSignal() {
   return {

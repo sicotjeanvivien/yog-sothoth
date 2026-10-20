@@ -32,6 +32,8 @@
       "lastEvent": "Last event",
       "slot": "Slot",
       "latency": "RPC latency",
+      "priceCoverage": "Price coverage",
+      "measuredUntil": "Figures as of",
       "states": {
         "live": "Live",
         "delayed": "Delayed",
@@ -43,29 +45,109 @@
     "Overview": {
       "page": {
         "title": "Overview",
-        "description": "Protocol-wide snapshot of every Meteora pool the indexer has observed: total value locked, 24h activity, and discovery.",
+        "description": "What Yog-Scope observes, protocol by protocol: TVL, volume, fees, active pools, most traded tokens and signals, over the chosen period.",
         "breadcrumb": "All protocols"
       },
+      "period": {
+        "label": "Period",
+        "short": {
+          "24h": "24h",
+          "7d": "7d",
+          "30d": "30d"
+        },
+        "button": {
+          "24h": "24H",
+          "7d": "7D",
+          "30d": "30D"
+        },
+        "closedLabel": "{period}: not available yet",
+        "closedUntil": "Not enough data yet: Yog-Scope has measured it since {since}. This period will be complete on {opens}.",
+        "closedSoon": "The 30-day period is not open yet: it will be once its reads are measured over 30 days of data.",
+        "closedEmpty": "No hour is measured yet."
+      },
+      "unavailable": {
+        "label": "Why \"—\"?",
+        "previous": "The previous period starts before {since}, the first hour measured: no comparison with an incomplete sum.",
+        "tvlStart": "The TVL has no measure at the start of the period: its change cannot be computed."
+      },
       "kpis": {
-        "title": "Key figures",
-        "tvl": "Total TVL",
-        "coverage": "{priced} / {observed} priced",
-        "volume24h": "Volume 24h",
-        "bucketCoverage": "{priced} / {total} pool-hours priced",
-        "fees24h": "Fees 24h",
-        "pools": "Pools",
-        "discovered": "{count, plural, =0 {No new pools (24h)} other {+# discovered (24h)}}",
+        "tvl": "TVL",
+        "volume": "Volume {period}",
+        "fees": "Fees {period}",
+        "pools": "Active pools",
+        "tvlChange": "over {period}",
+        "volumeChange": "vs previous {period}",
+        "feesProtocol": "protocol {amount}",
+        "poolsObserved": "of {observed} observed",
+        "poolsObservedBefore": "of",
+        "poolsObservedAfter": "observed",
+        "poolsBorn": "+{births} born in {period}",
         "info": {
-          "tvl": "Sum of the reserve value of every observed pool whose two tokens have a known price. The line below gives the coverage: priced pools / observed pools.",
-          "volume24h": "Trading volume realized over the last 24h, valued at each trade's own time. An hour whose tokens have no known price cannot be valued and is left out of the sum — the line below gives the coverage: valued hours / hours that traded.",
-          "fees24h": "Trading fees actually collected over 24h (LP share + protocol share), valued at trade time. Same coverage as the volume — the two are valued together, so an hour missing from one is missing from the other.",
-          "pools": "Pools discovered in the transaction stream since observation began — what was seen, not a watchlist."
+          "tvl": "The value deposited in every observed pool whose two tokens have a known price, at the end of the last complete hour. Its change compares with its level at the start of the chosen period.",
+          "volume": "What was traded over the chosen period, valued at each trade's own price, up to the last complete hour. The change compares with the previous period of the same length.",
+          "fees": "What those trades paid in fees over the chosen period: the depositors' (LP) share and the protocol's.",
+          "pools": "The pools with at least one trade over the chosen period, among every pool Yog-Scope has seen, and those born during the period."
         }
       },
-      "latestSignals": {
-        "title": "Latest signals",
-        "seeAll": "See all",
-        "empty": "No signal yet — the detectors are watching."
+      "protocols": {
+        "title": "Activity by protocol · {period}",
+        "info": "A protocol is a program that runs trading pools. Yog-Scope observes one today; the others will come one by one.",
+        "tableLabel": "Activity by protocol over the chosen period",
+        "protocol": "Protocol",
+        "tvl": "TVL",
+        "volume": "Volume {period}",
+        "share": "Volume share",
+        "live": "live"
+      },
+      "signals": {
+        "title": "Signals",
+        "info": "Unusual behaviour spotted automatically in the observed pools. These are findings, not advice.",
+        "tableLabel": "Latest signals, all protocols",
+        "empty": "No signal yet — the detectors are watching.",
+        "headline": {
+          "tvl_drain": "TVL drain on {pair}: {value}",
+          "flow_imbalance": "Swap imbalance on {pair}: {value}",
+          "price_oracle_deviation": "Price / oracle gap on {pair}: {value}",
+          "fallback": "{pair}: {value}"
+        }
+      },
+      "volume": {
+        "titleHourly": "Volume by hour · {period}",
+        "titleDaily": "Volume by day · {period}",
+        "infoHourly": "What was traded, hour by hour, over the chosen period.",
+        "infoDaily": "What was traded, by 24-hour slices ending at the last complete hour, over the chosen period.",
+        "chartLabel": "Volume over the chosen period, all protocols",
+        "invite": "Hover or tap a bar for its detail",
+        "today": "today",
+        "daysAgo": "D−{days}",
+        "noValue": "no valued volume"
+      },
+      "tokens": {
+        "title": "Most traded tokens · {period}",
+        "info": "The tokens that moved the most over the chosen period, all protocols together: a trade counts for both its tokens. A volume followed by a fraction covers only those pool-hours, the others could not be valued.",
+        "tableLabel": "Most traded tokens over the chosen period",
+        "token": "Token",
+        "volume": "Volume {period}",
+        "pools": "Pools",
+        "empty": "No token traded over the period."
+      },
+      "coverage": {
+        "value": "{percent} of pool-hours",
+        "mark": "{priced} of {total} pool-hours valued"
+      },
+      "stale": {
+        "title": "Figures running late.",
+        "body": "This page's figures stop at {at}, {ago}: the hourly computation has fallen behind. They stay shown, as of that hour.",
+        "stamp": "as of {at}"
+      },
+      "error": {
+        "title": "This block could not be loaded.",
+        "rest": "The other blocks of the page are not affected.",
+        "kpi": "Unavailable for now",
+        "timeout": "The service took too long to answer.",
+        "network": "The service cannot be reached.",
+        "http": "The service answered with an error.",
+        "validation": "The service returned an unexpected answer."
       }
     },
     "BlockError": {

@@ -102,7 +102,7 @@ async fn no_such_route() -> ApiError {
 /// committed OpenAPI document is read from this same list, so a route cannot be
 /// served without being declared.
 fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
-    // ⚠️ `/api/stats` is slow too, but stays out: its computation takes a slot
+    // ⚠️ `/api/protocols` is slow too, but stays out: its computation takes a slot
     // inside the cache, so its waiters hold none.
     let slotted = OpenApiRouter::new()
         .routes(routes!(handlers::signals::list_signals))
@@ -110,7 +110,6 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
 
     OpenApiRouter::new()
         .routes(routes!(handlers::announcements::list_active_announcements))
-        .routes(routes!(handlers::stats::get_stats))
         .routes(routes!(handlers::network::get_network))
         .routes(routes!(handlers::ingestion::get_ingestion))
         // The live feed is capped by its own slots, in the handler.

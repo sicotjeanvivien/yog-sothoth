@@ -19,7 +19,6 @@ mod create_position;
 mod event_index_uniqueness;
 mod fee_split;
 mod fund_reward;
-mod global_analytics;
 mod implied_price_coverage;
 mod initialize_pool;
 mod initialize_reward;

@@ -16,18 +16,17 @@ use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
         Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity,
-        EventFreshnessRepository, FrozenHours, GlobalAnalytics, GlobalAnalyticsRepository,
-        NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog, PoolCounts, Protocol,
-        ProtocolActivity, ProtocolActivityBar, ProtocolActivityLookup, ProtocolPools, ProtocolTvl,
-        Severity, Signal, SignalCursor, SignalFeed, SignalRecord, Span, TokenActivityCursor,
-        TokenActivityFeed, TokenActivityPage, TokenMetadata, TokenMetadataLookup, TokenPrice,
-        TokenPriceLookup, Window,
+        EventFreshnessRepository, FrozenHours, NetworkStatus, NetworkStatusLookup, Pool,
+        PoolCatalog, Protocol, ProtocolActivity, ProtocolActivityBar, ProtocolActivityLookup,
+        ProtocolPools, ProtocolTvl, Severity, Signal, SignalCursor, SignalFeed, SignalRecord, Span,
+        TokenActivityCursor, TokenActivityFeed, TokenActivityPage, TokenMetadata,
+        TokenMetadataLookup, TokenPrice, TokenPriceLookup, Window,
     },
 };
 
 use crate::application::{
     ActivityService, AnnouncementService, IngestionService, NetworkService, ProtocolCatalogService,
-    SignalService, StatsService, TokenService, WorkSlots,
+    SignalService, TokenService, WorkSlots,
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
@@ -53,11 +52,6 @@ pub(crate) fn app_state() -> AppState {
         )),
         signal_stream: broadcast::channel(1).0,
         stream_slots: Arc::new(Semaphore::new(1)),
-        stats_service: Arc::new(StatsService::new(
-            Arc::new(MockGlobalAnalyticsRepo::failing()),
-            Arc::new(PoolCountsRepo::failing()),
-            work_slots.clone(),
-        )),
         protocol_catalog_service: Arc::new(ProtocolCatalogService::new(
             Arc::new(PoolCountsRepo::failing()),
             vec![],
@@ -192,9 +186,6 @@ impl PoolRepoOnce {
 
 #[async_trait]
 impl PoolCatalog for PoolRepoOnce {
-    async fn counts(&self) -> RepositoryResult<yog_core::domain::PoolCounts> {
-        unreachable!("counts not used by SignalService")
-    }
     async fn counts_by_protocol(&self) -> RepositoryResult<Vec<ProtocolPools>> {
         unreachable!("counts_by_protocol not used by SignalService")
     }
@@ -203,54 +194,19 @@ impl PoolCatalog for PoolRepoOnce {
     }
 }
 
-pub(crate) struct MockGlobalAnalyticsRepo {
-    result: Mutex<Option<RepositoryResult<GlobalAnalytics>>>,
-}
-
-impl MockGlobalAnalyticsRepo {
-    pub(crate) fn with(analytics: GlobalAnalytics) -> Self {
-        Self {
-            result: Mutex::new(Some(Ok(analytics))),
-        }
-    }
-    pub(crate) fn failing() -> Self {
-        Self {
-            result: Mutex::new(Some(Err(RepositoryError::Integrity(
-                "global analytics boom".into(),
-            )))),
-        }
-    }
-}
-
-#[async_trait]
-impl GlobalAnalyticsRepository for MockGlobalAnalyticsRepo {
-    async fn global_analytics(&self) -> RepositoryResult<GlobalAnalytics> {
-        take(&self.result)
-    }
-}
-
-/// A `PoolCatalog` for `StatsService` and `ProtocolCatalogService`: only the counts answer.
+/// A `PoolCatalog` for `ProtocolCatalogService`: only the counts by protocol answer.
 pub(crate) struct PoolCountsRepo {
-    counts: Mutex<Option<RepositoryResult<PoolCounts>>>,
     by_protocol: Mutex<Option<RepositoryResult<Vec<ProtocolPools>>>>,
 }
 
 impl PoolCountsRepo {
-    pub(crate) fn with(counts: PoolCounts) -> Self {
-        Self {
-            counts: Mutex::new(Some(Ok(counts))),
-            by_protocol: Mutex::new(None),
-        }
-    }
     pub(crate) fn by_protocol(counts: Vec<ProtocolPools>) -> Self {
         Self {
-            counts: Mutex::new(None),
             by_protocol: Mutex::new(Some(Ok(counts))),
         }
     }
     pub(crate) fn failing() -> Self {
         Self {
-            counts: Mutex::new(Some(Err(RepositoryError::Integrity("counts boom".into())))),
             by_protocol: Mutex::new(Some(Err(RepositoryError::Integrity("counts boom".into())))),
         }
     }
@@ -258,14 +214,11 @@ impl PoolCountsRepo {
 
 #[async_trait]
 impl PoolCatalog for PoolCountsRepo {
-    async fn counts(&self) -> RepositoryResult<PoolCounts> {
-        take(&self.counts)
-    }
     async fn counts_by_protocol(&self) -> RepositoryResult<Vec<ProtocolPools>> {
         take(&self.by_protocol)
     }
     async fn find_by_addresses(&self, _addrs: &[Pubkey]) -> RepositoryResult<Vec<Pool>> {
-        unreachable!("find_by_addresses not used by StatsService")
+        unreachable!("find_by_addresses not used by ProtocolCatalogService")
     }
 }
 

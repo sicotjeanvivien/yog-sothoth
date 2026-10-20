@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The canonical card of a signal, for the `/signals` feed and the Overview (`compact`).
+ * The canonical card of a signal, for the `/signals` feed.
  * ⚠️ Severity is shape and colour, never hue alone. An unknown detector falls back to its raw
  * `message`: the card renders whatever the engine grows next.
  */
@@ -19,6 +19,7 @@ import { formatShortAddress } from "@/lib/format/format-short-address";
 
 import { PoolPairCell } from "./pool-pair-cell";
 import {
+  formatSignalValue,
   KNOWN_DETECTORS,
   SEVERITY_COLOR,
   SEVERITY_ICON,
@@ -72,23 +73,12 @@ function detectorSummary(
   }
 }
 
-export function SignalCard({
-  signal,
-  compact = false,
-}: {
-  signal: SignalResponse;
-  compact?: boolean;
-}) {
+export function SignalCard({ signal }: { signal: SignalResponse }) {
   const t = useTranslations("Dashboard.Signals.feed");
   const locale = useLocale();
 
   const known = KNOWN_DETECTORS.has(signal.detector);
-  // The drain ratio is unsigned: "+61%" would read as growth.
-  const value = !known
-    ? signal.value
-    : signal.detector === "tvl_drain"
-      ? formatPercent(signal.value, locale)
-      : formatSignedPercent(signal.value, locale);
+  const value = formatSignalValue(signal, locale);
   const threshold =
     signal.threshold === null
       ? "—"
@@ -120,28 +110,6 @@ export function SignalCard({
       {value}
     </span>
   );
-
-  if (compact) {
-    return (
-      <li
-        className={`flex items-center gap-4 rounded-[8px] border border-l-4 px-4 py-3 ${SEVERITY_CARD[signal.severity]}`}
-      >
-        {severityColumn}
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <PairLabel signal={signal} />
-          {/* Relative to now: the SSR text may lag the client by a minute. */}
-          <time
-            dateTime={signal.triggeredAt}
-            className="text-[13px] whitespace-nowrap text-slate-500"
-            suppressHydrationWarning
-          >
-            {formatRelativeTime(signal.triggeredAt, locale)}
-          </time>
-        </div>
-        {valueFigure}
-      </li>
-    );
-  }
 
   return (
     <li

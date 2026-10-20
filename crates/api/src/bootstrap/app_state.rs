@@ -4,21 +4,18 @@ use tokio::sync::{Semaphore, broadcast};
 use tokio_util::sync::CancellationToken;
 use yog_core::application::extraction::ExtractionDispatcher;
 use yog_core::domain::{
-    AnnouncementLookup, EventFreshnessRepository, GlobalAnalyticsRepository, NetworkStatusLookup,
-    PoolCatalog, ProtocolActivityLookup, SignalFeed, TokenActivityFeed, TokenMetadataLookup,
-    TokenPriceLookup,
+    AnnouncementLookup, EventFreshnessRepository, NetworkStatusLookup, PoolCatalog,
+    ProtocolActivityLookup, SignalFeed, TokenActivityFeed, TokenMetadataLookup, TokenPriceLookup,
 };
 use yog_persistence::{
-    Database, PgAnnouncementRepository, PgEventFreshnessRepository, PgGlobalAnalyticsRepository,
-    PgHealthChecker, PgNetworkStatusRepository, PgPoolRepository, PgProtocolActivityRepository,
-    PgSignalRepository, PgTokenActivityRepository, PgTokenMetadataRepository,
-    PgTokenPriceRepository, PoolSettings,
+    Database, PgAnnouncementRepository, PgEventFreshnessRepository, PgHealthChecker,
+    PgNetworkStatusRepository, PgPoolRepository, PgProtocolActivityRepository, PgSignalRepository,
+    PgTokenActivityRepository, PgTokenMetadataRepository, PgTokenPriceRepository, PoolSettings,
 };
 
 use crate::application::{
     ActivityService, AnnouncementService, IngestionService, NetworkService, ProtocolCatalogService,
-    STREAM_CHANNEL_CAPACITY, SignalService, SignalStreamPoller, StatsService, TokenService,
-    WorkSlots,
+    STREAM_CHANNEL_CAPACITY, SignalService, SignalStreamPoller, TokenService, WorkSlots,
 };
 use crate::bootstrap::Config;
 use crate::http::{AppState, SSE_MAX_STREAMS, STATEMENT_TIMEOUT, WORK_SLOT_WAIT, WORK_SLOTS};
@@ -42,8 +39,6 @@ pub(crate) async fn build_app_state(
     let db_pool = database.pool().clone();
 
     let pool_repo: Arc<dyn PoolCatalog> = Arc::new(PgPoolRepository::new(db_pool.clone()));
-    let global_analytics_repo: Arc<dyn GlobalAnalyticsRepository> =
-        Arc::new(PgGlobalAnalyticsRepository::new(db_pool.clone()));
     let network_status_repo: Arc<dyn NetworkStatusLookup> =
         Arc::new(PgNetworkStatusRepository::new(db_pool.clone()));
     let event_freshness_repo: Arc<dyn EventFreshnessRepository> =
@@ -82,11 +77,6 @@ pub(crate) async fn build_app_state(
         signal_service,
         signal_stream,
         stream_slots: Arc::new(Semaphore::new(SSE_MAX_STREAMS)),
-        stats_service: Arc::new(StatsService::new(
-            global_analytics_repo,
-            pool_repo.clone(),
-            work_slots.clone(),
-        )),
         protocol_catalog_service: Arc::new(ProtocolCatalogService::new(
             pool_repo,
             ExtractionDispatcher::new().implemented_protocols(),
