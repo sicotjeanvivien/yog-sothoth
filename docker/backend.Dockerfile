@@ -126,6 +126,9 @@ ENTRYPOINT ["/usr/local/bin/yog-api"]
 # yog-context — token enrichment daemon (metadata + price).
 FROM runtime AS yog-context
 COPY --from=builder /app/target/release/yog-context /usr/local/bin/yog-context
+# Two malloc arenas, as for yog-api: its workers run together on a multi-thread runtime,
+# each peak in its own thread's arena, and an arena keeps its peak.
+ENV MALLOC_ARENA_MAX=2
 EXPOSE 9000
 ENTRYPOINT ["/usr/local/bin/yog-context"]
 

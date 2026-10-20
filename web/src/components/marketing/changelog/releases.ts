@@ -81,6 +81,10 @@ export const RELEASES: readonly Release[] = [
             text: "The analytic writer prices each pool's two tokens once per five-minute tranche, keeps the market price beside the price it publishes, and values the swaps from it; no reader values a swap anymore.",
             technical: true,
           },
+          {
+            text: "The service that fetches token prices and names gets 64 MB of memory instead of 32: it needed about 35, so it lived on swap and was slowed down during its calls to the price providers.",
+            technical: false,
+          },
         ],
       },
     ],
