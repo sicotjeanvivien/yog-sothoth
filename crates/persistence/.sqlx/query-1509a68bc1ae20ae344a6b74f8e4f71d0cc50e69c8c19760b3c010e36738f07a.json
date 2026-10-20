@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM analytic_token_periods",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "1509a68bc1ae20ae344a6b74f8e4f71d0cc50e69c8c19760b3c010e36738f07a"
+}

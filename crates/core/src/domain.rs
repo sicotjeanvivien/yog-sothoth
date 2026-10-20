@@ -15,8 +15,10 @@ mod pool_account;
 mod pool_current_state;
 mod pool_price_snapshot;
 mod protocol;
+mod protocol_activity;
 mod signals;
 mod swap_flow;
+mod token_activity;
 mod token_metadata;
 mod token_price;
 mod trade_direction;
@@ -24,8 +26,8 @@ mod unpriced_mints;
 mod watched_pool;
 
 pub use analytic::{
-    AnalyticProgress, AnalyticRepository, CycleOutcome, CycleWrite, FREEZE_MARGIN,
-    MAX_HOURS_PER_CYCLE, TRANCHE,
+    AnalyticProgress, AnalyticRepository, CycleOutcome, CycleWrite, FREEZE_MARGIN, FrozenHours,
+    MAX_HOURS_PER_CYCLE, Span, TRANCHE, Window,
 };
 pub use announcements::{Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity};
 pub use domain_event::DomainEvent;
@@ -61,7 +63,7 @@ pub use meteora::{
     MeteoraDammV2WithdrawIneligibleRewardEventRepository, MeteoraDlmmPoolAccountProperties,
 };
 pub use network_status::{NetworkStatus, NetworkStatusLookup, NetworkStatusRepository};
-pub use pool::{Pool, PoolCatalog, PoolCounts, PoolRepository};
+pub use pool::{Pool, PoolCatalog, PoolCounts, PoolRepository, ProtocolPools};
 pub use pool_account::{
     DecodedPoolAccount, PoolAccountProperties, PoolAccountResolver, PoolRegistryProperties,
 };
@@ -71,11 +73,17 @@ pub use pool_current_state::{
 };
 pub use pool_price_snapshot::{PoolPriceSnapshot, PoolPriceSnapshotRepository};
 pub use protocol::Protocol;
+pub use protocol_activity::{
+    ProtocolActivity, ProtocolActivityBar, ProtocolActivityLookup, ProtocolTvl,
+};
 pub use signals::{
     DetectorError, EvalContext, Severity, Signal, SignalCursor, SignalDetector, SignalFeed,
     SignalRecord, SignalRepository,
 };
 pub use swap_flow::{PoolSwapFlow, SwapFlowRepository};
+pub use token_activity::{
+    TokenActivity, TokenActivityCursor, TokenActivityFeed, TokenActivityPage,
+};
 pub use token_metadata::{
     MISSING_MINT_DISCOVERY_WINDOW, MetadataProvider, PRICE_CANDIDATE_WINDOW, TokenMetadata,
     TokenMetadataLookup, TokenMetadataRepository,

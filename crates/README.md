@@ -244,7 +244,7 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 - Extend the cross-protocol VIEWs with a new `UNION ALL` branch per VIEW (in a new migration redefining them), the `protocol` literal injected.
 - Implement the new `Pg<Platform><Product><EventKind>EventRepository` traits in `persistence/src/repositories/<platform>/<product>/`. Follow the `Row + TryFrom<XxxRow> for XxxDomain` convention.
 - Implement the satellite's `PoolAccountResolver` (write + queue) on a `Pg*` struct. ⚠️ Its `list_unresolved` **must** filter on its own protocol: "has no satellite row yet" is one of the candidate conditions, and that is permanently true of every pool of every *other* protocol — get it wrong and the queue starves behind pools this resolver can never store.
-- Give the analytic writer the protocol's swaps: a module beside `repositories/analytic/meteora_damm_v2.rs` that prices its pools' tokens and values its swaps for one tranche, called from `PgAnalyticRepository::write_cycle` (`crates/analytic/README.md`, *The price of a token in a pool*). ⚠️ The anchor counts a token's pools in the tranche: with two protocols, the count must span both. It needs no guard of its own: `CycleWrite::without_written` has already taken the valued tranches and frozen hours out of its range.
+- Give the analytic writer the protocol's swaps: a module beside `repositories/analytic/meteora_damm_v2.rs` that prices its pools' tokens and values its swaps for one tranche, called from `PgAnalyticRepository::write_cycle` (`crates/analytic/README.md`, *The price of a token in a pool*). ⚠️ The anchor counts a token's pools in the tranche: with two protocols, the count must span both. It needs no guard of its own: `CycleWrite::without_written` has already taken the valued tranches and frozen hours out of its range. The same module counts the protocol's pools born per hour (`upsert_births`, from its `initialize_pool` table), called beside it.
 - Regenerate `.sqlx/` (`cd crates/persistence && cargo sqlx prepare -- --all-targets --all-features`).
 - Re-export the new repositories from `lib.rs`.
 
@@ -276,6 +276,7 @@ There is no central registry. A protocol is added by writing isolated per-protoc
 | `ExtractionDispatcher::extract` | `core` | transaction → events |
 | `ExtractionDispatcher::implemented_protocols` | `core` | whether the ingestion subscribes to it at all |
 | `decode_pool_account` | `core` | account bytes → properties |
+| `PgAnalyticRepository::write_cycle` | `persistence` | tranche valuation and births |
 | `EventPersistor::persist` | `indexer` | event → sub-persistor |
 | `init_event_persistor` (`bootstrap/daemon/init.rs`) | `indexer` | sub-persistor instantiation |
 | `pool_account_resolvers` vec (`bootstrap/daemon.rs`) | `context` | property backfill |

@@ -3,7 +3,7 @@ use solana_pubkey::Pubkey;
 
 use crate::{
     RepositoryResult,
-    domain::{Pool, PoolRegistryProperties},
+    domain::{Pool, PoolRegistryProperties, Protocol},
 };
 
 /// Every pool ever recorded, and how many were first seen in the last 24h.
@@ -11,6 +11,13 @@ use crate::{
 pub struct PoolCounts {
     pub observed: i64,
     pub discovered_24h: i64,
+}
+
+/// How many pools of one protocol were ever recorded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProtocolPools {
+    pub protocol: Protocol,
+    pub pools_seen: i64,
 }
 
 /// Write side of the pool registry, the indexer's lens; [`PoolCatalog`] reads it.
@@ -42,6 +49,9 @@ pub trait PoolRepository: Send + Sync {
 pub trait PoolCatalog: Send + Sync {
     /// See [`PoolCounts`].
     async fn counts(&self) -> RepositoryResult<PoolCounts>;
+
+    /// One row per protocol with at least one pool recorded.
+    async fn counts_by_protocol(&self) -> RepositoryResult<Vec<ProtocolPools>>;
 
     /// Many pools in one query, unordered, unknown addresses omitted.
     async fn find_by_addresses(&self, pool_addresses: &[Pubkey]) -> RepositoryResult<Vec<Pool>>;

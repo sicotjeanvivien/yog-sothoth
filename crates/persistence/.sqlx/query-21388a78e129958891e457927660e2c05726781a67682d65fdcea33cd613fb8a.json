@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT MIN(bucket) AS \"first?: DateTime<Utc>\",\n                   MAX(bucket) FILTER (WHERE frozen_at IS NOT NULL)\n                       AS \"last_frozen?: DateTime<Utc>\"\n              FROM analytic_hours\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "first?: DateTime<Utc>",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "last_frozen?: DateTime<Utc>",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "21388a78e129958891e457927660e2c05726781a67682d65fdcea33cd613fb8a"
+}

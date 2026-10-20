@@ -2,19 +2,23 @@ use std::sync::Arc;
 
 use tokio::sync::{Semaphore, broadcast};
 use tokio_util::sync::CancellationToken;
+use yog_core::application::extraction::ExtractionDispatcher;
 use yog_core::domain::{
     AnnouncementLookup, EventFreshnessRepository, GlobalAnalyticsRepository, NetworkStatusLookup,
-    PoolCatalog, SignalFeed, TokenMetadataLookup, TokenPriceLookup,
+    PoolCatalog, ProtocolActivityLookup, SignalFeed, TokenActivityFeed, TokenMetadataLookup,
+    TokenPriceLookup,
 };
 use yog_persistence::{
     Database, PgAnnouncementRepository, PgEventFreshnessRepository, PgGlobalAnalyticsRepository,
-    PgHealthChecker, PgNetworkStatusRepository, PgPoolRepository, PgSignalRepository,
-    PgTokenMetadataRepository, PgTokenPriceRepository, PoolSettings,
+    PgHealthChecker, PgNetworkStatusRepository, PgPoolRepository, PgProtocolActivityRepository,
+    PgSignalRepository, PgTokenActivityRepository, PgTokenMetadataRepository,
+    PgTokenPriceRepository, PoolSettings,
 };
 
 use crate::application::{
-    AnnouncementService, IngestionService, NetworkService, STREAM_CHANNEL_CAPACITY, SignalService,
-    SignalStreamPoller, StatsService, TokenService, WorkSlots,
+    ActivityService, AnnouncementService, IngestionService, NetworkService, ProtocolCatalogService,
+    STREAM_CHANNEL_CAPACITY, SignalService, SignalStreamPoller, StatsService, TokenService,
+    WorkSlots,
 };
 use crate::bootstrap::Config;
 use crate::http::{AppState, SSE_MAX_STREAMS, STATEMENT_TIMEOUT, WORK_SLOT_WAIT, WORK_SLOTS};
@@ -51,6 +55,10 @@ pub(crate) async fn build_app_state(
     let signal_repo: Arc<dyn SignalFeed> = Arc::new(PgSignalRepository::new(db_pool.clone()));
     let announcement_repo: Arc<dyn AnnouncementLookup> =
         Arc::new(PgAnnouncementRepository::new(db_pool.clone()));
+    let protocol_activity_repo: Arc<dyn ProtocolActivityLookup> =
+        Arc::new(PgProtocolActivityRepository::new(db_pool.clone()));
+    let token_activity_repo: Arc<dyn TokenActivityFeed> =
+        Arc::new(PgTokenActivityRepository::new(db_pool.clone()));
 
     let signal_service = Arc::new(SignalService::new(
         signal_repo.clone(),
@@ -76,8 +84,17 @@ pub(crate) async fn build_app_state(
         stream_slots: Arc::new(Semaphore::new(SSE_MAX_STREAMS)),
         stats_service: Arc::new(StatsService::new(
             global_analytics_repo,
-            pool_repo,
+            pool_repo.clone(),
             work_slots.clone(),
+        )),
+        protocol_catalog_service: Arc::new(ProtocolCatalogService::new(
+            pool_repo,
+            ExtractionDispatcher::new().implemented_protocols(),
+            work_slots.clone(),
+        )),
+        activity_service: Arc::new(ActivityService::new(
+            protocol_activity_repo,
+            token_activity_repo,
         )),
         work_slots,
         token_service: Arc::new(TokenService::new(token_metadata_repo, token_price_repo)),

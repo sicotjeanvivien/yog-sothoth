@@ -1,5 +1,5 @@
 //! Postgres implementation of [`AnalyticRepository`]: one transaction per
-//! cycle, whose only per-protocol part is each protocol's tranches.
+//! cycle, whose only per-protocol parts are each protocol's tranches and births.
 //!
 //! [`AnalyticRepository`]: yog_core::domain::AnalyticRepository
 
@@ -11,7 +11,9 @@ use chrono::{DateTime, Utc};
 use sqlx::{PgExecutor, PgPool, Postgres, Transaction, postgres::types::PgInterval};
 use yog_core::{
     RepositoryResult,
-    domain::{AnalyticProgress, AnalyticRepository, CycleOutcome, CycleWrite, TRANCHE},
+    domain::{
+        AnalyticProgress, AnalyticRepository, CycleOutcome, CycleWrite, Protocol, TRANCHE, Window,
+    },
 };
 
 #[derive(Clone)]
@@ -53,9 +55,15 @@ impl AnalyticRepository for PgAnalyticRepository {
         .await?;
         let pool_hours = upsert_pool_hourly(&mut tx, cycle.from, cycle.through).await?;
         upsert_protocol_hourly(&mut tx, cycle.from, cycle.through).await?;
+        meteora_damm_v2::upsert_births(&mut tx, cycle.from, cycle.through).await?;
         record_hours(&mut tx, cycle.from, cycle.through).await?;
         let hours_frozen = match cycle.freeze_through {
-            Some(through) => freeze(&mut tx, cycle.from, through, cycle.at).await?,
+            Some(through) => {
+                let frozen = freeze(&mut tx, cycle.from, through, cycle.at).await?;
+                write_protocol_periods(&mut tx, through).await?;
+                write_token_periods(&mut tx, through).await?;
+                frozen
+            }
             None => 0,
         };
         if let Some(hour) = cycle.tvl_hour {
@@ -264,6 +272,98 @@ async fn freeze(
     .await
     .map_err(map_sqlx_error)?;
     Ok(frozen.rows_affected())
+}
+
+/// [`Window::ALL`] as the two arrays the period queries unnest.
+fn windows() -> (Vec<String>, Vec<i32>) {
+    Window::ALL
+        .iter()
+        .map(|window| (window.as_str().to_owned(), window.hours()))
+        .unzip()
+}
+
+/// The distinct pools of every protocol and window ending at `last_hour`; a
+/// protocol without any gets 0, so a missing row means a window never counted.
+/// ⚠️ Grouped per pool first, not `COUNT(DISTINCT)`: that one sorts, and spills.
+async fn write_protocol_periods(
+    tx: &mut Transaction<'static, Postgres>,
+    last_hour: DateTime<Utc>,
+) -> RepositoryResult<()> {
+    let (periods, hours) = windows();
+    let protocols: Vec<&str> = Protocol::all().iter().map(|p| p.as_str()).collect();
+    sqlx::query!(
+        r#"
+        WITH by_pool AS (
+            SELECT w.period, f.protocol, f.pool_address
+              FROM UNNEST($2::TEXT[], $3::INT[]) AS w (period, hours)
+              JOIN analytic_pool_hourly f
+                ON f.bucket > $1::TIMESTAMPTZ - make_interval(hours => w.hours)
+               AND f.bucket <= $1
+             GROUP BY w.period, f.protocol, f.pool_address
+        )
+        INSERT INTO analytic_protocol_periods (protocol, period, bucket, active_pools)
+        SELECT pr.protocol, w.period, $1, COUNT(b.pool_address)
+          FROM UNNEST($4::TEXT[]) AS pr (protocol)
+         CROSS JOIN UNNEST($2::TEXT[]) AS w (period)
+          LEFT JOIN by_pool b ON b.protocol = pr.protocol AND b.period = w.period
+         GROUP BY pr.protocol, w.period
+        "#,
+        last_hour,
+        &periods,
+        &hours,
+        &protocols as &[&str],
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(map_sqlx_error)?;
+    Ok(())
+}
+
+/// Every token of every window ending at `last_hour`, in place of the last
+/// ones: the volume of the pools that hold it, a swap counting for both sides.
+/// ⚠️ The mints joined to the pools once summed, not to every pool-hour; the volume
+/// rounded, or the page cursor, a `Decimal`, could not hold it exactly.
+async fn write_token_periods(
+    tx: &mut Transaction<'static, Postgres>,
+    last_hour: DateTime<Utc>,
+) -> RepositoryResult<()> {
+    sqlx::query!("DELETE FROM analytic_token_periods")
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+    let (periods, hours) = windows();
+    sqlx::query!(
+        r#"
+        WITH by_pool AS (
+            SELECT w.period, f.protocol, f.pool_address,
+                   SUM(f.volume_in_a_usd + f.volume_in_b_usd) FILTER (WHERE f.valued)
+                       AS volume_usd,
+                   COUNT(*) AS pool_hours, COUNT(*) FILTER (WHERE f.valued) AS pool_hours_valued
+              FROM UNNEST($2::TEXT[], $3::INT[]) AS w (period, hours)
+              JOIN analytic_pool_hourly f
+                ON f.bucket > $1::TIMESTAMPTZ - make_interval(hours => w.hours)
+               AND f.bucket <= $1
+             GROUP BY w.period, f.protocol, f.pool_address
+        )
+        INSERT INTO analytic_token_periods (
+            period, mint, bucket, volume_usd, pools, pool_hours, pool_hours_valued
+        )
+        SELECT b.period, m.mint, $1, ROUND(COALESCE(SUM(b.volume_usd), 0), 6), COUNT(*),
+               SUM(b.pool_hours), SUM(b.pool_hours_valued)
+          FROM by_pool b
+          JOIN pools p ON p.pool_address = b.pool_address AND p.protocol = b.protocol
+         CROSS JOIN LATERAL (VALUES (p.token_a_mint), (p.token_b_mint)) AS m (mint)
+         WHERE m.mint IS NOT NULL
+         GROUP BY b.period, m.mint
+        "#,
+        last_hour,
+        &periods,
+        &hours,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(map_sqlx_error)?;
+    Ok(())
 }
 
 /// The current TVL of every protocol, by the rule of `pool_current_tvl`.

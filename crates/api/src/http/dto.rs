@@ -4,6 +4,8 @@ pub(crate) mod schema;
 pub(crate) mod response;
 
 pub(crate) use response::{
-    AnnouncementResponse, IngestionResponse, NetworkResponse, PageResponse, SignalResponse,
-    StatsResponse, TokenResponse,
+    AnnouncementResponse, IngestionResponse, LatestTvlResponse, NetworkResponse, PageResponse,
+    ProtocolActivityBarResponse, ProtocolActivityResponse, ProtocolCatalogResponse,
+    ProtocolTvlResponse, SignalResponse, StatsResponse, TokenActivityPageResponse, TokenResponse,
+    WindowedResponse,
 };

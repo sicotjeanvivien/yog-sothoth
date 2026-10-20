@@ -15,7 +15,7 @@ mod signals_query;
 use page_direction_param::PageDirectionParam;
 use page_position_param::PagePositionParam;
 use severity_param::SeverityParam;
-pub(crate) use signals_query::{MAX_LIMIT, SignalsQuery};
+pub(crate) use signals_query::SignalsQuery;
 
 #[derive(Debug)]
 pub(crate) struct ListSignalsRequest {
@@ -29,7 +29,7 @@ pub(crate) struct ListSignalsRequest {
 
 impl ListSignalsRequest {
     pub(crate) fn parse(query: SignalsQuery) -> Result<Self, ApiError> {
-        validate_limit(query.limit)?;
+        super::validate_limit(query.limit)?;
 
         let pool = query
             .pool
@@ -68,15 +68,6 @@ impl ListSignalsRequest {
             limit: self.limit,
         }
     }
-}
-
-fn validate_limit(limit: i64) -> Result<(), ApiError> {
-    if !(1..=MAX_LIMIT).contains(&limit) {
-        return Err(ApiError::BadRequest(format!(
-            "`limit` must be between 1 and {MAX_LIMIT}, got {limit}"
-        )));
-    }
-    Ok(())
 }
 
 fn validate_cursor_position_exclusive(

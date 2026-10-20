@@ -1,6 +1,6 @@
 //! Postgres implementation of `TokenMetadataRepository`, over `token_metadata` (baseline §6).
 
-mod rows;
+pub(super) mod rows;
 
 use crate::repositories::helper::{convert_string_to_pubkey, map_sqlx_error};
 use async_trait::async_trait;

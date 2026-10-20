@@ -30,7 +30,9 @@ fn ids(page: &yog_core::Page<yog_core::domain::SignalRecord>) -> Vec<i64> {
 }
 
 fn signal_cursor(cursor: &Cursor) -> SignalCursor {
-    let Cursor::Signal(c) = cursor;
+    let Cursor::Signal(c) = cursor else {
+        panic!("a signal page yields signal cursors: {cursor:?}")
+    };
     c.clone()
 }
 

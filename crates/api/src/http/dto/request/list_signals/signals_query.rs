@@ -2,13 +2,7 @@ use serde::Deserialize;
 use utoipa::IntoParams;
 
 use super::{PageDirectionParam, PagePositionParam, SeverityParam};
-
-const DEFAULT_LIMIT: i64 = 50;
-pub(crate) const MAX_LIMIT: i64 = 200;
-
-pub(super) fn default_limit() -> i64 {
-    DEFAULT_LIMIT
-}
+use crate::http::dto::request::default_limit;
 
 /// Query params for `GET /api/signals`: standard cursor pagination plus
 /// optional exact severity and pool filters. No sort (the feed ordering

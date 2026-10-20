@@ -10,8 +10,8 @@ use tokio_util::sync::CancellationToken;
 use yog_persistence::PgHealthChecker;
 
 use crate::application::{
-    AnnouncementService, EnrichedSignal, IngestionService, NetworkService, SignalService,
-    StatsService, TokenService, WorkSlots,
+    ActivityService, AnnouncementService, EnrichedSignal, IngestionService, NetworkService,
+    ProtocolCatalogService, SignalService, StatsService, TokenService, WorkSlots,
 };
 
 /// The services and the runtime handles the router and handlers read. Handlers never reach a
@@ -30,6 +30,8 @@ pub(crate) struct AppState {
     /// The slots of every expensive read: the slow routes and the cached computations.
     pub(crate) work_slots: WorkSlots,
     pub(crate) stats_service: Arc<StatsService>,
+    pub(crate) protocol_catalog_service: Arc<ProtocolCatalogService>,
+    pub(crate) activity_service: Arc<ActivityService>,
     pub(crate) token_service: Arc<TokenService>,
     pub(crate) announcement_service: Arc<AnnouncementService>,
     /// Infra probe, exposed directly: no application logic surrounds it.

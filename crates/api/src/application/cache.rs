@@ -29,6 +29,13 @@ pub(crate) const STATS: CachePolicy = CachePolicy {
     max_capacity: 1,
 };
 
+/// `/api/protocols`: the catalogue, which counts every pool ever seen.
+pub(crate) const PROTOCOLS: CachePolicy = CachePolicy {
+    name: "protocols",
+    ttl: SHARED_RESULT_TTL,
+    max_capacity: 1,
+};
+
 /// Results by key, each computed once per [`CachePolicy::ttl`], at most
 /// [`CachePolicy::max_capacity`] of them kept.
 pub(crate) struct SharedCache<K, V> {

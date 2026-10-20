@@ -1,13 +1,15 @@
 mod rows;
 
-use crate::repositories::helper::{convert_decimal_to_bigdecimal, map_sqlx_error};
+use crate::repositories::helper::{convert_decimal_to_bigdecimal, map_sqlx_error, parse_protocol};
 use async_trait::async_trait;
 use rows::PoolRow;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
-    domain::{Pool, PoolCatalog, PoolCounts, PoolRegistryProperties, PoolRepository},
+    domain::{
+        Pool, PoolCatalog, PoolCounts, PoolRegistryProperties, PoolRepository, ProtocolPools,
+    },
 };
 
 pub struct PgPoolRepository {
@@ -136,6 +138,29 @@ impl PoolCatalog for PgPoolRepository {
             observed: row.observed,
             discovered_24h: row.discovered_24h,
         })
+    }
+
+    async fn counts_by_protocol(&self) -> RepositoryResult<Vec<ProtocolPools>> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT protocol, COUNT(*) AS "pools_seen!"
+              FROM pools
+             GROUP BY protocol
+             ORDER BY protocol
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter()
+            .map(|row| {
+                Ok(ProtocolPools {
+                    protocol: parse_protocol(&row.protocol)?,
+                    pools_seen: row.pools_seen,
+                })
+            })
+            .collect()
     }
 
     async fn find_by_addresses(&self, pool_addresses: &[Pubkey]) -> RepositoryResult<Vec<Pool>> {

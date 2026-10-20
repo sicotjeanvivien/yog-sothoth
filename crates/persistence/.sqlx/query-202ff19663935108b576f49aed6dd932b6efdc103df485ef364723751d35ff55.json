@@ -1,0 +1,170 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT w.bucket AS \"last_hour?\",\n                   t.mint AS \"mint?\", t.volume_usd AS \"volume_usd?\", t.pools AS \"pools?\",\n                   t.pool_hours AS \"pool_hours?\", t.pool_hours_valued AS \"pool_hours_valued?\",\n                   m.symbol AS \"symbol?\", m.name AS \"name?\",\n                   m.decimals AS \"decimals?\", m.logo_uri AS \"logo_uri?\",\n                   m.metadata_provider AS \"metadata_provider?\",\n                   m.fetched_at AS \"fetched_at?\", m.last_refresh_at AS \"last_refresh_at?\"\n              FROM (SELECT MAX(bucket) AS bucket\n                      FROM analytic_token_periods WHERE period = $1) w\n              LEFT JOIN LATERAL (\n                  SELECT * FROM analytic_token_periods t\n                   WHERE t.period = $1 AND t.bucket = w.bucket\n                     AND ($2::NUMERIC IS NULL\n                          OR t.volume_usd < $2\n                          OR (t.volume_usd = $2 AND t.mint > $3))\n                   ORDER BY t.volume_usd DESC, t.mint\n                   LIMIT $4\n              ) t ON true\n              LEFT JOIN token_metadata m ON m.mint = t.mint\n             ORDER BY t.volume_usd DESC, t.mint\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "last_hour?",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "mint?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_token_periods",
+            "name": "mint"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "volume_usd?",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_token_periods",
+            "name": "volume_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "pools?",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_token_periods",
+            "name": "pools"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "pool_hours?",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_token_periods",
+            "name": "pool_hours"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "pool_hours_valued?",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_token_periods",
+            "name": "pool_hours_valued"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "symbol?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "symbol"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "name?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "decimals?",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "decimals"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "logo_uri?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "logo_uri"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "metadata_provider?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "metadata_provider"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "fetched_at?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "fetched_at"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "last_refresh_at?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "last_refresh_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Numeric",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "202ff19663935108b576f49aed6dd932b6efdc103df485ef364723751d35ff55"
+}

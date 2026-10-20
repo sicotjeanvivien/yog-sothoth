@@ -116,6 +116,13 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         // The live feed is capped by its own slots, in the handler.
         .routes(routes!(handlers::signals::stream_signals))
         .routes(routes!(handlers::token::get_token))
+        .routes(routes!(handlers::token::list_token_activity))
+        .routes(routes!(handlers::protocols::list_protocols))
+        .routes(routes!(handlers::protocols::get_protocol_activity))
+        .routes(routes!(handlers::protocols::get_protocol_activity_hourly))
+        .routes(routes!(handlers::protocols::get_protocol_activity_daily))
+        .routes(routes!(handlers::protocols::get_protocol_tvl))
+        .routes(routes!(handlers::protocols::get_protocol_tvl_hourly))
         .merge(slotted)
 }
 
