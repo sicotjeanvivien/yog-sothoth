@@ -35,7 +35,7 @@ export const RELEASES: readonly Release[] = [
     version: "v0.1.12",
     date: "2026-10-20",
     summary:
-      "The Overview now says which protocol its figures come from, over 24 hours or 7 days, with the most traded tokens and an advanced mode; and a token sold off within the hour no longer inflates the volume.",
+      "The Overview now says which protocol its figures come from, over 24 hours or 7 days, with the most traded tokens and an advanced mode; a token sold off within the hour no longer inflates the volume; and the price service gets the memory it needs.",
     sections: [
       {
         kind: "features",
