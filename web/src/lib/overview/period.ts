@@ -8,7 +8,7 @@ export const PERIODS: readonly Period[] = zWindowResponse.options;
 
 export const DEFAULT_PERIOD: Period = "24h";
 
-const HOUR_MS = 60 * 60 * 1000;
+export const HOUR_MS = 60 * 60 * 1000;
 
 export const PERIOD_HOURS: Record<Period, number> = {
   "24h": 24,

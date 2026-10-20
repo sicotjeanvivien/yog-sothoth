@@ -3,7 +3,7 @@
 /**
  * 24H / 7D / 30D, links that change `?period=`. A closed period is a button that opens why,
  * not `aria-disabled`: it does something. ⚠️ No `title`, never shown on touch. Without
- * `availability` (loading, or the read failed), the other periods wait, inert.
+ * `availability` (still loading), the other periods wait, inert.
  */
 
 import { useCallback, useId, useRef, useState } from "react";

@@ -9,11 +9,10 @@ import { getTranslations } from "next-intl/server";
 import { LiveIndicator } from "@/components/dashboard/live-status/live-indicator";
 import { ApiClientError } from "@/lib/api/errors";
 import { fetchProtocolActivity } from "@/lib/api/server/protocols";
-import { periodState } from "@/lib/overview/availability";
-import { PERIODS, type Period } from "@/lib/overview/period";
+import { CLOSED_PERIODS, PERIODS, type Period } from "@/lib/overview/period";
 
 import { LABEL_CLASS } from "./overview-layout";
-import { utcMoment } from "./overview-parts";
+import { closedReason } from "./overview-parts";
 import { PeriodSelector, type PeriodAvailability } from "./period-selector";
 import { PriceCoverage } from "./price-coverage";
 
@@ -49,7 +48,10 @@ export async function OverviewHeader({ period }: { period: Period }) {
   );
 }
 
-/** Each period, open or closed, read on the span any measure carries. */
+/**
+ * Each period, open or closed, read on the span any measure carries. ⚠️ A failed read keeps
+ * them links: each block then says for itself what its period lacks.
+ */
 async function PeriodControl({ period }: { period: Period }) {
   const t = await getTranslations("Dashboard.Overview.period");
 
@@ -57,26 +59,22 @@ async function PeriodControl({ period }: { period: Period }) {
   try {
     span = await fetchProtocolActivity(period);
   } catch (err) {
-    if (err instanceof ApiClientError) {
-      return <Selector period={period} availability={null} />;
+    if (!(err instanceof ApiClientError)) {
+      throw err;
     }
-    throw err;
+    const availability = Object.fromEntries(
+      PERIODS.map((p) => [
+        p,
+        CLOSED_PERIODS.has(p) ? { open: false, reason: t("closedSoon") } : { open: true },
+      ]),
+    ) as PeriodAvailability;
+    return <Selector period={period} availability={availability} />;
   }
 
-  const since = span.coveredSince ? await utcMoment(span.coveredSince) : null;
   const entries = await Promise.all(
     PERIODS.map(async (p) => {
-      const state = periodState(p, span);
-      if (state.open) {
-        return [p, state] as const;
-      }
-      const reason =
-        state.opensAt !== null && since !== null
-          ? t("closedUntil", { since, opens: await utcMoment(state.opensAt) })
-          : span.asOf === null
-            ? t("closedEmpty")
-            : t("closedSoon");
-      return [p, { open: false, reason }] as const;
+      const reason = await closedReason(p, span);
+      return [p, reason === null ? { open: true } : { open: false, reason }] as const;
     }),
   );
 

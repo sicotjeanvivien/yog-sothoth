@@ -15,7 +15,7 @@ import { formatUsdCompact } from "@/lib/format/format-usd";
 import type { Period } from "@/lib/overview/period";
 
 import { BlockPlaceholder } from "../block-placeholder";
-import { BlockHeading } from "./overview-parts";
+import { BlockHeading, closedReason, PeriodNotice } from "./overview-parts";
 import {
   CELL_CLASS,
   HEAD_ROW_CLASS,
@@ -51,10 +51,14 @@ export async function TopTokens({ period }: { period: Period }) {
     throw err;
   }
 
+  const closed = await closedReason(period, page);
+
   return (
     <section aria-label={title} className={SECTION_CLASS}>
       <BlockHeading title={title} info={t("tokens.info")} />
-      {page.items.length === 0 ? (
+      {closed !== null ? (
+        <PeriodNotice reason={closed} />
+      ) : page.items.length === 0 ? (
         <p className="py-6 text-[14px] text-dash-ink-2">{t("tokens.empty")}</p>
       ) : (
         <div role="table" aria-label={t("tokens.tableLabel")}>

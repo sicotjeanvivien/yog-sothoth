@@ -9,6 +9,8 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { InfoPopover } from "@/components/shared/info-popover";
 import { formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatSignedPercent } from "@/lib/format/format-percent";
+import { periodState, type MeasuredSpan } from "@/lib/overview/availability";
+import type { Period } from "@/lib/overview/period";
 
 import {
   BLOCK_HEAD_CLASS,
@@ -27,7 +29,7 @@ export async function KpiCell({
 }: {
   label: string;
   info: string;
-  value: string;
+  value: ReactNode;
   sub?: ReactNode;
 }) {
   const tShell = await getTranslations("Dashboard.shell");
@@ -117,4 +119,28 @@ export async function Change({ ratio, suffix }: { ratio: number; suffix: string 
 export async function utcMoment(input: string | Date): Promise<string> {
   const locale = (await getLocale()) as FormatLocale;
   return formatUtcMoment(input, locale) ?? "—";
+}
+
+/** Why `period` is closed on this span, or `null` when its facts are whole. */
+export async function closedReason(period: Period, span: MeasuredSpan): Promise<string | null> {
+  const t = await getTranslations("Dashboard.Overview.period");
+  const state = periodState(period, span);
+  if (state.open) {
+    return null;
+  }
+  if (span.asOf === null || span.coveredSince === null) {
+    return t("closedEmpty");
+  }
+  if (state.opensAt === null) {
+    return t("closedSoon");
+  }
+  return t("closedUntil", {
+    since: await utcMoment(span.coveredSince),
+    opens: await utcMoment(state.opensAt),
+  });
+}
+
+/** A block's line for a period its facts do not cover whole, in place of its rows. */
+export function PeriodNotice({ reason }: { reason: string }) {
+  return <p className="py-6 text-[14px] text-dash-ink-2">— {reason}</p>;
 }

@@ -247,8 +247,8 @@ and red carry a meaning, never the brand. The frame (`shell/`, `sidebar/`,
 and no Tailwind palette. The background is a flat `dash-bg`, which also sits
 behind the pages that left the menu, with no glow and no text shadow. The
 older palette (`cosmos-*`, `sothoth-*`, `slate-*`) remains in use for
-page contents not yet moved to the roles; the Overview's blocks have, not yet
-the shared ⓘ and `BlockError`.
+page contents not yet moved to the roles; the Overview's own blocks have
+moved, while the ⓘ (`InfoPopover`) and `BlockError` they share keep it.
 
 ## Overview
 
@@ -263,14 +263,15 @@ unknown is 24h) drives every label, section title, chart and ⓘ, which speak of
 "the chosen period". The TVL stays the value of the last frozen hour; only its
 change follows the period. The selector (`period-selector.tsx`) is a set of
 links, in its own unkeyed `<Suspense>` so a period change keeps it; every block
-has its `<Suspense key={period}>`, so the change shows their waiting slots
-only.
+that reads the period has its `<Suspense key={period}>`, so the change shows
+their waiting slots only; the signals do not reload.
 
 **What may not be shown** (`lib/overview/availability.ts`, pure and tested) — a
 figure the facts do not cover whole is "—", never a smaller number:
 - a period whose window starts before `coveredSince` (the first frozen hour) is
   closed: a button whose panel says when it opens. 30d stays closed in the web
-  (`CLOSED_PERIODS`) until its times are measured on the prod;
+  (`CLOSED_PERIODS`) until its times are measured on the prod. Reached by its
+  URL anyway, every block shows "—" and the same reason;
 - the volume change is "—" when the previous window (`offset`) starts before
   `coveredSince`;
 - the TVL change is "—" when `/tvl/hourly` has no point at the window's start:

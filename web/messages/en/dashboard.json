@@ -61,14 +61,13 @@
         },
         "closedLabel": "{period}: not available yet",
         "closedUntil": "Not enough data yet: Yog-Scope has measured it since {since}. This period will be complete on {opens}.",
-        "closedSoon": "This period opens once 30 days of data are measured.",
+        "closedSoon": "The 30-day period is not open yet: it will be once its reads are measured over 30 days of data.",
         "closedEmpty": "No hour is measured yet."
       },
       "unavailable": {
         "label": "Why \"—\"?",
         "previous": "The previous period starts before {since}, the first hour measured: no comparison with an incomplete sum.",
-        "tvlStart": "The TVL has only been measured since {since}: it has no value at the start of the period.",
-        "tvlStartUnknown": "The TVL has no measure at the start of the period."
+        "tvlStart": "The TVL has no measure at the start of the period: its change cannot be computed."
       },
       "kpis": {
         "tvl": "TVL",
@@ -79,6 +78,8 @@
         "volumeChange": "vs previous {period}",
         "feesProtocol": "protocol {amount}",
         "poolsObserved": "of {observed} observed",
+        "poolsObservedBefore": "of",
+        "poolsObservedAfter": "observed",
         "poolsBorn": "+{births} born in {period}",
         "info": {
           "tvl": "The value deposited in every observed pool whose two tokens have a known price, at the end of the last complete hour. Its change compares with its level at the start of the chosen period.",

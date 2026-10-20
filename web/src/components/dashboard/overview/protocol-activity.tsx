@@ -20,7 +20,7 @@ import type { Period } from "@/lib/overview/period";
 import { sumUsd } from "@/lib/overview/totals";
 
 import { BlockPlaceholder } from "../block-placeholder";
-import { BlockHeading } from "./overview-parts";
+import { BlockHeading, closedReason, PeriodNotice } from "./overview-parts";
 import {
   CELL_CLASS,
   HEAD_ROW_CLASS,
@@ -66,12 +66,14 @@ export async function ProtocolActivity({ period }: { period: Period }) {
     throw err;
   }
 
+  const closed = await closedReason(period, activity);
   const total = sumUsd(activity.items.map((i) => i.volumeUsd));
   const observed = new Set(catalogue.filter((p) => p.observed).map((p) => p.protocol));
 
   return (
     <section aria-label={title} className={SECTION_CLASS}>
       <BlockHeading title={title} info={t("protocols.info")} />
+      {closed !== null && <PeriodNotice reason={closed} />}
       <div className="dash-scroll overflow-x-auto">
         <div role="table" aria-label={t("protocols.tableLabel")}>
           <div role="row" className={`${HEAD_ROW_CLASS} ${COLUMNS}`}>

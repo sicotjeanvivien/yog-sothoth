@@ -1,8 +1,6 @@
 /** The Overview's bar series: fixed slots ending at `asOf`, and the scale's two round marks. */
 
-import { periodMs, type Period } from "./period";
-
-const HOUR_MS = 60 * 60 * 1000;
+import { HOUR_MS, periodMs, type Period } from "./period";
 
 /** The tallest bar, under the chart's 170 px, so the top mark's label stays clear. */
 export const CHART_TOP_PX = 160;
