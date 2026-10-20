@@ -2,8 +2,8 @@
 
 /**
  * The sidebar's menu. ⚠️ A closed entry is a `<span role="link" aria-disabled>` with no `href`,
- * `tabindex` or handler. The collapsed rail keeps every entry as its icon alone; every collapsed
- * style is `rail:`-scoped. The `__tests__` hold both rules.
+ * `tabindex` or handler. The collapsed rail keeps every row as its icon alone and hides the
+ * platforms' products; every collapsed style is `rail:`-scoped. The `__tests__` hold these rules.
  */
 
 import { useId, type FC } from "react";
@@ -16,29 +16,33 @@ import {
   type IconProps,
 } from "@/components/shared/icon";
 
-import type { NavKey } from "./sidebar-keys";
+import type { IconKey } from "./sidebar-keys";
 import {
   SIDEBAR_NAV,
-  type ClosedNavEntry,
   type OpenNavEntry,
+  type ProductEntry,
   type SidebarNavEntry,
+  type SidebarNavPlatform,
 } from "./sidebar-nav";
 
-type NavIcon = { kind: "icon"; Icon: FC<IconProps> } | { kind: "abbr"; text: string };
+type NavIcon = { kind: "icon"; Icon: FC<IconProps> } | { kind: "letter"; text: string };
 
-const NAV_ICONS: Record<NavKey, NavIcon> = {
+const NAV_ICONS: Record<IconKey, NavIcon> = {
   overview: { kind: "icon", Icon: OverviewIcon },
-  meteoraDammV2: { kind: "abbr", text: "D2" },
-  meteoraDlmm: { kind: "abbr", text: "DL" },
-  raydium: { kind: "abbr", text: "RY" },
-  orca: { kind: "abbr", text: "OR" },
+  meteora: { kind: "letter", text: "M" },
+  raydium: { kind: "letter", text: "R" },
+  orca: { kind: "letter", text: "O" },
   token: { kind: "icon", Icon: TokenIcon },
 };
 
-function rowClass(collapsed: boolean): string {
-  return `flex min-h-11 rail:min-h-9 items-center justify-between gap-2 px-[10px] text-[14px] ${
-    collapsed ? "rail:justify-center rail:px-0" : ""
-  }`;
+/** The 20 px box of a menu icon, shared with the Preferences. */
+export const ICON_BOX = "inline-flex h-5 w-5 shrink-0 items-center justify-center";
+
+/** A product sits under its platform's label, without an icon. */
+function rowClass(collapsed: boolean, product = false): string {
+  return `flex min-h-11 rail:min-h-9 items-center justify-between gap-2 pr-[10px] text-[14px] ${
+    product ? "pl-10" : "pl-[10px]"
+  } ${collapsed ? "rail:justify-center rail:px-0" : ""}`;
 }
 
 type SidebarNavListProps = {
@@ -50,56 +54,49 @@ type SidebarNavListProps = {
 export function SidebarNavList({ collapsed, onNavigate }: SidebarNavListProps) {
   const pathname = usePathname();
   const t = useTranslations("Dashboard.Sidebar.nav");
-  const groupIdPrefix = useId();
+  const idPrefix = useId();
 
-  const renderEntry = (entry: SidebarNavEntry) => (
-    <li key={entry.key}>
-      {entry.kind === "open" ? (
-        <OpenEntry
-          entry={entry}
-          label={t(entry.labelKey)}
-          // Exact match: `usePathname` already strips the locale.
-          active={pathname === entry.href}
-          collapsed={collapsed}
-          onNavigate={onNavigate}
-        />
-      ) : (
-        <ClosedEntry
-          entry={entry}
-          label={t(entry.labelKey)}
-          soon={t("soon")}
-          soonTitle={t("soonTitle", { label: t(entry.labelKey) })}
-          collapsed={collapsed}
-        />
-      )}
-    </li>
-  );
+  const renderEntry = (entry: SidebarNavEntry | ProductEntry, icon: NavIcon | null) => {
+    const label = t(entry.labelKey);
+    return entry.kind === "open" ? (
+      <OpenEntry
+        entry={entry}
+        label={label}
+        icon={icon}
+        // Exact match: `usePathname` already strips the locale.
+        active={pathname === entry.href}
+        collapsed={collapsed}
+        onNavigate={onNavigate}
+      />
+    ) : (
+      <ClosedEntry
+        label={label}
+        icon={icon}
+        soon={t("soon")}
+        soonTitle={t("soonTitle", { label })}
+        collapsed={collapsed}
+      />
+    );
+  };
 
   return (
     <ul className="flex flex-col gap-[2px]">
-      {SIDEBAR_NAV.map((item) => {
-        if (item.kind !== "group") return renderEntry(item);
-        const captionId = `${groupIdPrefix}-${item.labelKey}`;
+      {SIDEBAR_NAV.map((item, index) => {
+        if (item.kind !== "platform") {
+          return <li key={item.key}>{renderEntry(item, NAV_ICONS[item.key])}</li>;
+        }
+        const first = SIDEBAR_NAV[index - 1]?.kind !== "platform";
         return (
-          <li key={item.labelKey}>
-            <span
-              id={captionId}
-              className={`${rowClass(false)} text-dash-ink-2 ${collapsed ? "rail:hidden" : ""}`}
-            >
-              <span>{t(item.labelKey)}</span>
-              <span
-                aria-hidden="true"
-                className="font-dash-mono text-[11px] text-dash-ink-3 tabular-nums"
-              >
-                {item.entries.length}
-              </span>
-            </span>
-            <ul
-              aria-labelledby={captionId}
-              className="flex flex-col gap-[2px]"
-            >
-              {item.entries.map(renderEntry)}
-            </ul>
+          // The first platform stands apart from the entries above it.
+          <li key={item.key} className={first ? "mt-2.5" : undefined}>
+            <Platform
+              platform={item}
+              captionId={`${idPrefix}-${item.key}`}
+              pathname={pathname}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+              renderEntry={renderEntry}
+            />
           </li>
         );
       })}
@@ -107,36 +104,105 @@ export function SidebarNavList({ collapsed, onNavigate }: SidebarNavListProps) {
   );
 }
 
-/** The 20 px box of a menu icon, shared with the Preferences. */
-export const ICON_BOX = "inline-flex h-5 w-5 shrink-0 items-center justify-center";
+/** A platform's row, then its products, which the collapsed rail hides. */
+function Platform({
+  platform,
+  captionId,
+  pathname,
+  collapsed,
+  onNavigate,
+  renderEntry,
+}: {
+  platform: SidebarNavPlatform;
+  captionId: string;
+  pathname: string;
+  collapsed: boolean;
+  onNavigate: () => void;
+  renderEntry: (entry: SidebarNavEntry | ProductEntry, icon: NavIcon | null) => React.ReactNode;
+}) {
+  const t = useTranslations("Dashboard.Sidebar.nav");
+  const label = t(platform.labelKey);
+  const icon = NAV_ICONS[platform.key];
 
-/** The entry's icon, or its protocol's abbreviation. */
-function EntryIcon({ entryKey, tone }: { entryKey: NavKey; tone: string }) {
-  const icon = NAV_ICONS[entryKey];
-  const box = `${ICON_BOX} ${tone}`;
+  if (platform.products.length === 0) {
+    return (
+      <ClosedEntry
+        label={label}
+        icon={icon}
+        soon={t("soon")}
+        soonTitle={t("soonTitle", { label })}
+        collapsed={collapsed}
+      />
+    );
+  }
 
+  const target = platform.products.find((product) => product.kind === "open");
+  const current = platform.products.some(
+    (product) => product.kind === "open" && product.href === pathname,
+  );
+  const content = <EntryLabel icon={icon} label={label} collapsed={collapsed} />;
+
+  return (
+    <>
+      {target ? (
+        <Link
+          id={captionId}
+          href={target.href}
+          onClick={onNavigate}
+          title={collapsed ? label : undefined}
+          className={`${rowClass(collapsed)} text-dash-ink transition-colors hover:bg-dash-surface focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-dash-accent ${
+            current && collapsed
+              ? "rail:bg-dash-surface rail:shadow-[inset_2px_0_0_var(--color-dash-accent)]"
+              : ""
+          }`}
+        >
+          {content}
+        </Link>
+      ) : (
+        <span
+          id={captionId}
+          title={collapsed ? label : undefined}
+          className={`${rowClass(collapsed)} text-dash-ink`}
+        >
+          {content}
+        </span>
+      )}
+      <ul
+        aria-labelledby={captionId}
+        className={`flex flex-col gap-[2px] ${collapsed ? "rail:hidden" : ""}`}
+      >
+        {platform.products.map((product) => (
+          <li key={product.key}>{renderEntry(product, null)}</li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/** The row's icon: a drawn one, or the platform's letter until its official logo. */
+function EntryIcon({ icon, tone }: { icon: NavIcon; tone: string }) {
   return icon.kind === "icon" ? (
-    <span aria-hidden="true" className={box}>
+    <span aria-hidden="true" className={`${ICON_BOX} ${tone}`}>
       <icon.Icon size={16} />
     </span>
   ) : (
     <span
       aria-hidden="true"
-      className={`${box} border border-dash-rule font-dash-mono text-[9px] tracking-[0.02em]`}
+      className={`${ICON_BOX} border border-dashed border-dash-ink-3 font-dash-mono text-[10px] text-dash-ink-2`}
     >
       {icon.text}
     </span>
   );
 }
 
-/** The icon then the label, which the collapsed rail keeps for screen readers only. */
+/** The icon, if any, then the label, which the collapsed rail keeps for screen readers only. */
 function EntryLabel({
-  entryKey,
+  icon,
   label,
   collapsed,
   tone = "",
 }: {
-  entryKey: NavKey;
+  icon: NavIcon | null;
   label: string;
   collapsed: boolean;
   /** The icon's colour, when it is not the row's. */
@@ -144,7 +210,7 @@ function EntryLabel({
 }) {
   return (
     <span className="flex min-w-0 items-center gap-[10px]">
-      <EntryIcon entryKey={entryKey} tone={tone} />
+      {icon && <EntryIcon icon={icon} tone={tone} />}
       <span className={collapsed ? "rail:sr-only" : undefined}>{label}</span>
     </span>
   );
@@ -153,12 +219,14 @@ function EntryLabel({
 function OpenEntry({
   entry,
   label,
+  icon,
   active,
   collapsed,
   onNavigate,
 }: {
-  entry: OpenNavEntry;
+  entry: OpenNavEntry<string>;
   label: string;
+  icon: NavIcon | null;
   active: boolean;
   collapsed: boolean;
   onNavigate: () => void;
@@ -176,10 +244,10 @@ function OpenEntry({
       // overlaps the page.
       title={collapsed ? label : undefined}
       // Inset outline: the scrolling nav would clip one drawn outside.
-      className={`group ${rowClass(collapsed)} transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-dash-accent ${state}`}
+      className={`group ${rowClass(collapsed, icon === null)} transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-dash-accent ${state}`}
     >
       <EntryLabel
-        entryKey={entry.key}
+        icon={icon}
         label={label}
         collapsed={collapsed}
         tone={active ? "" : "text-dash-ink-3 group-hover:text-dash-ink"}
@@ -189,14 +257,14 @@ function OpenEntry({
 }
 
 function ClosedEntry({
-  entry,
   label,
+  icon,
   soon,
   soonTitle,
   collapsed,
 }: {
-  entry: ClosedNavEntry;
   label: string;
+  icon: NavIcon | null;
   soon: string;
   soonTitle: string;
   collapsed: boolean;
@@ -206,9 +274,9 @@ function ClosedEntry({
       role="link"
       aria-disabled="true"
       title={collapsed ? soonTitle : undefined}
-      className={`${rowClass(collapsed)} cursor-default text-dash-ink-3`}
+      className={`${rowClass(collapsed, icon === null)} cursor-default text-dash-ink-3`}
     >
-      <EntryLabel entryKey={entry.key} label={label} collapsed={collapsed} />
+      <EntryLabel icon={icon} label={label} collapsed={collapsed} />
       <span
         className={`border border-dashed border-dash-ink-3 px-1 py-px font-dash-mono text-[11px] whitespace-nowrap uppercase ${collapsed ? "rail:sr-only" : ""}`}
       >

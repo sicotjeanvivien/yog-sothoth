@@ -191,17 +191,20 @@ block in its own, behind a `BlockPlaceholder`. A failed block shows its
 `BlockError`; the status code is already sent.
 
 **Menu** — `sidebar/sidebar-nav.ts` is pure data: Overview, then the
-*Protocol* group (Meteora DAMM v2, Meteora DLMM, Raydium, Orca), then Token.
+platforms (Meteora, with DAMM v2 and DLMM under it; Raydium; Orca), then Token.
 An entry is `open` (it has a page and an `href`) or `closed` (tagged "Soon", no
-`href`).
+`href`). A platform links to its first open product; with none open it is a
+caption over them, and with no product listed it is a closed entry itself.
 `SidebarNavList` renders a closed entry as a plain `<span>`, never a link; its
-test fails as soon as one becomes a link or loses its tag. To open an entry
+test fails as soon as one becomes a link or loses its tag. To open a top entry
 once its page exists, move its key from `ClosedNavKey` to `OpenNavKey`
-(`sidebar-keys.ts`) and give it an `href`. Every entry, open or closed, has
-its icon in `NAV_ICONS` — a drawn one, or the protocol's abbreviation (D2, DL,
-RY, OR) — shown in both states; the compiler refuses a key without one. The
-collapsed rail keeps every entry as its icon alone, its label in `title`.
-`/signals` is no longer in the menu.
+(`sidebar-keys.ts`) and give it an `href`; a product opens by turning `open`
+with its `href`. Every row but a product has its icon in `NAV_ICONS` — a drawn
+one, or the platform's letter until its official logo — shown in both states;
+the compiler refuses a key without one. The collapsed rail keeps every row as
+its icon alone, its label in `title`, hides the products, and marks the
+platform of the current page. The About page's scope (`PROTOCOL_SCOPE`) is
+read from the same data. `/signals` is no longer in the menu.
 
 **Preferences** — at the foot of the menu: the
 language, FR | EN (`shared/locale-switch.tsx`, also the site footer's), each a

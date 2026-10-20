@@ -12,60 +12,51 @@ vi.mock("@/i18n/navigation", async () => {
   const { createElement } = await import("react");
   return {
     Link: (props: ComponentProps<"a">) => createElement("a", props),
-    usePathname: () => "/overview",
+    usePathname: () => "/damm",
   };
 });
 
-// A group holding an open entry, next to one holding only closed ones.
+// A platform whose second product is open — the current page — next to one that lists none.
 vi.mock("../sidebar-nav", () => ({
   SIDEBAR_NAV: [
     { kind: "open", key: "overview", href: "/overview", labelKey: "overview" },
     {
-      kind: "group",
-      labelKey: "protocol",
-      entries: [
-        { kind: "open", key: "overview", href: "/p", labelKey: "meteoraDammV2" },
-        { kind: "closed", key: "raydium", labelKey: "raydium" },
+      kind: "platform",
+      key: "meteora",
+      labelKey: "meteora",
+      products: [
+        { kind: "closed", key: "meteoraDlmm", labelKey: "dlmm" },
+        { kind: "open", key: "meteoraDammV2", href: "/damm", labelKey: "dammV2" },
       ],
     },
-    {
-      kind: "group",
-      labelKey: "token",
-      entries: [{ kind: "closed", key: "orca", labelKey: "orca" }],
-    },
+    { kind: "platform", key: "orca", labelKey: "orca", products: [] },
+    { kind: "closed", key: "token", labelKey: "token" },
   ] satisfies SidebarNavItem[],
 }));
 
-type Node = { tag: string; attrs: string; hidden: boolean; hasLink: boolean };
+type Node = { tag: string; hidden: boolean };
 
-/** For every link, closed entry, group and caption, whether a `rail:hidden` on it or an ancestor hides it. */
+/** Every link and closed entry, by label, with whether a `rail:hidden` on it or an ancestor hides it. */
 function walk(html: string) {
-  const links: { attrs: string; hidden: boolean }[] = [];
-  const closed: boolean[] = [];
-  const groups: { hidden: boolean; hasLink: boolean }[] = [];
-  const captions: boolean[] = [];
+  const rows: { label: string; attrs: string; hidden: boolean }[] = [];
   const stack: Node[] = [];
-  for (const [, slash, tag = "", attrs = "", self] of html.matchAll(
-    /<(\/?)([a-z0-9]+)([^>]*?)(\/?)>/g,
+  let open: { attrs: string; hidden: boolean } | null = null;
+  for (const [, slash, tag = "", attrs = "", self, text] of html.matchAll(
+    /<(\/?)([a-z0-9]+)([^>]*?)(\/?)>([^<]*)/g,
   )) {
     if (slash) {
-      const node = stack.pop();
-      if (node?.tag === "ul" && node.attrs.includes("aria-labelledby")) {
-        groups.push({ hidden: node.hidden, hasLink: node.hasLink });
-      }
+      stack.pop();
       continue;
     }
-    const hidden =
-      (stack.at(-1)?.hidden ?? false) || /\brail:hidden\b/.test(attrs);
-    if (tag === "a") {
-      links.push({ attrs, hidden });
-      for (const node of stack) node.hasLink = true;
+    const hidden = (stack.at(-1)?.hidden ?? false) || /\brail:hidden\b/.test(attrs);
+    if (tag === "a" || attrs.includes('aria-disabled="true"')) open = { attrs, hidden };
+    if (open && tag === "span" && !attrs.includes("aria-hidden") && text?.trim()) {
+      rows.push({ label: text.trim().replace("&#x27;", "'"), ...open });
+      open = null;
     }
-    if (attrs.includes('aria-disabled="true"')) closed.push(hidden);
-    if (tag === "span" && / id="/.test(attrs)) captions.push(hidden);
-    if (!self) stack.push({ tag, attrs, hidden, hasLink: false });
+    if (!self) stack.push({ tag, hidden });
   }
-  return { links, closed, groups, captions };
+  return rows;
 }
 
 function collapsedMarkup() {
@@ -76,41 +67,41 @@ function collapsedMarkup() {
   );
 }
 
-function renderCollapsed() {
-  return walk(collapsedMarkup());
+function rows() {
+  return Object.fromEntries(walk(collapsedMarkup()).map((r) => [r.label, r]));
 }
 
 describe("SidebarNavList on the collapsed rail", () => {
-  it("keeps every open entry, in a group or not, its icon centred", () => {
-    const { links } = renderCollapsed();
+  // Mutations: `rail:hidden` back on a closed entry, or the products left on the rail.
+  it("keeps every row as its icon, and hides the platforms' products", () => {
+    const shown = Object.entries(rows())
+      .filter(([, row]) => !row.hidden)
+      .map(([label]) => label);
 
-    expect(links).toHaveLength(2);
-    for (const link of links) {
-      expect(link.hidden).toBe(false);
-      expect(link.attrs).toMatch(/\brail:px-0\b/);
-    }
+    expect(shown).toEqual(["Vue d'ensemble", "Meteora", "Orca", "Token"]);
   });
 
-  // Mutation: `rail:hidden` back on a closed entry — the rail shows one entry out of six.
-  it("keeps every closed entry", () => {
-    const { closed } = renderCollapsed();
+  // Mutation: the platform linked to its first product, open or not.
+  it("links a platform to its first open product", () => {
+    expect(rows()["Meteora"]?.attrs).toMatch(/href="\/damm"/);
+  });
 
-    expect(closed).toEqual([false, false]);
+  // Mutation: the current page's platform left unmarked — the folded rail shows no position.
+  it("marks the platform of the current page", () => {
+    expect(rows()["Meteora"]?.attrs).toMatch(/rail:shadow-\[inset_2px/);
+  });
+
+  it("centres every row", () => {
+    for (const label of ["Vue d'ensemble", "Meteora", "Orca", "Token"]) {
+      expect(rows()[label]?.attrs).toMatch(/\brail:px-0\b/);
+    }
   });
 
   // Mutation: `rail:hidden` instead of `rail:sr-only` on the tag — a screen reader no longer hears « Bientôt ».
   it("keeps « Bientôt » for screen readers", () => {
     const tags = [...collapsedMarkup().matchAll(/<span class="([^"]*)">Bientôt</g)];
 
-    expect(tags).toHaveLength(2);
+    expect(tags).toHaveLength(3);
     for (const [, classes] of tags) expect(classes).toMatch(/\brail:sr-only\b/);
-  });
-
-  // Mutation: a group hidden when it holds no open entry, as when only open ones had an icon.
-  it("keeps every group, its caption hidden", () => {
-    const { groups, captions } = renderCollapsed();
-
-    expect(groups.map((group) => group.hidden)).toEqual([false, false]);
-    expect(captions).toEqual([true, true]);
   });
 });
