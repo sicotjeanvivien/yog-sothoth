@@ -87,11 +87,12 @@ describe("SidebarNavList", () => {
     expect(list).toMatch(/<span>DAMM v2<\/span>(?:(?!<\/li>).)*<\/li><li>.*<span>DLMM<\/span>/);
   });
 
-  // Mutations: the icon rendered on the collapsed rail only, or given to a product too.
+  // Mutation: the icon rendered on the collapsed rail only.
   it.each(["Vue d'ensemble", "Meteora", "Raydium", "Orca", "Token"])("gives %s its icon", (label) => {
     expect(row(render(), label)).toMatch(ICON);
   });
 
+  // Mutation: a product drawn with its platform's icon — two « M » stacked.
   it.each(["DAMM v2", "DLMM"])("gives the product %s no icon", (label) => {
     expect(row(render(), label)).not.toMatch(ICON);
   });
