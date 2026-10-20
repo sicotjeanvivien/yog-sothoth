@@ -13,6 +13,8 @@ const COMPACT_FORMATTER = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
+const RATE_FORMATTER = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 2 });
+
 const EMPTY = "—";
 
 export function formatCount(value: number | null | undefined): string {
@@ -27,4 +29,9 @@ export function formatCountCompact(value: number | null | undefined): string {
     return EMPTY;
   }
   return COMPACT_FORMATTER.format(value);
+}
+
+/** A rate per second: whole from 10, two significant digits under it, so a slow pace is never "0". */
+export function formatRate(rate: number): string {
+  return rate < 10 ? RATE_FORMATTER.format(rate) : formatCount(Math.round(rate));
 }

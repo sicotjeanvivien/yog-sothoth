@@ -15,7 +15,7 @@ import {
   fetchProtocolTvlHourly,
 } from "@/lib/api/server/protocols";
 import { volumeCoverage } from "@/lib/coverage/volume-coverage";
-import { formatCount, formatCountCompact } from "@/lib/format/format-count";
+import { formatCount, formatCountCompact, formatRate } from "@/lib/format/format-count";
 import { formatTimes } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { previousWindowCovered, tvlStart } from "@/lib/overview/availability";
@@ -296,6 +296,8 @@ async function valued(
   return (
     <>
       {figure}
+      {/* ⚠️ A place to break: in a narrow cell the mark goes under the figure, not over the edge. */}
+      <wbr />
       <VolumeCoverageMark
         coverage={coverage}
         label={(priced, total) => t("mark", { priced, total })}
@@ -327,11 +329,6 @@ function kpiError(err: unknown, label: string, info: string, advanced = false) {
     throw err;
   }
   return <KpiFailed label={label} info={info} advanced={advanced} />;
-}
-
-/** One decimal under 10/s, or a quiet window would read "≈ 0 per second" under its swaps. */
-function formatRate(rate: number): string {
-  return rate < 10 ? rate.toFixed(1) : formatCount(Math.round(rate));
 }
 
 /** "—", "Unavailable for now" and a retry; the cause sits in the blocks' error boxes. */
