@@ -21,6 +21,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
         &[
             ("yog_analytic", &["INSERT", "SELECT", "UPDATE"]),
             ("yog_api", &["SELECT"]),
+            ("yog_signals", &["SELECT"]),
         ],
     ),
     (

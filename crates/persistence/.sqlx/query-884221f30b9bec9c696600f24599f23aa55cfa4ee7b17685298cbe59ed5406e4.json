@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO analytic_tranches (bucket, written_at)\n        SELECT generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ, INTERVAL '5 minutes'), $3\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "884221f30b9bec9c696600f24599f23aa55cfa4ee7b17685298cbe59ed5406e4"
+}

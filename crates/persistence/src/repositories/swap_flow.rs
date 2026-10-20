@@ -1,5 +1,5 @@
 //! Postgres implementation of [`SwapFlowRepository`]: windows and sums the
-//! `meteora_damm_v2_pool_hourly_flow` view (baseline §15) per pool.
+//! `meteora_damm_v2_pool_hourly_flow` view (028) per pool.
 //!
 //! [`SwapFlowRepository`]: yog_core::domain::SwapFlowRepository
 
@@ -45,8 +45,14 @@ impl SwapFlowRepository for PgSwapFlowRepository {
                      THEN SUM(volume_a_to_b_usd) END AS "volume_a_to_b_usd?",
                 CASE WHEN bool_and(valuation_complete)
                      THEN SUM(volume_b_to_a_usd) END AS "volume_b_to_a_usd?"
-            FROM meteora_damm_v2_pool_hourly_flow
+            FROM meteora_damm_v2_pool_hourly_flow,
+                 (SELECT MIN(bucket) AS first_hour, MAX(bucket) AS last_hour
+                    FROM analytic_hours) written
             WHERE bucket > $1
+              -- ⚠️ A window the facts do not span reads as nothing: a partial one
+              -- would compare a fragment, during a catch-up or a stopped writer.
+              AND written.first_hour <= date_trunc('hour', $1, 'UTC') + INTERVAL '1 hour'
+              AND written.last_hour >= date_trunc('hour', now(), 'UTC') - INTERVAL '1 hour'
             GROUP BY pool_address
             HAVING NOT bool_and(valuation_complete)
                 OR SUM(volume_a_to_b_usd) + SUM(volume_b_to_a_usd) >= $2

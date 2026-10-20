@@ -25,8 +25,11 @@ before the end of the tranche (`yog_price_asof`). The other token takes the
 lower of its market price and its price in the pool: the pool's mid price at
 the end of the tranche (from the last `next_sqrt_price`) times the anchor's.
 When both are traded in as many pools, each takes the lower of its two prices;
-a token without a market price takes its price in the pool. A token emptied in
-its pool is then worth what the pool pays for it, not its price of before.
+a token without a market price takes its price in the pool. Without the pool's
+rate — its raw swaps gone, or a token's decimals unknown — there is nothing to
+bound by: only the anchor keeps a price, and the tranche is counted unvalued.
+A token emptied in its pool is then worth what the pool pays for it, not its
+price of before.
 
 Both prices are kept, `market_*` beside the published `price_*`: their gap is
 how far the pool and the market disagree. The table covers the pools with

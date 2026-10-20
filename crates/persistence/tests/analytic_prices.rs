@@ -304,6 +304,47 @@ async fn a_tranche_without_any_price_is_not_valued(pool: PgPool) {
     assert_eq!(valued, (false, None));
 }
 
+/// Against a missing rate read as no bound: a tranche whose raw swaps are gone — an outage
+/// longer than their retention — would price the other token at its market price again.
+#[sqlx::test]
+async fn without_the_pools_rate_only_the_anchor_is_priced(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (x, sol, other) = (pk(40).to_string(), pk(41).to_string(), pk(42).to_string());
+    let gone = setup_pool(&pool, 1, (&x, 6), (&sol, 6)).await;
+    let beside = setup_pool(&pool, 2, (&other, 6), (&sol, 6)).await;
+    price_at(&pool, &x, "5", tranche).await;
+    price_at(&pool, &sol, "100", tranche).await;
+    swap(&pool, &gone, "x", (4, 1), sqrt_price_x64(4, 1), tranche).await;
+    swap(&pool, &beside, "o", (1, 1), sqrt_price_x64(1, 1), tranche).await;
+    sqlx::query("CALL refresh_continuous_aggregate('meteora_damm_v2_swap_events_5min', $1, $2)")
+        .bind(tranche)
+        .bind(tranche + Duration::minutes(5))
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM meteora_damm_v2_swap_events WHERE pool_address = $1")
+        .bind(&gone)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    value(&pool, tranche).await;
+
+    let (market_x, price_x, _, price_sol) = prices(&pool, &gone, tranche).await;
+    assert_eq!(market_x, Some(dec("5")));
+    assert_eq!((price_x, price_sol), (None, Some(dec("100"))));
+    let valued: bool =
+        sqlx::query_scalar("SELECT valued FROM analytic_pool_5min WHERE pool_address = $1")
+            .bind(&gone)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(
+        !valued,
+        "the token without a bound leaves its tranche unvalued, and counted"
+    );
+}
+
 /// Against the margin dropped from the tranche's close: a swap landing within it would
 /// miss a tranche already valued.
 #[sqlx::test]
@@ -551,5 +592,5 @@ fn the_writer_reads_market_prices_in_the_price_table_alone() {
         .collect();
 
     assert_eq!(readers.len(), 1, "{readers:?}");
-    assert!(readers[0].ends_with("meteora_damm_v2_pool_prices.sql"));
+    assert!(readers[0].ends_with("meteora_damm_v2_tranche.sql"));
 }

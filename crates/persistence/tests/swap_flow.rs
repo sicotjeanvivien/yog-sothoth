@@ -254,6 +254,29 @@ async fn an_empty_direction_is_zero_not_unknown(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
+    // A second pool of B in the tranche makes B the anchor, as SOL against a fresh token:
+    // without A's decimals there is no pool rate, and only an anchor keeps a price.
+    let beside = pk(9).to_string();
+    sqlx::query(
+        "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint)
+         VALUES ($1,'meteora_damm_v2',$2,$3)",
+    )
+    .bind(&beside)
+    .bind(pk(8).to_string())
+    .bind(pk(3).to_string())
+    .execute(&pool)
+    .await
+    .unwrap();
+    insert_swap(
+        &pool,
+        &beside,
+        "sig_beside",
+        "b_to_a",
+        0,
+        1,
+        now - Duration::hours(2),
+    )
+    .await;
 
     write_facts_spanning(&pool, 31, 0).await;
     let repo = PgSwapFlowRepository::new(pool.clone());
@@ -276,8 +299,8 @@ async fn an_empty_direction_is_zero_not_unknown(pool: PgPool) {
     assert!(close(b_to_a, 200), "2.0 B at $100 is $200, got {b_to_a}");
 }
 
-/// Against the view made `security_invoker`: `yog_signals` would then need a grant on
-/// the facts it reads through it.
+/// Against the grant on `analytic_hours` lost: the read checks the facts' coverage under
+/// `yog_signals`' own role, while the view reads the facts as its owner.
 #[sqlx::test]
 async fn yog_signals_values_the_flow_under_its_own_role(pool: PgPool) {
     let now = Utc::now();
@@ -379,4 +402,47 @@ async fn the_volume_floor_keeps_the_unvaluable_windows(pool: PgPool) {
         "the $50 pool is under the floor, the $100 one on it; the unvaluable one has no total \
          to compare, so it stays"
     );
+}
+
+/// A priced pool with one swap each way an hour back, and its facts written from
+/// `first` to `last` hours back.
+async fn flows_with_facts_spanning(pool: &PgPool, first: i64, last: i64) -> usize {
+    let now = Utc::now();
+    let pool_addr = seed_pool_with_unpriced_a(pool, 30).await;
+    insert_swap(
+        pool,
+        &pool_addr,
+        "sig_ba",
+        "b_to_a",
+        0,
+        1_000_000_000,
+        now - Duration::hours(1),
+    )
+    .await;
+    write_facts_spanning(pool, first, last).await;
+    PgSwapFlowRepository::new(pool.clone())
+        .directional_volume_since(now - Duration::hours(24), Decimal::ZERO)
+        .await
+        .unwrap()
+        .len()
+}
+
+/// Against the coverage guard dropped: a writer that has rebuilt only its last three hours
+/// would hand the detector a fragment of the window as if it were the window.
+#[sqlx::test]
+async fn a_window_the_facts_do_not_reach_back_to_yields_nothing(pool: PgPool) {
+    assert_eq!(flows_with_facts_spanning(&pool, 3, 0).await, 0);
+}
+
+/// Against the guard's upper bound dropped: a writer stopped three hours back would hand
+/// the detector a window with its last hours missing.
+#[sqlx::test]
+async fn a_window_past_the_last_hour_written_yields_nothing(pool: PgPool) {
+    assert_eq!(flows_with_facts_spanning(&pool, 31, 3).await, 0);
+}
+
+/// The two above, against a guard that refuses every window.
+#[sqlx::test]
+async fn a_window_the_facts_span_is_read(pool: PgPool) {
+    assert_eq!(flows_with_facts_spanning(&pool, 31, 0).await, 1);
 }

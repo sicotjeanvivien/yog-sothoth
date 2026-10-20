@@ -568,11 +568,11 @@ unless measured since then: a stopped, catching-up or new writer shows, as
 
 The DAMM v2 tranches are those of `meteora_damm_v2_swap_events_5min` (021),
 refreshed every 5 minutes up to 10 minutes ago and read in real time past that.
-The price of each pool's tokens (`meteora_damm_v2_pool_prices.sql`) reads the
-pool's last `next_sqrt_price` of the tranche from the raw swaps, and the market
-prices through `yog_price_asof` once per mint; the swaps
-(`meteora_damm_v2_swap_tranches.sql`) value through `yog_moved_amount_usd` (025)
-at those prices. Nothing else in the writer reads a price, and no view a binary
+One statement per tranche (`meteora_damm_v2_tranche.sql`) prices each pool's
+tokens — the pool's last `next_sqrt_price` of the tranche from the raw swaps, the
+market prices through `yog_price_asof` once per mint — and values the swaps at
+those prices through `yog_moved_amount_usd` (025): both read one snapshot of the
+aggregate. Nothing else in the writer reads a price, and no view a binary
 reads values a swap by the hour (`tests/analytic_prices.rs`): the hourly priced
 view (023) is left to the activity view alone. The two 5-minute tables are kept
 7 days, as the raw swaps: an older tranche has no pool price left to bound it.

@@ -54,6 +54,7 @@ GRANT SELECT, INSERT, UPDATE
     ON analytic_tranches, analytic_pool_prices_5min, analytic_pool_5min
     TO yog_analytic;
 GRANT SELECT ON meteora_damm_v2_swap_events TO yog_analytic;
+GRANT SELECT ON analytic_hours TO yog_signals;
 
 CREATE OR REPLACE VIEW meteora_damm_v2_pool_hourly_flow AS
 SELECT
@@ -69,7 +70,9 @@ FROM analytic_pool_hourly;
 TRUNCATE analytic_pool_hourly, analytic_protocol_hourly;
 DELETE FROM analytic_hours
  WHERE bucket IS DISTINCT FROM (
-     SELECT GREATEST(date_trunc('hour', MIN(timestamp), 'UTC') + INTERVAL '1 hour',
-                     (SELECT MIN(bucket) FROM analytic_hours))
+     SELECT CASE WHEN MIN(timestamp) IS NOT NULL THEN
+                GREATEST(date_trunc('hour', MIN(timestamp), 'UTC') + INTERVAL '1 hour',
+                         (SELECT MIN(bucket) FROM analytic_hours))
+            END
        FROM meteora_damm_v2_swap_events);
 UPDATE analytic_hours SET frozen_at = NULL;

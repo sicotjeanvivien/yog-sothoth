@@ -41,10 +41,16 @@ impl AnalyticRepository for PgAnalyticRepository {
         // ⚠️ One statement per tranche: a whole catch-up in one would outlast its timeout.
         while tranche <= cycle.tranches_through {
             meteora_damm_v2::value_tranche(&mut tx, tranche).await?;
-            record_tranche(&mut tx, tranche, cycle.at).await?;
             tranches_written += 1;
             tranche += TRANCHE;
         }
+        record_tranches(
+            &mut tx,
+            cycle.tranches_from,
+            cycle.tranches_through,
+            cycle.at,
+        )
+        .await?;
         let pool_hours = upsert_pool_hourly(&mut tx, cycle.from, cycle.through).await?;
         upsert_protocol_hourly(&mut tx, cycle.from, cycle.through).await?;
         record_hours(&mut tx, cycle.from, cycle.through).await?;
@@ -99,14 +105,19 @@ async fn progress<'e>(executor: impl PgExecutor<'e>) -> RepositoryResult<Analyti
 }
 
 /// ⚠️ A plain insert: a tranche written twice is a bug, and fails the cycle.
-async fn record_tranche(
+async fn record_tranches(
     tx: &mut Transaction<'static, Postgres>,
-    tranche: DateTime<Utc>,
+    from: DateTime<Utc>,
+    through: DateTime<Utc>,
     at: DateTime<Utc>,
 ) -> RepositoryResult<()> {
     sqlx::query!(
-        "INSERT INTO analytic_tranches (bucket, written_at) VALUES ($1, $2)",
-        tranche,
+        r#"
+        INSERT INTO analytic_tranches (bucket, written_at)
+        SELECT generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ, INTERVAL '5 minutes'), $3
+        "#,
+        from,
+        through,
         at,
     )
     .execute(&mut **tx)
