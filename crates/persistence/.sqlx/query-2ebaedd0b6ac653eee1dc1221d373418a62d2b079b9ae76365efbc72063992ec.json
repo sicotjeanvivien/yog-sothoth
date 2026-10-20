@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT (SELECT MIN(bucket) FROM analytic_hours) AS \"first_hour?: DateTime<Utc>\",\n               (SELECT MAX(bucket) FROM analytic_hours WHERE frozen_at IS NOT NULL)\n                   AS \"last_frozen?: DateTime<Utc>\",\n               (SELECT MAX(bucket) FROM analytic_tranches) AS \"last_tranche?: DateTime<Utc>\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "first_hour?: DateTime<Utc>",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "last_frozen?: DateTime<Utc>",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_tranche?: DateTime<Utc>",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "2ebaedd0b6ac653eee1dc1221d373418a62d2b079b9ae76365efbc72063992ec"
+}

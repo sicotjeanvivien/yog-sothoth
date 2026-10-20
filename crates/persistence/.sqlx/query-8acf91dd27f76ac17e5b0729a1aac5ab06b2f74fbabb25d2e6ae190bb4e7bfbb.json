@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO analytic_pool_5min (\n    pool_address, bucket, protocol, swap_count, valued,\n    volume_in_a_usd, volume_in_b_usd, fees_usd, lp_fees_usd,\n    protocol_fees_usd, referral_fees_usd\n)\nSELECT pool_address, bucket, $2, swap_count, valued,\n       volume_in_a_usd, volume_in_b_usd, fees_usd,\n       fees_usd - protocol_fees_usd - referral_fees_usd,\n       protocol_fees_usd, referral_fees_usd\n  FROM (\n    SELECT s.pool_address, s.bucket, s.swap_count, v.valued,\n           CASE WHEN v.valued THEN yog_moved_amount_usd(s.volume_in_a, tma.decimals, pr.price_a_usd) END\n               AS volume_in_a_usd,\n           CASE WHEN v.valued THEN yog_moved_amount_usd(s.volume_in_b, tmb.decimals, pr.price_b_usd) END\n               AS volume_in_b_usd,\n           CASE WHEN v.valued THEN\n               yog_moved_amount_usd(s.fee_in_a, tma.decimals, pr.price_a_usd)\n             + yog_moved_amount_usd(s.fee_in_b, tmb.decimals, pr.price_b_usd)\n           END AS fees_usd,\n           CASE WHEN v.valued THEN\n               yog_moved_amount_usd(s.protocol_fee_in_a, tma.decimals, pr.price_a_usd)\n             + yog_moved_amount_usd(s.protocol_fee_in_b, tmb.decimals, pr.price_b_usd)\n           END AS protocol_fees_usd,\n           CASE WHEN v.valued THEN\n               yog_moved_amount_usd(s.referral_fee_in_a, tma.decimals, pr.price_a_usd)\n             + yog_moved_amount_usd(s.referral_fee_in_b, tmb.decimals, pr.price_b_usd)\n           END AS referral_fees_usd\n      FROM meteora_damm_v2_swap_events_5min s\n      JOIN analytic_pool_prices_5min pr ON pr.pool_address = s.pool_address AND pr.bucket = s.bucket\n      LEFT JOIN pools p ON p.pool_address = s.pool_address\n      LEFT JOIN token_metadata tma ON tma.mint = p.token_a_mint::TEXT\n      LEFT JOIN token_metadata tmb ON tmb.mint = p.token_b_mint::TEXT\n     CROSS JOIN LATERAL (\n         SELECT NOT (\n             (COALESCE(s.volume_in_a, 0) + COALESCE(s.fee_in_a, 0) > 0\n                 AND (pr.price_a_usd IS NULL OR tma.decimals IS NULL))\n             OR\n             (COALESCE(s.volume_in_b, 0) + COALESCE(s.fee_in_b, 0) > 0\n                 AND (pr.price_b_usd IS NULL OR tmb.decimals IS NULL))\n         ) AS valued\n     ) v\n     WHERE s.bucket = $1\n  ) valued\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8acf91dd27f76ac17e5b0729a1aac5ab06b2f74fbabb25d2e6ae190bb4e7bfbb"
+}

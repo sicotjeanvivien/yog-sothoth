@@ -71,11 +71,11 @@ async fn insert_liquidity_event(pool: &PgPool, pool_addr: &str, at: DateTime<Utc
     .unwrap();
 }
 
-/// `volume_a_to_b_usd` as view 023 publishes it for the pool's only bucket.
+/// The a→b volume the hourly priced view values for the pool's only bucket.
 async fn flow_a_to_b(pool: &PgPool) -> Option<f64> {
     sqlx::query_scalar(
-        "SELECT volume_a_to_b_usd::DOUBLE PRECISION
-         FROM meteora_damm_v2_pool_hourly_flow",
+        "SELECT yog_moved_amount_usd(volume_in_a, dec_a, eff_price_a)::DOUBLE PRECISION
+         FROM meteora_damm_v2_swap_events_hourly_priced",
     )
     .fetch_one(pool)
     .await
@@ -414,7 +414,6 @@ async fn the_price_lookup_is_inlined(pool: PgPool) {
     insert_liquidity_event(&pool, &pool_addr, Utc::now()).await;
     for view in [
         "meteora_damm_v2_pool_hourly_activity",
-        "meteora_damm_v2_pool_hourly_flow",
         "meteora_damm_v2_pool_hourly_liquidity_flow",
         "meteora_damm_v2_liquidity_events_valued",
         "meteora_damm_v2_swap_events_hourly_priced",

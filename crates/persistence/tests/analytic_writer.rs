@@ -9,6 +9,7 @@ use yog_persistence::PgAnalyticRepository;
 
 use super::helpers::{
     INSUFFICIENT_PRIVILEGE, as_role, assert_reads_no_password_hash, pk, price_mint, sqlstate,
+    sqrt_price_x64,
 };
 
 /// One instant per test, at the precision Postgres keeps: two `Utc::now()`
@@ -33,6 +34,7 @@ fn cycle_from(now: DateTime<Utc>, first: DateTime<Utc>) -> CycleWrite {
         AnalyticProgress {
             first_hour: Some(first),
             last_frozen: None,
+            last_tranche: None,
         },
     )
 }
@@ -75,13 +77,14 @@ async fn setup_pool(pool: &PgPool, seed: u8, price_b: Option<&str>) -> String {
 }
 
 /// A swap each way, both fees on the out token (`collect_fee_mode = 0`), each
-/// carrying a protocol and a referral share.
+/// carrying a protocol and a referral share. ⚠️ A square rate: the pool's price
+/// from its square root is then exact, and equal to the implied one.
 async fn trade(pool: &PgPool, address: &str, tag: &str, at: DateTime<Utc>) {
     for (direction, a, b, claiming, protocol, referral, fee_is_a) in [
         (
             "a_to_b",
             1_000_000_000i64,
-            500_000_000i64,
+            250_000_000i64,
             4_000_000i64,
             800_000i64,
             200_000i64,
@@ -90,7 +93,7 @@ async fn trade(pool: &PgPool, address: &str, tag: &str, at: DateTime<Utc>) {
         (
             "b_to_a",
             2_000_000_000,
-            1_000_000_000,
+            500_000_000,
             80_000_000,
             16_000_000,
             4_000_000,
@@ -103,7 +106,7 @@ async fn trade(pool: &PgPool, address: &str, tag: &str, at: DateTime<Utc>) {
                 amount_a, amount_b, reserve_a_after, reserve_b_after, next_sqrt_price,
                 claiming_fee, protocol_fee, compounding_fee, referral_fee, fee_token_is_a,
                 timestamp, slot, event_index)
-             VALUES ($1, $2, $3, $4, $5, 0, 0, 0, $6, $7, 0, $8, $9, $10, 0, 0)",
+             VALUES ($1, $2, $3, $4, $5, 0, 0, $11, $6, $7, 0, $8, $9, $10, 0, 0)",
         )
         .bind(address)
         .bind(format!("{tag}_{direction}"))
@@ -115,6 +118,7 @@ async fn trade(pool: &PgPool, address: &str, tag: &str, at: DateTime<Utc>) {
         .bind(referral)
         .bind(fee_is_a)
         .bind(at)
+        .bind(sqrt_price_x64(a, b))
         .execute(pool)
         .await
         .unwrap();
@@ -279,10 +283,10 @@ async fn facts_summed_from_the_tranches_equal_the_hourly_view(pool: PgPool) {
 
     let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
     let outcome = repository
-        .write_cycle(&cycle_from(open + Duration::minutes(20), freezing))
+        .write_cycle(&cycle_from(open + Duration::minutes(70), freezing))
         .await
         .unwrap();
-    assert_eq!((outcome.pool_hours, outcome.hours_frozen), (4, 1));
+    assert_eq!((outcome.pool_hours, outcome.hours_frozen), (4, 2));
 
     let view = view_pool_hours(&pool, open).await;
     let mut counts: Vec<i64> = view.iter().map(|h| h.2).collect();
@@ -326,32 +330,37 @@ async fn a_late_swap_in_a_materialised_tranche_misses_its_frozen_hour(pool: PgPo
 /// be rewritten with the late swap.
 #[sqlx::test]
 async fn a_swap_written_after_the_freeze_changes_nothing_of_its_hour(pool: PgPool) {
-    let now = now();
+    let open = hours_before(now(), 1);
+    let frozen = open - Duration::hours(2);
     let address = setup_pool(&pool, 1, Some("180.0")).await;
-    let frozen = hours_before(now, 3);
     trade(&pool, &address, "before", frozen).await;
-    let current = hours_before(now, 0);
-    trade(&pool, &address, "now", current).await;
+    trade(&pool, &address, "now", open + Duration::minutes(10)).await;
 
     let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
-    let cycle = cycle_from(now, frozen);
-    let first = repository.write_cycle(&cycle).await.unwrap();
+    let first = repository
+        .write_cycle(&cycle_from(open + Duration::minutes(20), frozen))
+        .await
+        .unwrap();
     assert!(first.hours_frozen >= 1);
     let facts = fact_pool_hours(&pool, frozen).await;
     let aggregate = aggregate_protocol_hours(&pool, frozen).await;
     assert_eq!(facts[0].2, 2);
 
     trade(&pool, &address, "late", frozen + Duration::minutes(30)).await;
-    trade(&pool, &address, "later", current).await;
-    repository.write_cycle(&cycle).await.unwrap();
+    trade(&pool, &address, "later", open + Duration::minutes(10)).await;
+    let progress = repository.progress().await.unwrap();
+    repository
+        .write_cycle(&CycleWrite::plan(open + Duration::minutes(30), progress))
+        .await
+        .unwrap();
 
     assert_eq!(fact_pool_hours(&pool, frozen).await, facts);
     assert_eq!(aggregate_protocol_hours(&pool, frozen).await, aggregate);
-    let open = fact_pool_hours(&pool, current).await;
+    let open = fact_pool_hours(&pool, open).await;
     assert_eq!(
         open.last().unwrap().2,
         4,
-        "the open hour is rewritten: {open:?}"
+        "a tranche not yet valued takes the later swap: {open:?}"
     );
 }
 

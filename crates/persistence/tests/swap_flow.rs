@@ -1,13 +1,18 @@
-//! The directional swap flow view and `PgSwapFlowRepository`: each direction valued at the
-//! bucket's trade-time price on its input side, without collapsing them, summed over the window.
+//! The directional swap flow view and `PgSwapFlowRepository`: each direction as yog-analytic
+//! values its tranches, without collapsing them, summed over the window.
 
-use super::helpers::{as_role, pk, price_mint_since};
+use super::helpers::{as_role, pk, price_mint_since, sqrt_price_x64, write_facts_spanning};
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 
 use yog_core::domain::SwapFlowRepository;
 use yog_persistence::PgSwapFlowRepository;
+
+/// The pool's price when A is worth $2 and B $100: 0.02 B for an A, 20 raw.
+fn rate_of_a_at_two_dollars() -> sqlx::types::BigDecimal {
+    sqrt_price_x64(1, 20)
+}
 
 #[allow(clippy::too_many_arguments)]
 async fn insert_swap(
@@ -24,7 +29,7 @@ async fn insert_swap(
            (pool_address, signature, trade_direction,
             amount_a, amount_b, reserve_a_after, reserve_b_after, next_sqrt_price,
             claiming_fee, protocol_fee, compounding_fee, referral_fee, fee_token_is_a, timestamp, slot, event_index)
-         VALUES ($1,$2,$3,$4,$5,0,0,0,0,0,0,0,false,$6,0,0)",
+         VALUES ($1,$2,$3,$4,$5,0,0,$7,0,0,0,0,false,$6,0,0)",
     )
     .bind(pool_addr)
     .bind(signature)
@@ -32,6 +37,7 @@ async fn insert_swap(
     .bind(amount_a)
     .bind(amount_b)
     .bind(timestamp)
+    .bind(rate_of_a_at_two_dollars())
     .execute(pool)
     .await
     .unwrap();
@@ -121,6 +127,7 @@ async fn directional_volume_splits_and_windows(pool: PgPool) {
     )
     .await;
 
+    write_facts_spanning(&pool, 31, 0).await;
     let repo = PgSwapFlowRepository::new(pool.clone());
     let flows = repo
         .directional_volume_since(now - Duration::hours(24), Decimal::ZERO)
@@ -201,6 +208,7 @@ async fn a_partly_unvaluable_window_yields_no_total(pool: PgPool) {
         .await;
     }
 
+    write_facts_spanning(&pool, 31, 0).await;
     let repo = PgSwapFlowRepository::new(pool.clone());
     let flows = repo
         .directional_volume_since(now - Duration::hours(24), Decimal::ZERO)
@@ -247,6 +255,7 @@ async fn an_empty_direction_is_zero_not_unknown(pool: PgPool) {
     .await
     .unwrap();
 
+    write_facts_spanning(&pool, 31, 0).await;
     let repo = PgSwapFlowRepository::new(pool.clone());
     let flows = repo
         .directional_volume_since(now - Duration::hours(24), Decimal::ZERO)
@@ -267,8 +276,8 @@ async fn an_empty_direction_is_zero_not_unknown(pool: PgPool) {
     assert!(close(b_to_a, 200), "2.0 B at $100 is $200, got {b_to_a}");
 }
 
-/// Against the grant on `token_prices` lost: the pricing function reads it as the
-/// caller, not as the view's owner, so `yog_signals` needs its own SELECT.
+/// Against the view made `security_invoker`: `yog_signals` would then need a grant on
+/// the facts it reads through it.
 #[sqlx::test]
 async fn yog_signals_values_the_flow_under_its_own_role(pool: PgPool) {
     let now = Utc::now();
@@ -284,6 +293,7 @@ async fn yog_signals_values_the_flow_under_its_own_role(pool: PgPool) {
     )
     .await;
 
+    write_facts_spanning(&pool, 31, 0).await;
     let repo = PgSwapFlowRepository::new(as_role(&pool, "yog_signals").await);
     let flows = repo
         .directional_volume_since(now - Duration::hours(24), Decimal::ZERO)
@@ -355,6 +365,7 @@ async fn the_volume_floor_keeps_the_unvaluable_windows(pool: PgPool) {
         .await;
     }
 
+    write_facts_spanning(&pool, 31, 0).await;
     let flows = PgSwapFlowRepository::new(pool.clone())
         .directional_volume_since(now - Duration::hours(24), Decimal::from(100))
         .await

@@ -18,6 +18,7 @@ fn at(hour: u32, minute: u32) -> DateTime<Utc> {
 const PROGRESS: AnalyticProgress = AnalyticProgress {
     first_hour: None,
     last_frozen: None,
+    last_tranche: None,
 };
 
 /// Answers `progress` as scripted, writes every cycle unless `refusal` is set,
@@ -40,6 +41,7 @@ impl AnalyticRepository for ScriptedRepository {
             Some(error) => Err(error.clone()),
             None => Ok(CycleOutcome {
                 written: *cycle,
+                tranches_written: 0,
                 pool_hours: 0,
                 hours_frozen: 0,
             }),
@@ -80,6 +82,7 @@ async fn a_cycle_writes_what_the_plan_says_and_signals_success() {
     let progress = AnalyticProgress {
         first_hour: Some(at(9, 0)),
         last_frozen: Some(at(10, 0)),
+        last_tranche: Some(at(10, 55)),
     };
     let (worker, repository, heartbeat) = worker(Ok(progress), None);
 

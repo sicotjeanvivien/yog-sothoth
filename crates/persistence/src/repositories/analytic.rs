@@ -1,5 +1,5 @@
 //! Postgres implementation of [`AnalyticRepository`]: one transaction per
-//! cycle, whose only per-protocol part is each protocol's facts.
+//! cycle, whose only per-protocol part is each protocol's tranches.
 //!
 //! [`AnalyticRepository`]: yog_core::domain::AnalyticRepository
 
@@ -8,10 +8,10 @@ mod meteora_damm_v2;
 use crate::repositories::helper::map_sqlx_error;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{PgExecutor, PgPool, Postgres, Transaction};
 use yog_core::{
     RepositoryResult,
-    domain::{AnalyticProgress, AnalyticRepository, CycleOutcome, CycleWrite},
+    domain::{AnalyticProgress, AnalyticRepository, CycleOutcome, CycleWrite, TRANCHE},
 };
 
 #[derive(Clone)]
@@ -28,31 +28,24 @@ impl PgAnalyticRepository {
 #[async_trait]
 impl AnalyticRepository for PgAnalyticRepository {
     async fn progress(&self) -> RepositoryResult<AnalyticProgress> {
-        let row = sqlx::query!(
-            r#"
-            SELECT MIN(bucket) AS "first_hour?: DateTime<Utc>",
-                   MAX(bucket) FILTER (WHERE frozen_at IS NOT NULL)
-                       AS "last_frozen?: DateTime<Utc>"
-              FROM analytic_hours
-            "#
-        )
-        .fetch_one(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        Ok(AnalyticProgress {
-            first_hour: row.first_hour,
-            last_frozen: row.last_frozen,
-        })
+        progress(&self.pool).await
     }
 
     async fn write_cycle(&self, cycle: &CycleWrite) -> RepositoryResult<CycleOutcome> {
         let mut tx = self.pool.begin().await.map_err(map_sqlx_error)?;
         lock_out_other_writers(&mut tx).await?;
-        let cycle = cycle.without_frozen(last_frozen(&mut tx).await?);
+        let cycle = cycle.without_written(progress(&mut *tx).await?);
 
-        let pool_hours =
-            meteora_damm_v2::upsert_swap_facts(&mut tx, cycle.from, cycle.through).await?;
+        let mut tranches_written = 0;
+        let mut tranche = cycle.tranches_from;
+        // ⚠️ One statement per tranche: a whole catch-up in one would outlast its timeout.
+        while tranche <= cycle.tranches_through {
+            meteora_damm_v2::value_tranche(&mut tx, tranche).await?;
+            record_tranche(&mut tx, tranche, cycle.at).await?;
+            tranches_written += 1;
+            tranche += TRANCHE;
+        }
+        let pool_hours = upsert_pool_hourly(&mut tx, cycle.from, cycle.through).await?;
         upsert_protocol_hourly(&mut tx, cycle.from, cycle.through).await?;
         record_hours(&mut tx, cycle.from, cycle.through).await?;
         let hours_frozen = match cycle.freeze_through {
@@ -66,14 +59,15 @@ impl AnalyticRepository for PgAnalyticRepository {
         tx.commit().await.map_err(map_sqlx_error)?;
         Ok(CycleOutcome {
             written: cycle,
+            tranches_written,
             pool_hours,
             hours_frozen,
         })
     }
 }
 
-/// ⚠️ Before `last_frozen` is read: a concurrent cycle's freeze is then either
-/// committed and seen, or not begun. Readers are not blocked.
+/// ⚠️ Before the progress is read: a concurrent cycle is then either committed
+/// and seen, or not begun. Readers are not blocked.
 async fn lock_out_other_writers(tx: &mut Transaction<'static, Postgres>) -> RepositoryResult<()> {
     sqlx::query!("LOCK TABLE analytic_hours IN EXCLUSIVE MODE")
         .execute(&mut **tx)
@@ -82,21 +76,88 @@ async fn lock_out_other_writers(tx: &mut Transaction<'static, Postgres>) -> Repo
     Ok(())
 }
 
-/// Read inside the cycle's transaction: a freeze committed since the cycle
-/// was planned must still keep its hours out of it.
-async fn last_frozen(
-    tx: &mut Transaction<'static, Postgres>,
-) -> RepositoryResult<Option<DateTime<Utc>>> {
-    sqlx::query_scalar!(
+/// Read again inside the cycle's transaction: what a cycle committed since
+/// this one was planned must stay out of it.
+async fn progress<'e>(executor: impl PgExecutor<'e>) -> RepositoryResult<AnalyticProgress> {
+    let row = sqlx::query!(
         r#"
-        SELECT MAX(bucket) AS "last_frozen?: DateTime<Utc>"
-          FROM analytic_hours
-         WHERE frozen_at IS NOT NULL
+        SELECT (SELECT MIN(bucket) FROM analytic_hours) AS "first_hour?: DateTime<Utc>",
+               (SELECT MAX(bucket) FROM analytic_hours WHERE frozen_at IS NOT NULL)
+                   AS "last_frozen?: DateTime<Utc>",
+               (SELECT MAX(bucket) FROM analytic_tranches) AS "last_tranche?: DateTime<Utc>"
         "#
     )
-    .fetch_one(&mut **tx)
+    .fetch_one(executor)
     .await
-    .map_err(map_sqlx_error)
+    .map_err(map_sqlx_error)?;
+
+    Ok(AnalyticProgress {
+        first_hour: row.first_hour,
+        last_frozen: row.last_frozen,
+        last_tranche: row.last_tranche,
+    })
+}
+
+/// ⚠️ A plain insert: a tranche written twice is a bug, and fails the cycle.
+async fn record_tranche(
+    tx: &mut Transaction<'static, Postgres>,
+    tranche: DateTime<Utc>,
+    at: DateTime<Utc>,
+) -> RepositoryResult<()> {
+    sqlx::query!(
+        "INSERT INTO analytic_tranches (bucket, written_at) VALUES ($1, $2)",
+        tranche,
+        at,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(map_sqlx_error)?;
+    Ok(())
+}
+
+/// Every protocol's valued tranches of the hours, summed per pool and hour.
+/// Returns the facts upserted.
+async fn upsert_pool_hourly(
+    tx: &mut Transaction<'static, Postgres>,
+    from: DateTime<Utc>,
+    through: DateTime<Utc>,
+) -> RepositoryResult<u64> {
+    let upserted = sqlx::query!(
+        r#"
+        INSERT INTO analytic_pool_hourly (
+            pool_address, bucket, protocol, swap_count, valued,
+            volume_in_a_usd, volume_in_b_usd, fees_usd, lp_fees_usd,
+            protocol_fees_usd, referral_fees_usd
+        )
+        SELECT pool_address, time_bucket('1 hour', bucket), protocol,
+               SUM(swap_count), bool_and(valued),
+               CASE WHEN bool_and(valued) THEN SUM(volume_in_a_usd) END,
+               CASE WHEN bool_and(valued) THEN SUM(volume_in_b_usd) END,
+               CASE WHEN bool_and(valued) THEN SUM(fees_usd) END,
+               CASE WHEN bool_and(valued) THEN SUM(lp_fees_usd) END,
+               CASE WHEN bool_and(valued) THEN SUM(protocol_fees_usd) END,
+               CASE WHEN bool_and(valued) THEN SUM(referral_fees_usd) END
+          FROM analytic_pool_5min
+         WHERE bucket >= $1 AND bucket < $2::TIMESTAMPTZ + INTERVAL '1 hour'
+         GROUP BY pool_address, time_bucket('1 hour', bucket), protocol
+        ON CONFLICT (pool_address, bucket) DO UPDATE SET
+            protocol          = EXCLUDED.protocol,
+            swap_count        = EXCLUDED.swap_count,
+            valued            = EXCLUDED.valued,
+            volume_in_a_usd   = EXCLUDED.volume_in_a_usd,
+            volume_in_b_usd   = EXCLUDED.volume_in_b_usd,
+            fees_usd          = EXCLUDED.fees_usd,
+            lp_fees_usd       = EXCLUDED.lp_fees_usd,
+            protocol_fees_usd = EXCLUDED.protocol_fees_usd,
+            referral_fees_usd = EXCLUDED.referral_fees_usd
+        "#,
+        from,
+        through,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(map_sqlx_error)?;
+    Ok(upserted.rows_affected())
 }
 
 /// Every protocol's facts of the hours, summed per protocol.

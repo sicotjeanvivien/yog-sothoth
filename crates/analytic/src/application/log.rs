@@ -16,6 +16,9 @@ pub(super) fn started(interval: Duration, heartbeat: bool) {
 pub(super) fn written(outcome: &CycleOutcome, elapsed: Duration) {
     let cycle = &outcome.written;
     info!(
+        tranches_from = %cycle.tranches_from,
+        tranches_through = %cycle.tranches_through,
+        tranches_written = outcome.tranches_written,
         from = %cycle.from,
         through = %cycle.through,
         freeze_through = ?cycle.freeze_through,

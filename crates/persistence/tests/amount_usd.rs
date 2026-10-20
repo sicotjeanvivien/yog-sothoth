@@ -121,7 +121,6 @@ async fn the_amount_functions_are_inlined(pool: PgPool) {
     // amount of the hourly views and the analytic facts becomes a per-row call.
     for view in [
         "meteora_damm_v2_pool_hourly_activity",
-        "meteora_damm_v2_pool_hourly_flow",
         "meteora_damm_v2_pool_hourly_liquidity_flow",
         "meteora_damm_v2_liquidity_events_valued",
         "meteora_damm_v2_swap_events_hourly_priced",
