@@ -6,7 +6,6 @@
 
 import { getLocale, getTranslations } from "next-intl/server";
 
-import { BlockError } from "@/components/dashboard/block-error";
 import { ApiClientError } from "@/lib/api/errors";
 import { fetchProtocolActivitySeries } from "@/lib/api/server/protocols";
 import { formatUtcMoment, type FormatLocale } from "@/lib/format/date";
@@ -16,9 +15,9 @@ import { CHART_TOP_PX, roundTicks, slotsOf, type Slot } from "@/lib/overview/cha
 import type { Period } from "@/lib/overview/period";
 import { sumUsd } from "@/lib/overview/totals";
 
-import { BlockPlaceholder } from "../block-placeholder";
 import { BlockHeading, closedReason, PeriodNotice } from "./overview-parts";
 import { CELL_CLASS, MIN_HEIGHT, SPAN } from "./overview-layout";
+import { BlockFailed, BlockSkeleton } from "./overview-states";
 import { VolumeBars } from "./volume-bars";
 
 const SECTION_CLASS = `${CELL_CLASS} ${SPAN.main} ${MIN_HEIGHT.volume}`;
@@ -41,8 +40,9 @@ export async function VolumeChart({ period }: { period: Period }) {
   } catch (err) {
     if (err instanceof ApiClientError) {
       return (
-        <section className={SECTION_CLASS}>
-          <BlockError title={title} kind={err.details.kind} />
+        <section aria-label={title} className={SECTION_CLASS}>
+          <BlockHeading title={title} info={t(daily ? "infoDaily" : "infoHourly")} />
+          <BlockFailed kind={err.details.kind} />
         </section>
       );
     }
@@ -126,8 +126,18 @@ export async function VolumeChart({ period }: { period: Period }) {
   );
 }
 
-export async function VolumeChartPlaceholder() {
-  return <BlockPlaceholder className={`${SPAN.main} ${MIN_HEIGHT.volume}`} />;
+export async function VolumeChartPlaceholder({ period }: { period: Period }) {
+  const t = await getTranslations("Dashboard.Overview");
+  return (
+    <BlockSkeleton
+      title={t(period === "24h" ? "volume.titleHourly" : "volume.titleDaily", {
+        period: t(`period.short.${period}`),
+      })}
+      span={SPAN.main}
+      minHeight={MIN_HEIGHT.volume}
+      shape="chart"
+    />
+  );
 }
 
 function hourOf(date: Date): string {

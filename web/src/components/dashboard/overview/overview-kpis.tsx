@@ -6,7 +6,7 @@
 import type { ReactNode } from "react";
 import { getTranslations } from "next-intl/server";
 
-import { ApiClientError, type ApiClientErrorKind } from "@/lib/api/errors";
+import { ApiClientError } from "@/lib/api/errors";
 import {
   fetchPreviousProtocolActivity,
   fetchProtocolActivity,
@@ -20,9 +20,8 @@ import { previousWindowCovered, tvlStart } from "@/lib/overview/availability";
 import type { Period } from "@/lib/overview/period";
 import { changeRatio, sumUsd } from "@/lib/overview/totals";
 
-import { BlockPlaceholder } from "../block-placeholder";
 import { Change, closedReason, KpiCell, Unavailable, utcMoment } from "./overview-parts";
-import { MIN_HEIGHT, SPAN } from "./overview-layout";
+import { KpiFailedLine, KpiSkeleton, lateStamp } from "./overview-states";
 
 const usd = (value: number | null) =>
   value === null ? "—" : formatUsdCompact(String(value));
@@ -61,7 +60,15 @@ export async function TvlKpi({ period }: { period: Period }) {
       ) : undefined;
   }
 
-  return <KpiCell label={label} info={info} value={usd(current)} sub={sub} />;
+  return (
+    <KpiCell
+      label={label}
+      info={info}
+      value={usd(current)}
+      sub={sub}
+      stamp={await lateStamp(latest.value.asOf)}
+    />
+  );
 }
 
 export async function VolumeKpi({ period }: { period: Period }) {
@@ -98,7 +105,15 @@ export async function VolumeKpi({ period }: { period: Period }) {
     sub = ratio === null ? undefined : <Change ratio={ratio} suffix={suffix} />;
   }
 
-  return <KpiCell label={label} info={info} value={usd(current)} sub={sub} />;
+  return (
+    <KpiCell
+      label={label}
+      info={info}
+      value={usd(current)}
+      sub={sub}
+      stamp={await lateStamp(now.value.asOf)}
+    />
+  );
 }
 
 export async function FeesKpi({ period }: { period: Period }) {
@@ -130,6 +145,7 @@ export async function FeesKpi({ period }: { period: Period }) {
           ? undefined
           : t("kpis.feesProtocol", { amount: usd(protocolFees) })
       }
+      stamp={await lateStamp(now.asOf)}
     />
   );
 }
@@ -182,12 +198,13 @@ export async function PoolsKpi({ period }: { period: Period }) {
           {t("kpis.poolsBorn", { births: formatCount(births), period: short })}
         </>
       }
+      stamp={await lateStamp(now.value.asOf)}
     />
   );
 }
 
 export async function KpiPlaceholder() {
-  return <BlockPlaceholder className={`${SPAN.kpi} ${MIN_HEIGHT.kpi}`} />;
+  return <KpiSkeleton />;
 }
 
 /** "— ⓘ over 7d": a secondary figure withheld, its reason one click away. */
@@ -204,7 +221,7 @@ async function failure(err: unknown): Promise<string> {
   if (!(err instanceof ApiClientError)) {
     throw err;
   }
-  const t = await getTranslations("Dashboard.BlockError");
+  const t = await getTranslations("Dashboard.Overview.error");
   return t(err.details.kind);
 }
 
@@ -212,25 +229,17 @@ function kpiError(err: unknown, label: string, info: string) {
   if (!(err instanceof ApiClientError)) {
     throw err;
   }
-  return <KpiFailed label={label} info={info} kind={err.details.kind} />;
+  return <KpiFailed label={label} info={info} />;
 }
 
-async function KpiFailed({
-  label,
-  info,
-  kind,
-}: {
-  label: string;
-  info: string;
-  kind: ApiClientErrorKind;
-}) {
-  const t = await getTranslations("Dashboard.BlockError");
+/** "—", "Unavailable for now" and a retry; the cause sits in the blocks' error boxes. */
+function KpiFailed({ label, info }: { label: string; info: string }) {
   return (
     <KpiCell
       label={label}
       info={info}
-      value="—"
-      sub={<span className="text-dash-warn">{t(kind)}</span>}
+      value={<span className="text-dash-ink-3">—</span>}
+      sub={<KpiFailedLine />}
     />
   );
 }

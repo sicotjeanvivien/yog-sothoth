@@ -26,11 +26,14 @@ export async function KpiCell({
   info,
   value,
   sub,
+  stamp,
 }: {
   label: string;
   info: string;
   value: ReactNode;
   sub?: ReactNode;
+  /** The hour the figure stops at, shown only while the figures run late. */
+  stamp?: string | undefined;
 }) {
   const tShell = await getTranslations("Dashboard.shell");
 
@@ -50,6 +53,9 @@ export async function KpiCell({
       </span>
       {sub !== undefined && (
         <span className="text-[12px] leading-[1.45] text-dash-ink-2">{sub}</span>
+      )}
+      {stamp !== undefined && (
+        <span className="font-dash-mono text-[11px] text-dash-warn">{stamp}</span>
       )}
     </section>
   );

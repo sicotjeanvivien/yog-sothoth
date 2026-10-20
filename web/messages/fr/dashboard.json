@@ -134,6 +134,20 @@
       "coverage": {
         "value": "{percent} des pool-heures",
         "mark": "{priced} pool-heures valorisées sur {total}"
+      },
+      "stale": {
+        "title": "Chiffres en retard.",
+        "body": "Les chiffres de cette page s'arrêtent au {at}, {ago} : le calcul horaire a pris du retard. Ils restent affichés, à cette heure-là.",
+        "stamp": "au {at}"
+      },
+      "error": {
+        "title": "Ce bloc n'a pas pu être chargé.",
+        "rest": "Les autres blocs de la page ne sont pas touchés.",
+        "kpi": "Indisponible pour le moment",
+        "timeout": "Le service a mis trop de temps à répondre.",
+        "network": "Le service est injoignable.",
+        "http": "Le service a répondu par une erreur.",
+        "validation": "Le service a rendu une réponse inattendue."
       }
     },
     "BlockError": {

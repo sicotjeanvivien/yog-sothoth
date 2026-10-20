@@ -163,16 +163,18 @@ export function LiveRow({
   label,
   value,
   down = false,
+  late = false,
 }: {
   label: string;
   value: ReactNode;
   down?: boolean;
+  late?: boolean;
 }) {
   return (
     <div className="flex items-baseline justify-between gap-2">
       <dt className="text-dash-ink-3">{label}</dt>
       <dd
-        className={`font-dash-mono tabular-nums ${down ? "text-dash-down" : "text-dash-ink"}`}
+        className={`font-dash-mono tabular-nums ${down ? "text-dash-down" : late ? "text-dash-warn" : "text-dash-ink"}`}
       >
         {value}
       </dd>

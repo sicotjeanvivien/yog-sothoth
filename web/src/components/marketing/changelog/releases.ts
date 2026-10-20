@@ -45,7 +45,7 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "Every figure of the Overview stops at the last complete hour, the same for the whole page, up to about 70 minutes behind. A period or a change that would compare with hours not yet measured shows \"—\" and says why, rather than a smaller number.",
+            text: "Every figure of the Overview stops at the last complete hour, the same for the whole page, up to about 70 minutes behind. A period or a change that would compare with hours not yet measured shows \"—\" and says why, rather than a smaller number; figures stopped over two hours back are announced by a band at the top of the page.",
             technical: false,
           },
           {

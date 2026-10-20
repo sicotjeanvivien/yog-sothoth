@@ -5,15 +5,14 @@
 
 import { getTranslations } from "next-intl/server";
 
-import { BlockError } from "@/components/dashboard/block-error";
 import { LATEST_SIGNALS_COUNT } from "@/components/dashboard/signals/signal-display";
 import { ApiClientError } from "@/lib/api/errors";
 import type { SignalResponse } from "@/lib/api/schema/zod.gen";
 import { fetchSignals } from "@/lib/api/server/signals";
 
-import { BlockPlaceholder } from "../block-placeholder";
 import { BlockHeading } from "./overview-parts";
 import { CELL_CLASS, MIN_HEIGHT, SPAN } from "./overview-layout";
+import { BlockFailed, BlockSkeleton } from "./overview-states";
 import { OverviewSignalsLive } from "./overview-signals-live";
 
 const SECTION_CLASS = `${CELL_CLASS} ${SPAN.side} ${MIN_HEIGHT.signals}`;
@@ -27,8 +26,9 @@ export async function OverviewSignals() {
   } catch (err) {
     if (err instanceof ApiClientError) {
       return (
-        <section className={SECTION_CLASS}>
-          <BlockError title={t("title")} kind={err.details.kind} />
+        <section aria-label={t("title")} className={SECTION_CLASS}>
+          <BlockHeading title={t("title")} info={t("info")} />
+          <BlockFailed kind={err.details.kind} />
         </section>
       );
     }
@@ -46,5 +46,13 @@ export async function OverviewSignals() {
 }
 
 export async function OverviewSignalsPlaceholder() {
-  return <BlockPlaceholder className={`${SPAN.side} ${MIN_HEIGHT.signals}`} />;
+  const t = await getTranslations("Dashboard.Overview.signals");
+  return (
+    <BlockSkeleton
+      title={t("title")}
+      span={SPAN.side}
+      minHeight={MIN_HEIGHT.signals}
+      shape={{ rows: 7 }}
+    />
+  );
 }

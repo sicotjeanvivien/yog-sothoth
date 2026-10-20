@@ -17,6 +17,7 @@ import {
   VolumeKpi,
 } from "@/components/dashboard/overview/overview-kpis";
 import { GRID_CLASS } from "@/components/dashboard/overview/overview-layout";
+import { StaleBanner } from "@/components/dashboard/overview/overview-states";
 import {
   OverviewSignals,
   OverviewSignalsPlaceholder,
@@ -68,6 +69,9 @@ export default async function OverviewPage({
   return (
     <>
       <OverviewHeader period={period} />
+      <Suspense fallback={null}>
+        <StaleBanner period={period} />
+      </Suspense>
 
       <div className={GRID_CLASS}>
         <Suspense key={`tvl-${period}`} fallback={<KpiPlaceholder />}>
@@ -85,16 +89,16 @@ export default async function OverviewPage({
       </div>
 
       <div className={GRID_CLASS}>
-        <Suspense key={`protocols-${period}`} fallback={<ProtocolActivityPlaceholder />}>
+        <Suspense key={`protocols-${period}`} fallback={<ProtocolActivityPlaceholder period={period} />}>
           <ProtocolActivity period={period} />
         </Suspense>
         <Suspense fallback={<OverviewSignalsPlaceholder />}>
           <OverviewSignals />
         </Suspense>
-        <Suspense key={`chart-${period}`} fallback={<VolumeChartPlaceholder />}>
+        <Suspense key={`chart-${period}`} fallback={<VolumeChartPlaceholder period={period} />}>
           <VolumeChart period={period} />
         </Suspense>
-        <Suspense key={`tokens-${period}`} fallback={<TopTokensPlaceholder />}>
+        <Suspense key={`tokens-${period}`} fallback={<TopTokensPlaceholder period={period} />}>
           <TopTokens period={period} />
         </Suspense>
       </div>

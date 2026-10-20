@@ -134,6 +134,20 @@
       "coverage": {
         "value": "{percent} of pool-hours",
         "mark": "{priced} of {total} pool-hours valued"
+      },
+      "stale": {
+        "title": "Figures running late.",
+        "body": "This page's figures stop at {at}, {ago}: the hourly computation has fallen behind. They stay shown, as of that hour.",
+        "stamp": "as of {at}"
+      },
+      "error": {
+        "title": "This block could not be loaded.",
+        "rest": "The other blocks of the page are not affected.",
+        "kpi": "Unavailable for now",
+        "timeout": "The service took too long to answer.",
+        "network": "The service cannot be reached.",
+        "http": "The service answered with an error.",
+        "validation": "The service returned an unexpected answer."
       }
     },
     "BlockError": {

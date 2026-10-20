@@ -5,7 +5,6 @@
 
 import { getTranslations } from "next-intl/server";
 
-import { BlockError } from "@/components/dashboard/block-error";
 import { ApiClientError } from "@/lib/api/errors";
 import { fetchTopTokens } from "@/lib/api/server/tokens";
 import { volumeCoverage } from "@/lib/coverage/volume-coverage";
@@ -14,7 +13,6 @@ import { formatShortAddress } from "@/lib/format/format-short-address";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import type { Period } from "@/lib/overview/period";
 
-import { BlockPlaceholder } from "../block-placeholder";
 import { BlockHeading, closedReason, PeriodNotice } from "./overview-parts";
 import {
   CELL_CLASS,
@@ -24,6 +22,7 @@ import {
   ROW_CLASS,
   SPAN,
 } from "./overview-layout";
+import { BlockFailed, BlockSkeleton } from "./overview-states";
 import { VolumeCoverageMark } from "./volume-coverage-mark";
 
 const TOP_TOKENS = 10;
@@ -43,8 +42,9 @@ export async function TopTokens({ period }: { period: Period }) {
   } catch (err) {
     if (err instanceof ApiClientError) {
       return (
-        <section className={SECTION_CLASS}>
-          <BlockError title={title} kind={err.details.kind} />
+        <section aria-label={title} className={SECTION_CLASS}>
+          <BlockHeading title={title} info={t("tokens.info")} />
+          <BlockFailed kind={err.details.kind} />
         </section>
       );
     }
@@ -100,6 +100,14 @@ export async function TopTokens({ period }: { period: Period }) {
   );
 }
 
-export async function TopTokensPlaceholder() {
-  return <BlockPlaceholder className={`${SPAN.main} ${MIN_HEIGHT.tokens}`} />;
+export async function TopTokensPlaceholder({ period }: { period: Period }) {
+  const t = await getTranslations("Dashboard.Overview");
+  return (
+    <BlockSkeleton
+      title={t("tokens.title", { period: t(`period.short.${period}`) })}
+      span={SPAN.main}
+      minHeight={MIN_HEIGHT.tokens}
+      shape={{ rows: 11 }}
+    />
+  );
 }

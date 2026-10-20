@@ -189,8 +189,8 @@ rail collapses to 64 px from the toggle beside the logo, with a cookie.
 
 **Nothing waits for data** — the layout reads only its two cookies before
 rendering: the announcement streams in its own `<Suspense>`, and each Overview
-block in its own, behind a `BlockPlaceholder`. A failed block shows its
-`BlockError`; the status code is already sent.
+block in its own, behind its skeleton. A failed block shows its error box;
+the status code is already sent.
 
 **Menu** — `sidebar/sidebar-nav.ts` is pure data: Overview, then the
 platforms (Meteora, with DAMM v2 and DLMM under it; Raydium; Orca), then Token.
@@ -283,9 +283,16 @@ Each "—" carries an ⓘ with its reason.
 **ⓘ** — every KPI and section has one, click-toggled
 (`shared/info-popover.tsx`), never hover: hover does not exist on touch.
 
-**Blocks** — each fetches on its own, in its own `<Suspense>` with a
-`BlockPlaceholder` of its final size (`overview-layout.ts`), and fails on its
-own (`BlockError`, or a "—" KPI). The reads several blocks share are fetched
+**Blocks** — each fetches on its own, in its own `<Suspense>` with a skeleton
+of its final shape and size (`overview-states.tsx`, still when the reader asks
+for less motion), and fails on its own: the cause in words and a retry of the
+page, or a "—" KPI.
+
+**Late figures** (`lib/overview/staleness.ts`) — a frozen hour normally lags up
+to ~70 min. When `asOf` is over two hours back, the computation has stalled: a
+band over the page says until when the figures run, each KPI shows that hour,
+and the "Live" panel colours it. "Live" itself keeps speaking of ingestion,
+which can be fine while the figures stall. The reads several blocks share are fetched
 once per render. The volume chart is HTML bars (`volume-bars.tsx`): two dashed
 marks on round values (`roundTicks`), a fixed reading line above, the bar under
 the pointer, finger or arrow keys full and the others faded. A token whose

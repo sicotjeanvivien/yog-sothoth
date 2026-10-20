@@ -9,6 +9,7 @@ import { LiveRow } from "@/components/dashboard/live-status/live-indicator";
 import { ApiClientError } from "@/lib/api/errors";
 import { fetchProtocolActivity } from "@/lib/api/server/protocols";
 import type { Period } from "@/lib/overview/period";
+import { isStale } from "@/lib/overview/staleness";
 
 import { utcMoment } from "./overview-parts";
 
@@ -43,6 +44,7 @@ export async function OverviewLiveRows({ period }: { period: Period }) {
       <LiveRow
         label={t("liveStatus.measuredUntil")}
         value={activity.asOf === null ? "—" : await utcMoment(activity.asOf)}
+        late={isStale(activity.asOf, new Date())}
       />
     </>
   );

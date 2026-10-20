@@ -5,7 +5,6 @@
 
 import { getLocale, getTranslations } from "next-intl/server";
 
-import { BlockError } from "@/components/dashboard/block-error";
 import { PROTOCOL_SCOPE, type ScopeLine } from "@/components/dashboard/sidebar/sidebar-nav";
 import { ApiClientError } from "@/lib/api/errors";
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
@@ -20,8 +19,8 @@ import { formatUsdCompact } from "@/lib/format/format-usd";
 import type { Period } from "@/lib/overview/period";
 import { sumUsd } from "@/lib/overview/totals";
 
-import { BlockPlaceholder } from "../block-placeholder";
 import { BlockHeading, closedReason, PeriodNotice } from "./overview-parts";
+import { BlockFailed, BlockSkeleton } from "./overview-states";
 import { VolumeCoverageMark } from "./volume-coverage-mark";
 import {
   CELL_CLASS,
@@ -60,8 +59,9 @@ export async function ProtocolActivity({ period }: { period: Period }) {
   } catch (err) {
     if (err instanceof ApiClientError) {
       return (
-        <section className={SECTION_CLASS}>
-          <BlockError title={title} kind={err.details.kind} />
+        <section aria-label={title} className={SECTION_CLASS}>
+          <BlockHeading title={title} info={t("protocols.info")} />
+          <BlockFailed kind={err.details.kind} />
         </section>
       );
     }
@@ -150,6 +150,14 @@ export async function ProtocolActivity({ period }: { period: Period }) {
   );
 }
 
-export async function ProtocolActivityPlaceholder() {
-  return <BlockPlaceholder className={`${SPAN.main} ${MIN_HEIGHT.protocols}`} />;
+export async function ProtocolActivityPlaceholder({ period }: { period: Period }) {
+  const t = await getTranslations("Dashboard.Overview");
+  return (
+    <BlockSkeleton
+      title={t("protocols.title", { period: t(`period.short.${period}`) })}
+      span={SPAN.main}
+      minHeight={MIN_HEIGHT.protocols}
+      shape={{ rows: 5 }}
+    />
+  );
 }

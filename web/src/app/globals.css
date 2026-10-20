@@ -130,3 +130,28 @@
   scrollbar-width: thin;
   scrollbar-color: var(--color-dash-rule) transparent;
 }
+
+/* A waiting slot shaped like its content; still when the reader asks for less motion. */
+@keyframes dash-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@utility dash-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-dash-surface-2) 0%,
+    #1a1530 50%,
+    var(--color-dash-surface-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: dash-shimmer 1.4s ease-in-out infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
