@@ -33,6 +33,7 @@
       "slot": "Slot",
       "latency": "Latence RPC",
       "priceCoverage": "Couverture prix",
+      "measuredUntil": "Chiffres arrêtés à",
       "states": {
         "live": "En direct",
         "delayed": "Retardé",
@@ -128,11 +129,11 @@
         "token": "Token",
         "volume": "Volume {period}",
         "pools": "Pools",
-        "coverage": "{priced} pool-heures valorisées sur {total}",
         "empty": "Aucun token échangé sur la période."
       },
       "coverage": {
-        "value": "{percent} des pool-heures"
+        "value": "{percent} des pool-heures",
+        "mark": "{priced} pool-heures valorisées sur {total}"
       }
     },
     "BlockError": {

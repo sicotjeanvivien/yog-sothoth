@@ -14,6 +14,7 @@ import {
   fetchProtocols,
   fetchProtocolTvl,
 } from "@/lib/api/server/protocols";
+import { volumeCoverage } from "@/lib/coverage/volume-coverage";
 import { formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import type { Period } from "@/lib/overview/period";
@@ -21,6 +22,7 @@ import { sumUsd } from "@/lib/overview/totals";
 
 import { BlockPlaceholder } from "../block-placeholder";
 import { BlockHeading, closedReason, PeriodNotice } from "./overview-parts";
+import { VolumeCoverageMark } from "./volume-coverage-mark";
 import {
   CELL_CLASS,
   HEAD_ROW_CLASS,
@@ -123,6 +125,10 @@ export async function ProtocolActivity({ period }: { period: Period }) {
                 </div>
                 <div role="cell" className={NUM_CLASS}>
                   {formatUsdCompact(row?.volumeUsd ?? null)}
+                  <VolumeCoverageMark
+                    coverage={row ? volumeCoverage(row) : null}
+                    label={(priced, total) => t("coverage.mark", { priced, total })}
+                  />
                 </div>
                 <div role="cell" className="flex items-center justify-end gap-2">
                   <div className="h-1.5 max-w-[120px] flex-auto bg-dash-surface-2">

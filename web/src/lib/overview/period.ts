@@ -23,8 +23,11 @@ export function periodMs(period: Period): number {
   return PERIOD_HOURS[period] * HOUR_MS;
 }
 
-/** The default for a missing, repeated or unknown value: a bad link still renders a page. */
+/**
+ * The default for a missing, repeated, unknown or closed value: a bad link still renders a
+ * page, and a closed period's reads never run.
+ */
 export function parsePeriod(raw: string | string[] | undefined): Period {
   const parsed = zWindowResponse.safeParse(raw);
-  return parsed.success ? parsed.data : DEFAULT_PERIOD;
+  return parsed.success && !CLOSED_PERIODS.has(parsed.data) ? parsed.data : DEFAULT_PERIOD;
 }

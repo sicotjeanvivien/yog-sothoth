@@ -20,6 +20,16 @@ export const SEVERITY_COLOR: Record<SeverityResponse, string> = {
   critical: "text-rose-300",
 };
 
+/**
+ * A severity badge: filled to be looked at, outlined for information. ⚠️ Dark text on the
+ * fills: white reads at 2.7:1 on them.
+ */
+export const SEVERITY_BADGE: Record<SeverityResponse, string> = {
+  critical: "bg-dash-down text-dash-surface",
+  warning: "bg-dash-warn text-dash-surface",
+  info: "text-dash-ink-2 shadow-[inset_0_0_0_1px_var(--color-dash-ink-2)]",
+};
+
 /** Two shapes across the escalation, so the scale survives colour-blindness. */
 export const SEVERITY_ICON: Record<SeverityResponse, FC<IconProps>> = {
   info: InfoIcon,

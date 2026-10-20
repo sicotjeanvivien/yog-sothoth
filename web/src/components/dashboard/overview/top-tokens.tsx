@@ -86,7 +86,7 @@ export async function TopTokens({ period }: { period: Period }) {
                 {formatUsdCompact(item.volumeUsd)}
                 <VolumeCoverageMark
                   coverage={volumeCoverage(item)}
-                  label={(priced, total) => t("tokens.coverage", { priced, total })}
+                  label={(priced, total) => t("coverage.mark", { priced, total })}
                 />
               </div>
               <div role="cell" className={`${NUM_CLASS} text-dash-ink-2`}>

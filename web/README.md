@@ -221,7 +221,8 @@ it; the drawer has no folded form, whatever the collapse cookie says.
 `liveStatusOf` maps it to four states — live (green), delayed (yellow), stale
 (grey), offline (light red, the call failed). It sits in the page header (the
 Overview only) and opens on click, with the slot and RPC latency of
-`/api/network`, and the page's price coverage when the page streams one in.
+`/api/network`, and the rows the page streams in — on the Overview, its price
+coverage and the hour its figures stop at.
 
 **Fonts** — Geist (text) and Geist Mono (figures, addresses, times) are loaded
 by the locale layout, for the dashboard and the site alike; Cinzel too. Their
@@ -269,9 +270,10 @@ their waiting slots only; the signals do not reload.
 **What may not be shown** (`lib/overview/availability.ts`, pure and tested) — a
 figure the facts do not cover whole is "—", never a smaller number:
 - a period whose window starts before `coveredSince` (the first frozen hour) is
-  closed: a button whose panel says when it opens. 30d stays closed in the web
-  (`CLOSED_PERIODS`) until its times are measured on the prod. Reached by its
-  URL anyway, every block shows "—" and the same reason;
+  closed: a button whose panel says when it opens; reached by its URL anyway,
+  every block shows "—" and the same reason. 30d stays closed in the web
+  (`CLOSED_PERIODS`) until its times are measured on the prod: its URL falls
+  back to 24h, so its reads never run;
 - the volume change is "—" when the previous window (`offset`) starts before
   `coveredSince`;
 - the TVL change is "—" when `/tvl/hourly` has no point at the window's start:
@@ -287,8 +289,8 @@ own (`BlockError`, or a "—" KPI). The reads several blocks share are fetched
 once per render. The volume chart is HTML bars (`volume-bars.tsx`): two dashed
 marks on round values (`roundTicks`), a fixed reading line above, the bar under
 the pointer, finger or arrow keys full and the others faded. A token whose
-volume covers only part of its pool-hours carries the coverage mark
-(`volumeCoverage`).
+or protocol volume covers only part of its pool-hours carries the coverage
+mark (`volumeCoverage`).
 
 ## Site
 

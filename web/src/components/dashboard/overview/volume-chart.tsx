@@ -23,7 +23,7 @@ import { VolumeBars } from "./volume-bars";
 
 const SECTION_CLASS = `${CELL_CLASS} ${SPAN.main} ${MIN_HEIGHT.volume}`;
 
-/** The step between axis labels; the last slot always has one, the one before it none. */
+/** The step between axis labels; the last slot always has one. */
 const AXIS_EVERY: Record<Period, number> = { "24h": 6, "7d": 1, "30d": 7 };
 
 export async function VolumeChart({ period }: { period: Period }) {

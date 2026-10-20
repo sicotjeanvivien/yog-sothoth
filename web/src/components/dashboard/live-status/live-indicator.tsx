@@ -2,7 +2,7 @@
 
 /**
  * The page header's "Live · 2 s ago" button and its panel: state, last event, slot, RPC
- * latency, the page's price coverage, the four states' legend. ⚠️ Opens on click only.
+ * latency, the page's own rows, the four states' legend. ⚠️ Opens on click only.
  */
 
 import {
@@ -26,10 +26,10 @@ import { LIVE_LEGEND, liveStatusOf } from "./live-status";
 import { usePolled } from "./use-polled";
 
 export function LiveIndicator({
-  coverage,
+  pageRows,
 }: {
-  /** The page's price coverage, streamed by the server; no row without it. */
-  coverage?: ReactNode;
+  /** `LiveRow`s the page streams in: what its own figures stand on. */
+  pageRows?: ReactNode;
 }) {
   const t = useTranslations("Dashboard.liveStatus");
   const ingestion = usePolled(fetchIngestionBrowser);
@@ -93,14 +93,12 @@ export function LiveIndicator({
           </div>
 
           <dl className="flex flex-col gap-1.5 text-[12px]">
-            <Row
+            <LiveRow
               label={t("lastEvent")}
               value={lastEventAt ? <Age iso={lastEventAt} /> : "—"}
             />
             <NetworkRows />
-            {coverage !== undefined && (
-              <Row label={t("priceCoverage")} value={coverage} />
-            )}
+            {pageRows}
           </dl>
 
           <ul className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1.5 border-t border-dash-rule pt-2.5 text-[11px] text-dash-ink-2">
@@ -132,8 +130,8 @@ function NetworkRows() {
 
   return (
     <>
-      <Row label={t("slot")} value={value((data) => data.slot)} down={down} />
-      <Row
+      <LiveRow label={t("slot")} value={value((data) => data.slot)} down={down} />
+      <LiveRow
         label={t("latency")}
         value={value((data) => `${data.rpcLatencyMs} ms`)}
         down={down}
@@ -161,7 +159,7 @@ function Dot({ className }: { className: string }) {
   return <span aria-hidden="true" className={`h-2 w-2 shrink-0 ${className}`} />;
 }
 
-function Row({
+export function LiveRow({
   label,
   value,
   down = false,

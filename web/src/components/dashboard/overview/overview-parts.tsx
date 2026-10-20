@@ -96,12 +96,15 @@ export async function Unavailable({ reason }: { reason: string }) {
 /** "▲ +3.1 % over 7d": the arrow carries the direction in colour, the sign in text. */
 export async function Change({ ratio, suffix }: { ratio: number; suffix: string }) {
   const locale = await getLocale();
+  const text = formatSignedPercent(String(ratio), locale);
+  // ⚠️ From the rounded figure: an arrow beside "0 %" would show a direction it does not have.
+  const shown = Math.sign(ratio) * Math.round(Math.abs(ratio) * 1000);
   const arrow =
-    ratio > 0 ? (
+    shown > 0 ? (
       <span aria-hidden="true" className="text-[9px] text-dash-up">
         ▲{" "}
       </span>
-    ) : ratio < 0 ? (
+    ) : shown < 0 ? (
       <span aria-hidden="true" className="text-[9px] text-dash-down">
         ▼{" "}
       </span>
@@ -110,7 +113,7 @@ export async function Change({ ratio, suffix }: { ratio: number; suffix: string 
   return (
     <span className="text-dash-ink">
       {arrow}
-      {formatSignedPercent(String(ratio), locale)} {suffix}
+      {text} {suffix}
     </span>
   );
 }

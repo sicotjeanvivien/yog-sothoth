@@ -14,7 +14,7 @@ import { CLOSED_PERIODS, PERIODS, type Period } from "@/lib/overview/period";
 import { LABEL_CLASS } from "./overview-layout";
 import { closedReason } from "./overview-parts";
 import { PeriodSelector, type PeriodAvailability } from "./period-selector";
-import { PriceCoverage } from "./price-coverage";
+import { OverviewLiveRows, OverviewLiveRowsFallback } from "./overview-live-rows";
 
 export async function OverviewHeader({ period }: { period: Period }) {
   const t = await getTranslations("Dashboard.Overview.page");
@@ -33,9 +33,9 @@ export async function OverviewHeader({ period }: { period: Period }) {
       <div className="flex flex-col items-start gap-2.5 rail:ml-auto rail:items-end">
         <span className="-ml-[10px] rail:-mr-[10px] rail:ml-0">
           <LiveIndicator
-            coverage={
-              <Suspense key={period} fallback="—">
-                <PriceCoverage period={period} />
+            pageRows={
+              <Suspense key={period} fallback={<OverviewLiveRowsFallback />}>
+                <OverviewLiveRows period={period} />
               </Suspense>
             }
           />

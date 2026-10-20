@@ -22,8 +22,6 @@ import { formatShortAddress } from "@/lib/format/format-short-address";
 
 import { ROW_CLASS } from "./overview-layout";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 export function OverviewSignalsLive({
   initial,
   heading,
@@ -85,7 +83,7 @@ function SignalRow({ signal }: { signal: SignalResponse }) {
         />
       </div>
       <div role="cell" className="font-dash-mono text-[12px] text-dash-ink-2 tabular-nums">
-        {/* Against now: the SSR text may differ from the client's near midnight. */}
+        {/* Against today's UTC date: SSR and client may straddle midnight. */}
         <time dateTime={signal.triggeredAt} suppressHydrationWarning>
           {formatTriggeredAt(signal.triggeredAt, locale)}
         </time>
@@ -100,13 +98,13 @@ function SignalRow({ signal }: { signal: SignalResponse }) {
   );
 }
 
-/** "14:48" within a day, "18 oct." beyond, in UTC like the charts. */
+/** "14:48" today, "18 oct." before, in UTC like the charts. */
 function formatTriggeredAt(iso: string, locale: string): string {
   const at = new Date(iso);
-  const recent = Date.now() - at.getTime() < DAY_MS;
+  const today = at.toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10);
   return new Intl.DateTimeFormat(
     locale,
-    recent
+    today
       ? { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC" }
       : { day: "numeric", month: "short", timeZone: "UTC" },
   ).format(at);
