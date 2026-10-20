@@ -1,6 +1,6 @@
 /**
- * Activity by protocol: one row per protocol of the menu, observed or "Soon". The observed
- * ones come from the catalogue; Raydium and Orca, out of the domain, are written in the web.
+ * Activity by protocol: one row per protocol of the menu, observed or "Soon"; fees and active
+ * pools are the advanced mode's. Raydium and Orca, out of the domain, are written in the web.
  */
 
 import { getLocale, getTranslations } from "next-intl/server";
@@ -14,6 +14,7 @@ import {
   fetchProtocolTvl,
 } from "@/lib/api/server/protocols";
 import { volumeCoverage } from "@/lib/coverage/volume-coverage";
+import { formatCount } from "@/lib/format/format-count";
 import { formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import type { Period } from "@/lib/overview/period";
@@ -23,6 +24,7 @@ import { BlockHeading, closedReason, PeriodNotice } from "./overview-parts";
 import { BlockFailed, BlockSkeleton } from "./overview-states";
 import { VolumeCoverageMark } from "./volume-coverage-mark";
 import {
+  ADVANCED_ONLY,
   CELL_CLASS,
   HEAD_ROW_CLASS,
   MIN_HEIGHT,
@@ -37,8 +39,10 @@ const PROTOCOL_OF: Partial<Record<ScopeLine["key"], ProtocolResponse>> = {
   meteoraDlmm: "meteora_dlmm",
 };
 
+// ⚠️ Each row is its own grid: an `auto` or `max-content` column would size per row and the
+// columns would no longer line up.
 const COLUMNS =
-  "min-w-[460px] grid-cols-[minmax(0,1.7fr)_repeat(2,minmax(0,1fr))_minmax(0,1.4fr)]";
+  "min-w-[460px] grid-cols-[minmax(0,1.7fr)_repeat(2,minmax(0,1fr))_minmax(0,1.4fr)] adv:min-w-[640px] adv:grid-cols-[minmax(0,1.7fr)_72px_108px_108px_100px_minmax(0,1.2fr)]";
 
 const SECTION_CLASS = `${CELL_CLASS} ${SPAN.main} ${MIN_HEIGHT.protocols}`;
 
@@ -86,6 +90,12 @@ export async function ProtocolActivity({ period }: { period: Period }) {
             <div role="columnheader" className="text-right">
               {t("protocols.volume", { period: short })}
             </div>
+            <div role="columnheader" className={`${ADVANCED_ONLY.block} text-right`}>
+              {t("protocols.fees", { period: short })}
+            </div>
+            <div role="columnheader" className={`${ADVANCED_ONLY.block} text-right`}>
+              {t("protocols.activePools")}
+            </div>
             <div role="columnheader" className="text-right">
               {t("protocols.share")}
             </div>
@@ -104,6 +114,8 @@ export async function ProtocolActivity({ period }: { period: Period }) {
                   </div>
                   <div role="cell" className={`${NUM_CLASS} text-dash-ink-3`}>—</div>
                   <div role="cell" className={`${NUM_CLASS} text-dash-ink-3`}>—</div>
+                  <div role="cell" className={`${ADVANCED_ONLY.block} ${NUM_CLASS} text-dash-ink-3`}>—</div>
+                  <div role="cell" className={`${ADVANCED_ONLY.block} ${NUM_CLASS} text-dash-ink-3`}>—</div>
                   <div role="cell" className={`${NUM_CLASS} text-dash-ink-3`}>—</div>
                 </div>
               );
@@ -116,7 +128,7 @@ export async function ProtocolActivity({ period }: { period: Period }) {
               <div key={line.key} role="row" className={`${ROW_CLASS} ${COLUMNS}`}>
                 <div role="cell">
                   <span className="text-dash-ink">{name}</span>{" "}
-                  <span className="font-dash-mono text-[11px] text-dash-ink-3">
+                  <span className="font-dash-mono text-[11px] whitespace-nowrap text-dash-ink-3">
                     {t("protocols.live")}
                   </span>
                 </div>
@@ -129,6 +141,16 @@ export async function ProtocolActivity({ period }: { period: Period }) {
                     coverage={row ? volumeCoverage(row) : null}
                     label={(priced, total) => t("coverage.mark", { priced, total })}
                   />
+                </div>
+                <div role="cell" className={`${ADVANCED_ONLY.block} ${NUM_CLASS}`}>
+                  {formatUsdCompact(row?.feesUsd ?? null)}
+                  <VolumeCoverageMark
+                    coverage={row ? volumeCoverage(row) : null}
+                    label={(priced, total) => t("coverage.mark", { priced, total })}
+                  />
+                </div>
+                <div role="cell" className={`${ADVANCED_ONLY.block} ${NUM_CLASS}`}>
+                  {formatCount(row?.activePools ?? null)}
                 </div>
                 <div role="cell" className="flex items-center justify-end gap-2">
                   <div className="h-1.5 max-w-[120px] flex-auto bg-dash-surface-2">

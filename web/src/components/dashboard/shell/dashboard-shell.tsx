@@ -20,6 +20,7 @@ import {
 } from "@/components/dashboard/sidebar/preferences-state";
 import { RAIL_BREAKPOINT } from "@/components/shared/breakpoints";
 import { HamburgerIcon } from "@/components/shared/icon";
+import { writeCookie } from "@/components/shared/write-cookie";
 
 const RAIL_QUERY = `(min-width: ${RAIL_BREAKPOINT})`;
 
@@ -36,10 +37,6 @@ function useOnRail(): boolean {
     () => window.matchMedia(RAIL_QUERY).matches,
     () => true,
   );
-}
-
-function writeCookie(name: string, on: boolean, maxAgeS: number) {
-  document.cookie = `${name}=${on ? "1" : "0"}; path=/; max-age=${maxAgeS}; samesite=lax`;
 }
 
 export function DashboardShell({

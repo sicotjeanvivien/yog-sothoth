@@ -15,10 +15,8 @@ import type { Period } from "@/lib/overview/period";
 import {
   BLOCK_HEAD_CLASS,
   BLOCK_TITLE_CLASS,
-  CELL_CLASS,
+  kpiCellClass,
   LABEL_CLASS,
-  MIN_HEIGHT,
-  SPAN,
 } from "./overview-layout";
 
 export async function KpiCell({
@@ -27,6 +25,7 @@ export async function KpiCell({
   value,
   sub,
   stamp,
+  advanced = false,
 }: {
   label: string;
   info: string;
@@ -34,13 +33,15 @@ export async function KpiCell({
   sub?: ReactNode;
   /** The hour the figure stops at, shown only while the figures run late. */
   stamp?: string | undefined;
+  /** Shown in the advanced mode only. */
+  advanced?: boolean;
 }) {
   const tShell = await getTranslations("Dashboard.shell");
 
   return (
     <section
       aria-label={label}
-      className={`${CELL_CLASS} ${SPAN.kpi} ${MIN_HEIGHT.kpi} flex flex-col gap-1.5`}
+      className={kpiCellClass(advanced)}
     >
       <span className="flex min-h-6 items-center gap-1.5">
         <span className={LABEL_CLASS}>{label}</span>

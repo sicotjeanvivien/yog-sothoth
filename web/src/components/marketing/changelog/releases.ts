@@ -35,13 +35,21 @@ export const RELEASES: readonly Release[] = [
     version: "v0.1.12",
     date: "2026-10-20",
     summary:
-      "The Overview now says which protocol its figures come from, over 24 hours or 7 days, with the most traded tokens; and a token sold off within the hour no longer inflates the volume.",
+      "The Overview now says which protocol its figures come from, over 24 hours or 7 days, with the most traded tokens and an advanced mode; and a token sold off within the hour no longer inflates the volume.",
     sections: [
       {
         kind: "features",
         items: [
           {
             text: "The Overview is rebuilt: TVL, volume, fees and active pools, activity protocol by protocol (DAMM v2 observed, DLMM, Raydium and Orca to come), volume by hour or by day, the most traded tokens and the latest signals. A period selector switches the whole page between 24 hours and 7 days; 30 days opens once enough data is measured.",
+            technical: false,
+          },
+          {
+            text: "An advanced mode, off by default, puts more data on the same screen without making the page longer: swaps and their rate per second, turnover (the period's volume divided by the TVL), fees and active pools by protocol, and fees by hour or by day under the volume. The choice is remembered by a cookie, declared in the privacy policy.",
+            technical: false,
+          },
+          {
+            text: "A volume or fee figure that leaves out hours it could not value shows the share it does cover, such as \"97%\", rounded down so that a partial figure never reads 100%.",
             technical: false,
           },
           {

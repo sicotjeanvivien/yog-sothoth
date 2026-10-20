@@ -255,7 +255,8 @@ moved, while the ⓘ (`InfoPopover`) and `BlockError` they share keep it.
 
 `(dashboard)/overview/page.tsx`, after the canvas: four KPIs (TVL, volume,
 fees, active pools), activity by protocol, the latest signals, volume by hour
-or by day, the most traded tokens. Every figure comes from yog-analytic's
+or by day, the most traded tokens. The header is the title alone, then "Live",
+the period and the advanced mode at its right. Every figure comes from yog-analytic's
 measures (`/api/protocols/…`, `/api/tokens/activity`), which all end at the
 same `asOf`, the close of the last frozen hour.
 
@@ -298,7 +299,19 @@ once per render. The volume chart is HTML bars (`volume-bars.tsx`): two dashed
 marks on round values (`roundTicks`), a fixed reading line above, the bar under
 the pointer, finger or arrow keys full and the others faded. A volume, of a
 token, a protocol or a KPI, that covers only part of its pool-hours carries the
-coverage mark (`volumeCoverage`).
+coverage mark (`volumeCoverage`): the share valued, floored to a whole percent so
+a partial coverage never reads "100 %".
+
+**Advanced mode** — denser, not longer: six KPIs instead of four (swaps and
+their rate per second, turnover — the period's volume over the TVL — each with
+its ⓘ), the fees and active pools of each protocol, and the fees by hour or by
+day under the volume; cells, table rows and headings tighten, and the order of
+the sections never changes. The server renders both modes; `OverviewMode` puts
+`data-overview-advanced` over the page and the `adv:` variant (`globals.css`)
+shows, hides and tightens, so switching fetches nothing. The switch writes the
+`yog_overview_advanced` cookie (one year, declared in `/privacy`), which the
+page reads for the first paint. Each block's `MIN_HEIGHT` has its advanced
+value, so its waiting slot keeps its size in both modes.
 
 ## Site
 

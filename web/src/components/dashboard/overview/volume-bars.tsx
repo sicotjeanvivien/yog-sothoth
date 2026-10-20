@@ -1,17 +1,21 @@
 "use client";
 
 /**
- * The bars of the volume chart, drawn in HTML so the server renders them at their width.
- * ⚠️ The reading sits in a fixed line above, never in a `title` or a floating tip: a finger
- * would hide it. Hover, touch, or arrow keys pick a bar; the others fade.
+ * The bars of a chart of the Overview, drawn in HTML so the server renders them at their
+ * width. ⚠️ The reading sits in a fixed line above, never in a `title` or a floating tip: a
+ * finger would hide it. Hover, touch, or arrow keys pick a bar; the others fade.
  */
 
 import { useState, type KeyboardEvent } from "react";
+
+import { LABEL_CLASS } from "./overview-layout";
 
 export function VolumeBars({
   bars,
   ticks,
   axis,
+  height,
+  caption,
   invite,
   label,
 }: {
@@ -19,6 +23,9 @@ export function VolumeBars({
   bars: readonly { height: number | null; reading: string }[];
   ticks: readonly { bottom: number; label: string }[];
   axis: readonly string[];
+  height: number;
+  /** A name at the left of the reading line, for a chart under another. */
+  caption?: string;
   invite: string;
   label: string;
 }) {
@@ -39,11 +46,11 @@ export function VolumeBars({
 
   return (
     <div>
-      <p
-        aria-live="polite"
-        className="mb-2 min-h-[18px] font-dash-mono text-[12px] text-dash-ink-2"
-      >
-        {active === null ? invite : bars[active]?.reading}
+      <p className="mb-2 flex min-h-[18px] items-baseline justify-between gap-2">
+        {caption !== undefined && <span className={LABEL_CLASS}>{caption}</span>}
+        <span aria-live="polite" className="font-dash-mono text-[12px] text-dash-ink-2">
+          {active === null ? invite : bars[active]?.reading}
+        </span>
       </p>
       <div
         role="img"
@@ -52,7 +59,8 @@ export function VolumeBars({
         onKeyDown={onKeyDown}
         onMouseLeave={() => setActive(null)}
         onBlur={() => setActive(null)}
-        className="relative flex h-[170px] items-end gap-0.5 border-b border-dash-rule"
+        className="relative flex items-end gap-0.5 border-b border-dash-rule"
+        style={{ height }}
       >
         {ticks.map((tick) => (
           <span

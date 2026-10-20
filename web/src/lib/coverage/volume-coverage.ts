@@ -11,6 +11,8 @@ export type VolumeCoverage = {
   total: number;
   /** `true` when the published figure is a sub-total, not a total. */
   partial: boolean;
+  /** `priced / total`, floored to a whole percent: a partial coverage never reads 100 %. */
+  share: number;
 };
 
 /** `null` when nothing traded: "0 / 0" would read as a failure, not as silence. */
@@ -23,5 +25,5 @@ export function volumeCoverage(counters: {
     return null;
   }
   const priced = counters.poolHoursValued;
-  return { priced, total, partial: priced < total };
+  return { priced, total, partial: priced < total, share: Math.floor((priced * 100) / total) / 100 };
 }

@@ -1,22 +1,23 @@
 /**
  * Volume by hour (24H) or by 24-hour slice (7D, 30D), all protocols summed: the page's main
- * chart. The server lays the slots and words every reading; `VolumeBars` only tracks the bar
- * under the pointer.
+ * chart, and the fees under it in the advanced mode. The server lays the slots and words every
+ * reading; `VolumeBars` only tracks the bar under the pointer.
  */
 
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { ApiClientError } from "@/lib/api/errors";
+import type { ProtocolActivityBarResponse } from "@/lib/api/schema/zod.gen";
 import { fetchProtocolActivitySeries } from "@/lib/api/server/protocols";
 import { formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatUsdCompact } from "@/lib/format/format-usd";
-import { CHART_TOP_PX, roundTicks, slotsOf, type Slot } from "@/lib/overview/chart";
+import { CHART_PX, roundTicks, slotsOf, type Slot } from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
 import { sumUsd } from "@/lib/overview/totals";
 
 import { BlockHeading, closedReason, PeriodNotice } from "./overview-parts";
-import { CELL_CLASS, MIN_HEIGHT, SPAN } from "./overview-layout";
+import { ADVANCED_ONLY, CELL_CLASS, MIN_HEIGHT, SPAN } from "./overview-layout";
 import { BlockFailed, BlockSkeleton } from "./overview-states";
 import { VolumeBars } from "./volume-bars";
 
@@ -50,9 +51,16 @@ export async function VolumeChart({ period }: { period: Period }) {
   }
 
   const closed = await closedReason(period, series);
-  const slots = series.asOf === null ? [] : slotsOf(period, series.asOf, series.items);
-  const max = Math.max(0, ...slots.map((s) => s.value ?? 0));
-  const scale = (v: number) => (max > 0 ? (v / max) * CHART_TOP_PX : 0);
+  const slotsFor = (pick: (bar: ProtocolActivityBarResponse) => string | null) =>
+    series.asOf === null
+      ? []
+      : slotsOf(
+          period,
+          series.asOf,
+          series.items.map((bar) => ({ from: bar.from, value: pick(bar) })),
+        );
+  const slots = slotsFor((bar) => bar.volumeUsd);
+  const feeSlots = slotsFor((bar) => bar.feesUsd);
 
   const dayLabel = (i: number) => {
     const days = slots.length - 1 - i;
@@ -63,16 +71,27 @@ export async function VolumeChart({ period }: { period: Period }) {
       ? `${dayLabel(i)} · ${formatUtcMoment(slot.from, locale)} → ${formatUtcMoment(slot.to, locale)}`
       : `${hourOf(slot.from)} UTC`;
 
-  const bars = slots.map((slot, i) => ({
-    height: slot.value === null ? null : Math.max(slot.value > 0 ? 2 : 0, scale(slot.value)),
-    reading: `${slotName(slot, i)} — ${
-      slot.value === null ? t("noValue") : formatUsdCompact(String(slot.value))
-    }`,
-  }));
-  const ticks = roundTicks(max).map((value) => ({
-    bottom: Math.round(scale(value)),
-    label: formatUsdCompact(String(value)),
-  }));
+  const drawn = (values: readonly Slot[], top: number, noValue: string) => {
+    const max = Math.max(0, ...values.map((s) => s.value ?? 0));
+    const scale = (v: number) => (max > 0 ? (v / max) * top : 0);
+    return {
+      bars: values.map((slot, i) => ({
+        height: slot.value === null ? null : Math.max(slot.value > 0 ? 2 : 0, scale(slot.value)),
+        reading: `${slotName(slot, i)} — ${
+          slot.value === null ? noValue : formatUsdCompact(String(slot.value))
+        }`,
+      })),
+      ticks: roundTicks(max).map((value) => ({
+        bottom: Math.round(scale(value)),
+        label: formatUsdCompact(String(value)),
+      })),
+    };
+  };
+  const volume = drawn(slots, CHART_PX.volume.top, t("noValue"));
+  const fees = drawn(feeSlots, CHART_PX.fees.top, t("feesNoValue"));
+  const feesTotal = feeSlots.some((s) => s.value !== null)
+    ? String(feeSlots.reduce((sum, s) => sum + (s.value ?? 0), 0))
+    : null;
   const every = AXIS_EVERY[period];
   const last = slots.length - 1;
   const axis = slots.flatMap((slot, i) =>
@@ -114,13 +133,27 @@ export async function VolumeChart({ period }: { period: Period }) {
       {closed !== null ? (
         <PeriodNotice reason={closed} />
       ) : (
-        <VolumeBars
-          bars={bars}
-          ticks={ticks}
-          axis={axis}
-          invite={t("invite")}
-          label={t("chartLabel")}
-        />
+        <>
+          <VolumeBars
+            bars={volume.bars}
+            ticks={volume.ticks}
+            axis={axis}
+            height={CHART_PX.volume.height}
+            invite={t("invite")}
+            label={t("chartLabel")}
+          />
+          <div className={`mt-[22px] ${ADVANCED_ONLY.block}`}>
+            <VolumeBars
+              bars={fees.bars}
+              ticks={fees.ticks}
+              axis={axis}
+              height={CHART_PX.fees.height}
+              caption={t(daily ? "feesDaily" : "feesHourly")}
+              invite={t("feesTotal", { total: formatUsdCompact(feesTotal) })}
+              label={t("feesChartLabel")}
+            />
+          </div>
+        </>
       )}
     </section>
   );

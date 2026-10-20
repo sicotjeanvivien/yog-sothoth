@@ -2,13 +2,16 @@
 
 import { HOUR_MS, periodMs, type Period } from "./period";
 
-/** The tallest bar, under the chart's 170 px, so the top mark's label stays clear. */
-export const CHART_TOP_PX = 160;
+/** Each chart's height, and its tallest bar a little under it so the top mark's label stays clear. */
+export const CHART_PX = {
+  volume: { height: 170, top: 160 },
+  fees: { height: 80, top: 74 },
+} as const;
 
 /** One slot of the series; `value` is `null` where the facts hold no whole bar. */
 export type Slot = { from: Date; to: Date; value: number | null };
 
-type Bar = { from: string; volumeUsd: string | null };
+type Bar = { from: string; value: string | null };
 
 /** Hours over 24 h, 24-hour slices beyond: one slot each, summed across protocols. */
 export function slotsOf(
@@ -22,7 +25,7 @@ export function slotsOf(
 
   const sums = new Map<number, number>();
   for (const bar of bars) {
-    const value = bar.volumeUsd === null ? NaN : Number.parseFloat(bar.volumeUsd);
+    const value = bar.value === null ? NaN : Number.parseFloat(bar.value);
     if (!Number.isFinite(value)) continue;
     const key = Date.parse(bar.from);
     sums.set(key, (sums.get(key) ?? 0) + value);

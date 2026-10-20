@@ -16,10 +16,10 @@ import { isStale } from "@/lib/overview/staleness";
 
 import {
   BLOCK_HEAD_CLASS,
+  ADVANCED_ONLY,
   BLOCK_TITLE_CLASS,
   CELL_CLASS,
-  MIN_HEIGHT,
-  SPAN,
+  kpiCellClass,
 } from "./overview-layout";
 import { utcMoment } from "./overview-parts";
 
@@ -92,12 +92,12 @@ export async function StaleBanner({ period }: { period: Period }) {
 const BAR = "block dash-skeleton";
 
 /** A KPI's waiting slot: label, figure and line as bars. */
-export async function KpiSkeleton() {
+export async function KpiSkeleton({ advanced = false }: { advanced?: boolean }) {
   const t = await getTranslations("Dashboard.shell");
   return (
     <div
       aria-busy="true"
-      className={`${CELL_CLASS} ${SPAN.kpi} ${MIN_HEIGHT.kpi} flex flex-col gap-1.5`}
+      className={kpiCellClass(advanced)}
     >
       <span className={`${BAR} mt-1.5 h-[11px] w-[72px]`} />
       <span className={`${BAR} mt-1 h-6 w-[132px]`} />
@@ -126,12 +126,15 @@ export async function BlockSkeleton({
         <h2 className={BLOCK_TITLE_CLASS}>{title}</h2>
       </div>
       {shape === "chart" ? (
-        <span className={`${BAR} mt-[26px] h-[170px]`} />
+        <>
+          <span className={`${BAR} mt-[26px] h-[170px]`} />
+          <span className={`${BAR} mt-[66px] h-20 ${ADVANCED_ONLY.block}`} />
+        </>
       ) : (
         Array.from({ length: shape.rows }, (_, i) => (
           <span
             key={i}
-            className={`${BAR} my-[13px] h-3.5`}
+            className={`${BAR} my-[13px] h-3.5 adv:my-2.5`}
             style={{ width: `${[92, 78, 88, 70, 84][i % 5]}%` }}
           />
         ))

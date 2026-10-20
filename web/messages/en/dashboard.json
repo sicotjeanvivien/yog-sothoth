@@ -46,7 +46,7 @@
       "page": {
         "title": "Overview",
         "description": "What Yog-Scope observes, protocol by protocol: TVL, volume, fees, active pools, most traded tokens and signals, over the chosen period.",
-        "breadcrumb": "All protocols"
+        "advanced": "Advanced mode"
       },
       "period": {
         "label": "Period",
@@ -78,6 +78,10 @@
         "tvlChange": "over {period}",
         "volumeChange": "vs previous {period}",
         "feesProtocol": "protocol {amount}",
+        "swaps": "Swaps {period}",
+        "swapsRate": "≈ {rate} per second",
+        "rotation": "Turnover {period}",
+        "rotationSub": "volume ÷ TVL",
         "poolsObserved": "of {observed} observed",
         "poolsObservedBefore": "of",
         "poolsObservedAfter": "observed",
@@ -86,7 +90,9 @@
           "tvl": "The value deposited in every observed pool whose two tokens have a known price, at the end of the last complete hour. Its change compares with its level at the start of the chosen period.",
           "volume": "What was traded over the chosen period, valued at each trade's own price, up to the last complete hour. The change compares with the previous period of the same length.",
           "fees": "What those trades paid in fees over the chosen period: the depositors' (LP) share and the protocol's.",
-          "pools": "The pools with at least one trade over the chosen period, among every pool Yog-Scope has seen, and those born during the period."
+          "swaps": "The number of trades over the chosen period, and their average pace per second.",
+          "pools": "The pools with at least one trade over the chosen period, among every pool Yog-Scope has seen, and those born during the period.",
+          "rotation": "The chosen period's volume divided by the TVL: how many times the deposited liquidity changed hands. The TVL only counts pools whose two tokens have a known price."
         }
       },
       "protocols": {
@@ -96,6 +102,8 @@
         "protocol": "Protocol",
         "tvl": "TVL",
         "volume": "Volume {period}",
+        "fees": "Fees {period}",
+        "activePools": "Active pools",
         "share": "Volume share",
         "live": "live"
       },
@@ -120,7 +128,12 @@
         "invite": "Hover or tap a bar for its detail",
         "today": "today",
         "daysAgo": "D−{days}",
-        "noValue": "no valued volume"
+        "noValue": "no valued volume",
+        "feesHourly": "Fees by hour",
+        "feesDaily": "Fees by day",
+        "feesTotal": "{total} in total",
+        "feesChartLabel": "Fees over the chosen period, all protocols",
+        "feesNoValue": "no valued fees"
       },
       "tokens": {
         "title": "Most traded tokens · {period}",
