@@ -110,6 +110,7 @@ describe("SidebarNavList on the collapsed rail", () => {
 
     expect(caption).toMatch(/title="Raydium — bientôt"/);
     expect(caption).toMatch(/rail:text-dash-ink-3/);
+    expect(collapsedMarkup()).toMatch(/<span aria-hidden="true" class="[^"]*\brail:opacity-50\b[^"]*"><img[^>]*logo_raydium/);
   });
 
   // Mutation: `rail:px-0` dropped from a platform's link or caption — its icon sits off-centre.

@@ -7,7 +7,6 @@
  */
 
 import { useId, type FC } from "react";
-import Image from "next/image";
 import { useTranslations } from "next-intl";
 
 import { Link, usePathname } from "@/i18n/navigation";
@@ -16,6 +15,7 @@ import {
   TokenIcon,
   type IconProps,
 } from "@/components/shared/icon";
+import { StaticSvg } from "@/components/shared/static-svg";
 
 import type { IconKey, OpenNavKey, PlatformKey, ProductKey } from "./sidebar-keys";
 import {
@@ -39,6 +39,10 @@ const NAV_ICONS: Record<IconKey, NavIcon> = {
   orca: { kind: "logo", src: "/logo_orca.svg" },
   token: { kind: "icon", Icon: TokenIcon },
 };
+
+// A logo keeps its colours whatever the row's: a closed row dims it instead.
+const DIMMED_LOGO = "opacity-50";
+const DIMMED_LOGO_ON_RAIL = "rail:opacity-50";
 
 /** The 20 px box of a menu icon, shared with the Preferences. */
 export const ICON_BOX = "inline-flex h-5 w-5 shrink-0 items-center justify-center";
@@ -141,7 +145,14 @@ function Platform({
       product.kind === "open" &&
       (pathname === product.href || pathname.startsWith(`${product.href}/`)),
   );
-  const content = <EntryLabel icon={icon} label={label} collapsed={collapsed} />;
+  const content = (
+    <EntryLabel
+      icon={icon}
+      label={label}
+      collapsed={collapsed}
+      tone={!target && collapsed ? DIMMED_LOGO_ON_RAIL : ""}
+    />
+  );
 
   return (
     <>
@@ -182,16 +193,18 @@ function Platform({
   );
 }
 
-/** The row's icon: a drawn one, or the platform's own logo, in colour. */
+/**
+ * The row's icon: a drawn one, which takes the row's colour, or the platform's logo, which
+ * cannot and is dimmed by `tone` instead.
+ */
 function EntryIcon({ icon, tone }: { icon: NavIcon; tone: string }) {
   return icon.kind === "icon" ? (
     <span aria-hidden="true" className={`${ICON_BOX} ${tone}`}>
       <icon.Icon size={16} />
     </span>
   ) : (
-    <span aria-hidden="true" className={ICON_BOX}>
-      {/* ⚠️ The optimizer rejects SVG; served as is, it is cached once for every page. */}
-      <Image src={icon.src} alt="" width={20} height={20} unoptimized className="h-5 w-5 object-contain" />
+    <span aria-hidden="true" className={`${ICON_BOX} ${tone}`}>
+      <StaticSvg src={icon.src} width={20} height={20} className="object-contain" />
     </span>
   );
 }
@@ -281,7 +294,12 @@ function ClosedEntry({
       title={collapsed ? soonTitle : undefined}
       className={`${rowClass(collapsed, product)} cursor-default text-dash-ink-3`}
     >
-      <EntryLabel icon={icon} label={label} collapsed={collapsed} />
+      <EntryLabel
+        icon={icon}
+        label={label}
+        collapsed={collapsed}
+        tone={icon?.kind === "logo" ? DIMMED_LOGO : ""}
+      />
       <span
         className={`border border-dashed border-dash-ink-3 px-1 py-px font-dash-mono text-[11px] whitespace-nowrap uppercase ${collapsed ? "rail:sr-only" : ""}`}
       >

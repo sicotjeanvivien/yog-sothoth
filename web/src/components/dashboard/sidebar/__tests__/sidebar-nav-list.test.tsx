@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -99,13 +99,25 @@ describe("SidebarNavList", () => {
     expect(row(render(), label)).not.toMatch(ICON);
   });
 
-  // Mutation: a logo's path mistyped — the platform shows a broken image.
-  it("draws each platform with a logo the site serves", () => {
-    const logos = [...render().matchAll(/<img[^>]*\ssrc="([^"]+)"/g)].map((m) => m[1] ?? "");
-    const PUBLIC = join(__dirname, "..", "..", "..", "..", "..", "public");
+  // Mutations: two platforms' logos swapped, or a path whose case differs from the file — found
+  // on a case-insensitive disk, a 404 on the Linux server.
+  it.each(PLATFORMS.map((platform) => [platform.labelKey, platform.key] as const))(
+    "draws %s with its own logo, a file the site serves",
+    (labelKey, key) => {
+      const label = messages.Dashboard.Sidebar.nav[labelKey as keyof typeof messages.Dashboard.Sidebar.nav];
+      const src = /<img[^>]*\ssrc="\/([^"]+)"/.exec(row(render(), label))?.[1];
 
-    expect(logos).toHaveLength(3);
-    expect(logos.filter((src) => !existsSync(join(PUBLIC, src)))).toEqual([]);
+      expect(src).toBe(`logo_${key}.svg`);
+      expect(readdirSync(join(__dirname, "..", "..", "..", "..", "..", "public"))).toContain(src);
+    },
+  );
+
+  // Mutation: the closed rows' logos left at full colour — they read as open platforms.
+  it("dims the logo of a closed platform, not the drawn icon of a closed entry", () => {
+    const html = render();
+
+    expect(row(html, "Raydium")).toMatch(/<span aria-hidden="true" class="[^"]*\bopacity-50\b[^"]*"><img/);
+    expect(row(html, "Token")).not.toMatch(/opacity-50/);
   });
 
   it("gives nothing focusable besides the link", () => {
