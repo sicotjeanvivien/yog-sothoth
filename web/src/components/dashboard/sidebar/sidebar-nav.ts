@@ -19,7 +19,7 @@ export type ClosedNavEntry = {
 
 export type SidebarNavEntry = OpenNavEntry | ClosedNavEntry;
 
-/** A caption over indented entries — not itself navigable. */
+/** A caption over its entries — not itself navigable. */
 export type SidebarNavGroup = {
   kind: "group";
   labelKey: string;

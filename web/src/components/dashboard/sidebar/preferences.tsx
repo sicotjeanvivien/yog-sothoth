@@ -6,29 +6,23 @@
  * rail keeps only their icon.
  */
 
-import { useId, useState } from "react";
+import { useId } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
 import { ChevronDownIcon, PreferencesIcon } from "@/components/shared/icon";
-import { RAIL_BREAKPOINT } from "@/components/shared/breakpoints";
 import { LocaleSwitch } from "@/components/shared/locale-switch";
 import { usePathname } from "@/i18n/navigation";
 
-import {
-  PREFERENCES_COOKIE_MAX_AGE_S,
-  PREFERENCES_OPEN_COOKIE,
-  preferencesClick,
-} from "./preferences-state";
-
 export function Preferences({
-  initialOpen,
+  open,
+  onToggle,
   collapsed,
-  onExpand,
 }: {
-  initialOpen: boolean;
+  /** Owned by the shell, which also folds the rail. */
+  open: boolean;
+  onToggle: () => void;
   collapsed: boolean;
-  onExpand: () => void;
 }) {
   const t = useTranslations("Dashboard.preferences");
   const locale = useLocale();
@@ -36,25 +30,16 @@ export function Preferences({
   const query = useSearchParams().toString();
   const href = query ? `${pathname}?${query}` : pathname;
 
-  const [open, setOpen] = useState(initialOpen);
   const panelId = useId();
   const labelId = useId();
 
-  const toggle = () => {
-    // ⚠️ The cookie can say collapsed in the drawer, which has no collapsed form.
-    const onRail = window.matchMedia(`(min-width: ${RAIL_BREAKPOINT})`).matches;
-    const next = preferencesClick({ collapsed: collapsed && onRail, open });
-    document.cookie = `${PREFERENCES_OPEN_COOKIE}=${next.open ? "1" : "0"}; path=/; max-age=${PREFERENCES_COOKIE_MAX_AGE_S}; samesite=lax`;
-    setOpen(next.open);
-    if (next.expand) onExpand();
-  };
   const hiddenWhenCollapsed = collapsed ? "rail:hidden" : "";
 
   return (
     <div className="border-t border-dash-rule pt-2">
       <button
         type="button"
-        onClick={toggle}
+        onClick={onToggle}
         aria-expanded={open}
         aria-controls={panelId}
         title={collapsed ? t("title") : undefined}

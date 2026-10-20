@@ -208,7 +208,8 @@ language, FR | EN (`shared/locale-switch.tsx`, also the site footer's), each a
 link to the same page and query in that language. Whether they are open is the
 `yog_prefs_open` cookie, read by the layout so the first paint is right. On
 the collapsed rail only their icon stays; a click unfolds the rail and opens
-them (`preferencesClick`).
+them, and folding the rail closes them (`preferencesClick`, state owned by
+`DashboardShell`).
 
 **Live status** — `live-status/`: `LiveIndicator` polls `/api/ingestion` and
 `liveStatusOf` maps it to four states — live (green), delayed (yellow), stale

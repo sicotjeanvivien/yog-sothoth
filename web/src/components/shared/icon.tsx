@@ -48,17 +48,17 @@ export const TokenIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/** Three sliders; their knobs are filled with `dash-bg` to cut the rails. */
+/** Three sliders, each rail cut around its knob. */
 export const PreferencesIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.95,
   className,
 }) => (
   <svg {...base(size, strokeWidth)} strokeLinecap="butt" strokeLinejoin="miter" className={className}>
-    <path d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
-    <rect x="13.5" y="4.5" width="3.75" height="4.5" fill="var(--color-dash-bg)" />
-    <rect x="6.75" y="9.75" width="3.75" height="4.5" fill="var(--color-dash-bg)" />
-    <rect x="15" y="15" width="3.75" height="4.5" fill="var(--color-dash-bg)" />
+    <path d="M3.75 6.75h9.75M17.25 6.75h3M3.75 12h3M10.5 12h9.75M3.75 17.25h11.25M18.75 17.25h1.5" />
+    <rect x="13.5" y="4.5" width="3.75" height="4.5" />
+    <rect x="6.75" y="9.75" width="3.75" height="4.5" />
+    <rect x="15" y="15" width="3.75" height="4.5" />
   </svg>
 );
 

@@ -21,9 +21,8 @@ type SidebarProps = {
   /** A narrow rail. ⚠️ The drawer ignores it: every `collapsed` style is `rail:`-scoped. */
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  /** Unfolds the rail, for the Preferences opened from it. */
-  onExpand: () => void;
-  initialPreferencesOpen: boolean;
+  preferencesOpen: boolean;
+  onTogglePreferences: () => void;
 };
 
 export function Sidebar({
@@ -31,8 +30,8 @@ export function Sidebar({
   onNavigate,
   collapsed,
   onToggleCollapsed,
-  onExpand,
-  initialPreferencesOpen,
+  preferencesOpen,
+  onTogglePreferences,
 }: SidebarProps) {
   const t = useTranslations("Dashboard.shell");
   const positioning =
@@ -56,7 +55,7 @@ export function Sidebar({
         <CloseIcon size={16} />
       </button>
       <div
-        className={`flex items-center justify-between gap-2 ${collapsed ? "rail:flex-col rail:gap-3" : ""}`}
+        className={`flex items-center justify-between gap-1 ${collapsed ? "rail:flex-col rail:gap-3" : ""}`}
       >
         <Brand collapsed={collapsed} />
         <CollapseToggle collapsed={collapsed} onToggle={onToggleCollapsed} />
@@ -65,9 +64,9 @@ export function Sidebar({
         <SidebarNavList collapsed={collapsed} onNavigate={onNavigate} />
       </nav>
       <Preferences
-        initialOpen={initialPreferencesOpen}
+        open={preferencesOpen}
+        onToggle={onTogglePreferences}
         collapsed={collapsed}
-        onExpand={onExpand}
       />
     </aside>
   );
@@ -86,7 +85,7 @@ export function Brand({
   return (
     <div className={`flex ${collapsed ? "rail:justify-center" : ""}`}>
       <Link href="/" className="flex items-center gap-3">
-        <LogoMark width={small ? 30 : 40} priority />
+        <LogoMark width={small ? 30 : 36} priority />
         <span
           className={`font-display text-[16px] font-semibold tracking-[0.16em] whitespace-nowrap uppercase ${collapsed ? "rail:sr-only" : ""}`}
         >
@@ -116,7 +115,8 @@ function CollapseToggle({
       aria-expanded={!collapsed}
       aria-controls="dashboard-menu"
       title={label}
-      className="hidden h-8 w-8 shrink-0 items-center justify-center border border-transparent text-dash-ink-3 transition-colors hover:border-dash-rule hover:text-dash-ink rail:inline-flex"
+      // ⚠️ Into the rail's right padding when unfolded: logo, wordmark and button overflow it otherwise.
+      className={`hidden h-8 w-8 shrink-0 items-center justify-center border border-transparent text-dash-ink-3 transition-colors hover:border-dash-rule hover:text-dash-ink rail:inline-flex ${collapsed ? "" : "rail:-mr-4"}`}
     >
       <ChevronLeftIcon size={14} className={collapsed ? "rotate-180" : ""} />
     </button>

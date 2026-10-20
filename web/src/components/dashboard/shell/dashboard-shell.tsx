@@ -13,6 +13,11 @@ import {
   SIDEBAR_COLLAPSED_COOKIE,
   SIDEBAR_COOKIE_MAX_AGE_S,
 } from "@/components/dashboard/sidebar/sidebar-state";
+import {
+  PREFERENCES_COOKIE_MAX_AGE_S,
+  PREFERENCES_OPEN_COOKIE,
+  preferencesClick,
+} from "@/components/dashboard/sidebar/preferences-state";
 import { RAIL_BREAKPOINT } from "@/components/shared/breakpoints";
 import { HamburgerIcon } from "@/components/shared/icon";
 
@@ -30,6 +35,10 @@ export function DashboardShell({
   const t = useTranslations("Dashboard.shell");
   const [isOpen, setIsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(initialCollapsed);
+  // ⚠️ The folded rail hides the panel: open there, it would read as expanded to a screen reader.
+  const [preferencesOpen, setPreferencesOpen] = useState(
+    initialPreferencesOpen && !initialCollapsed,
+  );
 
   const open = useCallback(() => setIsOpen(true), []);
   const close = useCallback(() => setIsOpen(false), []);
@@ -39,11 +48,20 @@ export function DashboardShell({
     document.cookie = `${SIDEBAR_COLLAPSED_COOKIE}=${next ? "1" : "0"}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE_S}; samesite=lax`;
     setCollapsed(next);
   }, []);
-  const toggleCollapsed = useCallback(
-    () => persistCollapsed(!collapsed),
-    [collapsed, persistCollapsed],
-  );
-  const expand = useCallback(() => persistCollapsed(false), [persistCollapsed]);
+  const persistPreferences = useCallback((next: boolean) => {
+    document.cookie = `${PREFERENCES_OPEN_COOKIE}=${next ? "1" : "0"}; path=/; max-age=${PREFERENCES_COOKIE_MAX_AGE_S}; samesite=lax`;
+    setPreferencesOpen(next);
+  }, []);
+  const toggleCollapsed = useCallback(() => {
+    persistCollapsed(!collapsed);
+    if (!collapsed) persistPreferences(false);
+  }, [collapsed, persistCollapsed, persistPreferences]);
+  const togglePreferences = useCallback(() => {
+    const onRail = window.matchMedia(`(min-width: ${RAIL_BREAKPOINT})`).matches;
+    const next = preferencesClick({ collapsed, onRail, open: preferencesOpen });
+    persistPreferences(next.open);
+    if (next.expand) persistCollapsed(false);
+  }, [collapsed, preferencesOpen, persistCollapsed, persistPreferences]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -63,15 +81,18 @@ export function DashboardShell({
     };
   }, [isOpen]);
 
-  // Reset to closed on the rail, or the scroll-lock and overlay linger after a resize.
+  // Reset to closed on the rail, or the scroll-lock and overlay linger after a resize; a
+  // folded rail closes the Preferences, as folding it does.
   useEffect(() => {
     const query = window.matchMedia(`(min-width: ${RAIL_BREAKPOINT})`);
     function onChange(event: MediaQueryListEvent) {
-      if (event.matches) close();
+      if (!event.matches) return;
+      close();
+      if (collapsed) persistPreferences(false);
     }
     query.addEventListener("change", onChange);
     return () => query.removeEventListener("change", onChange);
-  }, [close]);
+  }, [close, collapsed, persistPreferences]);
 
   return (
     // Solid background over the cosmic one of `body` — behind the pages
@@ -88,8 +109,8 @@ export function DashboardShell({
         onNavigate={close}
         collapsed={collapsed}
         onToggleCollapsed={toggleCollapsed}
-        onExpand={expand}
-        initialPreferencesOpen={initialPreferencesOpen}
+        preferencesOpen={preferencesOpen}
+        onTogglePreferences={togglePreferences}
       />
 
       {/* `pt-14` up to 720 px makes room for the fixed mobile header. */}

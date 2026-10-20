@@ -68,14 +68,16 @@ function walk(html: string) {
   return { links, closed, groups, captions };
 }
 
-function renderCollapsed() {
-  return walk(
-    renderToStaticMarkup(
-      <NextIntlClientProvider locale="fr" timeZone="UTC" messages={messages}>
-        <SidebarNavList collapsed={true} onNavigate={() => {}} />
-      </NextIntlClientProvider>,
-    ),
+function collapsedMarkup() {
+  return renderToStaticMarkup(
+    <NextIntlClientProvider locale="fr" timeZone="UTC" messages={messages}>
+      <SidebarNavList collapsed={true} onNavigate={() => {}} />
+    </NextIntlClientProvider>,
   );
+}
+
+function renderCollapsed() {
+  return walk(collapsedMarkup());
 }
 
 describe("SidebarNavList on the collapsed rail", () => {
@@ -94,6 +96,14 @@ describe("SidebarNavList on the collapsed rail", () => {
     const { closed } = renderCollapsed();
 
     expect(closed).toEqual([false, false]);
+  });
+
+  // Mutation: `rail:hidden` instead of `rail:sr-only` on the tag — a screen reader no longer hears « Bientôt ».
+  it("keeps « Bientôt » for screen readers", () => {
+    const tags = [...collapsedMarkup().matchAll(/<span class="([^"]*)">Bientôt</g)];
+
+    expect(tags).toHaveLength(2);
+    for (const [, classes] of tags) expect(classes).toMatch(/\brail:sr-only\b/);
   });
 
   // Mutation: a group hidden when it holds no open entry, as when only open ones had an icon.

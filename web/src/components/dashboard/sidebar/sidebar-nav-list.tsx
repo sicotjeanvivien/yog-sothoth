@@ -26,7 +26,6 @@ import {
 
 type NavIcon = { kind: "icon"; Icon: FC<IconProps> } | { kind: "abbr"; text: string };
 
-// An entry without an icon does not compile: the collapsed rail shows nothing else.
 const NAV_ICONS: Record<NavKey, NavIcon> = {
   overview: { kind: "icon", Icon: OverviewIcon },
   meteoraDammV2: { kind: "abbr", text: "D2" },
@@ -205,7 +204,7 @@ function ClosedEntry({
     >
       <EntryLabel entryKey={entry.key} label={label} collapsed={collapsed} />
       <span
-        className={`border border-dashed border-dash-ink-3 px-1 py-px font-dash-mono text-[11px] whitespace-nowrap uppercase ${collapsed ? "rail:hidden" : ""}`}
+        className={`border border-dashed border-dash-ink-3 px-1 py-px font-dash-mono text-[11px] whitespace-nowrap uppercase ${collapsed ? "rail:sr-only" : ""}`}
       >
         {soon}
       </span>

@@ -17,7 +17,7 @@ describe("fonts", () => {
   it("are never fetched from Google at build time", () => {
     const remote = files(SRC).filter(
       (path) =>
-        /\.(ts|tsx|css)$/.test(path) &&
+        /\.(ts|tsx|js|jsx|mjs|css)$/.test(path) &&
         !path.includes("__tests__") &&
         readFileSync(path, "utf8").includes("next/font/google"),
     );
