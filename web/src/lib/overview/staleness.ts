@@ -1,4 +1,4 @@
-/** When the Overview's figures are late: past the ~70 min a frozen hour normally lags. */
+/** When the Overview's figures are late: well past the lag of a frozen hour. */
 
 import { HOUR_MS } from "./period";
 

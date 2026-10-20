@@ -271,7 +271,8 @@ their waiting slots only; the signals do not reload.
 figure the facts do not cover whole is "—", never a smaller number:
 - a period whose window starts before `coveredSince` (the first frozen hour) is
   closed: a button whose panel says when it opens; reached by its URL anyway,
-  every block shows "—" and the same reason. 30d stays closed in the web
+  every block that sums over it shows "—" and the same reason (the TVL stays,
+  its change says why it has none). 30d stays closed in the web
   (`CLOSED_PERIODS`) until its times are measured on the prod: its URL falls
   back to 24h, so its reads never run;
 - the volume change is "—" when the previous window (`offset`) starts before
@@ -295,9 +296,9 @@ and the "Live" panel colours it. "Live" itself keeps speaking of ingestion,
 which can be fine while the figures stall. The reads several blocks share are fetched
 once per render. The volume chart is HTML bars (`volume-bars.tsx`): two dashed
 marks on round values (`roundTicks`), a fixed reading line above, the bar under
-the pointer, finger or arrow keys full and the others faded. A token whose
-or protocol volume covers only part of its pool-hours carries the coverage
-mark (`volumeCoverage`).
+the pointer, finger or arrow keys full and the others faded. A volume, of a
+token, a protocol or a KPI, that covers only part of its pool-hours carries the
+coverage mark (`volumeCoverage`).
 
 ## Site
 

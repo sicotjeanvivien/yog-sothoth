@@ -14,6 +14,7 @@ import {
   fetchProtocolTvl,
   fetchProtocolTvlHourly,
 } from "@/lib/api/server/protocols";
+import { volumeCoverage } from "@/lib/coverage/volume-coverage";
 import { formatCount } from "@/lib/format/format-count";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { previousWindowCovered, tvlStart } from "@/lib/overview/availability";
@@ -22,6 +23,7 @@ import { changeRatio, sumUsd } from "@/lib/overview/totals";
 
 import { Change, closedReason, KpiCell, Unavailable, utcMoment } from "./overview-parts";
 import { KpiFailedLine, KpiSkeleton, lateStamp } from "./overview-states";
+import { VolumeCoverageMark } from "./volume-coverage-mark";
 
 const usd = (value: number | null) =>
   value === null ? "—" : formatUsdCompact(String(value));
@@ -109,7 +111,7 @@ export async function VolumeKpi({ period }: { period: Period }) {
     <KpiCell
       label={label}
       info={info}
-      value={usd(current)}
+      value={await valued(usd(current), now.value.items)}
       sub={sub}
       stamp={await lateStamp(now.value.asOf)}
     />
@@ -139,7 +141,7 @@ export async function FeesKpi({ period }: { period: Period }) {
     <KpiCell
       label={label}
       info={info}
-      value={usd(fees)}
+      value={await valued(usd(fees), now.items)}
       sub={
         protocolFees === null
           ? undefined
@@ -205,6 +207,27 @@ export async function PoolsKpi({ period }: { period: Period }) {
 
 export async function KpiPlaceholder() {
   return <KpiSkeleton />;
+}
+
+/** A volume or its fees, with the mark when they leave out pool-hours that could not be valued. */
+async function valued(
+  figure: string,
+  items: readonly { poolHours: number; poolHoursValued: number }[],
+): Promise<ReactNode> {
+  const t = await getTranslations("Dashboard.Overview.coverage");
+  const coverage = volumeCoverage({
+    poolHours: items.reduce((sum, i) => sum + i.poolHours, 0),
+    poolHoursValued: items.reduce((sum, i) => sum + i.poolHoursValued, 0),
+  });
+  return (
+    <>
+      {figure}
+      <VolumeCoverageMark
+        coverage={coverage}
+        label={(priced, total) => t("mark", { priced, total })}
+      />
+    </>
+  );
 }
 
 /** "— ⓘ over 7d": a secondary figure withheld, its reason one click away. */
