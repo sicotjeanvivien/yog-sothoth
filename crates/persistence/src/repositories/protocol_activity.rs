@@ -97,12 +97,13 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
               LEFT JOIN analytic_protocol_periods p
                      ON p.protocol = j.protocol
                     AND p.period = $3
-                    AND p.bucket = $2::TIMESTAMPTZ - INTERVAL '1 hour'
+                    AND p.bucket = $4
              ORDER BY j.protocol
             "#,
             span.from,
             span.as_of,
             window.as_str(),
+            span.last_hour(),
         )
         .fetch_all(&self.pool)
         .await

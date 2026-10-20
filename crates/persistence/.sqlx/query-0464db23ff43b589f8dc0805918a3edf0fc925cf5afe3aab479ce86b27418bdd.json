@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT w.bucket AS \"last_hour?\",\n                   t.mint AS \"mint?\", t.volume_usd AS \"volume_usd?\", t.pools AS \"pools?\",\n                   t.pool_hours AS \"pool_hours?\", t.pool_hours_valued AS \"pool_hours_valued?\",\n                   m.symbol AS \"symbol?\", m.name AS \"name?\",\n                   m.decimals AS \"decimals?\", m.logo_uri AS \"logo_uri?\",\n                   m.metadata_provider AS \"metadata_provider?\",\n                   m.fetched_at AS \"fetched_at?\", m.last_refresh_at AS \"last_refresh_at?\"\n              FROM (SELECT MAX(bucket) AS bucket\n                      FROM analytic_token_periods WHERE period = $1) w\n              LEFT JOIN LATERAL (\n                  SELECT * FROM analytic_token_periods t\n                   WHERE t.period = $1 AND t.bucket = w.bucket\n                     AND ($2::NUMERIC IS NULL\n                          OR t.volume_usd < $2\n                          OR (t.volume_usd = $2 AND t.mint > $3))\n                   ORDER BY t.volume_usd DESC, t.mint\n                   LIMIT $4\n              ) t ON true\n              LEFT JOIN token_metadata m ON m.mint = t.mint\n             ORDER BY t.volume_usd DESC, t.mint\n            ",
+  "query": "\n            SELECT w.bucket AS \"last_hour?\",\n                   t.mint AS \"mint?\", t.volume_usd AS \"volume_usd?\", t.pools AS \"pools?\",\n                   t.pool_hours AS \"pool_hours?\", t.pool_hours_valued AS \"pool_hours_valued?\",\n                   m.symbol AS \"symbol?\", m.name AS \"name?\",\n                   m.decimals AS \"decimals?\", m.logo_uri AS \"logo_uri?\",\n                   m.metadata_provider AS \"metadata_provider?\",\n                   m.fetched_at AS \"fetched_at?\", m.last_refresh_at AS \"last_refresh_at?\"\n              -- ⚠️ Every row shares one hour: its first by volume names it, through the index.\n              FROM (SELECT (SELECT bucket FROM analytic_token_periods\n                             WHERE period = $1\n                             ORDER BY volume_usd DESC, mint LIMIT 1) AS bucket) w\n              LEFT JOIN LATERAL (\n                  SELECT * FROM analytic_token_periods t\n                   WHERE t.period = $1 AND t.bucket = w.bucket\n                     AND ($2::NUMERIC IS NULL\n                          OR t.volume_usd < $2\n                          OR (t.volume_usd = $2 AND t.mint > $3))\n                   ORDER BY t.volume_usd DESC, t.mint\n                   LIMIT $4\n              ) t ON true\n              LEFT JOIN token_metadata m ON m.mint = t.mint\n             ORDER BY t.volume_usd DESC, t.mint\n            ",
   "describe": {
     "columns": [
       {
@@ -166,5 +166,5 @@
       false
     ]
   },
-  "hash": "202ff19663935108b576f49aed6dd932b6efdc103df485ef364723751d35ff55"
+  "hash": "0464db23ff43b589f8dc0805918a3edf0fc925cf5afe3aab479ce86b27418bdd"
 }

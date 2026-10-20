@@ -190,6 +190,30 @@ async fn the_next_page_starts_after_a_token_whose_volume_has_many_digits(pool: P
     assert_eq!((served, seen.len()), (4, 4), "{seen:?}");
 }
 
+/// Mutation: the window's lower bound taken inclusive — the pool last active 24
+/// hours before the frozen hour counts in its 24h window.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_window_starts_after_the_hour_a_window_length_back(pool: PgPool) {
+    let p = setup_pool(&pool, 1, 101, 102).await;
+    let q = setup_pool(&pool, 2, 101, 103).await;
+    tranche(&pool, &p, 0, Some(10)).await;
+    tranche(&pool, &q, 24, Some(10)).await;
+
+    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    repository.write_cycle(&cycle(0, 24)).await.unwrap();
+
+    assert_eq!(active_pools(&pool, "24h", 24).await, Some(1));
+    assert_eq!(active_pools(&pool, "7d", 24).await, Some(2));
+    let day: Vec<_> = tokens(&pool, "24h")
+        .await
+        .into_iter()
+        .map(|t| t.0)
+        .collect();
+    let mut expected = vec![pk(101).to_string(), pk(103).to_string()];
+    expected.sort();
+    assert_eq!(day, expected);
+}
+
 /// Mutations: the b side forgotten (Y and Z vanish), the pools of a token counted
 /// without DISTINCT (X has 3).
 #[sqlx::test(migrations = "./migrations")]

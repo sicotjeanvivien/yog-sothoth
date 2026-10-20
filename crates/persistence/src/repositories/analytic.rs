@@ -284,7 +284,6 @@ fn windows() -> (Vec<String>, Vec<i32>) {
 
 /// The distinct pools of every protocol and window ending at `last_hour`; a
 /// protocol without any gets 0, so a missing row means a window never counted.
-/// ⚠️ Grouped per pool first, not `COUNT(DISTINCT)`: that one sorts, and spills.
 async fn write_protocol_periods(
     tx: &mut Transaction<'static, Postgres>,
     last_hour: DateTime<Utc>,
@@ -293,6 +292,7 @@ async fn write_protocol_periods(
     let protocols: Vec<&str> = Protocol::all().iter().map(|p| p.as_str()).collect();
     sqlx::query!(
         r#"
+        -- ⚠️ Grouped per pool, then counted: a COUNT(DISTINCT) sorts, and spills.
         WITH by_pool AS (
             SELECT w.period, f.protocol, f.pool_address
               FROM UNNEST($2::TEXT[], $3::INT[]) AS w (period, hours)
@@ -321,8 +321,6 @@ async fn write_protocol_periods(
 
 /// Every token of every window ending at `last_hour`, in place of the last
 /// ones: the volume of the pools that hold it, a swap counting for both sides.
-/// ⚠️ The mints joined to the pools once summed, not to every pool-hour; the volume
-/// rounded, or the page cursor, a `Decimal`, could not hold it exactly.
 async fn write_token_periods(
     tx: &mut Transaction<'static, Postgres>,
     last_hour: DateTime<Utc>,
@@ -348,9 +346,11 @@ async fn write_token_periods(
         INSERT INTO analytic_token_periods (
             period, mint, bucket, volume_usd, pools, pool_hours, pool_hours_valued
         )
+        -- ⚠️ Rounded: the page cursor, a Decimal, must hold the volume exactly.
         SELECT b.period, m.mint, $1, ROUND(COALESCE(SUM(b.volume_usd), 0), 6), COUNT(*),
                SUM(b.pool_hours), SUM(b.pool_hours_valued)
           FROM by_pool b
+          -- ⚠️ The mints joined to the pools once summed, not to each pool-hour.
           JOIN pools p ON p.pool_address = b.pool_address AND p.protocol = b.protocol
          CROSS JOIN LATERAL (VALUES (p.token_a_mint), (p.token_b_mint)) AS m (mint)
          WHERE m.mint IS NOT NULL
