@@ -213,8 +213,14 @@ Overview only) and opens on click, with the slot and RPC latency of
 `/api/network`.
 
 **Fonts** — Geist (text) and Geist Mono (figures, addresses, times) are loaded
-by the locale layout (`next/font/google`), for the dashboard and the site
-alike. They are applied through `font-dash-sans` / `font-dash-mono`. Cinzel
+by the locale layout (`next/font/local`), for the dashboard and the site
+alike. Their files live in `src/app/fonts/`, Cinzel's too, each next to its
+OFL licence: the build fetches nothing, so it cannot fail on Google Fonts. They
+are Google Fonts' own latin files, fetched once with the user agent Next.js
+used to request them (`next/dist/compiled/@next/font/dist/google/fetch-resource.js`);
+a file fetched by a recent browser is another build of the font, and moves the
+line breaks. A new font goes the same way: its latin `.woff2` and its licence
+in that folder, one `localFont` in the layout. They are applied through `font-dash-sans` / `font-dash-mono`. Cinzel
 serves the frame only for the wordmark; page contents not yet redone (the
 Overview's titles among them) still use it.
 
@@ -402,6 +408,7 @@ web/
 ├── src/
 │   ├── app/
 │   │   ├── globals.css
+│   │   ├── fonts/                   # the three .woff2 and their OFL licences
 │   │   ├── layout.tsx               # root layout (passthrough)
 │   │   └── [locale]/
 │   │       ├── layout.tsx           # html/body, intl provider, fonts

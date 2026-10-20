@@ -6,22 +6,26 @@ import { routing } from "../../../i18n/routing";
 import { SITE_NAME, SITE_URL } from "@/config/site";
 import "../globals.css";
 
-import { Cinzel, Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 
-const cinzel = Cinzel({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+// ⚠️ Google Fonts' own latin files, kept in the project: a build that fetches
+// them fails whenever Google does not answer.
+const cinzel = localFont({
+  src: "../fonts/cinzel-latin.woff2",
+  weight: "400 600",
   variable: "--font-display",  // exposes a CSS variable
   display: "swap",
 });
 // Read by the `--font-dash-*` theme tokens, on the site and the dashboard alike.
-const geist = Geist({
-  subsets: ["latin"],
+const geist = localFont({
+  src: "../fonts/geist-latin.woff2",
+  weight: "100 900",
   variable: "--font-geist",
   display: "swap",
 });
-const geistMono = Geist_Mono({
-  subsets: ["latin"],
+const geistMono = localFont({
+  src: "../fonts/geist-mono-latin.woff2",
+  weight: "100 900",
   variable: "--font-geist-mono",
   display: "swap",
 });
