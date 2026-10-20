@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { NextIntlClientProvider } from "next-intl";
@@ -21,7 +23,7 @@ vi.mock("@/i18n/navigation", async () => {
 // ⚠️ Written out, not read from `SIDEBAR_NAV`: opening an entry must not shrink this list.
 const CLOSED_LABELS = ["DAMM v2", "DLMM", "Raydium", "Orca", "Token"];
 
-// The closed rows whose icon is drawn; the platforms have a letter, the products nothing.
+// The closed rows whose icon is drawn; the platforms have their logo, the products nothing.
 const DRAWN_ICONS = new Set(["Token"]);
 
 function render(): string {
@@ -42,7 +44,7 @@ function row(html: string, label: string): string {
   return found.split("</li>")[0] ?? "";
 }
 
-const ICON = /<span aria-hidden="true"[^>]*>(?:<svg\b|[A-Z]<)/;
+const ICON = /<span aria-hidden="true"[^>]*>(?:<svg\b|<img\b)/;
 
 describe("SidebarNavList", () => {
   it("renders Overview as the only link", () => {
@@ -95,6 +97,15 @@ describe("SidebarNavList", () => {
   // Mutation: a product drawn with its platform's icon — two « M » stacked.
   it.each(["DAMM v2", "DLMM"])("gives the product %s no icon", (label) => {
     expect(row(render(), label)).not.toMatch(ICON);
+  });
+
+  // Mutation: a logo's path mistyped — the platform shows a broken image.
+  it("draws each platform with a logo the site serves", () => {
+    const logos = [...render().matchAll(/<img[^>]*\ssrc="([^"]+)"/g)].map((m) => m[1] ?? "");
+    const PUBLIC = join(__dirname, "..", "..", "..", "..", "..", "public");
+
+    expect(logos).toHaveLength(3);
+    expect(logos.filter((src) => !existsSync(join(PUBLIC, src)))).toEqual([]);
   });
 
   it("gives nothing focusable besides the link", () => {

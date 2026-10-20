@@ -200,7 +200,7 @@ test fails as soon as one becomes a link or loses its tag. To open a top entry
 once its page exists, move its key from `ClosedNavKey` to `OpenNavKey`
 (`sidebar-keys.ts`) and give it an `href`; a product opens by turning `open`
 with its `href`. Every row but a product has its icon in `NAV_ICONS` — a drawn
-one, or the platform's letter until its official logo — shown in both states;
+one, or the platform's logo (`public/logo_<platform>.svg`) — shown in both states;
 the compiler refuses a key without one. The collapsed rail keeps every row as
 its icon alone, its label in `title`, hides the products, and marks the
 platform of the current page. The About page's scope (`PROTOCOL_SCOPE`) is

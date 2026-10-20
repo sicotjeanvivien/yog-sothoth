@@ -7,6 +7,7 @@
  */
 
 import { useId, type FC } from "react";
+import Image from "next/image";
 import { useTranslations } from "next-intl";
 
 import { Link, usePathname } from "@/i18n/navigation";
@@ -29,13 +30,13 @@ import {
 type RowEntry = SidebarNavEntry | ProductEntry | ClosedNavEntry<PlatformKey>;
 type RenderEntry = (entry: RowEntry, icon: NavIcon | null, product?: boolean) => React.ReactNode;
 
-type NavIcon = { kind: "icon"; Icon: FC<IconProps> } | { kind: "letter"; text: string };
+type NavIcon = { kind: "icon"; Icon: FC<IconProps> } | { kind: "logo"; src: string };
 
 const NAV_ICONS: Record<IconKey, NavIcon> = {
   overview: { kind: "icon", Icon: OverviewIcon },
-  meteora: { kind: "letter", text: "M" },
-  raydium: { kind: "letter", text: "R" },
-  orca: { kind: "letter", text: "O" },
+  meteora: { kind: "logo", src: "/logo_meteora.svg" },
+  raydium: { kind: "logo", src: "/logo_raydium.svg" },
+  orca: { kind: "logo", src: "/logo_orca.svg" },
   token: { kind: "icon", Icon: TokenIcon },
 };
 
@@ -181,18 +182,16 @@ function Platform({
   );
 }
 
-/** The row's icon: a drawn one, or the platform's letter until its official logo. */
+/** The row's icon: a drawn one, or the platform's own logo, in colour. */
 function EntryIcon({ icon, tone }: { icon: NavIcon; tone: string }) {
   return icon.kind === "icon" ? (
     <span aria-hidden="true" className={`${ICON_BOX} ${tone}`}>
       <icon.Icon size={16} />
     </span>
   ) : (
-    <span
-      aria-hidden="true"
-      className={`${ICON_BOX} border border-dashed border-dash-ink-3 font-dash-mono text-[10px] text-dash-ink-2`}
-    >
-      {icon.text}
+    <span aria-hidden="true" className={ICON_BOX}>
+      {/* ⚠️ The optimizer rejects SVG; served as is, it is cached once for every page. */}
+      <Image src={icon.src} alt="" width={20} height={20} unoptimized className="h-5 w-5 object-contain" />
     </span>
   );
 }
