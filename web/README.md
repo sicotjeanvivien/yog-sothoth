@@ -183,7 +183,7 @@ ships readable before its wording lands here.
 The `(dashboard)` layout mounts `DashboardShell`: the sidebar (a sticky rail
 from 721 px, the `rail:` breakpoint of `globals.css`; a drawer behind a thin
 "Menu" bar up to 720 px), the announcement banner and the live status. The
-rail collapses from the toggle at its foot, with a cookie.
+rail collapses to 64 px from the toggle beside the logo, with a cookie.
 
 **Nothing waits for data** — the layout reads only its two cookies before
 rendering: the announcement streams in its own `<Suspense>`, and each Overview
@@ -191,20 +191,29 @@ block in its own, behind a `BlockPlaceholder`. A failed block shows its
 `BlockError`; the status code is already sent.
 
 **Menu** — `sidebar/sidebar-nav.ts` is pure data: Overview, then the
-*Protocol* group (Meteora DAMM v2, Meteora DLMM, Raydium, Orca), then Token.
+platforms (Meteora, with DAMM v2 and DLMM under it; Raydium; Orca), then Token.
 An entry is `open` (it has a page and an `href`) or `closed` (tagged "Soon", no
-`href`).
+`href`). A platform links to its first open product; with none open it is a
+caption over them, and with no product listed it is a closed entry itself.
 `SidebarNavList` renders a closed entry as a plain `<span>`, never a link; its
-test fails as soon as one becomes a link or loses its tag. To open an entry
+test fails as soon as one becomes a link or loses its tag. To open a top entry
 once its page exists, move its key from `ClosedNavKey` to `OpenNavKey`
-(`sidebar-keys.ts`) and give it an `href`. The compiler then asks for its
-icon, which is all the collapsed rail shows. `/signals` is no longer in the
-menu.
+(`sidebar-keys.ts`) and give it an `href`; a product opens by turning `open`
+with its `href`. Every row but a product has its icon in `NAV_ICONS` — a drawn
+one, or the platform's logo (`public/logo_<platform>.svg`) — shown in both states;
+the compiler refuses a key without one. The collapsed rail keeps every row as
+its icon alone, its label in `title`, hides the products, and marks the
+platform of the current page. The About page's scope (`PROTOCOL_SCOPE`) is
+read from the same data. `/signals` is no longer in the menu.
 
-**Preferences** — at the foot of the menu, under the collapse toggle: the
+**Preferences** — at the foot of the menu: the
 language, FR | EN (`shared/locale-switch.tsx`, also the site footer's), each a
 link to the same page and query in that language. Whether they are open is the
-`yog_prefs_open` cookie, read by the layout so the first paint is right.
+`yog_prefs_open` cookie, read by the layout so the first paint is right. On
+the collapsed rail only their icon stays: a click unfolds the rail and opens
+them (`preferencesClick`). The folded rail hides an open panel without closing
+it; the drawer has no folded form, whatever the collapse cookie says.
+`DashboardShell` owns both states.
 
 **Live status** — `live-status/`: `LiveIndicator` polls `/api/ingestion` and
 `liveStatusOf` maps it to four states — live (green), delayed (yellow), stale
@@ -213,10 +222,18 @@ Overview only) and opens on click, with the slot and RPC latency of
 `/api/network`.
 
 **Fonts** — Geist (text) and Geist Mono (figures, addresses, times) are loaded
-by the locale layout (`next/font/google`), for the dashboard and the site
-alike. They are applied through `font-dash-sans` / `font-dash-mono`. Cinzel
-serves the frame only for the wordmark; page contents not yet redone (the
-Overview's titles among them) still use it.
+by the locale layout, for the dashboard and the site alike; Cinzel too. Their
+files live in `src/app/fonts/`, each family next to its OFL licence: the build
+fetches nothing, so it cannot fail on Google Fonts. They are Google Fonts' own
+files, every subset, fetched once with the user agent Next.js used to request
+them (`next/dist/compiled/@next/font/dist/google/fetch-resource.js`); a file
+fetched by a recent browser is another build of the font, and moves the line
+breaks. The latin subset goes through `next/font/local` (preload, fallback
+metrics, the CSS variable); the others are plain `@font-face` rules in
+`fonts.css`, each with its `unicode-range`. ⚠️ Every face of a family bears the
+name of its const in the layout (`geist`, `geistMono`, `cinzel`): Turbopack
+names the CSS variable after the const, and a face under another name is never
+used. `__tests__/fonts.test.ts` holds names, ranges and files together.
 
 **Colours** — the dashboard has one colour per role, declared once as
 `--color-dash-*` in `globals.css`: `bg`, `surface`, `surface-2`, `rule`,
@@ -402,6 +419,7 @@ web/
 ├── src/
 │   ├── app/
 │   │   ├── globals.css
+│   │   ├── fonts/                   # .woff2 per family and subset, OFL licences, fonts.css
 │   │   ├── layout.tsx               # root layout (passthrough)
 │   │   └── [locale]/
 │   │       ├── layout.tsx           # html/body, intl provider, fonts

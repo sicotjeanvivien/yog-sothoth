@@ -1,7 +1,7 @@
 import React from "react";
 
 /**
- * The dashboard's icon set: a 24x24 viewBox, a 1.6px `currentColor` stroke and `shrink-0`.
+ * The dashboard's icon set: a 24x24 viewBox, a `currentColor` stroke and `shrink-0`.
  * `size` is in rendered pixels; the viewBox stays 24x24 so the line weight scales evenly.
  */
 
@@ -26,11 +26,39 @@ const base = (size: number, strokeWidth: number) => ({
 
 export const OverviewIcon: React.FC<IconProps> = ({
   size = 18,
-  strokeWidth = 1.6,
+  strokeWidth = 1.95,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} strokeLinejoin="miter" className={className}>
+    <rect x="3.75" y="3.75" width="6.75" height="6.75" />
+    <rect x="13.5" y="3.75" width="6.75" height="6.75" />
+    <rect x="3.75" y="13.5" width="6.75" height="6.75" />
+    <rect x="13.5" y="13.5" width="6.75" height="6.75" />
+  </svg>
+);
+
+export const TokenIcon: React.FC<IconProps> = ({
+  size = 18,
+  strokeWidth = 1.95,
   className,
 }) => (
   <svg {...base(size, strokeWidth)} className={className}>
-    <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" />
+    <circle cx="12" cy="12" r="8.7" />
+    <circle cx="12" cy="12" r="3.9" />
+  </svg>
+);
+
+/** Three sliders, each rail cut around its knob. */
+export const PreferencesIcon: React.FC<IconProps> = ({
+  size = 18,
+  strokeWidth = 1.95,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} strokeLinecap="butt" strokeLinejoin="miter" className={className}>
+    <path d="M3.75 6.75h9.75M17.25 6.75h3M3.75 12h3M10.5 12h9.75M3.75 17.25h11.25M18.75 17.25h1.5" />
+    <rect x="13.5" y="4.5" width="3.75" height="4.5" />
+    <rect x="6.75" y="9.75" width="3.75" height="4.5" />
+    <rect x="15" y="15" width="3.75" height="4.5" />
   </svg>
 );
 
@@ -167,24 +195,12 @@ export const StarIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-export const ChevronDoubleLeftIcon: React.FC<IconProps> = ({
-  size = 24,
-  strokeWidth = 2,
+export const ChevronLeftIcon: React.FC<IconProps> = ({
+  size = 14,
+  strokeWidth = 2.1,
   className,
 }) => (
   <svg {...base(size, strokeWidth)} className={className}>
-    <polyline points="11 17 6 12 11 7" />
-    <polyline points="18 17 13 12 18 7" />
-  </svg>
-);
-
-export const ChevronDoubleRightIcon: React.FC<IconProps> = ({
-  size = 24,
-  strokeWidth = 2,
-  className,
-}) => (
-  <svg {...base(size, strokeWidth)} className={className}>
-    <polyline points="13 17 18 12 13 7" />
-    <polyline points="6 17 11 12 6 7" />
+    <path d="M15 5.25 8.25 12 15 18.75" />
   </svg>
 );

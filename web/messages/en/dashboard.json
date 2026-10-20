@@ -3,13 +3,14 @@
     "Sidebar": {
       "nav": {
         "overview": "Overview",
-        "protocol": "Protocol",
-        "meteoraDammV2": "Meteora DAMM v2",
-        "meteoraDlmm": "Meteora DLMM",
+        "meteora": "Meteora",
+        "dammV2": "DAMM v2",
+        "dlmm": "DLMM",
         "raydium": "Raydium",
         "orca": "Orca",
         "token": "Token",
-        "soon": "Soon"
+        "soon": "Soon",
+        "soonTitle": "{label} — soon"
       }
     },
     "shell": {

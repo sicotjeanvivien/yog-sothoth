@@ -8,97 +8,123 @@ import messages from "@/messages/fr/dashboard.json";
 import type { SidebarNavItem } from "../sidebar-nav";
 import { SidebarNavList } from "../sidebar-nav-list";
 
+const nav = vi.hoisted(() => ({ pathname: "/damm" }));
+
 vi.mock("@/i18n/navigation", async () => {
   const { createElement } = await import("react");
   return {
     Link: (props: ComponentProps<"a">) => createElement("a", props),
-    usePathname: () => "/overview",
+    usePathname: () => nav.pathname,
   };
 });
 
-// A group holding an open entry, next to one holding only closed ones.
+// A platform whose second product is open — the current page —, one whose products are all
+// closed, and one that lists none.
 vi.mock("../sidebar-nav", () => ({
   SIDEBAR_NAV: [
     { kind: "open", key: "overview", href: "/overview", labelKey: "overview" },
     {
-      kind: "group",
-      labelKey: "protocol",
-      entries: [
-        { kind: "open", key: "overview", href: "/p", labelKey: "meteoraDammV2" },
-        { kind: "closed", key: "raydium", labelKey: "raydium" },
+      kind: "platform",
+      key: "meteora",
+      labelKey: "meteora",
+      products: [
+        { kind: "closed", key: "meteoraDlmm", labelKey: "dlmm" },
+        { kind: "open", key: "meteoraDammV2", href: "/damm", labelKey: "dammV2" },
       ],
     },
     {
-      kind: "group",
-      labelKey: "token",
-      entries: [{ kind: "closed", key: "orca", labelKey: "orca" }],
+      kind: "platform",
+      key: "raydium",
+      labelKey: "raydium",
+      products: [{ kind: "closed", key: "meteoraDlmm", labelKey: "dlmm" }],
     },
+    { kind: "platform", key: "orca", labelKey: "orca", products: [] },
+    { kind: "closed", key: "token", labelKey: "token" },
   ] satisfies SidebarNavItem[],
 }));
 
-type Node = { tag: string; attrs: string; hidden: boolean; hasLink: boolean };
+type Node = { tag: string; hidden: boolean };
 
-/** For every link, closed entry and group, whether a `rail:hidden` on it or an ancestor hides it. */
+/** Every link, closed entry and caption, by label, with whether a `rail:hidden` on it or an ancestor hides it. */
 function walk(html: string) {
-  const links: { attrs: string; hidden: boolean }[] = [];
-  const closed: boolean[] = [];
-  const groups: { hidden: boolean; hasLink: boolean }[] = [];
+  const rows: { label: string; attrs: string; hidden: boolean }[] = [];
   const stack: Node[] = [];
-  for (const [, slash, tag = "", attrs = "", self] of html.matchAll(
-    /<(\/?)([a-z0-9]+)([^>]*?)(\/?)>/g,
+  let open: { attrs: string; hidden: boolean } | null = null;
+  for (const [, slash, tag = "", attrs = "", self, text] of html.matchAll(
+    /<(\/?)([a-z0-9]+)([^>]*?)(\/?)>([^<]*)/g,
   )) {
     if (slash) {
-      const node = stack.pop();
-      if (node?.tag === "ul" && node.attrs.includes("aria-labelledby")) {
-        groups.push({ hidden: node.hidden, hasLink: node.hasLink });
-      }
+      stack.pop();
       continue;
     }
-    const hidden =
-      (stack.at(-1)?.hidden ?? false) || /\brail:hidden\b/.test(attrs);
-    if (tag === "a") {
-      links.push({ attrs, hidden });
-      for (const node of stack) node.hasLink = true;
+    const hidden = (stack.at(-1)?.hidden ?? false) || /\brail:hidden\b/.test(attrs);
+    if (tag === "a" || attrs.includes('aria-disabled="true"') || (tag === "span" && / id="/.test(attrs))) {
+      open = { attrs, hidden };
     }
-    if (attrs.includes('aria-disabled="true"')) closed.push(hidden);
-    if (!self) stack.push({ tag, attrs, hidden, hasLink: false });
+    if (open && tag === "span" && !attrs.includes("aria-hidden") && text?.trim()) {
+      rows.push({ label: text.trim().replace("&#x27;", "'"), ...open });
+      open = null;
+    }
+    if (!self) stack.push({ tag, hidden });
   }
-  return { links, closed, groups };
+  return rows;
 }
 
-function renderCollapsed() {
-  return walk(
-    renderToStaticMarkup(
-      <NextIntlClientProvider locale="fr" timeZone="UTC" messages={messages}>
-        <SidebarNavList collapsed={true} onNavigate={() => {}} />
-      </NextIntlClientProvider>,
-    ),
+function collapsedMarkup() {
+  return renderToStaticMarkup(
+    <NextIntlClientProvider locale="fr" timeZone="UTC" messages={messages}>
+      <SidebarNavList collapsed={true} onNavigate={() => {}} />
+    </NextIntlClientProvider>,
   );
 }
 
-describe("SidebarNavList on the collapsed rail", () => {
-  it("keeps every open entry, in a group or not, its icon centred", () => {
-    const { links } = renderCollapsed();
+function rows() {
+  return Object.fromEntries(walk(collapsedMarkup()).map((r) => [r.label, r]));
+}
 
-    expect(links).toHaveLength(2);
-    for (const link of links) {
-      expect(link.hidden).toBe(false);
-      expect(link.attrs).toMatch(/\brail:px-0\b/);
+describe("SidebarNavList on the collapsed rail", () => {
+  // Mutations: `rail:hidden` back on a closed entry, or the products left on the rail.
+  it("keeps every row as its icon, and hides the platforms' products", () => {
+    const shown = Object.entries(rows())
+      .filter(([, row]) => !row.hidden)
+      .map(([label]) => label);
+
+    expect(shown).toEqual(["Vue d'ensemble", "Meteora", "Raydium", "Orca", "Token"]);
+  });
+
+  // Mutation: the platform linked to its first product, open or not.
+  it("links a platform to its first open product", () => {
+    expect(rows()["Meteora"]?.attrs).toMatch(/href="\/damm"/);
+  });
+
+  // Mutations: the current page's platform left unmarked, or marked on its products' own pages only.
+  it.each(["/damm", "/damm/pool"])("marks the platform of the current page, %s", (pathname) => {
+    nav.pathname = pathname;
+    expect(rows()["Meteora"]?.attrs).toMatch(/rail:shadow-\[inset_2px/);
+    nav.pathname = "/damm";
+  });
+
+  // Mutation: the caption left as plain text — folded, nothing says its products are not open yet.
+  it("tells that a platform with no open product is not ready yet", () => {
+    const caption = rows()["Raydium"]?.attrs ?? "";
+
+    expect(caption).toMatch(/title="Raydium — bientôt"/);
+    expect(caption).toMatch(/rail:text-dash-ink-3/);
+    expect(collapsedMarkup()).toMatch(/<span aria-hidden="true" class="[^"]*\brail:opacity-50\b[^"]*"><img[^>]*logo_raydium/);
+  });
+
+  // Mutation: `rail:px-0` dropped from a platform's link or caption — its icon sits off-centre.
+  it("centres every row", () => {
+    for (const label of ["Vue d'ensemble", "Meteora", "Raydium", "Orca", "Token"]) {
+      expect(rows()[label]?.attrs).toMatch(/\brail:px-0\b/);
     }
   });
 
-  it("hides every closed entry", () => {
-    const { closed } = renderCollapsed();
+  // Mutation: `rail:hidden` instead of `rail:sr-only` on the tag — a screen reader no longer hears « Bientôt ».
+  it("keeps « Bientôt » for screen readers", () => {
+    const tags = [...collapsedMarkup().matchAll(/<span class="([^"]*)">Bientôt</g)];
 
-    expect(closed).toEqual([true, true]);
-  });
-
-  it("shows a group only when it holds an open entry", () => {
-    const { groups } = renderCollapsed();
-
-    expect(groups).toEqual([
-      { hidden: false, hasLink: true },
-      { hidden: true, hasLink: false },
-    ]);
+    expect(tags).toHaveLength(5);
+    for (const [, classes] of tags) expect(classes).toMatch(/\brail:sr-only\b/);
   });
 });

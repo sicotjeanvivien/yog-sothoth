@@ -6,22 +6,39 @@ import { routing } from "../../../i18n/routing";
 import { SITE_NAME, SITE_URL } from "@/config/site";
 import "../globals.css";
 
-import { Cinzel, Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
+import "../fonts/fonts.css";
 
-const cinzel = Cinzel({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+// ⚠️ Google's own files, kept here: a build fetching them fails when Google is down. Each family
+// bears its const's name, the one Turbopack gives the CSS variable; `fonts.css` adds the subsets.
+const cinzel = localFont({
+  src: "../fonts/cinzel-latin.woff2",
+  weight: "400 600",
+  declarations: [
+    { prop: "font-family", value: "cinzel" },
+    { prop: "unicode-range", value: "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD" },
+  ],
   variable: "--font-display",  // exposes a CSS variable
   display: "swap",
 });
 // Read by the `--font-dash-*` theme tokens, on the site and the dashboard alike.
-const geist = Geist({
-  subsets: ["latin"],
+const geist = localFont({
+  src: "../fonts/geist-latin.woff2",
+  weight: "100 900",
+  declarations: [
+    { prop: "font-family", value: "geist" },
+    { prop: "unicode-range", value: "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD" },
+  ],
   variable: "--font-geist",
   display: "swap",
 });
-const geistMono = Geist_Mono({
-  subsets: ["latin"],
+const geistMono = localFont({
+  src: "../fonts/geist-mono-latin.woff2",
+  weight: "100 900",
+  declarations: [
+    { prop: "font-family", value: "geistMono" },
+    { prop: "unicode-range", value: "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD" },
+  ],
   variable: "--font-geist-mono",
   display: "swap",
 });

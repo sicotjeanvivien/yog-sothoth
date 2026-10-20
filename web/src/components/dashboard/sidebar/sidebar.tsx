@@ -9,11 +9,7 @@ import { useTranslations } from "next-intl";
 
 import { Link } from "@/i18n/navigation";
 import { LogoMark } from "@/components/shared/logo-mark";
-import {
-  ChevronDoubleLeftIcon,
-  ChevronDoubleRightIcon,
-  CloseIcon,
-} from "@/components/shared/icon";
+import { ChevronLeftIcon, CloseIcon } from "@/components/shared/icon";
 
 import { Preferences } from "./preferences";
 import { SidebarNavList } from "./sidebar-nav-list";
@@ -25,7 +21,10 @@ type SidebarProps = {
   /** A narrow rail. ⚠️ The drawer ignores it: every `collapsed` style is `rail:`-scoped. */
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  initialPreferencesOpen: boolean;
+  preferencesOpen: boolean;
+  /** Collapsed and on the rail: the drawer has no collapsed form. */
+  folded: boolean;
+  onTogglePreferences: () => void;
 };
 
 export function Sidebar({
@@ -33,14 +32,16 @@ export function Sidebar({
   onNavigate,
   collapsed,
   onToggleCollapsed,
-  initialPreferencesOpen,
+  preferencesOpen,
+  folded,
+  onTogglePreferences,
 }: SidebarProps) {
   const t = useTranslations("Dashboard.shell");
   const positioning =
     "fixed top-0 left-0 z-40 h-dvh transition-[transform,width] duration-200 ease-out rail:sticky rail:z-auto rail:translate-x-0";
   const drawerState = isOpen ? "translate-x-0" : "-translate-x-full";
   const width = collapsed
-    ? "w-[min(300px,85vw)] rail:w-[76px] rail:px-3"
+    ? "w-[min(300px,85vw)] rail:w-16 rail:gap-5 rail:px-2 rail:py-5"
     : "w-[min(300px,85vw)] rail:w-[232px]";
 
   return (
@@ -56,16 +57,21 @@ export function Sidebar({
       >
         <CloseIcon size={16} />
       </button>
-      <Brand collapsed={collapsed} />
+      <div
+        className={`flex items-center justify-between gap-1 ${collapsed ? "rail:flex-col rail:gap-3" : ""}`}
+      >
+        <Brand collapsed={collapsed} />
+        <CollapseToggle collapsed={collapsed} onToggle={onToggleCollapsed} />
+      </div>
       <nav className="min-h-0 flex-1 overflow-y-auto">
         <SidebarNavList collapsed={collapsed} onNavigate={onNavigate} />
       </nav>
-      <div className="flex flex-col gap-3">
-        <CollapseToggle collapsed={collapsed} onToggle={onToggleCollapsed} />
-        <div className={collapsed ? "rail:hidden" : undefined}>
-          <Preferences initialOpen={initialPreferencesOpen} />
-        </div>
-      </div>
+      <Preferences
+        open={preferencesOpen}
+        onToggle={onTogglePreferences}
+        collapsed={collapsed}
+        folded={folded}
+      />
     </aside>
   );
 }
@@ -83,7 +89,7 @@ export function Brand({
   return (
     <div className={`flex ${collapsed ? "rail:justify-center" : ""}`}>
       <Link href="/" className="flex items-center gap-3">
-        <LogoMark width={small ? 30 : 48} priority />
+        <LogoMark width={small ? 30 : 36} priority />
         <span
           className={`font-display text-[16px] font-semibold tracking-[0.16em] whitespace-nowrap uppercase ${collapsed ? "rail:sr-only" : ""}`}
         >
@@ -111,14 +117,11 @@ function CollapseToggle({
       onClick={onToggle}
       aria-label={label}
       aria-expanded={!collapsed}
-      title={collapsed ? label : undefined}
-      className={`hidden p-1 text-dash-ink-3 transition-colors hover:text-dash-ink rail:flex ${collapsed ? "rail:self-center" : "rail:self-end"}`}
+      title={label}
+      // ⚠️ Into the rail's right padding when unfolded: logo, wordmark and button overflow it otherwise.
+      className={`hidden h-8 w-8 shrink-0 items-center justify-center border border-transparent text-dash-ink-3 transition-colors hover:border-dash-rule hover:text-dash-ink rail:inline-flex ${collapsed ? "" : "rail:-mr-4"}`}
     >
-      {collapsed ? (
-        <ChevronDoubleRightIcon size={16} />
-      ) : (
-        <ChevronDoubleLeftIcon size={16} />
-      )}
+      <ChevronLeftIcon size={14} className={collapsed ? "rotate-180" : ""} />
     </button>
   );
 }

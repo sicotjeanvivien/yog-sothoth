@@ -3,20 +3,21 @@
     "Sidebar": {
       "nav": {
         "overview": "Vue d'ensemble",
-        "protocol": "Protocoles",
-        "meteoraDammV2": "Meteora DAMM v2",
-        "meteoraDlmm": "Meteora DLMM",
+        "meteora": "Meteora",
+        "dammV2": "DAMM v2",
+        "dlmm": "DLMM",
         "raydium": "Raydium",
         "orca": "Orca",
         "token": "Token",
-        "soon": "Bientôt"
+        "soon": "Bientôt",
+        "soonTitle": "{label} — bientôt"
       }
     },
     "shell": {
       "closeMenu": "Fermer le menu de navigation",
       "pageInfo": "À propos de cette page",
-      "collapseSidebar": "Réduire le menu",
-      "expandSidebar": "Étendre le menu",
+      "collapseSidebar": "Replier le menu",
+      "expandSidebar": "Déplier le menu",
       "metricInfo": "Définition",
       "menu": "Menu",
       "loading": "Chargement…"

@@ -5,7 +5,7 @@
  * fixed rail. The switch is CSS; React only tracks `isOpen`. No focus trap in the drawer.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
 
 import { Brand, Sidebar } from "@/components/dashboard/sidebar/sidebar";
@@ -13,8 +13,34 @@ import {
   SIDEBAR_COLLAPSED_COOKIE,
   SIDEBAR_COOKIE_MAX_AGE_S,
 } from "@/components/dashboard/sidebar/sidebar-state";
+import {
+  PREFERENCES_COOKIE_MAX_AGE_S,
+  PREFERENCES_OPEN_COOKIE,
+  preferencesClick,
+} from "@/components/dashboard/sidebar/preferences-state";
 import { RAIL_BREAKPOINT } from "@/components/shared/breakpoints";
 import { HamburgerIcon } from "@/components/shared/icon";
+
+const RAIL_QUERY = `(min-width: ${RAIL_BREAKPOINT})`;
+
+function subscribeToRail(onChange: () => void) {
+  const query = window.matchMedia(RAIL_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+/** Whether the menu is the fixed rail, not the drawer; the server paints the rail. */
+function useOnRail(): boolean {
+  return useSyncExternalStore(
+    subscribeToRail,
+    () => window.matchMedia(RAIL_QUERY).matches,
+    () => true,
+  );
+}
+
+function writeCookie(name: string, on: boolean, maxAgeS: number) {
+  document.cookie = `${name}=${on ? "1" : "0"}; path=/; max-age=${maxAgeS}; samesite=lax`;
+}
 
 export function DashboardShell({
   children,
@@ -30,18 +56,27 @@ export function DashboardShell({
   const t = useTranslations("Dashboard.shell");
   const [isOpen, setIsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(initialCollapsed);
+  const [preferencesOpen, setPreferencesOpen] = useState(initialPreferencesOpen);
+  const onRail = useOnRail();
 
   const open = useCallback(() => setIsOpen(true), []);
   const close = useCallback(() => setIsOpen(false), []);
 
   // A cookie, not localStorage: the server layout renders the right width, with no flash.
-  const toggleCollapsed = useCallback(() => {
-    setCollapsed((value) => {
-      const next = !value;
-      document.cookie = `${SIDEBAR_COLLAPSED_COOKIE}=${next ? "1" : "0"}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE_S}; samesite=lax`;
-      return next;
-    });
+  const persistCollapsed = useCallback((next: boolean) => {
+    writeCookie(SIDEBAR_COLLAPSED_COOKIE, next, SIDEBAR_COOKIE_MAX_AGE_S);
+    setCollapsed(next);
   }, []);
+  const toggleCollapsed = useCallback(
+    () => persistCollapsed(!collapsed),
+    [collapsed, persistCollapsed],
+  );
+  const togglePreferences = useCallback(() => {
+    const next = preferencesClick({ collapsed, onRail, open: preferencesOpen });
+    writeCookie(PREFERENCES_OPEN_COOKIE, next.open, PREFERENCES_COOKIE_MAX_AGE_S);
+    setPreferencesOpen(next.open);
+    if (next.expand) persistCollapsed(false);
+  }, [collapsed, onRail, preferencesOpen, persistCollapsed]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -63,7 +98,7 @@ export function DashboardShell({
 
   // Reset to closed on the rail, or the scroll-lock and overlay linger after a resize.
   useEffect(() => {
-    const query = window.matchMedia(`(min-width: ${RAIL_BREAKPOINT})`);
+    const query = window.matchMedia(RAIL_QUERY);
     function onChange(event: MediaQueryListEvent) {
       if (event.matches) close();
     }
@@ -86,7 +121,9 @@ export function DashboardShell({
         onNavigate={close}
         collapsed={collapsed}
         onToggleCollapsed={toggleCollapsed}
-        initialPreferencesOpen={initialPreferencesOpen}
+        preferencesOpen={preferencesOpen}
+        folded={collapsed && onRail}
+        onTogglePreferences={togglePreferences}
       />
 
       {/* `pt-14` up to 720 px makes room for the fixed mobile header. */}

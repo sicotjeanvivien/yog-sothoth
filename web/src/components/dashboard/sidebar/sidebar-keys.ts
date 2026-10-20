@@ -1,13 +1,17 @@
 /**
- * The sidebar's keys, as literal unions. Moving a key from `ClosedNavKey` to `OpenNavKey`
- * makes the icon map refuse to compile until the entry has an icon.
+ * The sidebar's keys, as literal unions. Every row but a platform's products needs its icon in
+ * `NAV_ICONS`: the collapsed rail shows nothing else.
  */
 
 export type OpenNavKey = "overview";
 
-export type ClosedNavKey =
-  | "meteoraDammV2"
-  | "meteoraDlmm"
-  | "raydium"
-  | "orca"
-  | "token";
+export type ClosedNavKey = "token";
+
+export type NavKey = OpenNavKey | ClosedNavKey;
+
+export type PlatformKey = "meteora" | "raydium" | "orca";
+
+/** The entries listed under a platform, without an icon of their own. */
+export type ProductKey = "meteoraDammV2" | "meteoraDlmm";
+
+export type IconKey = NavKey | PlatformKey;

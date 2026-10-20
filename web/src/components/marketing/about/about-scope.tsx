@@ -1,13 +1,13 @@
-/** The About page's scope: the dashboard menu's protocol group, each one observed or "Soon". */
+/** The About page's scope: the dashboard menu's protocols, each one observed or "Soon". */
 
 import { useTranslations } from "next-intl";
 
-import { PROTOCOL_ENTRIES } from "@/components/dashboard/sidebar/sidebar-nav";
-import type { ClosedNavKey, OpenNavKey } from "@/components/dashboard/sidebar/sidebar-keys";
+import { PROTOCOL_SCOPE } from "@/components/dashboard/sidebar/sidebar-nav";
+import type { PlatformKey, ProductKey } from "@/components/dashboard/sidebar/sidebar-keys";
 import { SITE_LABEL_CLASS } from "@/components/marketing/site-label";
 
 /** Ingested today, whether or not the dashboard has its page yet. */
-const OBSERVED: ReadonlySet<OpenNavKey | ClosedNavKey> = new Set(["meteoraDammV2"]);
+const OBSERVED: ReadonlySet<ProductKey | PlatformKey> = new Set(["meteoraDammV2"]);
 
 const TAG_CLASS =
   "px-[7px] py-0.5 font-dash-mono text-[10px] font-semibold tracking-[0.1em] whitespace-nowrap uppercase";
@@ -20,7 +20,7 @@ export function AboutScope() {
     <div>
       <span className={SITE_LABEL_CLASS}>{t("scope")}</span>
       <ul className="mt-2.5 border-t border-dash-rule">
-        {PROTOCOL_ENTRIES.map((entry) => {
+        {PROTOCOL_SCOPE.map((entry) => {
           const observed = OBSERVED.has(entry.key);
           return (
             <li
@@ -28,7 +28,7 @@ export function AboutScope() {
               className="flex items-center justify-between gap-4 border-b border-dash-rule py-3"
             >
               <span className={observed ? undefined : "text-dash-ink-3"}>
-                {tNav(entry.labelKey)}
+                {entry.labelKeys.map((key) => tNav(key)).join(" ")}
               </span>
               {observed ? (
                 <span className={`${TAG_CLASS} bg-dash-accent text-dash-surface`}>
