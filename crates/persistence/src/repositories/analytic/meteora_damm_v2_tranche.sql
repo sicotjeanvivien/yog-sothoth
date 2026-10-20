@@ -15,7 +15,7 @@ WITH tranche AS (
 last_swap AS (
     SELECT DISTINCT ON (pool_address) pool_address, next_sqrt_price
       FROM meteora_damm_v2_swap_events
-     WHERE timestamp >= $1 AND timestamp < $1::TIMESTAMPTZ + INTERVAL '5 minutes'
+     WHERE timestamp >= $1 AND timestamp < $1::TIMESTAMPTZ + $3::INTERVAL
      ORDER BY pool_address, timestamp DESC, slot DESC,
               transaction_index DESC NULLS LAST, event_index DESC
 ),
@@ -29,7 +29,7 @@ pools_per_mint AS (
 market AS (
     SELECT n.mint, pr.price_usd
       FROM pools_per_mint n
-      LEFT JOIN LATERAL yog_price_asof(n.mint, $1::TIMESTAMPTZ + INTERVAL '5 minutes') pr ON true
+      LEFT JOIN LATERAL yog_price_asof(n.mint, $1::TIMESTAMPTZ + $3::INTERVAL) pr ON true
 ),
 quoted AS (
     SELECT t.pool_address,

@@ -1,7 +1,7 @@
 -- 028_pool_prices_5min.sql — the price of each pool's two tokens per 5-minute
 -- tranche, written once by yog-analytic, and the swaps valued from it; the
--- hourly facts become their sums, and are rebuilt from the first whole hour the
--- raw swaps still cover.
+-- hourly facts become their sums, and are rebuilt from the second day the raw
+-- swaps still cover.
 
 CREATE TABLE analytic_tranches (
     bucket     TIMESTAMPTZ PRIMARY KEY,
@@ -50,7 +50,8 @@ CREATE INDEX analytic_pool_5min_bucket ON analytic_pool_5min (bucket DESC);
 SELECT add_retention_policy('analytic_pool_prices_5min', INTERVAL '7 days');
 SELECT add_retention_policy('analytic_pool_5min', INTERVAL '7 days');
 
-GRANT SELECT, INSERT, UPDATE
+-- Written once: no UPDATE, so a second write fails in Postgres itself.
+GRANT SELECT, INSERT
     ON analytic_tranches, analytic_pool_prices_5min, analytic_pool_5min
     TO yog_analytic;
 GRANT SELECT ON meteora_damm_v2_swap_events TO yog_analytic;
@@ -65,14 +66,19 @@ SELECT
     valued          AS valuation_complete
 FROM analytic_pool_hourly;
 
--- ⚠️ Only the hour of the floor stays, unfrozen: yog-analytic rebuilds every
--- fact from it; with no raw swap left, nothing stays and it starts afresh.
+-- ⚠️ The floor skips the oldest raw day, which the retention may drop during the
+-- rebuild; only that hour stays, unfrozen. With no raw swap, nothing stays.
 TRUNCATE analytic_pool_hourly, analytic_protocol_hourly;
 DELETE FROM analytic_hours
  WHERE bucket IS DISTINCT FROM (
      SELECT CASE WHEN MIN(timestamp) IS NOT NULL THEN
-                GREATEST(date_trunc('hour', MIN(timestamp), 'UTC') + INTERVAL '1 hour',
+                GREATEST(date_trunc('day', MIN(timestamp), 'UTC') + INTERVAL '1 day',
                          (SELECT MIN(bucket) FROM analytic_hours))
             END
        FROM meteora_damm_v2_swap_events);
+-- A writer stopped longer than the raw retention has no hour at the floor yet.
+INSERT INTO analytic_hours (bucket)
+SELECT date_trunc('day', MIN(timestamp), 'UTC') + INTERVAL '1 day'
+  FROM meteora_damm_v2_swap_events
+HAVING MIN(timestamp) IS NOT NULL AND NOT EXISTS (SELECT 1 FROM analytic_hours);
 UPDATE analytic_hours SET frozen_at = NULL;

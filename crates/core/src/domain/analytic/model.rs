@@ -16,7 +16,7 @@ const TRANCHE_MINUTES: i64 = 5;
 pub const TRANCHE: TimeDelta = TimeDelta::minutes(TRANCHE_MINUTES);
 
 /// The most tranches one cycle values: the hours of [`MAX_HOURS_PER_CYCLE`].
-pub const MAX_TRANCHES_PER_CYCLE: i32 = (MAX_HOURS_PER_CYCLE * 60 / TRANCHE_MINUTES) as i32;
+const MAX_TRANCHES_PER_CYCLE: i32 = (MAX_HOURS_PER_CYCLE * 60 / TRANCHE_MINUTES) as i32;
 
 /// How far the analytic tables go.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

@@ -8,7 +8,7 @@ mod meteora_damm_v2;
 use crate::repositories::helper::map_sqlx_error;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use sqlx::{PgExecutor, PgPool, Postgres, Transaction};
+use sqlx::{PgExecutor, PgPool, Postgres, Transaction, postgres::types::PgInterval};
 use yog_core::{
     RepositoryResult,
     domain::{AnalyticProgress, AnalyticRepository, CycleOutcome, CycleWrite, TRANCHE},
@@ -40,7 +40,7 @@ impl AnalyticRepository for PgAnalyticRepository {
         let mut tranche = cycle.tranches_from;
         // ⚠️ One statement per tranche: a whole catch-up in one would outlast its timeout.
         while tranche <= cycle.tranches_through {
-            meteora_damm_v2::value_tranche(&mut tx, tranche).await?;
+            meteora_damm_v2::value_tranche(&mut tx, tranche, tranche_interval()).await?;
             tranches_written += 1;
             tranche += TRANCHE;
         }
@@ -82,6 +82,17 @@ async fn lock_out_other_writers(tx: &mut Transaction<'static, Postgres>) -> Repo
     Ok(())
 }
 
+/// [`TRANCHE`] as Postgres takes it.
+fn tranche_interval() -> PgInterval {
+    PgInterval {
+        months: 0,
+        days: 0,
+        microseconds: TRANCHE
+            .num_microseconds()
+            .expect("a tranche fits in microseconds"),
+    }
+}
+
 /// Read again inside the cycle's transaction: what a cycle committed since
 /// this one was planned must stay out of it.
 async fn progress<'e>(executor: impl PgExecutor<'e>) -> RepositoryResult<AnalyticProgress> {
@@ -114,11 +125,12 @@ async fn record_tranches(
     sqlx::query!(
         r#"
         INSERT INTO analytic_tranches (bucket, written_at)
-        SELECT generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ, INTERVAL '5 minutes'), $3
+        SELECT generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ, $4::INTERVAL), $3
         "#,
         from,
         through,
         at,
+        tranche_interval(),
     )
     .execute(&mut **tx)
     .await

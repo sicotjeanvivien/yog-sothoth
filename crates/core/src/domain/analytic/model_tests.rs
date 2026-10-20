@@ -116,7 +116,7 @@ fn a_cycle_loses_the_hours_frozen_since_it_was_planned() {
 fn a_hand_built_cycle_freezes_nothing_past_what_it_rewrites() {
     let hand_built = CycleWrite {
         tranches_from: at(9, 0),
-        tranches_through: at(9, 55),
+        tranches_through: at(12, 55),
         from: at(9, 0),
         through: at(9, 0),
         freeze_through: Some(at(12, 0)),

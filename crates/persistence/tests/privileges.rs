@@ -26,7 +26,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     ),
     (
         "analytic_pool_5min",
-        &[("yog_analytic", &["INSERT", "SELECT", "UPDATE"])],
+        &[("yog_analytic", &["INSERT", "SELECT"])],
     ),
     (
         "analytic_pool_hourly",
@@ -34,7 +34,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     ),
     (
         "analytic_pool_prices_5min",
-        &[("yog_analytic", &["INSERT", "SELECT", "UPDATE"])],
+        &[("yog_analytic", &["INSERT", "SELECT"])],
     ),
     (
         "analytic_protocol_hourly",
@@ -52,7 +52,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     ),
     (
         "analytic_tranches",
-        &[("yog_analytic", &["INSERT", "SELECT", "UPDATE"])],
+        &[("yog_analytic", &["INSERT", "SELECT"])],
     ),
     ("announcements", &[("yog_api", &["SELECT"])]),
     ("claim_position_fee_events", &[("yog_api", &["SELECT"])]),
