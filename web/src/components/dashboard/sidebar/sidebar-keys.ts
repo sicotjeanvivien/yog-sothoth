@@ -1,6 +1,6 @@
 /**
- * The sidebar's keys, as literal unions. Moving a key from `ClosedNavKey` to `OpenNavKey`
- * makes the icon map refuse to compile until the entry has an icon.
+ * The sidebar's keys, as literal unions. Every key, open or closed, needs its icon in
+ * `NAV_ICONS`: the collapsed rail shows nothing else.
  */
 
 export type OpenNavKey = "overview";
@@ -11,3 +11,5 @@ export type ClosedNavKey =
   | "raydium"
   | "orca"
   | "token";
+
+export type NavKey = OpenNavKey | ClosedNavKey;

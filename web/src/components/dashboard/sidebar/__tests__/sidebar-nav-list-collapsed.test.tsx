@@ -38,11 +38,12 @@ vi.mock("../sidebar-nav", () => ({
 
 type Node = { tag: string; attrs: string; hidden: boolean; hasLink: boolean };
 
-/** For every link, closed entry and group, whether a `rail:hidden` on it or an ancestor hides it. */
+/** For every link, closed entry, group and caption, whether a `rail:hidden` on it or an ancestor hides it. */
 function walk(html: string) {
   const links: { attrs: string; hidden: boolean }[] = [];
   const closed: boolean[] = [];
   const groups: { hidden: boolean; hasLink: boolean }[] = [];
+  const captions: boolean[] = [];
   const stack: Node[] = [];
   for (const [, slash, tag = "", attrs = "", self] of html.matchAll(
     /<(\/?)([a-z0-9]+)([^>]*?)(\/?)>/g,
@@ -61,9 +62,10 @@ function walk(html: string) {
       for (const node of stack) node.hasLink = true;
     }
     if (attrs.includes('aria-disabled="true"')) closed.push(hidden);
+    if (tag === "span" && / id="/.test(attrs)) captions.push(hidden);
     if (!self) stack.push({ tag, attrs, hidden, hasLink: false });
   }
-  return { links, closed, groups };
+  return { links, closed, groups, captions };
 }
 
 function renderCollapsed() {
@@ -87,18 +89,18 @@ describe("SidebarNavList on the collapsed rail", () => {
     }
   });
 
-  it("hides every closed entry", () => {
+  // Mutation: `rail:hidden` back on a closed entry — the rail shows one entry out of six.
+  it("keeps every closed entry", () => {
     const { closed } = renderCollapsed();
 
-    expect(closed).toEqual([true, true]);
+    expect(closed).toEqual([false, false]);
   });
 
-  it("shows a group only when it holds an open entry", () => {
-    const { groups } = renderCollapsed();
+  // Mutation: a group hidden when it holds no open entry, as when only open ones had an icon.
+  it("keeps every group, its caption hidden", () => {
+    const { groups, captions } = renderCollapsed();
 
-    expect(groups).toEqual([
-      { hidden: false, hasLink: true },
-      { hidden: true, hasLink: false },
-    ]);
+    expect(groups.map((group) => group.hidden)).toEqual([false, false]);
+    expect(captions).toEqual([true, true]);
   });
 });

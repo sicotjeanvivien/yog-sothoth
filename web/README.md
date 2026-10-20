@@ -183,7 +183,7 @@ ships readable before its wording lands here.
 The `(dashboard)` layout mounts `DashboardShell`: the sidebar (a sticky rail
 from 721 px, the `rail:` breakpoint of `globals.css`; a drawer behind a thin
 "Menu" bar up to 720 px), the announcement banner and the live status. The
-rail collapses from the toggle at its foot, with a cookie.
+rail collapses to 64 px from the toggle beside the logo, with a cookie.
 
 **Nothing waits for data** — the layout reads only its two cookies before
 rendering: the announcement streams in its own `<Suspense>`, and each Overview
@@ -197,14 +197,18 @@ An entry is `open` (it has a page and an `href`) or `closed` (tagged "Soon", no
 `SidebarNavList` renders a closed entry as a plain `<span>`, never a link; its
 test fails as soon as one becomes a link or loses its tag. To open an entry
 once its page exists, move its key from `ClosedNavKey` to `OpenNavKey`
-(`sidebar-keys.ts`) and give it an `href`. The compiler then asks for its
-icon, which is all the collapsed rail shows. `/signals` is no longer in the
-menu.
+(`sidebar-keys.ts`) and give it an `href`. Every entry, open or closed, has
+its icon in `NAV_ICONS` — a drawn one, or the protocol's abbreviation (D2, DL,
+RY, OR) — shown in both states; the compiler refuses a key without one. The
+collapsed rail keeps every entry as its icon alone, its label in `title`.
+`/signals` is no longer in the menu.
 
-**Preferences** — at the foot of the menu, under the collapse toggle: the
+**Preferences** — at the foot of the menu: the
 language, FR | EN (`shared/locale-switch.tsx`, also the site footer's), each a
 link to the same page and query in that language. Whether they are open is the
-`yog_prefs_open` cookie, read by the layout so the first paint is right.
+`yog_prefs_open` cookie, read by the layout so the first paint is right. On
+the collapsed rail only their icon stays; a click unfolds the rail and opens
+them (`preferencesClick`).
 
 **Live status** — `live-status/`: `LiveIndicator` polls `/api/ingestion` and
 `liveStatusOf` maps it to four states — live (green), delayed (yellow), stale

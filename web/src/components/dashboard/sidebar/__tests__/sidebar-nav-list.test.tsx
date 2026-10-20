@@ -27,6 +27,9 @@ const CLOSED_LABELS = [
   "Token",
 ];
 
+// The closed entries whose icon is drawn; the protocols have an abbreviation.
+const DRAWN_ICONS = new Set(["Token"]);
+
 function render(): string {
   return renderToStaticMarkup(
     <NextIntlClientProvider locale="fr" timeZone="UTC" messages={messages}>
@@ -39,7 +42,8 @@ function render(): string {
 function row(html: string, label: string): string {
   const found = html
     .split("<li")
-    .find((chunk) => chunk.includes(`<span>${label}</span>`));
+    // React escapes the apostrophe of « Vue d'ensemble ».
+    .find((chunk) => chunk.includes(`<span>${label.replace("'", "&#x27;")}</span>`));
   if (found === undefined) throw new Error(`no row for ${label}`);
   return found.slice(0, found.indexOf("</li>"));
 }
@@ -62,13 +66,10 @@ describe("SidebarNavList", () => {
   it.each(CLOSED_LABELS)(
     "renders %s as a disabled span, outside any link",
     (label) => {
-      const html = render();
-      const closed = new RegExp(
-        `<span(?=[^>]*aria-disabled="true")[^>]*><span>${label}</span>`,
-      );
+      const closed = row(render(), label);
 
-      expect(html).toMatch(closed);
-      expect(html).not.toMatch(new RegExp(`<a\\b[^>]*>(?:(?!</a>).)*${label}`));
+      expect(closed).toMatch(/<span(?=[^>]*role="link")(?=[^>]*aria-disabled="true")/);
+      expect(closed).not.toMatch(/<a\b/);
     },
   );
 
@@ -77,7 +78,14 @@ describe("SidebarNavList", () => {
     const closed = row(render(), label);
 
     expect(closed).toMatch(/>Bientôt</);
-    expect(closed).not.toMatch(/<svg\b/);
+    expect(closed.match(/<svg\b/g)?.length ?? 0).toBe(DRAWN_ICONS.has(label) ? 1 : 0);
+  });
+
+  // Mutation: the icon rendered on the collapsed rail only.
+  it.each(["Vue d'ensemble", ...CLOSED_LABELS])("gives %s its icon", (label) => {
+    expect(row(render(), label)).toMatch(
+      /<span aria-hidden="true"[^>]*>(?:<svg\b|D2<|DL<|RY<|OR<)/,
+    );
   });
 
   it("gives nothing focusable besides the link", () => {

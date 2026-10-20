@@ -15,8 +15,8 @@
     "shell": {
       "closeMenu": "Fermer le menu de navigation",
       "pageInfo": "À propos de cette page",
-      "collapseSidebar": "Réduire le menu",
-      "expandSidebar": "Étendre le menu",
+      "collapseSidebar": "Replier le menu",
+      "expandSidebar": "Déplier le menu",
       "metricInfo": "Définition",
       "menu": "Menu",
       "loading": "Chargement…"

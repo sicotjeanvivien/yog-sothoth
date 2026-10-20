@@ -35,13 +35,15 @@ export function DashboardShell({
   const close = useCallback(() => setIsOpen(false), []);
 
   // A cookie, not localStorage: the server layout renders the right width, with no flash.
-  const toggleCollapsed = useCallback(() => {
-    setCollapsed((value) => {
-      const next = !value;
-      document.cookie = `${SIDEBAR_COLLAPSED_COOKIE}=${next ? "1" : "0"}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE_S}; samesite=lax`;
-      return next;
-    });
+  const persistCollapsed = useCallback((next: boolean) => {
+    document.cookie = `${SIDEBAR_COLLAPSED_COOKIE}=${next ? "1" : "0"}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE_S}; samesite=lax`;
+    setCollapsed(next);
   }, []);
+  const toggleCollapsed = useCallback(
+    () => persistCollapsed(!collapsed),
+    [collapsed, persistCollapsed],
+  );
+  const expand = useCallback(() => persistCollapsed(false), [persistCollapsed]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -86,6 +88,7 @@ export function DashboardShell({
         onNavigate={close}
         collapsed={collapsed}
         onToggleCollapsed={toggleCollapsed}
+        onExpand={expand}
         initialPreferencesOpen={initialPreferencesOpen}
       />
 
