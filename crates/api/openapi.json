@@ -629,67 +629,6 @@
         "pattern": "^-?\\d+(\\.\\d+)?$",
         "type": "string"
       },
-      "StatsResponse": {
-        "description": "Protocol-wide totals. Each USD sum comes with its coverage: `poolsPriced` of\n`poolsObserved` for the TVL, `swapBucketsPriced24h` of `swapBuckets24h` for\nvolume and fees, since a sum skips what it cannot value.",
-        "properties": {
-          "fees24hUsd": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/UnsignedDecimal"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "poolsDiscovered24h": {
-            "$ref": "#/components/schemas/Count"
-          },
-          "poolsObserved": {
-            "$ref": "#/components/schemas/Count"
-          },
-          "poolsPriced": {
-            "$ref": "#/components/schemas/Count"
-          },
-          "swapBuckets24h": {
-            "$ref": "#/components/schemas/Count"
-          },
-          "swapBucketsPriced24h": {
-            "$ref": "#/components/schemas/Count"
-          },
-          "totalTvlUsd": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/UnsignedDecimal"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "volume24hUsd": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/UnsignedDecimal"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "poolsPriced",
-          "swapBuckets24h",
-          "swapBucketsPriced24h",
-          "poolsObserved",
-          "poolsDiscovered24h",
-          "fees24hUsd",
-          "totalTvlUsd",
-          "volume24hUsd"
-        ],
-        "type": "object"
-      },
       "TokenActivityPageResponse": {
         "description": "The window envelope over a forward-only page: `prevCursor` is always `null`.",
         "properties": {
@@ -1680,35 +1619,6 @@
           }
         },
         "summary": "Live tail of the signal feed as Server-Sent Events: new signals only, each a\n`SignalResponse` with its id as the event id. History comes from\n`GET /api/signals`, re-fetched on (re)connect."
-      }
-    },
-    "/api/stats": {
-      "get": {
-        "description": "Returns the current protocol-wide statistics. Always a 200 with a payload —\nempty inputs surface as `null`/`0` fields, never a 404.",
-        "operationId": "get_stats",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StatsResponse"
-                }
-              }
-            },
-            "description": "Totals across every observed pool."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        },
-        "summary": "`GET /api/stats`"
       }
     },
     "/api/tokens/activity": {

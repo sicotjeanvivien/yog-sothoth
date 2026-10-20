@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * The page header's "Live · 2 s ago" button and its panel: the state, the last event, the
- * slot and the RPC latency, and the legend of the four states. ⚠️ Opens on click only.
+ * The page header's "Live · 2 s ago" button and its panel: state, last event, slot, RPC
+ * latency, the page's price coverage, the four states' legend. ⚠️ Opens on click only.
  */
 
 import {
@@ -25,7 +25,12 @@ import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { LIVE_LEGEND, liveStatusOf } from "./live-status";
 import { usePolled } from "./use-polled";
 
-export function LiveIndicator() {
+export function LiveIndicator({
+  coverage,
+}: {
+  /** The page's price coverage, streamed by the server; no row without it. */
+  coverage?: ReactNode;
+}) {
   const t = useTranslations("Dashboard.liveStatus");
   const ingestion = usePolled(fetchIngestionBrowser);
 
@@ -93,6 +98,9 @@ export function LiveIndicator() {
               value={lastEventAt ? <Age iso={lastEventAt} /> : "—"}
             />
             <NetworkRows />
+            {coverage !== undefined && (
+              <Row label={t("priceCoverage")} value={coverage} />
+            )}
           </dl>
 
           <ul className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1.5 border-t border-dash-rule pt-2.5 text-[11px] text-dash-ink-2">

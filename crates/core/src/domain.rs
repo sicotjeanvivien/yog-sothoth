@@ -3,7 +3,6 @@ mod announcements;
 mod domain_event;
 mod event_position;
 mod freshness_status;
-mod global_analytics;
 mod insert_outcome;
 mod kept_prices;
 mod liquidity_flow;
@@ -33,7 +32,6 @@ pub use announcements::{Announcement, AnnouncementKind, AnnouncementLookup, Anno
 pub use domain_event::DomainEvent;
 pub use event_position::{EventPosition, TransactionPosition};
 pub use freshness_status::{EventFreshnessRepository, FreshnessStatus};
-pub use global_analytics::{GlobalAnalytics, GlobalAnalyticsRepository};
 pub use insert_outcome::InsertOutcome;
 pub use kept_prices::{KeptPrices, PRICE_MAX_AGE_LATEST};
 pub use liquidity_flow::{LiquidityFlowRepository, PoolLiquidityFlow};
@@ -63,7 +61,7 @@ pub use meteora::{
     MeteoraDammV2WithdrawIneligibleRewardEventRepository, MeteoraDlmmPoolAccountProperties,
 };
 pub use network_status::{NetworkStatus, NetworkStatusLookup, NetworkStatusRepository};
-pub use pool::{Pool, PoolCatalog, PoolCounts, PoolRepository, ProtocolPools};
+pub use pool::{Pool, PoolCatalog, PoolRepository, ProtocolPools};
 pub use pool_account::{
     DecodedPoolAccount, PoolAccountProperties, PoolAccountResolver, PoolRegistryProperties,
 };

@@ -11,7 +11,7 @@ use yog_persistence::PgHealthChecker;
 
 use crate::application::{
     ActivityService, AnnouncementService, EnrichedSignal, IngestionService, NetworkService,
-    ProtocolCatalogService, SignalService, StatsService, TokenService, WorkSlots,
+    ProtocolCatalogService, SignalService, TokenService, WorkSlots,
 };
 
 /// The services and the runtime handles the router and handlers read. Handlers never reach a
@@ -29,7 +29,6 @@ pub(crate) struct AppState {
     pub(crate) stream_slots: Arc<Semaphore>,
     /// The slots of every expensive read: the slow routes and the cached computations.
     pub(crate) work_slots: WorkSlots,
-    pub(crate) stats_service: Arc<StatsService>,
     pub(crate) protocol_catalog_service: Arc<ProtocolCatalogService>,
     pub(crate) activity_service: Arc<ActivityService>,
     pub(crate) token_service: Arc<TokenService>,

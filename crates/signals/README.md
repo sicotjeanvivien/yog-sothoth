@@ -180,7 +180,7 @@ it changes**, not on every check, and measured.
 `meteora_damm_v2_pool_hourly_flow` VIEW, over yog-analytic's hourly facts (028):
 a swap counts once its tranche is valued, ~15 minutes after it closes. A window
 the facts do not span — a writer catching up or stopped — reads as no pool at all,
-as `/api/stats` reads it as no volume. A volume floor,
+as `/api/protocols/activity` returns no total for it. A volume floor,
 applied by the read, keeps thin pools out — but not a window that is not
 wholly valuable, which has no total to compare and stays to be counted. Warning at `|imbalance| ≥ threshold`, Critical at
 `≥ critical`.

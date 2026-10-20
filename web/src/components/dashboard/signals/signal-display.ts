@@ -5,7 +5,8 @@
 
 import type { FC } from "react";
 
-import type { SeverityResponse } from "@/lib/api/schema/zod.gen";
+import type { SeverityResponse, SignalResponse } from "@/lib/api/schema/zod.gen";
+import { formatPercent, formatSignedPercent } from "@/lib/format/format-percent";
 import {
   AlertOctagonIcon,
   AlertTriangleIcon,
@@ -43,5 +44,16 @@ export const STATUS_DOT: Record<
   reconnecting: "bg-amber-400",
 };
 
-/** How many signals the Overview's latest-signals block shows. */
-export const LATEST_SIGNALS_COUNT = 5;
+/** How many signals the Overview's signals block shows. */
+export const LATEST_SIGNALS_COUNT = 7;
+
+/** A known detector's value as a percent, an unknown one raw. */
+export function formatSignalValue(signal: SignalResponse, locale: string): string {
+  if (!KNOWN_DETECTORS.has(signal.detector)) {
+    return signal.value;
+  }
+  // The drain ratio is unsigned: "+61%" would read as growth.
+  return signal.detector === "tvl_drain"
+    ? formatPercent(signal.value, locale)
+    : formatSignedPercent(signal.value, locale);
+}

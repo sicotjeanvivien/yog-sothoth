@@ -9,7 +9,6 @@ mod protocol_activity;
 mod protocol_catalog;
 mod readiness;
 mod signal;
-mod stats;
 mod token;
 mod token_activity;
 mod window;
@@ -27,7 +26,6 @@ pub(crate) use readiness::{
     ChecksReportResponse, ComponentStatusResponse, ReadinessResponse, ReadinessStatusResponse,
 };
 pub(crate) use signal::SignalResponse;
-pub(crate) use stats::StatsResponse;
 pub(crate) use token::TokenResponse;
 pub(crate) use token_activity::TokenActivityPageResponse;
 pub(crate) use window::WindowedResponse;

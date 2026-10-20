@@ -46,6 +46,8 @@
   --breakpoint-rail: 45.0625rem;
   /* 1101 px: the site's grids drop to fewer columns up to 1100 px. */
   --breakpoint-wide: 68.8125rem;
+  /* 1181 px: the dashboard's grids drop to fewer columns up to 1180 px. */
+  --breakpoint-dash-wide: 73.8125rem;
 }
 
 @theme inline {
@@ -121,4 +123,10 @@
     outline: 2px solid var(--color-dash-accent);
     outline-offset: 2px;
   }
+}
+
+/* A wide table's horizontal scroll: a thin bar in the rule colour, on no track. */
+@utility dash-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-dash-rule) transparent;
 }

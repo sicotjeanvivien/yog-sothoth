@@ -19,6 +19,7 @@ import { formatShortAddress } from "@/lib/format/format-short-address";
 
 import { PoolPairCell } from "./pool-pair-cell";
 import {
+  formatSignalValue,
   KNOWN_DETECTORS,
   SEVERITY_COLOR,
   SEVERITY_ICON,
@@ -83,12 +84,7 @@ export function SignalCard({
   const locale = useLocale();
 
   const known = KNOWN_DETECTORS.has(signal.detector);
-  // The drain ratio is unsigned: "+61%" would read as growth.
-  const value = !known
-    ? signal.value
-    : signal.detector === "tvl_drain"
-      ? formatPercent(signal.value, locale)
-      : formatSignedPercent(signal.value, locale);
+  const value = formatSignalValue(signal, locale);
   const threshold =
     signal.threshold === null
       ? "—"

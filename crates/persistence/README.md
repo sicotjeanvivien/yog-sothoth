@@ -35,7 +35,7 @@ persistence/
 │   │   │                     plus the cp-amm pool-properties satellite)
 │   │   ├── meteora/dlmm/    (the DLMM pool-properties satellite; no event
 │   │   │                     repositories yet)
-│   │   ├── pool/, pool_current_state/, global_analytics/
+│   │   ├── pool/, pool_current_state/
 │   │   ├── protocol_activity/, token_activity/ (the measures the API reads)
 │   │   ├── signal/, swap_flow/, liquidity_flow/, pool_price_snapshot/
 │   │   ├── token_metadata/, token_price/, network_status/, watched_pool/
@@ -211,8 +211,8 @@ aggregates), which precomputes at the cost of staleness.
 ⚠️ **Inlining is not deduplication.** A view that reads a table its *caller*
 also reads gets scanned separately: the plan then holds two scans of the same
 hypertable. Migration 002 hit exactly that — the effective-price view was first
-joined *alongside* the swap cagg, and `/api/stats` scanned the swap hypertable
-twice. The fix is for the view to carry the base columns through so the caller
+joined *alongside* the swap cagg, and the protocol totals scanned the swap
+hypertable twice. The fix is for the view to carry the base columns through so the caller
 selects from it alone.
 
 ⚠️ **And a CTE referenced twice is materialized, which stops predicates from
@@ -560,12 +560,6 @@ the guard is written once, not in each protocol's query.
 the aggregate equal to `meteora_damm_v2_pool_hourly_activity` on closed hours
 where the pool and the market agree; `tests/analytic_prices.rs` holds the price
 rule (`crates/analytic/README.md`, *The price of a token in a pool*).
-
-`/api/stats` reads the last 24 h of the protocol aggregate and the last TVL of
-each protocol (`repositories/global_analytics.rs`). The volume reads as NULL
-unless the hours written span the window through the previous hour, the TVL
-unless measured since then: a stopped, catching-up or new writer shows, as
-`pool_current_tvl` does for a stale price.
 
 The cycle also writes what no sum of hours gives (029): the pools born per
 protocol and hour, from each protocol's `initialize_pool` events, in their own

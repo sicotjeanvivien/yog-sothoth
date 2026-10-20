@@ -22,13 +22,6 @@ pub(crate) struct CachePolicy {
     pub(crate) max_capacity: u64,
 }
 
-/// `/api/stats`: one aggregate for the whole protocol.
-pub(crate) const STATS: CachePolicy = CachePolicy {
-    name: "stats",
-    ttl: SHARED_RESULT_TTL,
-    max_capacity: 1,
-};
-
 /// `/api/protocols`: the catalogue, which counts every pool ever seen.
 pub(crate) const PROTOCOLS: CachePolicy = CachePolicy {
     name: "protocols",

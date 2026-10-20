@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatAbsolute, formatRelative } from "../date";
+import { formatAbsolute, formatRelative, formatUtcMoment } from "../date";
 
 // Away from any daylight-saving edge.
 const NOW = new Date("2026-05-12T15:00:00Z");
@@ -66,5 +66,16 @@ describe("formatAbsolute", () => {
 
   it("returns null on a malformed input", () => {
     expect(formatAbsolute("nope")).toBeNull();
+  });
+});
+describe("formatUtcMoment", () => {
+  // Mutation: `timeZone` dropped, a reader east of UTC reads the next day.
+  it("stays on the UTC day and hour", () => {
+    expect(formatUtcMoment("2026-10-13T23:30:00Z", "fr")).toBe("13 oct., 23:30 UTC");
+    expect(formatUtcMoment("2026-10-13T23:30:00Z", "en")).toBe("Oct 13, 23:30 UTC");
+  });
+
+  it("returns null on an invalid date", () => {
+    expect(formatUtcMoment("not a date", "en")).toBeNull();
   });
 });

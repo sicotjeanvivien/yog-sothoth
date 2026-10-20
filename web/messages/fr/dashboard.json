@@ -32,6 +32,7 @@
       "lastEvent": "Dernier événement",
       "slot": "Slot",
       "latency": "Latence RPC",
+      "priceCoverage": "Couverture prix",
       "states": {
         "live": "En direct",
         "delayed": "Retardé",
@@ -43,29 +44,94 @@
     "Overview": {
       "page": {
         "title": "Vue d'ensemble",
-        "description": "Aperçu global de toutes les pools Meteora observées par l'indexer : valeur totale verrouillée, activité 24h et découverte.",
+        "description": "Ce que Yog-Scope observe, protocole par protocole : TVL, volume, fees, pools actives, tokens les plus échangés et signaux, sur la période choisie.",
         "breadcrumb": "Tous les protocoles"
       },
+      "period": {
+        "label": "Période",
+        "short": {
+          "24h": "24 h",
+          "7d": "7 j",
+          "30d": "30 j"
+        },
+        "button": {
+          "24h": "24H",
+          "7d": "7J",
+          "30d": "30J"
+        },
+        "closedLabel": "{period} : pas encore disponible",
+        "closedUntil": "Pas encore assez de données : Yog-Scope les mesure depuis le {since}. Cette période sera complète le {opens}.",
+        "closedSoon": "Cette période ouvrira quand 30 jours de données seront mesurés.",
+        "closedEmpty": "Aucune heure n'est encore mesurée."
+      },
+      "unavailable": {
+        "label": "Pourquoi « — » ?",
+        "previous": "La période précédente commence avant le {since}, première heure mesurée : pas de comparaison avec une somme incomplète.",
+        "tvlStart": "La TVL n'est mesurée que depuis le {since} : elle n'a pas de valeur au début de la période.",
+        "tvlStartUnknown": "La TVL n'a pas de mesure au début de la période."
+      },
       "kpis": {
-        "title": "Chiffres clés",
-        "tvl": "TVL totale",
-        "coverage": "{priced} / {observed} valorisées",
-        "volume24h": "Volume 24h",
-        "bucketCoverage": "{priced} / {total} pool-heures valorisées",
-        "fees24h": "Frais 24h",
-        "pools": "Pools",
-        "discovered": "{count, plural, =0 {Aucune nouvelle pool (24h)} other {+# découvertes (24h)}}",
+        "tvl": "TVL",
+        "volume": "Volume {period}",
+        "fees": "Fees {period}",
+        "pools": "Pools actives",
+        "tvlChange": "sur {period}",
+        "volumeChange": "vs {period} préc.",
+        "feesProtocol": "dont protocole {amount}",
+        "poolsObserved": "sur {observed} observées",
+        "poolsBorn": "+{births} nées en {period}",
         "info": {
-          "tvl": "Somme de la valeur des réserves de toutes les pools observées dont les deux tokens ont un prix connu. La ligne dessous donne la couverture : pools valorisées / pools observées.",
-          "volume24h": "Volume d'échange réalisé sur les dernières 24 h, valorisé au prix du moment de chaque trade. Une heure dont les tokens n'ont pas de prix connu ne peut pas être valorisée et sort de la somme — la ligne dessous donne la couverture : heures valorisées / heures ayant tradé.",
-          "fees24h": "Frais de trading réellement encaissés sur 24 h (part LP + part protocole), valorisés au prix du moment du trade. Même couverture que le volume — les deux sont valorisés ensemble, donc une heure absente de l'un est absente de l'autre.",
-          "pools": "Pools découvertes dans le flux de transactions depuis le début de l'observation — ce qui a été vu, pas une liste de suivi."
+          "tvl": "La valeur de ce qui est déposé dans toutes les pools observées, quand les deux tokens d'une pool ont un prix connu, à la fin de la dernière heure complète. Sa variation compare à son niveau au début de la période choisie.",
+          "volume": "Ce qui s'est échangé sur la période choisie, valorisé au prix du moment de chaque échange, jusqu'à la dernière heure complète. La variation compare à la période précédente de même durée.",
+          "fees": "Ce que ces échanges ont payé en frais sur la période choisie : la part des déposants (LP) et celle du protocole.",
+          "pools": "Les pools qui ont eu au moins un échange sur la période choisie, parmi toutes celles que Yog-Scope a vues, et celles nées pendant la période."
         }
       },
-      "latestSignals": {
-        "title": "Derniers signaux",
-        "seeAll": "Voir tout",
-        "empty": "Aucun signal pour l'instant — les détecteurs veillent."
+      "protocols": {
+        "title": "Activité par protocole · {period}",
+        "info": "Un protocole est un programme qui fait fonctionner des pools d'échange. Yog-Scope en observe un aujourd'hui ; les autres arriveront un par un.",
+        "tableLabel": "Activité par protocole sur la période choisie",
+        "protocol": "Protocole",
+        "tvl": "TVL",
+        "volume": "Volume {period}",
+        "share": "Part du volume",
+        "live": "en direct"
+      },
+      "signals": {
+        "title": "Signaux",
+        "info": "Des comportements inhabituels repérés automatiquement dans les pools observées. Ce sont des constats, pas des conseils.",
+        "tableLabel": "Derniers signaux, tous protocoles",
+        "empty": "Aucun signal pour l'instant — les détecteurs veillent.",
+        "headline": {
+          "tvl_drain": "Fuite de TVL sur {pair} : {value}",
+          "flow_imbalance": "Déséquilibre des swaps sur {pair} : {value}",
+          "price_oracle_deviation": "Écart prix / oracle sur {pair} : {value}",
+          "fallback": "{pair} : {value}"
+        }
+      },
+      "volume": {
+        "titleHourly": "Volume par heure · {period}",
+        "titleDaily": "Volume par jour · {period}",
+        "infoHourly": "Ce qui s'est échangé, heure par heure, sur la période choisie.",
+        "infoDaily": "Ce qui s'est échangé, par tranche de 24 heures finissant à la dernière heure complète, sur la période choisie.",
+        "chartLabel": "Volume sur la période choisie, tous protocoles",
+        "invite": "Survolez ou touchez une barre pour son détail",
+        "today": "aujourd'hui",
+        "daysAgo": "J−{days}",
+        "noValue": "aucun volume valorisé"
+      },
+      "tokens": {
+        "title": "Tokens les plus échangés · {period}",
+        "info": "Les tokens qui ont le plus circulé sur la période choisie, tous protocoles confondus : un échange compte pour ses deux tokens. Un volume suivi d'une fraction ne couvre que ces pool-heures, les autres n'ayant pas pu être valorisées.",
+        "tableLabel": "Tokens les plus échangés sur la période choisie",
+        "token": "Token",
+        "volume": "Volume {period}",
+        "pools": "Pools",
+        "coverage": "{priced} pool-heures valorisées sur {total}",
+        "empty": "Aucun token échangé sur la période."
+      },
+      "coverage": {
+        "value": "{percent} des pool-heures"
       }
     },
     "BlockError": {

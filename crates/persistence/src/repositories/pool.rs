@@ -7,9 +7,7 @@ use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
-    domain::{
-        Pool, PoolCatalog, PoolCounts, PoolRegistryProperties, PoolRepository, ProtocolPools,
-    },
+    domain::{Pool, PoolCatalog, PoolRegistryProperties, PoolRepository, ProtocolPools},
 };
 
 pub struct PgPoolRepository {
@@ -119,27 +117,6 @@ impl PoolRepository for PgPoolRepository {
 
 #[async_trait]
 impl PoolCatalog for PgPoolRepository {
-    async fn counts(&self) -> RepositoryResult<PoolCounts> {
-        let row = sqlx::query!(
-            r#"
-            SELECT
-                COUNT(*) AS "observed!",
-                COUNT(*) FILTER (
-                    WHERE first_seen_at > NOW() - INTERVAL '24 hours'
-                ) AS "discovered_24h!"
-            FROM pools
-            "#,
-        )
-        .fetch_one(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        Ok(PoolCounts {
-            observed: row.observed,
-            discovered_24h: row.discovered_24h,
-        })
-    }
-
     async fn counts_by_protocol(&self) -> RepositoryResult<Vec<ProtocolPools>> {
         let rows = sqlx::query!(
             r#"

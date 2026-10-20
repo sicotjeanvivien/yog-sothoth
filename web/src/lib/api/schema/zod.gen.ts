@@ -199,19 +199,6 @@ export const zSignalResponse = z.object({
 
 export type SignalResponse = z.infer<typeof zSignalResponse>;
 
-export const zStatsResponse = z.object({
-    fees24hUsd: zUnsignedDecimal.nullable(),
-    poolsDiscovered24h: zCount,
-    poolsObserved: zCount,
-    poolsPriced: zCount,
-    swapBuckets24h: zCount,
-    swapBucketsPriced24h: zCount,
-    totalTvlUsd: zUnsignedDecimal.nullable(),
-    volume24hUsd: zUnsignedDecimal.nullable()
-});
-
-export type StatsResponse = z.infer<typeof zStatsResponse>;
-
 export const zTokenActivityResponse = z.object({
     poolHours: zCount,
     poolHoursValued: zCount,
@@ -394,8 +381,6 @@ export const zListSignalsQuery = z.object({
 export const zListSignalsResponse = zPageResponseSignalResponse;
 
 export const zStreamSignalsResponse = z.string();
-
-export const zGetStatsResponse = zStatsResponse;
 
 export const zListTokenActivityQuery = z.object({
     window: z.enum([

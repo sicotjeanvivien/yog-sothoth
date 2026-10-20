@@ -36,8 +36,8 @@ price of before.
 Both prices are kept, `market_*` beside the published `price_*`: their gap is
 how far the pool and the market disagree. The table covers the pools with
 swaps in the tranche, and only them.
-`/api/stats` reads the protocol aggregate and the last TVL measured
-(`repositories/global_analytics.rs` in `yog-persistence`).
+`/api/protocols/…` reads the protocol aggregate and the TVL
+(`repositories/protocol_activity.rs` in `yog-persistence`).
 
 ## Layout
 

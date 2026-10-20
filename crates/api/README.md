@@ -22,7 +22,7 @@ api/src/
 │   └── serve.rs           ← serve() — the server and the poller, and their stop
 ├── application/
 │   ├── services/          ← cross-protocol services at the root (SignalService,
-│   │                        StatsService, TokenService, NetworkService,
+│   │                        TokenService, NetworkService,
 │   │                        IngestionService, AnnouncementService)
 │   ├── signal_stream.rs   ← SignalStreamPoller (enriches once, feeds the SSE broadcast)
 │   ├── cache.rs           ← SharedCache (moka) and its named CachePolicy per use
@@ -110,7 +110,6 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/ingestion` | Our ingestion's freshness (`live` / `delayed` / `stale`) and its last indexed event |
 | `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` and `?pool=` filters); each item embeds its pool's token pair (`tokenA`/`tokenB`, `EmbeddedTokenResponse`) |
 | `GET` | `/api/signals/stream` | SSE stream of new signals (see below) |
-| `GET` | `/api/stats` | Global KPIs — total TVL, 24h volume/fees, pool counts |
 | `GET` | `/api/protocols` | Every protocol of the domain: observed by this build or not, pools seen — the catalogue, live |
 | `GET` | `/api/protocols/activity` | Per protocol over `?window=24h\|7d\|30d` (`?offset=` for the previous one): volume, fees and their shares, swaps, distinct active pools, births, pool-hours and the valued ones |
 | `GET` | `/api/protocols/activity/hourly`, `/daily` | The same flows per protocol and bar: an hour, or 24 hours ending at `asOf` |
@@ -135,8 +134,7 @@ cursor carries that hour, and one taken before a freeze is refused (400).
 
 ## What a route may return
 
-These rules hold for every `/api` route. Some current routes predate them
-(`/api/stats`); each changes with the page that needs it.
+These rules hold for every `/api` route.
 
 1. **A route names a resource of the data.** Its path is a noun phrase:
    `/api/<collection>`, `/api/<collection>/<id>`,
@@ -314,12 +312,12 @@ Each bound is named once in
 | `MAX_CONNECTIONS` | 400 | Connections held at once; the next wait in the kernel's accept queue (`CappedListener`). Capping streams was not enough: a burst of connections costs memory even when refused, and the allocator keeps the peak — 1000 at once got the process OOM-killed under 32 MiB with the stream cap in place. The `yog-api` image sets `MALLOC_ARENA_MAX=2`: without it glibc kept each burst's peak in a new arena (29.7 → 49 MiB → OOM over three rounds of 1000 opens); with it, twelve rounds level off at 44.1 MiB, inside the production `mem_limit`, raised to 64 MiB for it |
 | `IDLE_TIMEOUT` | 30 s | A connection with no byte either way for this long is closed, and its slot comes back. Without it the connection cap was a cheaper outage than the one it prevents: axum's `serve` sets no header-read nor keep-alive timeout, so 400 silent sockets would hold every slot. Both directions count — an SSE client sends nothing, its 15 s ping keeps it alive. It bounds that outage (400 silent sockets: `/healthz` answered after 28 s), it does not remove it for a client that can reach the process directly — in production only Caddy can, and it opens an upstream connection only for a complete request |
 
-And two results are shared rather than bounded: **`/api/stats`** and
-**`/api/protocols`** return the same body to every visitor, so they go through
+And one result is shared rather than bounded: **`/api/protocols`** returns
+the same body to every visitor, so it goes through
 `SharedCache` (`application/cache.rs`, on `moka`): the first caller of a cold
 key computes, the others wait for the same outcome — an error included, and
 nothing failed is kept. Each use declares a named `CachePolicy` (time to
-live, capacity) in that file: `STATS` (30 s, 1 entry), and `PROTOCOLS` (30 s, 1 entry) for
+live, capacity) in that file: `PROTOCOLS` (30 s, 1 entry) for
 `/api/protocols`, which counts every pool ever seen. The capacity, with eviction, is what makes the cache safe on keys
 that are not a fixed set.
 

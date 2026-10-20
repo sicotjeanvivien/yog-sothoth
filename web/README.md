@@ -65,7 +65,9 @@ lib/api/
 ├── schema/zod.gen.ts    # generated: one zod schema and one type per wire
 │                        # shape, from crates/api/openapi.json — never edited
 ├── server/              # one fetcher per resource for Server Components:
-│                        # fetchStats, fetchSignals, fetchActiveAnnouncements
+│                        # fetchSignals, fetchProtocolActivity, fetchTopTokens,
+│                        # fetchActiveAnnouncements, … — those a page's
+│                        # blocks share go through React's `cache`
 ├── browser/             # browser-side fetchers for Client Component flows
 │                        # (signals refill on reconnect, network status)
 └── errors.ts            # ApiClientError — discriminated union
@@ -131,7 +133,7 @@ its kind:
 
 ```tsx
 try {
-  stats = await fetchStats();
+  page = await fetchTopTokens(period, TOP_TOKENS);
 } catch (err) {
   if (err instanceof ApiClientError) {
     return <BlockError title={t("title")} kind={err.details.kind} />;
@@ -167,8 +169,8 @@ the SSE stream and the 200-item merge are untouched, so a hidden signal stays in
 memory and reappears the moment the filter releases it. One ⓘ on the detector
 group explains what each detector means.
 
-The **Overview** page shows the same cards for the latest signals, in a compact
-density, and keeps them live over the same SSE hook.
+The **Overview** shows the latest signals as rows of its own, kept live over the
+same SSE hook (see *Overview*).
 
 Signals render as cards: token pair (embedded `tokenA`/`tokenB` from the
 API, reusing `PoolPairCell`; short pool address while unresolved), a
@@ -219,7 +221,7 @@ it; the drawer has no folded form, whatever the collapse cookie says.
 `liveStatusOf` maps it to four states — live (green), delayed (yellow), stale
 (grey), offline (light red, the call failed). It sits in the page header (the
 Overview only) and opens on click, with the slot and RPC latency of
-`/api/network`.
+`/api/network`, and the page's price coverage when the page streams one in.
 
 **Fonts** — Geist (text) and Geist Mono (figures, addresses, times) are loaded
 by the locale layout, for the dashboard and the site alike; Cinzel too. Their
@@ -245,7 +247,47 @@ and red carry a meaning, never the brand. The frame (`shell/`, `sidebar/`,
 and no Tailwind palette. The background is a flat `dash-bg`, which also sits
 behind the pages that left the menu, with no glow and no text shadow. The
 older palette (`cosmos-*`, `sothoth-*`, `slate-*`) remains in use for
-page contents not yet moved to the roles, the Overview included.
+page contents not yet moved to the roles; the Overview's blocks have, not yet
+the shared ⓘ and `BlockError`.
+
+## Overview
+
+`(dashboard)/overview/page.tsx`, after the canvas: four KPIs (TVL, volume,
+fees, active pools), activity by protocol, the latest signals, volume by hour
+or by day, the most traded tokens. Every figure comes from yog-analytic's
+measures (`/api/protocols/…`, `/api/tokens/activity`), which all end at the
+same `asOf`, the close of the last frozen hour.
+
+**The period** — `?period=24h|7d|30d` (`lib/overview/period.ts`; missing or
+unknown is 24h) drives every label, section title, chart and ⓘ, which speak of
+"the chosen period". The TVL stays the value of the last frozen hour; only its
+change follows the period. The selector (`period-selector.tsx`) is a set of
+links, in its own unkeyed `<Suspense>` so a period change keeps it; every block
+has its `<Suspense key={period}>`, so the change shows their waiting slots
+only.
+
+**What may not be shown** (`lib/overview/availability.ts`, pure and tested) — a
+figure the facts do not cover whole is "—", never a smaller number:
+- a period whose window starts before `coveredSince` (the first frozen hour) is
+  closed: a button whose panel says when it opens. 30d stays closed in the web
+  (`CLOSED_PERIODS`) until its times are measured on the prod;
+- the volume change is "—" when the previous window (`offset`) starts before
+  `coveredSince`;
+- the TVL change is "—" when `/tvl/hourly` has no point at the window's start:
+  the hours before the first complete TVL are deleted.
+Each "—" carries an ⓘ with its reason.
+
+**ⓘ** — every KPI and section has one, click-toggled
+(`shared/info-popover.tsx`), never hover: hover does not exist on touch.
+
+**Blocks** — each fetches on its own, in its own `<Suspense>` with a
+`BlockPlaceholder` of its final size (`overview-layout.ts`), and fails on its
+own (`BlockError`, or a "—" KPI). The reads several blocks share are fetched
+once per render. The volume chart is HTML bars (`volume-bars.tsx`): two dashed
+marks on round values (`roundTicks`), a fixed reading line above, the bar under
+the pointer, finger or arrow keys full and the others faded. A token whose
+volume covers only part of its pool-hours carries the coverage mark
+(`volumeCoverage`).
 
 ## Site
 
@@ -424,7 +466,7 @@ web/
 │   │   └── [locale]/
 │   │       ├── layout.tsx           # html/body, intl provider, fonts
 │   │       ├── (dashboard)/         # app shell: menu, network status
-│   │       │   ├── overview/        # global KPIs, latest signals (live over SSE)
+│   │       │   ├── overview/        # KPIs, activity by protocol, signals, volume, tokens
 │   │       │   └── signals/         # live signal feed (SSR + SSE)
 │   │       └── (marketing)/         # public pages: home, about, terms,
 │   │                                # privacy, legal-notice, support-us,
@@ -443,6 +485,7 @@ web/
 │   │   ├── announcements/           # pickAnnouncement + dismiss cookie
 │   │   ├── config/                  # zod-validated env (server + client)
 │   │   ├── coverage/                # volumeCoverage (pure, tested)
+│   │   ├── overview/                # period, availability, chart, totals (pure, tested)
 │   │   ├── format/                  # pubkey, date, number formatters
 │   │   └── signals/                 # mergeSignals, filterSignals (pure, tested)
 │   ├── types/
