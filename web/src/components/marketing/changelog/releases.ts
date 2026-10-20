@@ -35,7 +35,7 @@ export const RELEASES: readonly Release[] = [
     version: "v0.1.12",
     date: "2026-10-20",
     summary:
-      "The Overview now says which protocol its figures come from, over 24 hours or 7 days, with the most traded tokens and an advanced mode; and a token sold off within the hour no longer inflates the volume.",
+      "The Overview now says which protocol its figures come from, over 24 hours or 7 days, with the most traded tokens and an advanced mode; a token sold off within the hour no longer inflates the volume; and the price service gets the memory it needs.",
     sections: [
       {
         kind: "features",
@@ -80,6 +80,10 @@ export const RELEASES: readonly Release[] = [
           {
             text: "The analytic writer prices each pool's two tokens once per five-minute tranche, keeps the market price beside the price it publishes, and values the swaps from it; no reader values a swap anymore.",
             technical: true,
+          },
+          {
+            text: "The service that fetches token prices and names gets 64 MB of memory instead of 32: it needed about 35, so it lived on swap and was slowed down during its calls to the price providers.",
+            technical: false,
           },
         ],
       },

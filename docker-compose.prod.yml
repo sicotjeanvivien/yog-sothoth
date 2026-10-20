@@ -173,7 +173,8 @@ services:
     image: yog-context:prod
     build: !reset null
     ports: !reset []
-    mem_limit: 32m
+    # ⚠️ Size it on anonymous memory plus swap: the peak stops at the limit, the rest is in swap.
+    mem_limit: 64m
 
   yog-signals:
     image: yog-signals:prod
