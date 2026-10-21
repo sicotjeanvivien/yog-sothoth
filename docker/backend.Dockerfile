@@ -28,7 +28,7 @@
 # and rust-toolchain.toml must all be visible.
 
 # ── chef base ──────────────────────────────────────────────────────
-FROM rust:1.98-slim-bookworm AS chef
+FROM rust:1.99.1-slim-bookworm AS chef
 WORKDIR /app
 
 # pkg-config + libssl-dev are needed by several transitive crates
@@ -41,6 +41,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # cargo-chef pinned to a known-good release. Locked install avoids
 # pulling new transitive versions on every image build.
 RUN cargo install cargo-chef --locked --version 0.1.71
+
+# ⚠️ rust-toolchain.toml alone sets the toolchain, whatever the tag above: installed
+#    here, in a cached layer, or rustup fetches it in every stage that copies it in.
+COPY rust-toolchain.toml ./
+RUN rustup toolchain install --no-self-update
 
 # ── planner ────────────────────────────────────────────────────────
 # Copies the manifests + source just long enough to compute the

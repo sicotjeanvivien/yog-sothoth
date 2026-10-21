@@ -38,7 +38,7 @@
   "devDependencies": {
     "@hey-api/openapi-ts": "0.99.0",
     "@tailwindcss/postcss": "4.*",
-    "@types/node": "24.*",
+    "@types/node": "26.*",
     "@types/react": "19.*",
     "@types/react-dom": "19.*",
     "autoprefixer": "10.*",
