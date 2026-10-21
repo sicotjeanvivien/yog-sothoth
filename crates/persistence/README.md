@@ -943,6 +943,33 @@ configured to store database data in a …"). Hence the new mount point and the
 new volume (`timescaledb_pg18`) in `docker-compose.yml`, which also leaves the
 pg16 volume untouched for step 1.
 
+### Updating TimescaleDB in place, on the same Postgres major
+
+The image tag moves in both compose files, and the version that carries it
+deploys as usual. The new image also ships the previous TimescaleDB libraries,
+so Postgres restarts on it with the extension unchanged; the update itself is
+done by hand, in this order:
+
+1. **Wait for yog-archive's startup dump** to end in `archived`: it is the last
+   dump of the old version, and the only one that restores into it.
+2. **Update the extension**, alone in a fresh session, with no `pg_dump`
+   running (it would hold the update behind its locks, and everything behind
+   the update):
+   `PGOPTIONS='-c lock_timeout=30s' psql -X <admin-url> -c "ALTER EXTENSION timescaledb UPDATE"`.
+   Any statement before it in the session — a `SET lock_timeout` included —
+   loads the old library, and the update is refused.
+3. **Re-run `yog-migrate bootstrap`** (it applies `setup_roles.sql`), and check
+   that `PUBLIC` took nothing back ([above](#what-public-holds-taken-back--and-re-taken-after-an-extension-update)).
+4. **Restart every daemon**, yog-archive included, whose startup dump is then
+   the first of the new version. A connection opened before the update keeps
+   the old library loaded, and every TimescaleDB query on it fails with
+   `"timescaledb" already loaded with a different version`. Measured on
+   21 October 2026 (2.30.1 → 2.30.2): yog-indexer, yog-signals and
+   yog-analytic failed their heartbeats until restarted.
+
+There is no way back afterwards: the previous image lacks the new library, so
+the previous version of the stack can no longer load the extension.
+
 ## SQLx offline cache
 
 The crate uses `sqlx::query!` macros verified against the live schema at
