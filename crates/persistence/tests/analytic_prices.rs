@@ -644,6 +644,75 @@ async fn without_the_raw_a_one_way_tranche_is_still_exact(pool: PgPool) {
     assert_eq!(fees(&pool, &address).await, Some(dec("1")));
 }
 
+/// Against the raw swaps read as the aggregate's whatever they hold: a purchase landing after
+/// the tranche was materialised would add its fee to the split, against sums that lack it.
+#[sqlx::test]
+async fn a_swap_late_past_the_aggregate_leaves_the_split_unknown(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (a, sol) = (pk(10).to_string(), pk(11).to_string());
+    let address = setup_pool(&pool, 1, (&a, 6), (&sol, 6)).await;
+    price_at(&pool, &sol, "100", tranche).await;
+    trades(&pool, &address, &ONLY_B, tranche).await;
+    sqlx::query("CALL refresh_continuous_aggregate('meteora_damm_v2_swap_events_5min', $1, $2)")
+        .bind(tranche)
+        .bind(tranche + Duration::minutes(5))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let late = [(
+        "late",
+        "b_to_a",
+        (9_900_000_000, 10_000_000),
+        100_000,
+        false,
+    )];
+    trades(&pool, &address, &late, tranche + Duration::minutes(1)).await;
+
+    value(&pool, tranche).await;
+
+    assert_eq!(valued_tranche(&pool, &address).await, (false, None, None));
+}
+
+/// Against a sale's B fee shared by its net output: SOL sold for X, the fee taken in X on
+/// the way out, would be worth 1/990 of the trade instead of the 10 X of 1 000 it took.
+#[sqlx::test]
+async fn a_sale_of_the_trusted_input_pays_its_output_fee_share(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (sol, x, other) = (pk(10).to_string(), pk(11).to_string(), pk(12).to_string());
+    let address = setup_pool(&pool, 1, (&sol, 6), (&x, 6)).await;
+    let beside = setup_pool(&pool, 2, (&sol, 6), (&other, 6)).await;
+    price_at(&pool, &sol, "100", tranche).await;
+    swap(
+        &pool,
+        &beside,
+        "beside",
+        (1, 1),
+        sqrt_price_x64(1, 1),
+        tranche,
+    )
+    .await;
+    // 1 SOL in for 990 X out, 10 X more the fee.
+    let sale = [(
+        "sell",
+        "a_to_b",
+        (1_000_000, 990_000_000),
+        10_000_000,
+        false,
+    )];
+    trades(&pool, &address, &sale, tranche).await;
+
+    value(&pool, tranche).await;
+
+    let (valued, sells, _) = valued_tranche(&pool, &address).await;
+    assert!(valued);
+    assert_eq!(sells, Some(dec("100")), "the 1 SOL paid in");
+    assert_eq!(
+        fees(&pool, &address).await,
+        Some(dec("1")),
+        "10 of the 1 000 X"
+    );
+}
+
 /// Against the trusted output taken net of the input fee: SOL bought with X, its fee taken
 /// in X on the way in, would be worth the 0.99 SOL received, not the 1 SOL it traded.
 #[sqlx::test]

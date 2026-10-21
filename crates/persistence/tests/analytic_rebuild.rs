@@ -1,7 +1,7 @@
 //! The rebuild of 031: every table valued at the pool's mid price emptied, and the writer's
-//! floor kept, read on the 5-minute aggregate rather than on the raw swaps.
+//! floor kept where the raw swaps, which split the B fees, still cover it.
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use sqlx::migrate::Migrator;
 use sqlx::{AssertSqlSafe, PgPool};
 use yog_core::domain::{AnalyticRepository, CycleWrite};
@@ -121,28 +121,10 @@ async fn the_rebuild_empties_the_valued_tables(pool: PgPool) {
     );
 }
 
-/// Against the floor read on the raw swaps: their retention gone past it, the writer would
-/// lose every hour the aggregate still covers.
+/// Against the floor read on the aggregate: older than the raw swaps, its hours would be
+/// valued again with no split of their B fees, and frozen unvalued.
 #[sqlx::test(migrations = false)]
-async fn the_floor_stays_when_the_raw_is_gone(pool: PgPool) {
-    MIGRATOR.run_to(30, &pool).await.unwrap();
-    swap_materialised(&pool, 5).await;
-    frozen_hours_from(&pool, 3).await;
-    sqlx::query("DELETE FROM meteora_damm_v2_swap_events")
-        .execute(&pool)
-        .await
-        .unwrap();
-
-    MIGRATOR.run_to(31, &pool).await.unwrap();
-
-    assert_eq!(hours(&pool).await, [(midnight(&pool, 3).await, false)]);
-}
-
-/// Against the writer's first hour taken alone: older than what the aggregate covers, its
-/// hours would be written again with no swap, and published as empty; and against a whole
-/// day skipped, which an aggregate begun today would push to tomorrow.
-#[sqlx::test(migrations = false)]
-async fn the_floor_waits_for_the_aggregate(pool: PgPool) {
+async fn the_floor_waits_for_the_raw(pool: PgPool) {
     MIGRATOR.run_to(30, &pool).await.unwrap();
     swap_materialised(&pool, 3).await;
     frozen_hours_from(&pool, 5).await;
@@ -151,17 +133,22 @@ async fn the_floor_waits_for_the_aggregate(pool: PgPool) {
 
     assert_eq!(
         hours(&pool).await,
-        [(midnight(&pool, 3).await + Duration::hours(2), false)],
-        "the hour after the aggregate's first, at 01:00"
+        [(midnight(&pool, 2).await, false)],
+        "the raw swaps' second day"
     );
 }
 
-/// Against an aggregate read as no bound when it is empty: the writer's old hours would be
-/// written again with no swap, and published as empty.
+/// Against the writer's first hour kept with no raw swap left: its hours would be valued
+/// again with nothing to split their fees, and frozen unvalued.
 #[sqlx::test(migrations = false)]
-async fn the_floor_needs_the_aggregate(pool: PgPool) {
+async fn without_the_raw_no_hour_stays(pool: PgPool) {
     MIGRATOR.run_to(30, &pool).await.unwrap();
+    swap_materialised(&pool, 5).await;
     frozen_hours_from(&pool, 3).await;
+    sqlx::query("DELETE FROM meteora_damm_v2_swap_events")
+        .execute(&pool)
+        .await
+        .unwrap();
 
     MIGRATOR.run_to(31, &pool).await.unwrap();
 

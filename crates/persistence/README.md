@@ -585,15 +585,16 @@ tokens — the rate the tranche traded at, from the aggregate's `traded_a` and
 `traded_b`, the market prices through `yog_price_asof` once per mint — and values
 each direction's gross trusted leg through `yog_moved_amount_usd` (025): both read
 one snapshot of the aggregate. The raw swaps of the tranche tell the buys' input
-fee in B apart from the sales' output fee, which the aggregate sums together.
+fee in B apart from the sales' output fee, which the aggregate sums together; they
+are read only when they count the aggregate's swaps.
 Nothing else in the
 writer reads a price, and no view a binary reads values a swap by the hour
 (`tests/analytic_prices.rs`): the hourly priced view (023) is left to the
 activity view alone. The two 5-minute tables are kept 7 days, as the raw swaps.
 031 empties every table valued at the pool's mid price, and the protocol periods,
 written once at each freeze, that the hours frozen again write anew. It keeps the
-writer's floor: its first hour, no earlier than the hour after the 5-minute
-aggregate's first, and none without it (`tests/analytic_rebuild.rs`).
+writer's floor: its first hour, no earlier than the second day of the raw swaps,
+which split the B fees, and none without them (`tests/analytic_rebuild.rs`).
 ⚠️ A swap written into a tranche already valued — it is then more than 10 minutes
 late — is missing from the facts for good.
 

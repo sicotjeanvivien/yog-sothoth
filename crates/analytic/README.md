@@ -146,8 +146,9 @@ What valuing once costs, by design:
 - a pool-tranche without a trusted token when it is valued stays unvalued for
   good, and its hour with it. It is counted (`valued = false`,
   `active_pools_valued`), never filled with a guess;
-- a tranche valued again once its raw swaps are gone, both ways in a pool
-  collecting its fees in B, has no split of its B fee, and stays unvalued too.
+- a two-way tranche of a pool collecting its fees in B whose raw swaps are not
+  the aggregate's — a swap landed after its materialisation, or raw swaps gone —
+  has no split of its B fee, and stays unvalued too.
 
 ## Configuration
 
