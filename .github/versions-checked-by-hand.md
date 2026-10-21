@@ -1,6 +1,6 @@
 # Versions checked by hand
 
-Dependabot (`dependabot.yml`) never proposes the versions below: check each one by hand when its monthly PRs arrive.
+Dependabot (`dependabot.yml`) never proposes the versions below: check each one by hand when its weekly PRs arrive.
 
 | What | Where | Moves with | Latest |
 |---|---|---|---|
