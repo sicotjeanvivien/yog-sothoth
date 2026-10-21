@@ -54,6 +54,8 @@ struct Ledger {
     pid_file: Option<PathBuf>,
     /// Whether that `pg_dump` was still running when the upload was aborted.
     pg_dump_alive_at_abort: std::sync::Mutex<Option<bool>>,
+    /// The size of each part handed to the bucket, refused ones included.
+    parts: std::sync::Mutex<Vec<usize>>,
 }
 
 /// Whether `pid` still runs: present in `/proc` and not a zombie, which still answers `kill -0`.
@@ -70,6 +72,8 @@ enum Bucket {
     Accepting,
     /// Refuses to open any upload, as a key without the right would.
     Refusing,
+    /// Opens the upload, then refuses every part, as Scaleway refuses the 1 001st.
+    RefusingParts,
 }
 
 /// An in-memory bucket that records how each upload ended.
@@ -90,11 +94,25 @@ impl std::fmt::Display for TestStore {
 struct RecordingUpload {
     inner: Box<dyn MultipartUpload>,
     ledger: Arc<Ledger>,
+    refuse_parts: bool,
 }
 
 #[async_trait]
 impl MultipartUpload for RecordingUpload {
     fn put_part(&mut self, data: PutPayload) -> UploadPart {
+        self.ledger
+            .parts
+            .lock()
+            .unwrap()
+            .push(data.content_length());
+        if self.refuse_parts {
+            return Box::pin(async {
+                Err(object_store::Error::Generic {
+                    store: "TestStore",
+                    source: "400 InvalidArgument: Part number must be an integer between 1 and 1000, inclusive".into(),
+                })
+            });
+        }
         self.inner.put_part(data)
     }
 
@@ -154,6 +172,7 @@ impl ObjectStore for TestStore {
         Ok(Box::new(RecordingUpload {
             inner,
             ledger: Arc::clone(&self.ledger),
+            refuse_parts: self.bucket == Bucket::RefusingParts,
         }))
     }
 
@@ -469,6 +488,36 @@ async fn a_bucket_that_refuses_the_upload_is_signalled() {
         fakes.read("args"),
         None,
         "pg_dump ran with nowhere to write"
+    );
+}
+
+/// Against two mutations: the writer no longer cut at [`PART_SIZE`], or a refused part no longer
+/// stopping the dump. ⚠️ A refusal is joined only once two parts are in flight: hence three parts.
+#[tokio::test]
+async fn a_part_the_bucket_refuses_mid_dump_keeps_nothing_and_signals_why() {
+    let fakes = Fakes::new();
+    let size = 2 * PART_SIZE + 1024 * 1024;
+    let pg_dump = fakes.pg_dump(VERSION_16, &format!("head -c {size} /dev/zero"));
+    let pg_restore = fakes.script("pg_restore", "cat > /dev/null; exit 0");
+    let run = run_with(
+        server_16(),
+        Bucket::RefusingParts,
+        pg_dump,
+        pg_restore,
+        CancellationToken::new(),
+    )
+    .await;
+
+    assert_failed(
+        &run,
+        "store_failed",
+        "a part was refused: Generic TestStore error: 400 InvalidArgument",
+        1,
+    )
+    .await;
+    assert_eq!(
+        *run.ledger.parts.lock().unwrap(),
+        vec![PART_SIZE, PART_SIZE]
     );
 }
 

@@ -66,8 +66,8 @@ the check, and decides the `RunOutcome`.
 4. Run `pg_dump --format=custom --no-password`, the password split out of the
    URL (a socket URL with no host is accepted) and passed in `PGPASSWORD`,
    never in the arguments, which any user of the host can read in
-   `/proc/<pid>/cmdline`. Its output streams to the bucket in 8 MiB parts,
-   two in flight at most.
+   `/proc/<pid>/cmdline`. Its output streams to the bucket in 32 MiB parts,
+   two in flight at most; the bucket refuses the 1 001st (*Deploying*).
 5. Check the archive: `pg_dump` exited 0, **and** `pg_restore
    --file=/dev/null`, fed the whole stream alongside the upload, exits 0.
    Otherwise abort the upload. Restoring to a script file makes `pg_restore`
@@ -136,6 +136,13 @@ run otherwise, and says so.
   recoverable that long, and versions do not pile up forever — and abort
   incomplete multipart uploads after **1 day**: a stop mid-dump aborts its
   upload, but a killed process cannot.
+- **Largest dump: ~33.5 GB.** Scaleway takes at most 1 000 parts in one
+  multipart upload — AWS's 10 000 do not hold there — so 1 000 × 32 MiB ≈
+  33.5 GB. A larger dump ends in `store_failed` at part 1 001
+  (`400 InvalidArgument`), and nothing reaches the bucket. At the dump-to-database
+  ratio of October 2026 (0.53), that covers a database of ~63 GB, about 70 % of
+  the 90 GB disk. Raising `PART_SIZE` raises the ceiling and the memory with
+  it: an upload holds three parts.
 - **Key**: write-only on the bucket, no right to delete objects or versions.
   Retention belongs to the lifecycle rule, not to the archiver, for the same
   reason.
@@ -153,8 +160,8 @@ run otherwise, and says so.
   `ARCHIVE_STORE_*`, `ARCHIVE_HEARTBEAT_URL`) is unset — and only then: a
   placeholder passes. They are commented out in `.env.example` for that
   reason, so that a server `.env` copied from it fails the check instead of
-  starting an archiver whose alarm points at a check nobody created. Limit 256 MiB, for a
-  measured peak of 31 MiB with `pg_dump`. It waits for Postgres and
+  starting an archiver whose alarm points at a check nobody created. Limit 256 MiB, for
+  three 32 MiB parts (~96 MiB) plus `pg_dump` and `pg_restore`. It waits for Postgres and
   `yog-migrate` at `compose up`; after a host reboot Docker ignores that
   order, and a first run that finds Postgres not yet up ends in `refused`,
   signalled, with the next dump a full interval later.

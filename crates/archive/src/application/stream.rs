@@ -8,12 +8,20 @@ use yog_persistence::PgTools;
 
 use super::run_outcome::{Interrupted, RunFailure};
 
-/// Size of one multipart part. S3 requires at least 5 MiB for every part
-/// but the last; 8 MiB keeps the memory an upload holds small.
-pub(super) const PART_SIZE: usize = 8 * 1024 * 1024;
+/// Parts in one upload: Scaleway refuses the 1 001st.
+const MAX_PARTS: u64 = 1_000;
 
-/// Parts uploaded concurrently before the reader waits. With [`PART_SIZE`],
-/// the upload holds at most ~24 MiB (two in flight, one filling).
+/// Size of one multipart part; with [`MAX_PARTS`], the largest dump the bucket takes.
+/// S3 requires at least 5 MiB for every part but the last.
+pub(super) const PART_SIZE: usize = 32 * 1024 * 1024;
+
+const _: () = assert!(
+    PART_SIZE as u64 * MAX_PARTS >= 33_554_432_000,
+    "the bucket would refuse a dump of 33.5 GB"
+);
+
+/// Parts uploaded concurrently before the reader waits: the upload holds at most
+/// three parts, two in flight and one filling.
 const PARTS_IN_FLIGHT: usize = 2;
 
 /// Dump into the open upload while `pg_restore` checks the same bytes; returns the bytes written.
