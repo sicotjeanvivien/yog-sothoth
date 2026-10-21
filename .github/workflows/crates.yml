@@ -73,7 +73,7 @@ jobs:
       run: ${{ steps.diff.outputs.run }}
       contract: ${{ steps.contract.outputs.run }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - id: diff
@@ -93,7 +93,7 @@ jobs:
     if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # `cargo check --workspace` covers every member without listing any,
@@ -171,7 +171,7 @@ jobs:
     if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -222,7 +222,7 @@ jobs:
     if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: python3 crates/check-module-visibility.py
 
   fmt:
@@ -231,7 +231,7 @@ jobs:
     if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo fmt --all -- --check
 
@@ -241,7 +241,7 @@ jobs:
     if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # Every crate must be listed: clippy only DRIVES the packages named with
@@ -267,7 +267,7 @@ jobs:
     if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # Same rule as `clippy`: a crate absent from this list has its tests
@@ -319,7 +319,7 @@ jobs:
       DATABASE_URL: postgresql://yog:yog@localhost:5432/yog_sothoth
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
@@ -376,7 +376,7 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions-rust-lang/audit@v1
         name: Audit Rust Dependencies
         
@@ -423,7 +423,7 @@ jobs:
       DATABASE_URL: postgresql://yog:yog@localhost:5432/yog_sothoth
  
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
  
@@ -506,8 +506,8 @@ jobs:
     if: needs.changes.outputs.contract == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm

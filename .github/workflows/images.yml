@@ -40,7 +40,7 @@ jobs:
           [ -n "$YOG_API_DOMAIN" ] \
             || { echo "variable de dépôt YOG_API_DOMAIN absente (Settings → Variables), ex. api.yog-scope.xyz" >&2; exit 1; }
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: refs/tags/${{ env.VERSION }}
 
