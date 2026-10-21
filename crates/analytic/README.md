@@ -24,18 +24,43 @@ and nothing else ([`crates/README.md`](../README.md#database-roles)).
 In each pool and tranche, the **anchor** is the token traded in more pools of
 the tranche — SOL almost always. It keeps its market price, the last one at or
 before the end of the tranche (`yog_price_asof`). The other token takes the
-lower of its market price and its price in the pool: the pool's mid price at
-the end of the tranche (from the last `next_sqrt_price`) times the anchor's.
-When both are traded in as many pools, each takes the lower of its two prices;
-a token without a market price takes its price in the pool. Without the pool's
-rate — its raw swaps gone, or a token's decimals unknown — there is nothing to
-bound by: only the anchor keeps a price, and the tranche is counted unvalued.
-A token emptied in its pool is then worth what the pool pays for it, not its
-price of before.
+lower of its market price and its price in the pool: what the tranche traded,
+`traded_b / traded_a` in token units, times the anchor's — never the pool's mid
+price, which one swap sends to the end of its range on an empty pool. When both
+are traded in as many pools, each takes the lower of its two prices; a token
+without a market price takes its price in the pool. Without that rate — a
+token's decimals unknown — there is nothing to bound by, and only the anchor
+keeps a price.
 
 Both prices are kept, `market_*` beside the published `price_*`: their gap is
 how far the pool and the market disagree. The table covers the pools with
 swaps in the tranche, and only them.
+
+## The value of a swap
+
+The volume is a flow: it is measured by what changed hands, not by a price given
+to each token, and **gross**, fee included, as Meteora publishes it. Each
+direction of a tranche is worth its **trusted leg** at market price — the
+anchor's when it has a market price and decimals, else the other token's, the
+lower of the two on a tie. A purchase of A with SOL is worth the SOL paid in. A
+sale is worth the SOL paid out plus the fee the pool took on them: cp-amm always
+returns an output net of its fee. A token emptied in its pool, or one no market
+prices, is then worth what changed hands against it, whatever its price. The net
+is the gross less the fees.
+
+Which fee belongs to which direction follows cp-amm (`state/fee.rs`): A→B pays
+on its output, in B; B→A pays in A in a BothToken pool, else on its input in B.
+The 5-minute aggregate carries the buys' share of the B fees beside their total,
+the rest being the sales'.
+
+A fee is valued with the token it is taken in: at market for a trusted token;
+otherwise as its share of the gross amount of the direction that paid it, times
+that direction's trusted leg — amounts of one token, so its decimals never
+matter. Its protocol and referral parts follow it, direction by direction.
+
+A pool-tranche is valued when it has a trusted token and each direction and
+each fee can be computed; otherwise it is counted unvalued.
+
 `/api/protocols/…` reads the protocol aggregate and the TVL
 (`repositories/protocol_activity.rs` in `yog-persistence`).
 
@@ -79,10 +104,10 @@ in `persistence` (`repositories/analytic.rs`).
   valued, so its last write sees every swap that arrived within the margin.
 - **TVL**: measured into the hour of the cycle, as long as that hour is not
   frozen.
-- **Periods**: on a cycle that freezes, for each window — 24 h, 7 and 30 days
-  (`Window`, in `core`) — ending at the last hour it freezes. During a catch-up
-  only that hour gets them: the API then has no previous window to read for the
-  hours skipped.
+- **Periods**: on a cycle that freezes, the distinct pools of each window — 24 h,
+  7 and 30 days (`Window`, in `core`) — ending at every hour it freezes, so a
+  previous window read after a catch-up finds its row; the tokens, at the last
+  one only.
 
 ## The periods
 
@@ -119,12 +144,9 @@ What valuing once costs, by design:
   from the next refresh on: if its tranche is valued in between, it is not in
   the facts either
   ([`persistence/README.md`](../persistence/README.md#the-analytic-tables-migration-015));
-- a token without a price, or without decimals, when its tranche is valued
-  leaves that pool-tranche, and its hour, unvalued for good. It is counted
-  (`valued = false`, `active_pools_valued`), never filled with a guess;
-- the price in the pool is its mid price at the tranche's end: a token that
-  falls within the tranche is valued at the low, one that rises at its market
-  price — an error that can only undercount.
+- a pool-tranche without a trusted token when it is valued stays unvalued for
+  good, and its hour with it. It is counted (`valued = false`,
+  `active_pools_valued`), never filled with a guess;
 
 ## Configuration
 

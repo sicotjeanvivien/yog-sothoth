@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        -- ⚠️ Grouped per pool, then counted: a COUNT(DISTINCT) sorts, and spills.\n        WITH frozen AS (\n            SELECT generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ, INTERVAL '1 hour')\n                       AS last_hour\n        ),\n        by_pool AS (\n            SELECT h.last_hour, w.period, f.protocol, f.pool_address\n              FROM frozen h\n             CROSS JOIN UNNEST($3::TEXT[], $4::INT[]) AS w (period, hours)\n              JOIN analytic_pool_hourly f\n                ON f.bucket > h.last_hour - make_interval(hours => w.hours)\n               AND f.bucket <= h.last_hour\n             GROUP BY h.last_hour, w.period, f.protocol, f.pool_address\n        )\n        INSERT INTO analytic_protocol_periods (protocol, period, bucket, active_pools)\n        SELECT pr.protocol, w.period, h.last_hour, COUNT(b.pool_address)\n          FROM frozen h\n         CROSS JOIN UNNEST($5::TEXT[]) AS pr (protocol)\n         CROSS JOIN UNNEST($3::TEXT[]) AS w (period)\n          LEFT JOIN by_pool b\n                 ON b.last_hour = h.last_hour AND b.protocol = pr.protocol AND b.period = w.period\n         GROUP BY h.last_hour, pr.protocol, w.period\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "TextArray",
+        "Int4Array",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c8b6c745d1398cda7ad16b047979a8e46c88f694db9a1018eef2ca4bc9f05805"
+}

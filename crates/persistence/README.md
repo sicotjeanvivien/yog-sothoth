@@ -548,7 +548,7 @@ implied-price rule above.
 `yog-analytic` is their only writer, one transaction per cycle
 (`repositories/analytic.rs`): the closed 5-minute tranches, each protocol's from
 its own module — its pools' prices into `analytic_pool_prices_5min`, its swaps
-valued at them into `analytic_pool_5min` (028); the facts of the open hours, one
+valued by each direction's trusted leg into `analytic_pool_5min` (028, 031); the facts of the open hours, one
 row per (pool, hour), summed from those tranches; the protocol aggregate summed
 from the facts; the tranches and hours recorded, the hours frozen once closed;
 the protocol TVL, by the rule of `pool_current_tvl`. A tranche is valued once
@@ -564,7 +564,7 @@ rule (`crates/analytic/README.md`, *The price of a token in a pool*).
 The cycle also writes what no sum of hours gives (029): the pools born per
 protocol and hour, from each protocol's `initialize_pool` events, in their own
 table so an hour of births without a swap still counts; and, at each freeze, for
-every window ending at the frozen hour, the distinct active pools per protocol
+every window ending at each hour frozen, the distinct active pools per protocol
 (`analytic_protocol_periods`, one row per protocol, window and hour, 0 included,
 so a missing row means a window never counted) and the tokens
 (`analytic_token_periods`, replaced at each freeze, their volume rounded to
@@ -578,16 +578,26 @@ protocol aggregate and the TVL, over the span the API hands them;
 deletes the protocol TVL of the hours before the first complete one, so its first
 row is the floor a TVL variation starts from.
 
-The DAMM v2 tranches are those of `meteora_damm_v2_swap_events_5min` (021),
+The DAMM v2 tranches are those of `meteora_damm_v2_swap_events_5min` (021, recreated by 031),
 refreshed every 5 minutes up to 10 minutes ago and read in real time past that.
 One statement per tranche (`meteora_damm_v2_tranche.sql`) prices each pool's
-tokens — the pool's last `next_sqrt_price` of the tranche from the raw swaps, the
-market prices through `yog_price_asof` once per mint — and values the swaps at
-those prices through `yog_moved_amount_usd` (025): both read one snapshot of the
-aggregate. Nothing else in the writer reads a price, and no view a binary
-reads values a swap by the hour (`tests/analytic_prices.rs`): the hourly priced
-view (023) is left to the activity view alone. The two 5-minute tables are kept
-7 days, as the raw swaps: an older tranche has no pool price left to bound it.
+tokens — the rate the tranche traded at, from the aggregate's `traded_a` and
+`traded_b`, the market prices through `yog_price_asof` once per mint — and values
+each direction's gross trusted leg through `yog_moved_amount_usd` (025): both read
+one snapshot of the aggregate, which carries the buys' input fees in B beside the
+B fees of both directions.
+Nothing else in the
+writer reads a price, and no view a binary reads values a swap by the hour
+(`tests/analytic_prices.rs`): the hourly priced view (023) is left to the
+activity view alone. The two 5-minute tables are kept 7 days, as the raw swaps.
+031 recreates that aggregate with the buys' B fees. 032, outside a transaction,
+materialises it over every raw swap: its policy refreshes 6 days only, and older
+tranches, under its watermark yet never materialised, would read empty. 033 gives
+it back its policies, then empties every table valued at the pool's mid price, and
+the protocol periods, written once at each freeze, that the hours frozen again write
+anew. It keeps the writer's floor: its first hour, no earlier than the hour after
+the aggregate's first, read once materialised — a raw chunk dropped since takes
+nothing from it — and none without it (`tests/analytic_rebuild.rs`).
 ⚠️ A swap written into a tranche already valued — it is then more than 10 minutes
 late — is missing from the facts for good.
 

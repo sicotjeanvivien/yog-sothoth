@@ -8,6 +8,7 @@ mod helpers;
 
 mod amount_usd;
 mod analytic_prices;
+mod analytic_rebuild;
 mod analytic_writer;
 mod archive_role;
 mod cagg_materialization;
