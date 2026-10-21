@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.28
 #
 # Single Dockerfile for all seven Rust backend images.
 #
@@ -40,7 +40,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # cargo-chef pinned to a known-good release. Locked install avoids
 # pulling new transitive versions on every image build.
-RUN cargo install cargo-chef --locked --version 0.1.71
+RUN cargo install cargo-chef --locked --version 0.1.78
 
 # ⚠️ rust-toolchain.toml alone sets the toolchain, whatever the tag above: installed
 #    here, in a cached layer, or rustup fetches it in every stage that copies it in.
