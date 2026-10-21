@@ -6,6 +6,6 @@
 # never silently inherit "whatever stable is today".
 
 [toolchain]
-channel = "1.98.1"
+channel = "1.99.1"
 components = ["rustfmt", "clippy"]
 profile = "minimal"
