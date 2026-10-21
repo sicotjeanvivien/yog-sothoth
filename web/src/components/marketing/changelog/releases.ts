@@ -43,6 +43,10 @@ export const RELEASES: readonly Release[] = [
             text: "Backups had stopped: a dump over 8.39 GB was refused by the bucket at its 1,001st part. Parts are now 32 MiB, so a dump of up to 33.5 GB is stored.",
             technical: true,
           },
+          {
+            text: "TimescaleDB 2.30.2, Rust 1.99.1, Node 26, Yellowstone gRPC schema 14 and the dependencies' updates.",
+            technical: true,
+          },
         ],
       },
     ],
