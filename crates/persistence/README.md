@@ -590,15 +590,14 @@ Nothing else in the
 writer reads a price, and no view a binary reads values a swap by the hour
 (`tests/analytic_prices.rs`): the hourly priced view (023) is left to the
 activity view alone. The two 5-minute tables are kept 7 days, as the raw swaps.
-031 recreates that aggregate with the buys' B fees, empties every table valued at
-the pool's mid price, and the protocol periods, written once at each freeze, that
-the hours frozen again write anew. It keeps the writer's floor: its first hour, no
-earlier than the hour after the first raw swap — the recreated aggregate holds the
-raw swaps and nothing more — nor inside a raw chunk its retention may drop within
-the hour, and none without raw swaps. 032, outside a transaction, materialises the
-recreated aggregate over every raw swap: its policy refreshes 6 days only, and older
-tranches, under its watermark yet never materialised, would read empty. 033 adds
-its policies back, once it is materialised (`tests/analytic_rebuild.rs`).
+031 recreates that aggregate with the buys' B fees. 032, outside a transaction,
+materialises it over every raw swap: its policy refreshes 6 days only, and older
+tranches, under its watermark yet never materialised, would read empty. 033 gives
+it back its policies, then empties every table valued at the pool's mid price, and
+the protocol periods, written once at each freeze, that the hours frozen again write
+anew. It keeps the writer's floor: its first hour, no earlier than the hour after
+the aggregate's first, read once materialised — a raw chunk dropped since takes
+nothing from it — and none without it (`tests/analytic_rebuild.rs`).
 ⚠️ A swap written into a tranche already valued — it is then more than 10 minutes
 late — is missing from the facts for good.
 

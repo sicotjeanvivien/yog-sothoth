@@ -1,5 +1,5 @@
-//! The rebuild of 031 and 032: the 5-minute aggregate recreated and materialised, every table
-//! valued at the pool's mid price emptied, and the writer's floor kept where the raw swaps cover it.
+//! The rebuild of 031 to 033: the 5-minute aggregate recreated, materialised and given back its
+//! policies, every table valued at the pool's mid price emptied, the writer's floor kept.
 
 use chrono::{DateTime, Duration, Utc};
 use sqlx::migrate::Migrator;
@@ -102,7 +102,7 @@ async fn the_rebuild_empties_the_valued_tables(pool: PgPool) {
         sqlx::query(insert).execute(&pool).await.unwrap();
     }
 
-    MIGRATOR.run_to(31, &pool).await.unwrap();
+    MIGRATOR.run_to(33, &pool).await.unwrap();
 
     for table in [
         "analytic_tranches",
@@ -126,27 +126,45 @@ async fn the_rebuild_empties_the_valued_tables(pool: PgPool) {
     );
 }
 
-/// Against the writer's first hour taken alone: older than the raw swaps, which the aggregate
-/// just recreated holds and nothing more, its hours would be frozen as empty.
+/// Against the writer's first hour taken alone: older than what the aggregate holds, its
+/// hours would be frozen as empty.
 #[sqlx::test(migrations = false)]
-async fn the_floor_waits_for_the_raw(pool: PgPool) {
+async fn the_floor_waits_for_the_aggregate(pool: PgPool) {
     MIGRATOR.run_to(30, &pool).await.unwrap();
     swap_materialised(&pool, 3).await;
     frozen_hours_from(&pool, 5).await;
 
-    MIGRATOR.run_to(31, &pool).await.unwrap();
+    MIGRATOR.run_to(33, &pool).await.unwrap();
 
     assert_eq!(
         hours(&pool).await,
         [(midnight(&pool, 3).await + Duration::hours(2), false)],
-        "the hour after the raw swaps' first, at 01:00"
+        "the hour after the aggregate's first, at 01:00"
     );
 }
 
-/// Against the writer's first hour kept with no raw swap left: the aggregate just recreated
-/// would hold nothing for its hours, and they would be frozen as empty.
+/// Against the floor read on the raw swaps: a raw chunk dropped once 032 has materialised it
+/// would take away hours the aggregate still holds.
 #[sqlx::test(migrations = false)]
-async fn without_the_raw_no_hour_stays(pool: PgPool) {
+async fn the_floor_outlives_the_raw_dropped_after_materialisation(pool: PgPool) {
+    MIGRATOR.run_to(30, &pool).await.unwrap();
+    swap(&pool, 5).await;
+    frozen_hours_from(&pool, 3).await;
+    MIGRATOR.run_to(32, &pool).await.unwrap();
+    sqlx::query("DELETE FROM meteora_damm_v2_swap_events")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    MIGRATOR.run_to(33, &pool).await.unwrap();
+
+    assert_eq!(hours(&pool).await, [(midnight(&pool, 3).await, false)]);
+}
+
+/// Against the writer's first hour kept with nothing materialised: its hours would be frozen
+/// as empty.
+#[sqlx::test(migrations = false)]
+async fn without_an_aggregate_no_hour_stays(pool: PgPool) {
     MIGRATOR.run_to(30, &pool).await.unwrap();
     swap_materialised(&pool, 5).await;
     frozen_hours_from(&pool, 3).await;
@@ -155,7 +173,7 @@ async fn without_the_raw_no_hour_stays(pool: PgPool) {
         .await
         .unwrap();
 
-    MIGRATOR.run_to(31, &pool).await.unwrap();
+    MIGRATOR.run_to(33, &pool).await.unwrap();
 
     assert_eq!(hours(&pool).await, []);
 }
@@ -222,24 +240,6 @@ async fn the_recreated_aggregate_is_materialised(pool: PgPool) {
     assert!(
         watermark.is_some_and(|w| w > the_swap),
         "materialised past the swap of 5 days back: {watermark:?}"
-    );
-}
-
-/// Against the floor kept in a raw chunk its retention may drop during the migrations: 032
-/// would then materialise its tranches empty, and the writer freeze them as quiet hours.
-#[sqlx::test(migrations = false)]
-async fn the_floor_skips_raw_chunks_about_to_be_dropped(pool: PgPool) {
-    MIGRATOR.run_to(30, &pool).await.unwrap();
-    swap(&pool, 8).await;
-    swap(&pool, 3).await;
-    frozen_hours_from(&pool, 9).await;
-
-    MIGRATOR.run_to(31, &pool).await.unwrap();
-
-    assert_eq!(
-        hours(&pool).await,
-        [(midnight(&pool, 7).await, false)],
-        "the end of the day-8 chunk, which a 7-day retention may drop within the hour"
     );
 }
 
