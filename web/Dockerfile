@@ -13,7 +13,7 @@
 # The npm that `devEngines` in package.json names. The image ships an older
 # one, and npm refuses to run here under another major (EBADDEVENGINES) — both
 # `npm ci` and `npm run build` below need it.
-FROM node:24-alpine AS npm
+FROM node:26-alpine AS npm
 WORKDIR /app
 COPY package.json ./
 RUN npm install -g "npm@$(node -p 'require("./package.json").devEngines.packageManager.version')"
@@ -53,7 +53,7 @@ ENV NEXT_PUBLIC_YOG_API_URL=$NEXT_PUBLIC_YOG_API_URL
 RUN npm run build
 
 # ---- Stage 3: runner ----
-FROM node:24-alpine AS runner
+FROM node:26-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
