@@ -1,5 +1,4 @@
-# Once a month, one PR per ecosystem with every newer version, majors included.
-# What Dependabot cannot read is in versions-checked-by-hand.md, beside this file.
+# What Dependabot never proposes is in versions-checked-by-hand.md, beside this file.
 version: 2
 updates:
   - package-ecosystem: cargo
