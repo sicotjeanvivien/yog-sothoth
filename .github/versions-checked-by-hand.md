@@ -4,8 +4,9 @@ Dependabot (`dependabot.yml`) never proposes the versions below: check each one 
 
 | What | Where | Moves with | Latest |
 |---|---|---|---|
-| Node in CI | `node-version:` in `.github/workflows/web-quality.yml` (×4) and `.github/workflows/crates.yml` | the `node:` image of `web/Dockerfile` | [nodejs.org](https://nodejs.org/en/about/previous-releases) |
+| Node in CI | `node-version:` in `.github/workflows/web-quality.yml` (×4) and `.github/workflows/crates.yml` | the `node:` image of `web/Dockerfile`, `@types/node` in `web/package.json` | [nodejs.org](https://nodejs.org/en/about/previous-releases) |
 | npm | `devEngines` in `web/package.json` | — | [npmjs.com](https://www.npmjs.com/package/npm) |
+| npm sub-dependencies | `web/package-lock.json`, beyond the packages `web/package.json` names | the packages that pull them in | `npm outdated --all` in `web/` |
 | TimescaleDB in CI | `services:` in `.github/workflows/crates.yml` (×2) | the image of `docker-compose.yml` | [Docker Hub](https://hub.docker.com/r/timescale/timescaledb/tags) |
 | Postgres major of the database | the `-pg18` of `timescale/timescaledb` in `docker-compose.yml`, `docker-compose.prod.yml` and `.github/workflows/crates.yml` (×2) | the `postgres:` image of `docker/backend.Dockerfile`, the `timescaledb_pg18` volume of `docker-compose.yml` | [Docker Hub](https://hub.docker.com/r/timescale/timescaledb/tags) |
 | sqlx-cli | `cargo install sqlx-cli --version` in `.github/workflows/crates.yml` | the `sqlx` crate of `Cargo.toml` | [crates.io](https://crates.io/crates/sqlx-cli) |
