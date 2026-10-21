@@ -61,9 +61,9 @@ solana-transaction-status-client-types = "4"
 # `prost` build: regenerated here it comes out identical, so there is no
 # "Triton version" of the types to be locked into.
 #
-# ⚠️ 12, not 10: 10.x builds protobuf from C++ (`protobuf-src`), and the builder
-#    image has `cc` but no `g++` nor `make` — green on CI's ubuntu-latest, broken there.
-yellowstone-grpc-proto = { version = "12", default-features = false }
+# ⚠️ The builder image has `cc` but no `g++` nor `make`: a release that builds
+#    protobuf from C++ (`protobuf-src`) is green on CI's ubuntu-latest, broken there.
+yellowstone-grpc-proto = { version = "14", default-features = false }
 
 # The gRPC transport under that schema. Declared here only to add TLS: the
 # proto crate already pulls `tonic` with its default features (`router`,

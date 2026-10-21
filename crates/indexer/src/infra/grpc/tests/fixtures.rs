@@ -56,6 +56,7 @@ pub(super) fn transaction_update_with_signature(
             }),
             ..Default::default()
         }),
+        bank_id: 0,
     }
 }
 
