@@ -15,7 +15,6 @@ const MAX_PARTS: u64 = 1_000;
 /// S3 requires at least 5 MiB for every part but the last.
 pub(super) const PART_SIZE: usize = 32 * 1024 * 1024;
 
-// ⚠️ A smaller part lowers that ceiling: the build fails below 33.5 GB.
 const _: () = assert!(
     PART_SIZE as u64 * MAX_PARTS >= 33_554_432_000,
     "the bucket would refuse a dump of 33.5 GB"

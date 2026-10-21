@@ -67,7 +67,7 @@ the check, and decides the `RunOutcome`.
    URL (a socket URL with no host is accepted) and passed in `PGPASSWORD`,
    never in the arguments, which any user of the host can read in
    `/proc/<pid>/cmdline`. Its output streams to the bucket in 32 MiB parts,
-   two in flight at most, and at most 1 000 of them (*Deploying*).
+   two in flight at most; the bucket refuses the 1 001st (*Deploying*).
 5. Check the archive: `pg_dump` exited 0, **and** `pg_restore
    --file=/dev/null`, fed the whole stream alongside the upload, exits 0.
    Otherwise abort the upload. Restoring to a script file makes `pg_restore`

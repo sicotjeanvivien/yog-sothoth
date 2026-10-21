@@ -40,7 +40,7 @@ export const RELEASES: readonly Release[] = [
         kind: "fixes",
         items: [
           {
-            text: "Backups had stopped: a dump over 8.4 GB was refused by the bucket at its 1,001st part. Parts are now 32 MiB, so a dump of up to 33.5 GB is stored.",
+            text: "Backups had stopped: a dump over 8.39 GB was refused by the bucket at its 1,001st part. Parts are now 32 MiB, so a dump of up to 33.5 GB is stored.",
             technical: true,
           },
         ],
