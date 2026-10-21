@@ -224,3 +224,53 @@ async fn the_recreated_aggregate_is_materialised(pool: PgPool) {
         "materialised past the swap of 5 days back: {watermark:?}"
     );
 }
+
+/// Against the floor kept in a raw chunk its retention may drop during the migrations: 032
+/// would then materialise its tranches empty, and the writer freeze them as quiet hours.
+#[sqlx::test(migrations = false)]
+async fn the_floor_skips_raw_chunks_about_to_be_dropped(pool: PgPool) {
+    MIGRATOR.run_to(30, &pool).await.unwrap();
+    swap(&pool, 8).await;
+    swap(&pool, 3).await;
+    frozen_hours_from(&pool, 9).await;
+
+    MIGRATOR.run_to(31, &pool).await.unwrap();
+
+    assert_eq!(
+        hours(&pool).await,
+        [(midnight(&pool, 7).await, false)],
+        "the end of the day-8 chunk, which a 7-day retention may drop within the hour"
+    );
+}
+
+/// Against the policies recreated with the aggregate in 031: with the job scheduler on, a
+/// refresh could start before 032's and race it.
+#[sqlx::test(migrations = false)]
+async fn the_aggregate_gets_its_policies_once_materialised(pool: PgPool) {
+    let jobs = |pool: PgPool| async move {
+        let count: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM timescaledb_information.jobs j
+               JOIN timescaledb_information.continuous_aggregates c
+                 ON c.materialization_hypertable_name = j.hypertable_name
+                 OR c.view_name = j.hypertable_name
+              WHERE c.view_name = 'meteora_damm_v2_swap_events_5min'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        count
+    };
+    MIGRATOR.run_to(32, &pool).await.unwrap();
+    assert_eq!(
+        jobs(pool.clone()).await,
+        0,
+        "no policy while 032 materialises"
+    );
+
+    MIGRATOR.run_to(33, &pool).await.unwrap();
+    assert_eq!(
+        jobs(pool.clone()).await,
+        2,
+        "refresh and retention, as 021 set them"
+    );
+}

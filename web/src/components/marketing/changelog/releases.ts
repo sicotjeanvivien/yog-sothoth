@@ -49,7 +49,7 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "The volume, fees and most traded tokens of the past days are computed again under these rules, with no hour lost. For about three hours after this update, the Overview shows figures that stop at an earlier hour, announced by its band, and the swap flow signal waits while they catch up.",
+            text: "The volume, fees and most traded tokens of the past days are computed again under these rules. For about three hours after this update, the Overview shows figures that stop at an earlier hour, announced by its band, and the swap flow signal waits while they catch up.",
             technical: false,
           },
           {

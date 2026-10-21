@@ -38,18 +38,7 @@ FROM meteora_damm_v2_swap_events
 GROUP BY bucket, pool_address
 WITH NO DATA;
 
--- ⚠️ `end_offset` is the freeze margin: a row landing in a materialised tranche
--- stays unseen until the next refresh. `start_offset` stays under the raw 7 days (008).
-SELECT add_continuous_aggregate_policy('meteora_damm_v2_swap_events_5min',
-    start_offset         => INTERVAL '6 days',
-    end_offset           => INTERVAL '10 minutes',
-    schedule_interval    => INTERVAL '5 minutes',
-    -- ⚠️ Newest first, the watermark leads while older tranches are still empty.
-    refresh_newest_first => false);
-
--- ⚠️ Past the raw 7 days: an hour caught up after a week-long outage reads its tranches.
-SELECT add_retention_policy('meteora_damm_v2_swap_events_5min', INTERVAL '30 days');
-
+-- ⚠️ No policy before 032 has materialised it: a refresh running alongside would race it (033).
 GRANT SELECT ON meteora_damm_v2_swap_events_5min TO yog_analytic;
 
 -- ⚠️ The periods too: written once at each freeze, they would refuse the hours frozen again.
@@ -58,14 +47,23 @@ TRUNCATE analytic_tranches, analytic_pool_prices_5min, analytic_pool_5min,
          analytic_protocol_periods;
 
 -- ⚠️ On the raw swaps, which the aggregate just recreated covers exactly: a MIN over its
--- real-time part would aggregate them all. Their first hour skipped, as partial; with none,
--- no hour stays.
+-- real-time part would aggregate them all. Their first hour skipped, as partial, and every
+-- chunk their retention may drop within the hour, before 032 has materialised it; with no
+-- raw swap, no hour stays.
 WITH floor AS (
-    SELECT CASE WHEN MIN(timestamp) IS NOT NULL THEN
+    SELECT CASE WHEN MIN(s.timestamp) IS NOT NULL THEN
                GREATEST((SELECT MIN(bucket) FROM analytic_hours),
-                        date_trunc('hour', MIN(timestamp), 'UTC') + INTERVAL '1 hour')
+                        date_trunc('hour', MIN(s.timestamp), 'UTC') + INTERVAL '1 hour',
+                        (SELECT MAX(c.range_end)
+                           FROM timescaledb_information.chunks c,
+                                timescaledb_information.jobs j
+                          WHERE c.hypertable_name = 'meteora_damm_v2_swap_events'
+                            AND j.hypertable_name = 'meteora_damm_v2_swap_events'
+                            AND j.proc_name = 'policy_retention'
+                            AND c.range_end < now() - (j.config ->> 'drop_after')::INTERVAL
+                                                    + INTERVAL '1 hour'))
            END AS bucket
-      FROM meteora_damm_v2_swap_events
+      FROM meteora_damm_v2_swap_events s
 ),
 dropped AS (
     DELETE FROM analytic_hours
