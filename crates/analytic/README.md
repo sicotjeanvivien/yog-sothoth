@@ -24,18 +24,33 @@ and nothing else ([`crates/README.md`](../README.md#database-roles)).
 In each pool and tranche, the **anchor** is the token traded in more pools of
 the tranche — SOL almost always. It keeps its market price, the last one at or
 before the end of the tranche (`yog_price_asof`). The other token takes the
-lower of its market price and its price in the pool: the pool's mid price at
-the end of the tranche (from the last `next_sqrt_price`) times the anchor's.
-When both are traded in as many pools, each takes the lower of its two prices;
-a token without a market price takes its price in the pool. Without the pool's
-rate — its raw swaps gone, or a token's decimals unknown — there is nothing to
-bound by: only the anchor keeps a price, and the tranche is counted unvalued.
-A token emptied in its pool is then worth what the pool pays for it, not its
-price of before.
+lower of its market price and its price in the pool: what the tranche traded,
+`traded_b / traded_a` in token units, times the anchor's — never the pool's mid
+price, which one swap sends to the end of its range on an empty pool. When both
+are traded in as many pools, each takes the lower of its two prices; a token
+without a market price takes its price in the pool. Without that rate — a
+token's decimals unknown — there is nothing to bound by, and only the anchor
+keeps a price.
 
 Both prices are kept, `market_*` beside the published `price_*`: their gap is
 how far the pool and the market disagree. The table covers the pools with
 swaps in the tranche, and only them.
+
+## The value of a swap
+
+The volume is a flow: it is measured by what changed hands, not by a price given
+to each token. Each direction of a tranche is worth the **trusted leg** at its
+market price — the anchor's when it has a market price and decimals, else the
+other token's, the lower of the two legs on a tie. For a sale of A against SOL,
+that is the SOL the pool paid out (`traded_b − volume_in_b`); for a purchase, the
+SOL paid in. A token emptied in its pool, or one no market prices, is then worth
+what changed hands against it, whatever its price. The fees, taken in either
+token, are valued at the table's prices.
+
+A pool-tranche is valued when each direction has a trusted leg and each fee a
+price and decimals; otherwise it is counted unvalued. A token without decimals
+against SOL is valued by SOL's leg; a fee taken in it leaves its tranche unvalued.
+
 `/api/protocols/…` reads the protocol aggregate and the TVL
 (`repositories/protocol_activity.rs` in `yog-persistence`).
 
@@ -119,12 +134,12 @@ What valuing once costs, by design:
   from the next refresh on: if its tranche is valued in between, it is not in
   the facts either
   ([`persistence/README.md`](../persistence/README.md#the-analytic-tables-migration-015));
-- a token without a price, or without decimals, when its tranche is valued
-  leaves that pool-tranche, and its hour, unvalued for good. It is counted
-  (`valued = false`, `active_pools_valued`), never filled with a guess;
-- the price in the pool is its mid price at the tranche's end: a token that
-  falls within the tranche is valued at the low, one that rises at its market
-  price — an error that can only undercount.
+- a pool-tranche without a trusted leg, or with a fee in a token without a
+  price or decimals, when it is valued stays unvalued for good, and its hour
+  with it. It is counted (`valued = false`, `active_pools_valued`), never filled
+  with a guess;
+- a sale is worth what its seller received, fee taken out when the pool takes
+  it in the output token; a purchase what its buyer paid, fee included.
 
 ## Configuration
 

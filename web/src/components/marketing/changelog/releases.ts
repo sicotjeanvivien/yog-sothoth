@@ -32,6 +32,31 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.1.14",
+    date: "2026-10-21",
+    summary:
+      "The volume counts again only what changed hands: a nearly empty pool could publish hundreds of millions of dollars for a few cents.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "A token without a market price was valued at its pool's price after the last swap, which a single swap can push to any value when the pool is nearly empty: one pool published $801 million of volume for three swaps worth two cents, and the 24-hour volume read over a billion dollars. Each direction of a trade is now worth what changed hands on the side of the token that has a market price, usually SOL: a sale, the SOL the seller received; a purchase, the SOL the buyer paid.",
+            technical: false,
+          },
+          {
+            text: "The volume, fees and most traded tokens of the past days are computed again under this rule, with no hour lost. For about three hours after this update, the 24-hour volume shows as unavailable and the swap flow signal waits while they are rebuilt.",
+            technical: false,
+          },
+          {
+            text: "The analytic writer prices a token in its pool at the rate its five-minute tranche traded at, no longer at the pool's mid price, and no longer reads the raw swaps.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.1.13",
     date: "2026-10-21",
     summary: "The database is backed up again.",

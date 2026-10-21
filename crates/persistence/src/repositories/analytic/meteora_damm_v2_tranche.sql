@@ -12,13 +12,6 @@ WITH tranche AS (
       LEFT JOIN token_metadata tmb ON tmb.mint = p.token_b_mint::TEXT
      WHERE s.bucket = $1
 ),
-last_swap AS (
-    SELECT DISTINCT ON (pool_address) pool_address, next_sqrt_price
-      FROM meteora_damm_v2_swap_events
-     WHERE timestamp >= $1 AND timestamp < $1::TIMESTAMPTZ + $3::INTERVAL
-     ORDER BY pool_address, timestamp DESC, slot DESC,
-              transaction_index DESC NULLS LAST, event_index DESC
-),
 pools_per_mint AS (
     SELECT m.mint, COUNT(*) AS pools
       FROM tranche
@@ -37,15 +30,28 @@ quoted AS (
            mb.price_usd AS market_b,
            na.pools AS pools_a,
            nb.pools AS pools_b,
-           -- ⚠️ Squared before the one division: dividing first loses the smallest prices.
-           NULLIF(l.next_sqrt_price * l.next_sqrt_price / 2::NUMERIC ^ 128
-                      * 10::NUMERIC ^ (t.dec_a - t.dec_b), 0) AS rate
+           -- ⚠️ What the tranche traded, not the pool's mid price: on an empty pool one
+           -- swap sends that to the end of its range.
+           yog_token_amount(NULLIF(t.traded_b, 0), t.dec_b)
+               / NULLIF(yog_token_amount(t.traded_a, t.dec_a), 0) AS rate,
+           -- The token whose leg values the flows: the anchor, else the other, with a
+           -- market price and decimals; both on a tie.
+           CASE
+               WHEN na.pools > nb.pools AND k.a_ok THEN 'a'
+               WHEN nb.pools > na.pools AND k.b_ok THEN 'b'
+               WHEN k.a_ok AND k.b_ok THEN 'both'
+               WHEN k.a_ok THEN 'a'
+               WHEN k.b_ok THEN 'b'
+           END AS trust
       FROM tranche t
-      LEFT JOIN last_swap l ON l.pool_address = t.pool_address
       LEFT JOIN pools_per_mint na ON na.mint = t.mint_a
       LEFT JOIN pools_per_mint nb ON nb.mint = t.mint_b
       LEFT JOIN market ma ON ma.mint = t.mint_a
       LEFT JOIN market mb ON mb.mint = t.mint_b
+     CROSS JOIN LATERAL (
+         SELECT ma.price_usd IS NOT NULL AND t.dec_a IS NOT NULL AS a_ok,
+                mb.price_usd IS NOT NULL AND t.dec_b IS NOT NULL AS b_ok
+     ) k
 ),
 prices AS (
     INSERT INTO analytic_pool_prices_5min (
@@ -54,7 +60,7 @@ prices AS (
     SELECT q.pool_address, $1, q.market_a, x.price_a, q.market_b, x.price_b
       FROM quoted q
      -- ⚠️ LEAST skips NULL: a token without a market price takes its price in the pool.
-     -- Without the pool's rate there is nothing to bound by, and no price but the anchor's.
+     -- Without the tranche's rate there is nothing to bound by, and no price but the anchor's.
      CROSS JOIN LATERAL (
          SELECT CASE
                     WHEN q.pools_a > q.pools_b THEN COALESCE(q.market_a, q.rate * q.market_b)
@@ -84,10 +90,16 @@ SELECT pool_address, $1, $2, swap_count, valued,
        protocol_fees_usd, referral_fees_usd
   FROM (
     SELECT t.pool_address, t.swap_count, v.valued,
-           CASE WHEN v.valued THEN yog_moved_amount_usd(t.volume_in_a, t.dec_a, pr.price_a_usd) END
-               AS volume_in_a_usd,
-           CASE WHEN v.valued THEN yog_moved_amount_usd(t.volume_in_b, t.dec_b, pr.price_b_usd) END
-               AS volume_in_b_usd,
+           CASE WHEN v.valued THEN CASE q.trust
+               WHEN 'a' THEN l.a_to_b_in_a
+               WHEN 'b' THEN l.a_to_b_out_b
+               WHEN 'both' THEN LEAST(l.a_to_b_in_a, l.a_to_b_out_b)
+           END END AS volume_in_a_usd,
+           CASE WHEN v.valued THEN CASE q.trust
+               WHEN 'b' THEN l.b_to_a_in_b
+               WHEN 'a' THEN l.b_to_a_out_a
+               WHEN 'both' THEN LEAST(l.b_to_a_in_b, l.b_to_a_out_a)
+           END END AS volume_in_b_usd,
            CASE WHEN v.valued THEN
                yog_moved_amount_usd(t.fee_in_a, t.dec_a, pr.price_a_usd)
              + yog_moved_amount_usd(t.fee_in_b, t.dec_b, pr.price_b_usd)
@@ -102,13 +114,21 @@ SELECT pool_address, $1, $2, swap_count, valued,
            END AS referral_fees_usd
       FROM tranche t
       JOIN prices pr ON pr.pool_address = t.pool_address
+      JOIN quoted q ON q.pool_address = t.pool_address
+     -- Each direction's two legs at market price: what went in, and what came out.
+     CROSS JOIN LATERAL (
+         SELECT yog_moved_amount_usd(t.volume_in_a, t.dec_a, q.market_a) AS a_to_b_in_a,
+                yog_moved_amount_usd(t.traded_b - COALESCE(t.volume_in_b, 0), t.dec_b, q.market_b)
+                    AS a_to_b_out_b,
+                yog_moved_amount_usd(t.volume_in_b, t.dec_b, q.market_b) AS b_to_a_in_b,
+                yog_moved_amount_usd(t.traded_a - COALESCE(t.volume_in_a, 0), t.dec_a, q.market_a)
+                    AS b_to_a_out_a
+     ) l
      CROSS JOIN LATERAL (
          SELECT NOT (
-             (COALESCE(t.volume_in_a, 0) + COALESCE(t.fee_in_a, 0) > 0
-                 AND (pr.price_a_usd IS NULL OR t.dec_a IS NULL))
-             OR
-             (COALESCE(t.volume_in_b, 0) + COALESCE(t.fee_in_b, 0) > 0
-                 AND (pr.price_b_usd IS NULL OR t.dec_b IS NULL))
+             q.trust IS NULL
+             OR (COALESCE(t.fee_in_a, 0) > 0 AND (pr.price_a_usd IS NULL OR t.dec_a IS NULL))
+             OR (COALESCE(t.fee_in_b, 0) > 0 AND (pr.price_b_usd IS NULL OR t.dec_b IS NULL))
          ) AS valued
      ) v
   ) valued

@@ -548,7 +548,7 @@ implied-price rule above.
 `yog-analytic` is their only writer, one transaction per cycle
 (`repositories/analytic.rs`): the closed 5-minute tranches, each protocol's from
 its own module — its pools' prices into `analytic_pool_prices_5min`, its swaps
-valued at them into `analytic_pool_5min` (028); the facts of the open hours, one
+valued by each direction's trusted leg into `analytic_pool_5min` (028, 031); the facts of the open hours, one
 row per (pool, hour), summed from those tranches; the protocol aggregate summed
 from the facts; the tranches and hours recorded, the hours frozen once closed;
 the protocol TVL, by the rule of `pool_current_tvl`. A tranche is valued once
@@ -581,13 +581,16 @@ row is the floor a TVL variation starts from.
 The DAMM v2 tranches are those of `meteora_damm_v2_swap_events_5min` (021),
 refreshed every 5 minutes up to 10 minutes ago and read in real time past that.
 One statement per tranche (`meteora_damm_v2_tranche.sql`) prices each pool's
-tokens — the pool's last `next_sqrt_price` of the tranche from the raw swaps, the
-market prices through `yog_price_asof` once per mint — and values the swaps at
-those prices through `yog_moved_amount_usd` (025): both read one snapshot of the
-aggregate. Nothing else in the writer reads a price, and no view a binary
-reads values a swap by the hour (`tests/analytic_prices.rs`): the hourly priced
-view (023) is left to the activity view alone. The two 5-minute tables are kept
-7 days, as the raw swaps: an older tranche has no pool price left to bound it.
+tokens — the rate the tranche traded at, from the aggregate's `traded_a` and
+`traded_b`, the market prices through `yog_price_asof` once per mint — and values
+each direction's trusted leg through `yog_moved_amount_usd` (025): both read one
+snapshot of the aggregate, and nothing reads the raw swaps. Nothing else in the
+writer reads a price, and no view a binary reads values a swap by the hour
+(`tests/analytic_prices.rs`): the hourly priced view (023) is left to the
+activity view alone. The two 5-minute tables are kept 7 days, as the raw swaps.
+031 empties every table valued at the pool's mid price, and keeps the writer's
+floor: its first hour, but no earlier than the second day of the 5-minute
+aggregate, kept 30 days (`tests/analytic_rebuild.rs`).
 ⚠️ A swap written into a tranche already valued — it is then more than 10 minutes
 late — is missing from the facts for good.
 
@@ -595,8 +598,8 @@ Still reading market prices outside the table: the liquidity
 (`meteora_damm_v2_pool_hourly_liquidity_flow`,
 `meteora_damm_v2_liquidity_events_valued`) and the TVL (`pool_current_tvl`).
 
-`yog_analytic` reads through explicit grants (015, 021, the raw swaps in 028, and
-the `initialize_pool` events in 029).
+`yog_analytic` reads through explicit grants (015, 021, and the `initialize_pool`
+events in 029); its grant on the raw swaps (028) has no reader left.
 ⚠️ An aggregate is granted as well as any view over it: TimescaleDB checks a
 continuous aggregate as the reader, not as the owner of the view on top.
 

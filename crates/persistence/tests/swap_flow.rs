@@ -81,15 +81,15 @@ async fn directional_volume_splits_and_windows(pool: PgPool) {
         price_mint_since(&pool, mint, price, 4).await;
     }
 
-    // Two a_to_b swaps: input side amount_a totals 3_000_000 (3.0 @ 6 dec)
-    //   → 3.0 × $2 = $6 of a_to_b flow.
+    // Two a_to_b swaps: 3.0 A in (6 dec) for 0.06 B out (9 dec)
+    //   → $6 of a_to_b flow, on either leg.
     insert_swap(
         &pool,
         &pool_addr,
         "sig_a1",
         "a_to_b",
         1_000_000,
-        0,
+        20_000_000,
         now - Duration::hours(1),
     )
     .await;
@@ -99,18 +99,18 @@ async fn directional_volume_splits_and_windows(pool: PgPool) {
         "sig_a2",
         "a_to_b",
         2_000_000,
-        0,
+        40_000_000,
         now - Duration::hours(2),
     )
     .await;
-    // One b_to_a swap: input side amount_b = 2_000_000_000 (2.0 @ 9 dec)
-    //   → 2.0 × $100 = $200 of b_to_a flow.
+    // One b_to_a swap: 2.0 B in (9 dec) for 100.0 A out (6 dec)
+    //   → $200 of b_to_a flow, on either leg.
     insert_swap(
         &pool,
         &pool_addr,
         "sig_b1",
         "b_to_a",
-        0,
+        100_000_000,
         2_000_000_000,
         now - Duration::hours(1),
     )
@@ -122,7 +122,7 @@ async fn directional_volume_splits_and_windows(pool: PgPool) {
         "sig_old",
         "a_to_b",
         999_000_000,
-        0,
+        19_980_000_000,
         now - Duration::hours(30),
     )
     .await;

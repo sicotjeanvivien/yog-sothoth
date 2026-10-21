@@ -1,6 +1,6 @@
-//! The price table of `PgAnalyticRepository` (028): each pool's two tokens priced once per
-//! 5-minute tranche — the anchor at its market price, the other bounded by the pool's own —
-//! the swaps valued at them, the hours summed from them, and no swap valued anywhere else.
+//! The price table of `PgAnalyticRepository` (028, 031): each pool's two tokens priced once per
+//! 5-minute tranche — the anchor at its market price, the other bounded by what the tranche
+//! traded — each direction valued by its trusted leg, the hours summed, no swap valued elsewhere.
 
 use std::path::Path;
 
@@ -53,32 +53,59 @@ async fn setup_pool(pool: &PgPool, seed: u8, a: (&str, i16), b: (&str, i16)) -> 
     address
 }
 
-/// A swap A into B, the pool left at `sqrt_price`.
-async fn swap(
-    pool: &PgPool,
-    address: &str,
-    tag: &str,
-    (amount_a, amount_b): (i64, i64),
+/// One swap: `amounts` is `(amount_a, amount_b)`, the input and output its direction says.
+struct Trade<'a> {
+    tag: &'a str,
+    direction: &'a str,
+    amounts: (i64, i64),
+    fee: i64,
+    fee_token_is_a: bool,
     sqrt_price: BigDecimal,
     at: DateTime<Utc>,
-) {
+}
+
+async fn trade(pool: &PgPool, address: &str, trade: &Trade<'_>) {
     sqlx::query(
         "INSERT INTO meteora_damm_v2_swap_events
            (pool_address, signature, trade_direction,
             amount_a, amount_b, reserve_a_after, reserve_b_after, next_sqrt_price,
             claiming_fee, protocol_fee, compounding_fee, referral_fee, fee_token_is_a,
             timestamp, slot, event_index)
-         VALUES ($1, $2, 'a_to_b', $3, $4, 0, 0, $5, 0, 0, 0, 0, false, $6, 0, 0)",
+         VALUES ($1, $2, $3, $4, $5, 0, 0, $6, $7, 0, 0, 0, $8, $9, 0, 0)",
     )
     .bind(address)
-    .bind(tag)
-    .bind(amount_a)
-    .bind(amount_b)
-    .bind(sqrt_price)
-    .bind(at)
+    .bind(trade.tag)
+    .bind(trade.direction)
+    .bind(trade.amounts.0)
+    .bind(trade.amounts.1)
+    .bind(&trade.sqrt_price)
+    .bind(trade.fee)
+    .bind(trade.fee_token_is_a)
+    .bind(trade.at)
     .execute(pool)
     .await
     .unwrap();
+}
+
+/// A swap A into B without fee, the pool left at `sqrt_price`.
+async fn swap(
+    pool: &PgPool,
+    address: &str,
+    tag: &str,
+    amounts: (i64, i64),
+    sqrt_price: BigDecimal,
+    at: DateTime<Utc>,
+) {
+    let a_to_b = Trade {
+        tag,
+        direction: "a_to_b",
+        amounts,
+        fee: 0,
+        fee_token_is_a: false,
+        sqrt_price,
+        at,
+    };
+    trade(pool, address, &a_to_b).await;
 }
 
 fn repository_of(pool: PgPool) -> PgAnalyticRepository {
@@ -127,8 +154,8 @@ fn dec(value: &str) -> BigDecimal {
     value.parse().unwrap()
 }
 
-/// Against the bound dropped: IA keeps its market price of before its fall, and its
-/// 1.94 billion units sold are worth $14.5 million.
+/// Against the bound dropped, or the sale valued by IA's leg: IA would keep its market price
+/// of before its fall, and its 1.94 billion units sold be worth $14.5 million.
 #[sqlx::test]
 async fn a_token_emptied_in_its_pool_is_worth_what_the_pool_pays(pool: PgPool) {
     let tranche = settled_tranche();
@@ -172,8 +199,8 @@ async fn a_token_emptied_in_its_pool_is_worth_what_the_pool_pays(pool: PgPool) {
     );
     let price_ia = price_ia.unwrap();
     assert!(
-        price_ia > dec("0.00000000001") && price_ia < dec("0.0000000001"),
-        "IA is worth what its pool pays, ~4.9e-11 $: {price_ia}"
+        price_ia > dec("0.0000000001") && price_ia < dec("0.000000001"),
+        "IA is worth what its pool pays, ~2.7e-10 $: {price_ia}"
     );
     let volume: Option<BigDecimal> = sqlx::query_scalar(
         "SELECT volume_in_a_usd FROM analytic_pool_5min WHERE pool_address = $1",
@@ -304,45 +331,221 @@ async fn a_tranche_without_any_price_is_not_valued(pool: PgPool) {
     assert_eq!(valued, (false, None));
 }
 
-/// Against a missing rate read as no bound: a tranche whose raw swaps are gone — an outage
-/// longer than their retention — would price the other token at its market price again.
+/// `(valued, volume_in_a_usd, volume_in_b_usd)` of the pool's one tranche.
+async fn valued_tranche(
+    pool: &PgPool,
+    address: &str,
+) -> (bool, Option<BigDecimal>, Option<BigDecimal>) {
+    sqlx::query_as(
+        "SELECT valued, volume_in_a_usd, volume_in_b_usd
+           FROM analytic_pool_5min WHERE pool_address = $1",
+    )
+    .bind(address)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+/// A pool whose `token_metadata` row is gone: its decimals are unknown.
+async fn forget_decimals(pool: &PgPool, mint: &str) {
+    sqlx::query("DELETE FROM token_metadata WHERE mint = $1")
+        .bind(mint)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+/// Against the pool's mid price taken for the rate: WIGGA, without a market price, would be
+/// worth 21 876 SOL for what its empty pool traded at 2.4e-7 SOL, and its 3 swaps $801 million.
 #[sqlx::test]
-async fn without_the_pools_rate_only_the_anchor_is_priced(pool: PgPool) {
+async fn an_empty_pool_is_worth_what_it_traded(pool: PgPool) {
     let tranche = settled_tranche();
-    let (x, sol, other) = (pk(40).to_string(), pk(41).to_string(), pk(42).to_string());
-    let gone = setup_pool(&pool, 1, (&x, 6), (&sol, 6)).await;
-    let beside = setup_pool(&pool, 2, (&other, 6), (&sol, 6)).await;
-    price_at(&pool, &x, "5", tranche).await;
-    price_at(&pool, &sol, "100", tranche).await;
-    swap(&pool, &gone, "x", (4, 1), sqrt_price_x64(4, 1), tranche).await;
-    swap(&pool, &beside, "o", (1, 1), sqrt_price_x64(1, 1), tranche).await;
-    sqlx::query("CALL refresh_continuous_aggregate('meteora_damm_v2_swap_events_5min', $1, $2)")
-        .bind(tranche)
-        .bind(tranche + Duration::minutes(5))
-        .execute(&pool)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM meteora_damm_v2_swap_events WHERE pool_address = $1")
-        .bind(&gone)
-        .execute(&pool)
-        .await
-        .unwrap();
+    let (wigga, sol, other) = (pk(10).to_string(), pk(11).to_string(), pk(12).to_string());
+    let empty = setup_pool(&pool, 1, (&wigga, 6), (&sol, 9)).await;
+    let beside = setup_pool(&pool, 2, (&other, 6), (&sol, 9)).await;
+    price_at(&pool, &sol, "104", tranche - Duration::minutes(1)).await;
+    let mid = sqrt_price_x64(1, 21_876_000);
+    for (tag, direction, amounts) in [
+        ("sell", "a_to_b", (352_231_421, 58_808)),
+        ("buy", "b_to_a", (352_231_420, 110_000)),
+    ] {
+        let at = tranche + Duration::minutes(1);
+        let swap = Trade {
+            tag,
+            direction,
+            amounts,
+            fee: 0,
+            fee_token_is_a: false,
+            sqrt_price: mid.clone(),
+            at,
+        };
+        trade(&pool, &empty, &swap).await;
+    }
+    swap(
+        &pool,
+        &beside,
+        "beside",
+        (1_000, 1),
+        sqrt_price_x64(1_000, 1),
+        tranche,
+    )
+    .await;
 
     value(&pool, tranche).await;
 
-    let (market_x, price_x, _, price_sol) = prices(&pool, &gone, tranche).await;
-    assert_eq!(market_x, Some(dec("5")));
-    assert_eq!((price_x, price_sol), (None, Some(dec("100"))));
-    let valued: bool =
-        sqlx::query_scalar("SELECT valued FROM analytic_pool_5min WHERE pool_address = $1")
-            .bind(&gone)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let (market_wigga, price_wigga, ..) = prices(&pool, &empty, tranche).await;
+    assert_eq!(market_wigga, None);
+    let price_wigga = price_wigga.unwrap();
     assert!(
-        !valued,
-        "the token without a bound leaves its tranche unvalued, and counted"
+        price_wigga > dec("0.00002") && price_wigga < dec("0.00003"),
+        "WIGGA is worth what its pool traded, ~2.5e-5 $: {price_wigga}"
     );
+    let (valued, sells, buys) = valued_tranche(&pool, &empty).await;
+    assert!(valued);
+    assert!(
+        sells.unwrap() + buys.unwrap() < dec("0.02"),
+        "less than two cents changed hands"
+    );
+}
+
+/// Against a direction valued by its whole column (`traded_b`), or by the amount times the
+/// tranche's rate: the sale of a token that fell within the tranche would be worth 1.1 or 0.55 SOL.
+#[sqlx::test]
+async fn each_direction_is_worth_its_trusted_leg(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (a, sol) = (pk(10).to_string(), pk(11).to_string());
+    let address = setup_pool(&pool, 1, (&a, 6), (&sol, 6)).await;
+    price_at(&pool, &sol, "100", tranche).await;
+    // 1 SOL buys 1 000 A, then 1 000 A sell for 0.1 SOL.
+    for (tag, direction, amounts) in [
+        ("buy", "b_to_a", (1_000_000_000, 1_000_000)),
+        ("sell", "a_to_b", (1_000_000_000, 100_000)),
+    ] {
+        let swap = Trade {
+            tag,
+            direction,
+            amounts,
+            fee: 0,
+            fee_token_is_a: false,
+            sqrt_price: sqrt_price_x64(10_000, 1),
+            at: tranche,
+        };
+        trade(&pool, &address, &swap).await;
+    }
+
+    value(&pool, tranche).await;
+
+    let (valued, sells, buys) = valued_tranche(&pool, &address).await;
+    assert!(valued);
+    assert_eq!(
+        (sells, buys),
+        (Some(dec("10")), Some(dec("100"))),
+        "the sale is worth the 0.1 SOL it got, the purchase the 1 SOL it paid"
+    );
+}
+
+/// Against the anchor's leg taken without its price: X, in more pools than Y but without a
+/// market price, would leave its pool unvalued where Y's leg says what changed hands.
+#[sqlx::test]
+async fn the_trusted_leg_is_the_priced_one(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (x, y, z) = (pk(10).to_string(), pk(11).to_string(), pk(12).to_string());
+    let xy = setup_pool(&pool, 1, (&x, 6), (&y, 6)).await;
+    let xz = setup_pool(&pool, 2, (&x, 6), (&z, 6)).await;
+    price_at(&pool, &y, "2", tranche).await;
+    swap(
+        &pool,
+        &xy,
+        "xy",
+        (10_000_000, 5_000_000),
+        sqrt_price_x64(2, 1),
+        tranche,
+    )
+    .await;
+    swap(&pool, &xz, "xz", (1, 1), sqrt_price_x64(1, 1), tranche).await;
+
+    value(&pool, tranche).await;
+
+    let (valued, sells, _) = valued_tranche(&pool, &xy).await;
+    assert!(valued);
+    assert_eq!(sells, Some(dec("10")), "the 5 Y received, at $2");
+}
+
+/// Against both decimals required to value a direction: a fresh token Helius has not
+/// described yet would leave unvalued a sale that SOL's leg measures.
+#[sqlx::test]
+async fn a_token_without_metadata_is_valued_by_its_partner(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (a, sol, other) = (pk(10).to_string(), pk(11).to_string(), pk(12).to_string());
+    let address = setup_pool(&pool, 1, (&a, 6), (&sol, 6)).await;
+    let beside = setup_pool(&pool, 2, (&other, 6), (&sol, 6)).await;
+    forget_decimals(&pool, &a).await;
+    price_at(&pool, &sol, "100", tranche).await;
+    swap(
+        &pool,
+        &beside,
+        "beside",
+        (1, 1),
+        sqrt_price_x64(1, 1),
+        tranche,
+    )
+    .await;
+    swap(
+        &pool,
+        &address,
+        "ab",
+        (4, 1_000_000),
+        sqrt_price_x64(4, 1),
+        tranche,
+    )
+    .await;
+
+    value(&pool, tranche).await;
+
+    let (_, price_a, _, price_sol) = prices(&pool, &address, tranche).await;
+    assert_eq!(
+        (price_a, price_sol),
+        (None, Some(dec("100"))),
+        "without the tranche's rate, only SOL has a price"
+    );
+    let (valued, sells, _) = valued_tranche(&pool, &address).await;
+    assert!(valued);
+    assert_eq!(sells, Some(dec("100")), "the 1 SOL received, at $100");
+}
+
+/// Against the fees left out of `valued`: a fee taken in a token without decimals would be
+/// published as nothing, and its tranche counted as fully valued.
+#[sqlx::test]
+async fn a_fee_in_an_unpriced_token_leaves_the_tranche_unvalued(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (a, sol, other) = (pk(10).to_string(), pk(11).to_string(), pk(12).to_string());
+    let address = setup_pool(&pool, 1, (&a, 6), (&sol, 6)).await;
+    let beside = setup_pool(&pool, 2, (&other, 6), (&sol, 6)).await;
+    forget_decimals(&pool, &a).await;
+    price_at(&pool, &sol, "100", tranche).await;
+    swap(
+        &pool,
+        &beside,
+        "beside",
+        (1, 1),
+        sqrt_price_x64(1, 1),
+        tranche,
+    )
+    .await;
+    let with_fee_in_a = Trade {
+        tag: "ab",
+        direction: "a_to_b",
+        amounts: (4, 1_000_000),
+        fee: 1,
+        fee_token_is_a: true,
+        sqrt_price: sqrt_price_x64(4, 1),
+        at: tranche,
+    };
+    trade(&pool, &address, &with_fee_in_a).await;
+
+    value(&pool, tranche).await;
+
+    assert_eq!(valued_tranche(&pool, &address).await, (false, None, None));
 }
 
 /// Against the margin dropped from the tranche's close: a swap landing within it would
