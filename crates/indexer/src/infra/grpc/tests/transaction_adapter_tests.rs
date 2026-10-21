@@ -73,6 +73,7 @@ fn update_with_loaded(
                 ..Default::default()
             }),
         }),
+        bank_id: 0,
     }
 }
 
@@ -267,6 +268,7 @@ fn a_missing_transaction_envelope_is_an_error() {
     let update = SubscribeUpdateTransaction {
         slot: REFERENCE_SLOT,
         transaction: None,
+        bank_id: 0,
     };
 
     let error = from_grpc(&update, reference_timestamp()).expect_err("no transaction");

@@ -97,7 +97,7 @@ yog-bootstrap = { path = "../bootstrap", features = ["heartbeat", "test-support"
 # Both were *already* switched on, but only as a side effect:
 # `yellowstone-grpc-proto` pulls `tonic` with its default features, which turns
 # on `tonic/transport` → `tonic/server` → `tokio-stream/net`. That is a chain
-# through a caret-pinned third party, so a routine `12.x` release setting
+# through a caret-pinned third party, so a routine minor release setting
 # `default-features = false` on its own `tonic` — or a tonic that moves `server`
 # out of `transport` — would break the test build on a `cargo update`, and
 # `check-per-crate` could not catch it (default features, no test targets).
