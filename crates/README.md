@@ -207,7 +207,7 @@ is `edited` too. After retargeting a PR, push a commit or close and reopen it.
 - **`crates.yml`** — Rust workspace: `check` (then `cargo doc` with `-D warnings`, the only check on intra-doc links), `check-per-crate` (one `cargo check -p <member>` per crate — `check` passes the whole workspace in a single call, where Cargo unifies features and a crate that forgot to declare one is kept green by its siblings), `module-visibility` (see *Conventions*), `fmt`, `clippy -D warnings`, `test`, `test-integration`, `audit`, `sqlx-check` (spins up TimescaleDB, applies migrations, verifies the committed `.sqlx/` cache)
 - **`web-quality.yml`** / **`web-docker.yml`** — the frontend (see [`web/README.md`](../web/README.md))
 - **`scripts.yml`** — what no other workflow reads: `shellcheck` over every tracked `*.sh` (`docker/update.sh`, `docker/deploy-entry.sh`, `web/audit.sh`), and `actionlint` over the workflows, with shellcheck on their `run:` scripts
-- **`dependabot.yml`** — not a workflow: once a month, one PR per ecosystem with every newer version, majors included. Its PRs pass the four verdicts like any other and carry the version change only; staying behind is an `ignore` in that file, with its reason
+- **`dependabot.yml`** — not a workflow: once a month, one PR per ecosystem with every newer version, majors included. Its PRs pass the four verdicts like any other and carry the version change only. What it cannot read is listed in `versions-checked-by-hand.md`, checked by hand
 
 ---
 
