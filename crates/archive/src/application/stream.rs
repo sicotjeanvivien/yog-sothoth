@@ -8,7 +8,7 @@ use yog_persistence::PgTools;
 
 use super::run_outcome::{Interrupted, RunFailure};
 
-/// Parts in one upload: Scaleway refuses the 1 001st, whatever S3's own limit says.
+/// Parts in one upload: Scaleway refuses the 1 001st.
 const MAX_PARTS: u64 = 1_000;
 
 /// Size of one multipart part; with [`MAX_PARTS`], the largest dump the bucket takes.

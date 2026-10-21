@@ -137,7 +137,7 @@ run otherwise, and says so.
   incomplete multipart uploads after **1 day**: a stop mid-dump aborts its
   upload, but a killed process cannot.
 - **Largest dump: ~33.5 GB.** Scaleway takes at most 1 000 parts in one
-  multipart upload — AWS's 10 000 do not hold there — so 1 000 × 32 MiB =
+  multipart upload — AWS's 10 000 do not hold there — so 1 000 × 32 MiB ≈
   33.5 GB. A larger dump ends in `store_failed` at part 1 001
   (`400 InvalidArgument`), and nothing reaches the bucket. At the dump-to-database
   ratio of October 2026 (0.53), that covers a database of ~63 GB, about 70 % of
