@@ -4,6 +4,10 @@
 use chrono::{DateTime, Utc};
 use sqlx::migrate::Migrator;
 use sqlx::{AssertSqlSafe, PgPool};
+use yog_core::domain::{AnalyticRepository, CycleWrite};
+use yog_persistence::PgAnalyticRepository;
+
+use super::helpers::as_role;
 
 static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
@@ -87,6 +91,8 @@ async fn the_rebuild_empties_the_valued_tables(pool: PgPool) {
         "INSERT INTO analytic_token_periods
            (period, mint, bucket, volume_usd, pools, pool_hours, pool_hours_valued)
          VALUES ('24h', 'm', now(), 801792609, 1, 1, 1)",
+        "INSERT INTO analytic_protocol_periods (protocol, period, bucket, active_pools)
+         VALUES ('meteora_damm_v2', '24h', now(), 1)",
     ] {
         sqlx::query(insert).execute(&pool).await.unwrap();
     }
@@ -100,6 +106,7 @@ async fn the_rebuild_empties_the_valued_tables(pool: PgPool) {
         "analytic_pool_hourly",
         "analytic_protocol_hourly",
         "analytic_token_periods",
+        "analytic_protocol_periods",
     ] {
         let rows: i64 = sqlx::query_scalar(AssertSqlSafe(format!("SELECT count(*) FROM {table}")))
             .fetch_one(&pool)
@@ -146,4 +153,46 @@ async fn the_floor_waits_for_the_aggregate(pool: PgPool) {
         [(midnight(&pool, 2).await, false)],
         "the aggregate's second day"
     );
+}
+
+/// Against an aggregate read as no bound when it is empty: the writer's old hours would be
+/// written again with no swap, and published as empty.
+#[sqlx::test(migrations = false)]
+async fn the_floor_needs_the_aggregate(pool: PgPool) {
+    MIGRATOR.run_to(30, &pool).await.unwrap();
+    frozen_hours_from(&pool, 3).await;
+
+    MIGRATOR.run_to(31, &pool).await.unwrap();
+
+    assert_eq!(hours(&pool).await, []);
+}
+
+/// Against the periods kept: written once at each freeze, the first hour frozen again past
+/// one of theirs would fail its cycle, and every cycle after it.
+#[sqlx::test(migrations = false)]
+async fn the_writer_freezes_again_after_the_rebuild(pool: PgPool) {
+    MIGRATOR.run_to(30, &pool).await.unwrap();
+    swap_materialised(&pool, 5).await;
+    frozen_hours_from(&pool, 3).await;
+    sqlx::query(concat!(
+        "INSERT INTO analytic_protocol_periods (protocol, period, bucket, active_pools)
+         SELECT 'meteora_damm_v2', w, ",
+        day!(),
+        " + h * INTERVAL '1 hour', 1
+           FROM generate_series(0, 23) h, unnest(ARRAY['24h', '7d', '30d']) w"
+    ))
+    .bind(3)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    MIGRATOR.run_to(31, &pool).await.unwrap();
+
+    let analytic = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    let progress = analytic.progress().await.unwrap();
+    let written = analytic
+        .write_cycle(&CycleWrite::plan(Utc::now(), progress))
+        .await
+        .expect("the hours frozen again find no period of before");
+    assert!(written.hours_frozen > 0);
 }

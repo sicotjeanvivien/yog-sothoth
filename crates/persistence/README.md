@@ -588,9 +588,10 @@ snapshot of the aggregate, and nothing reads the raw swaps. Nothing else in the
 writer reads a price, and no view a binary reads values a swap by the hour
 (`tests/analytic_prices.rs`): the hourly priced view (023) is left to the
 activity view alone. The two 5-minute tables are kept 7 days, as the raw swaps.
-031 empties every table valued at the pool's mid price, and keeps the writer's
-floor: its first hour, but no earlier than the second day of the 5-minute
-aggregate, kept 30 days (`tests/analytic_rebuild.rs`).
+031 empties every table valued at the pool's mid price, and the protocol periods,
+written once at each freeze, that the hours frozen again write anew. It keeps the
+writer's floor: its first hour, no earlier than the second day of the 5-minute
+aggregate, kept 30 days, and none without it (`tests/analytic_rebuild.rs`).
 ⚠️ A swap written into a tranche already valued — it is then more than 10 minutes
 late — is missing from the facts for good.
 
@@ -598,8 +599,8 @@ Still reading market prices outside the table: the liquidity
 (`meteora_damm_v2_pool_hourly_liquidity_flow`,
 `meteora_damm_v2_liquidity_events_valued`) and the TVL (`pool_current_tvl`).
 
-`yog_analytic` reads through explicit grants (015, 021, and the `initialize_pool`
-events in 029); its grant on the raw swaps (028) has no reader left.
+`yog_analytic` reads through explicit grants (015, 021, the raw swaps in 028, and
+the `initialize_pool` events in 029).
 ⚠️ An aggregate is granted as well as any view over it: TimescaleDB checks a
 continuous aggregate as the reader, not as the owner of the view on top.
 

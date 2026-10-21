@@ -138,8 +138,12 @@ What valuing once costs, by design:
   price or decimals, when it is valued stays unvalued for good, and its hour
   with it. It is counted (`valued = false`, `active_pools_valued`), never filled
   with a guess;
-- a sale is worth what its seller received, fee taken out when the pool takes
-  it in the output token; a purchase what its buyer paid, fee included.
+- a direction whose trusted token goes in counts the fee; one whose trusted
+  token comes out does not when the pool takes the fee in it; on a tie, the
+  lower leg is the one without the fee;
+- a fee taken in the untrusted token is valued at the table's price, which the
+  tranche's two directions average: worth more than it was when that token fell
+  within the tranche, never more than what the tranche traded.
 
 ## Configuration
 
