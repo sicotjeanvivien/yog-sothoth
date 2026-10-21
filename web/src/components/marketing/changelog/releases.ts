@@ -32,6 +32,22 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.1.13",
+    date: "2026-10-21",
+    summary: "The database is backed up again.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "Backups had stopped: a dump over 8.4 GB was refused by the bucket at its 1,001st part. Parts are now 32 MiB, so a dump of up to 33.5 GB is stored.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.1.12",
     date: "2026-10-20",
     summary:
