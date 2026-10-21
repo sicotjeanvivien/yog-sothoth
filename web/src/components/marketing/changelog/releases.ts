@@ -53,7 +53,7 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "The analytic writer prices a token in its pool at the rate its five-minute tranche traded at, no longer at the pool's mid price; it reads each tranche's raw swaps for the fee of each direction, and writes the active pools of every hour it freezes.",
+            text: "The analytic writer prices a token in its pool at the rate its five-minute tranche traded at, no longer at the pool's mid price; its five-minute aggregate, recreated, carries the fee of each direction; and it writes the active pools of every hour it freezes.",
             technical: true,
           },
         ],

@@ -608,10 +608,10 @@ async fn an_only_b_pool_splits_its_fees_by_direction(pool: PgPool) {
     assert_eq!(fees(&pool, &address).await, Some(dec("2")));
 }
 
-/// Against an unknown split read as no fee on the purchases: without the raw swaps, the sale
-/// of a pool collecting B both ways would be given the purchase's fee too, and published.
+/// Against the split read back from the raw swaps: their retention gone, a two-way tranche of
+/// a pool collecting B both ways would lose it, though its aggregate still holds every fee.
 #[sqlx::test]
-async fn without_the_raw_a_two_way_only_b_tranche_is_unvalued(pool: PgPool) {
+async fn the_split_outlives_the_raw(pool: PgPool) {
     let tranche = settled_tranche();
     let (a, sol) = (pk(10).to_string(), pk(11).to_string());
     let address = setup_pool(&pool, 1, (&a, 6), (&sol, 6)).await;
@@ -621,33 +621,17 @@ async fn without_the_raw_a_two_way_only_b_tranche_is_unvalued(pool: PgPool) {
 
     value(&pool, tranche).await;
 
-    assert_eq!(valued_tranche(&pool, &address).await, (false, None, None));
-}
-
-/// Against the raw swaps required for every split: a tranche of purchases alone, whose B fee
-/// can only be theirs, would be left unvalued once its raw swaps are gone.
-#[sqlx::test]
-async fn without_the_raw_a_one_way_tranche_is_still_exact(pool: PgPool) {
-    let tranche = settled_tranche();
-    let (a, sol) = (pk(10).to_string(), pk(11).to_string());
-    let address = setup_pool(&pool, 1, (&a, 6), (&sol, 6)).await;
-    price_at(&pool, &sol, "100", tranche).await;
-    trades(&pool, &address, &ONLY_B[..1], tranche).await;
-    drop_the_raw(&pool, &address, tranche).await;
-
-    value(&pool, tranche).await;
-
     assert_eq!(
         valued_tranche(&pool, &address).await,
-        (true, Some(dec("0")), Some(dec("100")))
+        (true, Some(dec("100")), Some(dec("100")))
     );
-    assert_eq!(fees(&pool, &address).await, Some(dec("1")));
+    assert_eq!(fees(&pool, &address).await, Some(dec("2")));
 }
 
-/// Against the raw swaps read as the aggregate's whatever they hold: a purchase landing after
-/// the tranche was materialised would add its fee to the split, against sums that lack it.
+/// ☠️ Pins the loss the READMEs warn about: a purchase landing after its tranche was
+/// materialised is left out of it whole, its fee with it, and the tranche stays valued.
 #[sqlx::test]
-async fn a_swap_late_past_the_aggregate_leaves_the_split_unknown(pool: PgPool) {
+async fn a_swap_late_past_the_aggregate_is_left_out_whole(pool: PgPool) {
     let tranche = settled_tranche();
     let (a, sol) = (pk(10).to_string(), pk(11).to_string());
     let address = setup_pool(&pool, 1, (&a, 6), (&sol, 6)).await;
@@ -670,7 +654,77 @@ async fn a_swap_late_past_the_aggregate_leaves_the_split_unknown(pool: PgPool) {
 
     value(&pool, tranche).await;
 
-    assert_eq!(valued_tranche(&pool, &address).await, (false, None, None));
+    assert_eq!(
+        valued_tranche(&pool, &address).await,
+        (true, Some(dec("100")), Some(dec("100"))),
+        "the tranche as its aggregate holds it, the late swap left out"
+    );
+}
+
+/// Against the B fees priced at one rate for both directions: X fell between its sale and its
+/// purchase, and the purchase's referral fee would take the sale's higher price.
+#[sqlx::test]
+async fn protocol_and_referral_fees_take_their_direction_price(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (sol, x, other) = (pk(10).to_string(), pk(11).to_string(), pk(12).to_string());
+    let address = setup_pool(&pool, 1, (&sol, 6), (&x, 6)).await;
+    let beside = setup_pool(&pool, 2, (&sol, 6), (&other, 6)).await;
+    price_at(&pool, &sol, "100", tranche).await;
+    swap(
+        &pool,
+        &beside,
+        "beside",
+        (1, 1),
+        sqrt_price_x64(1, 1),
+        tranche,
+    )
+    .await;
+    // 1 SOL sold for 1 000 X gross, 10 X the fee; then 10 000 X in, 100 X of fee, buy 0.99 SOL.
+    let swaps = [
+        (
+            "sell",
+            "a_to_b",
+            (1_000_000, 990_000_000),
+            10_000_000,
+            false,
+        ),
+        (
+            "buy",
+            "b_to_a",
+            (990_000, 10_000_000_000),
+            100_000_000,
+            false,
+        ),
+    ];
+    trades(&pool, &address, &swaps, tranche).await;
+    sqlx::query(
+        "UPDATE meteora_damm_v2_swap_events
+            SET claiming_fee = claiming_fee - 40000000, referral_fee = 40000000
+          WHERE signature = 'buy'",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    value(&pool, tranche).await;
+
+    let (fees, referral): (Option<BigDecimal>, Option<BigDecimal>) = sqlx::query_as(
+        "SELECT fees_usd, referral_fees_usd FROM analytic_pool_5min WHERE pool_address = $1",
+    )
+    .bind(&address)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        fees,
+        Some(dec("2")),
+        "10 of the sale's 1 000 X, 100 of the buy's 10 000 X"
+    );
+    assert_eq!(
+        referral,
+        Some(dec("0.4")),
+        "40 of the buy's 10 000 X, at $100 the SOL"
+    );
 }
 
 /// Against a sale's B fee shared by its net output: SOL sold for X, the fee taken in X on

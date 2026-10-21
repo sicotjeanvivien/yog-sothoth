@@ -578,23 +578,26 @@ protocol aggregate and the TVL, over the span the API hands them;
 deletes the protocol TVL of the hours before the first complete one, so its first
 row is the floor a TVL variation starts from.
 
-The DAMM v2 tranches are those of `meteora_damm_v2_swap_events_5min` (021),
+The DAMM v2 tranches are those of `meteora_damm_v2_swap_events_5min` (021, recreated by 031),
 refreshed every 5 minutes up to 10 minutes ago and read in real time past that.
 One statement per tranche (`meteora_damm_v2_tranche.sql`) prices each pool's
 tokens — the rate the tranche traded at, from the aggregate's `traded_a` and
 `traded_b`, the market prices through `yog_price_asof` once per mint — and values
 each direction's gross trusted leg through `yog_moved_amount_usd` (025): both read
-one snapshot of the aggregate. The raw swaps of the tranche tell the buys' input
-fee in B apart from the sales' output fee, which the aggregate sums together; they
-are read only when they count the aggregate's swaps.
+one snapshot of the aggregate, which carries the buys' input fees in B beside the
+B fees of both directions.
 Nothing else in the
 writer reads a price, and no view a binary reads values a swap by the hour
 (`tests/analytic_prices.rs`): the hourly priced view (023) is left to the
 activity view alone. The two 5-minute tables are kept 7 days, as the raw swaps.
-031 empties every table valued at the pool's mid price, and the protocol periods,
-written once at each freeze, that the hours frozen again write anew. It keeps the
-writer's floor: its first hour, no earlier than the second day of the raw swaps,
-which split the B fees, and none without them (`tests/analytic_rebuild.rs`).
+031 recreates that aggregate with the buys' B fees, empties every table valued at
+the pool's mid price, and the protocol periods, written once at each freeze, that
+the hours frozen again write anew. It keeps the writer's floor: its first hour, no
+earlier than the hour after the first raw swap — the recreated aggregate holds the
+raw swaps and nothing more — and none without them. 032, outside a transaction,
+materialises the recreated aggregate over every raw swap: its policy refreshes 6
+days only, and older tranches, under its watermark yet never materialised, would
+read empty (`tests/analytic_rebuild.rs`).
 ⚠️ A swap written into a tranche already valued — it is then more than 10 minutes
 late — is missing from the facts for good.
 

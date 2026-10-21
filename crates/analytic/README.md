@@ -50,12 +50,13 @@ is the gross less the fees.
 
 Which fee belongs to which direction follows cp-amm (`state/fee.rs`): A→B pays
 on its output, in B; B→A pays in A in a BothToken pool, else on its input in B.
-The 5-minute aggregate sums both B fees together, so the tranche reads the
-buys' share from the raw swaps.
+The 5-minute aggregate carries the buys' share of the B fees beside their total,
+the rest being the sales'.
 
 A fee is valued with the token it is taken in: at market for a trusted token;
-otherwise as its share of the gross amount of the trade that paid it, times
-that trade's trusted leg — amounts of one token, so its decimals never matter.
+otherwise as its share of the gross amount of the direction that paid it, times
+that direction's trusted leg — amounts of one token, so its decimals never
+matter. Its protocol and referral parts follow it, direction by direction.
 
 A pool-tranche is valued when it has a trusted token and each direction and
 each fee can be computed; otherwise it is counted unvalued.
@@ -146,9 +147,6 @@ What valuing once costs, by design:
 - a pool-tranche without a trusted token when it is valued stays unvalued for
   good, and its hour with it. It is counted (`valued = false`,
   `active_pools_valued`), never filled with a guess;
-- a two-way tranche of a pool collecting its fees in B whose raw swaps are not
-  the aggregate's — a swap landed after its materialisation, or raw swaps gone —
-  has no split of its B fee, and stays unvalued too.
 
 ## Configuration
 

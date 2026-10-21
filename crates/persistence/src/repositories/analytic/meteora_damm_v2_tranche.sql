@@ -12,21 +12,6 @@ WITH tranche AS (
       LEFT JOIN token_metadata tmb ON tmb.mint = p.token_b_mint::TEXT
      WHERE s.bucket = $1
 ),
--- The buys' input fee in B, which the aggregate sums with the sales' output fee in B,
--- for the pools that trade both ways without a fee in A: the others need no split.
-raw_fees AS (
-    SELECT pool_address, COUNT(*) AS swaps,
-           SUM(claiming_fee + protocol_fee + compounding_fee + referral_fee)
-               FILTER (WHERE trade_direction = 'b_to_a' AND NOT fee_token_is_a) AS fee_b_on_buys
-      FROM meteora_damm_v2_swap_events
-     WHERE timestamp >= $1 AND timestamp < $1::TIMESTAMPTZ + $3::INTERVAL
-       AND pool_address IN (
-           SELECT pool_address FROM tranche
-            WHERE COALESCE(volume_in_a, 0) > 0 AND COALESCE(volume_in_b, 0) > 0
-              AND COALESCE(fee_in_a, 0) = 0
-       )
-     GROUP BY pool_address
-),
 pools_per_mint AS (
     SELECT m.mint, COUNT(*) AS pools
       FROM tranche
@@ -111,53 +96,47 @@ SELECT pool_address, $1, $2, swap_count, valued,
            CASE WHEN v.valued THEN w.a_to_b END AS volume_in_a_usd,
            CASE WHEN v.valued THEN w.b_to_a END AS volume_in_b_usd,
            CASE WHEN v.valued THEN
-               COALESCE(t.fee_in_a, 0) * u.per_a + COALESCE(t.fee_in_b, 0) * u.per_b
+               COALESCE(t.fee_in_a, 0) * u.per_a
+             + sold.fee_b * u.sale_b + COALESCE(t.fee_in_b_on_buys, 0) * u.buy_b
            END AS fees_usd,
            CASE WHEN v.valued THEN
                COALESCE(t.protocol_fee_in_a, 0) * u.per_a
-             + COALESCE(t.protocol_fee_in_b, 0) * u.per_b
+             + sold.protocol_b * u.sale_b + COALESCE(t.protocol_fee_in_b_on_buys, 0) * u.buy_b
            END AS protocol_fees_usd,
            CASE WHEN v.valued THEN
                COALESCE(t.referral_fee_in_a, 0) * u.per_a
-             + COALESCE(t.referral_fee_in_b, 0) * u.per_b
+             + sold.referral_b * u.sale_b + COALESCE(t.referral_fee_in_b_on_buys, 0) * u.buy_b
            END AS referral_fees_usd
       FROM tranche t
       JOIN quoted q ON q.pool_address = t.pool_address
-      LEFT JOIN raw_fees rf ON rf.pool_address = t.pool_address
      -- ⚠️ A→B always pays its fee on the output, in B; B→A pays it in A in a BothToken
-     -- pool (`fee_in_a > 0`), else on its input in B, which only the raw swaps tell apart.
-     -- ⚠️ Read only when the raw swaps are the aggregate's: a late swap would skew the split.
+     -- pool, else on its input in B: the sales' B fees are what the buys' leave.
      CROSS JOIN LATERAL (
-         SELECT CASE
-                    WHEN COALESCE(t.volume_in_b, 0) = 0 OR COALESCE(t.fee_in_a, 0) > 0 THEN 0
-                    WHEN COALESCE(t.volume_in_a, 0) = 0 THEN COALESCE(t.fee_in_b, 0)
-                    WHEN rf.swaps = t.swap_count THEN COALESCE(rf.fee_b_on_buys, 0)
-                END AS buys_b
-     ) fee
-     CROSS JOIN LATERAL (SELECT COALESCE(t.fee_in_b, 0) - fee.buys_b AS sales_b) sold
+         SELECT COALESCE(t.fee_in_b, 0) - COALESCE(t.fee_in_b_on_buys, 0) AS fee_b,
+                COALESCE(t.protocol_fee_in_b, 0) - COALESCE(t.protocol_fee_in_b_on_buys, 0)
+                    AS protocol_b,
+                COALESCE(t.referral_fee_in_b, 0) - COALESCE(t.referral_fee_in_b_on_buys, 0)
+                    AS referral_b
+     ) sold
      -- Each direction's gross output in raw units: its output, and the fee taken on it.
      CROSS JOIN LATERAL (
          SELECT t.traded_a - COALESCE(t.volume_in_a, 0) + COALESCE(t.fee_in_a, 0) AS out_a,
-                t.traded_b - COALESCE(t.volume_in_b, 0) + sold.sales_b AS out_b
+                t.traded_b - COALESCE(t.volume_in_b, 0) + sold.fee_b AS out_b
      ) o
      -- Each direction's gross at market price, by either leg: an output leg gets back the
      -- fee taken on it, and a B→A output the one its input paid in B.
      CROSS JOIN LATERAL (
          SELECT yog_moved_amount_usd(t.volume_in_a, t.dec_a, q.market_a) AS a_to_b_by_a,
-                -- ⚠️ yog_moved_amount_usd reads a NULL amount as nothing moved: an unknown
-                -- split must stay NULL before it.
-                CASE WHEN o.out_b IS NOT NULL
-                     THEN yog_moved_amount_usd(o.out_b, t.dec_b, q.market_b)
-                END AS a_to_b_by_b,
+                yog_moved_amount_usd(o.out_b, t.dec_b, q.market_b) AS a_to_b_by_b,
                 yog_moved_amount_usd(t.volume_in_b, t.dec_b, q.market_b) AS b_to_a_by_b,
                 -- ⚠️ Multiplied before the division: dividing first rounds the input's share.
                 -- Nothing out — a dust input taken whole as fee — is worth nothing.
                 CASE WHEN COALESCE(t.volume_in_b, 0) = 0 OR o.out_a = 0 THEN 0
                      ELSE yog_moved_amount_usd(o.out_a, t.dec_a, q.market_a)
-                          * t.volume_in_b / NULLIF(t.volume_in_b - fee.buys_b, 0)
+                          * t.volume_in_b
+                          / NULLIF(t.volume_in_b - COALESCE(t.fee_in_b_on_buys, 0), 0)
                 END AS b_to_a_by_a
      ) g
-     -- ⚠️ LEAST skips NULL: on a tie whose fee split is unknown, the input leg stands alone.
      CROSS JOIN LATERAL (
          SELECT CASE q.trust
                     WHEN 'a' THEN g.a_to_b_by_a
@@ -170,8 +149,8 @@ SELECT pool_address, $1, $2, swap_count, valued,
                     WHEN 'both' THEN LEAST(g.b_to_a_by_b, g.b_to_a_by_a)
                 END AS b_to_a
      ) w
-     -- USD per raw unit of each token's fees: a trusted token at its market price, the
-     -- other at its share of the gross of the direction that paid it.
+     -- USD per raw unit of each fee: in a trusted token at its market price, otherwise
+     -- at its share of the gross of the direction that paid it — A only on the buys.
      CROSS JOIN LATERAL (
          SELECT CASE
                     WHEN COALESCE(t.fee_in_a, 0) = 0 THEN 0
@@ -179,22 +158,20 @@ SELECT pool_address, $1, $2, swap_count, valued,
                     ELSE yog_amount_usd(1, t.dec_a, q.market_a)
                 END AS per_a,
                 CASE
-                    WHEN COALESCE(t.fee_in_b, 0) = 0 THEN 0
-                    WHEN q.trust = 'a' THEN (
-                        CASE WHEN sold.sales_b = 0 THEN 0
-                             ELSE sold.sales_b * g.a_to_b_by_a / NULLIF(o.out_b, 0)
-                        END
-                      + CASE WHEN fee.buys_b = 0 THEN 0
-                             ELSE fee.buys_b * g.b_to_a_by_a / NULLIF(t.volume_in_b, 0)
-                        END
-                    ) / t.fee_in_b
+                    WHEN sold.fee_b = 0 THEN 0
+                    WHEN q.trust = 'a' THEN g.a_to_b_by_a / NULLIF(o.out_b, 0)
                     ELSE yog_amount_usd(1, t.dec_b, q.market_b)
-                END AS per_b
+                END AS sale_b,
+                CASE
+                    WHEN COALESCE(t.fee_in_b_on_buys, 0) = 0 THEN 0
+                    WHEN q.trust = 'a' THEN g.b_to_a_by_a / NULLIF(t.volume_in_b, 0)
+                    ELSE yog_amount_usd(1, t.dec_b, q.market_b)
+                END AS buy_b
      ) u
      CROSS JOIN LATERAL (
          SELECT NOT (
              q.trust IS NULL OR w.a_to_b IS NULL OR w.b_to_a IS NULL
-             OR u.per_a IS NULL OR u.per_b IS NULL
+             OR u.per_a IS NULL OR u.sale_b IS NULL OR u.buy_b IS NULL
          ) AS valued
      ) v
   ) valued
