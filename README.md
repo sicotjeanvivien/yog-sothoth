@@ -110,7 +110,7 @@ All nineteen are extracted, persisted to their own per-kind table (`meteora_damm
 
 | Layer | Technology |
 |---|---|
-| Indexer, enrichment, signals, API | Rust 1.98, Tokio, axum, sqlx |
+| Indexer, enrichment, signals, API | Rust 1.99, Tokio, axum, sqlx |
 | Database | TimescaleDB on PostgreSQL 18 |
 | Frontend | Next.js 16, TypeScript, Tailwind v4, next-intl |
 | External data | Solana JSON-RPC (any provider), Yellowstone gRPC (Alchemy), Helius DAS, Jupiter Price V3 |

@@ -5,7 +5,7 @@
 # jobs so a failure in one does not mask issues in the others.
 #
 # Every job first installs the npm that `devEngines` in web/package.json
-# names: the one Node 24 ships is older, and npm refuses to run in web/
+# names: the one Node 26 ships is older, and npm refuses to run in web/
 # under another major (EBADDEVENGINES). The guard is the point — two majors
 # write the lockfile differently, and a lock one accepts the other can
 # reject (`npm ci`: "Missing: … from lock file").
@@ -70,7 +70,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           cache: npm
           cache-dependency-path: web/package-lock.json
 
@@ -95,7 +95,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           cache: npm
           cache-dependency-path: web/package-lock.json
 
@@ -120,7 +120,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           cache: npm
           cache-dependency-path: web/package-lock.json
 
@@ -154,7 +154,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
 
       - name: Install the npm package.json asks for
         run: npm install -g "npm@$(jq -r .devEngines.packageManager.version package.json)"
