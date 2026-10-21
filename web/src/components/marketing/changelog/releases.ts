@@ -41,15 +41,19 @@ export const RELEASES: readonly Release[] = [
         kind: "fixes",
         items: [
           {
-            text: "A token without a market price was valued at its pool's price after the last swap, which a single swap can push to any value when the pool is nearly empty: one pool published $801 million of volume for three swaps worth two cents, and the 24-hour volume read over a billion dollars. Each direction of a trade is now worth what changed hands on the side of the token that has a market price, usually SOL: a sale, the SOL the seller received; a purchase, the SOL the buyer paid.",
+            text: "A token without a market price was valued at its pool's price after the last swap, which a single swap can push to any value when the pool is nearly empty: one pool published $801 million of volume for three swaps worth two cents, and the 24-hour volume read over a billion dollars. Each direction of a trade is now worth what changed hands on the side of the token that has a market price, usually SOL, fee included as Meteora counts it: a purchase, the SOL the buyer paid; a sale, the SOL the seller received plus the fee the pool took.",
             technical: false,
           },
           {
-            text: "The volume, fees and most traded tokens of the past days are computed again under this rule, with no hour lost. For about three hours after this update, the 24-hour volume shows as unavailable and the swap flow signal waits while they are rebuilt.",
+            text: "A fee taken in a token without a market price is now worth its share of the trade that paid it, no longer that token's average price over five minutes, which could overstate it after a crash.",
             technical: false,
           },
           {
-            text: "The analytic writer prices a token in its pool at the rate its five-minute tranche traded at, no longer at the pool's mid price, and no longer reads the raw swaps.",
+            text: "The volume, fees and most traded tokens of the past days are computed again under these rules, with no hour lost. For about three hours after this update, the Overview shows figures that stop at an earlier hour, announced by its band, and the swap flow signal waits while they catch up.",
+            technical: false,
+          },
+          {
+            text: "The analytic writer prices a token in its pool at the rate its five-minute tranche traded at, no longer at the pool's mid price; it reads each tranche's raw swaps for the fee of each direction, and writes the active pools of every hour it freezes.",
             technical: true,
           },
         ],

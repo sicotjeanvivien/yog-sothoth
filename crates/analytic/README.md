@@ -39,17 +39,26 @@ swaps in the tranche, and only them.
 ## The value of a swap
 
 The volume is a flow: it is measured by what changed hands, not by a price given
-to each token. Each direction of a tranche is worth the **trusted leg** at its
-market price — the anchor's when it has a market price and decimals, else the
-other token's, the lower of the two legs on a tie. For a sale of A against SOL,
-that is the SOL the pool paid out (`traded_b − volume_in_b`); for a purchase, the
-SOL paid in. A token emptied in its pool, or one no market prices, is then worth
-what changed hands against it, whatever its price. The fees, taken in either
-token, are valued at the table's prices.
+to each token, and **gross**, fee included, as Meteora publishes it. Each
+direction of a tranche is worth its **trusted leg** at market price — the
+anchor's when it has a market price and decimals, else the other token's, the
+lower of the two on a tie. A purchase of A with SOL is worth the SOL paid in. A
+sale is worth the SOL paid out plus the fee the pool took on them: cp-amm always
+returns an output net of its fee. A token emptied in its pool, or one no market
+prices, is then worth what changed hands against it, whatever its price. The net
+is the gross less the fees.
 
-A pool-tranche is valued when each direction has a trusted leg and each fee a
-price and decimals; otherwise it is counted unvalued. A token without decimals
-against SOL is valued by SOL's leg; a fee taken in it leaves its tranche unvalued.
+Which fee belongs to which direction follows cp-amm (`state/fee.rs`): A→B pays
+on its output, in B; B→A pays in A in a BothToken pool, else on its input in B.
+The 5-minute aggregate sums both B fees together, so the tranche reads the
+buys' share from the raw swaps.
+
+A fee is valued with the token it is taken in: at market for a trusted token;
+otherwise as its share of the gross amount of the trade that paid it, times
+that trade's trusted leg — amounts of one token, so its decimals never matter.
+
+A pool-tranche is valued when it has a trusted token and each direction and
+each fee can be computed; otherwise it is counted unvalued.
 
 `/api/protocols/…` reads the protocol aggregate and the TVL
 (`repositories/protocol_activity.rs` in `yog-persistence`).
@@ -94,10 +103,10 @@ in `persistence` (`repositories/analytic.rs`).
   valued, so its last write sees every swap that arrived within the margin.
 - **TVL**: measured into the hour of the cycle, as long as that hour is not
   frozen.
-- **Periods**: on a cycle that freezes, for each window — 24 h, 7 and 30 days
-  (`Window`, in `core`) — ending at the last hour it freezes. During a catch-up
-  only that hour gets them: the API then has no previous window to read for the
-  hours skipped.
+- **Periods**: on a cycle that freezes, the distinct pools of each window — 24 h,
+  7 and 30 days (`Window`, in `core`) — ending at every hour it freezes, so a
+  previous window read after a catch-up finds its row; the tokens, at the last
+  one only.
 
 ## The periods
 
@@ -134,16 +143,11 @@ What valuing once costs, by design:
   from the next refresh on: if its tranche is valued in between, it is not in
   the facts either
   ([`persistence/README.md`](../persistence/README.md#the-analytic-tables-migration-015));
-- a pool-tranche without a trusted leg, or with a fee in a token without a
-  price or decimals, when it is valued stays unvalued for good, and its hour
-  with it. It is counted (`valued = false`, `active_pools_valued`), never filled
-  with a guess;
-- a direction whose trusted token goes in counts the fee; one whose trusted
-  token comes out does not when the pool takes the fee in it; on a tie, the
-  lower leg is the one without the fee;
-- a fee taken in the untrusted token is valued at the table's price, which the
-  tranche's two directions average: worth more than it was when that token fell
-  within the tranche, never more than what the tranche traded.
+- a pool-tranche without a trusted token when it is valued stays unvalued for
+  good, and its hour with it. It is counted (`valued = false`,
+  `active_pools_valued`), never filled with a guess;
+- a tranche valued again once its raw swaps are gone, both ways in a pool
+  collecting its fees in B, has no split of its B fee, and stays unvalued too.
 
 ## Configuration
 

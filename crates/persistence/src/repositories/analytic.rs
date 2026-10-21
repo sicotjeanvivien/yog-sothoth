@@ -60,7 +60,7 @@ impl AnalyticRepository for PgAnalyticRepository {
         let hours_frozen = match cycle.freeze_through {
             Some(through) => {
                 let frozen = freeze(&mut tx, cycle.from, through, cycle.at).await?;
-                write_protocol_periods(&mut tx, through).await?;
+                write_protocol_periods(&mut tx, cycle.from, through).await?;
                 write_token_periods(&mut tx, through).await?;
                 frozen
             }
@@ -282,33 +282,42 @@ fn windows() -> (Vec<String>, Vec<i32>) {
         .unzip()
 }
 
-/// The distinct pools of every protocol and window ending at `last_hour`; a
-/// protocol without any gets 0, so a missing row means a window never counted.
+/// The distinct pools of every protocol and window ending at each hour `from..=through` frozen;
+/// a protocol without any gets 0, so a missing row means a window never counted.
 async fn write_protocol_periods(
     tx: &mut Transaction<'static, Postgres>,
-    last_hour: DateTime<Utc>,
+    from: DateTime<Utc>,
+    through: DateTime<Utc>,
 ) -> RepositoryResult<()> {
     let (periods, hours) = windows();
     let protocols: Vec<&str> = Protocol::all().iter().map(|p| p.as_str()).collect();
     sqlx::query!(
         r#"
         -- ⚠️ Grouped per pool, then counted: a COUNT(DISTINCT) sorts, and spills.
-        WITH by_pool AS (
-            SELECT w.period, f.protocol, f.pool_address
-              FROM UNNEST($2::TEXT[], $3::INT[]) AS w (period, hours)
+        WITH frozen AS (
+            SELECT generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ, INTERVAL '1 hour')
+                       AS last_hour
+        ),
+        by_pool AS (
+            SELECT h.last_hour, w.period, f.protocol, f.pool_address
+              FROM frozen h
+             CROSS JOIN UNNEST($3::TEXT[], $4::INT[]) AS w (period, hours)
               JOIN analytic_pool_hourly f
-                ON f.bucket > $1::TIMESTAMPTZ - make_interval(hours => w.hours)
-               AND f.bucket <= $1
-             GROUP BY w.period, f.protocol, f.pool_address
+                ON f.bucket > h.last_hour - make_interval(hours => w.hours)
+               AND f.bucket <= h.last_hour
+             GROUP BY h.last_hour, w.period, f.protocol, f.pool_address
         )
         INSERT INTO analytic_protocol_periods (protocol, period, bucket, active_pools)
-        SELECT pr.protocol, w.period, $1, COUNT(b.pool_address)
-          FROM UNNEST($4::TEXT[]) AS pr (protocol)
-         CROSS JOIN UNNEST($2::TEXT[]) AS w (period)
-          LEFT JOIN by_pool b ON b.protocol = pr.protocol AND b.period = w.period
-         GROUP BY pr.protocol, w.period
+        SELECT pr.protocol, w.period, h.last_hour, COUNT(b.pool_address)
+          FROM frozen h
+         CROSS JOIN UNNEST($5::TEXT[]) AS pr (protocol)
+         CROSS JOIN UNNEST($3::TEXT[]) AS w (period)
+          LEFT JOIN by_pool b
+                 ON b.last_hour = h.last_hour AND b.protocol = pr.protocol AND b.period = w.period
+         GROUP BY h.last_hour, pr.protocol, w.period
         "#,
-        last_hour,
+        from,
+        through,
         &periods,
         &hours,
         &protocols as &[&str],

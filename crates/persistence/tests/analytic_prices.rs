@@ -513,10 +513,233 @@ async fn a_token_without_metadata_is_valued_by_its_partner(pool: PgPool) {
     assert_eq!(sells, Some(dec("100")), "the 1 SOL received, at $100");
 }
 
-/// Against the fees left out of `valued`: a fee taken in a token without decimals would be
-/// published as nothing, and its tranche counted as fully valued.
+/// `(tag, direction, (amount_a, amount_b), fee, fee_token_is_a)`.
+type Swap = (&'static str, &'static str, (i64, i64), i64, bool);
+
+/// `swaps` at `at`; the pool's mid price is not read.
+async fn trades(pool: &PgPool, address: &str, swaps: &[Swap], at: DateTime<Utc>) {
+    for &(tag, direction, amounts, fee, fee_token_is_a) in swaps {
+        let swap = Trade {
+            tag,
+            direction,
+            amounts,
+            fee,
+            fee_token_is_a,
+            sqrt_price: sqrt_price_x64(1, 1),
+            at,
+        };
+        trade(pool, address, &swap).await;
+    }
+}
+
+/// `fees_usd` of the pool's one tranche.
+async fn fees(pool: &PgPool, address: &str) -> Option<BigDecimal> {
+    sqlx::query_scalar("SELECT fees_usd FROM analytic_pool_5min WHERE pool_address = $1")
+        .bind(address)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+/// Its 5-minute aggregate materialised, then the raw swaps of `address` gone.
+async fn drop_the_raw(pool: &PgPool, address: &str, tranche: DateTime<Utc>) {
+    sqlx::query("CALL refresh_continuous_aggregate('meteora_damm_v2_swap_events_5min', $1, $2)")
+        .bind(tranche)
+        .bind(tranche + Duration::minutes(5))
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM meteora_damm_v2_swap_events WHERE pool_address = $1")
+        .bind(address)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+/// A sale and a purchase of A against SOL at $100, each paying 0.01 SOL of fee: the purchase
+/// on its input, the sale on its output — a pool collecting its fees in B.
+const ONLY_B: [Swap; 2] = [
+    ("buy", "b_to_a", (990_000_000, 1_000_000), 10_000, false),
+    ("sell", "a_to_b", (1_000_000_000, 990_000), 10_000, false),
+];
+
+/// Against the sale valued net: the SOL its seller received leave out the fee the pool took
+/// on them, and the sale reads a fee short of its trade.
 #[sqlx::test]
-async fn a_fee_in_an_unpriced_token_leaves_the_tranche_unvalued(pool: PgPool) {
+async fn a_sale_counts_its_fee(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (a, sol) = (pk(10).to_string(), pk(11).to_string());
+    let address = setup_pool(&pool, 1, (&a, 6), (&sol, 6)).await;
+    price_at(&pool, &sol, "100", tranche).await;
+    let sale = [("sell", "a_to_b", (1_000_000_000, 990_000), 10_000, false)];
+    trades(&pool, &address, &sale, tranche).await;
+
+    value(&pool, tranche).await;
+
+    let (valued, sells, _) = valued_tranche(&pool, &address).await;
+    assert!(valued);
+    assert_eq!(
+        sells,
+        Some(dec("100")),
+        "0.99 SOL received + 0.01 SOL of fee"
+    );
+    assert_eq!(fees(&pool, &address).await, Some(dec("1")));
+}
+
+/// Against the B fee of a pool collecting B both ways given to its sales alone: they would
+/// count the purchase's input fee as well, one fee more than they traded.
+#[sqlx::test]
+async fn an_only_b_pool_splits_its_fees_by_direction(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (a, sol) = (pk(10).to_string(), pk(11).to_string());
+    let address = setup_pool(&pool, 1, (&a, 6), (&sol, 6)).await;
+    price_at(&pool, &sol, "100", tranche).await;
+    trades(&pool, &address, &ONLY_B, tranche).await;
+
+    value(&pool, tranche).await;
+
+    let (valued, sells, buys) = valued_tranche(&pool, &address).await;
+    assert!(valued);
+    assert_eq!(
+        (sells, buys),
+        (Some(dec("100")), Some(dec("100"))),
+        "each direction is its gross trade, 1 SOL"
+    );
+    assert_eq!(fees(&pool, &address).await, Some(dec("2")));
+}
+
+/// Against an unknown split read as no fee on the purchases: without the raw swaps, the sale
+/// of a pool collecting B both ways would be given the purchase's fee too, and published.
+#[sqlx::test]
+async fn without_the_raw_a_two_way_only_b_tranche_is_unvalued(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (a, sol) = (pk(10).to_string(), pk(11).to_string());
+    let address = setup_pool(&pool, 1, (&a, 6), (&sol, 6)).await;
+    price_at(&pool, &sol, "100", tranche).await;
+    trades(&pool, &address, &ONLY_B, tranche).await;
+    drop_the_raw(&pool, &address, tranche).await;
+
+    value(&pool, tranche).await;
+
+    assert_eq!(valued_tranche(&pool, &address).await, (false, None, None));
+}
+
+/// Against the raw swaps required for every split: a tranche of purchases alone, whose B fee
+/// can only be theirs, would be left unvalued once its raw swaps are gone.
+#[sqlx::test]
+async fn without_the_raw_a_one_way_tranche_is_still_exact(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (a, sol) = (pk(10).to_string(), pk(11).to_string());
+    let address = setup_pool(&pool, 1, (&a, 6), (&sol, 6)).await;
+    price_at(&pool, &sol, "100", tranche).await;
+    trades(&pool, &address, &ONLY_B[..1], tranche).await;
+    drop_the_raw(&pool, &address, tranche).await;
+
+    value(&pool, tranche).await;
+
+    assert_eq!(
+        valued_tranche(&pool, &address).await,
+        (true, Some(dec("0")), Some(dec("100")))
+    );
+    assert_eq!(fees(&pool, &address).await, Some(dec("1")));
+}
+
+/// Against the trusted output taken net of the input fee: SOL bought with X, its fee taken
+/// in X on the way in, would be worth the 0.99 SOL received, not the 1 SOL it traded.
+#[sqlx::test]
+async fn a_sale_of_the_trusted_output_gives_back_its_input_fee(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (sol, x, other) = (pk(10).to_string(), pk(11).to_string(), pk(12).to_string());
+    let address = setup_pool(&pool, 1, (&sol, 6), (&x, 6)).await;
+    let beside = setup_pool(&pool, 2, (&sol, 6), (&other, 6)).await;
+    price_at(&pool, &sol, "100", tranche).await;
+    swap(
+        &pool,
+        &beside,
+        "beside",
+        (1, 1),
+        sqrt_price_x64(1, 1),
+        tranche,
+    )
+    .await;
+    // 1 000 X in, 10 X of it the fee, for 0.99 SOL out.
+    let buy = [("buy", "b_to_a", (990_000, 1_000_000_000), 10_000_000, false)];
+    trades(&pool, &address, &buy, tranche).await;
+
+    value(&pool, tranche).await;
+
+    let (valued, _, buys) = valued_tranche(&pool, &address).await;
+    assert!(valued);
+    assert_eq!(buys, Some(dec("100")), "0.99 SOL × 1 000 X ÷ 990 X");
+    assert_eq!(
+        fees(&pool, &address).await,
+        Some(dec("1")),
+        "10 of the 1 000 X"
+    );
+}
+
+/// Against the input's share divided by nothing: a dust purchase of 1 unit taken whole as fee,
+/// for nothing out, would leave its tranche unvalued, and a real sale with it.
+#[sqlx::test]
+async fn a_dust_purchase_taken_whole_as_fee_is_worth_nothing(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (sol, x, other) = (pk(10).to_string(), pk(11).to_string(), pk(12).to_string());
+    let address = setup_pool(&pool, 1, (&sol, 6), (&x, 6)).await;
+    let beside = setup_pool(&pool, 2, (&sol, 6), (&other, 6)).await;
+    price_at(&pool, &sol, "100", tranche).await;
+    swap(
+        &pool,
+        &beside,
+        "beside",
+        (1, 1),
+        sqrt_price_x64(1, 1),
+        tranche,
+    )
+    .await;
+    let swaps = [
+        ("sell", "a_to_b", (1_000_000, 4_000_000), 0, false),
+        ("dust", "b_to_a", (0, 1), 1, false),
+    ];
+    trades(&pool, &address, &swaps, tranche).await;
+
+    value(&pool, tranche).await;
+
+    assert_eq!(
+        valued_tranche(&pool, &address).await,
+        (true, Some(dec("100")), Some(dec("0")))
+    );
+}
+
+/// Against the fee valued at the table's price, the tranche's two directions averaged: bought
+/// after the crash, its 100 X would be worth $0.93 instead of the $0.01 they were paid.
+#[sqlx::test]
+async fn a_fee_in_the_untrusted_token_is_its_share_of_its_trade(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (x, sol) = (pk(10).to_string(), pk(11).to_string());
+    let address = setup_pool(&pool, 1, (&x, 6), (&sol, 9)).await;
+    price_at(&pool, &sol, "100", tranche).await;
+    // 1 000 X dumped for 1 SOL, then 0.01 SOL buys 9 900 X, 100 X more the fee.
+    let crash = [
+        ("dump", "a_to_b", (1_000_000_000, 1_000_000_000), 0, false),
+        (
+            "buy",
+            "b_to_a",
+            (9_900_000_000, 10_000_000),
+            100_000_000,
+            true,
+        ),
+    ];
+    trades(&pool, &address, &crash, tranche).await;
+
+    value(&pool, tranche).await;
+
+    assert_eq!(fees(&pool, &address).await, Some(dec("0.01")));
+}
+
+/// Against the decimals of the fee's token required: a fee taken in a token Helius has not
+/// described yet would leave unvalued a share that needs only its amounts.
+#[sqlx::test]
+async fn a_fee_in_a_token_without_decimals_is_valued(pool: PgPool) {
     let tranche = settled_tranche();
     let (a, sol, other) = (pk(10).to_string(), pk(11).to_string(), pk(12).to_string());
     let address = setup_pool(&pool, 1, (&a, 6), (&sol, 6)).await;
@@ -532,20 +755,59 @@ async fn a_fee_in_an_unpriced_token_leaves_the_tranche_unvalued(pool: PgPool) {
         tranche,
     )
     .await;
-    let with_fee_in_a = Trade {
-        tag: "ab",
-        direction: "a_to_b",
-        amounts: (4, 1_000_000),
-        fee: 1,
-        fee_token_is_a: true,
-        sqrt_price: sqrt_price_x64(4, 1),
-        at: tranche,
-    };
-    trade(&pool, &address, &with_fee_in_a).await;
+    // 1 SOL buys 990 units of A, 10 more the fee.
+    let buy = [("buy", "b_to_a", (990, 1_000_000), 10, true)];
+    trades(&pool, &address, &buy, tranche).await;
 
     value(&pool, tranche).await;
 
-    assert_eq!(valued_tranche(&pool, &address).await, (false, None, None));
+    assert_eq!(
+        valued_tranche(&pool, &address).await,
+        (true, Some(dec("0")), Some(dec("100")))
+    );
+    assert_eq!(fees(&pool, &address).await, Some(dec("1")));
+}
+
+/// Against the higher leg taken on a tie: A, priced $30 by the market where its pool pays $25,
+/// would value its sale at $120 for the $100 of B it got.
+#[sqlx::test]
+async fn a_tie_takes_the_lower_gross_leg(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (a, b) = (pk(10).to_string(), pk(11).to_string());
+    let address = setup_pool(&pool, 1, (&a, 6), (&b, 6)).await;
+    price_at(&pool, &a, "30", tranche).await;
+    price_at(&pool, &b, "100", tranche).await;
+    let sale = [("sell", "a_to_b", (4_000_000, 1_000_000), 0, false)];
+    trades(&pool, &address, &sale, tranche).await;
+
+    value(&pool, tranche).await;
+
+    let (valued, sells, _) = valued_tranche(&pool, &address).await;
+    assert!(valued);
+    assert_eq!(sells, Some(dec("100")));
+}
+
+/// Against a trusted token's fees read from the price table: on a tie whose other token has
+/// no decimals, the table has no price for USDC, and a fee in it would leave the tranche unvalued.
+#[sqlx::test]
+async fn a_trusted_token_prices_its_fees_at_market_on_a_tie(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (x, usdc) = (pk(10).to_string(), pk(11).to_string());
+    let address = setup_pool(&pool, 1, (&x, 6), (&usdc, 6)).await;
+    forget_decimals(&pool, &x).await;
+    price_at(&pool, &usdc, "1", tranche).await;
+    let sale = [("sell", "a_to_b", (1_000, 990_000), 10_000, false)];
+    trades(&pool, &address, &sale, tranche).await;
+
+    value(&pool, tranche).await;
+
+    let (_, _, _, price_usdc) = prices(&pool, &address, tranche).await;
+    assert_eq!(price_usdc, None, "the table has no price for USDC here");
+    assert_eq!(
+        valued_tranche(&pool, &address).await,
+        (true, Some(dec("1")), Some(dec("0")))
+    );
+    assert_eq!(fees(&pool, &address).await, Some(dec("0.01")));
 }
 
 /// Against the margin dropped from the tranche's close: a swap landing within it would

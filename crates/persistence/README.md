@@ -564,7 +564,7 @@ rule (`crates/analytic/README.md`, *The price of a token in a pool*).
 The cycle also writes what no sum of hours gives (029): the pools born per
 protocol and hour, from each protocol's `initialize_pool` events, in their own
 table so an hour of births without a swap still counts; and, at each freeze, for
-every window ending at the frozen hour, the distinct active pools per protocol
+every window ending at each hour frozen, the distinct active pools per protocol
 (`analytic_protocol_periods`, one row per protocol, window and hour, 0 included,
 so a missing row means a window never counted) and the tokens
 (`analytic_token_periods`, replaced at each freeze, their volume rounded to
@@ -583,15 +583,17 @@ refreshed every 5 minutes up to 10 minutes ago and read in real time past that.
 One statement per tranche (`meteora_damm_v2_tranche.sql`) prices each pool's
 tokens — the rate the tranche traded at, from the aggregate's `traded_a` and
 `traded_b`, the market prices through `yog_price_asof` once per mint — and values
-each direction's trusted leg through `yog_moved_amount_usd` (025): both read one
-snapshot of the aggregate, and nothing reads the raw swaps. Nothing else in the
+each direction's gross trusted leg through `yog_moved_amount_usd` (025): both read
+one snapshot of the aggregate. The raw swaps of the tranche tell the buys' input
+fee in B apart from the sales' output fee, which the aggregate sums together.
+Nothing else in the
 writer reads a price, and no view a binary reads values a swap by the hour
 (`tests/analytic_prices.rs`): the hourly priced view (023) is left to the
 activity view alone. The two 5-minute tables are kept 7 days, as the raw swaps.
 031 empties every table valued at the pool's mid price, and the protocol periods,
 written once at each freeze, that the hours frozen again write anew. It keeps the
-writer's floor: its first hour, no earlier than the second day of the 5-minute
-aggregate, kept 30 days, and none without it (`tests/analytic_rebuild.rs`).
+writer's floor: its first hour, no earlier than the hour after the 5-minute
+aggregate's first, and none without it (`tests/analytic_rebuild.rs`).
 ⚠️ A swap written into a tranche already valued — it is then more than 10 minutes
 late — is missing from the facts for good.
 

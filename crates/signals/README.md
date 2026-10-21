@@ -178,8 +178,8 @@ it changes**, not on every check, and measured.
 **`flow_imbalance`** — directional swap-flow imbalance over a rolling window:
 `(a_to_b − b_to_a) / (a_to_b + b_to_a)` on USD-valued volumes read from the
 `meteora_damm_v2_pool_hourly_flow` VIEW, over yog-analytic's hourly facts (028):
-each direction is worth its trusted leg at its market price; a swap counts once
-its tranche is valued, ~15 minutes after it closes. A window
+each direction is worth its gross trusted leg at market price, fee included on
+both sides; a swap counts once its tranche is valued, ~15 minutes after it closes. A window
 the facts do not span — a writer catching up or stopped — reads as no pool at all. A volume floor,
 applied by the read, keeps thin pools out — but not a window that is not
 wholly valuable, which has no total to compare and stays to be counted. Warning at `|imbalance| ≥ threshold`, Critical at

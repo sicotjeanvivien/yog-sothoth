@@ -1,5 +1,5 @@
 //! `PgAnalyticRepository`, written under `yog_analytic` itself: the facts and
-//! the protocol aggregate against the activity view, the freeze, the TVL.
+//! the protocol aggregate against what each trade is worth, the freeze, the TVL.
 
 use chrono::{DateTime, Duration, DurationRound, Utc};
 use sqlx::PgPool;
@@ -125,6 +125,72 @@ async fn trade(pool: &PgPool, address: &str, tag: &str, at: DateTime<Utc>) {
     }
 }
 
+fn dec(value: &str) -> BigDecimal {
+    value.parse().unwrap()
+}
+
+/// What `trades` calls of [`trade`] are worth, B at $180: each sale its 0.25 B received and
+/// 0.005 B of fee, each purchase its 0.5 B paid, its 100 A of fee their share of 2 100 A gross.
+fn worth(trades: u32) -> [BigDecimal; 5] {
+    let n = BigDecimal::from(trades);
+    let in_b = |amount: &str| dec(amount) * dec("180");
+    let in_a = |units: i64| BigDecimal::from(units) * dec("90") / dec("2100");
+    let fees = in_b("0.005") + in_a(100);
+    let protocol = in_b("0.0008") + in_a(16);
+    let referral = in_b("0.0002") + in_a(4);
+    let lp = &fees - &protocol - &referral;
+    [in_b("0.755"), fees, lp, protocol, referral].map(|v| (v * &n).round(12))
+}
+
+/// The facts of `priced` worth `trades` trades an hour, and the others unvalued.
+fn assert_worth(facts: &[PoolHour], priced: &str, trades: u32) {
+    for fact in facts {
+        let values = [&fact.3, &fact.4, &fact.5, &fact.6, &fact.7];
+        if fact.0 == priced {
+            let got = values.map(|v| v.as_ref().expect("a valued fact").round(12));
+            assert_eq!(got, worth(trades), "{fact:?}");
+        } else {
+            assert!(values.iter().all(|v| v.is_none()), "{fact:?}");
+        }
+    }
+}
+
+/// `(pool, hour, swaps, valued)` of each pool-hour: what the view and the facts must share.
+fn keys(hours: &[PoolHour]) -> Vec<(String, DateTime<Utc>, i64, bool)> {
+    hours
+        .iter()
+        .map(|h| (h.0.clone(), h.1, h.2, h.3.is_some()))
+        .collect()
+}
+
+/// The protocol hours the facts sum to.
+fn summed(facts: &[PoolHour]) -> Vec<ProtocolHour> {
+    let mut hours: Vec<ProtocolHour> = Vec::new();
+    for fact in facts {
+        let at = match hours.iter().position(|h| h.0 == fact.1) {
+            Some(at) => at,
+            None => {
+                hours.push((fact.1, None, None, None, 0, 0, 0));
+                hours.len() - 1
+            }
+        };
+        let hour = &mut hours[at];
+        let add = |sum: &mut Option<BigDecimal>, v: &Option<BigDecimal>| {
+            if let Some(v) = v {
+                *sum = Some(sum.take().unwrap_or_default() + v);
+            }
+        };
+        add(&mut hour.1, &fact.3);
+        add(&mut hour.2, &fact.4);
+        add(&mut hour.3, &fact.5);
+        hour.4 += fact.2;
+        hour.5 += 1;
+        hour.6 += i64::from(fact.3.is_some());
+    }
+    hours.sort_by_key(|h| h.0);
+    hours
+}
+
 type PoolHour = (
     String,
     DateTime<Utc>,
@@ -204,8 +270,8 @@ async fn aggregate_protocol_hours(pool: &PgPool, through: DateTime<Utc>) -> Vec<
     .unwrap()
 }
 
-/// Against any formula of the branch drifting from `swap_parts` (010): a
-/// fee share swapped, a side dropped, a valued flag read from the wrong side.
+/// Against a formula of the branch drifting: a fee share swapped, a side dropped, a
+/// valued flag read from the wrong side. The view gives the hours and their swaps.
 #[sqlx::test]
 async fn facts_and_aggregate_equal_the_activity_view_on_closed_hours(pool: PgPool) {
     let now = now();
@@ -223,17 +289,20 @@ async fn facts_and_aggregate_equal_the_activity_view_on_closed_hours(pool: PgPoo
     let view = view_pool_hours(&pool, closed).await;
     assert_eq!(view.len(), 3);
     assert_eq!(view.iter().filter(|h| h.3.is_some()).count(), 2, "{view:?}");
-    assert!(view.iter().any(|h| h.7.as_ref().is_some_and(|r| r > 0)));
-    assert_eq!(fact_pool_hours(&pool, closed).await, view);
+    let facts = fact_pool_hours(&pool, closed).await;
+    assert_eq!(keys(&facts), keys(&view));
+    assert_worth(&facts, &priced, 1);
 
-    let by_protocol = view_protocol_hours(&pool, closed).await;
-    assert_eq!(by_protocol.len(), 2);
-    assert_eq!(aggregate_protocol_hours(&pool, closed).await, by_protocol);
+    assert_eq!(view_protocol_hours(&pool, closed).await.len(), 2);
+    assert_eq!(
+        aggregate_protocol_hours(&pool, closed).await,
+        summed(&facts)
+    );
 }
 
 /// Against a 5-minute tranche lost (the last of an hour), a sum dropped from
-/// the rollup, the raw swaps past the watermark left out, or the implied price
-/// dropped from the pricing both read.
+/// the rollup, the raw swaps past the watermark left out, or the fee in A valued
+/// otherwise than as its share of the purchase.
 #[sqlx::test]
 async fn facts_summed_from_the_tranches_equal_the_hourly_view(pool: PgPool) {
     let open = hours_before(now(), 3);
@@ -293,11 +362,8 @@ async fn facts_summed_from_the_tranches_equal_the_hourly_view(pool: PgPool) {
     counts.sort();
     assert_eq!(counts, [2, 2, 6, 6], "{view:?}");
     let facts = fact_pool_hours(&pool, open).await;
-    assert!(
-        facts.iter().all(|h| h.3.is_some() == (h.0 == implied)),
-        "the implied price values its pool's facts, and only those: {facts:?}"
-    );
-    assert_eq!(facts, view);
+    assert_eq!(keys(&facts), keys(&view));
+    assert_worth(&facts, &implied, 3);
 }
 
 /// ☠️ Pins the loss the READMEs warn about: a late swap in a tranche already

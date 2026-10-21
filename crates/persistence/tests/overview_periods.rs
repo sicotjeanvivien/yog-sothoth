@@ -124,6 +124,27 @@ async fn a_pool_active_two_hours_counts_once(pool: PgPool) {
     }
 }
 
+/// Mutation: the periods written for the cycle's last hour alone — a catch-up leaves the
+/// hours before it without any, and a previous window ending there reads nothing.
+#[sqlx::test(migrations = "./migrations")]
+async fn every_hour_a_cycle_freezes_gets_its_periods(pool: PgPool) {
+    let p = setup_pool(&pool, 1, 101, 102).await;
+    let q = setup_pool(&pool, 2, 101, 103).await;
+    tranche(&pool, &p, 0, Some(10)).await;
+    tranche(&pool, &q, 2, Some(5)).await;
+
+    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    repository.write_cycle(&cycle(0, 2)).await.unwrap();
+
+    for (at, pools) in [(0, 1), (1, 1), (2, 2)] {
+        assert_eq!(
+            active_pools(&pool, "24h", at).await,
+            Some(pools),
+            "hour {at}"
+        );
+    }
+}
+
 /// Mutation: the protocols taken from the facts — DLMM, without a pool, gets no
 /// row, and its measured zero reads as never counted.
 #[sqlx::test(migrations = "./migrations")]
