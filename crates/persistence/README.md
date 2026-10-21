@@ -822,7 +822,7 @@ caller's decision.
   TimescaleDB. Record the source's version next to every dump —
   `SELECT extversion FROM pg_extension WHERE extname = 'timescaledb'` — and
   start the target from that exact version (a versioned tag such as
-  `2.30.2-pg18`, which both compose files use, or the image digest). The proof above used the source's image
+  `2.30.2-pg18`, or the image digest). The proof above used the source's image
   by its ID, not by its tag.
 
 ### The sequence

@@ -42,9 +42,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # pulling new transitive versions on every image build.
 RUN cargo install cargo-chef --locked --version 0.1.71
 
-# ⚠️ rust-toolchain.toml lists them: missing here, rustup fetches them in every
-#    stage that copies it in, so each build needs static.rust-lang.org.
-RUN rustup component add rustfmt clippy
+# ⚠️ rust-toolchain.toml alone sets the toolchain, whatever the tag above: installed
+#    here, in a cached layer, or rustup fetches it in every stage that copies it in.
+COPY rust-toolchain.toml ./
+RUN rustup toolchain install --no-self-update
 
 # ── planner ────────────────────────────────────────────────────────
 # Copies the manifests + source just long enough to compute the
