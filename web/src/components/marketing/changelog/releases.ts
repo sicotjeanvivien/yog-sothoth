@@ -32,6 +32,22 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.1.15",
+    date: "2026-10-21",
+    summary: "Search engines can now find the Overview.",
+    sections: [
+      {
+        kind: "features",
+        items: [
+          {
+            text: "The Overview is listed in the sitemap, in English and in French, so search engines can index it.",
+            technical: false,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.1.14",
     date: "2026-10-21",
     summary:
