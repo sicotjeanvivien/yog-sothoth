@@ -1,0 +1,69 @@
+# Once a month, Dependabot opens one PR per ecosystem with every newer version,
+# majors included. Such a PR carries the version change only: a bump that needs
+# code is done by hand. Staying behind is an `ignore` below.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      cargo:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: monthly
+    groups:
+      npm:
+        patterns: ["*"]
+    ignore:
+      # ⚠️ Its major follows the `node:` image of web/Dockerfile: lift this in
+      #    the PR that moves that image.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # ⚠️ The `rust:` image of docker/backend.Dockerfile comes in the `docker` PR,
+  #    not this one, and nothing checks that the two agree.
+  - package-ecosystem: rust-toolchain
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      toolchain:
+        patterns: ["*"]
+
+  # ⚠️ A new `node:` major leaves the workflows' `node-version: 24` behind —
+  #    github-actions never moves it: those, and @types/node, move by hand.
+  - package-ecosystem: docker
+    directories: [/docker, /web]
+    schedule:
+      interval: monthly
+    groups:
+      docker:
+        patterns: ["*"]
+    ignore:
+      # ⚠️ Its major follows the `-pgNN` of the TimescaleDB image: lift this in
+      #    the PR that moves the database.
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      compose:
+        patterns: ["*"]
+    ignore:
+      # Built from this repository: no registry publishes them under that name.
+      - dependency-name: "yog-*"
