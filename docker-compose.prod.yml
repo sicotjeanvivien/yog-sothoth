@@ -101,7 +101,7 @@ services:
     # silently moved the version would strand every dump taken before it.
     # Upgrading is a decision: change this line, then take a fresh dump.
     # The restore procedure was proven on 2.27.1-pg16, then again on this one.
-    image: timescale/timescaledb:2.30.1-pg18
+    image: timescale/timescaledb:2.30.2-pg18
     command:
       - postgres
       - -c
