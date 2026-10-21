@@ -116,7 +116,7 @@ jobs:
       DRY_RUN: ${{ github.event.inputs.dry_run }}
     steps:
       # Le fichier de règles est versionné : il faut le dépôt.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # `gh cache list --limit 100` rend les 100 caches les plus RÉCEMMENT
       # UTILISÉS : au-delà de cent entrées, la fenêtre contient exactement les
