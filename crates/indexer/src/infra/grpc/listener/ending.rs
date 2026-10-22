@@ -121,8 +121,7 @@ impl Ending {
 }
 
 impl Verdict {
-    /// Where the next attempt resumes from, given the mark the loop already `held`; a mark given
-    /// up is logged and counted here, the one place one dies.
+    /// Where the next attempt resumes from, given the mark the loop already `held`.
     /// ⚠️ No floor: a replay breaking before the buffer drains rewinds `REWIND_SLOTS` each round and
     /// the churn resets the budget, so `from_slot` can walk back without bound.
     pub(super) fn next_resume_from(&self, held: Option<u64>) -> Option<u64> {
