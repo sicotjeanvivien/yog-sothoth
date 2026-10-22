@@ -1,6 +1,12 @@
 //! How one connection ended, what that ending is worth, and what it does to the
 //! resume mark.
 
+use tonic::Code;
+
+use crate::infra::grpc::metrics::{GrpcListenerMetrics, MarkRefusal};
+
+use super::log;
+
 /// How one connection ended. Stream endings carry `resume_from` and `delivered` (whether data
 /// came off the stream); what an ending is worth is [`Ending::verdict`]'s alone.
 pub(super) enum Ending {
@@ -18,6 +24,8 @@ pub(super) enum Ending {
     },
     Failed {
         error: String,
+        /// The `Status` code, the server's or the one tonic built for our transport.
+        code: Code,
         delivered: bool,
         resume_from: Option<u64>,
     },
@@ -45,8 +53,11 @@ pub(super) enum Verdict {
         mark: Option<u64>,
         error: Option<String>,
     },
-    /// The server had our `from_slot` and gave nothing back.
-    Refused { error: String },
+    /// The server refused the request itself: the one verdict that gives the mark up.
+    Refused { error: String, reason: MarkRefusal },
+    /// The server answered and gave nothing back, for a reason the request does not cause:
+    /// credentials, quota, an incident, or a close with nothing sent.
+    ServerFailed { error: String },
     /// Nobody answered the request: the service was unreachable, or silent.
     Unanswered { error: String },
 }
@@ -69,7 +80,7 @@ impl Ending {
             },
             Ending::StreamClosed {
                 delivered: false, ..
-            } => Verdict::Refused {
+            } => Verdict::ServerFailed {
                 error: "stream closed without delivering anything".to_string(),
             },
 
@@ -77,15 +88,20 @@ impl Ending {
                 error,
                 delivered: true,
                 resume_from,
+                ..
             } => Verdict::Delivered {
                 mark: resume_from,
                 error: Some(error),
             },
             Ending::Failed {
                 error,
+                code,
                 delivered: false,
                 ..
-            } => Verdict::Refused { error },
+            } => match refusal_of(code) {
+                Some(reason) => Verdict::Refused { error, reason },
+                None => Verdict::ServerFailed { error },
+            },
 
             Ending::Stalled {
                 error,
@@ -105,16 +121,37 @@ impl Ending {
 }
 
 impl Verdict {
-    /// Where the next attempt resumes from, given the mark the loop already `held`.
+    /// Where the next attempt resumes from, given the mark the loop already `held`; a mark given
+    /// up is logged and counted here, the one place one dies.
     /// ⚠️ No floor: a replay breaking before the buffer drains rewinds `REWIND_SLOTS` each round and
     /// the churn resets the budget, so `from_slot` can walk back without bound.
     pub(super) fn next_resume_from(&self, held: Option<u64>) -> Option<u64> {
         match self {
             // ⚠️ An absent mark is not zero (an unroutable transaction never enters the buffer).
             Verdict::Delivered { mark, .. } => mark.or(held),
-            // A mark is given up only to the server that refused it; the next attempt starts live.
-            Verdict::Refused { .. } => None,
-            Verdict::Unanswered { .. } | Verdict::ShutdownRequested | Verdict::ConsumerGone => held,
+            Verdict::Refused { reason, .. } => {
+                if let Some(slot) = held {
+                    log::mark_abandoned(slot, *reason);
+                    GrpcListenerMetrics::record_mark_abandoned(*reason);
+                }
+                None
+            }
+            Verdict::ServerFailed { .. }
+            | Verdict::Unanswered { .. }
+            | Verdict::ShutdownRequested
+            | Verdict::ConsumerGone => held,
         }
+    }
+}
+
+/// Whether a code says the request itself is at fault, which alone gives the mark up.
+/// ⚠️ Any other code keeps it, so a server that refuses `from_slot` under another code stops the
+/// indexer at the end of the budget instead of leaving a gap.
+fn refusal_of(code: Code) -> Option<MarkRefusal> {
+    match code {
+        Code::InvalidArgument => Some(MarkRefusal::InvalidArgument),
+        Code::OutOfRange => Some(MarkRefusal::OutOfRange),
+        Code::NotFound => Some(MarkRefusal::NotFound),
+        _ => None,
     }
 }

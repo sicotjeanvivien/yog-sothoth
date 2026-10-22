@@ -357,6 +357,16 @@ itself. The mark is kept even when the attempt delivered nothing: silence is
 not a refusal, and the retry budget is what bounds a server that never speaks
 again.
 
+The same holds for a server that answers and delivers nothing: the mark is
+given up only when the `Status` code says the request itself is at fault —
+`INVALID_ARGUMENT`, `OUT_OF_RANGE` (Yellowstone's answer to a slot past
+retention, sent on the accepted stream) or `NOT_FOUND`. Every other code, and a
+clean close with nothing sent, keeps it and is charged to the budget, so a
+provider that refuses `from_slot` under another code stops the indexer rather
+than leaving a gap. Only the code is read, never the message. Each mark given
+up is a `warn!` (`gRPC resume mark abandoned`, with the slot and the code) and
+an increment of `yog_indexer_grpc_resume_marks_abandoned_total{reason}`.
+
 ## `TransactionProcessor` and its collaborators
 
 `TransactionProcessor::process_transaction(protocol, &OnChainTransaction)`
@@ -528,7 +538,9 @@ histograms.
   `yog_indexer_grpc_untimestamped_transactions_total{reason}`, the two gauges
   `yog_indexer_grpc_pending_payloads_peak` and
   `yog_indexer_grpc_pending_slot_lag_peak` (peaks since start, not current
-  values), `yog_indexer_grpc_ping_replies_unsent_total{reason}` and
+  values), `yog_indexer_grpc_ping_replies_unsent_total{reason}`,
+  `yog_indexer_grpc_resume_marks_abandoned_total{reason}` (the refusing gRPC
+  code; **each increment is a gap** between the mark and the live edge) and
   `yog_indexer_grpc_stalls_total{site}`. ⚠️ **`stalls_total` is the only
   trace of a server that went silent without closing**: `site="stream"` for a
   stream that stopped delivering block-metas (before it, the sign was

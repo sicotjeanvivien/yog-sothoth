@@ -239,6 +239,7 @@ impl Connector {
             // request — scrubbed like every other third-party string.
             Err(status) => Err(Ending::Failed {
                 error: url.scrub(&format!("subscribe: {status}")),
+                code: status.code(),
                 delivered: false,
                 resume_from: None,
             }),
@@ -267,6 +268,7 @@ impl Connector {
             }),
             Err(status) => Some(Ending::Failed {
                 error: self.endpoint.url().scrub(&format!("stream: {status}")),
+                code: status.code(),
                 delivered: session.received_data(),
                 resume_from: session.resume_from(),
             }),

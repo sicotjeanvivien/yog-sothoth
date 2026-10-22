@@ -406,20 +406,19 @@ async fn an_attempt_with_nothing_to_resume_from_keeps_the_mark_we_hold() {
     );
 }
 
-/// ⚠️ The slot may be past retention: the next attempt starts live, never decided on error text.
-/// Mutation this is written against: `next_resume_from`'s `Refused` arm returning `held`; a prefix,
-/// since a second attempt needs another test's budget rule.
-#[tokio::test]
-async fn a_refused_resume_point_is_not_asked_for_twice() {
+/// A session that delivers slot 10 and breaks: the mark is 8 when the next attempt starts.
+fn leaves_the_mark_at_8() -> ScriptedSession {
+    ScriptedSession::Stream(vec![
+        routable(10),
+        Action::Fail(Status::unavailable("the provider restarted")),
+    ])
+}
+
+/// The `from_slot` the attempt after `ending` asks for, the mark being 8 when `ending` begins.
+async fn mark_after(ending: ScriptedSession) -> Option<u64> {
     let server = test_geyser_server::start(vec![
-        ScriptedSession::Stream(vec![
-            routable(10),
-            Action::Fail(Status::unavailable("the provider restarted")),
-        ]),
-        ScriptedSession::Refuse(Status::invalid_argument(
-            "from_slot is behind the retention window",
-        )),
-        ScriptedSession::closes_empty(),
+        leaves_the_mark_at_8(),
+        ending,
         ScriptedSession::closes_empty(),
     ])
     .await;
@@ -427,35 +426,155 @@ async fn a_refused_resume_point_is_not_asked_for_twice() {
 
     let outcome = timeout(
         TEST_DEADLINE,
-        listener_for(&server, 3)
+        listener_for(&server, 2)
             .await
             .run(downstream, CancellationToken::new()),
     )
     .await
-    .expect("the budget must run out rather than loop on a refused replay");
+    .expect("two attempts that deliver nothing exhaust a budget of two");
 
     assert!(outcome.is_err(), "{outcome:?}");
+    let resume_points = server.resume_points();
     assert_eq!(
-        server.resume_points().get(..3),
-        Some([None, Some(8), None].as_slice()),
-        "the refused replay is given up, not repeated: the attempt after it \
-         starts from the live edge"
+        resume_points.get(..2),
+        Some([None, Some(8)].as_slice()),
+        "scaffolding: the ending under test must start with the mark at 8"
+    );
+    assert_eq!(resume_points.len(), 3, "{resume_points:?}");
+    resume_points[2]
+}
+
+fn refuses_subscribe(status: Status) -> ScriptedSession {
+    ScriptedSession::Refuse(status)
+}
+
+/// Accepts `subscribe`, then ends the stream with `status` before sending anything.
+fn fails_before_delivering(status: Status) -> ScriptedSession {
+    ScriptedSession::Stream(vec![Action::Fail(status)])
+}
+
+// Mutation the next five are written against: `refusal_of` answering `Some` for every code.
+
+#[tokio::test]
+async fn an_expired_key_keeps_the_mark() {
+    assert_eq!(
+        mark_after(refuses_subscribe(Status::unauthenticated(
+            "the key expired"
+        )))
+        .await,
+        Some(8),
+        "a credential says nothing of slot 8: the attempt after asks for it again"
     );
 }
 
-/// The clean-EOF side of the refusal above; its mark comes from the `Failed` arm, scaffolding.
-/// Mutation this is written against: `next_resume_from`'s `Refused` arm returning `held`; a prefix,
-/// since a third attempt needs another test's budget rule.
 #[tokio::test]
-async fn a_clean_close_that_delivered_nothing_gives_up_the_replay_point() {
+async fn a_denied_permission_keeps_the_mark() {
+    assert_eq!(
+        mark_after(refuses_subscribe(Status::permission_denied(
+            "not on this plan"
+        )))
+        .await,
+        Some(8)
+    );
+}
+
+#[tokio::test]
+async fn an_exhausted_quota_keeps_the_mark() {
+    assert_eq!(
+        mark_after(refuses_subscribe(Status::resource_exhausted(
+            "quota reached"
+        )))
+        .await,
+        Some(8)
+    );
+}
+
+#[tokio::test]
+async fn an_unavailable_server_keeps_the_mark() {
+    assert_eq!(
+        mark_after(refuses_subscribe(Status::unavailable("draining"))).await,
+        Some(8)
+    );
+}
+
+#[tokio::test]
+async fn a_provider_incident_keeps_the_mark() {
+    assert_eq!(
+        mark_after(refuses_subscribe(Status::internal("backend error"))).await,
+        Some(8)
+    );
+}
+
+// Mutation the next three are written against: `refusal_of` answering `None` for every code.
+
+/// ⚠️ The slot may be past retention: the next attempt starts live, never decided on error text.
+#[tokio::test]
+async fn an_invalid_argument_gives_the_mark_up() {
+    assert_eq!(
+        mark_after(refuses_subscribe(Status::invalid_argument("bad from_slot"))).await,
+        None,
+        "the request itself was refused: asking for slot 8 again would be refused again"
+    );
+}
+
+#[tokio::test]
+async fn an_out_of_range_gives_the_mark_up() {
+    assert_eq!(
+        mark_after(refuses_subscribe(Status::out_of_range("slot 8 is gone"))).await,
+        None
+    );
+}
+
+#[tokio::test]
+async fn a_not_found_gives_the_mark_up() {
+    assert_eq!(
+        mark_after(refuses_subscribe(Status::not_found("slot 8 is gone"))).await,
+        None
+    );
+}
+
+/// ⚠️ The reference server refuses a slot past retention here, on an accepted stream.
+/// Mutation this is written against: `on_message`'s `Err(status)` arm losing `code`'s meaning,
+/// e.g. passing a fixed `Code::Internal`.
+#[tokio::test]
+async fn a_stream_failing_out_of_range_before_delivering_gives_the_mark_up() {
+    assert_eq!(
+        mark_after(fails_before_delivering(Status::out_of_range(
+            "broadcast from 8 is not available, last available: 9"
+        )))
+        .await,
+        None
+    );
+}
+
+/// Mutation this is written against: `on_message`'s `Err(status)` arm passing a fixed refusal
+/// code, e.g. `Code::InvalidArgument`.
+#[tokio::test]
+async fn a_stream_failing_internal_before_delivering_keeps_the_mark() {
+    assert_eq!(
+        mark_after(fails_before_delivering(Status::internal("backend error"))).await,
+        Some(8),
+        "an accepted stream proves the server saw slot 8, not that it refused it"
+    );
+}
+
+/// ⚠️ An exhausted quota can look exactly like this, with no code to read.
+/// Mutation this is written against: `Ending::verdict` classing `StreamClosed { delivered: false }`
+/// as `Refused`.
+#[tokio::test]
+async fn a_clean_close_that_delivered_nothing_keeps_the_mark() {
+    assert_eq!(mark_after(ScriptedSession::closes_empty()).await, Some(8));
+}
+
+/// The price of keeping the mark: a server refusing it under another code stops the indexer.
+/// Mutation this is written against: `settle` handing `ServerFailed` to `churn`.
+#[tokio::test]
+async fn a_kept_mark_refused_for_ever_exhausts_the_budget() {
     let server = test_geyser_server::start(vec![
-        ScriptedSession::Stream(vec![
-            routable(10),
-            Action::Fail(Status::unavailable("the provider restarted")),
-        ]),
-        ScriptedSession::closes_empty(),
-        ScriptedSession::closes_empty(),
-        ScriptedSession::closes_empty(),
+        leaves_the_mark_at_8(),
+        refuses_subscribe(Status::unauthenticated("the key expired")),
+        refuses_subscribe(Status::unauthenticated("the key expired")),
+        refuses_subscribe(Status::unauthenticated("the key expired")),
     ])
     .await;
     let (downstream, _consumer) = mpsc::channel(4);
@@ -467,14 +586,85 @@ async fn a_clean_close_that_delivered_nothing_gives_up_the_replay_point() {
             .run(downstream, CancellationToken::new()),
     )
     .await
-    .expect("the budget must run out rather than loop on a stale replay point");
+    .expect("the budget must run out rather than redial a refusing server for ever");
 
-    assert!(outcome.is_err(), "{outcome:?}");
+    match outcome {
+        Err(GrpcListenerError::RetriesExhausted {
+            attempts: 3,
+            last_error,
+        }) => assert!(
+            last_error.contains("the key expired"),
+            "the budget must run out on the refusal, not on something else: {last_error}"
+        ),
+        other => panic!("three refusals must exhaust a budget of three: {other:?}"),
+    }
     assert_eq!(
-        server.resume_points().get(..3),
-        Some([None, Some(8), None].as_slice()),
-        "the attempt that delivered nothing drops the mark: the one after it \
-         starts from the live edge, not from slot 8 again"
+        server.resume_points(),
+        vec![None, Some(8), Some(8), Some(8)],
+        "every attempt asks for slot 8: the indexer stops rather than leave a gap"
+    );
+}
+
+/// Not `#[tokio::test]`: it reads the counter. Mutation this is written against: removing the
+/// increment (0), or counting a refusal with no mark held (2).
+#[test]
+fn a_mark_given_up_is_counted_once_by_its_code() {
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    let server = metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("current-thread runtime")
+            .block_on(async {
+                let server = test_geyser_server::start(vec![
+                    // No mark yet: nothing is given up.
+                    fails_before_delivering(Status::out_of_range("no mark to refuse")),
+                    leaves_the_mark_at_8(),
+                    fails_before_delivering(Status::out_of_range("slot 8 is gone")),
+                    ScriptedSession::closes_empty(),
+                ])
+                .await;
+                let (downstream, _consumer) = mpsc::channel(4);
+
+                let outcome = timeout(
+                    TEST_DEADLINE,
+                    listener_for(&server, 2)
+                        .await
+                        .run(downstream, CancellationToken::new()),
+                )
+                .await
+                .expect("the budget must run out");
+                assert!(outcome.is_err(), "{outcome:?}");
+                server
+            })
+    });
+
+    assert_eq!(server.resume_points(), vec![None, None, Some(8), None]);
+
+    let abandoned: Vec<_> = snapshotter
+        .snapshot()
+        .into_vec()
+        .into_iter()
+        .filter(|(key, _, _, _)| {
+            key.key().name() == "yog_indexer_grpc_resume_marks_abandoned_total"
+        })
+        .map(|(key, _, _, value)| {
+            let reason = key
+                .key()
+                .labels()
+                .find(|l| l.key() == "reason")
+                .map(|l| l.value().to_string());
+            (reason, value)
+        })
+        .collect();
+    assert_eq!(
+        abandoned,
+        vec![(Some("out_of_range".to_string()), DebugValue::Counter(1))],
+        "one mark was given up, under the code that refused it"
     );
 }
 

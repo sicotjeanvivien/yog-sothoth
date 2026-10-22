@@ -2,11 +2,14 @@
 
 use super::*;
 
+use crate::infra::grpc::metrics::MarkRefusal;
+
 const MAX: u32 = 5;
 
 fn failed_empty() -> Verdict {
     Verdict::Refused {
         error: "refused".to_string(),
+        reason: MarkRefusal::InvalidArgument,
     }
 }
 

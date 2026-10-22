@@ -4,6 +4,8 @@ use tracing::{info, warn};
 use yellowstone_grpc_proto::prelude::SubscribeRequest;
 use yog_bootstrap::Endpoint;
 
+use crate::infra::grpc::metrics::MarkRefusal;
+
 /// The configuration has been read and the first attempt is about to start.
 pub(super) fn starting(endpoint: &Endpoint, header: Option<&str>, request: &SubscribeRequest) {
     info!(
@@ -55,5 +57,14 @@ pub(super) fn attempt_failed(attempt: u32, max: u32, error: &str, resume_from: O
         error = %error,
         resume_from = ?resume_from,
         "gRPC stream attempt failed"
+    );
+}
+
+/// The server refused the request, and the mark it held is given up: a gap opens at `slot`.
+pub(super) fn mark_abandoned(slot: u64, reason: MarkRefusal) {
+    warn!(
+        slot,
+        code = reason.as_str(),
+        "gRPC resume mark abandoned — the next attempt starts from the live edge"
     );
 }
