@@ -43,6 +43,9 @@ table is right: add the row here.
 | `init_event_persistor` | `crates/indexer/src/bootstrap/daemon/init.rs` |
 | `pool_account_resolvers` vec | `crates/context/src/bootstrap/daemon.rs` |
 | `From<domain::Protocol>` for `ProtocolResponse` | `crates/api/src/http/dto/response/protocol.rs` |
+| `spot_price_a_in_b` | `crates/signals/src/application/detectors/price_oracle_deviation.rs` |
+| `formatProtocolLabel` | `web/src/lib/format/format-protocol.ts` |
+| `PROTOCOL_OF` | `web/src/components/dashboard/overview/protocol-activity.tsx` |
 
 ## Step 1 — `core`
 
@@ -113,9 +116,19 @@ Rules: *5. In `api` (when read access is needed)*; each route: *Adding a new API
 - `crates/api/src/http/dto/response/protocol.rs` — its row of the table, then the contract
   (*Commands*).
 
-## Step 6 — Tests
+## Step 6 — `signals` and `web`
 
-Rules: *6. Tests*.
+Rules: *6. In `signals` and `web`*.
+
+- `crates/signals/src/application/detectors/price_oracle_deviation.rs` — its row of the table.
+- `crates/signals/src/bootstrap/daemon.rs` — the detectors' instances, if any.
+- `web/src/lib/format/format-protocol.ts` — its row of the table.
+- The menu, if the product shows there: `web/src/components/dashboard/sidebar/sidebar-keys.ts`,
+  `sidebar-nav.ts`, `web/messages/*/dashboard.json`, and the `PROTOCOL_OF` row.
+
+## Step 7 — Tests
+
+Rules: *7. Tests*.
 
 - `crates/core/tests/fixtures/<product>/` — the transactions.
 - `crates/indexer/src/infra/rpc/tests/fixture_pipeline_tests.rs` — the extraction tests.
@@ -129,6 +142,7 @@ every crate). Tests:
 ```bash
 (cd crates/persistence && cargo sqlx prepare -- --all-targets --all-features)  # first: builds are offline
 YOG_WRITE_OPENAPI=1 cargo test -p yog-api contract && (cd web && npm run gen:api)  # before the tests
+(cd web && npm run typecheck)                                # the label the contract now asks for
 cargo test --workspace                                       # DB-free; fixture suites and oracle included
 cargo test -p yog-persistence --features integration-tests  # live Postgres: see CLAUDE.md
 python3 crates/check-module-visibility.py                    # for a new platform's modules
@@ -139,6 +153,6 @@ Then see the sub-persistor write rows against a database: `/verify`, or `crates/
 
 ## Definition of done
 
-- [ ] Step 1 to 6: every bullet of the recipe's matching section done, the section re-read
+- [ ] Step 1 to 7: every bullet of the recipe's matching section done, the section re-read
 - [ ] Every row of *What stays narrow* has the protocol's branch or line
 - [ ] *Commands* green, and the sub-persistor seen writing rows
