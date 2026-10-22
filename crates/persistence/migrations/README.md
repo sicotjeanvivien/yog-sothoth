@@ -600,6 +600,25 @@ sequences default) live in
 next to the binary that embeds it, applied under the admin role by
 `yog-migrate -- setup-roles`.
 
+### A new continuous aggregate is materialised by the next migration
+
+An aggregate created `WITH NO DATA` has no watermark, and
+`yog_cagg_materialization_backlog()` then lends it the oldest raw row as its
+pending one: yog-signals' materialisation alarm goes to `/fail` until the first
+refresh ends — exactly what a real materialisation outage looks like. Seen at
+the v0.1.10 deploy (021): `/fail` for ~30 min, the first refresh running under
+a concurrent `pg_dump`.
+
+So the migration that creates it is followed by one that materialises it, and
+only then by the one that adds its policies — 031, 032, 033:
+
+- the refresh runs under `-- no-transaction` (a refresh refuses a transaction
+  block), alone in its file, and the deploy waits for it;
+- a fresh aggregate has no bucket to lose, so its range may start at `NULL`
+  (032) — unlike the full-range refresh of an aggregate that already holds
+  history, [above](#-refresh_continuous_aggregatecagg-null-null-once-retention-has-run);
+- no policy before it: a scheduled refresh running alongside would race it.
+
 ### An event table carries its position in the chain
 
 Every `*_events` table carries three columns locating it in the chain, and one
