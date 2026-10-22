@@ -122,9 +122,10 @@ Rules: *6. In `signals` and `web`*.
 - `crates/signals/src/application/detectors/price_oracle_deviation.rs` — its row of the table.
 - `crates/signals/src/bootstrap/daemon.rs` — the detectors' instances, if any.
 - `web/src/lib/format/format-protocol.ts` — its row of the table.
-- The menu, if the product shows there: `web/src/components/dashboard/sidebar/sidebar-keys.ts`,
-  `sidebar-nav.ts`, `web/messages/*/dashboard.json`,
-  `web/src/components/dashboard/overview/protocol-activity.tsx` (`PROTOCOL_OF`).
+- The menu line: `web/src/components/dashboard/sidebar/sidebar-keys.ts`,
+  `web/src/components/dashboard/sidebar/sidebar-nav.ts`, `web/messages/*/dashboard.json`,
+  `web/src/components/dashboard/overview/protocol-activity.tsx` (`PROTOCOL_OF`),
+  `web/src/components/marketing/about/about-scope.tsx` (`OBSERVED`).
 
 ## Step 7 — Tests
 

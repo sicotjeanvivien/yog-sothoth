@@ -33,7 +33,7 @@ import {
   SPAN,
 } from "./overview-layout";
 
-/** The API protocol behind each menu line; `null` for a platform the API does not cover. */
+/** The API protocol behind each menu line; `null` when it has none. */
 const PROTOCOL_OF: Record<ScopeLine["key"], ProtocolResponse | null> = {
   meteoraDammV2: "meteora_damm_v2",
   meteoraDlmm: "meteora_dlmm",
