@@ -36,6 +36,8 @@ flock -n 9 || { echo "yog-observe: another reading is running" >&2; exit 3; }
 # ⚠️ Root's own errors never reach the client: compose quotes the line of a malformed .env it trips
 # on. A reading that fails says so on stdout instead, by name or by exit code.
 exec 2>/dev/null
+# ⚠️ Nor does the client's stdin reach anything root starts: `compose exec` forwards it.
+exec 0</dev/null
 trap 'rc=$?; [ "$rc" -eq 0 ] || echo "reading_failed rc=$rc"' EXIT
 cd "$checkout"
 
@@ -46,7 +48,7 @@ dc() { bounded docker compose -f docker-compose.yml -f docker-compose.prod.yml -
 
 # Every line printed matches one of these; the others are only counted.
 readonly metric_line='^yog_[a-z0-9_]+(\{[a-z_]+="[A-Za-z0-9_.:+-]*"(,[a-z_]+="[A-Za-z0-9_.:+-]*")*\})? (-?[0-9.e+-]+|NaN|[+-]Inf)$'
-readonly db_line='^[a-z0-9_]+ [a-z0-9_]+$'
+readonly db_line='^[a-z0-9_]+ -?[a-z0-9_]+$'
 
 strict() { # <regex>: stdin's matching lines, then how many others were left out
   local line refused=0
@@ -60,11 +62,19 @@ strict() { # <regex>: stdin's matching lines, then how many others were left out
   echo "refused_lines $refused"
 }
 
-count() { grep -c -E "$1" <<<"$2" || true; }
+# The level column of our daemons (ANSI colours stripped) and of Postgres, and Rust's own panic line,
+# which no hook turns into an ERROR event.
+# shellcheck disable=SC2016 # awk's fields, not the shell's
+readonly log_levels='{ gsub(/\033\[[0-9;]*m/, "") }
+$2 == "WARN" || $5 == "WARNING:" { warn++ }
+$2 == "ERROR" || $5 ~ /^(ERROR|FATAL|PANIC):$/ || / panicked at / { error++ }
+END { printf "warn=%d error=%d\n", warn, error }'
 
 health() {
-  local services listing s id logs
+  local services listing s id levels
   services=$(dc config --services) || { echo "services unreadable"; services=""; }
+  # ⚠️ yog-migrate is one-shot (`run --rm` in update.sh): it never has a container to report.
+  services=$(grep -v -x yog-migrate <<<"$services" || true)
   if ! listing=$(dc ps -a --format '{{.Service}} {{.ID}}'); then
     echo "containers unreadable"
     listing=""
@@ -79,8 +89,8 @@ health() {
       '{{.State.Status}} started={{.State.StartedAt}} restarts={{.RestartCount}} oom_killed={{.State.OOMKilled}}' "$id" ||
       echo unreadable)"
     # Counted, never printed: a log line can quote a token name anyone may publish.
-    if logs=$(bounded docker logs --since 1h "$id" 2>&1); then
-      echo "logs_last_hour $s warn=$(count '\bWARN(ING)?\b' "$logs") error=$(count '\b(ERROR|FATAL|PANIC)\b' "$logs")"
+    if levels=$(bounded docker logs --since 1h "$id" 2>&1 | awk "$log_levels"); then
+      echo "logs_last_hour $s $levels"
     else
       echo "logs_last_hour $s unreadable"
     fi
@@ -99,7 +109,10 @@ health() {
 
   local mine theirs
   mine=$(sha256sum <"$installed" | cut -c1-12)
-  theirs=$(sha256sum <"$checkout/docker/observe.sh" | cut -c1-12)
+  theirs=missing
+  if [ -f "$checkout/docker/observe.sh" ]; then
+    theirs=$(sha256sum <"$checkout/docker/observe.sh" | cut -c1-12)
+  fi
   echo "observe installed=$mine checkout=$theirs $([ "$mine" = "$theirs" ] && echo match || echo differs)"
 }
 

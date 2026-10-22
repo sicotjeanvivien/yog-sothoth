@@ -1,4 +1,4 @@
-# Lints for what no other workflow reads: the shell scripts (docker/update.sh,
+# Checks for what no other workflow reads: the shell scripts (docker/update.sh,
 # docker/deploy-entry.sh, web/audit.sh, .github/actions/changes/changes.sh —
 # every `*.sh` git tracks) and the workflows themselves.
 #
@@ -9,7 +9,7 @@
 #                  checksum database verifies it, and no third-party action or
 #                  install script runs.
 #
-# Both jobs install shellcheck 0.11.0 from its release archive, checked
+# Both lint jobs install shellcheck 0.11.0 from its release archive, checked
 # against the SHA-256 below, rather than use the runner's: Ubuntu's is 0.9.0,
 # which reports an SC2015 that 0.11 no longer does, so the runner and a
 # developer's machine disagreed on the same file. One pinned version for
