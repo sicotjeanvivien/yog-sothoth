@@ -144,8 +144,6 @@ impl Verdict {
 }
 
 /// Whether a code says the request itself is at fault, which alone gives the mark up.
-/// ⚠️ Any other code keeps it, so a server that refuses `from_slot` under another code stops the
-/// indexer at the end of the budget instead of leaving a gap.
 fn refusal_of(code: Code) -> Option<MarkRefusal> {
     match code {
         Code::InvalidArgument => Some(MarkRefusal::InvalidArgument),

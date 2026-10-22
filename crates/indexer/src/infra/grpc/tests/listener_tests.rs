@@ -558,6 +558,38 @@ async fn a_stream_failing_internal_before_delivering_keeps_the_mark() {
     );
 }
 
+/// ⚠️ tonic builds its own `OUT_OF_RANGE` for an oversized message, which a replay can meet.
+/// Mutation this is written against: `Ending::verdict` reading the code before `delivered`.
+#[tokio::test]
+async fn a_stream_failing_out_of_range_after_delivering_keeps_its_mark() {
+    let server = test_geyser_server::start(vec![
+        leaves_the_mark_at_8(),
+        ScriptedSession::Stream(vec![
+            routable(12),
+            Action::Fail(Status::out_of_range("message too large")),
+        ]),
+        ScriptedSession::closes_empty(),
+    ])
+    .await;
+    let (downstream, _consumer) = mpsc::channel(4);
+
+    let outcome = timeout(
+        TEST_DEADLINE,
+        listener_for(&server, 1)
+            .await
+            .run(downstream, CancellationToken::new()),
+    )
+    .await
+    .expect("one empty close after two churns exhausts a budget of one");
+
+    assert!(outcome.is_err(), "{outcome:?}");
+    assert_eq!(
+        server.resume_points(),
+        vec![None, Some(8), Some(10)],
+        "a stream that delivered was accepted: its own mark stands, refusal code or not"
+    );
+}
+
 /// ⚠️ An exhausted quota can look exactly like this, with no code to read.
 /// Mutation this is written against: `Ending::verdict` classing `StreamClosed { delivered: false }`
 /// as `Refused`.

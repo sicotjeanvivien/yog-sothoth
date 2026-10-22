@@ -48,8 +48,7 @@ pub(super) fn resubscribing(attempt: u32, error: Option<&str>, resume_from: Opti
     }
 }
 
-/// An attempt that delivered nothing — refused, unreachable or silent — is
-/// charged to the budget.
+/// An attempt that delivered nothing is charged to the budget.
 pub(super) fn attempt_failed(attempt: u32, max: u32, error: &str, resume_from: Option<u64>) {
     warn!(
         attempt,
@@ -62,9 +61,5 @@ pub(super) fn attempt_failed(attempt: u32, max: u32, error: &str, resume_from: O
 
 /// The server refused the request, and the mark it held is given up: a gap opens at `slot`.
 pub(super) fn mark_abandoned(slot: u64, reason: MarkRefusal) {
-    warn!(
-        slot,
-        code = reason.as_str(),
-        "gRPC resume mark abandoned — the next attempt starts from the live edge"
-    );
+    warn!(slot, code = reason.as_str(), "gRPC resume mark abandoned");
 }

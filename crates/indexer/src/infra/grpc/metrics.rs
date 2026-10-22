@@ -130,7 +130,6 @@ const PING_REPLIES_UNSENT: &str = "yog_indexer_grpc_ping_replies_unsent_total";
 const STALLS: &str = "yog_indexer_grpc_stalls_total";
 
 /// Resume marks given up because the server refused the request, by [`MarkRefusal`].
-/// ⚠️ Each increment is a gap: the slots between the mark and the live edge are never indexed.
 const MARKS_ABANDONED: &str = "yog_indexer_grpc_resume_marks_abandoned_total";
 
 /// What an update was, for [`UPDATES_RECEIVED`].
