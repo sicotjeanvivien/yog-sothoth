@@ -110,10 +110,8 @@ jobs:
           "$(go env GOPATH)/bin/actionlint" -version | head -1
           "$(go env GOPATH)/bin/actionlint" -color
 
-  # The gate of the observation key (docker/observe.sh), run outside root as
-  # the key's user runs it: every bypass must exit 2 before anything runs.
-  # ⚠️ An unanchored match lets `health; id` through to `sudo`, which fails
-  # here with another code: that is what turns this job red.
+  # The observation key's script (docker/observe.sh): its gate, run as the key's user runs it,
+  # the check root makes again under sudo, and the strict filters of its output.
   observe-gate:
     name: observe gate
     needs: changes
@@ -121,25 +119,47 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Every bypass is refused with code 2
+      - name: Install the script where the gate hands over
+        run: sudo install -o root -g root -m 755 docker/observe.sh /usr/local/sbin/yog-observe
+      - name: Every bypass is refused with code 2, by the gate and by root
         run: |
           fail=0
-          cases=('id' 'health; id' 'health id' 'metrics && id' $'health\nid' '' 'HEALTH' 'db ')
-          for c in "${cases[@]}"; do
-            rc=0
-            err=$(SSH_ORIGINAL_COMMAND=$c docker/observe.sh 2>&1 >/dev/null) || rc=$?
+          refused() { # <label> <command…>: it must exit 2 and say `refused`
+            local label=$1 rc=0 err
+            shift
+            err=$("$@" 2>&1 >/dev/null) || rc=$?
             if [ "$rc" -eq 2 ] && [[ $err == *refused* ]]; then
-              printf 'ok      %q\n' "$c"
+              printf 'ok      %s\n' "$label"
             else
-              printf 'FAILED  %q: rc=%s %s\n' "$c" "$rc" "$err"
+              printf 'FAILED  %s: rc=%s %s\n' "$label" "$rc" "$err"
               fail=1
             fi
+          }
+          cases=('id' 'health; id' 'health id' 'metrics && id' $'health\nid' '' 'HEALTH' 'db ')
+          for c in "${cases[@]}"; do
+            # No sudo on the PATH: a bypass the gate let through would end on 127, not on root's refusal.
+            refused "gate $(printf %q "$c")" env PATH=/nonexistent SSH_ORIGINAL_COMMAND="$c" docker/observe.sh
+            refused "root $(printf %q "$c")" sudo /usr/local/sbin/yog-observe "$c"
           done
+          refused "root, two words" sudo /usr/local/sbin/yog-observe health metrics
+          refused "root, no word" sudo /usr/local/sbin/yog-observe
+
+          # An accepted word crosses both: the reading starts, and fails here on the missing checkout.
+          out=$(SSH_ORIGINAL_COMMAND=health docker/observe.sh 2>/dev/null) || true
+          if [[ $out == *reading_failed* ]]; then
+            echo "ok      health reaches the reading"
+          else
+            printf 'FAILED  health did not reach the reading: %s\n' "$out"
+            fail=1
+          fi
           exit "$fail"
-      # ⚠️ Run with the runner's UTF-8 locale on purpose: without the script's own
-      # `LC_ALL=C`, `É` matches `[A-Za-z]` and its line goes through.
       - name: The strict filters let no foreign text through
         run: |
+          export LC_ALL=en_US.UTF-8
+          if ! [[ É =~ ^[A-Za-z]$ ]]; then
+            echo "in $LC_ALL, É does not match [A-Za-z]: this step could not see the script's LC_ALL=C go" >&2
+            exit 1
+          fi
           definitions=$(sed -n '/^export LC_ALL=C$/p;/^readonly metric_line=/p;/^readonly db_line=/p;/^strict() {/,/^}/p' docker/observe.sh)
           eval "$definitions"
           kept=$(printf '%s\n' \

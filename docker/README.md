@@ -130,8 +130,11 @@ Two barriers, each enough on its own to keep root out of reach:
    `sudo -n /usr/local/sbin/yog-observe <word>`, the only commands the sudoers
    rule allows; run as root, the script checks the word again, then reads.
 
-Nothing it prints is a secret or a text someone else wrote. It never reads
-the `.env`; `docker inspect` only ever runs with a fixed template; log lines
+Nothing it prints is a secret or a text someone else wrote. It never opens
+the `.env` itself, and what compose reads of it never reaches the client: root's
+errors are discarded, since compose quotes the line of a `.env` it cannot
+parse, and a reading that fails says so on stdout. `docker inspect` only ever
+runs with a fixed template; log lines
 are only counted, since one can quote a token name anyone may publish;
 `metrics` and `db` lines are kept only if they match a strict pattern, and the
 others are counted (`refused_lines`).
@@ -147,15 +150,17 @@ is.
 adduser --disabled-password --gecos '' yog-obs     # no group added: that is the point
 install -o root -g root -m 755 /srv/yog-sothoth/docker/observe.sh /usr/local/sbin/yog-observe
 
-# the sudoers rule, checked before it is put in place
-cat >/tmp/yog-obs <<'EOF'
+# the sudoers rule, checked before it is put in place — in a file only root can open, never a
+# fixed name in /tmp that anyone may create first
+rule=$(mktemp)
+cat >"$rule" <<'EOF'
 yog-obs ALL=(root) NOPASSWD: /usr/local/sbin/yog-observe health, /usr/local/sbin/yog-observe metrics, /usr/local/sbin/yog-observe db
 EOF
-visudo -cf /tmp/yog-obs && install -o root -g root -m 440 /tmp/yog-obs /etc/sudoers.d/yog-obs && rm /tmp/yog-obs
+visudo -cf "$rule" && install -o root -g root -m 440 "$rule" /etc/sudoers.d/yog-obs; rm -f "$rule"
 
-# the key, in a file yog-obs cannot rewrite — nor its directory, nor the home holding it,
-# or yog-obs could rename `.ssh` away and put an unrestricted key in its place
-chown root:root /home/yog-obs && chmod 755 /home/yog-obs
+# the key, in a file yog-obs cannot rewrite — nor anything in its home: it could rename `.ssh`
+# away, or put code in the `.bashrc` that bash sources for sshd before the forced command
+chown -R root:root /home/yog-obs && chmod 755 /home/yog-obs
 install -d -o root -g root -m 755 /home/yog-obs/.ssh
 echo 'restrict,command="/usr/local/sbin/yog-observe" ssh-ed25519 AAAA… claude-observe-yog-scope' \
   >/home/yog-obs/.ssh/authorized_keys

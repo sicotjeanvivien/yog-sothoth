@@ -30,12 +30,15 @@ if [ $# -ne 1 ] || ! accepted "$1"; then
   refuse "$*"
 fi
 
-cd "$checkout"
 exec 9>/run/yog-observe.lock
 flock -n 9 || { echo "yog-observe: another reading is running" >&2; exit 3; }
 
-# ⚠️ A copy of update.sh's list: sourcing it would make root run whatever the checkout holds.
-readonly services=(postgres yog-indexer yog-context yog-signals yog-api yog-archive yog-analytic yog-web)
+# ⚠️ Root's own errors never reach the client: compose quotes the line of a malformed .env it trips
+# on. A reading that fails says so on stdout instead, by name or by exit code.
+exec 2>/dev/null
+trap 'rc=$?; [ "$rc" -eq 0 ] || echo "reading_failed rc=$rc"' EXIT
+cd "$checkout"
+
 readonly daemons=(yog-indexer yog-context yog-signals yog-analytic)
 
 bounded() { timeout 60 "$@"; }
@@ -57,28 +60,39 @@ strict() { # <regex>: stdin's matching lines, then how many others were left out
   echo "refused_lines $refused"
 }
 
+count() { grep -c -E "$1" <<<"$2" || true; }
+
 health() {
-  local s id warn error
-  for s in "${services[@]}"; do
-    id=$(dc ps -a -q "$s" 2>/dev/null) || id=""
+  local services listing s id logs
+  services=$(dc config --services) || { echo "services unreadable"; services=""; }
+  if ! listing=$(dc ps -a --format '{{.Service}} {{.ID}}'); then
+    echo "containers unreadable"
+    listing=""
+  fi
+  for s in $services; do
+    id=$(awk -v s="$s" '$1 == s { print $2; exit }' <<<"$listing")
     if [ -z "$id" ]; then
       echo "service $s missing"
       continue
     fi
     echo "service $s $(bounded docker inspect -f \
-      '{{.State.Status}} started={{.State.StartedAt}} restarts={{.RestartCount}} oom_killed={{.State.OOMKilled}}' "$id")"
+      '{{.State.Status}} started={{.State.StartedAt}} restarts={{.RestartCount}} oom_killed={{.State.OOMKilled}}' "$id" ||
+      echo unreadable)"
     # Counted, never printed: a log line can quote a token name anyone may publish.
-    warn=$(dc logs --no-color --since 1h "$s" 2>&1 | grep -c -E '\bWARN(ING)?\b') || true
-    error=$(dc logs --no-color --since 1h "$s" 2>&1 | grep -c -E '\b(ERROR|FATAL|PANIC)\b') || true
-    echo "logs_last_hour $s warn=$warn error=$error"
+    if logs=$(bounded docker logs --since 1h "$id" 2>&1); then
+      echo "logs_last_hour $s warn=$(count '\bWARN(ING)?\b' "$logs") error=$(count '\b(ERROR|FATAL|PANIC)\b' "$logs")"
+    else
+      echo "logs_last_hour $s unreadable"
+    fi
   done
 
   local ids
-  ids=$(dc ps -q)
+  ids=$(awk '{ print $2 }' <<<"$listing")
   # ⚠️ Never without ids: a bare `docker stats` lists every container on the host, other projects'.
   if [ -n "$ids" ]; then
     # shellcheck disable=SC2086 # one argument per container id
-    bounded docker stats --no-stream --format 'memory {{.Name}} {{.MemUsage}} cpu={{.CPUPerc}}' $ids
+    bounded docker stats --no-stream --format 'memory {{.Name}} {{.MemUsage}} cpu={{.CPUPerc}}' $ids ||
+      echo "memory unreadable"
   fi
   df -P / | awk 'NR == 2 { print "disk / used=" $3 "k available=" $4 "k " $5 }'
   free -m | awk '$1 == "Mem:" { print "host_memory_mib total=" $2 " used=" $3 " available=" $7 } $1 == "Swap:" { print "host_swap_mib total=" $2 " used=" $3 }'
@@ -106,9 +120,10 @@ metrics() {
 # As yog_api, which may write nothing, inside the postgres container, where local connections are
 # trusted: no secret is read. Read-only and bounded on top, whatever the role may do.
 db() {
+  local out rc=0
   # shellcheck disable=SC2016 # $POSTGRES_DB is the container's
-  dc exec -T -e PGOPTIONS='-c default_transaction_read_only=on -c statement_timeout=15s' postgres \
-    sh -c 'exec psql -X -q -At -F " " -v ON_ERROR_STOP=1 -U yog_api -d "$POSTGRES_DB"' <<'SQL' | strict "$db_line"
+  out=$(dc exec -T -e PGOPTIONS='-c default_transaction_read_only=on -c statement_timeout=15s' postgres \
+    sh -c 'exec psql -X -q -At -F " " -v ON_ERROR_STOP=1 -U yog_api -d "$POSTGRES_DB"' <<'SQL'
 SELECT 'network_slot', slot FROM network_status;
 SELECT 'network_rpc_latency_ms', rpc_latency_ms FROM network_status;
 SELECT 'network_observed_age_s', extract(epoch FROM now() - observed_at)::bigint FROM network_status;
@@ -120,6 +135,9 @@ SELECT 'pools_needs_refresh', count(*) FROM pools WHERE needs_refresh;
 SELECT 'signals_last_24h', count(*) FROM signals WHERE triggered_at > now() - interval '1 day';
 SELECT 'database_bytes', pg_database_size(current_database());
 SQL
+  ) || rc=$?
+  strict "$db_line" <<<"$out"
+  [ "$rc" -eq 0 ] || echo "db unreadable rc=$rc"
 }
 
 "$1"
