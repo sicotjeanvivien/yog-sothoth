@@ -162,5 +162,8 @@ Commit **the new migration AND the updated `crates/persistence/.sqlx/`** togethe
 - [ ] UNIQUE INDEX on `(signature, event_index, timestamp)` for idempotency
 - [ ] The repository's `insert` returns `InsertOutcome::from_rows_affected(…)`, not `Ok(())`
 - [ ] GRANTs in the same file; `yog_api` stays read-only
+- [ ] A new continuous aggregate is materialised by the next migration (`-- no-transaction`), its
+      policies by the one after: `crates/persistence/migrations/README.md`, *A new continuous
+      aggregate is materialised by the next migration*
 - [ ] VIEWs redefined via `CREATE OR REPLACE VIEW` with the new `UNION ALL` branch (if applicable)
 - [ ] Migration applied locally via `yog-migrate`; `.sqlx/` regenerated and committed
