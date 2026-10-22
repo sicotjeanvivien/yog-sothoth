@@ -129,6 +129,9 @@ const PING_REPLIES_UNSENT: &str = "yog_indexer_grpc_ping_replies_unsent_total";
 /// ⚠️ A stall retried with a mark is a billed replay.
 const STALLS: &str = "yog_indexer_grpc_stalls_total";
 
+/// Resume marks given up because the server refused the request, by [`MarkRefusal`].
+const MARKS_ABANDONED: &str = "yog_indexer_grpc_resume_marks_abandoned_total";
+
 /// What an update was, for [`UPDATES_RECEIVED`].
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum UpdateKind {
@@ -226,6 +229,24 @@ impl StallSite {
     }
 }
 
+/// The gRPC code a server refused the request with, for [`MARKS_ABANDONED`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MarkRefusal {
+    InvalidArgument,
+    OutOfRange,
+    NotFound,
+}
+
+impl MarkRefusal {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::InvalidArgument => "invalid_argument",
+            Self::OutOfRange => "out_of_range",
+            Self::NotFound => "not_found",
+        }
+    }
+}
+
 pub struct GrpcListenerMetrics;
 
 impl GrpcListenerMetrics {
@@ -256,6 +277,11 @@ impl GrpcListenerMetrics {
              block-meta on an open stream"
         );
         describe_counter!(
+            MARKS_ABANDONED,
+            "Resume marks given up because the server refused the request, \
+             labelled by its gRPC code; each one leaves slots never indexed"
+        );
+        describe_counter!(
             PING_REPLIES_UNSENT,
             "Server pings that could not be answered, labelled by why the \
              answer did not leave"
@@ -284,5 +310,9 @@ impl GrpcListenerMetrics {
 
     pub(crate) fn record_stall(site: StallSite) {
         counter!(STALLS, "site" => site.as_str()).increment(1);
+    }
+
+    pub(crate) fn record_mark_abandoned(reason: MarkRefusal) {
+        counter!(MARKS_ABANDONED, "reason" => reason.as_str()).increment(1);
     }
 }

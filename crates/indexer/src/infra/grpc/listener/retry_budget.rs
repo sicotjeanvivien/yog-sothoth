@@ -57,7 +57,9 @@ impl RetryBudget {
                 log::resubscribing(self.attempt, error.as_deref(), resume_from);
                 self.churn()
             }
-            Verdict::Refused { error } | Verdict::Unanswered { error } => {
+            Verdict::Refused { error, .. }
+            | Verdict::ServerFailed { error }
+            | Verdict::Unanswered { error } => {
                 log::attempt_failed(self.attempt, self.max_attempts, &error, resume_from);
                 self.charge(error)
             }
