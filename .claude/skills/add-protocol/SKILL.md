@@ -21,10 +21,10 @@ support.
 Then read where the protocol stands today — the code says it, this file does not:
 
 ```bash
-grep -n 'Meteora' crates/core/src/domain/protocol/model.rs                          # named by the enum?
-grep -n -A2 'fn is_implemented' crates/core/src/application/extraction/meteora/*.rs  # false = stub
-grep -n -E '^\s+Meteora[A-Za-z0-9]+\(' crates/core/src/domain/domain_event.rs          # has events?
-ls crates/core/src/application/decoder/meteora/ crates/persistence/src/repositories/meteora/
+sed -n '/pub enum Protocol/,/^}/p' crates/core/src/domain/protocol/model.rs   # named by the enum?
+grep -rn -A2 'fn is_implemented' crates/core/src/application/extraction/   # false = stub
+sed -n '/pub enum DomainEvent/,/^}/p' crates/core/src/domain/domain_event.rs   # has events?
+ls -R crates/core/src/application/decoder/ crates/persistence/src/repositories/ | grep -i '<product>'
 ```
 
 ## The dispatch points
@@ -48,12 +48,16 @@ table is right: add the row here.
 
 Rules: *1. In `core`*.
 
+- A platform new to the tree first gets its module, beside `meteora`: `mod <platform>;` in
+  `crates/core/src/application/extraction.rs`, `…/application/decoder.rs`,
+  `crates/core/src/domain.rs`, `crates/persistence/src/repositories.rs` and
+  `crates/indexer/src/application/services.rs`, each with its `<platform>.rs`.
 - Extraction:
   - `crates/core/src/application/extraction/<platform>/<product>/` — `events.rs`,
     `extractor.rs`, `translator.rs`; template `extraction/meteora/damm_v2/`.
   - `crates/core/src/application/extraction/<platform>/<product>.rs` — the struct
     implementing `EventExtractor`; template `extraction/meteora/damm_v2.rs`, declared in
-    `extraction/meteora.rs`.
+    `extraction/<platform>.rs`.
   - `extraction_dispatcher.rs` — the first two rows of the table.
 - Domain:
   - `crates/core/src/domain/<platform>/<product>/<event_kind>/` — `model.rs`,
@@ -73,9 +77,8 @@ Rules: *1. In `core`*.
 
 Rules: *2. In `persistence`*; the migration itself with `/add-migration`.
 
-- `crates/persistence/migrations/NNN_<desc>.sql` — event tables, satellite, VIEW branches,
-  grants.
-- `crates/persistence/tests/privileges.rs` — one line per new table.
+- `crates/persistence/migrations/` — the migrations step 2 of the recipe asks for.
+- `crates/persistence/tests/privileges.rs` — the privilege matrix.
 - `crates/persistence/src/repositories/<platform>/<product>/` — the event repositories;
   template `repositories/meteora/damm_v2/`.
 - The satellite's resolver — template `repositories/meteora/dlmm/pool_properties.rs`
@@ -103,7 +106,7 @@ Rules: *4. In `context`*.
 
 ## Step 5 — `api`, only if read access is needed
 
-Rules: *5. In `api`*; each route with `/add-endpoint`.
+Rules: *5. In `api` (when read access is needed)*; each route with `/add-endpoint`.
 
 - `crates/api/src/application/services/` — a service, if any.
 - `crates/api/src/http/dto/response/protocol.rs` — its row of the table, then the contract
@@ -119,10 +122,11 @@ Rules: *6. Tests*.
 
 ## Commands
 
-Build, format, lint and the workspace tests: `crates/README.md` → *Building, testing,
-linting*. Those specific to a protocol:
+Format and lint: `crates/README.md` → *Building, testing, linting* (its clippy line names
+every crate). Tests:
 
 ```bash
+cargo test --workspace                                             # DB-free
 cargo test -p yog-indexer                                          # fixture suites, extraction oracle
 (cd crates/persistence && cargo sqlx prepare -- --all-targets --all-features)
 cargo test -p yog-persistence --features integration-tests        # live Postgres: see CLAUDE.md
@@ -134,14 +138,6 @@ Then see the sub-persistor write rows against a database: `/verify`, or `crates/
 
 ## Definition of done
 
-- [ ] Every row of *What stays narrow* touched, and the contract regenerated
-- [ ] `is_implemented` flipped in the change that fills the extractor
-- [ ] For a protocol new to the enum: its arms in `program_id()`, `as_str()`, `all()` and
-      `FromStr`
-- [ ] Account decoder grounded on real mainnet fixtures; satellite table and resolver
-- [ ] `DomainEvent` variant and its accessors
-- [ ] Migration (tables, satellite, VIEW branches, grants) and its `privileges.rs` lines
-- [ ] Analytic module called from `write_cycle`
-- [ ] Repositories re-exported; `.sqlx/` regenerated and committed
-- [ ] Transaction fixtures, extraction tests, and the oracle's own fixtures and count
-- [ ] *Commands* and *Building, testing, linting* green
+- [ ] Step 1 to 6: every bullet of the recipe's matching section done, the section re-read
+- [ ] Every row of *What stays narrow* touched
+- [ ] *Commands* green, and the sub-persistor seen writing rows

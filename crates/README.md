@@ -229,7 +229,7 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 - Create per-event modules under `domain/<platform>/<product>/{event_kind}/` with `model.rs` and `repository.rs`. Event structs are prefixed with the protocol (e.g. `MeteoraDlmmSwapEvent`), as are their cursor types, which take the event's full name (`MeteoraDlmmSwapEventCursor`).
 - Add the sub-enum `<Platform><Product>Event` in `domain/<platform>/<product>.rs` with one variant per event kind.
 - Add an outer variant in `DomainEvent` (`domain/domain_event.rs`) and update the accessor methods (`pool_address`, `signature`, `timestamp`, `protocol`, `kind`) to match.
-- For a protocol the `Protocol` enum does not name yet (`domain/protocol/model.rs`): its variant, its program-id constant, and its arm in `program_id()`, `as_str()`, `all()` and `FromStr`. ⚠️ Only the first two are matches the compiler completes: `all()` is a literal slice and `FromStr` ends on `_ => Err(…)`. Forget `all()` and `from_program_id` never finds the protocol, so ingestion never subscribes to it; forget `FromStr` and every read of its rows fails at runtime, `parse_protocol` turning the stored name into `RepositoryError::Integrity`.
+- For a protocol the `Protocol` enum does not name yet (`domain/protocol/model.rs`): its variant, its program-id constant, and its arm in `program_id()`, `as_str()`, `all()` and `FromStr`. ⚠️ The compiler completes `program_id()` and `as_str()`, which are matches, and asks nothing for the other two: `all()` is a literal slice and `FromStr` ends on `_ => Err(…)`. Missing from `all()`, the protocol is skipped by everything that iterates it — `implemented_protocols` (no subscription), `from_program_id` (its accounts refused as `UnknownProgram`), the analytic periods, the API's protocol catalog. Missing from `FromStr`, one row naming it in a cross-protocol table (`pools`, `signals`, …) fails that table's whole read as `RepositoryError::Integrity`, the other protocols' rows with it.
 
 **Account side** — the properties events never carry (mints, base fee, fee shape):
 
@@ -267,7 +267,7 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 
 ### 6. Tests
 
-Add fixture transactions under `core/tests/fixtures/` — they stay in `core`, they are data — and extend the extraction tests in `indexer/src/infra/rpc/tests/fixture_pipeline_tests.rs`, one directory over from the adapter that turns a fixture into an `OnChainTransaction`. Add the account fixtures mentioned in step 1, and the privilege-matrix lines mentioned in step 2. ⚠️ The extraction oracle (`indexer/src/infra/rpc/tests/extraction_oracle_tests.rs`) reads `core/tests/fixtures/damm_v2` only and asserts its exact count: give the new protocol's fixtures their own oracle and count, or its extraction stays green on zero events.
+Add fixture transactions under `core/tests/fixtures/` — they stay in `core`, they are data — and extend the extraction tests in `indexer/src/infra/rpc/tests/fixture_pipeline_tests.rs`, one directory over from the adapter that turns a fixture into an `OnChainTransaction`. Add the account fixtures mentioned in step 1, and the privilege-matrix lines mentioned in step 2. ⚠️ The extraction oracle (`indexer/src/infra/rpc/tests/extraction_oracle_tests.rs`) runs `MeteoraDammV2` alone over `core/tests/fixtures/damm_v2`, against a golden digest (`indexer/testdata/golden/extraction.txt`): it witnesses no other protocol. The new one needs its own — its extractor, its fixtures, its golden file.
 
 ### What stays narrow
 
