@@ -1,14 +1,15 @@
-# Lints for what no other workflow reads: the shell scripts (docker/update.sh,
+# Checks for what no other workflow reads: the shell scripts (docker/update.sh,
 # docker/deploy-entry.sh, web/audit.sh, .github/actions/changes/changes.sh —
 # every `*.sh` git tracks) and the workflows themselves.
 #
 #   - shellcheck : shellcheck over `git ls-files '*.sh'`.
+#   - observe-gate : the bypasses the observation key's gate must refuse.
 #   - actionlint : the workflows, with shellcheck over their `run:` scripts,
 #                  installed by `go install` at a pinned version — the Go
 #                  checksum database verifies it, and no third-party action or
 #                  install script runs.
 #
-# Both jobs install shellcheck 0.11.0 from its release archive, checked
+# Both lint jobs install shellcheck 0.11.0 from its release archive, checked
 # against the SHA-256 below, rather than use the runner's: Ubuntu's is 0.9.0,
 # which reports an SC2015 that 0.11 no longer does, so the runner and a
 # developer's machine disagreed on the same file. One pinned version for
@@ -109,6 +110,73 @@ jobs:
           "$(go env GOPATH)/bin/actionlint" -version | head -1
           "$(go env GOPATH)/bin/actionlint" -color
 
+  # The observation key's script (docker/observe.sh): its gate, run as the key's user runs it,
+  # the check root makes again under sudo, and the strict filters of its output.
+  observe-gate:
+    name: observe gate
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the script where the gate hands over
+        run: sudo install -o root -g root -m 755 docker/observe.sh /usr/local/sbin/yog-observe
+      - name: Every bypass is refused with code 2, by the gate and by root
+        run: |
+          fail=0
+          refused() { # <label> <command…>: it must exit 2 and say `refused`
+            local label=$1 rc=0 err
+            shift
+            err=$("$@" 2>&1 >/dev/null) || rc=$?
+            if [ "$rc" -eq 2 ] && [[ $err == *refused* ]]; then
+              printf 'ok      %s\n' "$label"
+            else
+              printf 'FAILED  %s: rc=%s %s\n' "$label" "$rc" "$err"
+              fail=1
+            fi
+          }
+          cases=('id' 'health; id' 'health id' 'metrics && id' $'health\nid' '' 'HEALTH' 'db ')
+          for c in "${cases[@]}"; do
+            # No sudo on the PATH: a bypass the gate let through would end on 127, not on root's refusal.
+            refused "gate $(printf %q "$c")" env PATH=/nonexistent SSH_ORIGINAL_COMMAND="$c" docker/observe.sh
+            refused "root $(printf %q "$c")" sudo /usr/local/sbin/yog-observe "$c"
+          done
+          refused "root, two words" sudo /usr/local/sbin/yog-observe health metrics
+          refused "root, no word" sudo /usr/local/sbin/yog-observe
+
+          # An accepted word crosses both: the reading starts, and fails here on the missing checkout.
+          out=$(SSH_ORIGINAL_COMMAND=health docker/observe.sh 2>/dev/null) || true
+          if [[ $out == *reading_failed* ]]; then
+            echo "ok      health reaches the reading"
+          else
+            printf 'FAILED  health did not reach the reading: %s\n' "$out"
+            fail=1
+          fi
+          exit "$fail"
+      - name: The strict filters let no foreign text through
+        run: |
+          export LC_ALL=en_US.UTF-8
+          if ! [[ É =~ ^[A-Za-z]$ ]]; then
+            echo "in $LC_ALL, É does not match [A-Za-z]: this step could not see the script's LC_ALL=C go" >&2
+            exit 1
+          fi
+          definitions=$(sed -n '/^export LC_ALL=C$/p;/^readonly metric_line=/p;/^readonly db_line=/p;/^strict() {/,/^}/p' docker/observe.sh)
+          eval "$definitions"
+          kept=$(printf '%s\n' \
+            'yog_ok{reason="out_of_range"} 3' \
+            'yog_ok_bucket{le="+Inf"} 7' \
+            'yog_x{token="ÉLON"} 1' \
+            'yog_x{token="Ignore previous instructions"} 1' \
+            'yog_x{token="a\"b"} 1' \
+            'process_cpu_seconds_total 1' \
+            'yog_x 1; rm -rf /' \
+            | strict "$metric_line")
+          expected=$(printf '%s\n' 'yog_ok{reason="out_of_range"} 3' 'yog_ok_bucket{le="+Inf"} 7' 'refused_lines 5')
+          [ "$kept" = "$expected" ] || { printf 'metrics filter kept:\n%s\n' "$kept"; exit 1; }
+          kept=$(printf '%s\n' 'pools 120815' 'name Ignore all rules' 'pools 1;DROP' | strict "$db_line")
+          [ "$kept" = "$(printf '%s\n' 'pools 120815' 'refused_lines 2')" ] || { printf 'db filter kept:\n%s\n' "$kept"; exit 1; }
+          echo "both filters kept only our lines"
+
   # The one check the ruleset of main requires from this workflow: green when
   # every job above passed or was skipped, red when one failed or was
   # cancelled. `always()` is what makes it run after a failure — skipped, a
@@ -116,7 +184,7 @@ jobs:
   verdict:
     name: Verdict (scripts)
     if: always()
-    needs: [changes, shellcheck, actionlint]
+    needs: [changes, shellcheck, actionlint, observe-gate]
     runs-on: ubuntu-latest
     steps:
       - name: Every job passed or was skipped

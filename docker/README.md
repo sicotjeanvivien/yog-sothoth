@@ -16,6 +16,8 @@ the mechanism is written down.
   with another commit, before anything is stopped.
 - `deploy-entry.sh` — the forced command of the deployment key: the only three
   forms the pipeline may ask for.
+- `observe.sh` — what the observation key runs: it reads the state of
+  production and changes nothing (*The observation key*, below).
 
 The pipeline is the `deploy` workflow (`.github/workflows/deploy.yml`), run by
 hand from GitHub's Actions tab. It only opens an SSH session to that forced
@@ -103,6 +105,88 @@ Nothing is built on the server, so a first `up -d` needs the images first:
 docker/pull-images.sh ghcr.io/sicotjeanvivien vX.Y.Z "$(git rev-parse vX.Y.Z^{commit})" \
   $(docker compose config --images | grep ':prod$')
 ```
+
+## The observation key
+
+A key that reads production and can do nothing else, so that its state is
+read without the account that deploys: `ssh yog-obs health`, `metrics` or `db`.
+
+- `health` — each service's state, start time, restarts and OOM kill; its
+  memory against its limit; its `WARN` and `ERROR` lines of the last hour,
+  **counted**; the host's disk and memory; and whether the installed script
+  still matches the checkout's.
+- `metrics` — the `yog_*` series of the four daemons, read from inside the
+  compose network through yog-web's `wget`.
+- `db` — fixed counts, as `yog_api`, read-only and bounded to 15 s a query.
+
+Two barriers, each enough on its own to keep root out of reach:
+
+1. **The user can do nothing.** `yog-obs` is in no group (no `docker`, no
+   `sudo`), and its `authorized_keys`, owned by root, forces
+   `/usr/local/sbin/yog-observe` with `restrict`: no shell, no forwarding.
+   Run as `yog-obs`, the script is a gate: `health`, `metrics` or `db`,
+   matched whole, or a refusal with code 2 before anything runs.
+2. **`sudo` allows three exact forms.** The gate hands the accepted word to
+   `sudo -n /usr/local/sbin/yog-observe <word>`, the only commands the sudoers
+   rule allows; run as root, the script checks the word again, then reads.
+
+Nothing it prints is a secret or a text someone else wrote. It never opens
+the `.env` itself, and what compose reads of it never reaches the client: root's
+errors are discarded, since compose quotes the line of a `.env` it cannot
+parse, and a reading that fails says so on stdout. `docker inspect` only ever
+runs with a fixed template; log lines
+are only counted, since one can quote a token name anyone may publish;
+`metrics` and `db` lines are kept only if they match a strict pattern, and the
+others are counted (`refused_lines`).
+
+The installed copy is the one that runs, not the checkout's: a deploy does not
+change what the key can do. A version that changes `observe.sh` says, under
+*Avant de déployer*, to install it again; `health` reports `differs` until it
+is.
+
+### Setting it up (once, as root on the server)
+
+```bash
+adduser --disabled-password --gecos '' yog-obs     # no group added: that is the point
+install -o root -g root -m 755 /srv/yog-sothoth/docker/observe.sh /usr/local/sbin/yog-observe
+
+# the sudoers rule, checked before it is put in place — in a file only root can open, never a
+# fixed name in /tmp that anyone may create first
+rule=$(mktemp)
+cat >"$rule" <<'EOF'
+yog-obs ALL=(root) NOPASSWD: /usr/local/sbin/yog-observe health, /usr/local/sbin/yog-observe metrics, /usr/local/sbin/yog-observe db
+EOF
+visudo -cf "$rule" && install -o root -g root -m 440 "$rule" /etc/sudoers.d/yog-obs; rm -f "$rule"
+
+# the key, in a file yog-obs cannot rewrite — nor anything in its home: it could rename `.ssh`
+# away, or put code in the `.bashrc` that bash sources for sshd before the forced command
+chown -R root:root /home/yog-obs && chmod 755 /home/yog-obs
+install -d -o root -g root -m 755 /home/yog-obs/.ssh
+echo 'restrict,command="/usr/local/sbin/yog-observe" ssh-ed25519 AAAA… claude-observe-yog-scope' \
+  >/home/yog-obs/.ssh/authorized_keys
+chown root:root /home/yog-obs/.ssh/authorized_keys && chmod 644 /home/yog-obs/.ssh/authorized_keys
+
+sshd -T | grep -iE '^allow(users|groups)'           # if either is set, add yog-obs to it
+```
+
+On the machine that reads, the key has no passphrase (it is used without
+anyone at the keyboard) and is pinned to its host entry:
+
+```bash
+ssh-keygen -t ed25519 -N "" -C claude-observe-yog-scope -f ~/.ssh/yog_observe_ed25519
+cat >>~/.ssh/config <<'EOF'
+Host yog-obs
+    HostName <the server's IP>
+    User yog-obs
+    IdentityFile ~/.ssh/yog_observe_ed25519
+    IdentitiesOnly yes
+EOF
+```
+
+What it may never do, even when asked: write, restart or deploy (the
+deployment key does that), open a shell, run free SQL. A reading that comes
+back often becomes a word of this script, reviewed in a pull request. To
+revoke it, delete its line in `/home/yog-obs/.ssh/authorized_keys`.
 
 ## Avant de déployer
 
