@@ -265,7 +265,14 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 - If the protocol introduces new event kinds the API wants to expose, add a service under `application/services/`. A service goes under `services/<platform>/<product>/` only when its repository, params and result are irreducibly that product's; cross-protocol services stay at the root and must not name a protocol in their constructor.
 - Add handlers and DTOs as needed. For a cross-protocol read surface, point the handler at the matching VIEW; for protocol-specific detail, point at the table directly.
 
-### 6. Tests
+### 6. In `signals` and `web`
+
+- Give the protocol its arm in `spot_price_a_in_b` (`signals/src/application/detectors/price_oracle_deviation.rs`): its `sqrt_price` decoder, or `None` while it has none — its pools are then counted `no_decoder` (see [`signals/README.md`](./signals/README.md)), not dropped.
+- The flow-imbalance and TVL-drain detectors are built per protocol in `signals/src/bootstrap/daemon.rs`, each with its own settings. A new protocol has neither until it gets its own instances — a choice of thresholds, not a line to copy, and nothing asks for it.
+- Give it its label in `formatProtocolLabel` (`web/src/lib/format/format-protocol.ts`); once the contract is regenerated, `npm run typecheck` asks for it.
+- Its line in the dashboard menu, which is also the list the Overview's activity table and the About page show: its `ProductKey` (`web/src/components/dashboard/sidebar/sidebar-keys.ts`), its entry under its platform in `sidebar-nav.ts` with its label in `web/messages/*/dashboard.json`, and its protocol in `PROTOCOL_OF` (`web/src/components/dashboard/overview/protocol-activity.tsx`), which `npm run typecheck` asks for once the `ProductKey` exists. ⚠️ Nothing asks for its entry in the About page's `OBSERVED` (`web/src/components/marketing/about/about-scope.tsx`): without it, the page says "Soon".
+
+### 7. Tests
 
 Add fixture transactions under `core/tests/fixtures/` — they stay in `core`, they are data — and extend the extraction tests in `indexer/src/infra/rpc/tests/fixture_pipeline_tests.rs`, one directory over from the adapter that turns a fixture into an `OnChainTransaction`. Add the account fixtures mentioned in step 1, and the privilege-matrix lines mentioned in step 2. ⚠️ The extraction oracle (`indexer/src/infra/rpc/tests/extraction_oracle_tests.rs`) runs `MeteoraDammV2` alone over `core/tests/fixtures/damm_v2`, against a golden digest (`indexer/testdata/golden/extraction.txt`): it witnesses no other protocol. The new one needs its own — its extractor, its fixtures, its golden file.
 
@@ -273,7 +280,7 @@ Add fixture transactions under `core/tests/fixtures/` — they stay in `core`, t
 
 There is no central registry. A protocol is added by writing isolated per-protocol code plus a fixed, short list of dispatch points — one per concern, each a single branch or a single line:
 
-| Dispatch point | Crate | Concern |
+| Dispatch point | In | Concern |
 |---|---|---|
 | `ExtractionDispatcher::extract` | `core` | transaction → events |
 | `ExtractionDispatcher::implemented_protocols` | `core` | whether the ingestion subscribes to it at all |
@@ -283,8 +290,10 @@ There is no central registry. A protocol is added by writing isolated per-protoc
 | `init_event_persistor` (`bootstrap/daemon/init.rs`) | `indexer` | sub-persistor instantiation |
 | `pool_account_resolvers` vec (`bootstrap/daemon.rs`) | `context` | property backfill |
 | `From<domain::Protocol>` in `http/dto/response/protocol.rs` | `api` | protocol name in the contract (then regenerate it) |
+| `spot_price_a_in_b` (`application/detectors/price_oracle_deviation.rs`) | `signals` | `sqrt_price` → spot price, or `None` |
+| `formatProtocolLabel` (`web/src/lib/format/format-protocol.ts`) | `web` | display label |
 
-The two-level enums (`DomainEvent`, `PoolAccountProperties`) are matched exhaustively, so adding a variant breaks the build at each site that must follow instead of silently dropping the protocol.
+The two-level enums (`DomainEvent`, `PoolAccountProperties`) and the switch of `formatProtocolLabel` are matched exhaustively, so adding a variant breaks the build, or the web's typecheck, at each site that must follow instead of silently dropping the protocol.
 
 ---
 
