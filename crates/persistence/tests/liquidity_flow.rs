@@ -297,3 +297,56 @@ async fn an_untouched_leg_does_not_void_a_valuable_bucket(pool: PgPool) {
          nothing about it"
     );
 }
+
+/// Mutation: the flow joined to `tvl_usd`, whose unpriced side counts 0: `tvl_drain` would
+/// then divide a drain by half a pool.
+#[sqlx::test]
+async fn a_pool_with_one_side_unpriced_has_no_complete_tvl(pool: PgPool) {
+    let now = Utc::now();
+    let pool_addr = seed_pool(&pool, now - Duration::hours(9)).await;
+    for delete in [
+        "DELETE FROM token_prices WHERE mint = $1",
+        "DELETE FROM token_last_price WHERE mint = $1",
+    ] {
+        sqlx::query(delete)
+            .bind(pk(2).to_string())
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    sqlx::query(
+        "INSERT INTO pool_current_state
+           (pool_address, protocol, last_event_at, last_event_kind, last_signature,
+            reserve_a, reserve_b, last_slot, last_event_index)
+         VALUES ($1,'meteora_damm_v2',$2,'liquidity_remove','sig',10000000,1000000000,1,0)",
+    )
+    .bind(&pool_addr)
+    .bind(now)
+    .execute(&pool)
+    .await
+    .unwrap();
+    // Only B moves, so the window's flow is valued whole.
+    insert_liquidity_event(
+        &pool,
+        &pool_addr,
+        "sig_rem",
+        "remove",
+        0,
+        500_000_000,
+        now - Duration::hours(1),
+    )
+    .await;
+
+    let flows = PgLiquidityFlowRepository::new(pool.clone())
+        .liquidity_flow_since(now - Duration::hours(6))
+        .await
+        .unwrap();
+
+    let flow = flows
+        .iter()
+        .find(|f| f.pool_address == pk(1))
+        .expect("the pool moved in the window");
+    let removed = flow.removed_usd.expect("only the priced side moved");
+    assert!(close(removed, 50), "removed expected ~$50, got {removed}");
+    assert_eq!(flow.tvl_usd, None);
+}

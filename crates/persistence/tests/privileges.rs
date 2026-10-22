@@ -65,6 +65,13 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
         ],
     ),
     (
+        "analytic_protocol_tvl_discovered",
+        &[
+            ("yog_analytic", &["INSERT", "SELECT", "UPDATE"]),
+            ("yog_api", &["SELECT"]),
+        ],
+    ),
+    (
         "analytic_token_periods",
         &[
             ("yog_analytic", &["DELETE", "INSERT", "SELECT"]),

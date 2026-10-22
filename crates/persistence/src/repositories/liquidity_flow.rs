@@ -42,11 +42,11 @@ impl LiquidityFlowRepository for PgLiquidityFlowRepository {
                      THEN SUM(f.added_usd) END   AS "added_usd?",
                 CASE WHEN bool_and(f.valuation_complete)
                      THEN SUM(f.removed_usd) END AS "removed_usd?",
-                t.tvl_usd                        AS "tvl_usd?"
+                t.tvl_complete_usd               AS "tvl_usd?"
             FROM meteora_damm_v2_pool_hourly_liquidity_flow f
             LEFT JOIN pool_current_tvl t ON t.pool_address = f.pool_address
             WHERE f.bucket > $1
-            GROUP BY f.pool_address, t.tvl_usd
+            GROUP BY f.pool_address, t.tvl_complete_usd
             "#,
             since,
         )

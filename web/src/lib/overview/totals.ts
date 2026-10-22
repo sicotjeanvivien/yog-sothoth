@@ -26,6 +26,30 @@ export function changeRatio(current: number | null, previous: number | null): nu
   return current / previous - 1;
 }
 
+/** The protocols' TVL held by pools discovered in `period`; `null` when one has no measure of it. */
+export function discoveredTvl(
+  items: readonly { discovered: readonly { period: Period; tvlUsd: string }[] }[],
+  period: Period,
+): number | null {
+  const parts = items.map((i) => i.discovered.find((d) => d.period === period)?.tvlUsd ?? null);
+  return sumUsd(parts);
+}
+
+/**
+ * The TVL's change over the period without its discovered part: a pool seen for the first time
+ * brings its whole stock, which the raw change would take for a deposit.
+ */
+export function tvlChange(
+  current: number | null,
+  start: number | null,
+  discovered: number | null,
+): number | null {
+  return changeRatio(
+    current === null || discovered === null ? null : current - discovered,
+    start,
+  );
+}
+
 /** Volume over TVL, or `null` when either is unknown or the TVL is zero. */
 export function rotation(volume: number | null, tvl: number | null): number | null {
   if (volume === null || tvl === null || tvl <= 0) {

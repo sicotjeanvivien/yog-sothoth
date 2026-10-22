@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { changeRatio, rotation, sumUsd, swapsPerSecond } from "../totals";
+import {
+  changeRatio,
+  discoveredTvl,
+  rotation,
+  sumUsd,
+  swapsPerSecond,
+  tvlChange,
+} from "../totals";
 
 describe("sumUsd", () => {
   it("adds the protocols' amounts", () => {
@@ -25,6 +32,34 @@ describe("changeRatio", () => {
   // Mutation: the zero guard dropped renders "+∞ %".
   it("is unknown on a zero base", () => {
     expect(changeRatio(10, 0)).toBeNull();
+  });
+});
+
+describe("tvlChange", () => {
+  // Mutation: the discovered part left in renders +10 %, a discovery taken for a deposit.
+  it("leaves out the pools discovered in the period", () => {
+    expect(tvlChange(110, 100, 8)).toBeCloseTo(0.02);
+  });
+
+  // Mutation: an unknown part read as 0 renders the raw change.
+  it("is unknown when the discovered part is", () => {
+    expect(tvlChange(110, 100, null)).toBeNull();
+  });
+});
+
+describe("discoveredTvl", () => {
+  const items = [
+    { discovered: [{ period: "24h" as const, tvlUsd: "3" }, { period: "7d" as const, tvlUsd: "5" }] },
+    { discovered: [{ period: "7d" as const, tvlUsd: "2" }] },
+  ];
+
+  it("adds the protocols' part for the period", () => {
+    expect(discoveredTvl(items, "7d")).toBe(7);
+  });
+
+  // Mutation: a protocol without the period skipped publishes a part that misses it.
+  it("is unknown when a protocol has no measure of the period", () => {
+    expect(discoveredTvl(items, "24h")).toBeNull();
   });
 });
 

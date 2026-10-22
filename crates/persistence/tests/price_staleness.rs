@@ -242,14 +242,46 @@ async fn current_tvl_goes_absent_when_the_price_stops_being_refreshed(pool: PgPo
     );
 }
 
+/// Mutation: `tvl_usd` the strict sum again, which erases the pool for its unpriced side.
 #[sqlx::test]
-async fn current_tvl_is_absent_for_a_token_never_priced(pool: PgPool) {
+async fn a_token_never_priced_counts_zero_in_the_tvl_and_voids_the_complete_one(pool: PgPool) {
     let (pool_addr, _mint_a, mint_b) = seed_pool(&pool).await;
     seed_current_state(&pool, &pool_addr).await;
 
     price_at(&pool, &mint_b, "100.0", Utc::now() - Duration::minutes(5)).await;
 
-    assert!(current_tvl(&pool).await.is_none());
+    let (tvl_usd, tvl_complete_usd): (Option<Decimal>, Option<Decimal>) =
+        sqlx::query_as("SELECT tvl_usd, tvl_complete_usd FROM pool_current_tvl")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    // 1.0 B × $100, A without a price.
+    assert_eq!(tvl_usd, Some(Decimal::from(100)));
+    assert_eq!(tvl_complete_usd, None);
+}
+
+/// Mutation: `token_metadata` joined without `LEFT`, the pool leaving the view uncounted.
+#[sqlx::test]
+async fn a_pool_without_decimals_stays_in_the_view_unvalued(pool: PgPool) {
+    let pool_addr = pk(1).to_string();
+    sqlx::query(
+        "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint)
+         VALUES ($1,'meteora_damm_v2',$2,$3)",
+    )
+    .bind(&pool_addr)
+    .bind(pk(2).to_string())
+    .bind(pk(3).to_string())
+    .execute(&pool)
+    .await
+    .unwrap();
+    seed_current_state(&pool, &pool_addr).await;
+
+    let rows: Vec<(String, Option<Decimal>)> =
+        sqlx::query_as("SELECT pool_address, tvl_usd FROM pool_current_tvl")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(rows, vec![(pool_addr, None)]);
 }
 
 #[sqlx::test]

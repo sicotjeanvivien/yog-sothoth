@@ -68,6 +68,7 @@ impl AnalyticRepository for PgAnalyticRepository {
         };
         if let Some(hour) = cycle.tvl_hour {
             measure_tvl(&mut tx, hour, cycle.at).await?;
+            meteora_damm_v2::measure_discovered_tvl(&mut tx, hour).await?;
         }
 
         tx.commit().await.map_err(map_sqlx_error)?;
@@ -383,16 +384,19 @@ async fn measure_tvl(
 ) -> RepositoryResult<()> {
     sqlx::query!(
         r#"
-        INSERT INTO analytic_protocol_tvl (protocol, bucket, tvl_usd, pools_priced, measured_at)
+        INSERT INTO analytic_protocol_tvl
+            (protocol, bucket, tvl_usd, pools_priced, pools_unvalued, measured_at)
         SELECT p.protocol, $1, SUM(t.tvl_usd),
-               COUNT(*) FILTER (WHERE t.tvl_usd IS NOT NULL), $2
+               COUNT(*) FILTER (WHERE t.tvl_usd IS NOT NULL),
+               COUNT(*) FILTER (WHERE t.tvl_usd IS NULL), $2
           FROM pool_current_tvl t
           JOIN pools p ON p.pool_address = t.pool_address
          GROUP BY p.protocol
         ON CONFLICT (protocol, bucket) DO UPDATE SET
-            tvl_usd      = EXCLUDED.tvl_usd,
-            pools_priced = EXCLUDED.pools_priced,
-            measured_at  = EXCLUDED.measured_at
+            tvl_usd        = EXCLUDED.tvl_usd,
+            pools_priced   = EXCLUDED.pools_priced,
+            pools_unvalued = EXCLUDED.pools_unvalued,
+            measured_at    = EXCLUDED.measured_at
         "#,
         hour,
         at,

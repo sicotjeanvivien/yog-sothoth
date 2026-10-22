@@ -15,12 +15,12 @@ use yog_persistence::{PgHealthChecker, PgPool};
 use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
-        Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity,
-        EventFreshnessRepository, FrozenHours, NetworkStatus, NetworkStatusLookup, Pool,
-        PoolCatalog, Protocol, ProtocolActivity, ProtocolActivityBar, ProtocolActivityLookup,
-        ProtocolPools, ProtocolTvl, Severity, Signal, SignalCursor, SignalFeed, SignalRecord, Span,
-        TokenActivityCursor, TokenActivityFeed, TokenActivityPage, TokenMetadata,
-        TokenMetadataLookup, TokenPrice, TokenPriceLookup, Window,
+        Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity, DiscoveredTvl,
+        EventFreshnessRepository, FrozenHours, LatestProtocolTvl, NetworkStatus,
+        NetworkStatusLookup, Pool, PoolCatalog, Protocol, ProtocolActivity, ProtocolActivityBar,
+        ProtocolActivityLookup, ProtocolPools, ProtocolTvl, Severity, Signal, SignalCursor,
+        SignalFeed, SignalRecord, Span, TokenActivityCursor, TokenActivityFeed, TokenActivityPage,
+        TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceLookup, Window,
     },
 };
 
@@ -229,6 +229,8 @@ pub(crate) struct MockProtocolActivityRepo {
     pub(crate) activity: Vec<ProtocolActivity>,
     pub(crate) bars: Vec<ProtocolActivityBar>,
     pub(crate) tvl: Vec<ProtocolTvl>,
+    /// The discovered parts `tvl_latest` hands with each of [`Self::tvl`].
+    pub(crate) discovered: Vec<DiscoveredTvl>,
     pub(crate) spans: Mutex<Vec<Span>>,
     pub(crate) tvl_ranges: Mutex<Vec<(DateTime<Utc>, DateTime<Utc>)>>,
 }
@@ -248,6 +250,7 @@ impl MockProtocolActivityRepo {
             activity: vec![],
             bars: vec![],
             tvl: vec![],
+            discovered: vec![],
             spans: Mutex::new(vec![]),
             tvl_ranges: Mutex::new(vec![]),
         }
@@ -271,8 +274,15 @@ impl ProtocolActivityLookup for MockProtocolActivityRepo {
         self.spans.lock().unwrap().push(*span);
         Ok(self.bars.clone())
     }
-    async fn tvl_latest(&self, last: DateTime<Utc>) -> RepositoryResult<Vec<ProtocolTvl>> {
-        Ok(self.record_tvl(last, last))
+    async fn tvl_latest(&self, last: DateTime<Utc>) -> RepositoryResult<Vec<LatestProtocolTvl>> {
+        Ok(self
+            .record_tvl(last, last)
+            .into_iter()
+            .map(|tvl| LatestProtocolTvl {
+                tvl,
+                discovered: self.discovered.clone(),
+            })
+            .collect())
     }
     async fn tvl_hourly(
         &self,

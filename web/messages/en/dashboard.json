@@ -68,7 +68,8 @@
       "unavailable": {
         "label": "Why \"—\"?",
         "previous": "The previous period starts before {since}, the first hour measured: no comparison with an incomplete sum.",
-        "tvlStart": "The TVL has no measure at the start of the period: its change cannot be computed."
+        "tvlStart": "The TVL has no measure at the start of the period: its change cannot be computed.",
+        "tvlDiscovered": "The share of the pools discovered during the period is not measured: without it, the change would count a discovery as a deposit."
       },
       "kpis": {
         "tvl": "TVL",
@@ -76,6 +77,7 @@
         "fees": "Fees {period}",
         "pools": "Active pools",
         "tvlChange": "over {period}",
+        "tvlDiscovered": "excluding {amount} of discovered pools",
         "volumeChange": "vs previous {period}",
         "feesProtocol": "protocol {amount}",
         "swaps": "Swaps {period}",
@@ -87,12 +89,12 @@
         "poolsObservedAfter": "observed",
         "poolsBorn": "+{births} born in {period}",
         "info": {
-          "tvl": "The value deposited in every observed pool whose two tokens have a known price, at the end of the last complete hour. Its change compares with its level at the start of the chosen period.",
+          "tvl": "The value deposited in the pools Yog-Scope has observed since 1 October 2026, at the end of the last complete hour: their reserves, each at its token's Jupiter price when under 15 minutes old. A token without a price counts as 0. The TVL says what is deposited, not what can be traded. Its change compares with its level at the start of the chosen period, without the pools discovered during the period: a pool seen for the first time brings its whole stock, which is not a deposit.",
           "volume": "What was traded over the chosen period, valued at each trade's own price, up to the last complete hour. The change compares with the previous period of the same length.",
           "fees": "What those trades paid in fees over the chosen period: the depositors' (LP) share and the protocol's.",
           "swaps": "The number of trades over the chosen period, and their average pace per second.",
           "pools": "The pools with at least one trade over the chosen period, among every pool Yog-Scope has seen, and those born during the period.",
-          "rotation": "The chosen period's volume divided by the TVL: how many times the deposited liquidity changed hands. The TVL only counts pools whose two tokens have a known price."
+          "rotation": "The chosen period's volume divided by the TVL: how many times the deposited liquidity changed hands."
         }
       },
       "protocols": {

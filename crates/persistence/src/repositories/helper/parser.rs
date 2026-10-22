@@ -3,12 +3,23 @@ use solana_pubkey::Pubkey;
 use sqlx::Error as SqlxError;
 use sqlx::types::BigDecimal;
 use std::str::FromStr;
-use yog_core::{RepositoryError, RepositoryResult, domain::Protocol};
+use yog_core::{
+    RepositoryError, RepositoryResult,
+    domain::{Protocol, Window},
+};
 
 /// Parses a stored protocol; an unknown one is `RepositoryError::Integrity`.
 pub(crate) fn parse_protocol(raw: &str) -> RepositoryResult<Protocol> {
     Protocol::from_str(raw)
         .map_err(|e| RepositoryError::Integrity(format!("invalid protocol: {e}")))
+}
+
+/// Parses a stored window label (`Window::as_str`); an unknown one is `RepositoryError::Integrity`.
+pub(crate) fn parse_window(raw: &str) -> RepositoryResult<Window> {
+    Window::ALL
+        .into_iter()
+        .find(|window| window.as_str() == raw)
+        .ok_or_else(|| RepositoryError::Integrity(format!("invalid window: {raw}")))
 }
 
 /// Parses a stored pubkey; a malformed one is `RepositoryError::Integrity`.

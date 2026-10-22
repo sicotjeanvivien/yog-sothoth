@@ -249,8 +249,9 @@ async fn a_page_past_the_last_token_still_names_its_ranking(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn the_tvl_is_the_last_measured_at_or_before_the_hour(pool: PgPool) {
     sqlx::query(
-        "INSERT INTO analytic_protocol_tvl (protocol, bucket, tvl_usd, pools_priced, measured_at)
-         VALUES ('meteora_damm_v2', $1, 100, 3, $1), ('meteora_damm_v2', $2, 999, 3, $2)",
+        "INSERT INTO analytic_protocol_tvl
+           (protocol, bucket, tvl_usd, pools_priced, pools_unvalued, measured_at)
+         VALUES ('meteora_damm_v2', $1, 100, 3, 0, $1), ('meteora_damm_v2', $2, 999, 3, 0, $2)",
     )
     .bind(last() - Duration::hours(3))
     .bind(last() + Duration::hours(1))
@@ -262,8 +263,55 @@ async fn the_tvl_is_the_last_measured_at_or_before_the_hour(pool: PgPool) {
     let tvl = repository.tvl_latest(last()).await.unwrap();
 
     assert_eq!(tvl.len(), 1);
-    assert_eq!(tvl[0].tvl_usd, Some(Decimal::from(100)));
-    assert_eq!(tvl[0].at, last() - Duration::hours(2));
+    assert_eq!(tvl[0].tvl.tvl_usd, Some(Decimal::from(100)));
+    assert_eq!(tvl[0].tvl.at, last() - Duration::hours(2));
+}
+
+/// Mutation: the discovered parts read at their own last hour, past the TVL's: they would
+/// split a TVL they were not measured with.
+#[sqlx::test(migrations = "./migrations")]
+async fn the_discovered_parts_are_those_of_the_tvl_hour(pool: PgPool) {
+    let (measured, later) = (last() - Duration::hours(3), last() + Duration::hours(1));
+    sqlx::query(
+        "INSERT INTO analytic_protocol_tvl
+           (protocol, bucket, tvl_usd, pools_priced, pools_unvalued, measured_at)
+         VALUES ('meteora_damm_v2', $1, 100, 3, 2, $1), ('meteora_damm_v2', $2, 999, 3, 2, $2)",
+    )
+    .bind(measured)
+    .bind(later)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO analytic_protocol_tvl_discovered (protocol, period, bucket, tvl_usd, pools)
+         SELECT 'meteora_damm_v2', w.period, b.bucket, b.tvl + w.extra, 1
+           FROM (VALUES ('24h', 0), ('7d', 1), ('30d', 2)) AS w (period, extra),
+                (VALUES ($1::TIMESTAMPTZ, 10), ($2::TIMESTAMPTZ, 90)) AS b (bucket, tvl)",
+    )
+    .bind(measured)
+    .bind(later)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repository = PgProtocolActivityRepository::new(as_role(&pool, "yog_api").await);
+
+    let tvl = repository.tvl_latest(last()).await.unwrap();
+
+    assert_eq!(tvl.len(), 1);
+    assert_eq!(tvl[0].tvl.pools_unvalued, 2);
+    let parts: Vec<_> = tvl[0]
+        .discovered
+        .iter()
+        .map(|d| (d.window, d.tvl_usd, d.pools))
+        .collect();
+    assert_eq!(
+        parts,
+        vec![
+            (Window::Day, Decimal::from(10), 1),
+            (Window::Week, Decimal::from(11), 1),
+            (Window::Month, Decimal::from(12), 1),
+        ]
+    );
 }
 
 /// Mutations: either end excluded (the variation loses its start, or the series
@@ -272,8 +320,9 @@ async fn the_tvl_is_the_last_measured_at_or_before_the_hour(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn the_tvl_series_holds_both_ends_and_every_protocol(pool: PgPool) {
     sqlx::query(
-        "INSERT INTO analytic_protocol_tvl (protocol, bucket, tvl_usd, pools_priced, measured_at)
-         SELECT p, h, EXTRACT(EPOCH FROM h - $1) / 3600 + base, base + 1, h
+        "INSERT INTO analytic_protocol_tvl
+           (protocol, bucket, tvl_usd, pools_priced, pools_unvalued, measured_at)
+         SELECT p, h, EXTRACT(EPOCH FROM h - $1) / 3600 + base, base + 1, 0, h
            FROM (VALUES ('meteora_damm_v2', 0), ('meteora_dlmm', 100)) AS v (p, base),
                 generate_series($1 - INTERVAL '3 hours', $1 + INTERVAL '1 hour',
                                 INTERVAL '1 hour') AS h",

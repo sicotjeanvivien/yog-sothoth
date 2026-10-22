@@ -7,7 +7,8 @@ into `analytic_pool_5min`; sums the tranches per pool and hour into
 `analytic_pool_hourly`, and those facts per protocol into
 `analytic_protocol_hourly`; counts the pools born per protocol and hour into
 `analytic_protocol_births_hourly`; measures the TVL of every protocol into
-`analytic_protocol_tvl`; and freezes each hour ten minutes after its close,
+`analytic_protocol_tvl`, and the part of it the pools discovered in each window
+hold into `analytic_protocol_tvl_discovered`; and freezes each hour ten minutes after its close,
 writing then the distinct pools and the tokens of every window ending at it.
 A tranche is valued once, a frozen hour never written again.
 
@@ -103,7 +104,15 @@ in `persistence` (`repositories/analytic.rs`).
   freezes only on a cycle that rewrote it, and only once its last tranche is
   valued, so its last write sees every swap that arrived within the margin.
 - **TVL**: measured into the hour of the cycle, as long as that hour is not
-  frozen.
+  frozen. It is the reserves of every pool observed since indexing began, each
+  side at its token's Jupiter price when under 15 minutes old; a side without one
+  counts 0, a pool with no side valued is counted apart (`pools_unvalued`). The
+  pools Meteora holds that never emitted an event since are out of it: a limit of
+  observation, which grows the figure as dormant pools wake.
+- **Discovered part**: with each TVL, for every window — 24 h, 7 and 30 days — the
+  TVL of the pools first seen in it whose `initialize_pool` was not observed. Such a
+  pool brings its whole stock in at once; a variation of the TVL leaves it out to
+  tell a discovery from a deposit, while a pool born in the window is one.
 - **Periods**: on a cycle that freezes, the distinct pools of each window — 24 h,
   7 and 30 days (`Window`, in `core`) — ending at every hour it freezes, so a
   previous window read after a catch-up finds its row; the tokens, at the last

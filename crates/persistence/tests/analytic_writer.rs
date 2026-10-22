@@ -485,42 +485,42 @@ async fn a_cycle_waits_for_a_concurrent_freeze_and_keeps_out_of_it(pool: PgPool)
     assert_eq!(fact_pool_hours(&pool, frozen).await[0].2, 999);
 }
 
+/// The pool's current reserves, as the indexer leaves them after an event.
+async fn hold(pool: &PgPool, address: &str, reserve_a: i64, reserve_b: i64) {
+    sqlx::query(
+        "INSERT INTO pool_current_state
+           (pool_address, protocol, last_event_at, last_event_kind, last_signature,
+            reserve_a, reserve_b, last_slot, last_event_index)
+         VALUES ($1, 'meteora_damm_v2', now(), 'liquidity_add', 'sig', $2, $3, 1, 0)",
+    )
+    .bind(address)
+    .bind(reserve_a)
+    .bind(reserve_b)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// Mutations: the view's sum strict again (a side without a price erasing its pool), and the
+/// unvalued pools counted as priced or not at all.
 #[sqlx::test]
-async fn the_tvl_is_the_sum_of_pool_current_tvl(pool: PgPool) {
-    let priced = setup_pool(&pool, 1, Some("180.0")).await;
-    let unpriced = setup_pool(&pool, 2, None).await;
+async fn a_side_without_a_price_counts_zero_and_a_pool_without_any_its_own_count(pool: PgPool) {
+    let both = setup_pool(&pool, 1, Some("180.0")).await;
     price_mint(&pool, &mints_of(1).0, "2.5").await;
-    for (address, reserve_a, reserve_b) in
-        [(&priced, 3_000_000i64, 7_000_000_000i64), (&unpriced, 1, 1)]
-    {
-        sqlx::query(
-            "INSERT INTO pool_current_state
-               (pool_address, protocol, last_event_at, last_event_kind, last_signature,
-                reserve_a, reserve_b, last_slot, last_event_index)
-             VALUES ($1, 'meteora_damm_v2', now(), 'liquidity_add', 'sig', $2, $3, 1, 0)",
-        )
-        .bind(address)
-        .bind(reserve_a)
-        .bind(reserve_b)
-        .execute(&pool)
-        .await
-        .unwrap();
-    }
+    let one = setup_pool(&pool, 3, Some("180.0")).await;
+    let none = setup_pool(&pool, 2, None).await;
+    // 3 A × $2.5 + 7 B × $180; 2 B × $180, A unlisted; nothing priced.
+    hold(&pool, &both, 3_000_000, 7_000_000_000).await;
+    hold(&pool, &one, 5_000_000, 2_000_000_000).await;
+    hold(&pool, &none, 1, 1).await;
 
     let now = now();
     let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
     let cycle = cycle_from(now, hours_before(now, 0));
     repository.write_cycle(&cycle).await.unwrap();
 
-    let expected: (Option<BigDecimal>, i64) = sqlx::query_as(
-        "SELECT SUM(tvl_usd), COUNT(*) FILTER (WHERE tvl_usd IS NOT NULL) FROM pool_current_tvl",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(expected, (Some("1267.5".parse::<BigDecimal>().unwrap()), 1));
-    let measured: (DateTime<Utc>, Option<BigDecimal>, i64, DateTime<Utc>) = sqlx::query_as(
-        "SELECT bucket, tvl_usd, pools_priced, measured_at
+    let measured: (DateTime<Utc>, Option<BigDecimal>, i64, i64, DateTime<Utc>) = sqlx::query_as(
+        "SELECT bucket, tvl_usd, pools_priced, pools_unvalued, measured_at
            FROM analytic_protocol_tvl WHERE protocol = 'meteora_damm_v2'",
     )
     .fetch_one(&pool)
@@ -528,7 +528,96 @@ async fn the_tvl_is_the_sum_of_pool_current_tvl(pool: PgPool) {
     .unwrap();
     assert_eq!(
         measured,
-        (cycle.tvl_hour.unwrap(), expected.0, expected.1, cycle.at)
+        (cycle.tvl_hour.unwrap(), Some(dec("1627.5")), 2, 1, cycle.at)
+    );
+}
+
+/// The discovered part of each window, as `(period, tvl_usd, pools)` in window order.
+async fn discovered(pool: &PgPool, bucket: DateTime<Utc>) -> Vec<(String, BigDecimal, i64)> {
+    sqlx::query_as(
+        "SELECT period, tvl_usd, pools FROM analytic_protocol_tvl_discovered
+          WHERE protocol = 'meteora_damm_v2' AND bucket = $1
+          ORDER BY CASE period WHEN '24h' THEN 1 WHEN '7d' THEN 2 ELSE 3 END",
+    )
+    .bind(bucket)
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+/// A pool priced on B at $180 holding `b` B, first seen at `seen`.
+async fn seen_at(pool: &PgPool, seed: u8, b: i64, seen: DateTime<Utc>) -> String {
+    let address = setup_pool(pool, seed, Some("180.0")).await;
+    hold(pool, &address, 1, b * 1_000_000_000).await;
+    sqlx::query("UPDATE pools SET first_seen_at = $2 WHERE pool_address = $1")
+        .bind(&address)
+        .bind(seen)
+        .execute(pool)
+        .await
+        .unwrap();
+    address
+}
+
+/// Mutations: `first_seen_at` ignored, or compared with `>` (the pool seen at the very start
+/// of the 24 hours drops out); the birth ignored (the pool born in the window counts).
+#[sqlx::test]
+async fn a_pool_discovered_in_a_window_counts_in_its_part_and_one_born_there_does_not(
+    pool: PgPool,
+) {
+    let now = now();
+    let cycle = cycle_from(now, hours_before(now, 0));
+    let hour = cycle.tvl_hour.unwrap();
+    let start_of_day = hour + Duration::hours(1) - Duration::hours(24);
+    seen_at(&pool, 4, 1, hour - Duration::hours(2)).await;
+    seen_at(&pool, 8, 16, start_of_day).await;
+    let born = seen_at(&pool, 5, 2, hour - Duration::hours(2)).await;
+    sqlx::query(
+        "INSERT INTO meteora_damm_v2_initialize_pool_events
+           (pool_address, signature, token_a_mint, token_b_mint, creator, payer, alpha_vault,
+            sqrt_min_price, sqrt_max_price, sqrt_price, liquidity,
+            activation_type, activation_point, collect_fee_mode, pool_type,
+            token_a_flag, token_b_flag, token_a_amount, token_b_amount,
+            total_amount_a, total_amount_b, pool_fees_raw, timestamp, slot, event_index)
+         VALUES ($1, $1, 'a', 'b', 'c', 'p', 'v', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                 '\\x00', $2, 0, 0)",
+    )
+    .bind(&born)
+    .bind(hour - Duration::hours(2))
+    .execute(&pool)
+    .await
+    .unwrap();
+    seen_at(&pool, 6, 4, hour - Duration::hours(48)).await;
+    seen_at(&pool, 7, 8, hour - Duration::days(40)).await;
+
+    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    repository.write_cycle(&cycle).await.unwrap();
+
+    assert_eq!(
+        discovered(&pool, hour).await,
+        vec![
+            ("24h".to_owned(), dec("3060"), 2),
+            ("7d".to_owned(), dec("3780"), 3),
+            ("30d".to_owned(), dec("3780"), 3),
+        ]
+    );
+}
+
+/// Mutation: the windows joined to the pools without `LEFT`, a window without one unwritten.
+#[sqlx::test]
+async fn a_window_without_a_discovered_pool_writes_zero(pool: PgPool) {
+    let now = now();
+    let cycle = cycle_from(now, hours_before(now, 0));
+    let hour = cycle.tvl_hour.unwrap();
+    seen_at(&pool, 7, 8, hour - Duration::days(40)).await;
+
+    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    repository.write_cycle(&cycle).await.unwrap();
+
+    assert_eq!(
+        discovered(&pool, hour).await,
+        ["24h", "7d", "30d"]
+            .map(|period| (period.to_owned(), dec("0"), 0))
+            .to_vec()
     );
 }
 

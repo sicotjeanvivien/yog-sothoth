@@ -306,10 +306,12 @@ Two consequences worth knowing before you touch a valuation view:
 
 - `pool_current_tvl` goes NULL when `yog-context` stops refreshing prices, so a
   dead enrichment loop makes the TVL *disappear* rather than freeze at a stale
-  figure. That is deliberate — `tvl_drain` reads the same view and must not
-  compute ratios against a quote from yesterday. Its two sides (`value_a_usd`,
-  `value_b_usd`, migration 019), whose sum is `tvl_usd`, go NULL each on its
-  own price.
+  figure. Its two sides (`value_a_usd`, `value_b_usd`, migration 019) go NULL each
+  on its own price. `tvl_usd` sums the sides valued, a side without a price
+  counting 0 (034), and goes NULL only when neither is; `tvl_complete_usd` is
+  NULL as soon as one side is. `tvl_drain` reads the second: a drain over half a
+  pool is not a drain, and the detector must not compute it against a quote from
+  yesterday either.
 - `pool_price_snapshot` is the one **exempt** view, and the exemption is the
   policy's boundary rather than an oversight: it publishes no USD figure, only
   raw inputs with their `fetched_at`, and `price_oracle_deviation` gates on them
@@ -551,7 +553,10 @@ its own module — its pools' prices into `analytic_pool_prices_5min`, its swaps
 valued by each direction's trusted leg into `analytic_pool_5min` (028, 031); the facts of the open hours, one
 row per (pool, hour), summed from those tranches; the protocol aggregate summed
 from the facts; the tranches and hours recorded, the hours frozen once closed;
-the protocol TVL, by the rule of `pool_current_tvl`. A tranche is valued once
+the protocol TVL, by the rule of `pool_current_tvl`, with its pools unvalued
+counted apart, and the part of it held by the pools discovered in each window
+(`analytic_protocol_tvl_discovered`, 034: first seen in it, their birth unobserved,
+one row per window, 0 included). A tranche is valued once
 and a frozen hour never written again, whatever range the cycle was handed:
 the transaction locks `analytic_hours` against any other writer, reads its
 progress, and `CycleWrite::without_written` (`core`) takes out what is done —
@@ -576,7 +581,9 @@ cannot split.
 protocol aggregate and the TVL, over the span the API hands them;
 `tests/overview_periods.rs` and `tests/protocol_activity.rs` hold the rules. 030
 deletes the protocol TVL of the hours before the first complete one, so its first
-row is the floor a TVL variation starts from.
+row is the floor a TVL variation starts from; 034 deletes the whole series measured
+before a side without a price counted 0, which the past reserves it lacks could not
+measure again.
 
 The DAMM v2 tranches are those of `meteora_damm_v2_swap_events_5min` (021, recreated by 031),
 refreshed every 5 minutes up to 10 minutes ago and read in real time past that.

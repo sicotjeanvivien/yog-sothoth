@@ -170,18 +170,12 @@ export type ProtocolActivityResponse = z.infer<typeof zProtocolActivityResponse>
 export const zProtocolTvlResponse = z.object({
     at: z.iso.datetime({ offset: true }),
     poolsPriced: zCount,
+    poolsUnvalued: zCount,
     protocol: zProtocolResponse,
     tvlUsd: zUnsignedDecimal.nullable()
 });
 
 export type ProtocolTvlResponse = z.infer<typeof zProtocolTvlResponse>;
-
-export const zLatestTvlResponse = z.object({
-    asOf: z.iso.datetime({ offset: true }).nullable(),
-    items: z.array(zProtocolTvlResponse)
-});
-
-export type LatestTvlResponse = z.infer<typeof zLatestTvlResponse>;
 
 export const zSignalResponse = z.object({
     detector: z.string().min(1),
@@ -237,6 +231,32 @@ export const zWindowResponse = z.enum([
 ]);
 
 export type WindowResponse = z.infer<typeof zWindowResponse>;
+
+export const zDiscoveredTvlResponse = z.object({
+    period: zWindowResponse,
+    pools: zCount,
+    tvlUsd: zUnsignedDecimal
+});
+
+export type DiscoveredTvlResponse = z.infer<typeof zDiscoveredTvlResponse>;
+
+export const zLatestProtocolTvlResponse = z.object({
+    at: z.iso.datetime({ offset: true }),
+    discovered: z.array(zDiscoveredTvlResponse),
+    poolsPriced: zCount,
+    poolsUnvalued: zCount,
+    protocol: zProtocolResponse,
+    tvlUsd: zUnsignedDecimal.nullable()
+});
+
+export type LatestProtocolTvlResponse = z.infer<typeof zLatestProtocolTvlResponse>;
+
+export const zLatestTvlResponse = z.object({
+    asOf: z.iso.datetime({ offset: true }).nullable(),
+    items: z.array(zLatestProtocolTvlResponse)
+});
+
+export type LatestTvlResponse = z.infer<typeof zLatestTvlResponse>;
 
 export const zTokenActivityPageResponse = z.object({
     asOf: z.iso.datetime({ offset: true }).nullable(),
@@ -299,6 +319,7 @@ export const zWindowedResponseProtocolTvlResponse = z.object({
     items: z.array(z.object({
         at: z.iso.datetime({ offset: true }),
         poolsPriced: zCount,
+        poolsUnvalued: zCount,
         protocol: zProtocolResponse,
         tvlUsd: zUnsignedDecimal.nullable()
     })),

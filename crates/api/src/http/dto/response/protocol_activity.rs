@@ -5,9 +5,12 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::Serialize;
 use utoipa::ToSchema;
-use yog_core::domain::{ProtocolActivity, ProtocolActivityBar, ProtocolTvl};
+use yog_core::domain::{
+    DiscoveredTvl, LatestProtocolTvl, ProtocolActivity, ProtocolActivityBar, ProtocolTvl,
+};
 
 use super::protocol::ProtocolResponse;
+use super::window::WindowResponse;
 use crate::application::Measured;
 use crate::http::dto::schema::{Count, UnsignedDecimal};
 
@@ -98,8 +101,12 @@ pub(crate) struct ProtocolTvlResponse {
     at: DateTime<Utc>,
     #[schema(value_type = Option<UnsignedDecimal>)]
     tvl_usd: Option<Decimal>,
+    /// Pools with at least one side valued, a side without a price counting 0.
     #[schema(value_type = Count)]
     pools_priced: i64,
+    /// Pools with no side valued, out of `tvlUsd`.
+    #[schema(value_type = Count)]
+    pools_unvalued: i64,
 }
 
 impl From<ProtocolTvl> for ProtocolTvlResponse {
@@ -109,6 +116,59 @@ impl From<ProtocolTvl> for ProtocolTvlResponse {
             at: t.at,
             tvl_usd: t.tvl_usd,
             pools_priced: t.pools_priced,
+            pools_unvalued: t.pools_unvalued,
+        }
+    }
+}
+
+/// The part of `tvlUsd` held by the pools first seen in `period`, their birth unobserved.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DiscoveredTvlResponse {
+    period: WindowResponse,
+    #[schema(value_type = UnsignedDecimal)]
+    tvl_usd: Decimal,
+    #[schema(value_type = Count)]
+    pools: i64,
+}
+
+impl From<DiscoveredTvl> for DiscoveredTvlResponse {
+    fn from(d: DiscoveredTvl) -> Self {
+        Self {
+            period: d.window.into(),
+            tvl_usd: d.tvl_usd,
+            pools: d.pools,
+        }
+    }
+}
+
+/// A protocol's last TVL, with its discovered part for each period measured.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LatestProtocolTvlResponse {
+    protocol: ProtocolResponse,
+    at: DateTime<Utc>,
+    #[schema(value_type = Option<UnsignedDecimal>)]
+    tvl_usd: Option<Decimal>,
+    /// Pools with at least one side valued, a side without a price counting 0.
+    #[schema(value_type = Count)]
+    pools_priced: i64,
+    /// Pools with no side valued, out of `tvlUsd`.
+    #[schema(value_type = Count)]
+    pools_unvalued: i64,
+    /// One per period measured with this TVL; a period missing was not measured.
+    discovered: Vec<DiscoveredTvlResponse>,
+}
+
+impl From<LatestProtocolTvl> for LatestProtocolTvlResponse {
+    fn from(LatestProtocolTvl { tvl, discovered }: LatestProtocolTvl) -> Self {
+        Self {
+            protocol: tvl.protocol.into(),
+            at: tvl.at,
+            tvl_usd: tvl.tvl_usd,
+            pools_priced: tvl.pools_priced,
+            pools_unvalued: tvl.pools_unvalued,
+            discovered: discovered.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -119,14 +179,18 @@ impl From<ProtocolTvl> for ProtocolTvlResponse {
 pub(crate) struct LatestTvlResponse {
     /// `null` before the first hour is frozen.
     as_of: Option<DateTime<Utc>>,
-    items: Vec<ProtocolTvlResponse>,
+    items: Vec<LatestProtocolTvlResponse>,
 }
 
-impl From<Measured<Vec<ProtocolTvl>>> for LatestTvlResponse {
-    fn from(measured: Measured<Vec<ProtocolTvl>>) -> Self {
+impl From<Measured<Vec<LatestProtocolTvl>>> for LatestTvlResponse {
+    fn from(measured: Measured<Vec<LatestProtocolTvl>>) -> Self {
         Self {
             as_of: measured.span.map(|s| s.as_of),
             items: measured.items.into_iter().map(Into::into).collect(),
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/protocol_activity_tests.rs"]
+mod tests;

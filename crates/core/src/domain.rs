@@ -72,7 +72,8 @@ pub use pool_current_state::{
 pub use pool_price_snapshot::{PoolPriceSnapshot, PoolPriceSnapshotRepository};
 pub use protocol::Protocol;
 pub use protocol_activity::{
-    ProtocolActivity, ProtocolActivityBar, ProtocolActivityLookup, ProtocolTvl,
+    DiscoveredTvl, LatestProtocolTvl, ProtocolActivity, ProtocolActivityBar,
+    ProtocolActivityLookup, ProtocolTvl,
 };
 pub use signals::{
     DetectorError, EvalContext, Severity, Signal, SignalCursor, SignalDetector, SignalFeed,
