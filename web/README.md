@@ -355,8 +355,9 @@ hides the rest.
 `src/config/site.ts` holds the site's origin, the preview image
 (`public/og-image.png`, one for every page and both languages) and the pages in
 two lists: `SITEMAP_PATHS`, which `app/sitemap.ts` lists and `app/robots.ts`
-points at, and `UNLISTED_PATHS`, the dashboard, served with its metadata but
-kept out of the sitemap — its reads are live, slow, and fail with the API. The locale layout sets `metadataBase`
+points at, the Overview included, and `UNLISTED_PATHS`, the signal feed, served
+with its metadata but kept out of the sitemap — its reads are live, slow, and
+fail with the API. The locale layout sets `metadataBase`
 and the only title template, `%s — ${SITE_NAME}`. Each page builds its metadata
 through `lib/seo/page-metadata.ts` — title, description, preview, canonical
 without parameters, its two languages and `x-default` to the unprefixed path —

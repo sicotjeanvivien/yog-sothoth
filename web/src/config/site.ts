@@ -11,6 +11,7 @@ export const SITE_NAME = "Yog-Scope";
  */
 export const SITEMAP_PATHS = [
   "",
+  "/overview",
   "/about",
   "/changelog",
   "/support-us",
@@ -20,7 +21,7 @@ export const SITEMAP_PATHS = [
 ] as const;
 
 /** Served with their metadata, out of the sitemap: their reads are live, slow, and fail with the API. */
-export const UNLISTED_PATHS = ["/overview", "/signals"] as const;
+export const UNLISTED_PATHS = ["/signals"] as const;
 
 export type PagePath = (typeof SITEMAP_PATHS)[number] | (typeof UNLISTED_PATHS)[number];
 
