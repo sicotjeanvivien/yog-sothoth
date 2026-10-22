@@ -24,7 +24,7 @@ Then read where the protocol stands today — the code says it, this file does n
 sed -n '/pub enum Protocol/,/^}/p' crates/core/src/domain/protocol/model.rs   # named by the enum?
 grep -rn -A2 'fn is_implemented' crates/core/src/application/extraction/   # false = stub
 sed -n '/pub enum DomainEvent/,/^}/p' crates/core/src/domain/domain_event.rs   # has events?
-ls -R crates/core/src/application/decoder/ crates/persistence/src/repositories/ | grep -i '<product>'
+grep -rli '<product>' crates/*/src web/src | sort   # every file that already names it, layer by layer
 ```
 
 ## The dispatch points
@@ -48,10 +48,11 @@ table is right: add the row here.
 
 Rules: *1. In `core`*.
 
-- A platform new to the tree first gets its module, beside `meteora`: `mod <platform>;` in
+- A platform new to the tree first gets its module in
   `crates/core/src/application/extraction.rs`, `…/application/decoder.rs`,
   `crates/core/src/domain.rs`, `crates/persistence/src/repositories.rs` and
-  `crates/indexer/src/application/services.rs`, each with its `<platform>.rs`.
+  `crates/indexer/src/application/services.rs`, each with its `<platform>.rs` — declared
+  and re-exported the way `meteora` is there (rules: *Conventions*, module visibility).
 - Extraction:
   - `crates/core/src/application/extraction/<platform>/<product>/` — `events.rs`,
     `extractor.rs`, `translator.rs`; template `extraction/meteora/damm_v2/`.
@@ -106,7 +107,7 @@ Rules: *4. In `context`*.
 
 ## Step 5 — `api`, only if read access is needed
 
-Rules: *5. In `api` (when read access is needed)*; each route with `/add-endpoint`.
+Rules: *5. In `api` (when read access is needed)*; each route: *Adding a new API endpoint*.
 
 - `crates/api/src/application/services/` — a service, if any.
 - `crates/api/src/http/dto/response/protocol.rs` — its row of the table, then the contract
@@ -126,11 +127,11 @@ Format and lint: `crates/README.md` → *Building, testing, linting* (its clippy
 every crate). Tests:
 
 ```bash
-cargo test --workspace                                             # DB-free
-cargo test -p yog-indexer                                          # fixture suites, extraction oracle
-(cd crates/persistence && cargo sqlx prepare -- --all-targets --all-features)
-cargo test -p yog-persistence --features integration-tests        # live Postgres: see CLAUDE.md
-YOG_WRITE_OPENAPI=1 cargo test -p yog-api contract && (cd web && npm run gen:api)
+(cd crates/persistence && cargo sqlx prepare -- --all-targets --all-features)  # first: builds are offline
+YOG_WRITE_OPENAPI=1 cargo test -p yog-api contract && (cd web && npm run gen:api)  # before the tests
+cargo test --workspace                                       # DB-free; fixture suites and oracle included
+cargo test -p yog-persistence --features integration-tests  # live Postgres: see CLAUDE.md
+python3 crates/check-module-visibility.py                    # for a new platform's modules
 ```
 
 Then see the sub-persistor write rows against a database: `/verify`, or `crates/README.md`
@@ -139,5 +140,5 @@ Then see the sub-persistor write rows against a database: `/verify`, or `crates/
 ## Definition of done
 
 - [ ] Step 1 to 6: every bullet of the recipe's matching section done, the section re-read
-- [ ] Every row of *What stays narrow* touched
+- [ ] Every row of *What stays narrow* has the protocol's branch or line
 - [ ] *Commands* green, and the sub-persistor seen writing rows
