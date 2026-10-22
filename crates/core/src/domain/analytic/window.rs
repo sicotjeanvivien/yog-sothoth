@@ -25,7 +25,7 @@ impl Window {
         TimeDelta::hours(self.hours().into())
     }
 
-    /// ⚠️ Also the `period` CHECK of migration 029: a new label fails its insert.
+    /// ⚠️ Also the `period` CHECKs of migrations 029 and 034: a new label fails their inserts.
     pub const fn as_str(self) -> &'static str {
         match self {
             Window::Day => "24h",

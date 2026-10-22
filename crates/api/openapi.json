@@ -584,7 +584,7 @@
         "type": "string"
       },
       "ProtocolTvlResponse": {
-        "description": "A protocol's TVL at `at`, the close of the hour it was last measured in;\n`poolsPriced` is its coverage.",
+        "description": "A protocol's TVL at `at`, the close of the hour it was last measured in.",
         "properties": {
           "at": {
             "format": "date-time",
@@ -1163,7 +1163,7 @@
           },
           "items": {
             "items": {
-              "description": "A protocol's TVL at `at`, the close of the hour it was last measured in;\n`poolsPriced` is its coverage.",
+              "description": "A protocol's TVL at `at`, the close of the hour it was last measured in.",
               "properties": {
                 "at": {
                   "format": "date-time",

@@ -44,20 +44,17 @@ export function previousWindowCovered(span: MeasuredSpan): boolean {
 type TvlPoint = { protocol: ProtocolResponse; at: string; tvlUsd: string | null };
 
 /**
- * The protocol's TVL at the window's start, the first point of `/tvl/hourly`. `null` when
- * the TVL was first measured later, the hours before the floor being deleted.
+ * The protocol's TVL a period before its `latest` measure, the start its discovered part was
+ * measured from. `null` when the series has no point there: measured later, or deleted.
  */
 export function tvlStart<T extends TvlPoint>(
   points: readonly T[],
-  from: string | null,
-  protocol: ProtocolResponse,
+  latest: { protocol: ProtocolResponse; at: string },
+  period: Period,
 ): T | null {
-  if (from === null) {
-    return null;
-  }
-  const start = Date.parse(from);
+  const start = Date.parse(latest.at) - periodMs(period);
   return (
-    points.find((p) => p.protocol === protocol && Date.parse(p.at) === start) ??
+    points.find((p) => p.protocol === latest.protocol && Date.parse(p.at) === start) ??
     null
   );
 }

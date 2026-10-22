@@ -110,7 +110,8 @@ in `persistence` (`repositories/analytic.rs`).
   pools Meteora holds that never emitted an event since are out of it: a limit of
   observation, which grows the figure as dormant pools wake.
 - **Discovered part**: with each TVL, for every window — 24 h, 7 and 30 days — the
-  TVL of the pools first seen in it whose `initialize_pool` was not observed. Such a
+  TVL of the pools first seen since the window's start point was last measured (its
+  `from` when there is none) whose `initialize_pool` was not observed. Such a
   pool brings its whole stock in at once; a variation of the TVL leaves it out to
   tell a discovery from a deposit, while a pool born in the window is one.
 - **Periods**: on a cycle that freezes, the distinct pools of each window — 24 h,

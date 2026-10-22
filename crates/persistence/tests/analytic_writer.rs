@@ -602,6 +602,53 @@ async fn a_pool_discovered_in_a_window_counts_in_its_part_and_one_born_there_doe
     );
 }
 
+/// Mutation: the window started at `from`, not at the start point's last measure: the pool
+/// first seen between the two is in neither TVL, and passes for a deposit.
+#[sqlx::test]
+async fn a_pool_first_seen_after_the_start_measure_counts_as_discovered(pool: PgPool) {
+    let now = now();
+    let cycle = cycle_from(now, hours_before(now, 0));
+    let hour = cycle.tvl_hour.unwrap();
+    let from = hour + Duration::hours(1) - Duration::hours(24);
+    sqlx::query(
+        "INSERT INTO analytic_protocol_tvl
+           (protocol, bucket, tvl_usd, pools_priced, pools_unvalued, measured_at)
+         VALUES ('meteora_damm_v2', $1, 720, 1, 0, $2)",
+    )
+    .bind(hour - Duration::hours(24))
+    .bind(from - Duration::minutes(8))
+    .execute(&pool)
+    .await
+    .unwrap();
+    seen_at(&pool, 6, 4, from - Duration::minutes(10)).await;
+    seen_at(&pool, 4, 1, from - Duration::minutes(3)).await;
+
+    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    repository.write_cycle(&cycle).await.unwrap();
+
+    assert_eq!(
+        discovered(&pool, hour).await[0],
+        ("24h".to_owned(), dec("180"), 1)
+    );
+}
+
+/// Mutation: the pools counted from `pools`, one without a current state counted beside
+/// those of the TVL.
+#[sqlx::test]
+async fn a_pool_without_a_current_state_is_not_counted_discovered(pool: PgPool) {
+    let now = now();
+    let cycle = cycle_from(now, hours_before(now, 0));
+    setup_pool(&pool, 9, Some("180.0")).await;
+
+    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    repository.write_cycle(&cycle).await.unwrap();
+
+    assert_eq!(
+        discovered(&pool, cycle.tvl_hour.unwrap()).await[0],
+        ("24h".to_owned(), dec("0"), 0)
+    );
+}
+
 /// Mutation: the windows joined to the pools without `LEFT`, a window without one unwritten.
 #[sqlx::test]
 async fn a_window_without_a_discovered_pool_writes_zero(pool: PgPool) {

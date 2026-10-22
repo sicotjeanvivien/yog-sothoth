@@ -92,8 +92,7 @@ impl From<ProtocolActivityBar> for ProtocolActivityBarResponse {
     }
 }
 
-/// A protocol's TVL at `at`, the close of the hour it was last measured in;
-/// `poolsPriced` is its coverage.
+/// A protocol's TVL at `at`, the close of the hour it was last measured in.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ProtocolTvlResponse {

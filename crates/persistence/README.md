@@ -555,8 +555,9 @@ row per (pool, hour), summed from those tranches; the protocol aggregate summed
 from the facts; the tranches and hours recorded, the hours frozen once closed;
 the protocol TVL, by the rule of `pool_current_tvl`, with its pools unvalued
 counted apart, and the part of it held by the pools discovered in each window
-(`analytic_protocol_tvl_discovered`, 034: first seen in it, their birth unobserved,
-one row per window, 0 included). A tranche is valued once
+(`analytic_protocol_tvl_discovered`, 034: first seen since the window's start point
+was last measured, their birth unobserved, counted among the pools of
+`pool_current_tvl`; one row per window, 0 included). A tranche is valued once
 and a frozen hour never written again, whatever range the cycle was handed:
 the transaction locks `analytic_hours` against any other writer, reads its
 progress, and `CycleWrite::without_written` (`core`) takes out what is done —

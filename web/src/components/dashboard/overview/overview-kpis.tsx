@@ -55,16 +55,14 @@ export async function TvlKpi({ period }: { period: Period }) {
   if (hourly.status === "rejected") {
     sub = <Withheld reason={await failure(hourly.reason)} suffix={suffix} />;
   } else if (current !== null) {
-    const starts = latest.value.items.map((i) =>
-      tvlStart(hourly.value.items, hourly.value.from, i.protocol),
-    );
+    const starts = latest.value.items.map((i) => tvlStart(hourly.value.items, i, period));
     const start = starts.some((s) => s === null)
       ? null
       : sumUsd(starts.map((s) => s?.tvlUsd ?? null));
     const discovered = discoveredTvl(latest.value.items, period);
     const ratio = tvlChange(current, start, discovered);
     sub =
-      ratio !== null && discovered !== null ? (
+      ratio !== null ? (
         <>
           <Change ratio={ratio} suffix={suffix} />
           {" · "}

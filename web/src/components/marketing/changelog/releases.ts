@@ -53,7 +53,7 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "The TVL series starts again: the hours measured under the former price rule are deleted, and the change stays hidden until the new series covers the period.",
+            text: "The TVL series starts again: the hours measured under the former price rule are deleted. The TVL itself shows \"—\" until the first hour measured after this release has closed, about an hour, and its change stays hidden until the new series covers the period.",
             technical: false,
           },
           {
