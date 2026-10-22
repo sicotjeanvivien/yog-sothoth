@@ -33,8 +33,9 @@ export type Release = {
 export const RELEASES: readonly Release[] = [
   {
     version: "v0.1.15",
-    date: "2026-10-21",
-    summary: "Search engines can now find the Overview.",
+    date: "2026-10-22",
+    summary:
+      "Search engines can now find the Overview, and the indexer no longer skips transactions when its stream provider turns a reconnection down for a reason the request did not cause.",
     sections: [
       {
         kind: "features",
@@ -42,6 +43,27 @@ export const RELEASES: readonly Release[] = [
           {
             text: "The Overview is listed in the sitemap, in English and in French, so search engines can index it.",
             technical: false,
+          },
+          {
+            text: "Production can be read by a key that can do nothing else: the state of each service, the daemons' counters and a few counts from the database, as a user with no rights of its own and a sudo rule limited to three exact commands.",
+            technical: true,
+          },
+        ],
+      },
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "When the stream provider refused a reconnection over an expired key, a quota or an incident on its side, the indexer resumed from the latest block, and the transactions in between were never indexed. It now asks again for the block where it stopped, and gives that point up only when the provider says the request itself is at fault.",
+            technical: false,
+          },
+          {
+            text: "Every resume point given up is logged and counted (yog_indexer_grpc_resume_marks_abandoned_total), labelled by the gRPC code that refused it.",
+            technical: true,
+          },
+          {
+            text: "tokio 1.54.1: 1.54.0 was withdrawn from crates.io.",
+            technical: true,
           },
         ],
       },
