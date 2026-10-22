@@ -1,6 +1,6 @@
 ---
 name: add-protocol
-description: Add a new Meteora/AMM protocol (or product) to Yog-Sothoth following the "voie 3" per-protocol pattern. Use when the user wants to support a new on-chain protocol/product end-to-end — new domain events, SQL tables, repositories, indexer sub-persistor, and optional API surface. A map of the recipe in crates/README.md — file paths, order, commands and the checklist; every rule stays in the recipe.
+description: Add a new Meteora/AMM protocol (or product) to Yog-Sothoth following the "voie 3" per-protocol pattern. Use when the user wants to support a new on-chain protocol/product end-to-end — new domain events, SQL tables, repositories, indexer sub-persistor, optional API surface, signals and dashboard wiring. A map of the recipe in crates/README.md — file paths, order, commands and the checklist; every rule stays in the recipe.
 ---
 
 # Add a new protocol (voie 3)
@@ -45,7 +45,6 @@ table is right: add the row here.
 | `From<domain::Protocol>` for `ProtocolResponse` | `crates/api/src/http/dto/response/protocol.rs` |
 | `spot_price_a_in_b` | `crates/signals/src/application/detectors/price_oracle_deviation.rs` |
 | `formatProtocolLabel` | `web/src/lib/format/format-protocol.ts` |
-| `PROTOCOL_OF` | `web/src/components/dashboard/overview/protocol-activity.tsx` |
 
 ## Step 1 — `core`
 
@@ -124,7 +123,8 @@ Rules: *6. In `signals` and `web`*.
 - `crates/signals/src/bootstrap/daemon.rs` — the detectors' instances, if any.
 - `web/src/lib/format/format-protocol.ts` — its row of the table.
 - The menu, if the product shows there: `web/src/components/dashboard/sidebar/sidebar-keys.ts`,
-  `sidebar-nav.ts`, `web/messages/*/dashboard.json`, and the `PROTOCOL_OF` row.
+  `sidebar-nav.ts`, `web/messages/*/dashboard.json`,
+  `web/src/components/dashboard/overview/protocol-activity.tsx` (`PROTOCOL_OF`).
 
 ## Step 7 — Tests
 

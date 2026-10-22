@@ -33,10 +33,13 @@ import {
   SPAN,
 } from "./overview-layout";
 
-/** The menu's products the API knows; a line missing here is never observed. */
-const PROTOCOL_OF: Partial<Record<ScopeLine["key"], ProtocolResponse>> = {
+/** The API protocol behind each menu line; `null` for a platform the API does not cover. */
+const PROTOCOL_OF: Record<ScopeLine["key"], ProtocolResponse | null> = {
   meteoraDammV2: "meteora_damm_v2",
   meteoraDlmm: "meteora_dlmm",
+  meteora: null,
+  raydium: null,
+  orca: null,
 };
 
 // ⚠️ Each row is its own grid: an `auto` or `max-content` column would size per row and the
@@ -103,7 +106,7 @@ export async function ProtocolActivity({ period }: { period: Period }) {
           {PROTOCOL_SCOPE.map((line) => {
             const name = line.labelKeys.map((key) => tNav(key)).join(" ");
             const protocol = PROTOCOL_OF[line.key];
-            if (protocol === undefined || !observed.has(protocol)) {
+            if (protocol === null || !observed.has(protocol)) {
               return (
                 <div key={line.key} role="row" className={`${ROW_CLASS} ${COLUMNS}`}>
                   <div role="cell">

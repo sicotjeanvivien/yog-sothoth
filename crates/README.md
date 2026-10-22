@@ -270,7 +270,7 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 - Give the protocol its arm in `spot_price_a_in_b` (`signals/src/application/detectors/price_oracle_deviation.rs`): its `sqrt_price` decoder, or `None` while it has none — its pools are then counted `no_decoder` (see [`signals/README.md`](./signals/README.md)), not dropped.
 - The flow-imbalance and TVL-drain detectors are built per protocol in `signals/src/bootstrap/daemon.rs`, each with its own settings. A new protocol has neither until it gets its own instances — a choice of thresholds, not a line to copy, and nothing asks for it.
 - Give it its label in `formatProtocolLabel` (`web/src/lib/format/format-protocol.ts`); once the contract is regenerated, `npm run typecheck` asks for it.
-- To show the product in the dashboard menu: its `ProductKey` (`web/src/components/dashboard/sidebar/sidebar-keys.ts`), its entry under its platform in `sidebar-nav.ts` with its label in `web/messages/*/dashboard.json`, and its line in `PROTOCOL_OF` (`web/src/components/dashboard/overview/protocol-activity.tsx`). ⚠️ `PROTOCOL_OF` is partial on purpose — the menu lists platforms the API does not know — so nothing asks for that line: without it, the product's Overview line stays empty.
+- To show the product in the dashboard menu: its `ProductKey` (`web/src/components/dashboard/sidebar/sidebar-keys.ts`), its entry under its platform in `sidebar-nav.ts` with its label in `web/messages/*/dashboard.json`, and its protocol in `PROTOCOL_OF` (`web/src/components/dashboard/overview/protocol-activity.tsx`), which `npm run typecheck` asks for once the `ProductKey` exists.
 
 ### 7. Tests
 
@@ -280,7 +280,7 @@ Add fixture transactions under `core/tests/fixtures/` — they stay in `core`, t
 
 There is no central registry. A protocol is added by writing isolated per-protocol code plus a fixed, short list of dispatch points — one per concern, each a single branch or a single line:
 
-| Dispatch point | Crate | Concern |
+| Dispatch point | In | Concern |
 |---|---|---|
 | `ExtractionDispatcher::extract` | `core` | transaction → events |
 | `ExtractionDispatcher::implemented_protocols` | `core` | whether the ingestion subscribes to it at all |
@@ -291,8 +291,7 @@ There is no central registry. A protocol is added by writing isolated per-protoc
 | `pool_account_resolvers` vec (`bootstrap/daemon.rs`) | `context` | property backfill |
 | `From<domain::Protocol>` in `http/dto/response/protocol.rs` | `api` | protocol name in the contract (then regenerate it) |
 | `spot_price_a_in_b` (`application/detectors/price_oracle_deviation.rs`) | `signals` | `sqrt_price` → spot price, or `None` |
-| `formatProtocolLabel` (`src/lib/format/format-protocol.ts`) | `web` | display label |
-| `PROTOCOL_OF` (`src/components/dashboard/overview/protocol-activity.tsx`) | `web` | the menu line its Overview activity fills |
+| `formatProtocolLabel` (`web/src/lib/format/format-protocol.ts`) | `web` | display label |
 
 The two-level enums (`DomainEvent`, `PoolAccountProperties`) and the switch of `formatProtocolLabel` are matched exhaustively, so adding a variant breaks the build, or the web's typecheck, at each site that must follow instead of silently dropping the protocol.
 
