@@ -80,7 +80,7 @@ impl SlotProgress {
             .block_time
             .and_then(|time| DateTime::from_timestamp(time.timestamp, 0))
         else {
-            log::no_block_time(slot);
+            log::no_block_time(slot, bank);
             return self.buffer.on_slot_unresolvable(slot, bank);
         };
 

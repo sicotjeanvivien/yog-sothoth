@@ -3,6 +3,8 @@
 use tracing::{debug, info, warn};
 use yog_core::CoreError;
 
+use crate::infra::grpc::slot_timestamp_buffer::Bank;
+
 /// A transaction matched no protocol filter and was dropped.
 pub(super) fn unroutable(slot: u64) {
     warn!(
@@ -11,11 +13,12 @@ pub(super) fn unroutable(slot: u64) {
     );
 }
 
-/// A block-meta came without a usable block time; its slot is given up.
-pub(super) fn no_block_time(slot: u64) {
+/// A block-meta came without a usable block time; its bank is given up.
+pub(super) fn no_block_time(slot: u64, bank: Bank) {
     warn!(
         slot,
-        "block-meta carried no usable block time — giving up on the slot"
+        ?bank,
+        "block-meta carried no usable block time — giving up on its bank"
     );
 }
 
