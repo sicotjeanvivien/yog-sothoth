@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO analytic_protocol_tvl_discovered (protocol, period, bucket, tvl_usd, pools)\n        SELECT $2, w.period, $1, COALESCE(SUM(t.tvl_usd), 0), COUNT(t.pool_address)\n          FROM UNNEST($3::TEXT[], $4::INT[]) AS w (period, hours)\n          LEFT JOIN analytic_protocol_tvl s\n                 ON s.protocol = $2 AND s.bucket = $1::TIMESTAMPTZ - make_interval(hours => w.hours)\n          -- ⚠️ From the start point's last measure, not `from`: a pool first seen in between\n          -- would be in neither TVL.\n          LEFT JOIN pools p\n                 ON p.protocol = $2\n                AND p.first_seen_at >= COALESCE(s.measured_at,\n                        $1::TIMESTAMPTZ + INTERVAL '1 hour' - make_interval(hours => w.hours))\n                AND NOT EXISTS (SELECT 1 FROM meteora_damm_v2_initialize_pool_events b\n                                 WHERE b.pool_address = p.pool_address)\n          LEFT JOIN pool_current_tvl t ON t.pool_address = p.pool_address\n         GROUP BY w.period\n        ON CONFLICT (protocol, period, bucket) DO UPDATE SET\n            tvl_usd = EXCLUDED.tvl_usd,\n            pools   = EXCLUDED.pools\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Text",
+        "TextArray",
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5655e32012783324d641e54a9e664b6c9a43082d63b8db8f42da45d525a9f14c"
+}

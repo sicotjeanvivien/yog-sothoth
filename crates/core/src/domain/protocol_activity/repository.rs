@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
-use super::{ProtocolActivity, ProtocolActivityBar, ProtocolTvl};
+use super::{LatestProtocolTvl, ProtocolActivity, ProtocolActivityBar, ProtocolTvl};
 use crate::RepositoryResult;
 use crate::domain::{FrozenHours, Span, Window};
 
@@ -27,8 +27,9 @@ pub trait ProtocolActivityLookup: Send + Sync {
     /// a bar the facts do not hold whole is left out.
     async fn activity_daily(&self, span: &Span) -> RepositoryResult<Vec<ProtocolActivityBar>>;
 
-    /// Each protocol's last TVL measured at or before the hour `last`.
-    async fn tvl_latest(&self, last: DateTime<Utc>) -> RepositoryResult<Vec<ProtocolTvl>>;
+    /// Each protocol's last TVL measured at or before the hour `last`, with the
+    /// discovered parts measured with it.
+    async fn tvl_latest(&self, last: DateTime<Utc>) -> RepositoryResult<Vec<LatestProtocolTvl>>;
 
     /// The TVL measured at each hour from `first` through `last`, oldest first.
     async fn tvl_hourly(

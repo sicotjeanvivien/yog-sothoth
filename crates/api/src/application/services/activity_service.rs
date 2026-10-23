@@ -7,8 +7,9 @@ use chrono::TimeDelta;
 use yog_core::{
     Page, RepositoryResult,
     domain::{
-        FrozenHours, ProtocolActivity, ProtocolActivityBar, ProtocolActivityLookup, ProtocolTvl,
-        Span, TokenActivity, TokenActivityCursor, TokenActivityFeed, Window,
+        FrozenHours, LatestProtocolTvl, ProtocolActivity, ProtocolActivityBar,
+        ProtocolActivityLookup, ProtocolTvl, Span, TokenActivity, TokenActivityCursor,
+        TokenActivityFeed, Window,
     },
 };
 
@@ -87,7 +88,7 @@ impl ActivityService {
 
     /// Each protocol's last TVL measured by the last frozen hour; its span is a
     /// day, of which only `as_of` counts.
-    pub(crate) async fn protocol_tvl(&self) -> RepositoryResult<Measured<Vec<ProtocolTvl>>> {
+    pub(crate) async fn protocol_tvl(&self) -> RepositoryResult<Measured<Vec<LatestProtocolTvl>>> {
         let span = self.span(Window::Day, None).await?;
         let items = match &span {
             Some(span) => self.protocols.tvl_latest(span.last_hour()).await?,

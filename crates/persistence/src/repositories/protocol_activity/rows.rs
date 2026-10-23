@@ -2,11 +2,13 @@ use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use yog_core::{
     RepositoryError, RepositoryResult,
-    domain::{ProtocolActivity, ProtocolActivityBar, ProtocolTvl},
+    domain::{
+        DiscoveredTvl, LatestProtocolTvl, ProtocolActivity, ProtocolActivityBar, ProtocolTvl,
+    },
 };
 
 use crate::repositories::helper::{
-    convert_bigdecimal_to_decimal, convert_optional, parse_protocol,
+    convert_bigdecimal_to_decimal, convert_optional, parse_protocol, parse_window,
 };
 
 pub(super) struct ProtocolActivityRow {
@@ -38,6 +40,20 @@ pub(super) struct ProtocolTvlRow {
     pub(super) at: DateTime<Utc>,
     pub(super) tvl_usd: Option<BigDecimal>,
     pub(super) pools_priced: i64,
+    pub(super) pools_unvalued: i64,
+}
+
+/// A protocol's last TVL row, once per discovered part measured with it; the
+/// `discovered_*` columns are `None` together, on a TVL row without any.
+pub(super) struct LatestProtocolTvlRow {
+    pub(super) protocol: String,
+    pub(super) at: DateTime<Utc>,
+    pub(super) tvl_usd: Option<BigDecimal>,
+    pub(super) pools_priced: i64,
+    pub(super) pools_unvalued: i64,
+    pub(super) discovered_period: Option<String>,
+    pub(super) discovered_usd: Option<BigDecimal>,
+    pub(super) discovered_pools: Option<i64>,
 }
 
 fn usd(value: Option<BigDecimal>, field: &str) -> RepositoryResult<Option<rust_decimal::Decimal>> {
@@ -89,6 +105,55 @@ impl TryFrom<ProtocolTvlRow> for ProtocolTvl {
             at: row.at,
             tvl_usd: usd(row.tvl_usd, "tvl_usd")?,
             pools_priced: row.pools_priced,
+            pools_unvalued: row.pools_unvalued,
         })
     }
+}
+
+/// Folds the rows of [`LatestProtocolTvlRow`], ordered by protocol, into one TVL each.
+pub(super) fn fold_latest(
+    rows: Vec<LatestProtocolTvlRow>,
+) -> RepositoryResult<Vec<LatestProtocolTvl>> {
+    let mut latest: Vec<LatestProtocolTvl> = Vec::new();
+    for row in rows {
+        let discovered = match (
+            row.discovered_period,
+            row.discovered_usd,
+            row.discovered_pools,
+        ) {
+            (Some(period), Some(tvl_usd), Some(pools)) => Some(DiscoveredTvl {
+                window: parse_window(&period)?,
+                tvl_usd: convert_bigdecimal_to_decimal(tvl_usd, "discovered_usd")?,
+                pools,
+            }),
+            (None, None, None) => None,
+            _ => {
+                return Err(RepositoryError::Integrity(
+                    "a discovered part read without all of its columns".to_owned(),
+                ));
+            }
+        };
+        let protocol = parse_protocol(&row.protocol)?;
+        let current = match latest.last_mut() {
+            Some(last) if last.tvl.protocol == protocol => last,
+            _ => {
+                latest.push(LatestProtocolTvl {
+                    tvl: ProtocolTvl {
+                        protocol,
+                        at: row.at,
+                        tvl_usd: usd(row.tvl_usd, "tvl_usd")?,
+                        pools_priced: row.pools_priced,
+                        pools_unvalued: row.pools_unvalued,
+                    },
+                    discovered: Vec::new(),
+                });
+                latest.last_mut().expect("just pushed")
+            }
+        };
+        current.discovered.extend(discovered);
+    }
+    for tvl in &mut latest {
+        tvl.discovered.sort_by_key(|d| d.window.hours());
+    }
+    Ok(latest)
 }

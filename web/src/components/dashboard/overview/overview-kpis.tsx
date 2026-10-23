@@ -20,7 +20,14 @@ import { formatTimes } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { previousWindowCovered, tvlStart } from "@/lib/overview/availability";
 import type { Period } from "@/lib/overview/period";
-import { changeRatio, rotation, sumUsd, swapsPerSecond } from "@/lib/overview/totals";
+import {
+  changeRatio,
+  discoveredTvl,
+  rotation,
+  sumUsd,
+  swapsPerSecond,
+  tvlChange,
+} from "@/lib/overview/totals";
 
 import { Change, closedReason, KpiCell, Unavailable, utcMoment } from "./overview-parts";
 import { KpiFailedLine, KpiSkeleton, lateStamp } from "./overview-states";
@@ -48,18 +55,23 @@ export async function TvlKpi({ period }: { period: Period }) {
   if (hourly.status === "rejected") {
     sub = <Withheld reason={await failure(hourly.reason)} suffix={suffix} />;
   } else if (current !== null) {
-    const starts = latest.value.items.map((i) =>
-      tvlStart(hourly.value.items, hourly.value.from, i.protocol),
-    );
+    const starts = latest.value.items.map((i) => tvlStart(hourly.value.items, i, period));
     const start = starts.some((s) => s === null)
       ? null
       : sumUsd(starts.map((s) => s?.tvlUsd ?? null));
-    const ratio = changeRatio(current, start);
+    const discovered = discoveredTvl(latest.value.items, period);
+    const ratio = tvlChange(current, start, discovered);
     sub =
       ratio !== null ? (
-        <Change ratio={ratio} suffix={suffix} />
+        <>
+          <Change ratio={ratio} suffix={suffix} />
+          {" · "}
+          {t("kpis.tvlDiscovered", { amount: usd(discovered) })}
+        </>
       ) : start === null ? (
         <Withheld reason={t("unavailable.tvlStart")} suffix={suffix} />
+      ) : discovered === null ? (
+        <Withheld reason={t("unavailable.tvlDiscovered")} suffix={suffix} />
       ) : undefined;
   }
 

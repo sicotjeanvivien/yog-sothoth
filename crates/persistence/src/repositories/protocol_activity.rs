@@ -6,13 +6,15 @@ mod rows;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use rows::{ProtocolActivityBarRow, ProtocolActivityRow, ProtocolTvlRow};
+use rows::{
+    LatestProtocolTvlRow, ProtocolActivityBarRow, ProtocolActivityRow, ProtocolTvlRow, fold_latest,
+};
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
     domain::{
-        FrozenHours, ProtocolActivity, ProtocolActivityBar, ProtocolActivityLookup, ProtocolTvl,
-        Span, Window,
+        FrozenHours, LatestProtocolTvl, ProtocolActivity, ProtocolActivityBar,
+        ProtocolActivityLookup, ProtocolTvl, Span, Window,
     },
 };
 
@@ -169,15 +171,27 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
             .collect()
     }
 
-    async fn tvl_latest(&self, last: DateTime<Utc>) -> RepositoryResult<Vec<ProtocolTvl>> {
+    async fn tvl_latest(&self, last: DateTime<Utc>) -> RepositoryResult<Vec<LatestProtocolTvl>> {
+        // ⚠️ The parts joined on the TVL row's own hour: a part of another hour splits another TVL.
         let rows = sqlx::query_as!(
-            ProtocolTvlRow,
+            LatestProtocolTvlRow,
             r#"
-            SELECT DISTINCT ON (protocol)
-                   protocol, bucket + INTERVAL '1 hour' AS "at!", tvl_usd, pools_priced
-              FROM analytic_protocol_tvl
-             WHERE bucket <= $1
-             ORDER BY protocol, bucket DESC
+            WITH latest AS (
+                SELECT DISTINCT ON (protocol)
+                       protocol, bucket, tvl_usd, pools_priced, pools_unvalued
+                  FROM analytic_protocol_tvl
+                 WHERE bucket <= $1
+                 ORDER BY protocol, bucket DESC
+            )
+            SELECT l.protocol AS "protocol!", l.bucket + INTERVAL '1 hour' AS "at!",
+                   l.tvl_usd, l.pools_priced AS "pools_priced!",
+                   l.pools_unvalued AS "pools_unvalued!",
+                   d.period AS "discovered_period?", d.tvl_usd AS "discovered_usd?",
+                   d.pools AS "discovered_pools?"
+              FROM latest l
+              LEFT JOIN analytic_protocol_tvl_discovered d
+                     ON d.protocol = l.protocol AND d.bucket = l.bucket
+             ORDER BY l.protocol
             "#,
             last,
         )
@@ -185,7 +199,7 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
         .await
         .map_err(map_sqlx_error)?;
 
-        rows.into_iter().map(ProtocolTvl::try_from).collect()
+        fold_latest(rows)
     }
 
     async fn tvl_hourly(
@@ -196,7 +210,8 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
         let rows = sqlx::query_as!(
             ProtocolTvlRow,
             r#"
-            SELECT protocol, bucket + INTERVAL '1 hour' AS "at!", tvl_usd, pools_priced
+            SELECT protocol, bucket + INTERVAL '1 hour' AS "at!", tvl_usd, pools_priced,
+                   pools_unvalued
               FROM analytic_protocol_tvl
              WHERE bucket BETWEEN $1 AND $2
              ORDER BY bucket, protocol

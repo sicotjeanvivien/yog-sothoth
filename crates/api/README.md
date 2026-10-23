@@ -113,7 +113,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/protocols` | Every protocol of the domain: observed by this build or not, pools seen — the catalogue, live |
 | `GET` | `/api/protocols/activity` | Per protocol over `?window=24h\|7d\|30d` (`?offset=` for the previous one): volume, fees and their shares, swaps, distinct active pools, births, pool-hours and the valued ones |
 | `GET` | `/api/protocols/activity/hourly`, `/daily` | The same flows per protocol and bar: an hour, or 24 hours ending at `asOf` |
-| `GET` | `/api/protocols/tvl` | Per protocol, the TVL of the last frozen hour |
+| `GET` | `/api/protocols/tvl` | Per protocol, the TVL of the last frozen hour and, for each window, the part its discovered pools hold |
 | `GET` | `/api/protocols/tvl/hourly` | Per protocol, the TVL at the close of every hour from the window's start |
 | `GET` | `/api/tokens/activity` | Tokens by volume over `?window=`, identity embedded, forward-only cursor; a swap counts for both its tokens |
 | `GET` | `/api/tokens/{mint}` | Token metadata + latest price (200 with `price: null` if no price yet) |
@@ -127,7 +127,9 @@ ends at the close of the last frozen hour, `asOf`, the same for every route, and
 no read counts an open hour. Each response carries `from`, `asOf` and
 `coveredSince`, the first hour of the facts: a total whose window starts before
 it returns no row rather than a partial sum; a series returns the bars the facts
-hold whole. The TVL is each protocol's last measure by that hour, its `at` said.
+hold whole. The TVL is each protocol's last measure by that hour, its `at` said,
+with the part of it held by the pools discovered in each window, measured with it
+(a window without its part was not measured: the web then withholds the change).
 The tokens are the exception to one read of the frozen hours: their span ends at
 the hour of the ranking read with them, which each freeze rewrites whole — a
 cursor carries that hour, and one taken before a freeze is refused (400).

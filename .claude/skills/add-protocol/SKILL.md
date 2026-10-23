@@ -87,8 +87,8 @@ Rules: *2. In `persistence`*; the migration itself with `/add-migration`.
 - The satellite's resolver — template `repositories/meteora/dlmm/pool_properties.rs`
   (`PgMeteoraDlmmPoolPropertiesRepository`, implementing `PoolAccountResolver`).
 - `crates/persistence/src/repositories/analytic/<protocol>.rs` and its `.sql` — template
-  `analytic/meteora_damm_v2.rs` (`upsert_births`) and `meteora_damm_v2_tranche.sql`; its
-  row of the table.
+  `analytic/meteora_damm_v2.rs` (`upsert_births`, `measure_discovered_tvl`) and
+  `meteora_damm_v2_tranche.sql`; its row of the table.
 - `crates/persistence/src/lib.rs` — the re-exports.
 - `crates/persistence/.sqlx/` — regenerated, see *Commands*.
 

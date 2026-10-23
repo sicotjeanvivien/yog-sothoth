@@ -4,7 +4,7 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
-use crate::domain::Protocol;
+use crate::domain::{Protocol, Window};
 
 /// One protocol over a span. The USD sums skip the unvalued pool-hours, which
 /// `pool_hours - pool_hours_valued` counts.
@@ -36,11 +36,28 @@ pub struct ProtocolActivityBar {
     pub pool_hours_valued: i64,
 }
 
-/// One protocol's TVL as last measured during the hour that closes at `at`.
+/// One protocol's TVL as last measured during the hour that closes at `at`: its pools
+/// valued by their priced sides; `pools_unvalued` counts those with no side valued.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolTvl {
     pub protocol: Protocol,
     pub at: DateTime<Utc>,
     pub tvl_usd: Option<Decimal>,
     pub pools_priced: i64,
+    pub pools_unvalued: i64,
+}
+
+/// The part of a TVL held by the pools first seen in `window`, their birth unobserved.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiscoveredTvl {
+    pub window: Window,
+    pub tvl_usd: Decimal,
+    pub pools: i64,
+}
+
+/// The last TVL of a protocol, with its discovered part for each window measured.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LatestProtocolTvl {
+    pub tvl: ProtocolTvl,
+    pub discovered: Vec<DiscoveredTvl>,
 }

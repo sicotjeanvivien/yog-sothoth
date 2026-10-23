@@ -32,6 +32,39 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.1.16",
+    date: "2026-10-23",
+    summary:
+      "The TVL now says what it counts: no pool drops out because one of its tokens has no price, and its change no longer takes a pool seen for the first time for a deposit.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "A pool with one token without a market price dropped out of the TVL whole, with the value of its other side. That side now counts, the token without a price counting 0, as Meteora does.",
+            technical: false,
+          },
+          {
+            text: "A dormant pool touched for the first time brought its whole stock into the TVL, and its change showed it as a deposit. The change now leaves out the pools discovered during the period, and says how much they hold; a pool born during the period still counts as a deposit.",
+            technical: false,
+          },
+          {
+            text: "The TVL's tooltip says what it counts: the pools observed since 1 October 2026, at Jupiter prices under 15 minutes old, a token without a price at 0 — and what it does not measure, the liquidity that can be traded.",
+            technical: false,
+          },
+          {
+            text: "The TVL series starts again: the hours measured under the former price rule are deleted. The TVL itself shows \"—\" until the first hour measured after this release has closed, about an hour, and its change stays hidden until the new series covers the period.",
+            technical: false,
+          },
+          {
+            text: "The tvl_drain detector keeps reading a pool's TVL only when both of its sides are priced (pool_current_tvl.tvl_complete_usd): a drain over half a pool would be overstated.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.1.15",
     date: "2026-10-22",
     summary:

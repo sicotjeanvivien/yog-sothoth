@@ -1,0 +1,107 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH latest AS (\n                SELECT DISTINCT ON (protocol)\n                       protocol, bucket, tvl_usd, pools_priced, pools_unvalued\n                  FROM analytic_protocol_tvl\n                 WHERE bucket <= $1\n                 ORDER BY protocol, bucket DESC\n            )\n            SELECT l.protocol AS \"protocol!\", l.bucket + INTERVAL '1 hour' AS \"at!\",\n                   l.tvl_usd, l.pools_priced AS \"pools_priced!\",\n                   l.pools_unvalued AS \"pools_unvalued!\",\n                   d.period AS \"discovered_period?\", d.tvl_usd AS \"discovered_usd?\",\n                   d.pools AS \"discovered_pools?\"\n              FROM latest l\n              LEFT JOIN analytic_protocol_tvl_discovered d\n                     ON d.protocol = l.protocol AND d.bucket = l.bucket\n             ORDER BY l.protocol\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "protocol"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "at!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "tvl_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "tvl_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "pools_priced!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "pools_priced"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "pools_unvalued!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "pools_unvalued"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "discovered_period?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl_discovered",
+            "name": "period"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "discovered_usd?",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl_discovered",
+            "name": "tvl_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "discovered_pools?",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl_discovered",
+            "name": "pools"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3e87a910fc23cfb9553326df179d3edb63d1935c52b99a552e6d05b525bc1b32"
+}

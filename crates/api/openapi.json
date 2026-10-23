@@ -75,6 +75,26 @@
         "minimum": 0,
         "type": "integer"
       },
+      "DiscoveredTvlResponse": {
+        "description": "The part of `tvlUsd` held by the pools first seen in `period`, their birth unobserved.",
+        "properties": {
+          "period": {
+            "$ref": "#/components/schemas/WindowResponse"
+          },
+          "pools": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "tvlUsd": {
+            "$ref": "#/components/schemas/UnsignedDecimal"
+          }
+        },
+        "required": [
+          "period",
+          "tvlUsd",
+          "pools"
+        ],
+        "type": "object"
+      },
       "EmbeddedTokenResponse": {
         "description": "A token, embedded in another resource's response.",
         "properties": {
@@ -155,6 +175,52 @@
         ],
         "type": "object"
       },
+      "LatestProtocolTvlResponse": {
+        "description": "A protocol's last TVL, with its discovered part for each period measured.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "discovered": {
+            "description": "One per period measured with this TVL; a period missing was not measured.",
+            "items": {
+              "$ref": "#/components/schemas/DiscoveredTvlResponse"
+            },
+            "type": "array"
+          },
+          "poolsPriced": {
+            "$ref": "#/components/schemas/Count",
+            "description": "Pools with at least one side valued, a side without a price counting 0."
+          },
+          "poolsUnvalued": {
+            "$ref": "#/components/schemas/Count",
+            "description": "Pools with no side valued, out of `tvlUsd`."
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          },
+          "tvlUsd": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "protocol",
+          "at",
+          "poolsPriced",
+          "poolsUnvalued",
+          "discovered",
+          "tvlUsd"
+        ],
+        "type": "object"
+      },
       "LatestTvlResponse": {
         "description": "The TVL of every protocol at the close of the last frozen hour.",
         "properties": {
@@ -168,7 +234,7 @@
           },
           "items": {
             "items": {
-              "$ref": "#/components/schemas/ProtocolTvlResponse"
+              "$ref": "#/components/schemas/LatestProtocolTvlResponse"
             },
             "type": "array"
           }
@@ -518,14 +584,19 @@
         "type": "string"
       },
       "ProtocolTvlResponse": {
-        "description": "A protocol's TVL at `at`, the close of the hour it was last measured in;\n`poolsPriced` is its coverage.",
+        "description": "A protocol's TVL at `at`, the close of the hour it was last measured in.",
         "properties": {
           "at": {
             "format": "date-time",
             "type": "string"
           },
           "poolsPriced": {
-            "$ref": "#/components/schemas/Count"
+            "$ref": "#/components/schemas/Count",
+            "description": "Pools with at least one side valued, a side without a price counting 0."
+          },
+          "poolsUnvalued": {
+            "$ref": "#/components/schemas/Count",
+            "description": "Pools with no side valued, out of `tvlUsd`."
           },
           "protocol": {
             "$ref": "#/components/schemas/ProtocolResponse"
@@ -545,6 +616,7 @@
           "protocol",
           "at",
           "poolsPriced",
+          "poolsUnvalued",
           "tvlUsd"
         ],
         "type": "object"
@@ -1091,14 +1163,19 @@
           },
           "items": {
             "items": {
-              "description": "A protocol's TVL at `at`, the close of the hour it was last measured in;\n`poolsPriced` is its coverage.",
+              "description": "A protocol's TVL at `at`, the close of the hour it was last measured in.",
               "properties": {
                 "at": {
                   "format": "date-time",
                   "type": "string"
                 },
                 "poolsPriced": {
-                  "$ref": "#/components/schemas/Count"
+                  "$ref": "#/components/schemas/Count",
+                  "description": "Pools with at least one side valued, a side without a price counting 0."
+                },
+                "poolsUnvalued": {
+                  "$ref": "#/components/schemas/Count",
+                  "description": "Pools with no side valued, out of `tvlUsd`."
                 },
                 "protocol": {
                   "$ref": "#/components/schemas/ProtocolResponse"
@@ -1118,6 +1195,7 @@
                 "protocol",
                 "at",
                 "poolsPriced",
+                "poolsUnvalued",
                 "tvlUsd"
               ],
               "type": "object"
