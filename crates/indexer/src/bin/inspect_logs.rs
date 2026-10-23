@@ -33,14 +33,14 @@ async fn main() -> Result<()> {
         .context("failed to connect to RPC WebSocket")?;
     eprintln!("# Connected.");
 
-    // Every log mentioning the DAMM v2 program, at the indexer's `confirmed` commitment.
+    // Every log mentioning the DAMM v2 program, at the indexer's `finalized` commitment.
     let subscribe = json!({
         "jsonrpc": "2.0",
         "id": 1,
         "method": "logsSubscribe",
         "params": [
             { "mentions": [DAMM_V2_PROGRAM_ID] },
-            { "commitment": "confirmed" }
+            { "commitment": "finalized" }
         ]
     });
 

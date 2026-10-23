@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use tokio::time::Instant;
 
-/// How long the listener waits for an answer to `subscribe`, or for a block-meta (one per ~400 ms
-/// slot), before ending the attempt as stalled.
+/// How long the listener waits for an answer to `subscribe`, or for a block-meta, before ending
+/// the attempt as stalled.
 /// ⚠️ A server can stop delivering and keep pinging (`rpcpool/yellowstone-grpc` #25, #175).
 pub(crate) const STALL_TIMEOUT: Duration = Duration::from_secs(30);
 

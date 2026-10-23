@@ -9,11 +9,12 @@ use super::{ping_answer::PING_REPLY_ID, slot_progress::REWIND_SLOTS};
 use metrics_util::debugging::{DebugValue, DebuggingRecorder};
 use tokio_util::sync::CancellationToken;
 use yellowstone_grpc_proto::prelude::{
-    SubscribeRequestPing, SubscribeUpdatePing, SubscribeUpdatePong,
+    SlotStatus, SubscribeRequestPing, SubscribeUpdatePing, SubscribeUpdatePong,
 };
 
 use crate::infra::grpc::test_fixtures::{
-    PROTOCOL, Snapshot, at, block_meta, ping, transaction, transaction_update_with_signature,
+    PROTOCOL, Snapshot, at, block_meta, block_meta_in_bank, gauge_for, ping, slot_finalized,
+    slot_status, transaction, transaction_in_bank, transaction_update_with_signature,
     unroutable_transaction, update,
 };
 
@@ -67,6 +68,7 @@ async fn a_transaction_waits_for_its_block_time_and_leaves_with_it() {
          a unique-key member and the partitioning column"
     );
 
+    session.handle(slot_finalized(10, None)).await;
     session.handle(block_meta(10, Some(1_700_000_000))).await;
 
     let ingested = downstream.try_recv().expect("released by its block-meta");
@@ -88,6 +90,7 @@ async fn a_transaction_waits_for_its_block_time_and_leaves_with_it() {
 async fn a_transaction_arriving_after_its_block_meta_leaves_at_once() {
     let (mut session, mut downstream, _outbound) = session(4);
 
+    session.handle(slot_finalized(10, None)).await;
     session.handle(block_meta(10, Some(1_700_000_000))).await;
     session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
 
@@ -102,6 +105,7 @@ async fn a_block_meta_without_a_time_gives_up_the_slot() {
     let (mut session, mut downstream, _outbound) = session(4);
 
     session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
+    session.handle(slot_finalized(10, None)).await;
     session.handle(block_meta(10, None)).await;
 
     assert!(
@@ -117,6 +121,122 @@ async fn a_block_meta_without_a_time_gives_up_the_slot() {
     );
 }
 
+// ── banks ───────────────────────────────────────────────────────────
+
+const BANK_ID_MISSING: &str = "yog_indexer_grpc_bank_id_missing";
+
+/// Drain what reached the consumer, by signature's first byte.
+fn drain_signatures(downstream: &mut mpsc::Receiver<IngestedTransaction>) -> Vec<u8> {
+    std::iter::from_fn(|| downstream.try_recv().ok())
+        .map(|ingested| ingested.transaction.position.signature.as_ref()[0])
+        .collect()
+}
+
+/// Alchemy's shape: nothing names a bank. Against a fallback that drops the slot, or a gauge left unset.
+#[test]
+fn a_status_naming_no_bank_pairs_its_slot_by_slot_and_raises_the_gauge() {
+    let (delivered, snapshot) = counted(async {
+        let (mut session, mut downstream, _outbound) = session(4);
+        session.handle(slot_finalized(10, None)).await;
+        session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
+        session.handle(block_meta(10, Some(1_700_000_000))).await;
+        drain_signatures(&mut downstream).len()
+    });
+
+    assert_eq!(delivered, 1);
+    assert_eq!(gauge_for(&snapshot, BANK_ID_MISSING), Some(1.0));
+}
+
+/// Against a key back to the slot alone: the transaction of bank 6 would reach the consumer.
+#[test]
+fn a_server_naming_banks_lets_only_the_kept_banks_transactions_through() {
+    let (delivered, snapshot) = counted(async {
+        let (mut session, mut downstream, _outbound) = session(4);
+        session
+            .handle(transaction_in_bank(10, 5, vec![5; 64]))
+            .await;
+        session
+            .handle(transaction_in_bank(10, 6, vec![6; 64]))
+            .await;
+        session
+            .handle(block_meta_in_bank(10, 5, Some(1_700_000_000)))
+            .await;
+        session
+            .handle(block_meta_in_bank(10, 6, Some(1_700_000_001)))
+            .await;
+        session.handle(slot_finalized(10, Some(5))).await;
+        drain_signatures(&mut downstream)
+    });
+
+    assert_eq!(delivered, vec![5], "bank 5's transaction alone");
+    assert_eq!(
+        gauge_for(&snapshot, BANK_ID_MISSING),
+        Some(0.0),
+        "every message named its bank"
+    );
+}
+
+/// Against a 0 read as a bank of its own: every transaction of a half-filling server would be
+/// dropped as losing. The bank-less message also raises the gauge for the rest of the session.
+#[test]
+fn a_transaction_naming_bank_0_is_paired_with_the_kept_bank() {
+    let (delivered, snapshot) = counted(async {
+        let (mut session, mut downstream, _outbound) = session(4);
+        session.handle(slot_finalized(10, Some(5))).await;
+        session
+            .handle(transaction_in_bank(10, 0, vec![7; 64]))
+            .await;
+        session
+            .handle(block_meta_in_bank(10, 5, Some(1_700_000_000)))
+            .await;
+        drain_signatures(&mut downstream)
+    });
+
+    assert_eq!(delivered, vec![7]);
+    assert_eq!(gauge_for(&snapshot, BANK_ID_MISSING), Some(1.0));
+}
+
+/// Against a settlement on any status: a `Confirmed` one would let out what `finalized` holds.
+#[tokio::test]
+async fn a_status_other_than_finalized_releases_nothing() {
+    let (mut session, mut downstream, _outbound) = session(4);
+
+    session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
+    session
+        .handle(slot_status(10, SlotStatus::SlotConfirmed, None))
+        .await;
+    session.handle(block_meta(10, Some(1_700_000_000))).await;
+
+    assert!(downstream.try_recv().is_err());
+}
+
+/// Against a status counted as `other`, the label that says the request and the reader disagree.
+#[test]
+fn a_status_is_data_counted_under_its_own_kind() {
+    let (received, snapshot) = counted(async {
+        let (mut session, _downstream, _outbound) = session(4);
+        session.handle(slot_finalized(10, None)).await;
+        session.received_data()
+    });
+
+    assert!(
+        received,
+        "a status is the server delivering, not a keep-alive"
+    );
+    let kind = |kind: &str| {
+        snapshot.iter().find_map(|(key, _, _, value)| {
+            (key.key().name() == "yog_indexer_grpc_updates_total"
+                && key
+                    .key()
+                    .labels()
+                    .any(|l| l.key() == "kind" && l.value() == kind))
+            .then_some(value)
+        })
+    };
+    assert_eq!(kind("slot"), Some(&DebugValue::Counter(1)));
+    assert_eq!(kind("other"), None);
+}
+
 // ── routing and skip-and-log ────────────────────────────────────────
 
 /// A transaction that matched no protocol filter is dropped, not guessed at.
@@ -125,6 +245,7 @@ async fn a_transaction_matching_no_protocol_filter_is_dropped() {
     let (mut session, mut downstream, _outbound) = session(4);
 
     session.handle(unroutable_transaction(10)).await;
+    session.handle(slot_finalized(10, None)).await;
     session.handle(block_meta(10, Some(1_700_000_000))).await;
 
     assert!(downstream.try_recv().is_err());
@@ -143,6 +264,7 @@ async fn a_transaction_that_cannot_be_translated_does_not_stop_the_stream() {
     );
     assert_eq!(session.handle(malformed).await, SessionState::Open);
     session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
+    session.handle(slot_finalized(10, None)).await;
     session.handle(block_meta(10, Some(1_700_000_000))).await;
 
     let ingested = downstream.try_recv().expect("the sound one still arrives");
@@ -168,6 +290,7 @@ fn a_malformed_transaction_and_an_unroutable_one_are_counted_apart() {
                 UpdateOneof::Transaction(transaction_update_with_signature(10, vec![7; 63])),
             ))
             .await;
+        session.handle(slot_finalized(10, None)).await;
         session.handle(block_meta(10, Some(1_700_000_000))).await;
 
         // Unroutable: perfectly well-formed, matching no protocol.
@@ -235,6 +358,7 @@ async fn a_full_downstream_slows_the_stream_instead_of_dropping() {
     session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
 
     // Blocks on the second payload until the consumer takes the first: the behaviour under test.
+    session.handle(slot_finalized(10, None)).await;
     let handling = tokio::spawn(async move {
         session.handle(block_meta(10, Some(1_700_000_000))).await;
         session
@@ -270,6 +394,7 @@ async fn a_closed_downstream_ends_the_session() {
 
     session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
 
+    session.handle(slot_finalized(10, None)).await;
     assert_eq!(
         session.handle(block_meta(10, Some(1_700_000_000))).await,
         SessionState::DownstreamClosed
@@ -337,6 +462,7 @@ async fn a_ping_during_a_replay_leaves_it_alone() {
         "a ping releases nothing — the payload is still waiting for its block time"
     );
 
+    session.handle(slot_finalized(10, None)).await;
     session.handle(block_meta(10, Some(1_700_000_000))).await;
     let ingested = downstream
         .try_recv()
@@ -448,6 +574,7 @@ async fn the_resume_point_is_the_oldest_slot_the_session_did_not_finish() {
 
     // Slot 10 is closed by its block-meta: finished.
     session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
+    session.handle(slot_finalized(10, None)).await;
     session.handle(block_meta(10, Some(1_700_000_000))).await;
     assert_eq!(
         session.resume_from(),
@@ -523,10 +650,11 @@ async fn only_a_block_meta_moves_the_block_meta_count() {
         .await;
     session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
     session.handle(unroutable_transaction(11)).await;
+    session.handle(slot_finalized(10, None)).await;
     assert_eq!(
         session.block_metas_received(),
         0,
-        "pings, pongs and transactions say nothing about whether block-metas still flow"
+        "pings, pongs, statuses and transactions say nothing about whether block-metas still flow"
     );
 
     session.handle(block_meta(10, Some(1_700_000_000))).await;
@@ -571,6 +699,7 @@ async fn a_shutdown_reaches_a_session_parked_on_a_full_consumer() {
     session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
     session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
 
+    session.handle(slot_finalized(10, None)).await;
     let handling =
         tokio::spawn(async move { session.handle(block_meta(10, Some(1_700_000_000))).await });
 

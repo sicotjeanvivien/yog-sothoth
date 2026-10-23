@@ -10,12 +10,13 @@ mod slot_progress;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use yellowstone_grpc_proto::prelude::{
-    SubscribeRequest, SubscribeUpdate, SubscribeUpdateBlockMeta, SubscribeUpdateTransaction,
-    subscribe_update::UpdateOneof,
+    SubscribeRequest, SubscribeUpdate, SubscribeUpdateTransaction, subscribe_update::UpdateOneof,
 };
 use yog_core::domain::Protocol;
 
-use crate::application::source::IngestedTransaction;
+use crate::{
+    application::source::IngestedTransaction, infra::grpc::slot_timestamp_buffer::Resolved,
+};
 
 use super::{
     metrics::{DropReason, GrpcListenerMetrics, UpdateKind},
@@ -44,7 +45,7 @@ pub(super) struct StreamSession {
     slots: SlotProgress,
     delivery: Delivery,
     pings: PingAnswer,
-    /// Whether a transaction or a block-meta came off the stream; see [`Self::received_data`].
+    /// Whether a data message came off the stream; see [`Self::received_data`].
     received_data: bool,
     /// See [`Self::block_metas_received`].
     block_metas: u64,
@@ -65,7 +66,7 @@ impl StreamSession {
         }
     }
 
-    /// Whether a transaction or a block-meta came; one with neither is charged to the retry budget.
+    /// Whether a data message came; a session with none is charged to the retry budget.
     /// ⚠️ A ping does not count: servers ping right after `subscribe`, so a stream that pings and
     /// closes would otherwise reset the budget and be redialled once a second for ever.
     pub(super) fn received_data(&self) -> bool {
@@ -98,7 +99,14 @@ impl StreamSession {
                 GrpcListenerMetrics::record_update(UpdateKind::BlockMeta);
                 self.received_data = true;
                 self.block_metas += 1;
-                self.on_block_meta(meta).await
+                let released = self.slots.on_block_meta(meta);
+                self.deliver_all(released).await
+            }
+            Some(UpdateOneof::Slot(status)) => {
+                GrpcListenerMetrics::record_update(UpdateKind::Slot);
+                self.received_data = true;
+                let released = self.slots.on_slot_status(status);
+                self.deliver_all(released).await
             }
             Some(UpdateOneof::Ping(_)) => {
                 GrpcListenerMetrics::record_update(UpdateKind::Ping);
@@ -140,8 +148,8 @@ impl StreamSession {
         }
     }
 
-    async fn on_block_meta(&mut self, meta: SubscribeUpdateBlockMeta) -> SessionState {
-        for resolved in self.slots.on_block_meta(meta) {
+    async fn deliver_all(&mut self, released: Vec<Resolved<PendingTransaction>>) -> SessionState {
+        for resolved in released {
             match self.delivery.deliver(resolved.payload, resolved.at).await {
                 SessionState::Open => {}
                 // The rest of the batch dies with the buffer; `resume_from` asks for it again.

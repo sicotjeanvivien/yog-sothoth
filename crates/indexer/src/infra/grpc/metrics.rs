@@ -9,6 +9,11 @@ use metrics::{counter, describe_counter, describe_gauge, gauge};
 /// left under the bounds, which the two peaks below measure.
 const TRANSACTIONS_EVICTED: &str = "yog_indexer_grpc_untimestamped_transactions_total";
 
+/// Transactions dropped because the cluster finalized another bank of their slot.
+/// ⚠️ Stays at zero by construction on a server that sends no `bank_id`: read it beside
+/// [`BANK_ID_MISSING`].
+const LOSING_BANK_TRANSACTIONS: &str = "yog_indexer_grpc_losing_bank_transactions_total";
+
 /// The most payloads waiting at once since start, against `MAX_PENDING_PAYLOADS`.
 const PENDING_PAYLOADS_PEAK: &str = "yog_indexer_grpc_pending_payloads_peak";
 
@@ -88,6 +93,10 @@ impl GrpcBufferMetrics {
             "Transactions dropped because their slot never received a block time, \
              labelled by the bound that forced it"
         );
+        describe_counter!(
+            LOSING_BANK_TRANSACTIONS,
+            "Transactions dropped because the cluster finalized another bank of their slot"
+        );
         describe_gauge!(
             PENDING_PAYLOADS_PEAK,
             "The most transactions waiting for their slot's block time at once since start"
@@ -100,6 +109,10 @@ impl GrpcBufferMetrics {
 
     pub(crate) fn record_evicted(count: usize, reason: EvictionReason) {
         counter!(TRANSACTIONS_EVICTED, "reason" => reason.as_str()).increment(count as u64);
+    }
+
+    pub(crate) fn record_losing_bank(count: usize) {
+        counter!(LOSING_BANK_TRANSACTIONS).increment(count as u64);
     }
 }
 
@@ -132,11 +145,17 @@ const STALLS: &str = "yog_indexer_grpc_stalls_total";
 /// Resume marks given up because the server refused the request, by [`MarkRefusal`].
 const MARKS_ABANDONED: &str = "yog_indexer_grpc_resume_marks_abandoned_total";
 
+/// 1 when the current session's server names no bank, so slots are paired by slot alone; 0 when
+/// it names them. ⚠️ Kept across a reconnection until the new session's first message says.
+const BANK_ID_MISSING: &str = "yog_indexer_grpc_bank_id_missing";
+
 /// What an update was, for [`UPDATES_RECEIVED`].
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum UpdateKind {
     Transaction,
     BlockMeta,
+    /// A slot status, whatever its level: the subscription asks for `Finalized` ones only.
+    Slot,
     /// A server keep-alive, counted and answered with a ping-only request.
     Ping,
     /// The server's answer to one of ours. ⚠️ Rises with `ping` while answers get through;
@@ -151,6 +170,7 @@ impl UpdateKind {
         match self {
             Self::Transaction => "transaction",
             Self::BlockMeta => "block_meta",
+            Self::Slot => "slot",
             Self::Ping => "ping",
             Self::Pong => "pong",
             Self::Other => "other",
@@ -286,6 +306,11 @@ impl GrpcListenerMetrics {
             "Server pings that could not be answered, labelled by why the \
              answer did not leave"
         );
+        describe_gauge!(
+            BANK_ID_MISSING,
+            "1 when the stream's server names no bank, so each slot is paired \
+             by slot alone; 0 when banks are told apart"
+        );
     }
 
     pub(crate) fn record_update(kind: UpdateKind) {
@@ -314,5 +339,9 @@ impl GrpcListenerMetrics {
 
     pub(crate) fn record_mark_abandoned(reason: MarkRefusal) {
         counter!(MARKS_ABANDONED, "reason" => reason.as_str()).increment(1);
+    }
+
+    pub(crate) fn record_bank_id_missing(missing: bool) {
+        gauge!(BANK_ID_MISSING).set(if missing { 1.0 } else { 0.0 });
     }
 }
