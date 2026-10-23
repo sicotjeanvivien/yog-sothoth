@@ -33,7 +33,7 @@ pub(super) struct SlotProgress {
     /// The highest slot a block-meta closed. Advanced by block-metas alone: a
     /// transaction names a slot still in flight.
     highest_meta_slot: Option<u64>,
-    /// What this session has reported of its server's bank ids; see [`Self::bank`].
+    /// What this session has reported of its server's bank ids; see [`Self::report_bank_naming`].
     bank_ids: Option<BankIds>,
 }
 
@@ -61,7 +61,8 @@ impl SlotProgress {
     ) -> Option<Resolved<PendingTransaction>> {
         // Waiting for its status or block-meta, or dropped on the way in —
         // `on_payload` counts and logs that case itself.
-        let bank = self.bank(pending.update.slot, Bank::from_wire(pending.update.bank_id));
+        let bank = Bank::from_wire(pending.update.bank_id);
+        self.report_bank_naming(pending.update.slot, bank);
         self.buffer.on_payload(pending.update.slot, bank, pending)
     }
 
@@ -71,7 +72,8 @@ impl SlotProgress {
         meta: SubscribeUpdateBlockMeta,
     ) -> Vec<Resolved<PendingTransaction>> {
         let slot = meta.slot;
-        let bank = self.bank(slot, Bank::from_wire(meta.bank_id));
+        let bank = Bank::from_wire(meta.bank_id);
+        self.report_bank_naming(slot, bank);
         self.highest_meta_slot = Some(self.highest_meta_slot.map_or(slot, |seen| seen.max(slot)));
 
         // ⚠️ Nothing substitutes for a missing `block_time`: in every unique key and the partitioning
@@ -97,13 +99,14 @@ impl SlotProgress {
         if status.status() != SlotStatus::SlotFinalized {
             return Vec::new();
         }
-        let bank = self.bank(status.slot, Bank::from_status(status.bank_id));
+        let bank = Bank::from_status(status.bank_id);
+        self.report_bank_naming(status.slot, bank);
         self.buffer.on_finalized(status.slot, bank)
     }
 
-    /// Pass a message's bank through, reporting once per change whether the server names banks.
+    /// Report, once per change, whether the server names the banks of its messages.
     /// ⚠️ `Missing` is sticky for the session: one bank-less message is a slot paired by slot alone.
-    fn bank(&mut self, slot: u64, bank: Bank) -> Bank {
+    fn report_bank_naming(&mut self, slot: u64, bank: Bank) {
         let seen = match bank {
             Bank::Id(_) => BankIds::Named,
             Bank::Unknown => BankIds::Missing,
@@ -120,7 +123,6 @@ impl SlotProgress {
                 log::no_bank_id(slot);
             }
         }
-        bank
     }
 
     /// Where a reconnection should resume from, or `None` when nothing arrived.

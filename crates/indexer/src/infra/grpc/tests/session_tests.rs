@@ -126,7 +126,7 @@ async fn a_block_meta_without_a_time_gives_up_the_slot() {
 const BANK_ID_MISSING: &str = "yog_indexer_grpc_bank_id_missing";
 
 /// Drain what reached the consumer, by signature's first byte.
-fn signatures(downstream: &mut mpsc::Receiver<IngestedTransaction>) -> Vec<u8> {
+fn drain_signatures(downstream: &mut mpsc::Receiver<IngestedTransaction>) -> Vec<u8> {
     std::iter::from_fn(|| downstream.try_recv().ok())
         .map(|ingested| ingested.transaction.position.signature.as_ref()[0])
         .collect()
@@ -140,7 +140,7 @@ fn a_status_naming_no_bank_pairs_its_slot_by_slot_and_raises_the_gauge() {
         session.handle(slot_finalized(10, None)).await;
         session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
         session.handle(block_meta(10, Some(1_700_000_000))).await;
-        signatures(&mut downstream).len()
+        drain_signatures(&mut downstream).len()
     });
 
     assert_eq!(delivered, 1);
@@ -165,7 +165,7 @@ fn a_server_naming_banks_lets_only_the_kept_banks_transactions_through() {
             .handle(block_meta_in_bank(10, 6, Some(1_700_000_001)))
             .await;
         session.handle(slot_finalized(10, Some(5))).await;
-        signatures(&mut downstream)
+        drain_signatures(&mut downstream)
     });
 
     assert_eq!(delivered, vec![5], "bank 5's transaction alone");
@@ -189,7 +189,7 @@ fn a_transaction_naming_bank_0_is_paired_with_the_kept_bank() {
         session
             .handle(block_meta_in_bank(10, 5, Some(1_700_000_000)))
             .await;
-        signatures(&mut downstream)
+        drain_signatures(&mut downstream)
     });
 
     assert_eq!(delivered, vec![7]);
