@@ -26,7 +26,7 @@ context/src/
 │                      log.rs holds the client's log lines; infra.rs holds
 │                      the shared http_client and its timeouts; source_error.rs
 │                      turns a reqwest failure into a SourceError, URL stripped)
-├── bootstrap/       ← Config::load(), Daemon::new — composition root, and the
+├── bootstrap/       ← Config::load(), Daemon::connect — composition root, and the
 │                      stop: run() joins its three workers under the shared grace
 ├── error/           ← SourceError, WorkerError — shared by the layers
 └── main.rs

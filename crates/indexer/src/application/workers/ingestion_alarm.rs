@@ -88,8 +88,8 @@ impl IngestionAlarm {
 
         if let Some(heartbeat) = &self.heartbeat {
             match verdict.failure_reason(now) {
-                None => heartbeat.success().await,
-                Some(reason) => heartbeat.failure(&reason).await,
+                None => heartbeat.report_success().await,
+                Some(reason) => heartbeat.report_failure(&reason).await,
             }
         }
         verdict

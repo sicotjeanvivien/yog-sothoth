@@ -44,14 +44,14 @@ impl AnalyticWorker {
                 () = shutdown.cancelled() => break,
                 _ = async {
                     ticker.tick().await;
-                    self.cycle(Utc::now()).await
+                    self.run_cycle(Utc::now()).await
                 } => {}
             }
         }
         log::stopped();
     }
 
-    pub(crate) async fn cycle(&self, now: DateTime<Utc>) -> RepositoryResult<CycleOutcome> {
+    pub(crate) async fn run_cycle(&self, now: DateTime<Utc>) -> RepositoryResult<CycleOutcome> {
         let started = Instant::now();
         let written = self.write(now).await;
         let elapsed = started.elapsed();
@@ -61,14 +61,16 @@ impl AnalyticWorker {
                 metrics::record_frozen(outcome.hours_frozen);
                 log::written(outcome, elapsed);
                 if let Some(heartbeat) = &self.heartbeat {
-                    heartbeat.success().await;
+                    heartbeat.report_success().await;
                 }
             }
             Err(error) => {
                 metrics::record_cycle("failed", elapsed);
                 log::failed(error, elapsed);
                 if let Some(heartbeat) = &self.heartbeat {
-                    heartbeat.failure(&format!("cycle failed: {error}")).await;
+                    heartbeat
+                        .report_failure(&format!("cycle failed: {error}"))
+                        .await;
                 }
             }
         }

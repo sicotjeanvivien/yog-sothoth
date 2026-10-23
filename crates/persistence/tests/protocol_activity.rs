@@ -11,7 +11,7 @@ use yog_core::domain::{
 };
 use yog_persistence::{PgPoolRepository, PgProtocolActivityRepository, PgTokenActivityRepository};
 
-use super::helpers::{as_role, pk};
+use super::helpers::{pk, setup_roles_and_connect_as};
 
 /// The last frozen hour of every test: 12:00, so a day of 24 hours never starts at midnight.
 fn last() -> DateTime<Utc> {
@@ -45,7 +45,7 @@ async fn seed_hours(pool: &PgPool, hours: i32) {
     .unwrap();
 }
 
-async fn period(pool: &PgPool, window: &str, at: DateTime<Utc>, active_pools: i64) {
+async fn insert_period(pool: &PgPool, window: &str, at: DateTime<Utc>, active_pools: i64) {
     sqlx::query(
         "INSERT INTO analytic_protocol_periods (protocol, period, bucket, active_pools)
          VALUES ('meteora_damm_v2', $1, $2, $3)",
@@ -59,7 +59,8 @@ async fn period(pool: &PgPool, window: &str, at: DateTime<Utc>, active_pools: i6
 }
 
 async fn lookup(pool: &PgPool) -> (PgProtocolActivityRepository, Span, Span) {
-    let repository = PgProtocolActivityRepository::new(as_role(pool, "yog_api").await);
+    let repository =
+        PgProtocolActivityRepository::new(setup_roles_and_connect_as(pool, "yog_api").await);
     let hours = repository.frozen_hours().await.unwrap().unwrap();
     (
         repository,
@@ -119,9 +120,10 @@ async fn a_day_the_facts_do_not_hold_whole_is_left_out(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn the_previous_window_reads_the_pools_written_a_window_earlier(pool: PgPool) {
     seed_hours(&pool, 24 * 8).await;
-    period(&pool, "24h", last(), 10).await;
-    period(&pool, "24h", last() - Duration::hours(24), 7).await;
-    let repository = PgProtocolActivityRepository::new(as_role(&pool, "yog_api").await);
+    insert_period(&pool, "24h", last(), 10).await;
+    insert_period(&pool, "24h", last() - Duration::hours(24), 7).await;
+    let repository =
+        PgProtocolActivityRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
     let hours = repository.frozen_hours().await.unwrap().unwrap();
 
     let now = Span::of(hours, Window::Day, None);
@@ -165,7 +167,7 @@ async fn births_without_a_swap_are_counted(pool: PgPool) {
     assert_eq!((rows[0].births, rows[0].swap_count), (3, 0));
 }
 
-async fn token(pool: &PgPool, mint: u8, volume: i64, at: DateTime<Utc>) {
+async fn insert_token_period(pool: &PgPool, mint: u8, volume: i64, at: DateTime<Utc>) {
     sqlx::query(
         "INSERT INTO analytic_token_periods
            (period, mint, bucket, volume_usd, pools, pool_hours, pool_hours_valued)
@@ -184,7 +186,7 @@ async fn token(pool: &PgPool, mint: u8, volume: i64, at: DateTime<Utc>) {
 #[sqlx::test(migrations = "./migrations")]
 async fn the_tokens_page_by_volume_then_mint_with_their_identity(pool: PgPool) {
     for (mint, volume) in [(1, 30), (2, 20), (3, 20), (4, 5)] {
-        token(&pool, mint, volume, last()).await;
+        insert_token_period(&pool, mint, volume, last()).await;
     }
     sqlx::query(
         "INSERT INTO token_metadata (mint, symbol, decimals, fetched_at, last_refresh_at)
@@ -194,7 +196,7 @@ async fn the_tokens_page_by_volume_then_mint_with_their_identity(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    let feed = PgTokenActivityRepository::new(as_role(&pool, "yog_api").await);
+    let feed = PgTokenActivityRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
 
     let first = feed.list(Window::Day, None, 2).await.unwrap().unwrap();
     let cursor = first.page.items.last().map(|t| TokenActivityCursor {
@@ -224,8 +226,8 @@ async fn the_tokens_page_by_volume_then_mint_with_their_identity(pool: PgPool) {
 /// would lose the hour of its ranking, and a ranking never written read as one.
 #[sqlx::test(migrations = "./migrations")]
 async fn a_page_past_the_last_token_still_names_its_ranking(pool: PgPool) {
-    token(&pool, 1, 30, last()).await;
-    let feed = PgTokenActivityRepository::new(as_role(&pool, "yog_api").await);
+    insert_token_period(&pool, 1, 30, last()).await;
+    let feed = PgTokenActivityRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
 
     let past = TokenActivityCursor {
         last_hour: last(),
@@ -258,7 +260,8 @@ async fn the_tvl_is_the_last_measured_at_or_before_the_hour(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    let repository = PgProtocolActivityRepository::new(as_role(&pool, "yog_api").await);
+    let repository =
+        PgProtocolActivityRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
 
     let tvl = repository.tvl_latest(last()).await.unwrap();
 
@@ -293,7 +296,8 @@ async fn the_discovered_parts_are_those_of_the_tvl_hour(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    let repository = PgProtocolActivityRepository::new(as_role(&pool, "yog_api").await);
+    let repository =
+        PgProtocolActivityRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
 
     let tvl = repository.tvl_latest(last()).await.unwrap();
 
@@ -331,7 +335,8 @@ async fn the_tvl_series_holds_both_ends_and_every_protocol(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    let repository = PgProtocolActivityRepository::new(as_role(&pool, "yog_api").await);
+    let repository =
+        PgProtocolActivityRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
 
     let series = repository
         .tvl_hourly(last() - Duration::hours(2), last())
@@ -361,7 +366,7 @@ async fn the_tvl_series_holds_both_ends_and_every_protocol(pool: PgPool) {
     assert_eq!(read, expected);
 }
 
-async fn seen(pool: &PgPool, seed: u8, protocol: Protocol, mints: Option<(u8, u8)>) {
+async fn insert_seen_pool(pool: &PgPool, seed: u8, protocol: Protocol, mints: Option<(u8, u8)>) {
     sqlx::query(
         "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint)
          VALUES ($1, $2, $3, $4)",
@@ -380,11 +385,11 @@ async fn seen(pool: &PgPool, seed: u8, protocol: Protocol, mints: Option<(u8, u8
 /// protocol without a pool.
 #[sqlx::test(migrations = "./migrations")]
 async fn every_pool_seen_counts_under_its_protocol(pool: PgPool) {
-    let catalog = PgPoolRepository::new(as_role(&pool, "yog_api").await);
+    let catalog = PgPoolRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
     assert_eq!(catalog.counts_by_protocol().await.unwrap(), []);
-    seen(&pool, 1, Protocol::MeteoraDammV2, Some((101, 102))).await;
-    seen(&pool, 2, Protocol::MeteoraDammV2, None).await;
-    seen(&pool, 3, Protocol::MeteoraDlmm, Some((101, 103))).await;
+    insert_seen_pool(&pool, 1, Protocol::MeteoraDammV2, Some((101, 102))).await;
+    insert_seen_pool(&pool, 2, Protocol::MeteoraDammV2, None).await;
+    insert_seen_pool(&pool, 3, Protocol::MeteoraDlmm, Some((101, 103))).await;
 
     let mut counts: Vec<_> = catalog
         .counts_by_protocol()

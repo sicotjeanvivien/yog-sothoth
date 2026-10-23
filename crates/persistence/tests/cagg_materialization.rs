@@ -30,7 +30,7 @@ async fn seed_pool(pool: &PgPool) -> String {
     address
 }
 
-async fn swap_at(pool: &PgPool, address: &str, signature: &str, timestamp: DateTime<Utc>) {
+async fn insert_swap_at(pool: &PgPool, address: &str, signature: &str, timestamp: DateTime<Utc>) {
     sqlx::query(
         "INSERT INTO meteora_damm_v2_swap_events
            (pool_address, signature, trade_direction,
@@ -103,8 +103,8 @@ async fn every_aggregate_is_reported_and_an_empty_one_has_nothing_pending(pool: 
 #[sqlx::test]
 async fn before_any_refresh_the_oldest_raw_row_is_pending(pool: PgPool) {
     let address = seed_pool(&pool).await;
-    swap_at(&pool, &address, "sig-late", at(11, 20)).await;
-    swap_at(&pool, &address, "sig-early", at(10, 15)).await;
+    insert_swap_at(&pool, &address, "sig-late", at(11, 20)).await;
+    insert_swap_at(&pool, &address, "sig-early", at(10, 15)).await;
 
     let swaps = backlog_of(&pool, SWAPS).await;
     assert_eq!(swaps.watermark, None);
@@ -116,8 +116,8 @@ async fn before_any_refresh_the_oldest_raw_row_is_pending(pool: PgPool) {
 #[sqlx::test]
 async fn once_refreshed_nothing_is_pending_and_the_watermark_stops_at_the_data(pool: PgPool) {
     let address = seed_pool(&pool).await;
-    swap_at(&pool, &address, "sig-early", at(10, 15)).await;
-    swap_at(&pool, &address, "sig-late", at(11, 20)).await;
+    insert_swap_at(&pool, &address, "sig-early", at(10, 15)).await;
+    insert_swap_at(&pool, &address, "sig-late", at(11, 20)).await;
     refresh_the_day(&pool).await;
 
     let swaps = backlog_of(&pool, SWAPS).await;
@@ -130,17 +130,17 @@ async fn once_refreshed_nothing_is_pending_and_the_watermark_stops_at_the_data(p
 #[sqlx::test]
 async fn a_row_at_or_past_the_watermark_is_pending(pool: PgPool) {
     let address = seed_pool(&pool).await;
-    swap_at(&pool, &address, "sig-early", at(10, 15)).await;
-    swap_at(&pool, &address, "sig-late", at(11, 20)).await;
+    insert_swap_at(&pool, &address, "sig-early", at(10, 15)).await;
+    insert_swap_at(&pool, &address, "sig-late", at(11, 20)).await;
     refresh_the_day(&pool).await;
 
-    swap_at(&pool, &address, "sig-after", at(13, 30)).await;
+    insert_swap_at(&pool, &address, "sig-after", at(13, 30)).await;
     assert_eq!(
         backlog_of(&pool, SWAPS).await.oldest_pending_at,
         Some(at(13, 30))
     );
 
-    swap_at(&pool, &address, "sig-on-the-edge", at(12, 0)).await;
+    insert_swap_at(&pool, &address, "sig-on-the-edge", at(12, 0)).await;
     assert_eq!(
         backlog_of(&pool, SWAPS).await.oldest_pending_at,
         Some(at(12, 0))
@@ -164,7 +164,7 @@ async fn only_yog_signals_may_read_the_backlogs(pool: PgPool) {
 
     // A row, so a real chunk is read under the owner's rights.
     let address = seed_pool(&pool).await;
-    swap_at(&pool, &address, "sig-privileges", at(10, 15)).await;
+    insert_swap_at(&pool, &address, "sig-privileges", at(10, 15)).await;
 
     let mut conn = pool.acquire().await.unwrap();
 

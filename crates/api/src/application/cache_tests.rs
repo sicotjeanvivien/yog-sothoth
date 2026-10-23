@@ -16,7 +16,7 @@ fn policy(ttl: Duration, max_capacity: u64) -> CachePolicy {
 
 /// Counts its calls, and takes a moment — long enough for concurrent callers
 /// to pile up on the same cold key.
-async fn counted(calls: Arc<AtomicUsize>) -> Result<u32, RepositoryError> {
+async fn compute_counting_calls(calls: Arc<AtomicUsize>) -> Result<u32, RepositoryError> {
     calls.fetch_add(1, Ordering::SeqCst);
     tokio::time::sleep(Duration::from_millis(50)).await;
     Ok(42)
@@ -33,7 +33,11 @@ async fn concurrent_callers_of_a_cold_key_share_one_computation() {
 
     let callers = (0..50).map(|_| {
         let (cache, calls) = (cache.clone(), calls.clone());
-        tokio::spawn(async move { cache.get_or_compute((), counted(calls)).await })
+        tokio::spawn(async move {
+            cache
+                .get_or_compute((), compute_counting_calls(calls))
+                .await
+        })
     });
     let answers = futures_util::future::join_all(callers).await;
 
@@ -85,18 +89,18 @@ async fn an_expired_value_is_computed_again() {
     let calls = Arc::new(AtomicUsize::new(0));
 
     cache
-        .get_or_compute((), counted(calls.clone()))
+        .get_or_compute((), compute_counting_calls(calls.clone()))
         .await
         .unwrap();
     cache
-        .get_or_compute((), counted(calls.clone()))
+        .get_or_compute((), compute_counting_calls(calls.clone()))
         .await
         .unwrap();
     assert_eq!(calls.load(Ordering::SeqCst), 1, "still fresh");
 
     tokio::time::sleep(Duration::from_millis(200)).await;
     cache
-        .get_or_compute((), counted(calls.clone()))
+        .get_or_compute((), compute_counting_calls(calls.clone()))
         .await
         .unwrap();
     assert_eq!(calls.load(Ordering::SeqCst), 2, "expired");

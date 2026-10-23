@@ -1,6 +1,6 @@
 use super::*;
 
-fn ends_with<E: std::error::Error + Send + Sync + 'static>(
+fn spawn_ending_with<E: std::error::Error + Send + Sync + 'static>(
     result: Result<(), E>,
 ) -> JoinHandle<Result<(), E>> {
     tokio::spawn(async move { result })
@@ -83,8 +83,11 @@ async fn a_panicking_task_is_still_an_error() {
 async fn a_task_that_ends_in_time_is_not_reported_as_still_running() {
     let mut stop = Stop::new(Ok(()), None);
 
-    stop.settle("test task", &mut ends_with(Ok::<(), std::io::Error>(())))
-        .await;
+    stop.settle(
+        "test task",
+        &mut spawn_ending_with(Ok::<(), std::io::Error>(())),
+    )
+    .await;
 
     assert!(stop.still_running.is_empty());
     assert!(stop.finish().is_ok());
@@ -94,7 +97,7 @@ async fn a_task_that_ends_in_time_is_not_reported_as_still_running() {
 /// completion`), or skipping every stage rather than the named one.
 #[tokio::test(start_paused = true)]
 async fn the_stage_the_select_already_collected_is_not_joined_again() {
-    let mut spent = ends_with(Ok::<(), std::io::Error>(()));
+    let mut spent = spawn_ending_with(Ok::<(), std::io::Error>(()));
     // What the daemon's `select!` arm did: this handle is polled to completion.
     assert!(
         (&mut spent).await.is_ok(),
@@ -159,7 +162,7 @@ async fn an_error_reported_after_the_verdict_becomes_the_verdict() {
 
     stop.settle(
         "test task",
-        &mut ends_with(Err(std::io::Error::other("all workers gave up"))),
+        &mut spawn_ending_with(Err(std::io::Error::other("all workers gave up"))),
     )
     .await;
 
@@ -175,8 +178,11 @@ async fn an_error_reported_after_the_verdict_becomes_the_verdict() {
 async fn a_clean_stop_after_a_failure_does_not_erase_it() {
     let mut stop = Stop::new(Err(anyhow::anyhow!("the source failed first")), None);
 
-    stop.settle("test task", &mut ends_with(Ok::<(), std::io::Error>(())))
-        .await;
+    stop.settle(
+        "test task",
+        &mut spawn_ending_with(Ok::<(), std::io::Error>(())),
+    )
+    .await;
 
     let refused = stop.finish().expect_err("the first failure is the verdict");
     assert!(

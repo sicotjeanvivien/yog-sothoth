@@ -1,6 +1,6 @@
 use super::*;
 
-fn ends_with(result: Result<(), SourceError>) -> JoinHandle<Result<(), SourceError>> {
+fn spawn_ending_with(result: Result<(), SourceError>) -> JoinHandle<Result<(), SourceError>> {
     tokio::spawn(async move { result })
 }
 
@@ -13,9 +13,9 @@ fn semaphore_closed(stage: &'static str) -> SourceError {
 #[tokio::test]
 async fn a_stage_that_fails_during_the_drain_is_the_verdict() {
     let (mut listener, mut dispatcher, mut fetch) = (
-        ends_with(Err(semaphore_closed("listener"))),
-        ends_with(Ok(())),
-        ends_with(Ok(())),
+        spawn_ending_with(Err(semaphore_closed("listener"))),
+        spawn_ending_with(Ok(())),
+        spawn_ending_with(Ok(())),
     );
 
     let outcome = drain_stages(
@@ -40,8 +40,11 @@ async fn a_stage_that_fails_during_the_drain_is_the_verdict() {
 /// replace it.
 #[tokio::test]
 async fn the_stages_brought_down_by_a_failure_do_not_replace_it() {
-    let (mut listener, mut dispatcher, mut fetch) =
-        (ends_with(Ok(())), ends_with(Ok(())), ends_with(Ok(())));
+    let (mut listener, mut dispatcher, mut fetch) = (
+        spawn_ending_with(Ok(())),
+        spawn_ending_with(Ok(())),
+        spawn_ending_with(Ok(())),
+    );
 
     let outcome = drain_stages(
         LISTENER,
@@ -65,9 +68,9 @@ async fn the_stages_brought_down_by_a_failure_do_not_replace_it() {
 /// left joined here on purpose.
 #[tokio::test]
 async fn the_stage_that_already_answered_is_not_polled_again() {
-    let mut listener = ends_with(Ok(()));
+    let mut listener = spawn_ending_with(Ok(()));
     let first = join(LISTENER, (&mut listener).await);
-    let (mut dispatcher, mut fetch) = (ends_with(Ok(())), ends_with(Ok(())));
+    let (mut dispatcher, mut fetch) = (spawn_ending_with(Ok(())), spawn_ending_with(Ok(())));
 
     let outcome = drain_stages(
         LISTENER,

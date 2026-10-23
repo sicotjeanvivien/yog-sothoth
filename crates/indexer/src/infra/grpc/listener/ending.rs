@@ -3,9 +3,7 @@
 
 use tonic::Code;
 
-use crate::infra::grpc::metrics::{GrpcListenerMetrics, MarkRefusal};
-
-use super::log;
+use crate::infra::grpc::metrics::MarkRefusal;
 
 /// How one connection ended. Stream endings carry `resume_from` and `delivered` (whether data
 /// came off the stream); what an ending is worth is [`Ending::verdict`]'s alone.
@@ -38,9 +36,7 @@ pub(super) enum Ending {
     },
 }
 
-/// What an ending is worth — decided once, read by the two rules that follow
-/// an attempt: the resume mark ([`Verdict::next_resume_from`]) and the retry
-/// budget (`RetryBudget::settle`).
+/// What an ending is worth — decided once, read by every rule that follows an attempt.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Verdict {
     /// A stop was requested.
@@ -121,6 +117,14 @@ impl Ending {
 }
 
 impl Verdict {
+    /// The mark the loop `held` that [`Self::next_resume_from`] drops, and why.
+    pub(super) fn abandoned_mark(&self, held: Option<u64>) -> Option<(u64, MarkRefusal)> {
+        match (self, held, self.next_resume_from(held)) {
+            (Verdict::Refused { reason, .. }, Some(slot), None) => Some((slot, *reason)),
+            _ => None,
+        }
+    }
+
     /// Where the next attempt resumes from, given the mark the loop already `held`.
     /// ⚠️ No floor: a replay breaking before the buffer drains rewinds `REWIND_SLOTS` each round and
     /// the churn resets the budget, so `from_slot` can walk back without bound.
@@ -128,13 +132,7 @@ impl Verdict {
         match self {
             // ⚠️ An absent mark is not zero (an unroutable transaction never enters the buffer).
             Verdict::Delivered { mark, .. } => mark.or(held),
-            Verdict::Refused { reason, .. } => {
-                if let Some(slot) = held {
-                    log::mark_abandoned(slot, *reason);
-                    GrpcListenerMetrics::record_mark_abandoned(*reason);
-                }
-                None
-            }
+            Verdict::Refused { .. } => None,
             Verdict::ServerFailed { .. }
             | Verdict::Unanswered { .. }
             | Verdict::ShutdownRequested

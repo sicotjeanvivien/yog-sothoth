@@ -24,7 +24,9 @@ use crate::{
     infra::{
         Credential,
         grpc::{
-            interceptor::CredentialInterceptor, metrics::WAITING_PEAKS, subscription::build_request,
+            interceptor::CredentialInterceptor,
+            metrics::{GrpcListenerMetrics, WAITING_PEAKS},
+            subscription::build_request,
         },
     },
 };
@@ -98,6 +100,10 @@ impl GrpcListener {
                 .await
                 .verdict();
 
+            if let Some((slot, reason)) = verdict.abandoned_mark(resume_from) {
+                log::mark_abandoned(slot, reason);
+                GrpcListenerMetrics::record_mark_abandoned(reason);
+            }
             // ⚠️ The only place `resume_from` is written; the mark rule and the budget read the one verdict.
             resume_from = verdict.next_resume_from(resume_from);
 

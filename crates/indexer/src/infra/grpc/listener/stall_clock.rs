@@ -27,19 +27,19 @@ impl StallClock {
     }
 
     /// The listener starts waiting on the stream.
-    pub(super) fn wait_started(&mut self, at: Instant) {
+    pub(super) fn on_wait_started(&mut self, at: Instant) {
         self.waiting_since = Some(at);
     }
 
     /// Something came off the stream; the wait that preceded it counts.
-    pub(super) fn wait_ended(&mut self, at: Instant) {
+    pub(super) fn on_wait_ended(&mut self, at: Instant) {
         if let Some(since) = self.waiting_since.take() {
             self.silent += at.saturating_duration_since(since);
         }
     }
 
     /// A block-meta arrived: the stream is alive.
-    pub(super) fn heard_block_meta(&mut self) {
+    pub(super) fn on_block_meta(&mut self) {
         self.silent = Duration::ZERO;
     }
 

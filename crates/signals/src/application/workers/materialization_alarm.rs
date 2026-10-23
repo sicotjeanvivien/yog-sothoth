@@ -101,8 +101,8 @@ impl MaterializationAlarm {
 
         if let Some(heartbeat) = &self.heartbeat {
             match &verdict {
-                Verdict::OnTime => heartbeat.success().await,
-                Verdict::Failed(failure) => heartbeat.failure(&failure.reason()).await,
+                Verdict::OnTime => heartbeat.report_success().await,
+                Verdict::Failed(failure) => heartbeat.report_failure(&failure.reason()).await,
             }
         }
         verdict

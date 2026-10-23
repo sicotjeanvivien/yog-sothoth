@@ -178,7 +178,7 @@ impl Connector {
         let mut clock = StallClock::new(self.stall_timeout);
 
         loop {
-            clock.wait_started(Instant::now());
+            clock.on_wait_started(Instant::now());
 
             tokio::select! {
                 biased;
@@ -186,7 +186,7 @@ impl Connector {
                 _ = shutdown.cancelled() => return Ending::ShutdownRequested,
 
                 message = stream.message() => {
-                    clock.wait_ended(Instant::now());
+                    clock.on_wait_ended(Instant::now());
                     if let Some(ending) = self.on_message(message, &mut session, &mut clock).await {
                         return ending;
                     }
@@ -195,6 +195,7 @@ impl Connector {
                 // After `message`, so that a message already waiting — which
                 // may be the block-meta that resets the clock — is read first.
                 _ = tokio::time::sleep(clock.remaining()) => {
+                    GrpcListenerMetrics::record_stall(StallSite::Stream);
                     return self.stalled(
                         StallSite::Stream,
                         session.received_data(),
@@ -224,6 +225,7 @@ impl Connector {
             ) => subscribed,
         };
         let Ok(subscribed) = subscribed else {
+            GrpcListenerMetrics::record_stall(StallSite::Subscribe);
             return Err(self.stalled(StallSite::Subscribe, false, None));
         };
 
@@ -258,7 +260,7 @@ impl Connector {
                 let block_metas = session.block_metas_received();
                 let ending = ending_of(session.handle(update).await);
                 if session.block_metas_received() != block_metas {
-                    clock.heard_block_meta();
+                    clock.on_block_meta();
                 }
                 ending
             }
@@ -275,11 +277,9 @@ impl Connector {
         }
     }
 
-    /// End an attempt as [`Ending::Stalled`], counted by site. Not logged
-    /// here: the budget logs every ending once, with the mark it will use.
+    /// The [`Ending::Stalled`] of an attempt; the caller counts it by site. Not logged here: the
+    /// budget logs every ending once, with the mark it will use.
     fn stalled(&self, site: StallSite, delivered: bool, resume_from: Option<u64>) -> Ending {
-        GrpcListenerMetrics::record_stall(site);
-
         Ending::Stalled {
             error: format!("stalled: {} for {:?}", site.describe(), self.stall_timeout),
             delivered,

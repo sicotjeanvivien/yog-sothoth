@@ -30,7 +30,7 @@ indexer/src/
 │                            interceptor, protobuf adapter, slot/time buffer
 │   ├── listener/          ← one module per responsibility: connector,
 │   │                        ending (+ verdict, resume mark), retry_budget,
-│   │                        stall_clock, log — listener.rs only assembles them
+│   │                        stall_clock, log — listener.rs assembles them
 │   ├── session/           ← slot_progress, delivery, ping_answer, log —
 │   │                        session.rs only routes each update to them
 │   ├── slot_timestamp_buffer/ ← waiting_slots (what waits, and which go),
@@ -181,7 +181,8 @@ genuinely unreachable. Since 16 September 2026 the **retry rule** is covered:
 ending of a stream has a test that goes red when it changes its answer to which
 ending restarts the retry budget, which charges it, and what the next attempt
 asks for — the budget being `RetryBudget::settle`, and the resume point
-`Verdict::next_resume_from`, both reading the one `Ending::verdict`. One ending
+`Verdict::next_resume_from` (with `Verdict::abandoned_mark`, the mark it gives
+up), all reading the one `Ending::verdict`. One ending
 is guarded from two sides: what an attempt that never reached the service costs the retry budget is
 driven through `run`, against a port with nothing behind it, while what it does
 to the resume mark is driven one level down at `Connector::attempt` — observing

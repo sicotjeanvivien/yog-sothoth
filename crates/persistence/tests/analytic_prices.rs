@@ -10,7 +10,7 @@ use sqlx::types::BigDecimal;
 use yog_core::domain::{AnalyticProgress, AnalyticRepository, CycleOutcome, CycleWrite};
 use yog_persistence::PgAnalyticRepository;
 
-use super::helpers::{as_role, pk, price_at, sqrt_price_x64};
+use super::helpers::{pk, price_at, setup_roles_and_connect_as, sqrt_price_x64};
 
 /// A tranche three hours back, ten minutes into its hour: settled, and clear of
 /// the hour's first and last tranches.
@@ -64,7 +64,7 @@ struct Trade<'a> {
     at: DateTime<Utc>,
 }
 
-async fn trade(pool: &PgPool, address: &str, trade: &Trade<'_>) {
+async fn insert_trade(pool: &PgPool, address: &str, trade: &Trade<'_>) {
     sqlx::query(
         "INSERT INTO meteora_damm_v2_swap_events
            (pool_address, signature, trade_direction,
@@ -88,7 +88,7 @@ async fn trade(pool: &PgPool, address: &str, trade: &Trade<'_>) {
 }
 
 /// A swap A into B without fee, the pool left at `sqrt_price`.
-async fn swap(
+async fn insert_swap(
     pool: &PgPool,
     address: &str,
     tag: &str,
@@ -105,7 +105,7 @@ async fn swap(
         sqrt_price,
         at,
     };
-    trade(pool, address, &a_to_b).await;
+    insert_trade(pool, address, &a_to_b).await;
 }
 
 fn repository_of(pool: PgPool) -> PgAnalyticRepository {
@@ -113,13 +113,13 @@ fn repository_of(pool: PgPool) -> PgAnalyticRepository {
 }
 
 /// The cycle at `now` of a writer that valued every tranche before `tranche`.
-async fn cycle_at(pool: &PgPool, tranche: DateTime<Utc>, now: DateTime<Utc>) -> CycleOutcome {
+async fn run_cycle_at(pool: &PgPool, tranche: DateTime<Utc>, now: DateTime<Utc>) -> CycleOutcome {
     let progress = AnalyticProgress {
         first_hour: Some(hour_of(tranche)),
         last_frozen: None,
         last_tranche: Some(tranche - Duration::minutes(5)),
     };
-    repository_of(as_role(pool, "yog_analytic").await)
+    repository_of(setup_roles_and_connect_as(pool, "yog_analytic").await)
         .write_cycle(&CycleWrite::plan(now, progress))
         .await
         .unwrap()
@@ -127,7 +127,7 @@ async fn cycle_at(pool: &PgPool, tranche: DateTime<Utc>, now: DateTime<Utc>) -> 
 
 /// Values `tranche` alone, at the first instant it may be.
 async fn value(pool: &PgPool, tranche: DateTime<Utc>) -> CycleOutcome {
-    cycle_at(pool, tranche, tranche + Duration::minutes(15)).await
+    run_cycle_at(pool, tranche, tranche + Duration::minutes(15)).await
 }
 
 type Range = (
@@ -170,7 +170,7 @@ async fn a_token_emptied_in_its_pool_is_worth_what_the_pool_pays(pool: PgPool) {
     )
     .await;
     price_at(&pool, &sol, "107.28", tranche - Duration::minutes(1)).await;
-    swap(
+    insert_swap(
         &pool,
         &emptied,
         "ia",
@@ -179,7 +179,7 @@ async fn a_token_emptied_in_its_pool_is_worth_what_the_pool_pays(pool: PgPool) {
         tranche + Duration::minutes(1),
     )
     .await;
-    swap(
+    insert_swap(
         &pool,
         &beside,
         "beside",
@@ -226,11 +226,11 @@ async fn the_anchor_keeps_its_market_price_on_either_side(pool: PgPool) {
     // SOL as B, 0.25 SOL for an M: M is worth $25 in the pool, $0.001 on the market.
     let sol_as_b = setup_pool(&pool, 1, (&m, 6), (&sol, 6)).await;
     price_at(&pool, &m, "0.001", tranche).await;
-    swap(&pool, &sol_as_b, "m", (4, 1), sqrt_price_x64(4, 1), tranche).await;
+    insert_swap(&pool, &sol_as_b, "m", (4, 1), sqrt_price_x64(4, 1), tranche).await;
     // SOL as A, 4 N or 4 O for a SOL: each is worth $25 in its pool.
     let low_beside = setup_pool(&pool, 2, (&sol, 6), (&n, 6)).await;
     price_at(&pool, &n, "0.001", tranche).await;
-    swap(
+    insert_swap(
         &pool,
         &low_beside,
         "n",
@@ -241,7 +241,7 @@ async fn the_anchor_keeps_its_market_price_on_either_side(pool: PgPool) {
     .await;
     let high_beside = setup_pool(&pool, 3, (&sol, 6), (&o, 6)).await;
     price_at(&pool, &o, "50", tranche).await;
-    swap(
+    insert_swap(
         &pool,
         &high_beside,
         "o",
@@ -273,7 +273,7 @@ async fn with_no_anchor_each_token_takes_the_lower_of_its_two_prices(pool: PgPoo
         let address = setup_pool(&pool, seed, (&a, 6), (&b, 6)).await;
         price_at(&pool, &a, market_a, tranche).await;
         price_at(&pool, &b, market_b, tranche).await;
-        swap(
+        insert_swap(
             &pool,
             &address,
             &format!("ab{seed}"),
@@ -301,7 +301,7 @@ async fn a_token_without_a_market_price_takes_its_price_in_the_pool(pool: PgPool
     let (a, b) = (pk(10).to_string(), pk(11).to_string());
     let address = setup_pool(&pool, 1, (&a, 6), (&b, 6)).await;
     price_at(&pool, &b, "100", tranche).await;
-    swap(&pool, &address, "ab", (4, 1), sqrt_price_x64(4, 1), tranche).await;
+    insert_swap(&pool, &address, "ab", (4, 1), sqrt_price_x64(4, 1), tranche).await;
 
     value(&pool, tranche).await;
 
@@ -317,7 +317,7 @@ async fn a_tranche_without_any_price_is_not_valued(pool: PgPool) {
     let tranche = settled_tranche();
     let (a, b) = (pk(10).to_string(), pk(11).to_string());
     let address = setup_pool(&pool, 1, (&a, 6), (&b, 6)).await;
-    swap(&pool, &address, "ab", (4, 1), sqrt_price_x64(4, 1), tranche).await;
+    insert_swap(&pool, &address, "ab", (4, 1), sqrt_price_x64(4, 1), tranche).await;
 
     value(&pool, tranche).await;
 
@@ -379,9 +379,9 @@ async fn an_empty_pool_is_worth_what_it_traded(pool: PgPool) {
             sqrt_price: mid.clone(),
             at,
         };
-        trade(&pool, &empty, &swap).await;
+        insert_trade(&pool, &empty, &swap).await;
     }
-    swap(
+    insert_swap(
         &pool,
         &beside,
         "beside",
@@ -430,7 +430,7 @@ async fn each_direction_is_worth_its_trusted_leg(pool: PgPool) {
             sqrt_price: sqrt_price_x64(10_000, 1),
             at: tranche,
         };
-        trade(&pool, &address, &swap).await;
+        insert_trade(&pool, &address, &swap).await;
     }
 
     value(&pool, tranche).await;
@@ -453,7 +453,7 @@ async fn the_trusted_leg_is_the_priced_one(pool: PgPool) {
     let xy = setup_pool(&pool, 1, (&x, 6), (&y, 6)).await;
     let xz = setup_pool(&pool, 2, (&x, 6), (&z, 6)).await;
     price_at(&pool, &y, "2", tranche).await;
-    swap(
+    insert_swap(
         &pool,
         &xy,
         "xy",
@@ -462,7 +462,7 @@ async fn the_trusted_leg_is_the_priced_one(pool: PgPool) {
         tranche,
     )
     .await;
-    swap(&pool, &xz, "xz", (1, 1), sqrt_price_x64(1, 1), tranche).await;
+    insert_swap(&pool, &xz, "xz", (1, 1), sqrt_price_x64(1, 1), tranche).await;
 
     value(&pool, tranche).await;
 
@@ -481,7 +481,7 @@ async fn a_token_without_metadata_is_valued_by_its_partner(pool: PgPool) {
     let beside = setup_pool(&pool, 2, (&other, 6), (&sol, 6)).await;
     forget_decimals(&pool, &a).await;
     price_at(&pool, &sol, "100", tranche).await;
-    swap(
+    insert_swap(
         &pool,
         &beside,
         "beside",
@@ -490,7 +490,7 @@ async fn a_token_without_metadata_is_valued_by_its_partner(pool: PgPool) {
         tranche,
     )
     .await;
-    swap(
+    insert_swap(
         &pool,
         &address,
         "ab",
@@ -517,7 +517,7 @@ async fn a_token_without_metadata_is_valued_by_its_partner(pool: PgPool) {
 type Swap = (&'static str, &'static str, (i64, i64), i64, bool);
 
 /// `swaps` at `at`; the pool's mid price is not read.
-async fn trades(pool: &PgPool, address: &str, swaps: &[Swap], at: DateTime<Utc>) {
+async fn insert_trades(pool: &PgPool, address: &str, swaps: &[Swap], at: DateTime<Utc>) {
     for &(tag, direction, amounts, fee, fee_token_is_a) in swaps {
         let swap = Trade {
             tag,
@@ -528,7 +528,7 @@ async fn trades(pool: &PgPool, address: &str, swaps: &[Swap], at: DateTime<Utc>)
             sqrt_price: sqrt_price_x64(1, 1),
             at,
         };
-        trade(pool, address, &swap).await;
+        insert_trade(pool, address, &swap).await;
     }
 }
 
@@ -572,7 +572,7 @@ async fn a_sale_counts_its_fee(pool: PgPool) {
     let address = setup_pool(&pool, 1, (&a, 6), (&sol, 6)).await;
     price_at(&pool, &sol, "100", tranche).await;
     let sale = [("sell", "a_to_b", (1_000_000_000, 990_000), 10_000, false)];
-    trades(&pool, &address, &sale, tranche).await;
+    insert_trades(&pool, &address, &sale, tranche).await;
 
     value(&pool, tranche).await;
 
@@ -594,7 +594,7 @@ async fn an_only_b_pool_splits_its_fees_by_direction(pool: PgPool) {
     let (a, sol) = (pk(10).to_string(), pk(11).to_string());
     let address = setup_pool(&pool, 1, (&a, 6), (&sol, 6)).await;
     price_at(&pool, &sol, "100", tranche).await;
-    trades(&pool, &address, &ONLY_B, tranche).await;
+    insert_trades(&pool, &address, &ONLY_B, tranche).await;
 
     value(&pool, tranche).await;
 
@@ -616,7 +616,7 @@ async fn the_split_outlives_the_raw(pool: PgPool) {
     let (a, sol) = (pk(10).to_string(), pk(11).to_string());
     let address = setup_pool(&pool, 1, (&a, 6), (&sol, 6)).await;
     price_at(&pool, &sol, "100", tranche).await;
-    trades(&pool, &address, &ONLY_B, tranche).await;
+    insert_trades(&pool, &address, &ONLY_B, tranche).await;
     drop_the_raw(&pool, &address, tranche).await;
 
     value(&pool, tranche).await;
@@ -636,7 +636,7 @@ async fn a_swap_late_past_the_aggregate_is_left_out_whole(pool: PgPool) {
     let (a, sol) = (pk(10).to_string(), pk(11).to_string());
     let address = setup_pool(&pool, 1, (&a, 6), (&sol, 6)).await;
     price_at(&pool, &sol, "100", tranche).await;
-    trades(&pool, &address, &ONLY_B, tranche).await;
+    insert_trades(&pool, &address, &ONLY_B, tranche).await;
     sqlx::query("CALL refresh_continuous_aggregate('meteora_damm_v2_swap_events_5min', $1, $2)")
         .bind(tranche)
         .bind(tranche + Duration::minutes(5))
@@ -650,7 +650,7 @@ async fn a_swap_late_past_the_aggregate_is_left_out_whole(pool: PgPool) {
         100_000,
         false,
     )];
-    trades(&pool, &address, &late, tranche + Duration::minutes(1)).await;
+    insert_trades(&pool, &address, &late, tranche + Duration::minutes(1)).await;
 
     value(&pool, tranche).await;
 
@@ -670,7 +670,7 @@ async fn protocol_and_referral_fees_take_their_direction_price(pool: PgPool) {
     let address = setup_pool(&pool, 1, (&sol, 6), (&x, 6)).await;
     let beside = setup_pool(&pool, 2, (&sol, 6), (&other, 6)).await;
     price_at(&pool, &sol, "100", tranche).await;
-    swap(
+    insert_swap(
         &pool,
         &beside,
         "beside",
@@ -696,7 +696,7 @@ async fn protocol_and_referral_fees_take_their_direction_price(pool: PgPool) {
             false,
         ),
     ];
-    trades(&pool, &address, &swaps, tranche).await;
+    insert_trades(&pool, &address, &swaps, tranche).await;
     sqlx::query(
         "UPDATE meteora_damm_v2_swap_events
             SET claiming_fee = claiming_fee - 40000000, referral_fee = 40000000
@@ -736,7 +736,7 @@ async fn a_sale_of_the_trusted_input_pays_its_output_fee_share(pool: PgPool) {
     let address = setup_pool(&pool, 1, (&sol, 6), (&x, 6)).await;
     let beside = setup_pool(&pool, 2, (&sol, 6), (&other, 6)).await;
     price_at(&pool, &sol, "100", tranche).await;
-    swap(
+    insert_swap(
         &pool,
         &beside,
         "beside",
@@ -753,7 +753,7 @@ async fn a_sale_of_the_trusted_input_pays_its_output_fee_share(pool: PgPool) {
         10_000_000,
         false,
     )];
-    trades(&pool, &address, &sale, tranche).await;
+    insert_trades(&pool, &address, &sale, tranche).await;
 
     value(&pool, tranche).await;
 
@@ -776,7 +776,7 @@ async fn a_sale_of_the_trusted_output_gives_back_its_input_fee(pool: PgPool) {
     let address = setup_pool(&pool, 1, (&sol, 6), (&x, 6)).await;
     let beside = setup_pool(&pool, 2, (&sol, 6), (&other, 6)).await;
     price_at(&pool, &sol, "100", tranche).await;
-    swap(
+    insert_swap(
         &pool,
         &beside,
         "beside",
@@ -787,7 +787,7 @@ async fn a_sale_of_the_trusted_output_gives_back_its_input_fee(pool: PgPool) {
     .await;
     // 1 000 X in, 10 X of it the fee, for 0.99 SOL out.
     let buy = [("buy", "b_to_a", (990_000, 1_000_000_000), 10_000_000, false)];
-    trades(&pool, &address, &buy, tranche).await;
+    insert_trades(&pool, &address, &buy, tranche).await;
 
     value(&pool, tranche).await;
 
@@ -810,7 +810,7 @@ async fn a_dust_purchase_taken_whole_as_fee_is_worth_nothing(pool: PgPool) {
     let address = setup_pool(&pool, 1, (&sol, 6), (&x, 6)).await;
     let beside = setup_pool(&pool, 2, (&sol, 6), (&other, 6)).await;
     price_at(&pool, &sol, "100", tranche).await;
-    swap(
+    insert_swap(
         &pool,
         &beside,
         "beside",
@@ -823,7 +823,7 @@ async fn a_dust_purchase_taken_whole_as_fee_is_worth_nothing(pool: PgPool) {
         ("sell", "a_to_b", (1_000_000, 4_000_000), 0, false),
         ("dust", "b_to_a", (0, 1), 1, false),
     ];
-    trades(&pool, &address, &swaps, tranche).await;
+    insert_trades(&pool, &address, &swaps, tranche).await;
 
     value(&pool, tranche).await;
 
@@ -852,7 +852,7 @@ async fn a_fee_in_the_untrusted_token_is_its_share_of_its_trade(pool: PgPool) {
             true,
         ),
     ];
-    trades(&pool, &address, &crash, tranche).await;
+    insert_trades(&pool, &address, &crash, tranche).await;
 
     value(&pool, tranche).await;
 
@@ -869,7 +869,7 @@ async fn a_fee_in_a_token_without_decimals_is_valued(pool: PgPool) {
     let beside = setup_pool(&pool, 2, (&other, 6), (&sol, 6)).await;
     forget_decimals(&pool, &a).await;
     price_at(&pool, &sol, "100", tranche).await;
-    swap(
+    insert_swap(
         &pool,
         &beside,
         "beside",
@@ -880,7 +880,7 @@ async fn a_fee_in_a_token_without_decimals_is_valued(pool: PgPool) {
     .await;
     // 1 SOL buys 990 units of A, 10 more the fee.
     let buy = [("buy", "b_to_a", (990, 1_000_000), 10, true)];
-    trades(&pool, &address, &buy, tranche).await;
+    insert_trades(&pool, &address, &buy, tranche).await;
 
     value(&pool, tranche).await;
 
@@ -901,7 +901,7 @@ async fn a_tie_takes_the_lower_gross_leg(pool: PgPool) {
     price_at(&pool, &a, "30", tranche).await;
     price_at(&pool, &b, "100", tranche).await;
     let sale = [("sell", "a_to_b", (4_000_000, 1_000_000), 0, false)];
-    trades(&pool, &address, &sale, tranche).await;
+    insert_trades(&pool, &address, &sale, tranche).await;
 
     value(&pool, tranche).await;
 
@@ -920,7 +920,7 @@ async fn a_trusted_token_prices_its_fees_at_market_on_a_tie(pool: PgPool) {
     forget_decimals(&pool, &x).await;
     price_at(&pool, &usdc, "1", tranche).await;
     let sale = [("sell", "a_to_b", (1_000, 990_000), 10_000, false)];
-    trades(&pool, &address, &sale, tranche).await;
+    insert_trades(&pool, &address, &sale, tranche).await;
 
     value(&pool, tranche).await;
 
@@ -941,9 +941,9 @@ async fn a_tranche_waits_ten_minutes_after_its_close(pool: PgPool) {
     let (a, b) = (pk(10).to_string(), pk(11).to_string());
     let address = setup_pool(&pool, 1, (&a, 6), (&b, 6)).await;
     price_at(&pool, &b, "100", tranche).await;
-    swap(&pool, &address, "ab", (4, 1), sqrt_price_x64(4, 1), tranche).await;
+    insert_swap(&pool, &address, "ab", (4, 1), sqrt_price_x64(4, 1), tranche).await;
 
-    let early = cycle_at(&pool, tranche, tranche + Duration::minutes(14)).await;
+    let early = run_cycle_at(&pool, tranche, tranche + Duration::minutes(14)).await;
 
     assert_eq!(early.tranches_written, 0);
     let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM analytic_pool_prices_5min")
@@ -961,7 +961,7 @@ async fn a_tranche_is_valued_once(pool: PgPool) {
     let (a, b) = (pk(10).to_string(), pk(11).to_string());
     let address = setup_pool(&pool, 1, (&a, 6), (&b, 6)).await;
     price_at(&pool, &b, "100", tranche).await;
-    swap(
+    insert_swap(
         &pool,
         &address,
         "on_time",
@@ -972,7 +972,7 @@ async fn a_tranche_is_valued_once(pool: PgPool) {
     .await;
     value(&pool, tranche).await;
 
-    swap(
+    insert_swap(
         &pool,
         &address,
         "late",
@@ -981,7 +981,7 @@ async fn a_tranche_is_valued_once(pool: PgPool) {
         tranche,
     )
     .await;
-    let analytic = repository_of(as_role(&pool, "yog_analytic").await);
+    let analytic = repository_of(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     let progress = analytic.progress().await.unwrap();
     analytic
         .write_cycle(&CycleWrite::plan(tranche + Duration::minutes(30), progress))
@@ -1010,7 +1010,7 @@ async fn an_hourly_fact_is_the_sum_of_its_tranches(pool: PgPool) {
     price_at(&pool, &b, "100", hour).await;
     for (minute, amounts) in [(5, (4, 1)), (20, (8, 2)), (50, (40, 10))] {
         let at = hour + Duration::minutes(minute) + Duration::seconds(30);
-        swap(
+        insert_swap(
             &pool,
             &address,
             &format!("m{minute}"),
@@ -1026,7 +1026,7 @@ async fn an_hourly_fact_is_the_sum_of_its_tranches(pool: PgPool) {
         last_frozen: None,
         last_tranche: None,
     };
-    repository_of(as_role(&pool, "yog_analytic").await)
+    repository_of(setup_roles_and_connect_as(&pool, "yog_analytic").await)
         .write_cycle(&CycleWrite::plan(hour + Duration::minutes(40), progress))
         .await
         .unwrap();

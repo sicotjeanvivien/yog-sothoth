@@ -1,4 +1,4 @@
-//! The wiring: every dependency [`super::Daemon::new`] builds before it owns
+//! The wiring: every dependency [`super::Daemon::connect`] builds before it owns
 //! one, and the metric families it declares.
 
 use crate::{

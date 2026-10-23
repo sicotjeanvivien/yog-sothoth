@@ -45,19 +45,19 @@ impl TickOutcome {
             }
             TickOutcome::NoCandidates => {
                 debug!("price worker: no candidate mints — sleeping");
-                no_coverage();
+                reset_priced_mints();
                 "no_work"
             }
             TickOutcome::NothingDue => {
                 debug!("price worker: every candidate is waiting its turn — nothing asked");
                 // Coverage 0 is the truth; `no_prices` would be the wrong alarm.
-                no_coverage();
+                reset_priced_mints();
                 "nothing_due"
             }
             TickOutcome::SourceFailed(e) => {
                 warn!(error = %e, "price worker: source returned a hard error");
                 // Unreachable with the Jupiter client; kept for the next source.
-                no_coverage();
+                reset_priced_mints();
                 "source_hard_error"
             }
             TickOutcome::NoStorablePrice => {
@@ -98,6 +98,6 @@ impl TickOutcome {
 
 /// The coverage numerator falls with its denominator, or `priced / candidate` reads
 /// a stale ratio.
-fn no_coverage() {
+fn reset_priced_mints() {
     PriceWorkerMetrics::set_priced_mints(0);
 }

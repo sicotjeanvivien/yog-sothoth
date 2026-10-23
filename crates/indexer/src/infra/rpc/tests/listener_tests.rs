@@ -58,7 +58,7 @@ fn target(n: u8) -> SubscriptionTarget {
     SubscriptionTarget::new(Protocol::MeteoraDammV2, Pubkey::new_from_array([n; 32]))
 }
 
-fn worker<F>(n: u8, body: F) -> WorkerHandle
+fn spawn_worker<F>(n: u8, body: F) -> WorkerHandle
 where
     F: Future<Output = Result<(), SubscriptionWorkerError>> + Send + 'static,
 {
@@ -74,7 +74,7 @@ where
 #[tokio::test]
 async fn a_cancelled_worker_has_not_given_up() {
     let fleet: Vec<_> = [1, 2]
-        .map(|n| worker(n, std::future::pending()))
+        .map(|n| spawn_worker(n, std::future::pending()))
         .into_iter()
         .collect();
     for h in &fleet {
@@ -135,7 +135,11 @@ fn a_fleet_that_gave_up_on_every_target_names_every_one_of_them() {
 async fn a_panicking_worker_is_counted_as_a_panic() {
     let mut gave_up = Vec::new();
 
-    join_fleet(vec![worker(1, async { panic!("boom") })], &mut gave_up).await;
+    join_fleet(
+        vec![spawn_worker(1, async { panic!("boom") })],
+        &mut gave_up,
+    )
+    .await;
 
     let [failure] = gave_up.as_slice() else {
         panic!("a panic must be counted, got {gave_up:?}");
@@ -159,7 +163,11 @@ async fn a_worker_out_of_retries_is_counted_for_that_reason() {
         last_error: "connection refused".to_string(),
     };
 
-    join_fleet(vec![worker(1, async move { Err(exhausted) })], &mut gave_up).await;
+    join_fleet(
+        vec![spawn_worker(1, async move { Err(exhausted) })],
+        &mut gave_up,
+    )
+    .await;
 
     let [failure] = gave_up.as_slice() else {
         panic!("an exhausted budget must be counted, got {gave_up:?}");
@@ -176,7 +184,7 @@ async fn a_worker_out_of_retries_is_counted_for_that_reason() {
 async fn a_worker_that_stopped_cleanly_leaves_nothing_behind() {
     let mut gave_up = Vec::new();
 
-    join_fleet(vec![worker(1, async { Ok(()) })], &mut gave_up).await;
+    join_fleet(vec![spawn_worker(1, async { Ok(()) })], &mut gave_up).await;
 
     assert!(gave_up.is_empty(), "got {gave_up:?}");
 }

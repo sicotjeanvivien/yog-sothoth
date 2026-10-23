@@ -34,7 +34,7 @@ fn the_committed_document_is_the_one_the_routes_declare() {
 #[test]
 fn every_api_route_is_mounted_with_its_contract() {
     let mut found = Vec::new();
-    literal_routes(
+    collect_literal_routes(
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
         &mut found,
     );
@@ -45,7 +45,7 @@ fn every_api_route_is_mounted_with_its_contract() {
     );
 }
 
-fn literal_routes(dir: &Path, found: &mut Vec<(String, String)>) {
+fn collect_literal_routes(dir: &Path, found: &mut Vec<(String, String)>) {
     for path in source_files(dir) {
         let source = fs::read_to_string(&path).expect("readable source file");
         for call in [".route(", ".route_service(", ".nest(", ".nest_service("] {

@@ -8,7 +8,9 @@ use sqlx::PgPool;
 use yog_core::domain::{TokenPrice, TokenPriceRepository};
 use yog_persistence::PgTokenPriceRepository;
 
-use super::helpers::{CHECK_VIOLATION, as_role, pk, record_prices, sqlstate, token_price};
+use super::helpers::{
+    CHECK_VIOLATION, pk, record_prices, setup_roles_and_connect_as, sqlstate, token_price,
+};
 
 type LastPrice = (String, Decimal, DateTime<Utc>);
 
@@ -89,7 +91,8 @@ async fn a_zero_price_is_refused(pool: PgPool) {
 /// second batch updates the row the first inserted.
 #[sqlx::test]
 async fn the_price_worker_writes_the_last_price_as_yog_context(pool: PgPool) {
-    let repository = PgTokenPriceRepository::new(as_role(&pool, "yog_context").await);
+    let repository =
+        PgTokenPriceRepository::new(setup_roles_and_connect_as(&pool, "yog_context").await);
     let now = Utc::now();
 
     for at in [now - Duration::minutes(1), now] {

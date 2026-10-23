@@ -1205,6 +1205,46 @@ async fn a_subscribe_that_is_never_answered_is_bounded_and_keeps_the_mark() {
     assert_eq!(server.resume_points(), vec![None, Some(8), Some(8)]);
 }
 
+/// Mutation this is written against: the subscribe site not counting its stall.
+#[test]
+fn a_subscribe_that_is_never_answered_is_counted_under_its_site() {
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("current-thread runtime")
+            .block_on(run_until_subscribed(
+                vec![
+                    ScriptedSession::NeverAnswer,
+                    ScriptedSession::Stream(vec![Action::Hold]),
+                ],
+                2,
+            ))
+    });
+
+    let stalls = snapshotter
+        .snapshot()
+        .into_vec()
+        .into_iter()
+        .find(|(key, _, _, _)| {
+            key.key().name() == "yog_indexer_grpc_stalls_total"
+                && key
+                    .key()
+                    .labels()
+                    .any(|l| l.key() == "site" && l.value() == "subscribe")
+        })
+        .map(|(_, _, _, value)| value);
+    assert!(
+        matches!(stalls, Some(DebugValue::Counter(n)) if n >= 1),
+        "a subscribe never answered is counted under its own site: {stalls:?}"
+    );
+}
+
 /// ⚠️ The stall timeout outlasts a container's stop grace, so `docker compose stop` would kill it.
 /// Mutation this is written against: awaiting the bounded `subscribe` without the `select!` on the token.
 #[tokio::test]

@@ -23,7 +23,7 @@ async fn main() -> anyhow::Result<()> {
     let config = bootstrap::Config::load()?;
     info!("configuration loaded");
 
-    let daemon = bootstrap::Daemon::new(&config)
+    let daemon = bootstrap::Daemon::connect(&config)
         .await
         .inspect_err(|e| error!(error = %e, "failed to initialize daemon"))?;
     info!("daemon state initialized");
@@ -44,7 +44,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 /// Install the Prometheus exporter on `:9000/metrics` as the global `metrics` recorder.
-/// ⚠️ Before any metric is emitted, so before `Daemon::new` registers the descriptions.
+/// ⚠️ Before any metric is emitted, so before `Daemon::connect` registers the descriptions.
 fn init_metrics() -> anyhow::Result<()> {
     PrometheusBuilder::new()
         .with_http_listener(([0, 0, 0, 0], 9000))

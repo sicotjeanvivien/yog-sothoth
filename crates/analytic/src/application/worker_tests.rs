@@ -86,7 +86,7 @@ async fn a_cycle_writes_what_the_plan_says_and_signals_success() {
     };
     let (worker, repository, heartbeat) = worker(Ok(progress), None);
 
-    worker.cycle(at(12, 30)).await.unwrap();
+    worker.run_cycle(at(12, 30)).await.unwrap();
 
     assert_eq!(
         *repository.cycles.lock().unwrap(),
@@ -100,7 +100,7 @@ async fn a_failed_write_signals_its_error() {
     let refused = RepositoryError::Backend("permission denied for table signals".into());
     let (worker, _, heartbeat) = worker(Ok(PROGRESS), Some(refused));
 
-    assert!(worker.cycle(at(12, 30)).await.is_err());
+    assert!(worker.run_cycle(at(12, 30)).await.is_err());
 
     assert_eq!(signals(&heartbeat).len(), 1);
     assert!(
@@ -118,7 +118,7 @@ async fn an_unreadable_progress_writes_nothing_and_signals_failure() {
     let unreachable = RepositoryError::Timeout("pool timed out".into());
     let (worker, repository, heartbeat) = worker(Err(unreachable), None);
 
-    assert!(worker.cycle(at(12, 30)).await.is_err());
+    assert!(worker.run_cycle(at(12, 30)).await.is_err());
 
     assert!(repository.cycles.lock().unwrap().is_empty());
     assert!(signals(&heartbeat)[0].contains("pool timed out"));

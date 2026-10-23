@@ -8,8 +8,8 @@ use yog_core::domain::{AnalyticProgress, AnalyticRepository, CycleWrite};
 use yog_persistence::PgAnalyticRepository;
 
 use super::helpers::{
-    INSUFFICIENT_PRIVILEGE, as_role, assert_reads_no_password_hash, pk, price_mint, sqlstate,
-    sqrt_price_x64,
+    INSUFFICIENT_PRIVILEGE, assert_reads_no_password_hash, pk, price_mint,
+    setup_roles_and_connect_as, sqlstate, sqrt_price_x64,
 };
 
 /// One instant per test, at the precision Postgres keeps: two `Utc::now()`
@@ -79,7 +79,7 @@ async fn setup_pool(pool: &PgPool, seed: u8, price_b: Option<&str>) -> String {
 /// A swap each way, both fees on the out token (`collect_fee_mode = 0`), each
 /// carrying a protocol and a referral share. ⚠️ A square rate: the pool's price
 /// from its square root is then exact, and equal to the implied one.
-async fn trade(pool: &PgPool, address: &str, tag: &str, at: DateTime<Utc>) {
+async fn insert_trade(pool: &PgPool, address: &str, tag: &str, at: DateTime<Utc>) {
     for (direction, a, b, claiming, protocol, referral, fee_is_a) in [
         (
             "a_to_b",
@@ -277,12 +277,13 @@ async fn facts_and_aggregate_equal_the_activity_view_on_closed_hours(pool: PgPoo
     let now = now();
     let priced = setup_pool(&pool, 1, Some("180.0")).await;
     let unpriced = setup_pool(&pool, 2, None).await;
-    trade(&pool, &priced, "p3", hours_before(now, 3)).await;
-    trade(&pool, &priced, "p2", hours_before(now, 2)).await;
-    trade(&pool, &unpriced, "u2", hours_before(now, 2)).await;
+    insert_trade(&pool, &priced, "p3", hours_before(now, 3)).await;
+    insert_trade(&pool, &priced, "p2", hours_before(now, 2)).await;
+    insert_trade(&pool, &unpriced, "u2", hours_before(now, 2)).await;
     let closed = hours_before(now, 2);
 
-    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     let cycle = cycle_from(now, hours_before(now, 3));
     repository.write_cycle(&cycle).await.unwrap();
 
@@ -312,9 +313,9 @@ async fn facts_summed_from_the_tranches_equal_the_hourly_view(pool: PgPool) {
     for (hour, tag) in [(freezing, "f"), (open, "o")] {
         for minute in [0, 25, 55] {
             let at = hour + Duration::minutes(minute) + Duration::seconds(30);
-            trade(&pool, &implied, &format!("{tag}{minute}"), at).await;
+            insert_trade(&pool, &implied, &format!("{tag}{minute}"), at).await;
         }
-        trade(
+        insert_trade(
             &pool,
             &unvalued,
             &format!("{tag}u"),
@@ -350,7 +351,8 @@ async fn facts_summed_from_the_tranches_equal_the_hourly_view(pool: PgPool) {
     .unwrap();
     assert_eq!(flags, (true, true, 4));
 
-    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     let outcome = repository
         .write_cycle(&cycle_from(open + Duration::minutes(70), freezing))
         .await
@@ -372,16 +374,17 @@ async fn facts_summed_from_the_tranches_equal_the_hourly_view(pool: PgPool) {
 async fn a_late_swap_in_a_materialised_tranche_misses_its_frozen_hour(pool: PgPool) {
     let hour = hours_before(now(), 3);
     let address = setup_pool(&pool, 1, Some("180.0")).await;
-    trade(&pool, &address, "on_time", hour + Duration::minutes(20)).await;
+    insert_trade(&pool, &address, "on_time", hour + Duration::minutes(20)).await;
     sqlx::query("CALL refresh_continuous_aggregate('meteora_damm_v2_swap_events_5min', $1, $2)")
         .bind(hour)
         .bind(hour + Duration::hours(1))
         .execute(&pool)
         .await
         .unwrap();
-    trade(&pool, &address, "late", hour + Duration::minutes(20)).await;
+    insert_trade(&pool, &address, "late", hour + Duration::minutes(20)).await;
 
-    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     let outcome = repository
         .write_cycle(&cycle_from(hour + Duration::minutes(80), hour))
         .await
@@ -399,10 +402,11 @@ async fn a_swap_written_after_the_freeze_changes_nothing_of_its_hour(pool: PgPoo
     let open = hours_before(now(), 1);
     let frozen = open - Duration::hours(2);
     let address = setup_pool(&pool, 1, Some("180.0")).await;
-    trade(&pool, &address, "before", frozen).await;
-    trade(&pool, &address, "now", open + Duration::minutes(10)).await;
+    insert_trade(&pool, &address, "before", frozen).await;
+    insert_trade(&pool, &address, "now", open + Duration::minutes(10)).await;
 
-    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     let first = repository
         .write_cycle(&cycle_from(open + Duration::minutes(20), frozen))
         .await
@@ -412,8 +416,8 @@ async fn a_swap_written_after_the_freeze_changes_nothing_of_its_hour(pool: PgPoo
     let aggregate = aggregate_protocol_hours(&pool, frozen).await;
     assert_eq!(facts[0].2, 2);
 
-    trade(&pool, &address, "late", frozen + Duration::minutes(30)).await;
-    trade(&pool, &address, "later", open + Duration::minutes(10)).await;
+    insert_trade(&pool, &address, "late", frozen + Duration::minutes(30)).await;
+    insert_trade(&pool, &address, "later", open + Duration::minutes(10)).await;
     let progress = repository.progress().await.unwrap();
     repository
         .write_cycle(&CycleWrite::plan(open + Duration::minutes(30), progress))
@@ -456,8 +460,9 @@ async fn a_cycle_waits_for_a_concurrent_freeze_and_keeps_out_of_it(pool: PgPool)
     let now = now();
     let address = setup_pool(&pool, 1, Some("180.0")).await;
     let frozen = hours_before(now, 3);
-    trade(&pool, &address, "before", frozen).await;
-    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    insert_trade(&pool, &address, "before", frozen).await;
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
 
     let mut other_writer = pool.begin().await.unwrap();
     sqlx::query("INSERT INTO analytic_hours (bucket, frozen_at) VALUES ($1, now())")
@@ -515,7 +520,8 @@ async fn a_side_without_a_price_counts_zero_and_a_pool_without_any_its_own_count
     hold(&pool, &none, 1, 1).await;
 
     let now = now();
-    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     let cycle = cycle_from(now, hours_before(now, 0));
     repository.write_cycle(&cycle).await.unwrap();
 
@@ -546,7 +552,7 @@ async fn discovered(pool: &PgPool, bucket: DateTime<Utc>) -> Vec<(String, BigDec
 }
 
 /// A pool priced on B at $180 holding `b` B, first seen at `seen`.
-async fn seen_at(pool: &PgPool, seed: u8, b: i64, seen: DateTime<Utc>) -> String {
+async fn seed_pool_seen_at(pool: &PgPool, seed: u8, b: i64, seen: DateTime<Utc>) -> String {
     let address = setup_pool(pool, seed, Some("180.0")).await;
     hold(pool, &address, 1, b * 1_000_000_000).await;
     sqlx::query("UPDATE pools SET first_seen_at = $2 WHERE pool_address = $1")
@@ -568,9 +574,9 @@ async fn a_pool_discovered_in_a_window_counts_in_its_part_and_one_born_there_doe
     let cycle = cycle_from(now, hours_before(now, 0));
     let hour = cycle.tvl_hour.unwrap();
     let start_of_day = hour + Duration::hours(1) - Duration::hours(24);
-    seen_at(&pool, 4, 1, hour - Duration::hours(2)).await;
-    seen_at(&pool, 8, 16, start_of_day).await;
-    let born = seen_at(&pool, 5, 2, hour - Duration::hours(2)).await;
+    seed_pool_seen_at(&pool, 4, 1, hour - Duration::hours(2)).await;
+    seed_pool_seen_at(&pool, 8, 16, start_of_day).await;
+    let born = seed_pool_seen_at(&pool, 5, 2, hour - Duration::hours(2)).await;
     sqlx::query(
         "INSERT INTO meteora_damm_v2_initialize_pool_events
            (pool_address, signature, token_a_mint, token_b_mint, creator, payer, alpha_vault,
@@ -586,10 +592,11 @@ async fn a_pool_discovered_in_a_window_counts_in_its_part_and_one_born_there_doe
     .execute(&pool)
     .await
     .unwrap();
-    seen_at(&pool, 6, 4, hour - Duration::hours(48)).await;
-    seen_at(&pool, 7, 8, hour - Duration::days(40)).await;
+    seed_pool_seen_at(&pool, 6, 4, hour - Duration::hours(48)).await;
+    seed_pool_seen_at(&pool, 7, 8, hour - Duration::days(40)).await;
 
-    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     repository.write_cycle(&cycle).await.unwrap();
 
     assert_eq!(
@@ -620,10 +627,11 @@ async fn a_pool_first_seen_after_the_start_measure_counts_as_discovered(pool: Pg
     .execute(&pool)
     .await
     .unwrap();
-    seen_at(&pool, 6, 4, from - Duration::minutes(10)).await;
-    seen_at(&pool, 4, 1, from - Duration::minutes(3)).await;
+    seed_pool_seen_at(&pool, 6, 4, from - Duration::minutes(10)).await;
+    seed_pool_seen_at(&pool, 4, 1, from - Duration::minutes(3)).await;
 
-    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     repository.write_cycle(&cycle).await.unwrap();
 
     assert_eq!(
@@ -640,7 +648,8 @@ async fn a_pool_without_a_current_state_is_not_counted_discovered(pool: PgPool) 
     let cycle = cycle_from(now, hours_before(now, 0));
     setup_pool(&pool, 9, Some("180.0")).await;
 
-    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     repository.write_cycle(&cycle).await.unwrap();
 
     assert_eq!(
@@ -655,9 +664,10 @@ async fn a_window_without_a_discovered_pool_writes_zero(pool: PgPool) {
     let now = now();
     let cycle = cycle_from(now, hours_before(now, 0));
     let hour = cycle.tvl_hour.unwrap();
-    seen_at(&pool, 7, 8, hour - Duration::days(40)).await;
+    seed_pool_seen_at(&pool, 7, 8, hour - Duration::days(40)).await;
 
-    let repository = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     repository.write_cycle(&cycle).await.unwrap();
 
     assert_eq!(
@@ -672,14 +682,14 @@ async fn a_window_without_a_discovered_pool_writes_zero(pool: PgPool) {
 /// every role's password hash.
 #[sqlx::test]
 async fn yog_analytic_cannot_read_the_password_hashes(pool: PgPool) {
-    let analytic = as_role(&pool, "yog_analytic").await;
+    let analytic = setup_roles_and_connect_as(&pool, "yog_analytic").await;
 
     assert_reads_no_password_hash(&mut analytic.acquire().await.unwrap()).await;
 }
 
 #[sqlx::test]
 async fn yog_analytic_cannot_write_signals(pool: PgPool) {
-    let analytic = as_role(&pool, "yog_analytic").await;
+    let analytic = setup_roles_and_connect_as(&pool, "yog_analytic").await;
 
     let err = sqlx::query(
         "INSERT INTO signals (detector, protocol, pool_address, severity, value, triggered_at)

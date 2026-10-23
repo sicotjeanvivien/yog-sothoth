@@ -18,7 +18,7 @@ pub(crate) struct Daemon {
 }
 
 impl Daemon {
-    pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
+    pub(crate) async fn connect(config: Config) -> anyhow::Result<Self> {
         let heartbeat = config.heartbeat_url.map(init_heartbeat).transpose()?;
         let database = init_db(&config.database_url).await?;
         let repository: Arc<dyn AnalyticRepository> =
