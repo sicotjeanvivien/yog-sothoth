@@ -1,4 +1,4 @@
-//! The wiring: every dependency [`super::Daemon::new`] builds before it owns
+//! The wiring: every dependency [`super::Daemon::connect`] builds before it owns
 //! one.
 
 use std::sync::Arc;
@@ -32,7 +32,7 @@ pub(super) async fn init_store(
         Ok(store) => Ok(store),
         Err(e) => {
             heartbeat
-                .failure(&format!("store_misconfigured: {e}"))
+                .report_failure(&format!("store_misconfigured: {e}"))
                 .await;
             Err(anyhow::Error::new(e).context("failed to configure the bucket"))
         }

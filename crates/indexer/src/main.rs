@@ -15,7 +15,7 @@ use tracing::error;
 use bootstrap::{Config, Daemon};
 
 /// Install the Prometheus exporter on `:9000/metrics` as the global `metrics` recorder.
-/// ⚠️ Every `counter!()` is a silent no-op until then, so it runs before `Daemon::new`.
+/// ⚠️ Every `counter!()` is a silent no-op until then, so it runs before `Daemon::connect`.
 fn init_metrics() -> anyhow::Result<()> {
     PrometheusBuilder::new()
         .with_http_listener(([0, 0, 0, 0], 9000))
@@ -43,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
     let config =
         Config::load().inspect_err(|e| error!(error = %e, "failed to load configuration"))?;
 
-    let daemon = Daemon::new(config)
+    let daemon = Daemon::connect(config)
         .await
         .inspect_err(|e| error!(error = %e, "failed to initialize daemon"))?;
 

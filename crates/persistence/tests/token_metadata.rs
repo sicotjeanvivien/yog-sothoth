@@ -252,7 +252,10 @@ async fn candidates(pool: &PgPool) -> Vec<String> {
     mints
 }
 
-async fn known_pair_last_moved_at(pool: &PgPool, last_event: DateTime<Utc>) -> (String, String) {
+async fn seed_known_pair_last_moved_at(
+    pool: &PgPool,
+    last_event: DateTime<Utc>,
+) -> (String, String) {
     let (addr, mint_a, mint_b) = (pk(1).to_string(), pk(30).to_string(), pk(31).to_string());
     insert_resolved_pool(pool, &addr, &mint_a, &mint_b).await;
     insert_pool_state(pool, &addr, last_event).await;
@@ -271,7 +274,7 @@ fn window_start() -> DateTime<Utc> {
 #[sqlx::test]
 async fn a_mint_active_within_the_window_without_a_price_is_asked(pool: PgPool) {
     let since = window_start();
-    let (mint_a, mint_b) = known_pair_last_moved_at(&pool, since + Duration::minutes(1)).await;
+    let (mint_a, mint_b) = seed_known_pair_last_moved_at(&pool, since + Duration::minutes(1)).await;
 
     let mut expected = vec![mint_a, mint_b];
     expected.sort();
@@ -282,7 +285,7 @@ async fn a_mint_active_within_the_window_without_a_price_is_asked(pool: PgPool) 
 #[sqlx::test]
 async fn a_quiet_mint_priced_within_the_window_is_asked(pool: PgPool) {
     let since = window_start();
-    let (mint_a, _) = known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
+    let (mint_a, _) = seed_known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
     price_at(&pool, &mint_a, "1", since + Duration::minutes(1)).await;
     prices_written_just_now(&pool).await;
 
@@ -293,7 +296,7 @@ async fn a_quiet_mint_priced_within_the_window_is_asked(pool: PgPool) {
 #[sqlx::test]
 async fn a_quiet_mint_whose_price_is_older_than_the_window_is_not_asked(pool: PgPool) {
     let since = window_start();
-    let (mint_a, _) = known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
+    let (mint_a, _) = seed_known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
     price_at(&pool, &mint_a, "1", since - Duration::minutes(1)).await;
     prices_written_just_now(&pool).await;
 
@@ -305,7 +308,7 @@ async fn a_quiet_mint_whose_price_is_older_than_the_window_is_not_asked(pool: Pg
 #[sqlx::test]
 async fn a_mint_out_of_the_window_is_asked_again_after_an_event_on_its_pool(pool: PgPool) {
     let since = window_start();
-    let (mint_a, mint_b) = known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
+    let (mint_a, mint_b) = seed_known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
     price_at(&pool, &mint_a, "1", since - Duration::minutes(1)).await;
     prices_written_just_now(&pool).await;
     assert!(candidates(&pool).await.is_empty());
@@ -322,7 +325,7 @@ async fn a_mint_out_of_the_window_is_asked_again_after_an_event_on_its_pool(pool
 #[sqlx::test]
 async fn after_an_outage_the_price_window_counts_back_from_the_last_write(pool: PgPool) {
     let last_write = Utc::now() - Duration::days(3);
-    let (fresh_then, stale_then) = known_pair_last_moved_at(&pool, last_write).await;
+    let (fresh_then, stale_then) = seed_known_pair_last_moved_at(&pool, last_write).await;
     price_at(&pool, &fresh_then, "1", last_write).await;
     price_at(
         &pool,
@@ -339,7 +342,7 @@ async fn after_an_outage_the_price_window_counts_back_from_the_last_write(pool: 
 #[sqlx::test]
 async fn a_future_dated_price_does_not_move_the_window(pool: PgPool) {
     let since = window_start();
-    let (mint_a, _) = known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
+    let (mint_a, _) = seed_known_pair_last_moved_at(&pool, since - Duration::minutes(1)).await;
     price_at(&pool, &mint_a, "1", Utc::now() - Duration::hours(1)).await;
     price_at(
         &pool,

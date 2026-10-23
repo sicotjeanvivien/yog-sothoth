@@ -58,7 +58,7 @@ impl SignalEngine {
             let shutdown = shutdown.clone();
             set.spawn(async move {
                 let name = detector.name();
-                detector_loop(detector, repository, shutdown).await;
+                run_detector_loop(detector, repository, shutdown).await;
                 name
             });
         }
@@ -87,7 +87,7 @@ impl SignalEngine {
 }
 
 /// One detector's interval loop. Returns when `shutdown` is cancelled.
-async fn detector_loop(
+async fn run_detector_loop(
     detector: Arc<dyn SignalDetector>,
     repository: Arc<dyn SignalRepository>,
     shutdown: CancellationToken,

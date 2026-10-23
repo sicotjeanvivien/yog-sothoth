@@ -1,5 +1,5 @@
 //! The wiring of the materialisation alarm: every dependency
-//! [`super::Daemon::new`] builds for it before it owns one.
+//! [`super::Daemon::connect`] builds for it before it owns one.
 
 use std::sync::Arc;
 

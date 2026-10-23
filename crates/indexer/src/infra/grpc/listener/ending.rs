@@ -3,9 +3,7 @@
 
 use tonic::Code;
 
-use crate::infra::grpc::metrics::{GrpcListenerMetrics, MarkRefusal};
-
-use super::log;
+use crate::infra::grpc::metrics::MarkRefusal;
 
 /// How one connection ended. Stream endings carry `resume_from` and `delivered` (whether data
 /// came off the stream); what an ending is worth is [`Ending::verdict`]'s alone.
@@ -121,6 +119,14 @@ impl Ending {
 }
 
 impl Verdict {
+    /// The mark this verdict gives up, and why: a refusal while the loop `held` one.
+    pub(super) fn abandoned_mark(&self, held: Option<u64>) -> Option<(u64, MarkRefusal)> {
+        match self {
+            Verdict::Refused { reason, .. } => held.map(|slot| (slot, *reason)),
+            _ => None,
+        }
+    }
+
     /// Where the next attempt resumes from, given the mark the loop already `held`.
     /// ⚠️ No floor: a replay breaking before the buffer drains rewinds `REWIND_SLOTS` each round and
     /// the churn resets the budget, so `from_slot` can walk back without bound.
@@ -128,13 +134,7 @@ impl Verdict {
         match self {
             // ⚠️ An absent mark is not zero (an unroutable transaction never enters the buffer).
             Verdict::Delivered { mark, .. } => mark.or(held),
-            Verdict::Refused { reason, .. } => {
-                if let Some(slot) = held {
-                    log::mark_abandoned(slot, *reason);
-                    GrpcListenerMetrics::record_mark_abandoned(*reason);
-                }
-                None
-            }
+            Verdict::Refused { .. } => None,
             Verdict::ServerFailed { .. }
             | Verdict::Unanswered { .. }
             | Verdict::ShutdownRequested

@@ -21,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
         .inspect_err(|e| error!(error = %e, "failed to load configuration"))?;
     info!("configuration loaded");
 
-    let daemon = bootstrap::Daemon::new(config)
+    let daemon = bootstrap::Daemon::connect(config)
         .await
         .inspect_err(|e| error!(error = %e, "failed to initialize the analytic writer"))?;
     info!("analytic writer initialized");

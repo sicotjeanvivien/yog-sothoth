@@ -20,7 +20,7 @@ pub struct ReadabilityCheck {
 impl ReadabilityCheck {
     /// Take over a `pg_restore` started with piped stdin and stderr, and
     /// `kill_on_drop` — [`PgTools::start_check`](super::PgTools::start_check).
-    pub(super) fn new(mut child: Child) -> Self {
+    pub(super) fn take_over(mut child: Child) -> Self {
         let stdin = child.stdin.take();
         let stderr = tokio::spawn(read_tail(child.stderr.take().expect("stderr is piped")));
         Self {

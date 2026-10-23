@@ -57,7 +57,10 @@ impl Delivery {
         // ⚠️ Back-pressure, not dropping (unlike the JSON-RPC dispatcher): a streamed
         // transaction comes once and cannot be asked for again.
         let ingested = match self.downstream.try_send(ingested) {
-            Ok(()) => return emitted(),
+            Ok(()) => {
+                GrpcListenerMetrics::record_emitted();
+                return SessionState::Open;
+            }
             Err(mpsc::error::TrySendError::Closed(_)) => return SessionState::DownstreamClosed,
             Err(mpsc::error::TrySendError::Full(ingested)) => ingested,
         };
@@ -71,17 +74,15 @@ impl Delivery {
     async fn wait_for_room(&self, ingested: IngestedTransaction) -> SessionState {
         tokio::select! {
             sent = self.downstream.send(ingested) => {
-                if sent.is_ok() { emitted() } else { SessionState::DownstreamClosed }
+                if sent.is_err() {
+                    return SessionState::DownstreamClosed;
+                }
+                GrpcListenerMetrics::record_emitted();
+                SessionState::Open
             }
             _ = self.shutdown.cancelled() => SessionState::ShutdownRequested,
         }
     }
-}
-
-/// A transaction left for the pipeline.
-fn emitted() -> SessionState {
-    GrpcListenerMetrics::record_emitted();
-    SessionState::Open
 }
 
 /// The reason label for a translation failure: a bounded set, so the counter

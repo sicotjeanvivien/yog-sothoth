@@ -137,7 +137,7 @@ async fn retention_moment(pool: &PgPool, cagg: &str, raw_table: &str) -> Retenti
 
 /// Buckets currently materialized — not what a read returns, which adds the raw rows. The
 /// `materialized_only` flag is flipped for the count and put back.
-async fn materialized_buckets(pool: &PgPool) -> (i64, Option<DateTime<Utc>>) {
+async fn count_materialized_buckets(pool: &PgPool) -> (i64, Option<DateTime<Utc>>) {
     sqlx::query(
         "ALTER MATERIALIZED VIEW meteora_damm_v2_swap_events_hourly
          SET (timescaledb.materialized_only = true)",
@@ -202,7 +202,7 @@ async fn the_policy_refresh_cannot_erase_what_retention_dropped(pool: PgPool) {
     .await
     .expect("a full refresh must materialize the seeded history");
 
-    let (before, oldest_before) = materialized_buckets(&pool).await;
+    let (before, oldest_before) = count_materialized_buckets(&pool).await;
     assert_eq!(before, 90 * 24, "the 90 seeded days must all materialize");
 
     let moment = retention_moment(
@@ -236,7 +236,7 @@ async fn the_policy_refresh_cannot_erase_what_retention_dropped(pool: PgPool) {
          green with the defect in place"
     );
 
-    let (after_drop, _) = materialized_buckets(&pool).await;
+    let (after_drop, _) = count_materialized_buckets(&pool).await;
     assert_eq!(
         after_drop, before,
         "dropping raw chunks must not touch the aggregate — that is the whole \
@@ -250,7 +250,7 @@ async fn the_policy_refresh_cannot_erase_what_retention_dropped(pool: PgPool) {
         .await
         .expect("the policy's own refresh must run");
 
-    let (after_refresh, oldest_after) = materialized_buckets(&pool).await;
+    let (after_refresh, oldest_after) = count_materialized_buckets(&pool).await;
     assert_eq!(
         after_refresh, before,
         "the refresh reached past the retention cut, recomputed a range whose \
@@ -302,7 +302,7 @@ async fn a_full_range_refresh_still_destroys_the_history(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    let (before, _) = materialized_buckets(&pool).await;
+    let (before, _) = count_materialized_buckets(&pool).await;
 
     sqlx::query(
         "SELECT drop_chunks('meteora_damm_v2_swap_events', older_than => INTERVAL '30 days')",
@@ -317,7 +317,7 @@ async fn a_full_range_refresh_still_destroys_the_history(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    let (after, _) = materialized_buckets(&pool).await;
+    let (after, _) = count_materialized_buckets(&pool).await;
 
     assert!(
         after < before,

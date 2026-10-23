@@ -74,7 +74,7 @@ impl PgTools {
         if let Some(password) = &password {
             command.env("PGPASSWORD", password.expose());
         }
-        Ok(DumpStream::new(spawn(&self.pg_dump, &mut command)?))
+        Ok(DumpStream::take_over(spawn(&self.pg_dump, &mut command)?))
     }
 
     /// Starts `pg_restore --file=/dev/null`, fed the whole archive while it is produced. It
@@ -87,7 +87,7 @@ impl PgTools {
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::piped());
-        Ok(ReadabilityCheck::new(spawn(
+        Ok(ReadabilityCheck::take_over(spawn(
             &self.pg_restore,
             &mut command,
         )?))

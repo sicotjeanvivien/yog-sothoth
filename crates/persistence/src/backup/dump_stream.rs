@@ -21,7 +21,7 @@ pub struct DumpStream {
 impl DumpStream {
     /// Take over a `pg_dump` started with piped stdout and stderr, and
     /// `kill_on_drop` — [`PgTools::start_dump`](super::PgTools::start_dump).
-    pub(super) fn new(mut child: Child) -> Self {
+    pub(super) fn take_over(mut child: Child) -> Self {
         let stdout = child.stdout.take().expect("stdout is piped");
         let stderr = tokio::spawn(read_tail(child.stderr.take().expect("stderr is piped")));
         Self {

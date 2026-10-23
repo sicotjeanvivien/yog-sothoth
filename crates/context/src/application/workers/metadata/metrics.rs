@@ -10,7 +10,7 @@ const UPSERT_TOTAL: &str = "yog_context_metadata_upsert_total";
 pub(crate) struct MetadataWorkerMetrics;
 
 impl MetadataWorkerMetrics {
-    /// Register once at startup, from `Daemon::new`.
+    /// Register once at startup, from `Daemon::connect`.
     pub(crate) fn register_descriptions() {
         describe_counter!(
             TICK_TOTAL,

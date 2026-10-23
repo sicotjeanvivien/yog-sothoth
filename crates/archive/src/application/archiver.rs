@@ -48,11 +48,11 @@ impl Archiver {
     pub(crate) async fn run(&self, now: DateTime<Utc>, cancel: &CancellationToken) -> RunOutcome {
         let outcome = self.archive(now, cancel).await;
         match &outcome {
-            RunOutcome::Archived { .. } => self.heartbeat.success().await,
+            RunOutcome::Archived { .. } => self.heartbeat.report_success().await,
             RunOutcome::Cancelled => {}
             RunOutcome::Failed(failure) => {
                 self.heartbeat
-                    .failure(&format!("{}: {}", failure.kind.label(), failure.reason))
+                    .report_failure(&format!("{}: {}", failure.kind.label(), failure.reason))
                     .await;
             }
         }

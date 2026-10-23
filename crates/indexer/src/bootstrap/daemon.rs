@@ -54,7 +54,7 @@ pub(crate) struct Daemon {
 impl Daemon {
     /// Build and wire all runtime dependencies; fails fast on an unreachable database or a
     /// misconfiguration.
-    pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
+    pub(crate) async fn connect(config: Config) -> anyhow::Result<Self> {
         // What the configuration entails, logged before anything acts on it.
         log_ingestion_mode(&config);
         warn_saturating_couple(&config);

@@ -992,7 +992,7 @@ async fn run_until_subscribed(
 
 /// ⚠️ A server can stop delivering and keep the connection (`rpcpool/yellowstone-grpc` #25, #175).
 /// Mutation this is written against: removing the stall arm of `Connector::read`'s `select!`, or
-/// `stalled` handing back `resume_from: None`. Not `#[tokio::test]`: it reads the counter.
+/// `end_stalled` handing back `resume_from: None`. Not `#[tokio::test]`: it reads the counter.
 #[test]
 fn a_stalled_stream_is_resubscribed_at_its_mark() {
     use metrics_util::debugging::{DebugValue, DebuggingRecorder};
@@ -1126,7 +1126,7 @@ async fn a_slow_but_live_stream_is_not_restarted() {
 }
 
 /// A stream that stalls having delivered nothing spends the retry budget.
-/// Mutation this is written against: `stalled` reporting `delivered: true`, which restarts the
+/// Mutation this is written against: `end_stalled` reporting `delivered: true`, which restarts the
 /// budget each time.
 #[tokio::test]
 async fn a_stall_that_delivered_nothing_spends_the_budget() {

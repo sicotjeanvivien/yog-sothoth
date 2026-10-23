@@ -1,7 +1,7 @@
 //! The directional swap flow view and `PgSwapFlowRepository`: each direction as yog-analytic
 //! values its tranches, without collapsing them, summed over the window.
 
-use super::helpers::{as_role, pk, price_mint_since, sqrt_price_x64, write_facts_spanning};
+use super::helpers::{connect_pool_as, pk, price_mint_since, sqrt_price_x64, write_facts_spanning};
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
@@ -317,7 +317,7 @@ async fn yog_signals_values_the_flow_under_its_own_role(pool: PgPool) {
     .await;
 
     write_facts_spanning(&pool, 31, 0).await;
-    let repo = PgSwapFlowRepository::new(as_role(&pool, "yog_signals").await);
+    let repo = PgSwapFlowRepository::new(connect_pool_as(&pool, "yog_signals").await);
     let flows = repo
         .directional_volume_since(now - Duration::hours(24), Decimal::ZERO)
         .await
@@ -406,7 +406,7 @@ async fn the_volume_floor_keeps_the_unvaluable_windows(pool: PgPool) {
 
 /// A priced pool with one swap each way an hour back, and its facts written from
 /// `first` to `last` hours back.
-async fn flows_with_facts_spanning(pool: &PgPool, first: i64, last: i64) -> usize {
+async fn seed_flows_with_facts_spanning(pool: &PgPool, first: i64, last: i64) -> usize {
     let now = Utc::now();
     let pool_addr = seed_pool_with_unpriced_a(pool, 30).await;
     insert_swap(
@@ -431,18 +431,18 @@ async fn flows_with_facts_spanning(pool: &PgPool, first: i64, last: i64) -> usiz
 /// would hand the detector a fragment of the window as if it were the window.
 #[sqlx::test]
 async fn a_window_the_facts_do_not_reach_back_to_yields_nothing(pool: PgPool) {
-    assert_eq!(flows_with_facts_spanning(&pool, 3, 0).await, 0);
+    assert_eq!(seed_flows_with_facts_spanning(&pool, 3, 0).await, 0);
 }
 
 /// Against the guard's upper bound dropped: a writer stopped three hours back would hand
 /// the detector a window with its last hours missing.
 #[sqlx::test]
 async fn a_window_past_the_last_hour_written_yields_nothing(pool: PgPool) {
-    assert_eq!(flows_with_facts_spanning(&pool, 31, 3).await, 0);
+    assert_eq!(seed_flows_with_facts_spanning(&pool, 31, 3).await, 0);
 }
 
 /// The two above, against a guard that refuses every window.
 #[sqlx::test]
 async fn a_window_the_facts_span_is_read(pool: PgPool) {
-    assert_eq!(flows_with_facts_spanning(&pool, 31, 0).await, 1);
+    assert_eq!(seed_flows_with_facts_spanning(&pool, 31, 0).await, 1);
 }

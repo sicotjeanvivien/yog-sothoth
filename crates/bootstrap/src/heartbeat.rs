@@ -16,9 +16,9 @@ const TIMEOUT: Duration = Duration::from_secs(15);
 #[async_trait]
 pub trait Heartbeat: Send + Sync {
     /// The work went as it should.
-    async fn success(&self);
+    async fn report_success(&self);
     /// The work failed; `reason` says how.
-    async fn failure(&self, reason: &str);
+    async fn report_failure(&self, reason: &str);
 }
 
 /// What differs from one daemon's check to another's — the words its errors
@@ -65,7 +65,7 @@ impl HealthchecksHeartbeat {
             .await
             .and_then(reqwest::Response::error_for_status);
         if let Err(e) = result {
-            self.undelivered(kind);
+            self.record_undelivered(kind);
             warn!(
                 kind,
                 error = %self.url.scrub(&e.to_string()),
@@ -74,22 +74,22 @@ impl HealthchecksHeartbeat {
         }
     }
 
-    fn undelivered(&self, kind: &'static str) {
+    fn record_undelivered(&self, kind: &'static str) {
         metrics::counter!(self.settings.undelivered_counter, "kind" => kind).increment(1);
     }
 }
 
 #[async_trait]
 impl Heartbeat for HealthchecksHeartbeat {
-    async fn success(&self) {
+    async fn report_success(&self) {
         let request = self.client.post(self.url.expose());
         self.deliver(request, "success").await;
     }
 
-    async fn failure(&self, reason: &str) {
+    async fn report_failure(&self, reason: &str) {
         let Some(url) = fail_url(self.url.expose()) else {
             // Checked at startup; kept total rather than unwrapped.
-            self.undelivered("failure");
+            self.record_undelivered("failure");
             return;
         };
         let request = self.client.post(url).body(reason.to_string());
@@ -119,11 +119,11 @@ pub struct RecordingHeartbeat {
 #[cfg(feature = "test-support")]
 #[async_trait]
 impl Heartbeat for RecordingHeartbeat {
-    async fn success(&self) {
+    async fn report_success(&self) {
         self.signals.lock().unwrap().push("success".to_string());
     }
 
-    async fn failure(&self, reason: &str) {
+    async fn report_failure(&self, reason: &str) {
         self.signals
             .lock()
             .unwrap()

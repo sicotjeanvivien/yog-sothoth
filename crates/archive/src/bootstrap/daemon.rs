@@ -23,7 +23,7 @@ pub(crate) struct Daemon {
 impl Daemon {
     /// Build everything a run needs. Nothing here touches the database: see
     /// [`PgVersions`] for why the connection belongs to the run.
-    pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
+    pub(crate) async fn connect(config: Config) -> anyhow::Result<Self> {
         let heartbeat = init_heartbeat(config.heartbeat_url)?;
         let store = init_store(&config.store, &heartbeat).await?;
 

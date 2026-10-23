@@ -7,7 +7,7 @@ use sqlx::{AssertSqlSafe, PgPool};
 use yog_core::domain::{AnalyticRepository, CycleWrite};
 use yog_persistence::PgAnalyticRepository;
 
-use super::helpers::as_role;
+use super::helpers::connect_pool_as;
 
 static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
@@ -19,7 +19,7 @@ macro_rules! day {
 }
 
 /// One raw swap `days` back at 01:00.
-async fn swap(pool: &PgPool, days: i32) {
+async fn insert_swap(pool: &PgPool, days: i32) {
     sqlx::query(concat!(
         "INSERT INTO meteora_damm_v2_swap_events
            (pool_address, signature, trade_direction,
@@ -37,8 +37,8 @@ async fn swap(pool: &PgPool, days: i32) {
 }
 
 /// One swap `days` back at 01:00, materialised into the 5-minute aggregate.
-async fn swap_materialised(pool: &PgPool, days: i32) {
-    swap(pool, days).await;
+async fn insert_materialised_swap(pool: &PgPool, days: i32) {
+    insert_swap(pool, days).await;
     sqlx::query(
         "CALL refresh_continuous_aggregate('meteora_damm_v2_swap_events_5min', NULL, NULL)",
     )
@@ -48,7 +48,7 @@ async fn swap_materialised(pool: &PgPool, days: i32) {
 }
 
 /// Three frozen hours of the writer, from midnight `days` back.
-async fn frozen_hours_from(pool: &PgPool, days: i32) {
+async fn insert_frozen_hours_from(pool: &PgPool, days: i32) {
     sqlx::query(concat!(
         "INSERT INTO analytic_hours (bucket, frozen_at) SELECT ",
         day!(),
@@ -81,8 +81,8 @@ async fn midnight(pool: &PgPool, days: i32) -> DateTime<Utc> {
 #[sqlx::test(migrations = false)]
 async fn the_rebuild_empties_the_valued_tables(pool: PgPool) {
     MIGRATOR.run_to(30, &pool).await.unwrap();
-    swap_materialised(&pool, 5).await;
-    frozen_hours_from(&pool, 3).await;
+    insert_materialised_swap(&pool, 5).await;
+    insert_frozen_hours_from(&pool, 3).await;
     for insert in [
         "INSERT INTO analytic_tranches (bucket, written_at) VALUES (now(), now())",
         "INSERT INTO analytic_pool_prices_5min (pool_address, bucket) VALUES ('p', now())",
@@ -131,8 +131,8 @@ async fn the_rebuild_empties_the_valued_tables(pool: PgPool) {
 #[sqlx::test(migrations = false)]
 async fn the_floor_waits_for_the_aggregate(pool: PgPool) {
     MIGRATOR.run_to(30, &pool).await.unwrap();
-    swap_materialised(&pool, 3).await;
-    frozen_hours_from(&pool, 5).await;
+    insert_materialised_swap(&pool, 3).await;
+    insert_frozen_hours_from(&pool, 5).await;
 
     MIGRATOR.run_to(33, &pool).await.unwrap();
 
@@ -148,8 +148,8 @@ async fn the_floor_waits_for_the_aggregate(pool: PgPool) {
 #[sqlx::test(migrations = false)]
 async fn the_floor_outlives_the_raw_dropped_after_materialisation(pool: PgPool) {
     MIGRATOR.run_to(30, &pool).await.unwrap();
-    swap(&pool, 5).await;
-    frozen_hours_from(&pool, 3).await;
+    insert_swap(&pool, 5).await;
+    insert_frozen_hours_from(&pool, 3).await;
     MIGRATOR.run_to(32, &pool).await.unwrap();
     sqlx::query("DELETE FROM meteora_damm_v2_swap_events")
         .execute(&pool)
@@ -166,8 +166,8 @@ async fn the_floor_outlives_the_raw_dropped_after_materialisation(pool: PgPool) 
 #[sqlx::test(migrations = false)]
 async fn without_an_aggregate_no_hour_stays(pool: PgPool) {
     MIGRATOR.run_to(30, &pool).await.unwrap();
-    swap_materialised(&pool, 5).await;
-    frozen_hours_from(&pool, 3).await;
+    insert_materialised_swap(&pool, 5).await;
+    insert_frozen_hours_from(&pool, 3).await;
     sqlx::query("DELETE FROM meteora_damm_v2_swap_events")
         .execute(&pool)
         .await
@@ -183,8 +183,8 @@ async fn without_an_aggregate_no_hour_stays(pool: PgPool) {
 #[sqlx::test(migrations = false)]
 async fn the_writer_freezes_again_after_the_rebuild(pool: PgPool) {
     MIGRATOR.run_to(30, &pool).await.unwrap();
-    swap_materialised(&pool, 5).await;
-    frozen_hours_from(&pool, 3).await;
+    insert_materialised_swap(&pool, 5).await;
+    insert_frozen_hours_from(&pool, 3).await;
     sqlx::query(concat!(
         "INSERT INTO analytic_protocol_periods (protocol, period, bucket, active_pools)
          SELECT 'meteora_damm_v2', w, ",
@@ -200,7 +200,7 @@ async fn the_writer_freezes_again_after_the_rebuild(pool: PgPool) {
     // ⚠️ Every migration before the writer, whose queries follow the latest schema.
     MIGRATOR.run(&pool).await.unwrap();
 
-    let analytic = PgAnalyticRepository::new(as_role(&pool, "yog_analytic").await);
+    let analytic = PgAnalyticRepository::new(connect_pool_as(&pool, "yog_analytic").await);
     let progress = analytic.progress().await.unwrap();
     let written = analytic
         .write_cycle(&CycleWrite::plan(Utc::now(), progress))
@@ -225,7 +225,7 @@ async fn the_writer_freezes_again_after_the_rebuild(pool: PgPool) {
 #[sqlx::test(migrations = false)]
 async fn the_recreated_aggregate_is_materialised(pool: PgPool) {
     MIGRATOR.run_to(30, &pool).await.unwrap();
-    swap(&pool, 5).await;
+    insert_swap(&pool, 5).await;
 
     MIGRATOR.run_to(32, &pool).await.unwrap();
 

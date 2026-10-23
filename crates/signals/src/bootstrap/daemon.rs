@@ -35,7 +35,7 @@ pub(crate) struct Daemon {
 
 impl Daemon {
     /// Connect to the database and build the engine and its detectors.
-    pub(crate) async fn new(config: &Config) -> anyhow::Result<Self> {
+    pub(crate) async fn connect(config: &Config) -> anyhow::Result<Self> {
         let database = Database::connect(config.database_url.expose())
             .await
             .context("failed to connect to database")?;

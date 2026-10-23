@@ -34,7 +34,7 @@ async fn scalar(pool: &PgPool, query: &'static str) -> String {
 /// What a migration and the jobs make after the file ran: under yog_migrate a
 /// compressed hypertable and a continuous aggregate, then a chunk of
 /// `token_prices` born late and one compressed. Returns the relations to read.
-async fn born_after_the_file(pool: &PgPool) -> Vec<String> {
+async fn create_relations_born_after_the_file(pool: &PgPool) -> Vec<String> {
     let mut migrate = pool.acquire().await.unwrap();
     for statement in [
         "SET ROLE yog_migrate",
@@ -100,7 +100,7 @@ async fn yog_archive_reads_every_schema_and_writes_nothing(pool: PgPool) {
         "archive_probe.kept".to_string(),
         "_timescaledb_catalog.hypertable".to_string(),
     ];
-    reads.extend(born_after_the_file(&pool).await);
+    reads.extend(create_relations_born_after_the_file(&pool).await);
 
     let mut conn = pool.acquire().await.unwrap();
     sqlx::query("SET ROLE yog_archive")

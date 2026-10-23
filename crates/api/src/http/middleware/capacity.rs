@@ -145,7 +145,7 @@ impl CappedStream {
 
     /// Bytes out make the connection live; a write still pending past the deadline ends it.
     /// ⚠️ A client that stops reading leaves writes pending while hyper never reads again.
-    fn written(
+    fn on_written(
         &mut self,
         cx: &mut Context<'_>,
         outcome: Poll<io::Result<usize>>,
@@ -155,14 +155,14 @@ impl CappedStream {
                 self.touch();
                 outcome
             }
-            Poll::Pending if self.idle_expired(cx) => Poll::Ready(Err(idle_error())),
+            Poll::Pending if self.poll_idle_expired(cx) => Poll::Ready(Err(idle_error())),
             _ => outcome,
         }
     }
 
     /// Whether the deadline has passed. Registers the waker when it has not,
     /// so a stalled connection is woken — and closed — when it does.
-    fn idle_expired(&mut self, cx: &mut Context<'_>) -> bool {
+    fn poll_idle_expired(&mut self, cx: &mut Context<'_>) -> bool {
         self.deadline.as_mut().poll(cx).is_ready()
     }
 }
@@ -182,7 +182,7 @@ impl AsyncRead for CappedStream {
                 }
                 Poll::Ready(outcome)
             }
-            Poll::Pending if this.idle_expired(cx) => Poll::Ready(Err(idle_error())),
+            Poll::Pending if this.poll_idle_expired(cx) => Poll::Ready(Err(idle_error())),
             Poll::Pending => Poll::Pending,
         }
     }
@@ -196,7 +196,7 @@ impl AsyncWrite for CappedStream {
     ) -> Poll<io::Result<usize>> {
         let this = self.get_mut();
         let outcome = Pin::new(&mut this.stream).poll_write(cx, buf);
-        this.written(cx, outcome)
+        this.on_written(cx, outcome)
     }
 
     fn poll_write_vectored(
@@ -206,7 +206,7 @@ impl AsyncWrite for CappedStream {
     ) -> Poll<io::Result<usize>> {
         let this = self.get_mut();
         let outcome = Pin::new(&mut this.stream).poll_write_vectored(cx, bufs);
-        this.written(cx, outcome)
+        this.on_written(cx, outcome)
     }
 
     fn is_write_vectored(&self) -> bool {
@@ -216,7 +216,7 @@ impl AsyncWrite for CappedStream {
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         let this = self.get_mut();
         match Pin::new(&mut this.stream).poll_flush(cx) {
-            Poll::Pending if this.idle_expired(cx) => Poll::Ready(Err(idle_error())),
+            Poll::Pending if this.poll_idle_expired(cx) => Poll::Ready(Err(idle_error())),
             outcome => outcome,
         }
     }
