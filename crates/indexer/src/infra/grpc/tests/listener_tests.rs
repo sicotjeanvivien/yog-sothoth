@@ -1205,8 +1205,7 @@ async fn a_subscribe_that_is_never_answered_is_bounded_and_keeps_the_mark() {
     assert_eq!(server.resume_points(), vec![None, Some(8), Some(8)]);
 }
 
-/// Mutation this is written against: the subscribe site not counting its stall, which the stream
-/// site's test cannot see now that each site counts its own.
+/// Mutation this is written against: the subscribe site not counting its stall.
 #[test]
 fn a_subscribe_that_is_never_answered_is_counted_under_its_site() {
     use metrics_util::debugging::{DebugValue, DebuggingRecorder};

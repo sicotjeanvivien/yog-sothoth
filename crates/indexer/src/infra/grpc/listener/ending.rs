@@ -36,9 +36,7 @@ pub(super) enum Ending {
     },
 }
 
-/// What an ending is worth — decided once, read by the rules that follow an
-/// attempt: the resume mark ([`Verdict::next_resume_from`]) and the retry
-/// budget (`RetryBudget::settle`).
+/// What an ending is worth — decided once, read by every rule that follows an attempt.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Verdict {
     /// A stop was requested.
