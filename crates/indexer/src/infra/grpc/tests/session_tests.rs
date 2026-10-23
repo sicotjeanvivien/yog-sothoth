@@ -13,9 +13,9 @@ use yellowstone_grpc_proto::prelude::{
 };
 
 use crate::infra::grpc::test_fixtures::{
-    PROTOCOL, Snapshot, at, block_meta, block_meta_in_bank, ping, slot_finalized, slot_status,
-    transaction, transaction_in_bank, transaction_update_with_signature, unroutable_transaction,
-    update,
+    PROTOCOL, Snapshot, at, block_meta, block_meta_in_bank, gauge_for, ping, slot_finalized,
+    slot_status, transaction, transaction_in_bank, transaction_update_with_signature,
+    unroutable_transaction, update,
 };
 
 /// How many ping answers the harness's outbound half holds unread.
@@ -124,14 +124,6 @@ async fn a_block_meta_without_a_time_gives_up_the_slot() {
 // ── banks ───────────────────────────────────────────────────────────
 
 const BANK_ID_MISSING: &str = "yog_indexer_grpc_bank_id_missing";
-
-/// The gauge `name`, or `None` when never set.
-fn gauge_for(snapshot: &Snapshot, name: &str) -> Option<f64> {
-    snapshot.iter().find_map(|(key, _, _, value)| match value {
-        DebugValue::Gauge(v) if key.key().name() == name => Some(v.into_inner()),
-        _ => None,
-    })
-}
 
 /// Drain what reached the consumer, by signature's first byte.
 fn signatures(downstream: &mut mpsc::Receiver<IngestedTransaction>) -> Vec<u8> {

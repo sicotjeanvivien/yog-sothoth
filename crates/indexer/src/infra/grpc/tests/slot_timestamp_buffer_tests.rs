@@ -2,7 +2,7 @@
 //! the right numbers is a provider's stream's to say, through the two peaks it reports.
 
 use super::*;
-use crate::infra::grpc::test_fixtures::Snapshot;
+use crate::infra::grpc::test_fixtures::{Snapshot, gauge_for};
 
 /// What the assertions read and nothing in production does, through two `#[cfg(test)]` accessors.
 impl<T> SlotTimestampBuffer<T> {
@@ -57,7 +57,7 @@ fn at(secs: i64) -> DateTime<Utc> {
 
 // ── the arrival orders, banks aside ─────────────────────────────────
 
-/// The common order: transactions wait, the status and block-meta release them together.
+/// Against a release out of arrival order, or before both halves.
 #[test]
 fn payloads_arriving_before_their_block_time_wait_for_it() {
     let mut buffer = buffer();
@@ -282,7 +282,7 @@ fn an_unknown_bank_is_paired_by_slot_with_the_kept_one() {
     );
 }
 
-/// A status naming no bank cannot tell banks apart: the slot is paired by slot alone, as before.
+/// Against a status without a bank read as a bank of its own: every payload would be dropped as losing.
 #[test]
 fn a_status_naming_no_bank_admits_every_bank() {
     let mut buffer = buffer();
@@ -336,6 +336,28 @@ fn nothing_leaves_before_the_status_even_with_its_instant() {
 
     assert_eq!(buffer.pending_payloads(), 2);
     assert_eq!(buffer.on_finalized(10, Bank::Unknown).len(), 2);
+}
+
+/// Against a table sized to the window's slot count: the slot at its far edge, still waiting,
+/// would lose its verdict to the head's and be evicted instead of released.
+#[test]
+fn a_slot_at_the_edge_of_the_window_keeps_its_verdict() {
+    let mut buffer = SlotTimestampBuffer::<Payload>::new();
+    let edge = 1_000;
+
+    buffer.payload(edge, 1);
+    buffer.on_finalized(edge, Bank::Unknown);
+    for slot in edge + 1..=edge + MAX_PENDING_SLOTS {
+        buffer.close(slot, at(slot as i64));
+    }
+
+    assert_eq!(
+        buffer.on_block_time(edge, Bank::Unknown, at(1)),
+        vec![Resolved {
+            payload: 1,
+            at: at(1)
+        }]
+    );
 }
 
 /// The losing-bank counter, or `None` when never touched.
@@ -484,7 +506,7 @@ fn the_two_bounds_evict_opposite_ends() {
     );
 }
 
-/// ⚠️ `known` must be bounded too: nothing in the pending path touches it.
+/// ⚠️ `known` must be bounded too: every slot adds an entry, waiting or not.
 #[test]
 fn the_table_of_known_slots_is_bounded_too() {
     let mut buffer = buffer(); // 2 known slots
@@ -784,16 +806,6 @@ fn a_stale_slot_is_evicted_by_block_metas_alone() {
 }
 
 // ── peaks ───────────────────────────────────────────────────────────
-
-/// The gauge's value under `name`, or `None` when never set.
-fn gauge_for(snapshot: &Snapshot, name: &str) -> Option<f64> {
-    snapshot.iter().find_map(|(key, _, _, value)| match value {
-        metrics_util::debugging::DebugValue::Gauge(v) if key.key().name() == name => {
-            Some(v.into_inner())
-        }
-        _ => None,
-    })
-}
 
 /// ⚠️ Against a gauge that follows the current count: a drained buffer would read 0, and the
 /// burst the bound is sized for would be gone by the next scrape.

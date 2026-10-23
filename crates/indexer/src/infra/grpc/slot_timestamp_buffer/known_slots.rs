@@ -1,5 +1,4 @@
-//! What is already settled about a slot — each bank's instant, and the bank the cluster kept —
-//! for the payload that arrives after it.
+//! What is already known about a slot: each bank's instant, and the bank the cluster kept.
 
 use std::collections::BTreeMap;
 
@@ -51,7 +50,7 @@ impl Facts {
     }
 }
 
-/// The settled slots, in one bounded table.
+/// The slots' facts, in one bounded table.
 /// ⚠️ Given-up banks are kept too: a payload arriving after an empty block-meta meets the answer
 /// at once instead of waiting out the window and leaving labelled `slot_bound`.
 pub(super) struct KnownSlots {

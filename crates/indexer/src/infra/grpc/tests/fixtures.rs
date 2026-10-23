@@ -24,6 +24,16 @@ pub(super) type Snapshot = Vec<(
     metrics_util::debugging::DebugValue,
 )>;
 
+/// The gauge `name`, or `None` when never set.
+pub(super) fn gauge_for(snapshot: &Snapshot, name: &str) -> Option<f64> {
+    snapshot.iter().find_map(|(key, _, _, value)| match value {
+        metrics_util::debugging::DebugValue::Gauge(v) if key.key().name() == name => {
+            Some(v.into_inner())
+        }
+        _ => None,
+    })
+}
+
 pub(super) fn at(secs: i64) -> DateTime<Utc> {
     DateTime::from_timestamp(secs, 0).expect("a valid instant")
 }

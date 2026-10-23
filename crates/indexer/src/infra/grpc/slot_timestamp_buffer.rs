@@ -25,8 +25,9 @@ pub(crate) const MAX_PENDING_SLOTS: u64 = 256;
 /// ⚠️ A count, not bytes: at ~5–20 KB per update, the bound is ~40–160 MB resident.
 pub(crate) const MAX_PENDING_PAYLOADS: usize = 8_192;
 
-/// How many settled slots are remembered, for payloads that arrive **after** their block-meta and status.
-pub(crate) const MAX_KNOWN_SLOTS: usize = 256;
+/// How many slots' facts are remembered, for what waits and for what arrives after them.
+/// ⚠️ The whole window, head included: a waiting slot whose verdict was forgotten never leaves.
+pub(crate) const MAX_KNOWN_SLOTS: usize = MAX_PENDING_SLOTS as usize + 1;
 
 /// A payload and the block time that was found for it.
 #[derive(Debug, Clone, PartialEq, Eq)]
