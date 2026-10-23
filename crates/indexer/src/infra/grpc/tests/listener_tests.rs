@@ -992,7 +992,7 @@ async fn run_until_subscribed(
 
 /// ⚠️ A server can stop delivering and keep the connection (`rpcpool/yellowstone-grpc` #25, #175).
 /// Mutation this is written against: removing the stall arm of `Connector::read`'s `select!`, or
-/// `end_stalled` handing back `resume_from: None`. Not `#[tokio::test]`: it reads the counter.
+/// `stalled` handing back `resume_from: None`. Not `#[tokio::test]`: it reads the counter.
 #[test]
 fn a_stalled_stream_is_resubscribed_at_its_mark() {
     use metrics_util::debugging::{DebugValue, DebuggingRecorder};
@@ -1126,7 +1126,7 @@ async fn a_slow_but_live_stream_is_not_restarted() {
 }
 
 /// A stream that stalls having delivered nothing spends the retry budget.
-/// Mutation this is written against: `end_stalled` reporting `delivered: true`, which restarts the
+/// Mutation this is written against: `stalled` reporting `delivered: true`, which restarts the
 /// budget each time.
 #[tokio::test]
 async fn a_stall_that_delivered_nothing_spends_the_budget() {
@@ -1203,6 +1203,47 @@ async fn a_subscribe_that_is_never_answered_is_bounded_and_keeps_the_mark() {
     .await;
 
     assert_eq!(server.resume_points(), vec![None, Some(8), Some(8)]);
+}
+
+/// Mutation this is written against: the subscribe site not counting its stall, which the stream
+/// site's test cannot see now that each site counts its own.
+#[test]
+fn a_subscribe_that_is_never_answered_is_counted_under_its_site() {
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("current-thread runtime")
+            .block_on(run_until_subscribed(
+                vec![
+                    ScriptedSession::NeverAnswer,
+                    ScriptedSession::Stream(vec![Action::Hold]),
+                ],
+                2,
+            ))
+    });
+
+    let stalls = snapshotter
+        .snapshot()
+        .into_vec()
+        .into_iter()
+        .find(|(key, _, _, _)| {
+            key.key().name() == "yog_indexer_grpc_stalls_total"
+                && key
+                    .key()
+                    .labels()
+                    .any(|l| l.key() == "site" && l.value() == "subscribe")
+        })
+        .map(|(_, _, _, value)| value);
+    assert!(
+        matches!(stalls, Some(DebugValue::Counter(n)) if n >= 1),
+        "a subscribe never answered is counted under its own site: {stalls:?}"
+    );
 }
 
 /// ⚠️ The stall timeout outlasts a container's stop grace, so `docker compose stop` would kill it.

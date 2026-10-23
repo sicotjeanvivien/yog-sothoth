@@ -10,7 +10,7 @@ use yog_core::domain::{
 };
 use yog_persistence::{PgAnalyticRepository, PgTokenActivityRepository};
 
-use super::helpers::{connect_pool_as, pk};
+use super::helpers::{pk, setup_roles_and_connect_as};
 
 fn hour(n: i64) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 10, 1, 0, 0, 0).unwrap() + Duration::hours(n)
@@ -116,7 +116,8 @@ async fn a_pool_active_two_hours_counts_once(pool: PgPool) {
     insert_tranche(&pool, &p, 1, Some(20)).await;
     insert_tranche(&pool, &q, 1, Some(5)).await;
 
-    let repository = PgAnalyticRepository::new(connect_pool_as(&pool, "yog_analytic").await);
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     repository.write_cycle(&cycle(0, 1)).await.unwrap();
 
     for period in ["24h", "7d", "30d"] {
@@ -133,7 +134,8 @@ async fn every_hour_a_cycle_freezes_gets_its_periods(pool: PgPool) {
     insert_tranche(&pool, &p, 0, Some(10)).await;
     insert_tranche(&pool, &q, 2, Some(5)).await;
 
-    let repository = PgAnalyticRepository::new(connect_pool_as(&pool, "yog_analytic").await);
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     repository.write_cycle(&cycle(0, 2)).await.unwrap();
 
     for (at, pools) in [(0, 1), (1, 1), (2, 2)] {
@@ -152,7 +154,8 @@ async fn a_protocol_without_an_active_pool_counts_zero(pool: PgPool) {
     let p = setup_pool(&pool, 1, 101, 102).await;
     insert_tranche(&pool, &p, 0, Some(10)).await;
 
-    let repository = PgAnalyticRepository::new(connect_pool_as(&pool, "yog_analytic").await);
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     repository.write_cycle(&cycle(0, 0)).await.unwrap();
 
     let dlmm: Vec<(String, i64)> = sqlx::query_as(
@@ -184,9 +187,10 @@ async fn the_next_page_starts_after_a_token_whose_volume_has_many_digits(pool: P
     .execute(&pool)
     .await
     .unwrap();
-    let repository = PgAnalyticRepository::new(connect_pool_as(&pool, "yog_analytic").await);
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     repository.write_cycle(&cycle(0, 0)).await.unwrap();
-    let feed = PgTokenActivityRepository::new(connect_pool_as(&pool, "yog_api").await);
+    let feed = PgTokenActivityRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
 
     let mut seen = Vec::new();
     let mut cursor = None;
@@ -220,7 +224,8 @@ async fn a_window_starts_after_the_hour_a_window_length_back(pool: PgPool) {
     insert_tranche(&pool, &p, 0, Some(10)).await;
     insert_tranche(&pool, &q, 24, Some(10)).await;
 
-    let repository = PgAnalyticRepository::new(connect_pool_as(&pool, "yog_analytic").await);
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     repository.write_cycle(&cycle(0, 24)).await.unwrap();
 
     assert_eq!(active_pools(&pool, "24h", 24).await, Some(1));
@@ -245,7 +250,8 @@ async fn a_token_is_the_sum_of_the_pools_that_hold_it(pool: PgPool) {
     insert_tranche(&pool, &p, 1, Some(20)).await;
     insert_tranche(&pool, &q, 1, None).await;
 
-    let repository = PgAnalyticRepository::new(connect_pool_as(&pool, "yog_analytic").await);
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     repository.write_cycle(&cycle(0, 1)).await.unwrap();
 
     let mut expected = vec![
@@ -264,7 +270,8 @@ async fn a_freeze_replaces_the_tokens_of_the_last_one(pool: PgPool) {
     insert_tranche(&pool, &p, 0, Some(10)).await;
     insert_tranche(&pool, &p, 1, Some(20)).await;
 
-    let repository = PgAnalyticRepository::new(connect_pool_as(&pool, "yog_analytic").await);
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     repository.write_cycle(&cycle(0, 0)).await.unwrap();
     repository.write_cycle(&cycle(1, 1)).await.unwrap();
 
@@ -285,7 +292,8 @@ async fn a_birth_is_an_initialize_pool_and_nothing_else(pool: PgPool) {
     initialize(&pool, &p, hour(1) + Duration::minutes(3)).await;
     initialize(&pool, &p2, hour(1) + Duration::minutes(40)).await;
 
-    let repository = PgAnalyticRepository::new(connect_pool_as(&pool, "yog_analytic").await);
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     repository.write_cycle(&cycle(0, 1)).await.unwrap();
 
     let births: Vec<(DateTime<Utc>, i64)> = sqlx::query_as(

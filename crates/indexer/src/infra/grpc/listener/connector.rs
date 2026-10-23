@@ -195,7 +195,8 @@ impl Connector {
                 // After `message`, so that a message already waiting — which
                 // may be the block-meta that resets the clock — is read first.
                 _ = tokio::time::sleep(clock.remaining()) => {
-                    return self.end_stalled(
+                    GrpcListenerMetrics::record_stall(StallSite::Stream);
+                    return self.stalled(
                         StallSite::Stream,
                         session.received_data(),
                         session.resume_from(),
@@ -224,7 +225,8 @@ impl Connector {
             ) => subscribed,
         };
         let Ok(subscribed) = subscribed else {
-            return Err(self.end_stalled(StallSite::Subscribe, false, None));
+            GrpcListenerMetrics::record_stall(StallSite::Subscribe);
+            return Err(self.stalled(StallSite::Subscribe, false, None));
         };
 
         let url = self.endpoint.url();
@@ -275,11 +277,9 @@ impl Connector {
         }
     }
 
-    /// End an attempt as [`Ending::Stalled`], counted by site. Not logged
-    /// here: the budget logs every ending once, with the mark it will use.
-    fn end_stalled(&self, site: StallSite, delivered: bool, resume_from: Option<u64>) -> Ending {
-        GrpcListenerMetrics::record_stall(site);
-
+    /// The [`Ending::Stalled`] of an attempt; the caller counts it by site. Not logged here: the
+    /// budget logs every ending once, with the mark it will use.
+    fn stalled(&self, site: StallSite, delivered: bool, resume_from: Option<u64>) -> Ending {
         Ending::Stalled {
             error: format!("stalled: {} for {:?}", site.describe(), self.stall_timeout),
             delivered,

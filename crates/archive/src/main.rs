@@ -22,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
         .inspect_err(|e| error!(error = %e, "failed to load configuration"))?;
     info!("configuration loaded");
 
-    let daemon = bootstrap::Daemon::connect(config)
+    let daemon = bootstrap::Daemon::new(config)
         .await
         .inspect_err(|e| error!(error = %e, "failed to initialize the archiver"))?;
     info!("archiver initialized");
@@ -40,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 /// Install the Prometheus exporter on `:9000/metrics` and describe the archiver's metrics.
-/// ⚠️ Before any metric is emitted, so before `Daemon::connect`, which can signal a misconfigured bucket.
+/// ⚠️ Before any metric is emitted, so before `Daemon::new`, which can signal a misconfigured bucket.
 fn init_metrics() -> anyhow::Result<()> {
     PrometheusBuilder::new()
         .with_http_listener(([0, 0, 0, 0], 9000))

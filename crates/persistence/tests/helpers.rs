@@ -67,7 +67,7 @@ pub async fn apply_setup_roles(pool: &PgPool) {
 
 /// A pool on the test's database whose connections act as `role`, after
 /// [`apply_setup_roles`].
-pub async fn connect_pool_as(pool: &PgPool, role: &str) -> PgPool {
+pub async fn setup_roles_and_connect_as(pool: &PgPool, role: &str) -> PgPool {
     apply_setup_roles(pool).await;
     let options = (*pool.connect_options()).clone().options([("role", role)]);
     let scoped = PgPool::connect_with(options).await.unwrap();

@@ -100,11 +100,11 @@ impl GrpcListener {
                 .await
                 .verdict();
 
-            // ⚠️ The only place `resume_from` is written; the mark rule and the budget read the one verdict.
             if let Some((slot, reason)) = verdict.abandoned_mark(resume_from) {
                 log::mark_abandoned(slot, reason);
                 GrpcListenerMetrics::record_mark_abandoned(reason);
             }
+            // ⚠️ The only place `resume_from` is written; the mark rule and the budget read the one verdict.
             resume_from = verdict.next_resume_from(resume_from);
 
             match budget.settle(verdict, resume_from) {

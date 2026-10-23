@@ -10,7 +10,7 @@ use sqlx::types::BigDecimal;
 use yog_core::domain::{AnalyticProgress, AnalyticRepository, CycleOutcome, CycleWrite};
 use yog_persistence::PgAnalyticRepository;
 
-use super::helpers::{connect_pool_as, pk, price_at, sqrt_price_x64};
+use super::helpers::{pk, price_at, setup_roles_and_connect_as, sqrt_price_x64};
 
 /// A tranche three hours back, ten minutes into its hour: settled, and clear of
 /// the hour's first and last tranches.
@@ -119,7 +119,7 @@ async fn run_cycle_at(pool: &PgPool, tranche: DateTime<Utc>, now: DateTime<Utc>)
         last_frozen: None,
         last_tranche: Some(tranche - Duration::minutes(5)),
     };
-    repository_of(connect_pool_as(pool, "yog_analytic").await)
+    repository_of(setup_roles_and_connect_as(pool, "yog_analytic").await)
         .write_cycle(&CycleWrite::plan(now, progress))
         .await
         .unwrap()
@@ -981,7 +981,7 @@ async fn a_tranche_is_valued_once(pool: PgPool) {
         tranche,
     )
     .await;
-    let analytic = repository_of(connect_pool_as(&pool, "yog_analytic").await);
+    let analytic = repository_of(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     let progress = analytic.progress().await.unwrap();
     analytic
         .write_cycle(&CycleWrite::plan(tranche + Duration::minutes(30), progress))
@@ -1026,7 +1026,7 @@ async fn an_hourly_fact_is_the_sum_of_its_tranches(pool: PgPool) {
         last_frozen: None,
         last_tranche: None,
     };
-    repository_of(connect_pool_as(&pool, "yog_analytic").await)
+    repository_of(setup_roles_and_connect_as(&pool, "yog_analytic").await)
         .write_cycle(&CycleWrite::plan(hour + Duration::minutes(40), progress))
         .await
         .unwrap();

@@ -1,7 +1,9 @@
 //! The directional swap flow view and `PgSwapFlowRepository`: each direction as yog-analytic
 //! values its tranches, without collapsing them, summed over the window.
 
-use super::helpers::{connect_pool_as, pk, price_mint_since, sqrt_price_x64, write_facts_spanning};
+use super::helpers::{
+    pk, price_mint_since, setup_roles_and_connect_as, sqrt_price_x64, write_facts_spanning,
+};
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
@@ -317,7 +319,7 @@ async fn yog_signals_values_the_flow_under_its_own_role(pool: PgPool) {
     .await;
 
     write_facts_spanning(&pool, 31, 0).await;
-    let repo = PgSwapFlowRepository::new(connect_pool_as(&pool, "yog_signals").await);
+    let repo = PgSwapFlowRepository::new(setup_roles_and_connect_as(&pool, "yog_signals").await);
     let flows = repo
         .directional_volume_since(now - Duration::hours(24), Decimal::ZERO)
         .await

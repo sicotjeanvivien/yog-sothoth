@@ -36,8 +36,8 @@ pub(super) enum Ending {
     },
 }
 
-/// What an ending is worth — decided once, read by the two rules that follow
-/// an attempt: the resume mark ([`Verdict::next_resume_from`]) and the retry
+/// What an ending is worth — decided once, read by the rules that follow an
+/// attempt: the resume mark ([`Verdict::next_resume_from`]) and the retry
 /// budget (`RetryBudget::settle`).
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Verdict {
@@ -119,10 +119,10 @@ impl Ending {
 }
 
 impl Verdict {
-    /// The mark this verdict gives up, and why: a refusal while the loop `held` one.
+    /// The mark the loop `held` that [`Self::next_resume_from`] drops, and why.
     pub(super) fn abandoned_mark(&self, held: Option<u64>) -> Option<(u64, MarkRefusal)> {
-        match self {
-            Verdict::Refused { reason, .. } => held.map(|slot| (slot, *reason)),
+        match (self, held, self.next_resume_from(held)) {
+            (Verdict::Refused { reason, .. }, Some(slot), None) => Some((slot, *reason)),
             _ => None,
         }
     }

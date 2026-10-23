@@ -7,7 +7,7 @@ use sqlx::{AssertSqlSafe, PgPool};
 use yog_core::domain::{AnalyticRepository, CycleWrite};
 use yog_persistence::PgAnalyticRepository;
 
-use super::helpers::connect_pool_as;
+use super::helpers::setup_roles_and_connect_as;
 
 static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
@@ -200,7 +200,8 @@ async fn the_writer_freezes_again_after_the_rebuild(pool: PgPool) {
     // ⚠️ Every migration before the writer, whose queries follow the latest schema.
     MIGRATOR.run(&pool).await.unwrap();
 
-    let analytic = PgAnalyticRepository::new(connect_pool_as(&pool, "yog_analytic").await);
+    let analytic =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
     let progress = analytic.progress().await.unwrap();
     let written = analytic
         .write_cycle(&CycleWrite::plan(Utc::now(), progress))
