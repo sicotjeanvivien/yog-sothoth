@@ -214,7 +214,7 @@ async fn connect_and_forward(
 
     let filter = RpcTransactionLogsFilter::Mentions(vec![target.mention.to_string()]);
     let config = RpcTransactionLogsConfig {
-        commitment: Some(CommitmentConfig::confirmed()),
+        commitment: Some(CommitmentConfig::finalized()),
     };
 
     let (stream, unsubscribe) = match pubsub.logs_subscribe(filter, config).await {

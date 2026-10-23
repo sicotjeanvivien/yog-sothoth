@@ -34,7 +34,7 @@ indexer/src/
 │   ├── session/           ← slot_progress, delivery, ping_answer, log —
 │   │                        session.rs only routes each update to them
 │   ├── slot_timestamp_buffer/ ← waiting_slots (what waits, and which go),
-│   │                        known_times (what is settled), log —
+│   │                        known_slots (what is settled), bank, log —
 │   │                        slot_timestamp_buffer.rs only orchestrates them
 │   └── tests/             ← its ten test files, grouped: what is left beside
 │                            them is what goes into the binary
@@ -106,10 +106,23 @@ Filling it is this crate's job, one module per source:
 
 - `infra/grpc/slot_timestamp_buffer.rs` pairs a transaction with the block time
   its own message does not carry. `block_time` lives on
-  `SubscribeUpdateBlockMeta`, a **separate** subscription keyed by slot, while
+  `SubscribeUpdateBlockMeta`, a **separate** subscription, while
   `TransactionPosition::timestamp` may not be optional — it is in every event
-  table's unique key *and* the partitioning column. So the two streams have to
+  table's unique key *and* the partitioning column. So the streams have to
   be joined, and the wait bounded.
+
+  The key is **`(slot, bank)`, not the slot**: since Alpenglow a slot may carry
+  several banks, and neither the transaction nor the block-meta says which one
+  the cluster kept. Only the `Finalized` slot status names it, so a transaction
+  leaves once its bank is the kept one **and** that bank's block time is known,
+  in whichever order the three arrive. Another bank's transactions are dropped
+  and counted (`yog_indexer_grpc_losing_bank_transactions_total`). A bank id of
+  0, or a status without one, is *no bank named*: the slot is then paired by
+  slot alone, as a server before Yellowstone v16 forces, and
+  `yog_indexer_grpc_bank_id_missing` reads 1 for the session. ⚠️ **On such a
+  server the losing-bank counter stays at 0 by construction** — two banks of a
+  slot cannot be told apart, so 0 there proves nothing. A bank id is the serving
+  node's own counter, valid within one session; the buffer dies with it.
 
   The bound **counts slots, not seconds**, and the reason is what each choice
   does when things break: a wall clock keeps running while the stream is down,
@@ -531,11 +544,14 @@ histograms.
   `downstream_closed` outside a shutdown means the consumer died first.
 - **gRPC listener counters** (Yellowstone source only, and **no** `protocol`
   label — one stream serves every protocol) —
-  `yog_indexer_grpc_updates_total{kind}` (`transaction`, `block_meta`, `ping`,
-  `pong`, `other`), `yog_indexer_grpc_dropped_transactions_total{reason}`,
+  `yog_indexer_grpc_updates_total{kind}` (`transaction`, `block_meta`, `slot`,
+  `ping`, `pong`, `other`), `yog_indexer_grpc_dropped_transactions_total{reason}`,
   `yog_indexer_grpc_transactions_emitted_total`,
   `yog_indexer_grpc_downstream_full_total` (back-pressure, not loss),
-  `yog_indexer_grpc_untimestamped_transactions_total{reason}`, the two gauges
+  `yog_indexer_grpc_untimestamped_transactions_total{reason}`,
+  `yog_indexer_grpc_losing_bank_transactions_total`, the gauge
+  `yog_indexer_grpc_bank_id_missing` (1 when the session pairs by slot alone),
+  the two gauges
   `yog_indexer_grpc_pending_payloads_peak` and
   `yog_indexer_grpc_pending_slot_lag_peak` (peaks since start, not current
   values), `yog_indexer_grpc_ping_replies_unsent_total{reason}`,
@@ -783,6 +799,10 @@ and all four couples mean something:
 |---|---|---|
 | **`INGEST_SOURCE=rpc`** | what runs today — the allowlist enforced at the subscription | one `logsSubscribe` on the program id: the full firehose, one `getTransaction` each |
 | **`INGEST_SOURCE=grpc`** | pool addresses in the subscription filter | the production target — one stream, `transaction_index` included |
+
+Both sources read at **`finalized`**: since Alpenglow `confirmed` names the same
+state and is announced for removal. The gRPC source also subscribes to the
+`Finalized` slot statuses, which the buffer above waits for.
 
 **All four start.** Three of them were refused at load time until 10 September
 2026 by a `bootstrap/config/validator.rs` that no longer exists: its two arms

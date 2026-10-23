@@ -11,9 +11,30 @@ impl<T> SlotTimestampBuffer<T> {
         self.waiting.count()
     }
 
-    /// How many slot outcomes are remembered, instants and given-up slots alike.
+    /// How many slots are remembered, whatever is known of them.
     fn known_slots(&self) -> usize {
         self.known.len()
+    }
+}
+
+/// The shape Alchemy sends: no message names a bank. The bank-less tests read through these.
+impl SlotTimestampBuffer<Payload> {
+    fn payload(&mut self, slot: u64, payload: Payload) -> Option<Resolved<Payload>> {
+        self.on_payload(slot, Bank::Unknown, payload)
+    }
+
+    /// The slot's `Finalized` status, then its block-meta: Alchemy's order.
+    fn close(&mut self, slot: u64, at: DateTime<Utc>) -> Vec<Resolved<Payload>> {
+        let mut released = self.on_finalized(slot, Bank::Unknown);
+        released.extend(self.on_block_time(slot, Bank::Unknown, at));
+        released
+    }
+
+    /// The slot's `Finalized` status, then an empty block-meta.
+    fn close_empty(&mut self, slot: u64) -> Vec<Resolved<Payload>> {
+        let mut released = self.on_finalized(slot, Bank::Unknown);
+        released.extend(self.on_slot_unresolvable(slot, Bank::Unknown));
+        released
     }
 }
 
@@ -34,18 +55,18 @@ fn at(secs: i64) -> DateTime<Utc> {
     DateTime::from_timestamp(secs, 0).expect("a valid instant")
 }
 
-// ── the two arrival orders ──────────────────────────────────────────
+// ── the arrival orders, banks aside ─────────────────────────────────
 
-/// The common order: transactions wait, the block-meta closes the block and releases them together.
+/// The common order: transactions wait, the status and block-meta release them together.
 #[test]
 fn payloads_arriving_before_their_block_time_wait_for_it() {
     let mut buffer = buffer();
 
-    assert!(buffer.on_payload(10, 1).is_none(), "nothing to resolve yet");
-    assert!(buffer.on_payload(10, 2).is_none());
+    assert!(buffer.payload(10, 1).is_none(), "nothing to resolve yet");
+    assert!(buffer.payload(10, 2).is_none());
     assert_eq!(buffer.pending_payloads(), 2);
 
-    let released = buffer.on_block_time(10, at(100));
+    let released = buffer.close(10, at(100));
 
     assert_eq!(
         released,
@@ -69,12 +90,9 @@ fn payloads_arriving_before_their_block_time_wait_for_it() {
 fn a_payload_arriving_after_its_block_time_resolves_at_once() {
     let mut buffer = buffer();
 
-    assert!(
-        buffer.on_block_time(10, at(100)).is_empty(),
-        "nothing waiting"
-    );
+    assert!(buffer.close(10, at(100)).is_empty(), "nothing waiting");
 
-    let resolved = buffer.on_payload(10, 7).expect("the time is already known");
+    let resolved = buffer.payload(10, 7).expect("the time is already known");
 
     assert_eq!(
         resolved,
@@ -91,10 +109,10 @@ fn a_payload_arriving_after_its_block_time_resolves_at_once() {
 fn a_block_time_releases_only_its_own_slot() {
     let mut buffer = buffer();
 
-    buffer.on_payload(10, 1);
-    buffer.on_payload(11, 2);
+    buffer.payload(10, 1);
+    buffer.payload(11, 2);
 
-    let released = buffer.on_block_time(11, at(200));
+    let released = buffer.close(11, at(200));
 
     assert_eq!(
         released,
@@ -106,6 +124,230 @@ fn a_block_time_releases_only_its_own_slot() {
     assert_eq!(buffer.pending_payloads(), 1, "slot 10 is still waiting");
 }
 
+// ── banks ───────────────────────────────────────────────────────────
+
+const BANK_A: Bank = Bank::Id(1);
+const BANK_B: Bank = Bank::Id(2);
+
+/// Against a key back to the slot alone: bank B's payload would leave as if it were in the chain.
+#[test]
+fn only_the_finalized_bank_leaves_and_the_other_is_counted_as_losing() {
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    let released = metrics::with_local_recorder(&recorder, || {
+        let mut buffer = buffer();
+        buffer.on_payload(10, BANK_A, 1);
+        buffer.on_payload(10, BANK_B, 2);
+        buffer.on_block_time(10, BANK_A, at(100));
+        buffer.on_block_time(10, BANK_B, at(101));
+        let released = buffer.on_finalized(10, BANK_A);
+        assert_eq!(
+            buffer.pending_payloads(),
+            0,
+            "bank B's payload is not left waiting"
+        );
+        released
+    });
+
+    assert_eq!(
+        released,
+        vec![Resolved {
+            payload: 1,
+            at: at(100)
+        }]
+    );
+    assert_eq!(
+        losing_count(&snapshotter.snapshot().into_vec()),
+        Some(&DebugValue::Counter(1)),
+        "bank B's payload, counted as such"
+    );
+}
+
+/// Against an instant read from any bank of the slot: bank A's, named first, would be taken.
+#[test]
+fn a_payload_after_both_halves_leaves_at_once_with_its_banks_instant() {
+    for status_first in [true, false] {
+        let mut buffer = buffer();
+        let mut released = Vec::new();
+        if status_first {
+            released.extend(buffer.on_finalized(10, BANK_B));
+        }
+        released.extend(buffer.on_block_time(10, BANK_A, at(101)));
+        released.extend(buffer.on_block_time(10, BANK_B, at(102)));
+        if !status_first {
+            released.extend(buffer.on_finalized(10, BANK_B));
+        }
+        assert!(released.is_empty(), "nothing was waiting");
+
+        assert_eq!(
+            buffer.on_payload(10, BANK_B, 7),
+            Some(Resolved {
+                payload: 7,
+                at: at(102)
+            }),
+            "status first: {status_first}"
+        );
+        assert_eq!(buffer.pending_payloads(), 0);
+    }
+}
+
+/// Against a release on the instant alone, or a second release when the other half comes.
+#[test]
+fn a_waiting_payload_leaves_once_when_the_second_half_comes() {
+    for status_first in [true, false] {
+        let mut buffer = buffer();
+        assert!(buffer.on_payload(10, BANK_B, 7).is_none());
+
+        let (first, second) = if status_first {
+            let first = buffer.on_finalized(10, BANK_B);
+            (first, buffer.on_block_time(10, BANK_B, at(102)))
+        } else {
+            let first = buffer.on_block_time(10, BANK_B, at(102));
+            (first, buffer.on_finalized(10, BANK_B))
+        };
+
+        assert!(
+            first.is_empty(),
+            "one half is not enough (status first: {status_first})"
+        );
+        assert_eq!(
+            second,
+            vec![Resolved {
+                payload: 7,
+                at: at(102)
+            }]
+        );
+        assert!(
+            buffer.on_finalized(10, BANK_B).is_empty(),
+            "a duplicate status releases nothing twice"
+        );
+    }
+}
+
+/// Against a late payload checked only against the instant: it would leave with the kept bank's.
+#[test]
+fn a_losing_payload_arriving_after_the_verdict_is_dropped_and_counted() {
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    let mut buffer = buffer();
+    metrics::with_local_recorder(&recorder, || {
+        buffer.on_finalized(10, BANK_A);
+        buffer.on_block_time(10, BANK_A, at(100));
+        assert!(buffer.on_payload(10, BANK_B, 2).is_none());
+    });
+
+    assert_eq!(
+        buffer.pending_payloads(),
+        0,
+        "not left to wait out the window"
+    );
+    assert_eq!(
+        losing_count(&snapshotter.snapshot().into_vec()),
+        Some(&DebugValue::Counter(1))
+    );
+}
+
+/// Against an unknown bank read as a bank of its own: a server that names the kept bank but not
+/// the transaction's would see every transaction dropped as losing.
+#[test]
+fn an_unknown_bank_is_paired_by_slot_with_the_kept_one() {
+    let mut buffer = buffer();
+
+    assert!(buffer.on_payload(10, Bank::Unknown, 1).is_none());
+    buffer.on_finalized(10, BANK_A);
+    let released = buffer.on_block_time(10, BANK_A, at(100));
+    assert_eq!(
+        released,
+        vec![Resolved {
+            payload: 1,
+            at: at(100)
+        }]
+    );
+
+    // The other way round: the kept bank's payload, timed by a block-meta naming no bank.
+    buffer.on_finalized(11, BANK_A);
+    buffer.on_block_time(11, Bank::Unknown, at(110));
+    assert_eq!(
+        buffer.on_payload(11, BANK_A, 2),
+        Some(Resolved {
+            payload: 2,
+            at: at(110)
+        })
+    );
+}
+
+/// A status naming no bank cannot tell banks apart: the slot is paired by slot alone, as before.
+#[test]
+fn a_status_naming_no_bank_admits_every_bank() {
+    let mut buffer = buffer();
+
+    buffer.on_payload(10, BANK_A, 1);
+    buffer.on_payload(10, BANK_B, 2);
+    buffer.on_block_time(10, BANK_A, at(100));
+    let released = buffer.on_finalized(10, Bank::Unknown);
+
+    assert_eq!(
+        released,
+        vec![
+            Resolved {
+                payload: 1,
+                at: at(100)
+            },
+            Resolved {
+                payload: 2,
+                at: at(100)
+            },
+        ]
+    );
+}
+
+/// Against a give-up by slot: the losing bank's empty block-meta would drop the kept bank's payloads.
+#[test]
+fn an_empty_block_meta_on_the_losing_bank_spares_the_kept_one() {
+    let mut buffer = buffer();
+
+    buffer.on_payload(10, BANK_A, 1);
+    assert!(buffer.on_slot_unresolvable(10, BANK_B).is_empty());
+    buffer.on_finalized(10, BANK_A);
+
+    assert_eq!(
+        buffer.on_block_time(10, BANK_A, at(100)),
+        vec![Resolved {
+            payload: 1,
+            at: at(100)
+        }]
+    );
+}
+
+/// Against a release on the block time alone: a slot the cluster has not finalized would leave.
+#[test]
+fn nothing_leaves_before_the_status_even_with_its_instant() {
+    let mut buffer = buffer();
+
+    buffer.payload(10, 1);
+    assert!(buffer.on_block_time(10, Bank::Unknown, at(100)).is_empty());
+    assert!(buffer.payload(10, 2).is_none(), "a late payload waits too");
+
+    assert_eq!(buffer.pending_payloads(), 2);
+    assert_eq!(buffer.on_finalized(10, Bank::Unknown).len(), 2);
+}
+
+/// The losing-bank counter, or `None` when never touched.
+fn losing_count(snapshot: &Snapshot) -> Option<&metrics_util::debugging::DebugValue> {
+    snapshot
+        .iter()
+        .find(|(key, _, _, _)| {
+            key.key().name() == "yog_indexer_grpc_losing_bank_transactions_total"
+        })
+        .map(|(_, _, _, value)| value)
+}
+
 // ── the bounds ──────────────────────────────────────────────────────
 
 /// ⚠️ The bound counts slots: a stream that stops delivering evicts nothing, and an outage stays
@@ -114,17 +356,17 @@ fn a_block_time_releases_only_its_own_slot() {
 fn a_stalled_stream_evicts_nothing() {
     let mut buffer = buffer();
 
-    buffer.on_payload(10, 1);
-    buffer.on_payload(11, 2);
-    buffer.on_payload(12, 3);
+    buffer.payload(10, 1);
+    buffer.payload(11, 2);
+    buffer.payload(12, 3);
 
     // Nothing arrived, so nothing is evicted: there is no clock and no method to call.
     assert_eq!(buffer.pending_payloads(), 3);
 
     // And on reconnect they still resolve.
-    assert_eq!(buffer.on_block_time(10, at(100)).len(), 1);
-    assert_eq!(buffer.on_block_time(11, at(101)).len(), 1);
-    assert_eq!(buffer.on_block_time(12, at(102)).len(), 1);
+    assert_eq!(buffer.close(10, at(100)).len(), 1);
+    assert_eq!(buffer.close(11, at(101)).len(), 1);
+    assert_eq!(buffer.close(12, at(102)).len(), 1);
     assert_eq!(buffer.pending_payloads(), 0);
 }
 
@@ -133,10 +375,10 @@ fn a_stalled_stream_evicts_nothing() {
 fn a_slot_left_behind_by_the_stream_is_dropped() {
     let mut buffer = buffer(); // window of 3 slots
 
-    buffer.on_payload(10, 1);
-    buffer.on_payload(11, 2);
-    buffer.on_payload(12, 3);
-    buffer.on_payload(13, 4);
+    buffer.payload(10, 1);
+    buffer.payload(11, 2);
+    buffer.payload(12, 3);
+    buffer.payload(13, 4);
 
     assert_eq!(
         buffer.pending_payloads(),
@@ -146,14 +388,14 @@ fn a_slot_left_behind_by_the_stream_is_dropped() {
     );
 
     // The stream moves on, and slot 10 falls out of the window.
-    buffer.on_payload(14, 5);
+    buffer.payload(14, 5);
 
     assert!(
-        buffer.on_block_time(10, at(100)).is_empty(),
+        buffer.close(10, at(100)).is_empty(),
         "slot 10 is 4 behind the head and its meta is not coming"
     );
-    assert_eq!(buffer.on_block_time(11, at(101)).len(), 1);
-    assert_eq!(buffer.on_block_time(14, at(104)).len(), 1);
+    assert_eq!(buffer.close(11, at(101)).len(), 1);
+    assert_eq!(buffer.close(14, at(104)).len(), 1);
 }
 
 /// ⚠️ A fork's slot whose meta never comes is never accompanied by 256 others: only a distance
@@ -162,12 +404,12 @@ fn a_slot_left_behind_by_the_stream_is_dropped() {
 fn an_orphan_slot_does_not_pin_the_buffer_for_ever() {
     let mut buffer = buffer(); // window of 3 slots
 
-    buffer.on_payload(10, 1); // its block-meta will never come
+    buffer.payload(10, 1); // its block-meta will never come
 
     // One or two slots pending at a time, never near a population ceiling.
     for slot in 11..=14 {
-        buffer.on_payload(slot, slot as Payload);
-        buffer.on_block_time(slot, at(100 + slot as i64));
+        buffer.payload(slot, slot as Payload);
+        buffer.close(slot, at(100 + slot as i64));
     }
 
     assert_eq!(
@@ -185,10 +427,10 @@ fn the_payload_bound_evicts_the_newest_slot_not_the_oldest() {
     let mut buffer = buffer(); // 3 slots, 5 payloads
 
     for payload in 0..4 {
-        buffer.on_payload(10, payload);
+        buffer.payload(10, payload);
     }
     for payload in 4..6 {
-        buffer.on_payload(11, payload);
+        buffer.payload(11, payload);
     }
 
     assert_eq!(
@@ -198,12 +440,12 @@ fn the_payload_bound_evicts_the_newest_slot_not_the_oldest() {
          slot 10, whose block-meta is next on the wire, is kept"
     );
     assert_eq!(
-        buffer.on_block_time(10, at(100)).len(),
+        buffer.close(10, at(100)).len(),
         4,
         "the older slot resolves, which is the whole point of keeping it"
     );
     assert!(
-        buffer.on_block_time(11, at(101)).is_empty(),
+        buffer.close(11, at(101)).is_empty(),
         "the burst slot was the one dropped"
     );
 }
@@ -214,14 +456,14 @@ fn the_two_bounds_evict_opposite_ends() {
     // Slot bound: the oldest goes, its block-meta is not coming.
     let mut by_slots = SlotTimestampBuffer::with_bounds(2, 100, 2, fresh_peaks());
     for slot in 10..=13 {
-        by_slots.on_payload(slot, slot as Payload);
+        by_slots.payload(slot, slot as Payload);
     }
     assert!(
-        by_slots.on_block_time(10, at(100)).is_empty(),
+        by_slots.close(10, at(100)).is_empty(),
         "slot bound: the oldest was evicted"
     );
     assert_eq!(
-        by_slots.on_block_time(13, at(103)).len(),
+        by_slots.close(13, at(103)).len(),
         1,
         "slot bound: the newest survived"
     );
@@ -229,37 +471,37 @@ fn the_two_bounds_evict_opposite_ends() {
     // Payload bound: the newest goes, the oldest is due to resolve.
     let mut by_payloads = SlotTimestampBuffer::with_bounds(100, 2, 2, fresh_peaks());
     for slot in 10..=13 {
-        by_payloads.on_payload(slot, slot as Payload);
+        by_payloads.payload(slot, slot as Payload);
     }
     assert_eq!(
-        by_payloads.on_block_time(10, at(100)).len(),
+        by_payloads.close(10, at(100)).len(),
         1,
         "payload bound: the oldest survived"
     );
     assert!(
-        by_payloads.on_block_time(13, at(103)).is_empty(),
+        by_payloads.close(13, at(103)).is_empty(),
         "payload bound: the newest was evicted"
     );
 }
 
 /// ⚠️ `known` must be bounded too: nothing in the pending path touches it.
 #[test]
-fn the_table_of_known_times_is_bounded_too() {
+fn the_table_of_known_slots_is_bounded_too() {
     let mut buffer = buffer(); // 2 known slots
 
     for slot in 10..=13 {
-        buffer.on_block_time(slot, at(100 + slot as i64));
+        buffer.close(slot, at(100 + slot as i64));
     }
 
     assert_eq!(buffer.known_slots(), 2, "only the two most recent are kept");
     // The forgotten ones no longer resolve a late payload...
     assert!(
-        buffer.on_payload(10, 1).is_none(),
+        buffer.payload(10, 1).is_none(),
         "slot 10's time was forgotten, so its payload must wait"
     );
     // ...while the remembered ones still do.
     assert_eq!(
-        buffer.on_payload(13, 2),
+        buffer.payload(13, 2),
         Some(Resolved {
             payload: 2,
             at: at(113)
@@ -279,10 +521,10 @@ fn evicted_payloads_are_counted() {
     metrics::with_local_recorder(&recorder, || {
         let mut buffer = buffer(); // window of 3 slots
         // Slot 10 holds two payloads; the stream then moves four slots past it.
-        buffer.on_payload(10, 1);
-        buffer.on_payload(10, 2);
+        buffer.payload(10, 1);
+        buffer.payload(10, 2);
         for slot in 11..=14 {
-            buffer.on_payload(slot, slot as Payload);
+            buffer.payload(slot, slot as Payload);
         }
     });
 
@@ -312,10 +554,10 @@ fn the_bound_that_evicted_is_recorded_with_the_count() {
     metrics::with_local_recorder(&recorder, || {
         let mut buffer = buffer(); // 3 slots, 5 payloads
         for payload in 0..4 {
-            buffer.on_payload(10, payload);
+            buffer.payload(10, payload);
         }
         for payload in 4..6 {
-            buffer.on_payload(11, payload);
+            buffer.payload(11, payload);
         }
     });
 
@@ -344,10 +586,10 @@ fn a_slot_given_up_on_is_counted_under_its_own_reason() {
 
     metrics::with_local_recorder(&recorder, || {
         let mut buffer = buffer();
-        buffer.on_payload(10, 1);
-        buffer.on_payload(10, 2);
+        buffer.payload(10, 1);
+        buffer.payload(10, 2);
         // The block-meta came, with no instant.
-        buffer.on_slot_unresolvable(10);
+        buffer.close_empty(10);
     });
 
     let snapshot = snapshotter.snapshot().into_vec();
@@ -369,23 +611,23 @@ fn a_slot_given_up_on_is_counted_under_its_own_reason() {
 fn giving_up_on_a_slot_releases_its_place_in_the_window() {
     let mut buffer = buffer(); // 3 slots
 
-    buffer.on_payload(10, 1);
-    buffer.on_payload(11, 2);
-    buffer.on_payload(12, 3);
-    buffer.on_slot_unresolvable(10);
+    buffer.payload(10, 1);
+    buffer.payload(11, 2);
+    buffer.payload(12, 3);
+    buffer.close_empty(10);
 
     // A fourth slot now fits without evicting anything.
-    buffer.on_payload(13, 4);
+    buffer.payload(13, 4);
 
     assert_eq!(buffer.pending_payloads(), 3);
     assert_eq!(
-        buffer.on_block_time(11, at(101)).len(),
+        buffer.close(11, at(101)).len(),
         1,
         "slot 11 survived — it was not pushed out to make room for 13"
     );
-    assert_eq!(buffer.on_block_time(13, at(103)).len(), 1);
+    assert_eq!(buffer.close(13, at(103)).len(), 1);
     assert!(
-        buffer.on_block_time(10, at(100)).is_empty(),
+        buffer.close(10, at(100)).is_empty(),
         "the abandoned slot is gone for good"
     );
 }
@@ -400,7 +642,7 @@ fn giving_up_on_a_slot_with_nothing_waiting_counts_nothing() {
 
     metrics::with_local_recorder(&recorder, || {
         let mut buffer = buffer();
-        buffer.on_slot_unresolvable(42);
+        buffer.close_empty(42);
     });
 
     assert_eq!(
@@ -422,8 +664,8 @@ fn a_payload_arriving_after_its_slot_was_given_up_is_dropped_at_once() {
     let mut buffer = buffer();
     metrics::with_local_recorder(&recorder, || {
         // The block-meta came empty before any payload for the slot.
-        buffer.on_slot_unresolvable(10);
-        assert!(buffer.on_payload(10, 1).is_none(), "there is no instant");
+        buffer.close_empty(10);
+        assert!(buffer.payload(10, 1).is_none(), "there is no instant");
     });
 
     assert_eq!(
@@ -445,11 +687,11 @@ fn a_payload_arriving_after_its_slot_was_given_up_is_dropped_at_once() {
 fn giving_up_on_a_slot_never_overwrites_a_time_already_known() {
     let mut buffer = buffer();
 
-    buffer.on_block_time(10, at(100));
-    buffer.on_slot_unresolvable(10);
+    buffer.close(10, at(100));
+    buffer.close_empty(10);
 
     assert_eq!(
-        buffer.on_payload(10, 1),
+        buffer.payload(10, 1),
         Some(Resolved {
             payload: 1,
             at: at(100)
@@ -465,15 +707,15 @@ fn the_oldest_pending_slot_is_the_one_that_was_not_finished() {
 
     assert_eq!(buffer.oldest_pending_slot(), None, "nothing is waiting");
 
-    buffer.on_payload(12, 1);
-    buffer.on_payload(11, 2);
+    buffer.payload(12, 1);
+    buffer.payload(11, 2);
     assert_eq!(
         buffer.oldest_pending_slot(),
         Some(11),
         "oldest by slot, not by arrival — the replay has to cover both"
     );
 
-    buffer.on_block_time(11, at(100));
+    buffer.close(11, at(100));
     assert_eq!(buffer.oldest_pending_slot(), Some(12));
 }
 
@@ -501,21 +743,21 @@ fn counter_for<'a>(
 fn the_pending_count_tracks_every_way_in_and_out() {
     let mut buffer = buffer();
 
-    buffer.on_payload(10, 1);
-    buffer.on_payload(10, 2);
-    buffer.on_payload(11, 3);
+    buffer.payload(10, 1);
+    buffer.payload(10, 2);
+    buffer.payload(11, 3);
     assert_eq!(buffer.pending_payloads(), 3);
 
-    buffer.on_block_time(10, at(100));
+    buffer.close(10, at(100));
     assert_eq!(buffer.pending_payloads(), 1, "released two");
 
     // A time for a slot never pending must not disturb the count.
     // ⚠️ A near slot: a far one would move the head and evict slot 11 out of the window.
-    buffer.on_block_time(12, at(200));
+    buffer.close(12, at(200));
     assert_eq!(buffer.pending_payloads(), 1);
 
     // Resolving straight through `known` never touches pending either.
-    buffer.on_payload(12, 4);
+    buffer.payload(12, 4);
     assert_eq!(buffer.pending_payloads(), 1);
 }
 
@@ -525,11 +767,11 @@ fn the_pending_count_tracks_every_way_in_and_out() {
 fn a_stale_slot_is_evicted_by_block_metas_alone() {
     let mut buffer = buffer(); // window of 3 slots
 
-    buffer.on_payload(10, 1); // its block-meta will never come
+    buffer.payload(10, 1); // its block-meta will never come
 
     // Nothing else is watched; only block-metas arrive.
     for slot in 11..=20 {
-        buffer.on_block_time(slot, at(100 + slot as i64));
+        buffer.close(slot, at(100 + slot as i64));
     }
 
     assert_eq!(
@@ -565,9 +807,9 @@ fn the_payload_peak_survives_the_buffer_draining() {
     metrics::with_local_recorder(&recorder, || {
         let mut buffer = buffer();
         for payload in 1..=4 {
-            buffer.on_payload(10, payload);
+            buffer.payload(10, payload);
         }
-        assert_eq!(buffer.on_block_time(10, at(100)).len(), 4);
+        assert_eq!(buffer.close(10, at(100)).len(), 4);
         assert_eq!(buffer.pending_payloads(), 0);
     });
 
@@ -588,10 +830,10 @@ fn the_slot_lag_peak_is_the_oldest_waiting_slot_behind_the_head() {
 
     metrics::with_local_recorder(&recorder, || {
         let mut buffer = buffer(); // window of 3 slots
-        buffer.on_payload(10, 1);
-        buffer.on_payload(12, 2);
-        buffer.on_block_time(10, at(100));
-        buffer.on_block_time(12, at(102));
+        buffer.payload(10, 1);
+        buffer.payload(12, 2);
+        buffer.close(10, at(100));
+        buffer.close(12, at(102));
     });
 
     let snapshot = snapshotter.snapshot().into_vec();
@@ -622,7 +864,7 @@ fn the_payload_peak_keeps_the_overshoot_the_bound_evicted() {
     metrics::with_local_recorder(&recorder, || {
         let mut buffer = buffer(); // 5 payloads at most
         for payload in 1..=6 {
-            buffer.on_payload(10, payload);
+            buffer.payload(10, payload);
         }
         assert_eq!(
             buffer.pending_payloads(),

@@ -5,13 +5,13 @@
 
 use chrono::{DateTime, Utc};
 use yellowstone_grpc_proto::prelude::{
-    Message, SubscribeUpdate, SubscribeUpdateBlockMeta, SubscribeUpdatePing,
-    SubscribeUpdateTransaction, SubscribeUpdateTransactionInfo, Transaction, TransactionStatusMeta,
-    UnixTimestamp, subscribe_update::UpdateOneof,
+    Message, SlotStatus, SubscribeUpdate, SubscribeUpdateBlockMeta, SubscribeUpdatePing,
+    SubscribeUpdateSlot, SubscribeUpdateTransaction, SubscribeUpdateTransactionInfo, Transaction,
+    TransactionStatusMeta, UnixTimestamp, subscribe_update::UpdateOneof,
 };
 use yog_core::domain::Protocol;
 
-use super::subscription::BLOCK_META_FILTER;
+use super::subscription::{BLOCK_META_FILTER, SLOT_FILTER};
 
 /// The one protocol with a working extractor.
 pub(super) const PROTOCOL: Protocol = Protocol::MeteoraDammV2;
@@ -29,9 +29,20 @@ pub(super) fn at(secs: i64) -> DateTime<Utc> {
 }
 
 /// A transaction update the adapter accepts: a 64-byte signature, one account key, and a meta
-/// whose inner instructions were captured (there are none).
+/// whose inner instructions were captured (there are none). Bank 0: no bank named, as Alchemy sends.
 pub(super) fn transaction_update(slot: u64) -> SubscribeUpdateTransaction {
     transaction_update_with_signature(slot, vec![7; 64])
+}
+
+/// The same transaction, produced in bank `bank_id`.
+pub(super) fn transaction_in_bank(slot: u64, bank_id: u64, signature: Vec<u8>) -> SubscribeUpdate {
+    update(
+        &[PROTOCOL.as_str()],
+        UpdateOneof::Transaction(SubscribeUpdateTransaction {
+            bank_id,
+            ..transaction_update_with_signature(slot, signature)
+        }),
+    )
 }
 
 pub(super) fn transaction_update_with_signature(
@@ -77,12 +88,39 @@ pub(super) fn transaction(slot: u64, filters: &[&str]) -> SubscribeUpdate {
     update(filters, UpdateOneof::Transaction(transaction_update(slot)))
 }
 
+/// A block-meta naming no bank, as Alchemy sends.
 pub(super) fn block_meta(slot: u64, block_time: Option<i64>) -> SubscribeUpdate {
+    block_meta_in_bank(slot, 0, block_time)
+}
+
+pub(super) fn block_meta_in_bank(
+    slot: u64,
+    bank_id: u64,
+    block_time: Option<i64>,
+) -> SubscribeUpdate {
     update(
         &[BLOCK_META_FILTER],
         UpdateOneof::BlockMeta(SubscribeUpdateBlockMeta {
             slot,
+            bank_id,
             block_time: block_time.map(|timestamp| UnixTimestamp { timestamp }),
+            ..Default::default()
+        }),
+    )
+}
+
+/// A `Finalized` slot status, naming the bank kept or, as Alchemy sends, none.
+pub(super) fn slot_finalized(slot: u64, bank_id: Option<u64>) -> SubscribeUpdate {
+    slot_status(slot, SlotStatus::SlotFinalized, bank_id)
+}
+
+pub(super) fn slot_status(slot: u64, status: SlotStatus, bank_id: Option<u64>) -> SubscribeUpdate {
+    update(
+        &[SLOT_FILTER],
+        UpdateOneof::Slot(SubscribeUpdateSlot {
+            slot,
+            status: status as i32,
+            bank_id,
             ..Default::default()
         }),
     )

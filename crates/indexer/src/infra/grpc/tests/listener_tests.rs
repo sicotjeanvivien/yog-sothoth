@@ -88,7 +88,9 @@ use tokio::{net::TcpListener, time::timeout};
 use tonic::Status;
 
 use crate::infra::grpc::{
-    test_fixtures::{PROTOCOL, block_meta, ping, transaction, unroutable_transaction},
+    test_fixtures::{
+        PROTOCOL, block_meta, ping, slot_finalized, transaction, unroutable_transaction,
+    },
     test_geyser_server::{self, Action, ScriptedGeyserHandle, ScriptedSession},
 };
 
@@ -882,6 +884,7 @@ async fn a_shutdown_reaches_a_session_parked_on_a_full_consumer() {
     let server = test_geyser_server::start(vec![ScriptedSession::Stream(vec![
         routable(10),
         routable(10),
+        Action::send(slot_finalized(10, None)),
         Action::send(block_meta(10, Some(BLOCK_TIME))),
         Action::Hold,
     ])])
@@ -923,6 +926,7 @@ async fn a_shutdown_reaches_a_session_parked_on_a_full_consumer() {
 async fn a_vanished_consumer_stops_the_listener_without_retrying() {
     let server = test_geyser_server::start(vec![ScriptedSession::Stream(vec![
         routable(10),
+        Action::send(slot_finalized(10, None)),
         Action::send(block_meta(10, Some(BLOCK_TIME))),
         Action::Hold,
     ])])

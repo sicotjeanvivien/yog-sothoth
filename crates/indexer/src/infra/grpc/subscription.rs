@@ -8,14 +8,17 @@ use std::collections::{HashMap, HashSet};
 use solana_pubkey::Pubkey;
 use yellowstone_grpc_proto::prelude::{
     CommitmentLevel, SubscribeRequest, SubscribeRequestFilterBlocksMeta,
-    SubscribeRequestFilterTransactions,
+    SubscribeRequestFilterSlots, SubscribeRequestFilterTransactions,
 };
 use yog_core::domain::Protocol;
 
 use crate::error::GrpcListenerError;
 
-/// The name of the block-meta filter, the other half of the subscription; not a protocol name.
+/// The name of the block-meta filter, which names each slot's time; not a protocol name.
 pub(crate) const BLOCK_META_FILTER: &str = "block_meta";
+
+/// The name of the slot-status filter, which names the bank each slot kept; not a protocol name.
+pub(crate) const SLOT_FILTER: &str = "slots";
 
 /// Build the subscription from what is watched; an empty set is refused rather than opening a
 /// stream that stays silent for ever.
@@ -53,8 +56,17 @@ pub(crate) fn build_request(
             BLOCK_META_FILTER.to_string(),
             SubscribeRequestFilterBlocksMeta::default(),
         )]),
+        // ⚠️ The only message that says which bank of a slot the cluster kept: without it, no
+        // transaction leaves the buffer. `filter_by_commitment` keeps it to `Finalized` statuses.
+        slots: HashMap::from([(
+            SLOT_FILTER.to_string(),
+            SubscribeRequestFilterSlots {
+                filter_by_commitment: Some(true),
+                interslot_updates: Some(false),
+            },
+        )]),
         // Same commitment as the WebSocket path, so switching source does not switch settledness.
-        commitment: Some(CommitmentLevel::Confirmed as i32),
+        commitment: Some(CommitmentLevel::Finalized as i32),
         from_slot,
         ..Default::default()
     })
@@ -81,7 +93,8 @@ fn account_includes(watched: &HashSet<(Protocol, Pubkey)>) -> Vec<(Protocol, Vec
     includes
 }
 
-/// The protocol an update belongs to, from the filters it matched; `None` for a block-meta or any other name.
+/// The protocol an update belongs to, from the filters it matched; `None` for a block-meta, a slot
+/// status or any other name.
 /// ⚠️ An update touching two protocols' addresses matches both filters, and the first one wins.
 pub(crate) fn protocol_of(filters: &[String]) -> Option<Protocol> {
     filters.iter().find_map(|name| name.parse().ok())

@@ -1,9 +1,10 @@
-//! Pairs a Yellowstone stream's two halves: a transaction carries its slot and no time, a
-//! block-meta carries the slot's `block_time`, before or after. Holds whichever came first, bounded.
+//! Pairs a Yellowstone transaction, which carries its slot and bank but no time, with its bank's
+//! `block_time` and the `Finalized` status naming the bank kept, in any order; bounded.
 //! ⚠️ The bound counts slots, not seconds: a wall clock keeps running through an outage and
 //! would destroy transactions whose block-meta was coming on reconnect.
 
-mod known_times;
+mod bank;
+mod known_slots;
 mod log;
 mod waiting_slots;
 
@@ -11,7 +12,8 @@ use chrono::{DateTime, Utc};
 
 use super::metrics::{EvictionReason, GrpcBufferMetrics, WAITING_PEAKS, WaitingPeaks};
 
-use known_times::{KnownTimes, SlotOutcome};
+pub(crate) use bank::Bank;
+use known_slots::{KnownSlots, Settlement, SlotOutcome};
 use waiting_slots::WaitingSlots;
 
 /// How far behind the stream a slot may wait for its block-meta (≈ 100 s): a ceiling, not an estimate.
@@ -23,7 +25,7 @@ pub(crate) const MAX_PENDING_SLOTS: u64 = 256;
 /// ⚠️ A count, not bytes: at ~5–20 KB per update, the bound is ~40–160 MB resident.
 pub(crate) const MAX_PENDING_PAYLOADS: usize = 8_192;
 
-/// How many settled slots are remembered, for payloads that arrive **after** their block-meta.
+/// How many settled slots are remembered, for payloads that arrive **after** their block-meta and status.
 pub(crate) const MAX_KNOWN_SLOTS: usize = 256;
 
 /// A payload and the block time that was found for it.
@@ -33,10 +35,16 @@ pub(crate) struct Resolved<T> {
     pub(crate) at: DateTime<Utc>,
 }
 
-/// Holds one half of the stream until the other half names its instant.
+/// A payload waiting, with the bank it was produced in.
+struct Held<T> {
+    bank: Bank,
+    payload: T,
+}
+
+/// Holds each payload until its slot's kept bank and that bank's instant are both known.
 pub(crate) struct SlotTimestampBuffer<T> {
-    waiting: WaitingSlots<T>,
-    known: KnownTimes,
+    waiting: WaitingSlots<Held<T>>,
+    known: KnownSlots,
 }
 
 impl<T> SlotTimestampBuffer<T> {
@@ -58,50 +66,92 @@ impl<T> SlotTimestampBuffer<T> {
     ) -> Self {
         Self {
             waiting: WaitingSlots::new(max_pending_slots, max_pending_payloads, peaks),
-            known: KnownTimes::new(max_known_slots),
+            known: KnownSlots::new(max_known_slots),
         }
     }
 
-    /// Take a payload whose slot is known but whose instant may not be.
-    /// ⚠️ `None` is "not resolved now", not "safely waiting": the payload may have been evicted on
+    /// Take a payload whose slot and bank are known but whose instant may not be.
+    /// ⚠️ `None` is "not resolved now", not "safely waiting": the payload may have been dropped on
     /// the spot, counted and logged.
-    pub(crate) fn on_payload(&mut self, slot: u64, payload: T) -> Option<Resolved<T>> {
+    pub(crate) fn on_payload(&mut self, slot: u64, bank: Bank, payload: T) -> Option<Resolved<T>> {
         // A settled slot was seen when it was settled, so only a payload that
         // waits can move the head — and `push` applies the window when it does.
-        match self.known.outcome(slot) {
-            Some(SlotOutcome::At(at)) => return Some(Resolved { payload, at }),
+        match self.known.settlement(slot, bank) {
+            Settlement::Settled(SlotOutcome::At(at)) => return Some(Resolved { payload, at }),
             // Its one chance to be named came empty: waiting for a second block-meta would end
             // in an eviction blamed on the window's size.
-            Some(SlotOutcome::GivenUp) => {
+            Settlement::Settled(SlotOutcome::GivenUp) => {
                 GrpcBufferMetrics::record_evicted(1, EvictionReason::Unresolvable);
                 log::late_for_given_up_slot(slot);
                 return None;
             }
-            None => {}
+            Settlement::Losing => {
+                GrpcBufferMetrics::record_losing_bank(1);
+                log::late_for_losing_bank(slot);
+                return None;
+            }
+            Settlement::Pending => {}
         }
 
-        self.waiting.push(slot, payload);
+        self.waiting.push(slot, Held { bank, payload });
         None
     }
 
-    /// Take a slot's instant, releasing what waited for it in arrival order.
+    /// Take a bank's instant, releasing what waited for it in arrival order once the bank is kept.
     /// ⚠️ No `Option`: a caller without an instant calls [`Self::on_slot_unresolvable`], never a substitute.
-    pub(crate) fn on_block_time(&mut self, slot: u64, at: DateTime<Utc>) -> Vec<Resolved<T>> {
-        let released = self.waiting.release(slot);
-        self.known.resolve(slot, at);
-
-        released
-            .into_iter()
-            .map(|payload| Resolved { payload, at })
-            .collect()
+    pub(crate) fn on_block_time(
+        &mut self,
+        slot: u64,
+        bank: Bank,
+        at: DateTime<Utc>,
+    ) -> Vec<Resolved<T>> {
+        self.known.resolve(slot, bank, at);
+        self.settle(slot)
     }
 
-    /// Give up on a slot whose block-meta carried no `block_time`; one not pending is only remembered.
+    /// Give up on a bank whose block-meta carried no `block_time`, or release another admitted bank's.
     /// ⚠️ Not left to the slot bound: it would leave labelled `slot_bound`, make the window look
     /// too small, and hold a place meanwhile.
-    pub(crate) fn on_slot_unresolvable(&mut self, slot: u64) {
-        self.waiting.give_up(slot);
-        self.known.give_up(slot);
+    pub(crate) fn on_slot_unresolvable(&mut self, slot: u64, bank: Bank) -> Vec<Resolved<T>> {
+        self.known.give_up(slot, bank);
+        self.settle(slot)
+    }
+
+    /// The cluster finalized `bank` in `slot`: what waited in another bank is dropped, the rest
+    /// leaves if its instant is known.
+    pub(crate) fn on_finalized(&mut self, slot: u64, bank: Bank) -> Vec<Resolved<T>> {
+        self.known.keep(slot, bank);
+        self.settle(slot)
+    }
+
+    /// Apply what is known about `slot` to what waits for it.
+    fn settle(&mut self, slot: u64) -> Vec<Resolved<T>> {
+        let Some(kept) = self.known.kept(slot) else {
+            self.waiting.observe(slot);
+            return Vec::new();
+        };
+        self.waiting
+            .drop_losing(slot, |held| !kept.admits(held.bank));
+
+        match self.known.time(slot) {
+            Some(SlotOutcome::At(at)) => self
+                .waiting
+                .release(slot)
+                .into_iter()
+                .map(|held| Resolved {
+                    payload: held.payload,
+                    at,
+                })
+                .collect(),
+            Some(SlotOutcome::GivenUp) => {
+                self.waiting.give_up(slot);
+                Vec::new()
+            }
+            None => {
+                self.waiting.observe(slot);
+                Vec::new()
+            }
+        }
     }
 
     /// The oldest slot still waiting for an instant: its payloads die with the buffer, so a

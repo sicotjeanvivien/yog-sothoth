@@ -71,6 +71,32 @@ impl<T> WaitingSlots<T> {
         released
     }
 
+    /// Take note that the stream reached `slot`, with nothing to release yet.
+    pub(super) fn observe(&mut self, slot: u64) {
+        self.see(slot);
+        self.enforce_bounds();
+    }
+
+    /// Drop what waits for `slot` in a bank the cluster did not keep, counted apart from evictions.
+    pub(super) fn drop_losing(&mut self, slot: u64, is_losing: impl Fn(&T) -> bool) {
+        let Some(waiting) = self.pending.get_mut(&slot) else {
+            return;
+        };
+        let before = waiting.len();
+        waiting.retain(|payload| !is_losing(payload));
+        let dropped = before - waiting.len();
+        if waiting.is_empty() {
+            self.pending.remove(&slot);
+        }
+        if dropped == 0 {
+            return;
+        }
+
+        self.count -= dropped;
+        GrpcBufferMetrics::record_losing_bank(dropped);
+        log::losing_bank(slot, dropped);
+    }
+
     /// Drop everything waiting for `slot`: its instant will never be known.
     pub(super) fn give_up(&mut self, slot: u64) {
         // An empty block-meta is still the stream telling us where it is.
@@ -97,7 +123,7 @@ impl<T> WaitingSlots<T> {
     }
 
     /// Drop one slot's payloads, counted and logged under `reason`; the single place a pending
-    /// slot is destroyed, so no path forgets the counter. Nothing waiting is not counted.
+    /// slot is evicted, so no path forgets the counter. Nothing waiting is not counted.
     fn evict(&mut self, slot: u64, reason: EvictionReason) {
         let dropped = self.take(slot);
         if dropped.is_empty() {

@@ -1,4 +1,4 @@
-//! HTTP fetcher for confirmed Solana transactions: a signature in, the parsed transaction or a
+//! HTTP fetcher for finalized Solana transactions: a signature in, the parsed transaction or a
 //! typed `FetchError` out, with the retry loop inside and no metric.
 
 use super::transaction_adapter::{
@@ -17,7 +17,7 @@ use yog_bootstrap::SecretUrl;
 /// `the_declared_ceiling_is_the_highest_fixture_version` holds equal; hence no environment variable.
 pub(crate) const MAX_SUPPORTED_TRANSACTION_VERSION: u8 = 1;
 
-/// Fetches confirmed transactions from a Solana RPC node with a bounded retry strategy.
+/// Fetches finalized transactions from a Solana RPC node with a bounded retry strategy.
 pub(crate) struct TransactionFetcher {
     rpc_client: Arc<RpcClient>,
     /// Kept only to scrub the URL, credential included, out of the error strings reqwest renders.
@@ -32,7 +32,7 @@ impl TransactionFetcher {
         }
     }
 
-    /// Fetch a confirmed transaction by signature, retrying up to 5 times at 500 ms intervals
+    /// Fetch a finalized transaction by signature, retrying up to 5 times at 500 ms intervals
     /// what [`FetchError::is_retryable`] allows.
     /// ⚠️ `JsonParsed` is what `transaction_adapter` reads, not a preference.
     pub(crate) async fn fetch(
@@ -41,7 +41,7 @@ impl TransactionFetcher {
     ) -> Result<EncodedConfirmedTransactionWithStatusMeta, FetchError> {
         let config = RpcTransactionConfig {
             encoding: Some(UiTransactionEncoding::JsonParsed),
-            commitment: Some(CommitmentConfig::confirmed()),
+            commitment: Some(CommitmentConfig::finalized()),
             max_supported_transaction_version: Some(MAX_SUPPORTED_TRANSACTION_VERSION),
         };
 

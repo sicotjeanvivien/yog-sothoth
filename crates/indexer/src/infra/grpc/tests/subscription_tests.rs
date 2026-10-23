@@ -49,10 +49,32 @@ fn the_request_also_subscribes_to_block_metas() {
         request.blocks_meta.contains_key(BLOCK_META_FILTER),
         "no block-meta subscription means no timestamps at all"
     );
+}
+
+/// Against `Confirmed`, the level Alpenglow announces it will remove.
+#[test]
+fn the_request_reads_at_finalized() {
     assert_eq!(
-        request.commitment,
-        Some(CommitmentLevel::Confirmed as i32),
+        request(&[damm_v2_program()]).commitment,
+        Some(CommitmentLevel::Finalized as i32),
         "the same commitment the WebSocket path uses"
+    );
+}
+
+/// Against a request without slot statuses, or with every status: no transaction would leave, or
+/// a slot would settle on a status that is not `Finalized`.
+#[test]
+fn the_request_subscribes_to_finalized_slot_statuses() {
+    let request = request(&[damm_v2_program()]);
+
+    let filter = request
+        .slots
+        .get(SLOT_FILTER)
+        .expect("the slot statuses are what names the bank each slot kept");
+    assert_eq!(
+        filter.filter_by_commitment,
+        Some(true),
+        "only the statuses at the request's commitment"
     );
 }
 
@@ -138,6 +160,7 @@ fn an_update_names_its_protocol_through_the_filter_that_matched() {
 #[test]
 fn a_block_meta_filter_names_no_protocol() {
     assert_eq!(protocol_of(&[BLOCK_META_FILTER.to_string()]), None);
+    assert_eq!(protocol_of(&[SLOT_FILTER.to_string()]), None);
     assert_eq!(protocol_of(&[]), None);
     assert_eq!(protocol_of(&["something_else".to_string()]), None);
 }
