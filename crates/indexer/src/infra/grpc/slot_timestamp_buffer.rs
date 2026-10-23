@@ -16,7 +16,7 @@ pub(crate) use bank::Bank;
 use known_slots::{KnownSlots, Settlement, SlotOutcome};
 use waiting_slots::WaitingSlots;
 
-/// How far behind the stream a slot may wait for its block-meta (≈ 100 s): a ceiling, not an estimate.
+/// How far behind the stream a slot may wait for its block-meta: a ceiling, not an estimate.
 /// ⚠️ A distance from the head, not a count: a fork's slot whose meta never comes would otherwise
 /// stay oldest pending for ever, and every reconnection would replay from it.
 pub(crate) const MAX_PENDING_SLOTS: u64 = 256;
