@@ -13,7 +13,7 @@ Dependabot (`dependabot.yml`) never proposes the versions below: check each one 
 | sqlx-cli | `cargo install sqlx-cli --version` in `.github/workflows/crates.yml` | the `sqlx` crate of `Cargo.toml` | [crates.io](https://crates.io/crates/sqlx-cli) |
 | cargo-chef | `cargo install cargo-chef --version` in `docker/backend.Dockerfile` | — | [crates.io](https://crates.io/crates/cargo-chef) |
 | Dockerfile syntax | `# syntax=` on line 1 of `docker/backend.Dockerfile` and `web/Dockerfile` | — | [Docker Hub](https://hub.docker.com/r/docker/dockerfile/tags) |
-| Debian release | the `bookworm` of the `rust:`, `debian:` and `postgres:` images in `docker/backend.Dockerfile` | — | [debian.org](https://www.debian.org/releases/) |
+| Debian release | the `trixie` of the `rust:`, `debian:` and `postgres:` images in `docker/backend.Dockerfile` | — | [debian.org](https://www.debian.org/releases/) |
 | shellcheck | `SHELLCHECK_VERSION` and its `SHELLCHECK_SHA256` in `.github/workflows/scripts.yml` | — | [GitHub](https://github.com/koalaman/shellcheck/releases) |
 | actionlint | `go install …/actionlint@` in `.github/workflows/scripts.yml` | — | [GitHub](https://github.com/rhysd/actionlint/releases) |
 

@@ -28,7 +28,7 @@
 # and rust-toolchain.toml must all be visible.
 
 # ── chef base ──────────────────────────────────────────────────────
-FROM rust:1.99.1-slim-bookworm AS chef
+FROM rust:1.99.1-slim-trixie AS chef
 WORKDIR /app
 
 # pkg-config + libssl-dev are needed by several transitive crates
@@ -86,7 +86,7 @@ RUN cargo build --release \
 # libssl3 covers any non-rustls TLS code paths transitively pulled
 # in by Solana / sqlx-postgres. ca-certificates is required for
 # any HTTPS the binary opens (RPC endpoints).
-FROM debian:bookworm-slim AS runtime
+FROM debian:trixie-slim AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libssl3 ca-certificates \
@@ -157,7 +157,7 @@ ENTRYPOINT ["/usr/local/bin/yog-analytic"]
 # Debian release as the builder — so the same glibc — with no apt repository
 # to add. The tag pins the major only; a minor that moves is harmless, a
 # major must move together with the database image.
-FROM postgres:18-bookworm AS yog-archive
+FROM postgres:18-trixie AS yog-archive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libssl3 ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
