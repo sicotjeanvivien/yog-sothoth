@@ -24,13 +24,13 @@ The conventions are `crates/api/README.md` → *What a route may return*, and on
 read them, then answer each question below **from them**, citing the rule. A path that
 needs an answer the rules do not give is a question for the user, never a name made up.
 
-1. **What thing of the data is it?** An entity, an event collection, the TVL or a
-   singleton (rule 1). Its name is the one rule 1 lists; a thing not listed gets its name
-   from the user, by rule 1's naming rule.
+1. **What resource of the data is it?** Its kind — on-chain event, business, produced or
+   service resource — and its name, the one rule 1 lists; a resource not listed gets its
+   name from the user, by rule 1's naming rule.
 2. **For every protocol, or for one entity?** The form of rule 2. An entity is never a
    filter parameter.
 3. **The items, a measure, or the live stream?** The items: the collection itself
-   (rule 3). A measure: the collection and one cut, or `tvl` and its readings (rule 4).
+   (rule 3). A measure: the collection and one cut, or `tvl`, a reading at an instant (rule 4).
    The live stream: `live` (rule 5).
 4. **Does every field complete the route's name** (rule 6)? Live and computed in one
    response (rule 7) means two routes.
