@@ -1,5 +1,5 @@
 //! Postgres implementation of [`AnalyticRepository`]: one transaction per
-//! cycle, whose only per-protocol parts are each protocol's tranches and births.
+//! cycle, whose only per-protocol parts are each protocol's tranches, liquidity and births.
 //!
 //! [`AnalyticRepository`]: yog_core::domain::AnalyticRepository
 
@@ -43,6 +43,7 @@ impl AnalyticRepository for PgAnalyticRepository {
         // ⚠️ One statement per tranche: a whole catch-up in one would outlast its timeout.
         while tranche <= cycle.tranches_through {
             meteora_damm_v2::value_tranche(&mut tx, tranche, tranche_interval()).await?;
+            meteora_damm_v2::value_liquidity_tranche(&mut tx, tranche, tranche_interval()).await?;
             tranches_written += 1;
             tranche += TRANCHE;
         }
@@ -55,6 +56,13 @@ impl AnalyticRepository for PgAnalyticRepository {
         .await?;
         let pool_hours = upsert_pool_hourly(&mut tx, cycle.from, cycle.through).await?;
         upsert_protocol_hourly(&mut tx, cycle.from, cycle.through).await?;
+        meteora_damm_v2::upsert_liquidity_hourly(
+            &mut tx,
+            cycle.from,
+            cycle.through,
+            cycle.tranches_from,
+        )
+        .await?;
         meteora_damm_v2::upsert_births(&mut tx, cycle.from, cycle.through).await?;
         record_hours(&mut tx, cycle.from, cycle.through).await?;
         let hours_frozen = match cycle.freeze_through {

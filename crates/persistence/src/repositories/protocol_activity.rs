@@ -7,14 +7,15 @@ mod rows;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use rows::{
-    LatestProtocolTvlRow, ProtocolActivityBarRow, ProtocolActivityRow, ProtocolTvlRow, fold_latest,
+    LatestProtocolTvlRow, LiquidityMoveRow, ProtocolActivityBarRow, ProtocolActivityRow,
+    ProtocolTvlRow, fold_latest,
 };
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
     domain::{
-        FrozenHours, LatestProtocolTvl, ProtocolActivity, ProtocolActivityBar,
-        ProtocolActivityLookup, ProtocolTvl, Span, Window,
+        FrozenHours, LatestProtocolTvl, LiquidityMove, Protocol, ProtocolActivity,
+        ProtocolActivityBar, ProtocolActivityLookup, ProtocolTvl, Span, Window,
     },
 };
 
@@ -78,6 +79,13 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
                  WHERE bucket >= $1 AND bucket < $2
                  GROUP BY protocol
             ),
+            liquidity AS (
+                SELECT protocol, SUM(added_usd) AS added_usd, SUM(removed_usd) AS removed_usd,
+                       SUM(moves)::BIGINT AS moves, SUM(moves_valued)::BIGINT AS moves_valued
+                  FROM analytic_protocol_liquidity_hourly
+                 WHERE bucket >= $1 AND bucket < $2
+                 GROUP BY protocol
+            ),
             -- ⚠️ A full join: an hour of births without a swap still counts.
             joined AS (
                 SELECT COALESCE(f.protocol, b.protocol) AS protocol,
@@ -94,12 +102,22 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
                    p.active_pools AS "active_pools?",
                    COALESCE(j.births, 0) AS "births!",
                    COALESCE(j.pool_hours, 0) AS "pool_hours!",
-                   COALESCE(j.pool_hours_valued, 0) AS "pool_hours_valued!"
+                   COALESCE(j.pool_hours_valued, 0) AS "pool_hours_valued!",
+                   -- ⚠️ Only a span its liquidity covers whole: before, a sum would read low.
+                   CASE WHEN s.since <= $1 THEN l.added_usd END AS liquidity_added_usd,
+                   CASE WHEN s.since <= $1 THEN l.removed_usd END AS liquidity_removed_usd,
+                   CASE WHEN s.since <= $1 THEN l.moves END AS liquidity_moves,
+                   CASE WHEN s.since <= $1 THEN l.moves_valued END AS liquidity_moves_valued
               FROM joined j
               LEFT JOIN analytic_protocol_periods p
                      ON p.protocol = j.protocol
                     AND p.period = $3
                     AND p.bucket = $4
+              LEFT JOIN liquidity l ON l.protocol = j.protocol
+              LEFT JOIN LATERAL (
+                  SELECT MIN(bucket) AS since FROM analytic_protocol_liquidity_hourly
+                   WHERE protocol = j.protocol
+              ) s ON true
              ORDER BY j.protocol
             "#,
             span.from,
@@ -118,11 +136,15 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
         let rows = sqlx::query_as!(
             ProtocolActivityBarRow,
             r#"
-            SELECT protocol, bucket AS bar_from, volume_usd, fees_usd, swap_count,
-                   active_pools AS pool_hours, active_pools_valued AS pool_hours_valued
-              FROM analytic_protocol_hourly
-             WHERE bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND bucket < $2
-             ORDER BY bucket, protocol
+            SELECT h.protocol, h.bucket AS bar_from, h.volume_usd, h.fees_usd, h.swap_count,
+                   h.active_pools AS pool_hours, h.active_pools_valued AS pool_hours_valued,
+                   l.added_usd AS "liquidity_added_usd?", l.removed_usd AS "liquidity_removed_usd?",
+                   l.moves AS "liquidity_moves?", l.moves_valued AS "liquidity_moves_valued?"
+              FROM analytic_protocol_hourly h
+              LEFT JOIN analytic_protocol_liquidity_hourly l
+                     ON l.protocol = h.protocol AND l.bucket = h.bucket
+             WHERE h.bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND h.bucket < $2
+             ORDER BY h.bucket, h.protocol
             "#,
             span.from,
             span.as_of,
@@ -142,11 +164,20 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
         let rows = sqlx::query_as!(
             ProtocolActivityBarRow,
             r#"
-            SELECT protocol, bar_from AS "bar_from!",
-                   SUM(volume_usd) AS volume_usd, SUM(fees_usd) AS fees_usd,
-                   SUM(swap_count)::BIGINT AS "swap_count!",
-                   SUM(active_pools)::BIGINT AS "pool_hours!",
-                   SUM(active_pools_valued)::BIGINT AS "pool_hours_valued!"
+            SELECT hours.protocol, hours.bar_from AS "bar_from!",
+                   SUM(hours.volume_usd) AS volume_usd, SUM(hours.fees_usd) AS fees_usd,
+                   SUM(hours.swap_count)::BIGINT AS "swap_count!",
+                   SUM(hours.active_pools)::BIGINT AS "pool_hours!",
+                   SUM(hours.active_pools_valued)::BIGINT AS "pool_hours_valued!",
+                   -- ⚠️ Only a bar its liquidity covers whole: before, a sum would read low.
+                   CASE WHEN hours.bar_from >= MIN(s.since) THEN SUM(l.added_usd) END
+                       AS liquidity_added_usd,
+                   CASE WHEN hours.bar_from >= MIN(s.since) THEN SUM(l.removed_usd) END
+                       AS liquidity_removed_usd,
+                   CASE WHEN hours.bar_from >= MIN(s.since) THEN SUM(l.moves)::BIGINT END
+                       AS liquidity_moves,
+                   CASE WHEN hours.bar_from >= MIN(s.since) THEN SUM(l.moves_valued)::BIGINT END
+                       AS liquidity_moves_valued
               FROM (
                   SELECT h.*,
                          time_bucket(INTERVAL '1 day', bucket, origin => $2::TIMESTAMPTZ)
@@ -154,9 +185,15 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
                     FROM analytic_protocol_hourly h
                    WHERE bucket >= $1 AND bucket < $2
               ) hours
-             WHERE bar_from >= $3
-             GROUP BY protocol, bar_from
-             ORDER BY bar_from, protocol
+              LEFT JOIN analytic_protocol_liquidity_hourly l
+                     ON l.protocol = hours.protocol AND l.bucket = hours.bucket
+              LEFT JOIN LATERAL (
+                  SELECT MIN(bucket) AS since FROM analytic_protocol_liquidity_hourly
+                   WHERE protocol = hours.protocol
+              ) s ON true
+             WHERE hours.bar_from >= $3
+             GROUP BY hours.protocol, hours.bar_from
+             ORDER BY hours.bar_from, hours.protocol
             "#,
             span.from,
             span.as_of,
@@ -224,5 +261,39 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
         .map_err(map_sqlx_error)?;
 
         rows.into_iter().map(ProtocolTvl::try_from).collect()
+    }
+
+    async fn liquidity_moves(
+        &self,
+        span: &Span,
+        protocol: Protocol,
+        limit: i64,
+    ) -> RepositoryResult<Vec<LiquidityMove>> {
+        let rows = sqlx::query_as!(
+            LiquidityMoveRow,
+            r#"
+            SELECT m.protocol, m.timestamp AS at, m.signature, m.pool_address,
+                   ta.symbol AS "token_a_symbol?", tb.symbol AS "token_b_symbol?",
+                   m.owner, m.kind, m.amount_usd AS "amount_usd!"
+              FROM analytic_liquidity_moves m
+              LEFT JOIN pools p ON p.pool_address = m.pool_address
+              LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
+              LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT
+             WHERE m.protocol = $3
+               AND m.timestamp >= $1 AND m.timestamp < $2
+               AND m.amount_usd IS NOT NULL
+             ORDER BY m.amount_usd DESC, m.timestamp DESC, m.signature, m.event_index
+             LIMIT $4
+            "#,
+            span.from,
+            span.as_of,
+            protocol.as_str(),
+            limit,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter().map(LiquidityMove::try_from).collect()
     }
 }

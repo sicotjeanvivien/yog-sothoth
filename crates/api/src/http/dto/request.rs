@@ -10,11 +10,13 @@ use solana_pubkey::Pubkey;
 use crate::http::error::ApiError;
 
 mod get_token;
+mod list_liquidity_moves;
 mod list_signals;
 mod list_token_activity;
 mod window_param;
 
 pub(crate) use get_token::GetTokenRequest;
+pub(crate) use list_liquidity_moves::{LiquidityMovesQuery, ListLiquidityMovesRequest};
 pub(crate) use list_signals::{ListSignalsRequest, SignalsQuery};
 pub(crate) use list_token_activity::{ListTokenActivityRequest, TokenActivityQuery};
 pub(crate) use window_param::{ActivityQuery, WindowQuery};

@@ -1,0 +1,129 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH facts AS (\n                SELECT protocol,\n                       SUM(volume_usd) AS volume_usd, SUM(fees_usd) AS fees_usd,\n                       SUM(lp_fees_usd) AS lp_fees_usd,\n                       SUM(protocol_fees_usd) AS protocol_fees_usd,\n                       SUM(referral_fees_usd) AS referral_fees_usd,\n                       SUM(swap_count)::BIGINT AS swap_count,\n                       SUM(active_pools)::BIGINT AS pool_hours,\n                       SUM(active_pools_valued)::BIGINT AS pool_hours_valued\n                  FROM analytic_protocol_hourly\n                 WHERE bucket >= $1 AND bucket < $2\n                 GROUP BY protocol\n            ),\n            births AS (\n                SELECT protocol, SUM(births)::BIGINT AS births\n                  FROM analytic_protocol_births_hourly\n                 WHERE bucket >= $1 AND bucket < $2\n                 GROUP BY protocol\n            ),\n            liquidity AS (\n                SELECT protocol, SUM(added_usd) AS added_usd, SUM(removed_usd) AS removed_usd,\n                       SUM(moves)::BIGINT AS moves, SUM(moves_valued)::BIGINT AS moves_valued\n                  FROM analytic_protocol_liquidity_hourly\n                 WHERE bucket >= $1 AND bucket < $2\n                 GROUP BY protocol\n            ),\n            -- ⚠️ A full join: an hour of births without a swap still counts.\n            joined AS (\n                SELECT COALESCE(f.protocol, b.protocol) AS protocol,\n                       f.volume_usd, f.fees_usd, f.lp_fees_usd,\n                       f.protocol_fees_usd, f.referral_fees_usd,\n                       f.swap_count, f.pool_hours, f.pool_hours_valued, b.births\n                  FROM facts f\n                  FULL JOIN births b ON b.protocol = f.protocol\n            )\n            SELECT j.protocol AS \"protocol!\",\n                   j.volume_usd, j.fees_usd, j.lp_fees_usd,\n                   j.protocol_fees_usd, j.referral_fees_usd,\n                   COALESCE(j.swap_count, 0) AS \"swap_count!\",\n                   p.active_pools AS \"active_pools?\",\n                   COALESCE(j.births, 0) AS \"births!\",\n                   COALESCE(j.pool_hours, 0) AS \"pool_hours!\",\n                   COALESCE(j.pool_hours_valued, 0) AS \"pool_hours_valued!\",\n                   -- ⚠️ Only a span its liquidity covers whole: before, a sum would read low.\n                   CASE WHEN s.since <= $1 THEN l.added_usd END AS liquidity_added_usd,\n                   CASE WHEN s.since <= $1 THEN l.removed_usd END AS liquidity_removed_usd,\n                   CASE WHEN s.since <= $1 THEN l.moves END AS liquidity_moves,\n                   CASE WHEN s.since <= $1 THEN l.moves_valued END AS liquidity_moves_valued\n              FROM joined j\n              LEFT JOIN analytic_protocol_periods p\n                     ON p.protocol = j.protocol\n                    AND p.period = $3\n                    AND p.bucket = $4\n              LEFT JOIN liquidity l ON l.protocol = j.protocol\n              LEFT JOIN LATERAL (\n                  SELECT MIN(bucket) AS since FROM analytic_protocol_liquidity_hourly\n                   WHERE protocol = j.protocol\n              ) s ON true\n             ORDER BY j.protocol\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "volume_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "lp_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "protocol_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "referral_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "swap_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "active_pools?",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_periods",
+            "name": "active_pools"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "births!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
+        "name": "pool_hours!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 10,
+        "name": "pool_hours_valued!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 11,
+        "name": "liquidity_added_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 12,
+        "name": "liquidity_removed_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 13,
+        "name": "liquidity_moves",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 14,
+        "name": "liquidity_moves_valued",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      true,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "933f88bf88bf2c3e1ca53b38b4d7e58145d930c250042a7ce441f9c19d34caca"
+}

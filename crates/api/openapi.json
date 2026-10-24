@@ -245,6 +245,88 @@
         ],
         "type": "object"
       },
+      "LiquidityFlowsResponse": {
+        "description": "The liquidity added and removed; the sums skip the moves not valued.",
+        "properties": {
+          "addedUsd": {
+            "$ref": "#/components/schemas/UnsignedDecimal"
+          },
+          "moves": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "movesValued": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "removedUsd": {
+            "$ref": "#/components/schemas/UnsignedDecimal"
+          }
+        },
+        "required": [
+          "addedUsd",
+          "removedUsd",
+          "moves",
+          "movesValued"
+        ],
+        "type": "object"
+      },
+      "LiquidityMoveKindResponse": {
+        "enum": [
+          "add",
+          "remove"
+        ],
+        "type": "string"
+      },
+      "LiquidityMoveResponse": {
+        "description": "One valued liquidity move, with its pool's token symbols.",
+        "properties": {
+          "amountUsd": {
+            "$ref": "#/components/schemas/UnsignedDecimal"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/LiquidityMoveKindResponse"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "poolAddress": {
+            "type": "string"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          },
+          "signature": {
+            "type": "string"
+          },
+          "tokenASymbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tokenBSymbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "protocol",
+          "at",
+          "signature",
+          "poolAddress",
+          "owner",
+          "kind",
+          "amountUsd",
+          "tokenASymbol",
+          "tokenBSymbol"
+        ],
+        "type": "object"
+      },
       "NetworkResponse": {
         "description": "Where the chain is, as the probe last saw it. The probe's endpoint is not\nthe one ingestion uses: this says nothing about our ingestion.",
         "properties": {
@@ -426,6 +508,17 @@
             "format": "date-time",
             "type": "string"
           },
+          "liquidity": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LiquidityFlowsResponse",
+                "description": "`null` for a bar that starts before the protocol's liquidity was first measured."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "poolHours": {
             "$ref": "#/components/schemas/Count"
           },
@@ -456,6 +549,7 @@
           "poolHours",
           "poolHoursValued",
           "feesUsd",
+          "liquidity",
           "volumeUsd"
         ],
         "type": "object"
@@ -481,6 +575,17 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/UnsignedDecimal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "liquidity": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LiquidityFlowsResponse",
+                "description": "`null` when the window starts before the protocol's liquidity was first measured."
               },
               {
                 "type": "null"
@@ -548,6 +653,7 @@
           "poolHoursValued",
           "activePools",
           "feesUsd",
+          "liquidity",
           "lpFeesUsd",
           "protocolFeesUsd",
           "referralFeesUsd",
@@ -905,6 +1011,99 @@
         ],
         "type": "string"
       },
+      "WindowedResponse_LiquidityMoveResponse": {
+        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "properties": {
+          "asOf": {
+            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "description": "The first hour the facts hold.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "items": {
+              "description": "One valued liquidity move, with its pool's token symbols.",
+              "properties": {
+                "amountUsd": {
+                  "$ref": "#/components/schemas/UnsignedDecimal"
+                },
+                "at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "kind": {
+                  "$ref": "#/components/schemas/LiquidityMoveKindResponse"
+                },
+                "owner": {
+                  "type": "string"
+                },
+                "poolAddress": {
+                  "type": "string"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "signature": {
+                  "type": "string"
+                },
+                "tokenASymbol": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "tokenBSymbol": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "protocol",
+                "at",
+                "signature",
+                "poolAddress",
+                "owner",
+                "kind",
+                "amountUsd",
+                "tokenASymbol",
+                "tokenBSymbol"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
       "WindowedResponse_ProtocolActivityBarResponse": {
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
@@ -949,6 +1148,17 @@
                   "format": "date-time",
                   "type": "string"
                 },
+                "liquidity": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/LiquidityFlowsResponse",
+                      "description": "`null` for a bar that starts before the protocol's liquidity was first measured."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "poolHours": {
                   "$ref": "#/components/schemas/Count"
                 },
@@ -979,6 +1189,7 @@
                 "poolHours",
                 "poolHoursValued",
                 "feesUsd",
+                "liquidity",
                 "volumeUsd"
               ],
               "type": "object"
@@ -1052,6 +1263,17 @@
                     }
                   ]
                 },
+                "liquidity": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/LiquidityFlowsResponse",
+                      "description": "`null` when the window starts before the protocol's liquidity was first measured."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "lpFeesUsd": {
                   "oneOf": [
                     {
@@ -1113,6 +1335,7 @@
                 "poolHoursValued",
                 "activePools",
                 "feesUsd",
+                "liquidity",
                 "lpFeesUsd",
                 "protocolFeesUsd",
                 "referralFeesUsd",
@@ -1541,6 +1764,67 @@
               }
             },
             "description": "Each protocol's TVL at the close of every hour, from the window's start."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/protocols/{protocol}/liquidity-moves": {
+      "get": {
+        "operationId": "list_liquidity_moves",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowedResponse_LiquidityMoveResponse"
+                }
+              }
+            },
+            "description": "The protocol's valued liquidity moves over the window, largest first; none while its liquidity does not cover the window whole."
           },
           "default": {
             "content": {

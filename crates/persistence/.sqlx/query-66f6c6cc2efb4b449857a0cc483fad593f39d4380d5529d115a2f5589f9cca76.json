@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT hours.protocol, hours.bar_from AS \"bar_from!\",\n                   SUM(hours.volume_usd) AS volume_usd, SUM(hours.fees_usd) AS fees_usd,\n                   SUM(hours.swap_count)::BIGINT AS \"swap_count!\",\n                   SUM(hours.active_pools)::BIGINT AS \"pool_hours!\",\n                   SUM(hours.active_pools_valued)::BIGINT AS \"pool_hours_valued!\",\n                   -- ⚠️ Only a bar its liquidity covers whole: before, a sum would read low.\n                   CASE WHEN hours.bar_from >= MIN(s.since) THEN SUM(l.added_usd) END\n                       AS liquidity_added_usd,\n                   CASE WHEN hours.bar_from >= MIN(s.since) THEN SUM(l.removed_usd) END\n                       AS liquidity_removed_usd,\n                   CASE WHEN hours.bar_from >= MIN(s.since) THEN SUM(l.moves)::BIGINT END\n                       AS liquidity_moves,\n                   CASE WHEN hours.bar_from >= MIN(s.since) THEN SUM(l.moves_valued)::BIGINT END\n                       AS liquidity_moves_valued\n              FROM (\n                  SELECT h.*,\n                         time_bucket(INTERVAL '1 day', bucket, origin => $2::TIMESTAMPTZ)\n                             AS bar_from\n                    FROM analytic_protocol_hourly h\n                   WHERE bucket >= $1 AND bucket < $2\n              ) hours\n              LEFT JOIN analytic_protocol_liquidity_hourly l\n                     ON l.protocol = hours.protocol AND l.bucket = hours.bucket\n              LEFT JOIN LATERAL (\n                  SELECT MIN(bucket) AS since FROM analytic_protocol_liquidity_hourly\n                   WHERE protocol = hours.protocol\n              ) s ON true\n             WHERE hours.bar_from >= $3\n             GROUP BY hours.protocol, hours.bar_from\n             ORDER BY hours.bar_from, hours.protocol\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_hourly",
+            "name": "protocol"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "bar_from!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "volume_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "swap_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "pool_hours!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "pool_hours_valued!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "liquidity_added_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "liquidity_removed_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
+        "name": "liquidity_moves",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 10,
+        "name": "liquidity_moves_valued",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "66f6c6cc2efb4b449857a0cc483fad593f39d4380d5529d115a2f5589f9cca76"
+}

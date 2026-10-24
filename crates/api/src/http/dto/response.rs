@@ -19,7 +19,8 @@ pub(crate) use network::NetworkResponse;
 pub(crate) use page::PageResponse;
 pub(crate) use problem::{PROBLEM_CONTENT_TYPE, ProblemDetailsResponse};
 pub(crate) use protocol_activity::{
-    LatestTvlResponse, ProtocolActivityBarResponse, ProtocolActivityResponse, ProtocolTvlResponse,
+    LatestTvlResponse, LiquidityMoveResponse, ProtocolActivityBarResponse,
+    ProtocolActivityResponse, ProtocolTvlResponse,
 };
 pub(crate) use protocol_catalog::ProtocolCatalogResponse;
 pub(crate) use readiness::{

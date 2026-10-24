@@ -1,6 +1,6 @@
 //! The DAMM v2 branch: one tranche of its swaps, its pools' prices written
-//! and the swaps valued at them in a single statement; its pools born; and the
-//! TVL of its pools discovered, seen first without their birth.
+//! and the swaps valued at them in a single statement, then its liquidity moves;
+//! its pools born; and the TVL of its pools discovered, seen first without their birth.
 
 use chrono::{DateTime, Utc};
 use sqlx::{Postgres, Transaction, postgres::types::PgInterval};
@@ -19,6 +19,69 @@ pub(super) async fn value_tranche(
         tranche,
         Protocol::MeteoraDammV2.as_str(),
         width,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(map_sqlx_error)?;
+    Ok(())
+}
+
+/// The tranche's liquidity moves, each valued once at its pool's price in it.
+pub(super) async fn value_liquidity_tranche(
+    tx: &mut Transaction<'static, Postgres>,
+    tranche: DateTime<Utc>,
+    width: PgInterval,
+) -> RepositoryResult<()> {
+    sqlx::query_file!(
+        "src/repositories/analytic/meteora_damm_v2_liquidity_tranche.sql",
+        tranche,
+        Protocol::MeteoraDammV2.as_str(),
+        width,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(map_sqlx_error)?;
+    Ok(())
+}
+
+/// The moves of the hours `from..=through` summed, each hour rewritten whole, zero included, but
+/// none before the first hour whose tranches were all valued with their moves.
+/// `next_tranche` is the first tranche this cycle values.
+pub(super) async fn upsert_liquidity_hourly(
+    tx: &mut Transaction<'static, Postgres>,
+    from: DateTime<Utc>,
+    through: DateTime<Utc>,
+    next_tranche: DateTime<Utc>,
+) -> RepositoryResult<()> {
+    sqlx::query!(
+        r#"
+        INSERT INTO analytic_protocol_liquidity_hourly (
+            protocol, bucket, added_usd, removed_usd, moves, moves_valued
+        )
+        SELECT $3, h.bucket,
+               COALESCE(SUM(m.amount_usd) FILTER (WHERE m.kind = 'add'), 0),
+               COALESCE(SUM(m.amount_usd) FILTER (WHERE m.kind = 'remove'), 0),
+               COUNT(m.signature), COUNT(m.amount_usd)
+          FROM generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ, INTERVAL '1 hour') AS h (bucket)
+          LEFT JOIN analytic_liquidity_moves m
+                 ON m.protocol = $3
+                AND m.timestamp >= h.bucket AND m.timestamp < h.bucket + INTERVAL '1 hour'
+         -- ⚠️ Before the first hour written, an hour starting before `next_tranche` holds
+         -- tranches valued without their moves: it would read as an hour without any.
+         WHERE h.bucket >= COALESCE(
+                   (SELECT MIN(bucket) FROM analytic_protocol_liquidity_hourly WHERE protocol = $3),
+                   date_trunc('hour', $4::TIMESTAMPTZ - INTERVAL '1 microsecond') + INTERVAL '1 hour')
+         GROUP BY h.bucket
+        ON CONFLICT (protocol, bucket) DO UPDATE SET
+            added_usd    = EXCLUDED.added_usd,
+            removed_usd  = EXCLUDED.removed_usd,
+            moves        = EXCLUDED.moves,
+            moves_valued = EXCLUDED.moves_valued
+        "#,
+        from,
+        through,
+        Protocol::MeteoraDammV2.as_str(),
+        next_tranche,
     )
     .execute(&mut **tx)
     .await

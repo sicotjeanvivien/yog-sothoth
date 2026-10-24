@@ -1,12 +1,14 @@
-//! The rows of `/api/protocols/activity`, its series, and `/api/protocols/tvl`.
-//! Each USD sum comes with its coverage: `poolHoursValued` of `poolHours`.
+//! The rows of `/api/protocols/activity`, its series, `/api/protocols/tvl`, and a protocol's
+//! largest liquidity moves. Each USD sum comes with its coverage: `poolHoursValued` of
+//! `poolHours`, `movesValued` of `moves`.
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::{
-    DiscoveredTvl, LatestProtocolTvl, ProtocolActivity, ProtocolActivityBar, ProtocolTvl,
+    DiscoveredTvl, LatestProtocolTvl, LiquidityFlows, LiquidityMove, LiquidityMoveKind,
+    ProtocolActivity, ProtocolActivityBar, ProtocolTvl,
 };
 
 use super::protocol::ProtocolResponse;
@@ -40,6 +42,33 @@ pub(crate) struct ProtocolActivityResponse {
     pool_hours: i64,
     #[schema(value_type = Count)]
     pool_hours_valued: i64,
+    /// `null` when the window starts before the protocol's liquidity was first measured.
+    liquidity: Option<LiquidityFlowsResponse>,
+}
+
+/// The liquidity added and removed; the sums skip the moves not valued.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LiquidityFlowsResponse {
+    #[schema(value_type = UnsignedDecimal)]
+    added_usd: Decimal,
+    #[schema(value_type = UnsignedDecimal)]
+    removed_usd: Decimal,
+    #[schema(value_type = Count)]
+    moves: i64,
+    #[schema(value_type = Count)]
+    moves_valued: i64,
+}
+
+impl From<LiquidityFlows> for LiquidityFlowsResponse {
+    fn from(f: LiquidityFlows) -> Self {
+        Self {
+            added_usd: f.added_usd,
+            removed_usd: f.removed_usd,
+            moves: f.moves,
+            moves_valued: f.moves_valued,
+        }
+    }
 }
 
 impl From<ProtocolActivity> for ProtocolActivityResponse {
@@ -56,6 +85,7 @@ impl From<ProtocolActivity> for ProtocolActivityResponse {
             births: a.births,
             pool_hours: a.pool_hours,
             pool_hours_valued: a.pool_hours_valued,
+            liquidity: a.liquidity.map(Into::into),
         }
     }
 }
@@ -76,6 +106,8 @@ pub(crate) struct ProtocolActivityBarResponse {
     pool_hours: i64,
     #[schema(value_type = Count)]
     pool_hours_valued: i64,
+    /// `null` for a bar that starts before the protocol's liquidity was first measured.
+    liquidity: Option<LiquidityFlowsResponse>,
 }
 
 impl From<ProtocolActivityBar> for ProtocolActivityBarResponse {
@@ -88,6 +120,7 @@ impl From<ProtocolActivityBar> for ProtocolActivityBarResponse {
             swap_count: b.swap_count,
             pool_hours: b.pool_hours,
             pool_hours_valued: b.pool_hours_valued,
+            liquidity: b.liquidity.map(Into::into),
         }
     }
 }
@@ -193,3 +226,45 @@ impl From<Measured<Vec<LatestProtocolTvl>>> for LatestTvlResponse {
 #[cfg(test)]
 #[path = "tests/protocol_activity_tests.rs"]
 mod tests;
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum LiquidityMoveKindResponse {
+    Add,
+    Remove,
+}
+
+/// One valued liquidity move, with its pool's token symbols.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LiquidityMoveResponse {
+    protocol: ProtocolResponse,
+    at: DateTime<Utc>,
+    signature: String,
+    pool_address: String,
+    token_a_symbol: Option<String>,
+    token_b_symbol: Option<String>,
+    owner: String,
+    kind: LiquidityMoveKindResponse,
+    #[schema(value_type = UnsignedDecimal)]
+    amount_usd: Decimal,
+}
+
+impl From<LiquidityMove> for LiquidityMoveResponse {
+    fn from(m: LiquidityMove) -> Self {
+        Self {
+            protocol: m.protocol.into(),
+            at: m.at,
+            signature: m.signature,
+            pool_address: m.pool_address,
+            token_a_symbol: m.token_a_symbol,
+            token_b_symbol: m.token_b_symbol,
+            owner: m.owner,
+            kind: match m.kind {
+                LiquidityMoveKind::Add => LiquidityMoveKindResponse::Add,
+                LiquidityMoveKind::Remove => LiquidityMoveKindResponse::Remove,
+            },
+            amount_usd: m.amount_usd,
+        }
+    }
+}

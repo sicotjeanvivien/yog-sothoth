@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT protocol, bucket AS bar_from, volume_usd, fees_usd, swap_count,\n                   active_pools AS pool_hours, active_pools_valued AS pool_hours_valued\n              FROM analytic_protocol_hourly\n             WHERE bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND bucket < $2\n             ORDER BY bucket, protocol\n            ",
+  "query": "\n            SELECT h.protocol, h.bucket AS bar_from, h.volume_usd, h.fees_usd, h.swap_count,\n                   h.active_pools AS pool_hours, h.active_pools_valued AS pool_hours_valued,\n                   l.added_usd AS \"liquidity_added_usd?\", l.removed_usd AS \"liquidity_removed_usd?\",\n                   l.moves AS \"liquidity_moves?\", l.moves_valued AS \"liquidity_moves_valued?\"\n              FROM analytic_protocol_hourly h\n              LEFT JOIN analytic_protocol_liquidity_hourly l\n                     ON l.protocol = h.protocol AND l.bucket = h.bucket\n             WHERE h.bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND h.bucket < $2\n             ORDER BY h.bucket, h.protocol\n            ",
   "describe": {
     "columns": [
       {
@@ -79,6 +79,50 @@
             "name": "active_pools_valued"
           }
         }
+      },
+      {
+        "ordinal": 7,
+        "name": "liquidity_added_usd?",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_liquidity_hourly",
+            "name": "added_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "liquidity_removed_usd?",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_liquidity_hourly",
+            "name": "removed_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "liquidity_moves?",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_liquidity_hourly",
+            "name": "moves"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "liquidity_moves_valued?",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_liquidity_hourly",
+            "name": "moves_valued"
+          }
+        }
       }
     ],
     "parameters": {
@@ -95,8 +139,12 @@
       true,
       false,
       false,
+      false,
+      false,
+      false,
+      false,
       false
     ]
   },
-  "hash": "12f706fb9488a4afa6c3a916e92122234f7309d01bbd29f755504d9508870167"
+  "hash": "e2c1bf482e47320a19b550cb06cda68f93cf514f000b7c60e84f88c912349af9"
 }
