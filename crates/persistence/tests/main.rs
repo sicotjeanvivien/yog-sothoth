@@ -7,6 +7,7 @@
 mod helpers;
 
 mod amount_usd;
+mod analytic_bursts;
 mod analytic_liquidity;
 mod analytic_prices;
 mod analytic_rebuild;
