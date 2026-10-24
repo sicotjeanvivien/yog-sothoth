@@ -631,7 +631,7 @@ the start.
 the rules of `crates/api/README.md`: one static query per resource and cut, the protocol
 (`$n::TEXT IS NULL OR protocol = $n`) or the pool in the `WHERE`, so every one stays
 checked at compile time. The swaps by pool read `analytic_pool_hourly`, which 037 opens to
-`yog_api`, read only. A pool's liquidity moves page by a key of their order — amount or
+`yog_api`, read only; 037 also indexes the liquidity moves by pool. A pool's liquidity moves page by a key of their order — amount or
 instant, then signature and `event_index` — forward only. `tests/measures.rs` holds the
 scopes, the days, the TVL's last reading and the pages.
 
