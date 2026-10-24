@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * The row of a protocol page's tabs: links that change `?tab=` and keep the period, numbered
- * as in the canvas, and a digit key opens its tab. The page renders it once a tab has shipped.
+ * The row of a protocol page's tabs: links that change `?tab=` and keep the period, and a digit
+ * key opens its tab. The page renders it once a tab has shipped.
  */
 
 import { useEffect } from "react";

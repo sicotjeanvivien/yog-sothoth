@@ -1,5 +1,5 @@
 /**
- * The tabs of a protocol's page, in the canvas's order, chosen by `?tab=`. A tab joins the row
+ * The tabs of a protocol's page, in their row's order, chosen by `?tab=`. A tab joins the row
  * when its content ships; its number is its place in the full list, so it never moves.
  */
 
@@ -10,7 +10,7 @@ export type ProtocolTab = (typeof PROTOCOL_TABS)[number];
 /** The tabs whose content has shipped. */
 export const READY_TABS: ReadonlySet<ProtocolTab> = new Set<ProtocolTab>();
 
-/** "01" to "06", the tab's index in the row and its keyboard shortcut. */
+/** "01" to "06", shown before the tab's label. */
 export function tabNumber(tab: ProtocolTab): string {
   return String(PROTOCOL_TABS.indexOf(tab) + 1).padStart(2, "0");
 }

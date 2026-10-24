@@ -337,8 +337,9 @@ a tab joins the row when its content ships (`READY_TABS`), numbered by its
 place in the full list so it never moves. `?tab=` picks one, a bad value falls
 back to the first ready, which, like the default period, the URL leaves out
 (`pageQuery`, `tabQuery`); tab links keep the period, period links keep the
-tab, and a digit key opens its tab, Shift allowed for AZERTY. The KPIs' `<Suspense>` is keyed by the period
-only: a tab change re-reads them on the server and keeps them on screen.
+tab, and a digit key opens its tab, Shift allowed for AZERTY. The KPIs'
+`<Suspense>` is keyed by the period only: a tab change re-reads them on the
+server and keeps them on screen.
 
 ## Site
 
