@@ -161,11 +161,11 @@ at the end of this section.
    (`/api/protocols/meteora_damm_v2/swaps`). An entity is always in the path, never a filter
    parameter. An identifier is a key of the data — a base58 key, a protocol name, a signal's
    or an announcement's id — and never a reserved word (rules 4 and 5).
-3. **A collection returns its items**, cursor-paginated but for `tvl` (rule 4) (`Page<T>`: `?limit=`, 50 by
-   default, 200 at most), with `?window=` when it is read over one and `?sort=` when it has
-   more than one order. A collection that is not paginated yet is listed below. A parameter
-   may filter on an attribute of the items (`?severity=`),
-   never name an entity. Every item of a collection shared by several protocols carries its
+3. **A collection returns its items**, cursor-paginated (`Page<T>`: `?limit=`, 50 by
+   default, 200 at most) — all but `tvl`, which its window bounds (rule 4) — with `?window=`
+   when it is read over one and `?sort=` when it has more than one order. A collection not
+   paginated yet is listed below. A parameter may filter on an attribute of the items
+   (`?severity=`), never name an entity. Every item of a collection shared by several protocols carries its
    protocol.
 4. **A measure is a collection followed by a cut**, a reserved word that ends the path:
    - `totals`, the whole window: one row per protocol at the root, under an entity its own;
