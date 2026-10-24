@@ -207,6 +207,7 @@
         "curveLabel": "TVL over the period, from {low} to {high}",
         "tvlAt": "TVL {tvl}",
         "perHour": "{change} over the hour",
+        "perHours": "{change} over {hours} h",
         "tvlNow": "Now: {tvl} · hover or touch the curve for detail",
         "flowsHourly": "Added and removed per hour",
         "flowsDaily": "Added and removed per day",

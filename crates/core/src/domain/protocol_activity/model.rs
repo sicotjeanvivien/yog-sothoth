@@ -3,6 +3,7 @@
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
+use solana_pubkey::Pubkey;
 
 use crate::domain::{Protocol, Window};
 
@@ -62,10 +63,10 @@ pub struct LiquidityMove {
     pub protocol: Protocol,
     pub at: DateTime<Utc>,
     pub signature: String,
-    pub pool_address: String,
+    pub pool_address: Pubkey,
     pub token_a_symbol: Option<String>,
     pub token_b_symbol: Option<String>,
-    pub owner: String,
+    pub owner: Pubkey,
     pub kind: LiquidityMoveKind,
     pub amount_usd: Decimal,
 }

@@ -453,12 +453,13 @@ async fn insert_move(pool: &PgPool, tag: &str, at: DateTime<Utc>, usd: Option<i6
     sqlx::query(
         "INSERT INTO analytic_liquidity_moves
            (signature, event_index, timestamp, bucket, pool_address, protocol, owner, kind, amount_usd)
-         VALUES ($1, 0, $2, $2, $3, 'meteora_damm_v2', 'owner', 'remove', $4)",
+         VALUES ($1, 0, $2, $2, $3, 'meteora_damm_v2', $5, 'remove', $4)",
     )
     .bind(tag)
     .bind(at)
     .bind(pk(1).to_string())
     .bind(usd)
+    .bind(pk(2).to_string())
     .execute(pool)
     .await
     .unwrap();

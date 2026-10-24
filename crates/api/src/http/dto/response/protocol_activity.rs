@@ -256,10 +256,10 @@ impl From<LiquidityMove> for LiquidityMoveResponse {
             protocol: m.protocol.into(),
             at: m.at,
             signature: m.signature,
-            pool_address: m.pool_address,
+            pool_address: m.pool_address.to_string(),
             token_a_symbol: m.token_a_symbol,
             token_b_symbol: m.token_b_symbol,
-            owner: m.owner,
+            owner: m.owner.to_string(),
             kind: match m.kind {
                 LiquidityMoveKind::Add => LiquidityMoveKindResponse::Add,
                 LiquidityMoveKind::Remove => LiquidityMoveKindResponse::Remove,

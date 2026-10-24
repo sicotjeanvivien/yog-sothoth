@@ -199,6 +199,28 @@ async fn a_move_in_a_pool_never_priced_is_not_valued(pool: PgPool) {
     assert_eq!(move_usd(&pool, "new").await, None);
 }
 
+/// Mutation: the newest price row taken whatever it holds — its side without a price leaves
+/// `LEAST` the market alone, and 10 X would be worth $10 more.
+#[sqlx::test]
+async fn a_side_the_last_rows_did_not_price_stays_unvalued(pool: PgPool) {
+    let tranche = settled_hour() + Duration::minutes(10);
+    let next = tranche + Duration::minutes(5);
+    let (x, y, sol) = (pk(10).to_string(), pk(11).to_string(), pk(12).to_string());
+    let pool_x = setup_pool(&pool, 1, &x, &sol).await;
+    let pool_y = setup_pool(&pool, 2, &y, &sol).await;
+    price_at(&pool, &x, "1", tranche - Duration::minutes(1)).await;
+    price_at(&pool, &sol, "100", tranche - Duration::minutes(1)).await;
+    // No SOL out of the swap: no rate, so X gets no price in this tranche.
+    insert_swap(&pool, &pool_x, "x", 1_000_000, 0, tranche).await;
+    insert_swap(&pool, &pool_y, "y", 1_000_000, 1_000_000, tranche).await;
+    insert_swap(&pool, &pool_y, "y2", 1_000_000, 1_000_000, next).await;
+    insert_move(&pool, &pool_x, "unbounded", "add", (10_000_000, 0), next).await;
+
+    value(&pool, tranche, next).await;
+
+    assert_eq!(move_usd(&pool, "unbounded").await, None);
+}
+
 async fn hourly(pool: &PgPool) -> Vec<(DateTime<Utc>, BigDecimal, BigDecimal, i64, i64)> {
     sqlx::query_as(
         "SELECT bucket, added_usd, removed_usd, moves, moves_valued

@@ -9,7 +9,8 @@ use yog_core::{
 };
 
 use crate::repositories::helper::{
-    convert_bigdecimal_to_decimal, convert_optional, parse_protocol, parse_window,
+    convert_bigdecimal_to_decimal, convert_optional, convert_string_to_pubkey, parse_protocol,
+    parse_window,
 };
 
 pub(super) struct ProtocolActivityRow {
@@ -158,10 +159,10 @@ impl TryFrom<LiquidityMoveRow> for LiquidityMove {
             protocol: parse_protocol(&row.protocol)?,
             at: row.at,
             signature: row.signature,
-            pool_address: row.pool_address,
+            pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
             token_a_symbol: row.token_a_symbol,
             token_b_symbol: row.token_b_symbol,
-            owner: row.owner,
+            owner: convert_string_to_pubkey(row.owner, "owner")?,
             kind: match row.kind.as_str() {
                 "add" => LiquidityMoveKind::Add,
                 "remove" => LiquidityMoveKind::Remove,

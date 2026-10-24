@@ -72,15 +72,21 @@ export function TvlCurve({
             style={{ left: `${marks[active]}%` }}
           />
         )}
-        <div className="absolute inset-0 z-[2] flex">
-          {marks.map((_, i) => (
-            <div
-              key={i}
-              onMouseEnter={() => setActive(i)}
-              onClick={() => setActive(i)}
-              className="h-full flex-1 cursor-crosshair"
-            />
-          ))}
+        {/* ⚠️ Each zone from midpoint to midpoint: the points are not evenly spaced. */}
+        <div className="absolute inset-0 z-[2]">
+          {marks.map((mark, i) => {
+            const left = i === 0 ? 0 : (marks[i - 1]! + mark) / 2;
+            const right = i === marks.length - 1 ? 100 : (mark + marks[i + 1]!) / 2;
+            return (
+              <div
+                key={i}
+                onMouseEnter={() => setActive(i)}
+                onClick={() => setActive(i)}
+                className="absolute inset-y-0 cursor-crosshair"
+                style={{ left: `${left}%`, width: `${right - left}%` }}
+              />
+            );
+          })}
         </div>
         <svg
           viewBox={`0 0 ${CURVE_BOX.width} ${CURVE_BOX.height}`}

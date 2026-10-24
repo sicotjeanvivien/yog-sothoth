@@ -22,7 +22,8 @@ SELECT create_hypertable('analytic_liquidity_moves', 'timestamp',
                          create_default_indexes => FALSE);
 CREATE INDEX analytic_liquidity_moves_by_protocol
     ON analytic_liquidity_moves (protocol, timestamp DESC);
-SELECT add_retention_policy('analytic_liquidity_moves', INTERVAL '30 days');
+-- ⚠️ A day past the longest window: a chunk is dropped whole, by its end.
+SELECT add_retention_policy('analytic_liquidity_moves', INTERVAL '31 days');
 
 -- One row per protocol and written hour, zero included: the first one is when the
 -- liquidity started being measured.

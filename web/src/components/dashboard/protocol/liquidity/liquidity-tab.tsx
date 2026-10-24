@@ -165,8 +165,16 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
         marks={curve.coords.map((c) => (c.x / CURVE_BOX.width) * 100)}
         readings={curve.points.map((p, i) => {
           const previous = curve.points[i - 1];
+          const hours =
+            previous === undefined ? 0 : Math.round((p.at.getTime() - previous.at.getTime()) / 3_600_000);
           const change =
-            previous === undefined ? "" : ` · ${t("perHour", { change: signed(p.value - previous.value) })}`;
+            previous === undefined
+              ? ""
+              : ` · ${
+                  hours === 1
+                    ? t("perHour", { change: signed(p.value - previous.value) })
+                    : t("perHours", { change: signed(p.value - previous.value), hours })
+                }`;
           return `${moment(p.at)} — ${t("tvlAt", { tvl: usd(p.value) })}${change}`;
         })}
         rest={t("tvlNow", { tvl: usd(curve.points[curve.points.length - 1]!.value) })}
@@ -280,8 +288,9 @@ async function LargestMoves({ period, protocol }: TabProps) {
                 {t("moves.ago")}
               </div>
             </div>
-            {moves.items.map((move) => (
-              <div key={`${move.signature}-${move.at}`} role="row" className={`${ROW_CLASS} ${MOVE_COLUMNS}`}>
+            {/* ⚠️ The rank in the key: two moves of one transaction share signature and time. */}
+            {moves.items.map((move, rank) => (
+              <div key={`${move.signature}-${rank}`} role="row" className={`${ROW_CLASS} ${MOVE_COLUMNS}`}>
                 <div role="cell" className="font-dash-mono text-[12px] whitespace-nowrap text-dash-ink-2">
                   {shortenPubkey(move.owner)}
                 </div>

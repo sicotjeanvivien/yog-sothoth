@@ -207,6 +207,7 @@
         "curveLabel": "TVL sur la période, de {low} à {high}",
         "tvlAt": "TVL {tvl}",
         "perHour": "{change} sur l'heure",
+        "perHours": "{change} sur {hours} h",
         "tvlNow": "Maintenant : {tvl} · survolez ou touchez la courbe pour le détail",
         "flowsHourly": "Ajouts et retraits par heure",
         "flowsDaily": "Ajouts et retraits par jour",
