@@ -282,6 +282,9 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
              WHERE m.protocol = $3
                AND m.timestamp >= $1 AND m.timestamp < $2
                AND m.amount_usd IS NOT NULL
+               -- ⚠️ Only a span its liquidity covers whole, as the totals: else a ranking of part of it.
+               AND (SELECT MIN(bucket) FROM analytic_protocol_liquidity_hourly
+                     WHERE protocol = $3) <= $1
              ORDER BY m.amount_usd DESC, m.timestamp DESC, m.signature, m.event_index
              LIMIT $4
             "#,

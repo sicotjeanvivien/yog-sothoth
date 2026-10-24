@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT m.protocol, m.timestamp AS at, m.signature, m.pool_address,\n                   ta.symbol AS \"token_a_symbol?\", tb.symbol AS \"token_b_symbol?\",\n                   m.owner, m.kind, m.amount_usd AS \"amount_usd!\"\n              FROM analytic_liquidity_moves m\n              LEFT JOIN pools p ON p.pool_address = m.pool_address\n              LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT\n              LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT\n             WHERE m.protocol = $3\n               AND m.timestamp >= $1 AND m.timestamp < $2\n               AND m.amount_usd IS NOT NULL\n             ORDER BY m.amount_usd DESC, m.timestamp DESC, m.signature, m.event_index\n             LIMIT $4\n            ",
+  "query": "\n            SELECT m.protocol, m.timestamp AS at, m.signature, m.pool_address,\n                   ta.symbol AS \"token_a_symbol?\", tb.symbol AS \"token_b_symbol?\",\n                   m.owner, m.kind, m.amount_usd AS \"amount_usd!\"\n              FROM analytic_liquidity_moves m\n              LEFT JOIN pools p ON p.pool_address = m.pool_address\n              LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT\n              LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT\n             WHERE m.protocol = $3\n               AND m.timestamp >= $1 AND m.timestamp < $2\n               AND m.amount_usd IS NOT NULL\n               -- ⚠️ Only a span its liquidity covers whole, as the totals: else a ranking of part of it.\n               AND (SELECT MIN(bucket) FROM analytic_protocol_liquidity_hourly\n                     WHERE protocol = $3) <= $1\n             ORDER BY m.amount_usd DESC, m.timestamp DESC, m.signature, m.event_index\n             LIMIT $4\n            ",
   "describe": {
     "columns": [
       {
@@ -123,5 +123,5 @@
       true
     ]
   },
-  "hash": "5b7b171fe888c668e7dc54c4e9c18ea5593c8d076e6c7a3ced3e2d1bd22b0164"
+  "hash": "327225c7ed777e4b1a0d098c8705f3cee03d2c81f802e0d81d595e8cb2bf7958"
 }

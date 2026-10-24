@@ -6,8 +6,8 @@ use chrono::{DateTime, Duration, TimeZone, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use yog_core::domain::{
-    PoolCatalog, Protocol, ProtocolActivityLookup, Span, TokenActivityCursor, TokenActivityFeed,
-    Window,
+    LiquidityFlows, LiquidityMoveKind, PoolCatalog, Protocol, ProtocolActivityLookup, Span,
+    TokenActivityCursor, TokenActivityFeed, Window,
 };
 use yog_persistence::{PgPoolRepository, PgProtocolActivityRepository, PgTokenActivityRepository};
 
@@ -405,4 +405,102 @@ async fn every_pool_seen_counts_under_its_protocol(pool: PgPool) {
         (Protocol::MeteoraDlmm.as_str(), 1),
     ];
     assert_eq!(counts, expected);
+}
+
+/// Liquidity measured from `since` through the open hour, each hour $2 added and $1 removed.
+async fn seed_liquidity_since(pool: &PgPool, since: DateTime<Utc>) {
+    sqlx::query(
+        "INSERT INTO analytic_protocol_liquidity_hourly
+           (protocol, bucket, added_usd, removed_usd, moves, moves_valued)
+         SELECT 'meteora_damm_v2', h, 2, 1, 2, 2
+           FROM generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ + INTERVAL '1 hour', INTERVAL '1 hour') AS h",
+    )
+    .bind(since)
+    .bind(last())
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// Mutation: the start not checked — a week measured for 30 hours would read $60 added.
+#[sqlx::test(migrations = "./migrations")]
+async fn liquidity_is_read_only_over_a_span_it_covers_whole(pool: PgPool) {
+    seed_hours(&pool, 24 * 8).await;
+    seed_liquidity_since(&pool, last() - Duration::hours(29)).await;
+    let (repository, day, week) = lookup(&pool).await;
+
+    let day_rows = repository.activity(&day, Window::Day).await.unwrap();
+    assert_eq!(
+        day_rows[0].liquidity,
+        Some(LiquidityFlows {
+            added_usd: Decimal::from(48),
+            removed_usd: Decimal::from(24),
+            moves: 48,
+            moves_valued: 48,
+        })
+    );
+    let week_rows = repository.activity(&week, Window::Week).await.unwrap();
+    assert_eq!(week_rows[0].liquidity, None);
+
+    let days = repository.activity_daily(&week).await.unwrap();
+    let measured: Vec<bool> = days.iter().map(|d| d.liquidity.is_some()).collect();
+    assert_eq!(measured.iter().filter(|m| **m).count(), 1, "{measured:?}");
+    let hours = repository.activity_hourly(&week).await.unwrap();
+    assert_eq!(hours.iter().filter(|h| h.liquidity.is_some()).count(), 30);
+}
+
+async fn insert_move(pool: &PgPool, tag: &str, at: DateTime<Utc>, usd: Option<i64>) {
+    sqlx::query(
+        "INSERT INTO analytic_liquidity_moves
+           (signature, event_index, timestamp, bucket, pool_address, protocol, owner, kind, amount_usd)
+         VALUES ($1, 0, $2, $2, $3, 'meteora_damm_v2', 'owner', 'remove', $4)",
+    )
+    .bind(tag)
+    .bind(at)
+    .bind(pk(1).to_string())
+    .bind(usd)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// Mutation: the moves not ordered by value, or an unvalued one ranked, or the open hour read.
+#[sqlx::test(migrations = "./migrations")]
+async fn the_largest_valued_moves_of_the_span_come_first(pool: PgPool) {
+    seed_hours(&pool, 30).await;
+    seed_liquidity_since(&pool, last() - Duration::hours(29)).await;
+    insert_move(&pool, "small", last() - Duration::hours(2), Some(10)).await;
+    insert_move(&pool, "large", last() - Duration::hours(3), Some(500)).await;
+    insert_move(&pool, "unvalued", last() - Duration::hours(1), None).await;
+    insert_move(&pool, "open", last() + Duration::minutes(90), Some(9_000)).await;
+    let (repository, day, _) = lookup(&pool).await;
+
+    let moves = repository
+        .liquidity_moves(&day, Protocol::MeteoraDammV2, 5)
+        .await
+        .unwrap();
+    let ranked: Vec<(&str, Decimal)> = moves
+        .iter()
+        .map(|m| (m.signature.as_str(), m.amount_usd))
+        .collect();
+    assert_eq!(
+        ranked,
+        [("large", Decimal::from(500)), ("small", Decimal::from(10))]
+    );
+    assert_eq!(moves[0].kind, LiquidityMoveKind::Remove);
+}
+
+/// Mutation: the coverage dropped — a week measured for 30 hours ranks part of itself.
+#[sqlx::test(migrations = "./migrations")]
+async fn no_move_is_ranked_over_a_span_its_liquidity_does_not_cover(pool: PgPool) {
+    seed_hours(&pool, 24 * 8).await;
+    seed_liquidity_since(&pool, last() - Duration::hours(29)).await;
+    insert_move(&pool, "large", last() - Duration::hours(3), Some(500)).await;
+    let (repository, _, week) = lookup(&pool).await;
+
+    let moves = repository
+        .liquidity_moves(&week, Protocol::MeteoraDammV2, 5)
+        .await
+        .unwrap();
+    assert!(moves.is_empty());
 }
