@@ -22,8 +22,8 @@ api/src/
 │   └── serve.rs           ← serve() — the server and the poller, and their stop
 ├── application/
 │   ├── services/          ← cross-protocol services at the root (SignalService,
-│   │                        TokenService, NetworkService,
-│   │                        IngestionService, AnnouncementService)
+│   │                        TokenService, NetworkService, IngestionService,
+│   │                        AnnouncementService, ActivityService, MeasureService)
 │   ├── signal_stream.rs   ← SignalStreamPoller (enriches once, feeds the SSE broadcast)
 │   ├── cache.rs           ← SharedCache (moka) and its named CachePolicy per use
 │   ├── enriched_token.rs  ← one token side of a pool, identity only
@@ -119,9 +119,22 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/tokens/activity` | Tokens by volume over `?window=`, identity embedded, forward-only cursor; a swap counts for both its tokens |
 | `GET` | `/api/tokens/{mint}` | Token metadata + latest price (200 with `price: null` if no price yet) |
 | `GET` | `/api/announcements/active` | Operator announcements whose window is open — most severe first, non-paginated (hard cap); empty array is the nominal case |
+| `GET` | `/api/swaps/totals` (`?offset=`), `/hourly`, `/daily` | Per protocol, the swaps over `?window=`, then per bar: swaps, volume, fees and their shares, pool-hours and the valued ones; the totals with the distinct pools that swapped |
+| `GET` | `/api/protocols/{protocol}/swaps/totals`, `/hourly`, `/daily` | The same, the protocol's own |
+| `GET` | `/api/pools/{pool}/swaps/totals`, `/hourly`, `/daily` | The same for one pool, without the protocol nor the distinct pools; 404 for a pool unknown |
+| `GET` | `/api/swaps/by-token` | Tokens by volume over `?window=`, every protocol summed, forward-only cursor |
+| `GET` | `/api/pool-creations/totals`, `/hourly`, `/daily`, and under `/api/protocols/{protocol}/` | Per protocol, the pools created over the window, then per bar |
+| `GET` | `/api/protocols/{protocol}/liquidity-moves/totals`, `/hourly`, `/daily` | The protocol's liquidity created, added and removed, valued, with its moves valued; its `coveredSince` is the liquidity's |
+| `GET` | `/api/pools/{pool}/liquidity-moves` | A page of the pool's valued moves, `?sort=amount` (default) or `at`, forward-only cursor; empty while its protocol's liquidity does not cover the window |
+| `GET` | `/api/tvl`, `/api/protocols/{protocol}/tvl` | Per protocol, the last TVL reading at or before `asOf`, its `at` said |
+| `GET` | `/api/tvl/hourly`, `/api/protocols/{protocol}/tvl/hourly` | Per protocol, the reading of every hour measured from the window's start |
+| `GET` | `/api/pool-discoveries/totals`, and under `/api/protocols/{protocol}/` | Per protocol, the pools first seen in the window without their birth observed, and what they hold at the last reading |
+| `GET` | `/api/protocols/{protocol}/signals`, `/api/pools/{pool}/signals` | The signals of one protocol or one pool, paginated as `/api/signals`, `?severity=` |
 
-**What yog-analytic computes** (`/api/protocols/…` but the catalogue, `/api/tokens/activity`)
-read yog-analytic's tables over one span, built in `ActivityService`: the window
+**What yog-analytic computes** (`/api/protocols/…` but the catalogue and the signals,
+`/api/tokens/activity`, `/api/swaps/…`, `/api/pool-creations/…`, `/api/tvl…`,
+`/api/pool-discoveries/…`, `/api/pools/{pool}/…` but the signals) read yog-analytic's
+tables over one span, built in `ActivityService` and `MeasureService`: the window
 ends at the close of the last frozen hour, `asOf`, the same for every route (a window of
 future events starts there), and
 no read counts an open hour. Each response carries `from`, `asOf` and
