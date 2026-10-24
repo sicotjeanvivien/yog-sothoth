@@ -1,12 +1,15 @@
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use yog_core::{
     RepositoryError,
     domain::{
-        ByProtocol, LiquidityMoveSums, PoolCreationCount, PoolDiscoveries, PoolSwapBar,
-        ProtocolBar, ProtocolSwapTotals, SwapSums,
+        ByProtocol, LiquidityMove, LiquidityMoveSums, PoolCreationCount, PoolDiscoveries,
+        PoolSwapBar, ProtocolBar, ProtocolSwapTotals, SwapSums,
     },
 };
+
+use crate::repositories::protocol_activity::rows::LiquidityMoveRow;
 
 use crate::repositories::helper::{
     convert_bigdecimal_to_decimal, convert_optional, parse_protocol,
@@ -60,6 +63,40 @@ pub(super) struct PoolSwapBarRow {
     pub(super) referral_fees_usd: Option<BigDecimal>,
     pub(super) pool_hours: i64,
     pub(super) pool_hours_valued: i64,
+}
+
+/// A pool's move, and the amount its page is ordered by: rounded as the cursor holds it.
+pub(super) struct PoolLiquidityMoveRow {
+    pub(super) protocol: String,
+    pub(super) at: DateTime<Utc>,
+    pub(super) signature: String,
+    pub(super) event_index: i32,
+    pub(super) pool_address: String,
+    pub(super) token_a_symbol: Option<String>,
+    pub(super) token_b_symbol: Option<String>,
+    pub(super) owner: String,
+    pub(super) kind: String,
+    pub(super) amount_usd: BigDecimal,
+    pub(super) amount_key: BigDecimal,
+}
+
+impl PoolLiquidityMoveRow {
+    pub(super) fn into_keyed(self) -> Result<(LiquidityMove, Decimal), RepositoryError> {
+        let key = convert_bigdecimal_to_decimal(self.amount_key, "amount_key")?;
+        let row = LiquidityMoveRow {
+            protocol: self.protocol,
+            at: self.at,
+            signature: self.signature,
+            event_index: self.event_index,
+            pool_address: self.pool_address,
+            token_a_symbol: self.token_a_symbol,
+            token_b_symbol: self.token_b_symbol,
+            owner: self.owner,
+            kind: self.kind,
+            amount_usd: self.amount_usd,
+        };
+        Ok((LiquidityMove::try_from(row)?, key))
+    }
 }
 
 pub(super) struct PoolCreationRow {

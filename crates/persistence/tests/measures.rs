@@ -410,13 +410,14 @@ async fn a_protocols_signals_are_its_own(pool: PgPool) {
     assert_eq!(page.items[0].signal.protocol, Protocol::MeteoraDammV2);
 }
 
-/// Mutation: the amount compared exactly, not rounded as the cursor holds it — a `Decimal`
-/// keeps 28 digits, and the move past its rounding is repeated or skipped.
+/// Mutation: the amount compared exactly, not rounded as the cursor holds it, or the cursor
+/// keyed on the whole amount — the move past its rounding is repeated or skipped.
 #[sqlx::test(migrations = "./migrations")]
 async fn a_page_follows_a_move_whose_amount_has_more_digits_than_a_cursor(pool: PgPool) {
     let mine = pk(1).to_string();
     for (signature, minutes, usd) in [
         ("long", 30, "2.0000000000000000000000000000000000001"),
+        ("seventh", 25, "2.0000004"),
         ("round", 20, "2"),
         ("small", 10, "1"),
     ] {
@@ -440,7 +441,7 @@ async fn a_page_follows_a_move_whose_amount_has_more_digits_than_a_cursor(pool: 
 
     let mut seen = Vec::new();
     let mut cursor = None;
-    loop {
+    for _ in 0..10 {
         let page = repository
             .pool_moves(
                 &span(24),
@@ -460,5 +461,37 @@ async fn a_page_follows_a_move_whose_amount_has_more_digits_than_a_cursor(pool: 
         }
     }
 
-    assert_eq!(seen, ["round", "long", "small"]);
+    assert_eq!(seen, ["round", "seventh", "long", "small"]);
+}
+
+/// Mutation: the amount returned rounded as the cursor key — a move reads 1234.567890 here
+/// and 1234.5678901234 under its protocol.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_pools_move_keeps_its_amount_whole_whatever_its_order(pool: PgPool) {
+    sqlx::query(
+        "INSERT INTO analytic_liquidity_moves
+           (signature, event_index, timestamp, bucket, pool_address, protocol, owner, kind,
+            amount_usd)
+         VALUES ('sig', 0, $1, time_bucket('5 minutes', $1), $2, 'meteora_damm_v2', $3, 'add',
+                 1234.5678901234)",
+    )
+    .bind(as_of() - Duration::minutes(30))
+    .bind(pk(1).to_string())
+    .bind(pk(9).to_string())
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repository = repository(&pool).await;
+
+    for order in [LiquidityMoveOrder::Amount, LiquidityMoveOrder::At] {
+        let page = repository
+            .pool_moves(&span(24), Window::Day, pk(1), order, None, 5)
+            .await
+            .unwrap();
+        assert_eq!(
+            page.items[0].amount_usd,
+            Decimal::new(12_345_678_901_234, 10),
+            "{order:?}"
+        );
+    }
 }

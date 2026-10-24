@@ -125,7 +125,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/swaps/by-token` | Tokens by volume over `?window=`, every protocol summed, forward-only cursor |
 | `GET` | `/api/pool-creations/totals`, `/hourly`, `/daily`, and under `/api/protocols/{protocol}/` | Per protocol, the pools created over the window, then per bar |
 | `GET` | `/api/protocols/{protocol}/liquidity-moves/totals`, `/hourly`, `/daily` | The protocol's liquidity created, added and removed, valued, with its moves valued; its `coveredSince` is the liquidity's |
-| `GET` | `/api/pools/{pool}/liquidity-moves` | A page of the pool's valued moves, `?sort=amount` (default) or `at`, forward-only cursor; empty while its protocol's liquidity does not cover the window |
+| `GET` | `/api/pools/{pool}/liquidity-moves` | A page of the pool's valued moves, `?sort=amount` (default) or `at`, forward-only cursor, refused (400) for another pool or window or after a freeze; empty while its protocol's liquidity does not cover the window |
 | `GET` | `/api/tvl`, `/api/protocols/{protocol}/tvl` | Per protocol, the last TVL reading at or before `asOf`, its `at` said |
 | `GET` | `/api/tvl/hourly`, `/api/protocols/{protocol}/tvl/hourly` | Per protocol, the reading of every hour measured from the window's start |
 | `GET` | `/api/pool-discoveries/totals`, and under `/api/protocols/{protocol}/` | Per protocol, the pools first seen in the window without their birth observed, and what they hold at the last reading |

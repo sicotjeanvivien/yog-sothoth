@@ -6,8 +6,8 @@ mod rows;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use rows::{
-    LiquidityMoveSumsRow, PoolCreationRow, PoolDiscoveriesRow, PoolSwapBarRow, ProtocolSwapBarRow,
-    ProtocolSwapTotalsRow, SwapSumsRow,
+    LiquidityMoveSumsRow, PoolCreationRow, PoolDiscoveriesRow, PoolLiquidityMoveRow,
+    PoolSwapBarRow, ProtocolSwapBarRow, ProtocolSwapTotalsRow, SwapSumsRow,
 };
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
@@ -21,7 +21,7 @@ use yog_core::{
     },
 };
 
-use super::protocol_activity::rows::{LiquidityMoveRow, ProtocolTvlRow};
+use super::protocol_activity::rows::ProtocolTvlRow;
 use crate::repositories::helper::{
     PageBuilder, QueryMode, convert_decimal_to_bigdecimal, map_sqlx_error,
 };
@@ -458,12 +458,13 @@ impl LiquidityMoveLookup for PgMeasureRepository {
         };
         let rows = match order {
             LiquidityMoveOrder::Amount => sqlx::query_as!(
-                LiquidityMoveRow,
+                PoolLiquidityMoveRow,
                 r#"
                 SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index,
                        m.pool_address, ta.symbol AS "token_a_symbol?",
                        tb.symbol AS "token_b_symbol?", m.owner, m.kind,
-                       ROUND(m.amount_usd, 6) AS "amount_usd!"
+                       m.amount_usd AS "amount_usd!",
+                       ROUND(m.amount_usd, 6) AS "amount_key!"
                   FROM analytic_liquidity_moves m
                   LEFT JOIN pools p ON p.pool_address = m.pool_address
                   LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
@@ -493,12 +494,13 @@ impl LiquidityMoveLookup for PgMeasureRepository {
             .await
             .map_err(map_sqlx_error)?,
             LiquidityMoveOrder::At => sqlx::query_as!(
-                LiquidityMoveRow,
+                PoolLiquidityMoveRow,
                 r#"
                 SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index,
                        m.pool_address, ta.symbol AS "token_a_symbol?",
                        tb.symbol AS "token_b_symbol?", m.owner, m.kind,
-                       ROUND(m.amount_usd, 6) AS "amount_usd!"
+                       m.amount_usd AS "amount_usd!",
+                       ROUND(m.amount_usd, 6) AS "amount_key!"
                   FROM analytic_liquidity_moves m
                   LEFT JOIN pools p ON p.pool_address = m.pool_address
                   LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
@@ -526,24 +528,28 @@ impl LiquidityMoveLookup for PgMeasureRepository {
         };
         let moves = rows
             .into_iter()
-            .map(LiquidityMove::try_from)
+            .map(PoolLiquidityMoveRow::into_keyed)
             .collect::<RepositoryResult<Vec<_>>>()?;
-        let page = PageBuilder::new(moves, limit, QueryMode::Forward, had_cursor).finalize(|m| {
-            Cursor::LiquidityMove(Box::new(LiquidityMoveCursor {
-                pool,
-                window,
-                as_of: span.as_of,
-                order,
-                amount_usd: m.amount_usd,
-                at: m.at,
-                signature: m.signature.clone(),
-                event_index: m.event_index,
-            }))
-        });
+        let page =
+            PageBuilder::new(moves, limit, QueryMode::Forward, had_cursor).finalize(|(m, key)| {
+                Cursor::LiquidityMove(Box::new(LiquidityMoveCursor {
+                    pool,
+                    window,
+                    as_of: span.as_of,
+                    order,
+                    amount_usd: *key,
+                    at: m.at,
+                    signature: m.signature.clone(),
+                    event_index: m.event_index,
+                }))
+            });
         // ⚠️ Forward only: a previous cursor would be read forward from the first item.
         Ok(Page {
+            items: page.items.into_iter().map(|(m, _)| m).collect(),
+            next_cursor: page.next_cursor,
             prev_cursor: None,
-            ..page
+            is_first: page.is_first,
+            is_last: page.is_last,
         })
     }
 }
