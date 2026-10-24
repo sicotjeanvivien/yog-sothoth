@@ -7,14 +7,13 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 
 import { LiveIndicator } from "@/components/dashboard/live-status/live-indicator";
-import { ApiClientError } from "@/lib/api/errors";
-import { fetchProtocolActivity } from "@/lib/api/server/protocols";
-import { CLOSED_PERIODS, PERIODS, type Period } from "@/lib/overview/period";
+import type { Period } from "@/lib/overview/period";
 
 import { AdvancedSwitch } from "./advanced-switch";
-import { closedReason } from "./overview-parts";
-import { PeriodSelector, type PeriodAvailability } from "./period-selector";
 import { OverviewLiveRows, OverviewLiveRowsFallback } from "./overview-live-rows";
+import { PeriodControl, PeriodSelect } from "./period-control";
+
+const PAGE = { pathname: "/overview", keep: {} } as const;
 
 export async function OverviewHeader({ period }: { period: Period }) {
   const t = await getTranslations("Dashboard.Overview.page");
@@ -29,83 +28,18 @@ export async function OverviewHeader({ period }: { period: Period }) {
           <LiveIndicator
             pageRows={
               <Suspense key={period} fallback={<OverviewLiveRowsFallback />}>
-                <OverviewLiveRows period={period} />
+                <OverviewLiveRows period={period} scope="all" />
               </Suspense>
             }
           />
         </span>
         <div className="flex flex-wrap items-center gap-3 rail:justify-end">
-          <Suspense fallback={<Selector period={period} availability={null} />}>
-            <PeriodControl period={period} />
+          <Suspense fallback={<PeriodSelect period={period} {...PAGE} availability={null} />}>
+            <PeriodControl period={period} {...PAGE} />
           </Suspense>
           <AdvancedSwitch label={t("advanced")} />
         </div>
       </div>
     </header>
-  );
-}
-
-/**
- * Each period, open or closed, read on the span any measure carries. ⚠️ A failed read keeps
- * them links: each block then says for itself what its period lacks.
- */
-async function PeriodControl({ period }: { period: Period }) {
-  const t = await getTranslations("Dashboard.Overview.period");
-
-  let span;
-  try {
-    span = await fetchProtocolActivity(period);
-  } catch (err) {
-    if (!(err instanceof ApiClientError)) {
-      throw err;
-    }
-    const availability = Object.fromEntries(
-      PERIODS.map((p) => [
-        p,
-        CLOSED_PERIODS.has(p) ? { open: false, reason: t("closedSoon") } : { open: true },
-      ]),
-    ) as PeriodAvailability;
-    return <Selector period={period} availability={availability} />;
-  }
-
-  const entries = await Promise.all(
-    PERIODS.map(async (p) => {
-      const reason = await closedReason(p, span);
-      return [p, reason === null ? { open: true } : { open: false, reason }] as const;
-    }),
-  );
-
-  return (
-    <Selector
-      period={period}
-      availability={Object.fromEntries(entries) as PeriodAvailability}
-    />
-  );
-}
-
-async function Selector({
-  period,
-  availability,
-}: {
-  period: Period;
-  availability: PeriodAvailability | null;
-}) {
-  const t = await getTranslations("Dashboard.Overview.period");
-  const labels = Object.fromEntries(PERIODS.map((p) => [p, t(`button.${p}`)])) as Record<
-    Period,
-    string
-  >;
-  const closedLabels = Object.fromEntries(
-    PERIODS.map((p) => [p, t("closedLabel", { period: labels[p] })]),
-  ) as Record<Period, string>;
-
-  return (
-    <PeriodSelector
-      current={period}
-      availability={availability}
-      labels={labels}
-      closedLabels={closedLabels}
-      groupLabel={t("label")}
-    />
   );
 }

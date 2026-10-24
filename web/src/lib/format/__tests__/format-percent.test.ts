@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { formatPercent, formatSignedPercent, formatTimes } from "../format-percent";
+import {
+  formatFeeRate,
+  formatPercent,
+  formatSignedPercent,
+  formatTimes,
+} from "../format-percent";
 
 describe("formatSignedPercent", () => {
   it("shows the sign on a positive deviation", () => {
@@ -28,6 +33,14 @@ describe("formatPercent", () => {
 
   it("renders a plain threshold", () => {
     expect(formatPercent("0.0500", "en")).toBe("5%");
+  });
+});
+
+describe("formatFeeRate", () => {
+  // Mutation: one decimal, as `formatPercent`, shows 0.33 % and 0.25 % both as "0.3 %".
+  it("keeps two decimals, in the page's language", () => {
+    expect(formatFeeRate(0.00331, "en")).toBe("0.33%");
+    expect(formatFeeRate(0.0025, "fr")).toBe("0,25\u00a0%");
   });
 });
 

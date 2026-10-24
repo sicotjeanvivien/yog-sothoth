@@ -13,6 +13,11 @@ export function formatPercent(ratio: string, locale: string): string {
   return formatRatio(ratio, locale, "never");
 }
 
+/** 0.00331 → "0.33 %": a fee rate, where a tenth of a percent is too coarse. */
+export function formatFeeRate(ratio: number, locale: string): string {
+  return new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 2 }).format(ratio);
+}
+
 /** 0.6812 → "× 0.68": how many times a base was turned over. */
 export function formatTimes(ratio: number, locale: string): string {
   return `× ${new Intl.NumberFormat(locale, {

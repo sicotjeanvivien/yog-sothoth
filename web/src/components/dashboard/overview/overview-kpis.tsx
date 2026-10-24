@@ -1,6 +1,7 @@
 /**
- * The KPI cells, each fetching on its own so a slow route holds only its cell; swaps and
- * rotation are the advanced mode's. A failed secondary read costs only its line.
+ * The KPI cells, each fetching on its own so a slow route holds only its cell, and adding up
+ * the protocols of its `scope`; swaps and rotation are the advanced mode's. A failed secondary
+ * read costs only its line.
  */
 
 import type { ReactNode } from "react";
@@ -20,6 +21,7 @@ import { formatTimes } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { previousWindowCovered, tvlStart } from "@/lib/overview/availability";
 import type { Period } from "@/lib/overview/period";
+import { inScope, type Scope } from "@/lib/overview/scope";
 import {
   changeRatio,
   discoveredTvl,
@@ -33,10 +35,10 @@ import { Change, closedReason, KpiCell, Unavailable, utcMoment } from "./overvie
 import { KpiFailedLine, KpiSkeleton, lateStamp } from "./overview-states";
 import { VolumeCoverageMark } from "./volume-coverage-mark";
 
-const usd = (value: number | null) =>
+export const usd = (value: number | null) =>
   value === null ? "—" : formatUsdCompact(String(value));
 
-export async function TvlKpi({ period }: { period: Period }) {
+export async function TvlKpi({ period, scope }: { period: Period; scope: Scope }) {
   const t = await getTranslations("Dashboard.Overview");
   const label = t("kpis.tvl");
   const info = t("kpis.info.tvl");
@@ -50,16 +52,17 @@ export async function TvlKpi({ period }: { period: Period }) {
     return kpiError(latest.reason, label, info);
   }
 
-  const current = sumUsd(latest.value.items.map((i) => i.tvlUsd));
+  const items = inScope(latest.value.items, scope);
+  const current = sumUsd(items.map((i) => i.tvlUsd));
   let sub: ReactNode;
   if (hourly.status === "rejected") {
     sub = <Withheld reason={await failure(hourly.reason)} suffix={suffix} />;
   } else if (current !== null) {
-    const starts = latest.value.items.map((i) => tvlStart(hourly.value.items, i, period));
+    const starts = items.map((i) => tvlStart(hourly.value.items, i, period));
     const start = starts.some((s) => s === null)
       ? null
       : sumUsd(starts.map((s) => s?.tvlUsd ?? null));
-    const discovered = discoveredTvl(latest.value.items, period);
+    const discovered = discoveredTvl(items, period);
     const ratio = tvlChange(current, start, discovered);
     sub =
       ratio !== null ? (
@@ -86,7 +89,7 @@ export async function TvlKpi({ period }: { period: Period }) {
   );
 }
 
-export async function VolumeKpi({ period }: { period: Period }) {
+export async function VolumeKpi({ period, scope }: { period: Period; scope: Scope }) {
   const t = await getTranslations("Dashboard.Overview");
   const short = t(`period.short.${period}`);
   const label = t("kpis.volume", { period: short });
@@ -105,7 +108,8 @@ export async function VolumeKpi({ period }: { period: Period }) {
     return <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} />;
   }
 
-  const current = sumUsd(now.value.items.map((i) => i.volumeUsd));
+  const items = inScope(now.value.items, scope);
+  const current = sumUsd(items.map((i) => i.volumeUsd));
   let sub: ReactNode;
   if (before.status === "rejected") {
     sub = <Withheld reason={await failure(before.reason)} suffix={suffix} />;
@@ -116,7 +120,10 @@ export async function VolumeKpi({ period }: { period: Period }) {
     });
     sub = <Withheld reason={reason} suffix={suffix} />;
   } else {
-    const ratio = changeRatio(current, sumUsd(before.value.items.map((i) => i.volumeUsd)));
+    const ratio = changeRatio(
+      current,
+      sumUsd(inScope(before.value.items, scope).map((i) => i.volumeUsd)),
+    );
     sub = ratio === null ? undefined : <Change ratio={ratio} suffix={suffix} />;
   }
 
@@ -124,14 +131,14 @@ export async function VolumeKpi({ period }: { period: Period }) {
     <KpiCell
       label={label}
       info={info}
-      value={await valued(usd(current), now.value.items)}
+      value={await valued(usd(current), items)}
       sub={sub}
       stamp={await lateStamp(now.value.asOf)}
     />
   );
 }
 
-export async function FeesKpi({ period }: { period: Period }) {
+export async function FeesKpi({ period, scope }: { period: Period; scope: Scope }) {
   const t = await getTranslations("Dashboard.Overview");
   const label = t("kpis.fees", { period: t(`period.short.${period}`) });
   const info = t("kpis.info.fees");
@@ -147,14 +154,15 @@ export async function FeesKpi({ period }: { period: Period }) {
     return <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} />;
   }
 
-  const fees = sumUsd(now.items.map((i) => i.feesUsd));
-  const protocolFees = sumUsd(now.items.map((i) => i.protocolFeesUsd));
+  const items = inScope(now.items, scope);
+  const fees = sumUsd(items.map((i) => i.feesUsd));
+  const protocolFees = sumUsd(items.map((i) => i.protocolFeesUsd));
 
   return (
     <KpiCell
       label={label}
       info={info}
-      value={await valued(usd(fees), now.items)}
+      value={await valued(usd(fees), items)}
       sub={
         protocolFees === null
           ? undefined
@@ -165,7 +173,7 @@ export async function FeesKpi({ period }: { period: Period }) {
   );
 }
 
-export async function PoolsKpi({ period }: { period: Period }) {
+export async function PoolsKpi({ period, scope }: { period: Period; scope: Scope }) {
   const t = await getTranslations("Dashboard.Overview");
   const short = t(`period.short.${period}`);
   const label = t("kpis.pools");
@@ -183,7 +191,7 @@ export async function PoolsKpi({ period }: { period: Period }) {
     return <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} />;
   }
 
-  const items = now.value.items;
+  const items = inScope(now.value.items, scope);
   const active =
     items.length > 0 && items.every((i) => i.activePools !== null)
       ? items.reduce((sum, i) => sum + (i.activePools ?? 0), 0)
@@ -192,7 +200,9 @@ export async function PoolsKpi({ period }: { period: Period }) {
   const observed =
     catalogue.status === "fulfilled" ? (
       t("kpis.poolsObserved", {
-        observed: formatCount(catalogue.value.reduce((sum, p) => sum + p.poolsSeen, 0)),
+        observed: formatCount(
+          inScope(catalogue.value, scope).reduce((sum, p) => sum + p.poolsSeen, 0),
+        ),
       })
     ) : (
       <>
@@ -218,7 +228,7 @@ export async function PoolsKpi({ period }: { period: Period }) {
   );
 }
 
-export async function SwapsKpi({ period }: { period: Period }) {
+export async function SwapsKpi({ period, scope }: { period: Period; scope: Scope }) {
   const t = await getTranslations("Dashboard.Overview");
   const label = t("kpis.swaps", { period: t(`period.short.${period}`) });
   const info = t("kpis.info.swaps");
@@ -236,8 +246,8 @@ export async function SwapsKpi({ period }: { period: Period }) {
     );
   }
 
-  const swaps =
-    now.items.length === 0 ? null : now.items.reduce((sum, i) => sum + i.swapCount, 0);
+  const items = inScope(now.items, scope);
+  const swaps = items.length === 0 ? null : items.reduce((sum, i) => sum + i.swapCount, 0);
 
   return (
     <KpiCell
@@ -255,7 +265,7 @@ export async function SwapsKpi({ period }: { period: Period }) {
   );
 }
 
-export async function RotationKpi({ period }: { period: Period }) {
+export async function RotationKpi({ period, scope }: { period: Period; scope: Scope }) {
   const t = await getTranslations("Dashboard.Overview");
   const locale = await getLocale();
   const label = t("kpis.rotation", { period: t(`period.short.${period}`) });
@@ -274,16 +284,17 @@ export async function RotationKpi({ period }: { period: Period }) {
     );
   }
 
+  const items = inScope(now.items, scope);
   const ratio = rotation(
-    sumUsd(now.items.map((i) => i.volumeUsd)),
-    sumUsd(tvl.items.map((i) => i.tvlUsd)),
+    sumUsd(items.map((i) => i.volumeUsd)),
+    sumUsd(inScope(tvl.items, scope).map((i) => i.tvlUsd)),
   );
 
   return (
     <KpiCell
       label={label}
       info={info}
-      value={await valued(ratio === null ? "—" : formatTimes(ratio, locale), now.items)}
+      value={await valued(ratio === null ? "—" : formatTimes(ratio, locale), items)}
       sub={t("kpis.rotationSub")}
       stamp={await lateStamp(now.asOf)}
       advanced
@@ -296,7 +307,7 @@ export async function KpiPlaceholder({ advanced = false }: { advanced?: boolean 
 }
 
 /** A figure built on the volume, with the mark when it leaves out pool-hours not valued. */
-async function valued(
+export async function valued(
   figure: string,
   items: readonly { poolHours: number; poolHoursValued: number }[],
 ): Promise<ReactNode> {
@@ -336,7 +347,7 @@ async function failure(err: unknown): Promise<string> {
   return t(err.details.kind);
 }
 
-function kpiError(err: unknown, label: string, info: string, advanced = false) {
+export function kpiError(err: unknown, label: string, info: string, advanced = false) {
   if (!(err instanceof ApiClientError)) {
     throw err;
   }

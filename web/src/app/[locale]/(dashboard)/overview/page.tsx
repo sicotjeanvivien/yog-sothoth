@@ -81,22 +81,22 @@ export default async function OverviewPage({
 
       <div className={GRID_CLASS}>
         <Suspense key={`tvl-${period}`} fallback={<KpiPlaceholder />}>
-          <TvlKpi period={period} />
+          <TvlKpi period={period} scope="all" />
         </Suspense>
         <Suspense key={`volume-${period}`} fallback={<KpiPlaceholder />}>
-          <VolumeKpi period={period} />
+          <VolumeKpi period={period} scope="all" />
         </Suspense>
         <Suspense key={`fees-${period}`} fallback={<KpiPlaceholder />}>
-          <FeesKpi period={period} />
+          <FeesKpi period={period} scope="all" />
         </Suspense>
         <Suspense key={`swaps-${period}`} fallback={<KpiPlaceholder advanced />}>
-          <SwapsKpi period={period} />
+          <SwapsKpi period={period} scope="all" />
         </Suspense>
         <Suspense key={`pools-${period}`} fallback={<KpiPlaceholder />}>
-          <PoolsKpi period={period} />
+          <PoolsKpi period={period} scope="all" />
         </Suspense>
         <Suspense key={`rotation-${period}`} fallback={<KpiPlaceholder advanced />}>
-          <RotationKpi period={period} />
+          <RotationKpi period={period} scope="all" />
         </Suspense>
       </div>
 
