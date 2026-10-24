@@ -21,7 +21,7 @@ vi.mock("@/i18n/navigation", async () => {
 });
 
 // ⚠️ Written out, not read from `SIDEBAR_NAV`: opening an entry must not shrink this list.
-const CLOSED_LABELS = ["DAMM v2", "DLMM", "Raydium", "Orca", "Token"];
+const CLOSED_LABELS = ["DLMM", "Raydium", "Orca", "Token"];
 
 // The closed rows whose icon is drawn; the platforms have their logo, the products nothing.
 const DRAWN_ICONS = new Set(["Token"]);
@@ -47,12 +47,17 @@ function row(html: string, label: string): string {
 const ICON = /<span aria-hidden="true"[^>]*>(?:<svg\b|<img\b)/;
 
 describe("SidebarNavList", () => {
-  it("renders Overview as the only link", () => {
+  // Mutation: DAMM v2 closed again — its row « Bientôt », Meteora a caption.
+  it("links Overview, then Meteora and DAMM v2 to the DAMM v2 page", () => {
     const hrefs = [...render().matchAll(/<a\b[^>]*\shref="([^"]*)"/g)].map(
       (match) => match[1],
     );
 
-    expect(hrefs).toEqual(["/overview"]);
+    expect(hrefs).toEqual(["/overview", "/protocols/meteora-damm-v2", "/protocols/meteora-damm-v2"]);
+  });
+
+  it("does not tag DAMM v2 « Bientôt »", () => {
+    expect(row(render(), "DAMM v2")).not.toMatch(/Bientôt|aria-disabled/);
   });
 
   it.each(CLOSED_LABELS)(
@@ -73,17 +78,18 @@ describe("SidebarNavList", () => {
     expect(closed.match(/<svg\b/g)?.length ?? 0).toBe(DRAWN_ICONS.has(label) ? 1 : 0);
   });
 
-  // Mutation: a platform with products drawn as a closed entry — « Bientôt » twice over.
-  it("captions Meteora, which no product opens yet, with no tag and no link", () => {
+  // Mutation: a platform with an open product drawn as a caption — no way in from its name.
+  it("links Meteora to its first open product, with no tag", () => {
     const meteora = row(render(), "Meteora");
 
-    expect(meteora).not.toMatch(/<a\b|aria-disabled|Bientôt/);
+    expect(meteora).toMatch(/<a\b[^>]*href="\/protocols\/meteora-damm-v2"/);
+    expect(meteora).not.toMatch(/aria-disabled|Bientôt/);
   });
 
   // Mutation: the products rendered beside their platform, outside its list.
   it("lists DAMM v2 and DLMM under Meteora", () => {
     const html = render();
-    const id = /<span id="([^"]+)"[^>]*>(?:(?!<\/li>).)*<span>Meteora<\/span>/.exec(html)?.[1];
+    const id = /<(?:span|a)\b[^>]*\sid="([^"]+)"[^>]*>(?:(?!<\/li>).)*<span>Meteora<\/span>/.exec(html)?.[1];
     const list = new RegExp(`<ul aria-labelledby="${id}"[^>]*>(.*?)</ul>`).exec(html)?.[1] ?? "";
 
     expect(list).toMatch(/<span>DAMM v2<\/span>(?:(?!<\/li>).)*<\/li><li>.*<span>DLMM<\/span>/);
@@ -120,19 +126,19 @@ describe("SidebarNavList", () => {
     expect(row(html, "Token")).not.toMatch(/opacity-50/);
   });
 
-  it("gives nothing focusable besides the link", () => {
+  it("gives nothing focusable besides the links", () => {
     const html = render();
 
     expect(html).not.toMatch(/<button\b/);
     expect(html).not.toMatch(/tabindex/i);
   });
 
-  it("opens only Overview in the navigation data", () => {
+  it("opens Overview and DAMM v2 in the navigation data", () => {
     const open = [
       ...SIDEBAR_NAV.filter((item) => item.kind === "open"),
       ...PLATFORMS.flatMap((platform) => platform.products).filter((p) => p.kind === "open"),
     ];
 
-    expect(open.map((entry) => entry.key)).toEqual(["overview"]);
+    expect(open.map((entry) => entry.key)).toEqual(["overview", "meteoraDammV2"]);
   });
 });

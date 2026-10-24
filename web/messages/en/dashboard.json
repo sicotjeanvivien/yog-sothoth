@@ -193,6 +193,37 @@
         "pools": "Pools & positions",
         "tokens": "Tokens",
         "activity": "Live activity"
+      },
+      "liquidity": {
+        "title": "How liquidity moves",
+        "info": "The curve is the TVL hour by hour. Under it, the money added above the axis, the money removed below it. Each move is valued at its pool's price, never above what the pool traded.",
+        "added": "Added",
+        "removed": "Removed",
+        "net": "Net",
+        "notMeasured": "Liquidity has been measured only recently: the chosen period starts before, and a total would undercount it.",
+        "notMeasuredShort": "liquidity not measured yet",
+        "noCurve": "Not enough measured hours of TVL to draw the curve yet.",
+        "curveCaption": "Hourly TVL · tight axis, {low} → {high}",
+        "curveLabel": "TVL over the period, from {low} to {high}",
+        "tvlAt": "TVL {tvl}",
+        "perHour": "{change} over the hour",
+        "tvlNow": "Now: {tvl} · hover or touch the curve for detail",
+        "flowsHourly": "Added and removed per hour",
+        "flowsDaily": "Added and removed per day",
+        "flowsLabel": "Liquidity added and removed over the chosen period",
+        "flowReading": "added {added}, removed {removed}, net {net}",
+        "moves": {
+          "title": "Largest LP moves · {period}",
+          "info": "The largest liquidity deposits and withdrawals of the period, valued at their pool's price. The address is their owner's.",
+          "tableLabel": "Largest LP moves over the chosen period",
+          "owner": "Address",
+          "pool": "Pool",
+          "amount": "Amount",
+          "ago": "Ago",
+          "add": "deposit",
+          "remove": "withdrawal",
+          "empty": "No valued move over the period."
+        }
       }
     },
     "BlockError": {

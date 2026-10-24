@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { roundTicks, slotsOf } from "../chart";
+import { axisOf, roundTicks, slotsOf } from "../chart";
 
 describe("roundTicks", () => {
   it("keeps the largest d × 10ⁿ under the maximum, and its half", () => {
@@ -42,5 +42,19 @@ describe("slotsOf", () => {
     expect(slots).toHaveLength(7);
     expect(slots[0]?.value).toBeNull();
     expect(slots[6]?.value).toBe(7);
+  });
+});
+
+describe("axisOf", () => {
+  const hours = slotsOf("24h", "2026-10-24T12:00:00Z", []);
+
+  // Mutation: the last slot left to the step — the axis would end hours before `asOf`.
+  it("labels every sixth hour, and always the last one in UTC", () => {
+    expect(axisOf("24h", hours, String)).toEqual(["12:00", "18:00", "00:00", "06:00", "11:00 UTC"]);
+  });
+
+  it("names the days by how long ago they were", () => {
+    const days = slotsOf("7d", "2026-10-24T12:00:00Z", []);
+    expect(axisOf("7d", days, (d) => `J-${d}`)).toEqual(["J-6", "J-5", "J-4", "J-3", "J-2", "J-1", "J-0"]);
   });
 });

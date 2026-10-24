@@ -193,6 +193,37 @@
         "pools": "Pools & positions",
         "tokens": "Tokens",
         "activity": "Activité en direct"
+      },
+      "liquidity": {
+        "title": "Comment la liquidité bouge",
+        "info": "La courbe est la TVL heure par heure. Sous elle, l'argent ajouté au-dessus de l'axe, l'argent retiré en dessous. Chaque mouvement est valorisé au prix de sa pool, jamais au-dessus de ce que la pool a échangé.",
+        "added": "Ajouts",
+        "removed": "Retraits",
+        "net": "Net",
+        "notMeasured": "La liquidité n'est mesurée que depuis peu : la période choisie commence avant, un total la sous-compterait.",
+        "notMeasuredShort": "liquidité pas encore mesurée",
+        "noCurve": "Pas encore assez d'heures de TVL mesurées pour tracer la courbe.",
+        "curveCaption": "TVL horaire · axe resserré, {low} → {high}",
+        "curveLabel": "TVL sur la période, de {low} à {high}",
+        "tvlAt": "TVL {tvl}",
+        "perHour": "{change} sur l'heure",
+        "tvlNow": "Maintenant : {tvl} · survolez ou touchez la courbe pour le détail",
+        "flowsHourly": "Ajouts et retraits par heure",
+        "flowsDaily": "Ajouts et retraits par jour",
+        "flowsLabel": "Liquidité ajoutée et retirée sur la période choisie",
+        "flowReading": "ajouté {added}, retiré {removed}, net {net}",
+        "moves": {
+          "title": "Plus gros mouvements LP · {period}",
+          "info": "Les dépôts et retraits de liquidité les plus importants de la période, valorisés au prix de leur pool. L'adresse est celle de leur propriétaire.",
+          "tableLabel": "Plus gros mouvements LP sur la période choisie",
+          "owner": "Adresse",
+          "pool": "Pool",
+          "amount": "Montant",
+          "ago": "Il y a",
+          "add": "ajout",
+          "remove": "retrait",
+          "empty": "Aucun mouvement valorisé sur la période."
+        }
       }
     },
     "BlockError": {

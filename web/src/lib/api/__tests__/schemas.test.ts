@@ -105,12 +105,18 @@ describe("zProtocolActivityResponse", () => {
     births: 52,
     poolHours: 1246,
     poolHoursValued: 767,
+    liquidity: { addedUsd: "1200.5", removedUsd: "800", moves: 12, movesValued: 11 },
   });
 
   it("accepts a complete valid payload", () => {
     const parsed = zProtocolActivityResponse.parse(validActivity());
     expect(parsed.volumeUsd).toBe("508193.05");
     expect(parsed.poolHoursValued).toBe(767);
+  });
+
+  it("accepts a null liquidity, for a window that starts before it was measured", () => {
+    const parsed = zProtocolActivityResponse.parse({ ...validActivity(), liquidity: null });
+    expect(parsed.liquidity).toBeNull();
   });
 
   it("accepts the null active pools of a previous window not yet written", () => {

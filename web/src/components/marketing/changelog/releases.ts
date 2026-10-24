@@ -32,6 +32,39 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.1.17",
+    date: "2026-10-24",
+    summary:
+      "DAMM v2 has its own page, opened by its liquidity: the TVL hour by hour, what is added and removed, and the largest moves.",
+    sections: [
+      {
+        kind: "features",
+        items: [
+          {
+            text: "A page for Meteora DAMM v2, in the menu: its TVL, volume, fees and active pools over the period you choose, the same figures as its row on the Overview, with the fees' effective rate and, in the advanced mode, the protocol's share.",
+            technical: false,
+          },
+          {
+            text: "Its first tab, Liquidity: the TVL hour by hour on a tight axis, the liquidity added above it and removed below, per hour or per day, and in the advanced mode the largest moves of the period with their owner.",
+            technical: false,
+          },
+          {
+            text: "Each liquidity move is valued once, at its pool's price, never above what the pool traded: a deposit of a token the market overprices is worth what the pool would pay for it. Liquidity is measured from this release on, so the 24-hour figures fill in over a day and the 7-day ones over a week.",
+            technical: false,
+          },
+          {
+            text: "A green dot beside DAMM v2 in the menu while the ingestion is live.",
+            technical: false,
+          },
+          {
+            text: "yog-analytic writes each liquidity move into analytic_liquidity_moves and their sums per protocol and hour (migration 035); /api/protocols/activity and its series carry the liquidity, and /api/protocols/{protocol}/liquidity-moves ranks the largest.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.1.16",
     date: "2026-10-23",
     summary:

@@ -1,0 +1,313 @@
+/**
+ * The tab 01 of a protocol's page: how its liquidity moves — the TVL hour by hour, the
+ * liquidity added and removed per bar — then, in the advanced mode, its largest moves. The
+ * server words every reading; the charts only track the point under the pointer.
+ */
+
+import { Suspense } from "react";
+import { getLocale, getTranslations } from "next-intl/server";
+
+import {
+  ADVANCED_ONLY,
+  CELL_CLASS,
+  GRID_CLASS,
+  HEAD_ROW_CLASS,
+  NUM_CLASS,
+  ROW_CLASS,
+} from "@/components/dashboard/overview/overview-layout";
+import {
+  BlockHeading,
+  closedReason,
+  PeriodNotice,
+  Unavailable,
+} from "@/components/dashboard/overview/overview-parts";
+import { BlockFailed, BlockSkeleton } from "@/components/dashboard/overview/overview-states";
+import { ApiClientError } from "@/lib/api/errors";
+import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
+import {
+  fetchLiquidityMoves,
+  fetchProtocolActivity,
+  fetchProtocolActivitySeries,
+  fetchProtocolTvlHourly,
+} from "@/lib/api/server/protocols";
+import { formatRelative, formatUtcMoment, type FormatLocale } from "@/lib/format/date";
+import { formatUsdCompact } from "@/lib/format/format-usd";
+import { shortenPubkey } from "@/lib/format/pubkey";
+import { axisOf, hourOf, roundTicks } from "@/lib/overview/chart";
+import type { Period } from "@/lib/overview/period";
+import { CURVE_BOX, curveOf, flowSlotsOf } from "@/lib/protocol/liquidity";
+
+import { FlowBars } from "./flow-bars";
+import { TvlCurve } from "./tvl-curve";
+
+/** The flows' half height, and their tallest bar a little under it for the top mark's label. */
+const FLOW_PX = { half: 64, top: 58 } as const;
+
+const MOVES_SHOWN = 5;
+
+/** ⚠️ Side by side in the advanced mode: the moves below the chart would lengthen the page. */
+const FLOWS_SPAN = "col-span-12 adv:dash-wide:col-span-8";
+
+const MOVES_SPAN = `col-span-12 dash-wide:col-span-4 ${ADVANCED_ONLY.block}`;
+
+const FLOWS_CLASS = `${CELL_CLASS} ${FLOWS_SPAN} min-h-[420px]`;
+
+const MOVES_CLASS = `${CELL_CLASS} ${MOVES_SPAN} min-h-[262px]`;
+
+const MOVE_COLUMNS = "grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)_auto_auto]";
+
+type TabProps = { period: Period; protocol: ProtocolResponse };
+
+export async function LiquidityTab({ period, protocol }: TabProps) {
+  const t = await getTranslations("Dashboard.Protocol.liquidity");
+  const tPeriod = await getTranslations("Dashboard.Overview.period");
+  const short = tPeriod(`short.${period}`);
+
+  return (
+    <div className={GRID_CLASS}>
+      <Suspense
+        key={`flows-${period}`}
+        fallback={
+          <BlockSkeleton
+            title={t("title")}
+            span={FLOWS_SPAN}
+            minHeight="min-h-[420px]"
+            shape="chart"
+          />
+        }
+      >
+        <LiquidityFlows period={period} protocol={protocol} />
+      </Suspense>
+      <Suspense
+        key={`moves-${period}`}
+        fallback={
+          <BlockSkeleton
+            title={t("moves.title", { period: short })}
+            span={MOVES_SPAN}
+            minHeight="min-h-[262px]"
+            shape={{ rows: MOVES_SHOWN }}
+          />
+        }
+      >
+        <LargestMoves period={period} protocol={protocol} />
+      </Suspense>
+    </div>
+  );
+}
+
+async function LiquidityFlows({ period, protocol }: TabProps) {
+  const t = await getTranslations("Dashboard.Protocol.liquidity");
+  const tVolume = await getTranslations("Dashboard.Overview.volume");
+  const locale = (await getLocale()) as FormatLocale;
+  const title = t("title");
+
+  let tvl, series, totals;
+  try {
+    [tvl, series, totals] = await Promise.all([
+      fetchProtocolTvlHourly(period),
+      fetchProtocolActivitySeries(period),
+      fetchProtocolActivity(period),
+    ]);
+  } catch (err) {
+    if (err instanceof ApiClientError) {
+      return (
+        <section aria-label={title} className={FLOWS_CLASS}>
+          <BlockHeading title={title} info={t("info")} />
+          <BlockFailed kind={err.details.kind} />
+        </section>
+      );
+    }
+    throw err;
+  }
+
+  const closed = await closedReason(period, series);
+  const usd = (value: number | null) => formatUsdCompact(value === null ? null : String(value));
+  const signed = (value: number) => `${value < 0 ? "−" : "+"}${usd(Math.abs(value))}`;
+
+  const liquidity = totals.items.find((i) => i.protocol === protocol)?.liquidity ?? null;
+  const notMeasured = <Unavailable reason={t("notMeasured")} />;
+  const legend = (
+    <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] text-dash-ink-2">
+      <span>
+        <span aria-hidden="true" className="mr-1.5 inline-block h-2.5 w-2.5 bg-dash-up align-[-1px]" />
+        {t("added")}{" "}
+        <span className="font-dash-mono tabular-nums">
+          {liquidity === null ? notMeasured : formatUsdCompact(liquidity.addedUsd)}
+        </span>
+      </span>
+      <span>
+        <span aria-hidden="true" className="mr-1.5 inline-block h-2.5 w-2.5 bg-dash-down align-[-1px]" />
+        {t("removed")}{" "}
+        <span className="font-dash-mono tabular-nums">
+          {liquidity === null ? notMeasured : formatUsdCompact(liquidity.removedUsd)}
+        </span>
+      </span>
+      <span>
+        {t("net")}{" "}
+        <span className="font-dash-mono tabular-nums">
+          {liquidity === null
+            ? notMeasured
+            : signed(Number.parseFloat(liquidity.addedUsd) - Number.parseFloat(liquidity.removedUsd))}
+        </span>
+      </span>
+    </div>
+  );
+
+  const curve = curveOf(tvl.items, protocol);
+  const moment = (date: Date) => formatUtcMoment(date, locale) ?? "—";
+  const curveBlock =
+    curve === null ? (
+      <p className="py-6 text-[14px] text-dash-ink-2">— {t("noCurve")}</p>
+    ) : (
+      <TvlCurve
+        line={curve.line}
+        area={curve.area}
+        marks={curve.coords.map((c) => (c.x / CURVE_BOX.width) * 100)}
+        readings={curve.points.map((p, i) => {
+          const previous = curve.points[i - 1];
+          const change =
+            previous === undefined ? "" : ` · ${t("perHour", { change: signed(p.value - previous.value) })}`;
+          return `${moment(p.at)} — ${t("tvlAt", { tvl: usd(p.value) })}${change}`;
+        })}
+        rest={t("tvlNow", { tvl: usd(curve.points[curve.points.length - 1]!.value) })}
+        low={usd(curve.low)}
+        high={usd(curve.high)}
+        last={usd(curve.points[curve.points.length - 1]!.value)}
+        label={t("curveLabel", { low: usd(curve.low), high: usd(curve.high) })}
+      />
+    );
+
+  const daily = period !== "24h";
+  const slots = series.asOf === null ? [] : flowSlotsOf(period, series.asOf, series.items, protocol);
+  const max = Math.max(0, ...slots.flatMap((s) => [s.added ?? 0, s.removed ?? 0]));
+  const scale = (v: number) => (max > 0 ? (v / max) * FLOW_PX.top : 0);
+  const height = (v: number | null) => (v === null ? null : Math.max(v > 0 ? 2 : 0, scale(v)));
+  const daysAgo = (days: number) => (days === 0 ? tVolume("today") : tVolume("daysAgo", { days }));
+  const bars = slots.map((slot, i) => {
+    const name = daily
+      ? `${daysAgo(slots.length - 1 - i)} · ${moment(slot.from)} → ${moment(slot.to)}`
+      : `${hourOf(slot.from)} UTC`;
+    const reading =
+      slot.added === null || slot.removed === null
+        ? `${name} — ${t("notMeasuredShort")}`
+        : `${name} — ${t("flowReading", {
+            added: usd(slot.added),
+            removed: usd(slot.removed),
+            net: signed(slot.added - slot.removed),
+          })}`;
+    return { up: height(slot.added), down: height(slot.removed), reading };
+  });
+
+  return (
+    <section aria-label={title} className={FLOWS_CLASS}>
+      <BlockHeading title={title} info={t("info")}>
+        {closed === null && legend}
+      </BlockHeading>
+      {closed !== null ? (
+        <PeriodNotice reason={closed} />
+      ) : (
+        <>
+          {curve !== null && (
+            <p className="mb-1 font-dash-mono text-[11px] font-medium tracking-[0.12em] text-dash-ink-3 uppercase">
+              {t("curveCaption", { low: usd(curve.low), high: usd(curve.high) })}
+            </p>
+          )}
+          {curveBlock}
+          <p className="mt-[18px] mb-1 font-dash-mono text-[11px] font-medium tracking-[0.12em] text-dash-ink-3 uppercase">
+            {t(daily ? "flowsDaily" : "flowsHourly")}
+          </p>
+          <FlowBars
+            bars={bars}
+            ticks={roundTicks(max).map((value) => ({
+              offset: Math.round(scale(value)),
+              label: usd(value),
+            }))}
+            axis={axisOf(period, slots, daysAgo)}
+            half={FLOW_PX.half}
+            invite={tVolume("invite")}
+            label={t("flowsLabel")}
+          />
+        </>
+      )}
+    </section>
+  );
+}
+
+async function LargestMoves({ period, protocol }: TabProps) {
+  const t = await getTranslations("Dashboard.Protocol.liquidity");
+  const tPeriod = await getTranslations("Dashboard.Overview.period");
+  const locale = (await getLocale()) as FormatLocale;
+  const title = t("moves.title", { period: tPeriod(`short.${period}`) });
+
+  let moves, totals;
+  try {
+    [moves, totals] = await Promise.all([
+      fetchLiquidityMoves(protocol, period, MOVES_SHOWN),
+      fetchProtocolActivity(period),
+    ]);
+  } catch (err) {
+    if (err instanceof ApiClientError) {
+      return (
+        <section aria-label={title} className={MOVES_CLASS}>
+          <BlockHeading title={title} info={t("moves.info")} />
+          <BlockFailed kind={err.details.kind} />
+        </section>
+      );
+    }
+    throw err;
+  }
+
+  const measured = totals.items.some((i) => i.protocol === protocol && i.liquidity !== null);
+  const now = new Date();
+
+  return (
+    <section aria-label={title} className={MOVES_CLASS}>
+      <BlockHeading title={title} info={t("moves.info")} />
+      {!measured ? (
+        <PeriodNotice reason={t("notMeasured")} />
+      ) : moves.items.length === 0 ? (
+        <p className="py-6 text-[14px] text-dash-ink-2">{t("moves.empty")}</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <div role="table" aria-label={t("moves.tableLabel")} className="min-w-[360px]">
+            <div role="row" className={`${HEAD_ROW_CLASS} ${MOVE_COLUMNS}`}>
+              <div role="columnheader">{t("moves.owner")}</div>
+              <div role="columnheader">{t("moves.pool")}</div>
+              <div role="columnheader" className={NUM_CLASS}>
+                {t("moves.amount")}
+              </div>
+              <div role="columnheader" className={NUM_CLASS}>
+                {t("moves.ago")}
+              </div>
+            </div>
+            {moves.items.map((move) => (
+              <div key={`${move.signature}-${move.at}`} role="row" className={`${ROW_CLASS} ${MOVE_COLUMNS}`}>
+                <div role="cell" className="font-dash-mono text-[12px] whitespace-nowrap text-dash-ink-2">
+                  {shortenPubkey(move.owner)}
+                </div>
+                <div role="cell" className="truncate text-dash-ink">
+                  {move.tokenASymbol !== null && move.tokenBSymbol !== null
+                    ? `${move.tokenASymbol} / ${move.tokenBSymbol}`
+                    : shortenPubkey(move.poolAddress)}
+                </div>
+                <div role="cell" className={`${NUM_CLASS} text-dash-ink`}>
+                  <span
+                    aria-hidden="true"
+                    className={`font-bold ${move.kind === "add" ? "text-dash-up" : "text-dash-down"}`}
+                  >
+                    {move.kind === "add" ? "+ " : "− "}
+                  </span>
+                  <span className="sr-only">{t(move.kind === "add" ? "moves.add" : "moves.remove")} </span>
+                  {formatUsdCompact(move.amountUsd)}
+                </div>
+                <div role="cell" className={`${NUM_CLASS} text-dash-ink-2`}>
+                  {formatRelative(move.at, locale, now) ?? "—"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}

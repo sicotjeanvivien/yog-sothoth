@@ -41,7 +41,7 @@ export const PLATFORMS: readonly SidebarNavPlatform[] = [
     key: "meteora",
     labelKey: "meteora",
     products: [
-      { kind: "closed", key: "meteoraDammV2", labelKey: "dammV2" },
+      { kind: "open", key: "meteoraDammV2", href: "/protocols/meteora-damm-v2", labelKey: "dammV2" },
       { kind: "closed", key: "meteoraDlmm", labelKey: "dlmm" },
     ],
   },

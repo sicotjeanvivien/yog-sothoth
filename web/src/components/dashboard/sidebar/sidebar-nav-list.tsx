@@ -10,13 +10,17 @@ import { useId, type FC } from "react";
 import { useTranslations } from "next-intl";
 
 import { Link, usePathname } from "@/i18n/navigation";
+import { liveStatusOf, type LiveState } from "@/components/dashboard/live-status/live-status";
+import { usePolled } from "@/components/dashboard/live-status/use-polled";
 import {
   OverviewIcon,
   TokenIcon,
   type IconProps,
 } from "@/components/shared/icon";
 import { StaticSvg } from "@/components/shared/static-svg";
+import { fetchIngestionBrowser } from "@/lib/api/browser/ingestion";
 
+import { ProductLiveDot } from "./product-live-dot";
 import type { IconKey, OpenNavKey, PlatformKey, ProductKey } from "./sidebar-keys";
 import {
   SIDEBAR_NAV,
@@ -64,6 +68,7 @@ export function SidebarNavList({ collapsed, onNavigate }: SidebarNavListProps) {
   const pathname = usePathname();
   const t = useTranslations("Dashboard.Sidebar.nav");
   const idPrefix = useId();
+  const live = liveStatusOf(usePolled(fetchIngestionBrowser)).state;
 
   const renderEntry: RenderEntry = (entry, icon, product = false) => {
     const label = t(entry.labelKey);
@@ -77,6 +82,7 @@ export function SidebarNavList({ collapsed, onNavigate }: SidebarNavListProps) {
         active={pathname === entry.href}
         collapsed={collapsed}
         onNavigate={onNavigate}
+        live={product ? live : null}
       />
     ) : (
       <ClosedEntry
@@ -238,6 +244,7 @@ function OpenEntry({
   active,
   collapsed,
   onNavigate,
+  live,
 }: {
   entry: OpenNavEntry<OpenNavKey | ProductKey>;
   label: string;
@@ -246,6 +253,8 @@ function OpenEntry({
   active: boolean;
   collapsed: boolean;
   onNavigate: () => void;
+  /** The ingestion's state beside a product, `null` beside any other entry. */
+  live: LiveState | null;
 }) {
   const state = active
     ? "bg-dash-surface text-dash-ink shadow-[inset_2px_0_0_var(--color-dash-accent)]"
@@ -268,6 +277,7 @@ function OpenEntry({
         collapsed={collapsed}
         tone={active ? "" : "text-dash-ink-3 group-hover:text-dash-ink"}
       />
+      {live !== null && <ProductLiveDot state={live} />}
     </Link>
   );
 }
