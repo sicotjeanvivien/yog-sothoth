@@ -1,9 +1,8 @@
 "use client";
 
 /**
- * Liquidity added above the axis and removed under it, one column per bar, with symmetric
- * marks. ⚠️ As `VolumeBars`: the reading in a fixed line above, picked by hover, touch or arrow
- * keys, the other columns faded.
+ * Liquidity created and added above the axis, stacked, removed under it, one column per bar.
+ * ⚠️ As `VolumeBars`: the reading in a fixed line above, picked by hover, touch or arrow keys.
  */
 
 import { useState, type KeyboardEvent } from "react";
@@ -17,7 +16,12 @@ export function FlowBars({
   label,
 }: {
   /** Heights in pixels; `null` for a bar the liquidity was not measured whole. */
-  bars: readonly { up: number | null; down: number | null; reading: string }[];
+  bars: readonly {
+    created: number | null;
+    added: number | null;
+    down: number | null;
+    reading: string;
+  }[];
   /** Each mark's distance from the axis, and its unsigned label. */
   ticks: readonly { offset: number; label: string }[];
   axis: readonly string[];
@@ -89,11 +93,19 @@ export function FlowBars({
               onClick={() => setActive(i)}
               className="flex h-full min-w-0 flex-1 cursor-crosshair flex-col"
             >
-              <div className="flex flex-1 items-end" style={{ height: half }}>
-                {bar.up !== null && (
+              <div className="flex flex-1 flex-col justify-end" style={{ height: half }}>
+                {bar.added !== null && bar.added > 0 && (
                   <div
                     className={`w-full rounded-t-[2px] bg-dash-up transition-opacity ${faded(i)}`}
-                    style={{ height: bar.up }}
+                    style={{ height: bar.added }}
+                  />
+                )}
+                {bar.created !== null && bar.created > 0 && (
+                  <div
+                    className={`w-full bg-dash-flow-create transition-opacity ${faded(i)} ${
+                      bar.added === null || bar.added === 0 ? "rounded-t-[2px]" : ""
+                    }`}
+                    style={{ height: bar.created }}
                   />
                 )}
               </div>
@@ -101,7 +113,7 @@ export function FlowBars({
               <div className="flex-1" style={{ height: half }}>
                 {bar.down !== null && (
                   <div
-                    className={`w-full rounded-b-[2px] bg-dash-down transition-opacity ${faded(i)}`}
+                    className={`w-full rounded-b-[2px] bg-dash-flow-out transition-opacity ${faded(i)}`}
                     style={{ height: bar.down }}
                   />
                 )}

@@ -55,12 +55,18 @@ export function curveOf(
 }
 
 /** One bar of the flows: `null` where the liquidity was not measured whole. */
-export type FlowSlot = { from: Date; to: Date; added: number | null; removed: number | null };
+export type FlowSlot = {
+  from: Date;
+  to: Date;
+  created: number | null;
+  added: number | null;
+  removed: number | null;
+};
 
 type LiquidityBar = {
   protocol: ProtocolResponse;
   from: string;
-  liquidity: { addedUsd: string; removedUsd: string } | null;
+  liquidity: { createdUsd: string; addedUsd: string; removedUsd: string } | null;
 };
 
 /** The protocol's flows in the period's slots: hours over 24 h, 24-hour slices beyond. */
@@ -77,11 +83,13 @@ export function flowSlotsOf(
       asOf,
       mine.map((bar) => ({ from: bar.from, value: pick(bar) })),
     );
+  const created = slots((bar) => bar.liquidity?.createdUsd ?? null);
   const added = slots((bar) => bar.liquidity?.addedUsd ?? null);
   const removed = slots((bar) => bar.liquidity?.removedUsd ?? null);
   return added.map((slot, i) => ({
     from: slot.from,
     to: slot.to,
+    created: created[i]?.value ?? null,
     added: slot.value,
     removed: removed[i]?.value ?? null,
   }));

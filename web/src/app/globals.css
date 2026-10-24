@@ -40,6 +40,9 @@
   --color-dash-up: #25a877;
   --color-dash-down: #f87171;
   --color-dash-warn: #fbbf24;
+  /* Liquidity bars: what leaves, darker than the text red; what a pool's creation brings. */
+  --color-dash-flow-out: #bf3a43;
+  --color-dash-flow-create: #1798ad;
 
   /* 721 px: up to 720 px is the phone — the dashboard menu a drawer, the
      site menu folded behind "Menu". */

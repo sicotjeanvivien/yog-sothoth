@@ -45,11 +45,11 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "Its first tab, Liquidity: the TVL hour by hour on a tight axis, the liquidity added above it and removed below, per hour or per day, and in the advanced mode the largest moves of the period with their owner.",
+            text: "Its first tab, Liquidity: the TVL hour by hour on a tight axis, the liquidity deposited when pools are created and added above it, removed below, per hour or per day, and in the advanced mode the largest moves of the period with their owner.",
             technical: false,
           },
           {
-            text: "Each liquidity move is valued once, at its pool's price, never above what the pool traded: a deposit of a token the market overprices is worth what the pool would pay for it. Liquidity is measured from this release on, so the 24-hour figures fill in over a day and the 7-day ones over a week.",
+            text: "Each liquidity move is valued once, at its pool's price, never above what the pool traded: a deposit of a token the market overprices is worth what the pool would pay for it, and a token without a market price counts 0, as in the TVL. Liquidity is measured from this release on, so the 24-hour figures fill in over a day and the 7-day ones over a week.",
             technical: false,
           },
           {

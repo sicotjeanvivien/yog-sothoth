@@ -60,7 +60,11 @@ export const zIngestionResponse = z.object({
 
 export type IngestionResponse = z.infer<typeof zIngestionResponse>;
 
-export const zLiquidityMoveKindResponse = z.enum(['add', 'remove']);
+export const zLiquidityMoveKindResponse = z.enum([
+    'create',
+    'add',
+    'remove'
+]);
 
 export type LiquidityMoveKindResponse = z.infer<typeof zLiquidityMoveKindResponse>;
 
@@ -123,6 +127,7 @@ export type UnsignedDecimal = z.infer<typeof zUnsignedDecimal>;
 
 export const zLiquidityFlowsResponse = z.object({
     addedUsd: zUnsignedDecimal,
+    createdUsd: zUnsignedDecimal,
     moves: zCount,
     movesValued: zCount,
     removedUsd: zUnsignedDecimal

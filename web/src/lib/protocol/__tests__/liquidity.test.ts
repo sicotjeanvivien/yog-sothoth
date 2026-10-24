@@ -45,7 +45,10 @@ describe("curveOf", () => {
 });
 
 describe("flowSlotsOf", () => {
-  const bar = (from: string, liquidity: { addedUsd: string; removedUsd: string } | null) => ({
+  const bar = (
+    from: string,
+    liquidity: { createdUsd: string; addedUsd: string; removedUsd: string } | null,
+  ) => ({
     protocol: "meteora_damm_v2" as const,
     from,
     liquidity,
@@ -58,13 +61,14 @@ describe("flowSlotsOf", () => {
       "2026-10-24T12:00:00Z",
       [
         bar("2026-10-24T10:00:00Z", null),
-        bar("2026-10-24T11:00:00Z", { addedUsd: "5", removedUsd: "2" }),
+        bar("2026-10-24T11:00:00Z", { createdUsd: "7", addedUsd: "5", removedUsd: "2" }),
       ],
       "meteora_damm_v2",
     );
 
     expect(slots).toHaveLength(24);
-    expect(slots.at(-2)).toMatchObject({ added: null, removed: null });
-    expect(slots.at(-1)).toMatchObject({ added: 5, removed: 2 });
+    expect(slots.at(-2)).toMatchObject({ created: null, added: null, removed: null });
+    // Mutation: the creations read from the added column — a creation drawn as an addition.
+    expect(slots.at(-1)).toMatchObject({ created: 7, added: 5, removed: 2 });
   });
 });

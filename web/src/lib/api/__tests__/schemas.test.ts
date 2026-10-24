@@ -105,7 +105,13 @@ describe("zProtocolActivityResponse", () => {
     births: 52,
     poolHours: 1246,
     poolHoursValued: 767,
-    liquidity: { addedUsd: "1200.5", removedUsd: "800", moves: 12, movesValued: 11 },
+    liquidity: {
+      createdUsd: "300",
+      addedUsd: "1200.5",
+      removedUsd: "800",
+      moves: 12,
+      movesValued: 11,
+    },
   });
 
   it("accepts a complete valid payload", () => {

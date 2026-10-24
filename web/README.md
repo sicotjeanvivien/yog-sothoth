@@ -333,9 +333,12 @@ effective rate and, in the advanced mode, the protocol's fees with their share
 dashboard: same `OverviewMode`, same cookie.
 
 **01 Liquidity** — `protocol/liquidity/liquidity-tab.tsx`: the period's
-added, removed and net; the TVL hour by hour on a tight axis
+created, added, removed and net — a pool's creation deposits its first
+liquidity without an addition, so it has its own colour (`dash-flow-create`),
+stacked under the additions; the TVL hour by hour on a tight axis
 (`lib/protocol/liquidity.ts`), its reading fixed above and a dashed mark under
-the pointer; the liquidity added above the axis and removed under it, per hour
+the pointer; the liquidity created and added above the axis and removed under
+it (`dash-flow-out`, darker than the text red), per hour
 or per day, with symmetric marks; and, in the advanced mode, the largest moves
 beside the chart, so the page is no longer. The liquidity is measured from a
 later hour than the swaps: until a window is covered, its totals, bars and

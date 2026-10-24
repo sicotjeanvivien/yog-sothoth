@@ -45,6 +45,13 @@ const FLOW_PX = { half: 64, top: 58 } as const;
 
 const MOVES_SHOWN = 5;
 
+/** A creation enters as an addition does: its own colour, the same sign. */
+const SIGN = {
+  create: { sign: "+ ", tone: "text-dash-flow-create" },
+  add: { sign: "+ ", tone: "text-dash-up" },
+  remove: { sign: "− ", tone: "text-dash-down" },
+} as const;
+
 /** ⚠️ Side by side in the advanced mode: the moves below the chart would lengthen the page. */
 const FLOWS_SPAN = "col-span-12 adv:dash-wide:col-span-8";
 
@@ -129,6 +136,13 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
   const legend = (
     <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] text-dash-ink-2">
       <span>
+        <span aria-hidden="true" className="mr-1.5 inline-block h-2.5 w-2.5 bg-dash-flow-create align-[-1px]" />
+        {t("created")}{" "}
+        <span className="font-dash-mono tabular-nums">
+          {liquidity === null ? notMeasured : formatUsdCompact(liquidity.createdUsd)}
+        </span>
+      </span>
+      <span>
         <span aria-hidden="true" className="mr-1.5 inline-block h-2.5 w-2.5 bg-dash-up align-[-1px]" />
         {t("added")}{" "}
         <span className="font-dash-mono tabular-nums">
@@ -136,7 +150,7 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
         </span>
       </span>
       <span>
-        <span aria-hidden="true" className="mr-1.5 inline-block h-2.5 w-2.5 bg-dash-down align-[-1px]" />
+        <span aria-hidden="true" className="mr-1.5 inline-block h-2.5 w-2.5 bg-dash-flow-out align-[-1px]" />
         {t("removed")}{" "}
         <span className="font-dash-mono tabular-nums">
           {liquidity === null ? notMeasured : formatUsdCompact(liquidity.removedUsd)}
@@ -147,7 +161,11 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
         <span className="font-dash-mono tabular-nums">
           {liquidity === null
             ? notMeasured
-            : signed(Number.parseFloat(liquidity.addedUsd) - Number.parseFloat(liquidity.removedUsd))}
+            : signed(
+                Number.parseFloat(liquidity.createdUsd) +
+                  Number.parseFloat(liquidity.addedUsd) -
+                  Number.parseFloat(liquidity.removedUsd),
+              )}
         </span>
       </span>
     </div>
@@ -187,7 +205,10 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
 
   const daily = period !== "24h";
   const slots = series.asOf === null ? [] : flowSlotsOf(period, series.asOf, series.items, protocol);
-  const max = Math.max(0, ...slots.flatMap((s) => [s.added ?? 0, s.removed ?? 0]));
+  const max = Math.max(
+    0,
+    ...slots.flatMap((s) => [(s.created ?? 0) + (s.added ?? 0), s.removed ?? 0]),
+  );
   const scale = (v: number) => (max > 0 ? (v / max) * FLOW_PX.top : 0);
   const height = (v: number | null) => (v === null ? null : Math.max(v > 0 ? 2 : 0, scale(v)));
   const daysAgo = (days: number) => (days === 0 ? tVolume("today") : tVolume("daysAgo", { days }));
@@ -196,14 +217,20 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
       ? `${daysAgo(slots.length - 1 - i)} · ${moment(slot.from)} → ${moment(slot.to)}`
       : `${hourOf(slot.from)} UTC`;
     const reading =
-      slot.added === null || slot.removed === null
+      slot.created === null || slot.added === null || slot.removed === null
         ? `${name} — ${t("notMeasuredShort")}`
         : `${name} — ${t("flowReading", {
+            created: usd(slot.created),
             added: usd(slot.added),
             removed: usd(slot.removed),
-            net: signed(slot.added - slot.removed),
+            net: signed(slot.created + slot.added - slot.removed),
           })}`;
-    return { up: height(slot.added), down: height(slot.removed), reading };
+    return {
+      created: height(slot.created),
+      added: height(slot.added),
+      down: height(slot.removed),
+      reading,
+    };
   });
 
   return (
@@ -300,13 +327,10 @@ async function LargestMoves({ period, protocol }: TabProps) {
                     : shortenPubkey(move.poolAddress)}
                 </div>
                 <div role="cell" className={`${NUM_CLASS} text-dash-ink`}>
-                  <span
-                    aria-hidden="true"
-                    className={`font-bold ${move.kind === "add" ? "text-dash-up" : "text-dash-down"}`}
-                  >
-                    {move.kind === "add" ? "+ " : "− "}
+                  <span aria-hidden="true" className={`font-bold ${SIGN[move.kind].tone}`}>
+                    {SIGN[move.kind].sign}
                   </span>
-                  <span className="sr-only">{t(move.kind === "add" ? "moves.add" : "moves.remove")} </span>
+                  <span className="sr-only">{t(`moves.${move.kind}`)} </span>
                   {formatUsdCompact(move.amountUsd)}
                 </div>
                 <div role="cell" className={`${NUM_CLASS} text-dash-ink-2`}>
