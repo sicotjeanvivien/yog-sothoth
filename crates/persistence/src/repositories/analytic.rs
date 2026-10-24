@@ -1,5 +1,5 @@
 //! Postgres implementation of [`AnalyticRepository`]: one transaction per
-//! cycle, whose only per-protocol parts are each protocol's tranches, liquidity and births.
+//! cycle, whose only per-protocol parts are each protocol's tranches, liquidity, bursts and births.
 //!
 //! [`AnalyticRepository`]: yog_core::domain::AnalyticRepository
 
@@ -7,7 +7,7 @@ mod meteora_damm_v2;
 
 use crate::repositories::helper::map_sqlx_error;
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use sqlx::{PgExecutor, PgPool, Postgres, Transaction, postgres::types::PgInterval};
 use yog_core::{
     RepositoryResult,
@@ -54,6 +54,16 @@ impl AnalyticRepository for PgAnalyticRepository {
             cycle.at,
         )
         .await?;
+        // ⚠️ Without a tranche written, `tranches_through` may lie before the last one written.
+        if tranches_written > 0 {
+            meteora_damm_v2::write_bursts(
+                &mut tx,
+                cycle.tranches_from,
+                cycle.tranches_through,
+                tranche_interval(),
+            )
+            .await?;
+        }
         let pool_hours = upsert_pool_hourly(&mut tx, cycle.from, cycle.through).await?;
         upsert_protocol_hourly(&mut tx, cycle.from, cycle.through).await?;
         meteora_damm_v2::upsert_liquidity_hourly(
@@ -101,12 +111,17 @@ async fn lock_out_other_writers(tx: &mut Transaction<'static, Postgres>) -> Repo
 
 /// [`TRANCHE`] as Postgres takes it.
 fn tranche_interval() -> PgInterval {
+    interval_of(TRANCHE)
+}
+
+/// A span of minutes as Postgres takes it.
+fn interval_of(span: TimeDelta) -> PgInterval {
     PgInterval {
         months: 0,
         days: 0,
-        microseconds: TRANCHE
+        microseconds: span
             .num_microseconds()
-            .expect("a tranche fits in microseconds"),
+            .expect("a span of minutes fits in microseconds"),
     }
 }
 
@@ -141,8 +156,8 @@ async fn record_tranches(
 ) -> RepositoryResult<()> {
     sqlx::query!(
         r#"
-        INSERT INTO analytic_tranches (bucket, written_at)
-        SELECT generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ, $4::INTERVAL), $3
+        INSERT INTO analytic_tranches (bucket, written_at, rotations)
+        SELECT generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ, $4::INTERVAL), $3, true
         "#,
         from,
         through,

@@ -612,6 +612,14 @@ hour whose tranches were all valued with their moves: its first row is when the
 liquidity started being measured, which the reads take as its coverage. The moves are
 kept 31 days, a day past the longest window: a chunk is dropped whole; `tests/analytic_liquidity.rs` holds the price rule and
 the start.
+
+**The bursts (036).** The tranche statement also writes each tranche's `rotation`, from the
+raw swaps. A third statement (`meteora_damm_v2_bursts.sql`), after the tranches, draws the
+marked tranches of the pools marked lately into `analytic_bursts`: the rows not `settled` are
+deleted and written again every cycle, a settled one written once with its hours into
+`analytic_burst_hours` (`ON DELETE CASCADE` from its burst). Both are kept without limit;
+`analytic_tranches.rotations` says from which tranche the bursts are measured.
+`tests/analytic_bursts.rs` holds the rotation, the two thresholds and the settling.
 031 recreates that aggregate with the buys' B fees. 032, outside a transaction,
 materialises it over every raw swap: its policy refreshes 6 days only, and older
 tranches, under its watermark yet never materialised, would read empty. 033 gives

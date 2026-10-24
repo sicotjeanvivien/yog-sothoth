@@ -4,10 +4,13 @@
 
 use chrono::{DateTime, Utc};
 use sqlx::{Postgres, Transaction, postgres::types::PgInterval};
-use yog_core::{RepositoryResult, domain::Protocol};
+use yog_core::{
+    RepositoryResult,
+    domain::{BURST_GAP, BURST_ROTATION, Protocol, QUOTED_MINTS},
+};
 
-use super::windows;
-use crate::repositories::helper::map_sqlx_error;
+use super::{interval_of, windows};
+use crate::repositories::helper::{convert_decimal_to_bigdecimal, map_sqlx_error};
 
 pub(super) async fn value_tranche(
     tx: &mut Transaction<'static, Postgres>,
@@ -18,6 +21,37 @@ pub(super) async fn value_tranche(
         "src/repositories/analytic/meteora_damm_v2_tranche.sql",
         tranche,
         Protocol::MeteoraDammV2.as_str(),
+        width,
+        &QUOTED_MINTS[..] as &[&str],
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(map_sqlx_error)?;
+    Ok(())
+}
+
+/// The bursts as of the tranches written through `through`, `from` the first of this cycle:
+/// those not yet settled rewritten, a settled one written once with its hours.
+pub(super) async fn write_bursts(
+    tx: &mut Transaction<'static, Postgres>,
+    from: DateTime<Utc>,
+    through: DateTime<Utc>,
+    width: PgInterval,
+) -> RepositoryResult<()> {
+    sqlx::query!(
+        "DELETE FROM analytic_bursts WHERE protocol = $1 AND NOT settled",
+        Protocol::MeteoraDammV2.as_str(),
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(map_sqlx_error)?;
+    sqlx::query_file!(
+        "src/repositories/analytic/meteora_damm_v2_bursts.sql",
+        Protocol::MeteoraDammV2.as_str(),
+        from,
+        through,
+        convert_decimal_to_bigdecimal(BURST_ROTATION, "burst rotation")?,
+        interval_of(BURST_GAP),
         width,
     )
     .execute(&mut **tx)

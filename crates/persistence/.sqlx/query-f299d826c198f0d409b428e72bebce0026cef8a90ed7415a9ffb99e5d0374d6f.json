@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM analytic_bursts WHERE protocol = $1 AND NOT settled",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f299d826c198f0d409b428e72bebce0026cef8a90ed7415a9ffb99e5d0374d6f"
+}

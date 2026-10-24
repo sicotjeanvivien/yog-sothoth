@@ -5,7 +5,8 @@ two tokens of every pool **once** per closed 5-minute tranche into
 `analytic_pool_prices_5min`, and values that tranche's swaps at those prices
 into `analytic_pool_5min`, then each of its liquidity moves into
 `analytic_liquidity_moves`, summed per protocol and hour into
-`analytic_protocol_liquidity_hourly`; sums the tranches per pool and hour into
+`analytic_protocol_liquidity_hourly`; draws the bursts from the tranches into
+`analytic_bursts` and `analytic_burst_hours`; sums the tranches per pool and hour into
 `analytic_pool_hourly`, and those facts per protocol into
 `analytic_protocol_hourly`; counts the pools born per protocol and hour into
 `analytic_protocol_births_hourly`; measures the TVL of every protocol into
@@ -79,6 +80,23 @@ token takes the lower of its market price and the pool's last bounded one: never
 than the pool last traded it, nor than the market now. A pool never priced in the last
 seven days — the price table's — has no bound, and its move stays unvalued, counted.
 Pools that only move liquidity stay out of the swaps' facts: they are not active pools.
+
+## The bursts
+
+A tranche carries its **rotation**: what its quoted side — SOL, USDC or USDT — traded over
+its mean reserve, read in the raw swaps with the tranche; a pair with both or neither takes
+the smaller of its two sides. A tranche is marked at `BURST_ROTATION` (1); a pool's marked
+tranches no more than `BURST_GAP` (30 min) apart make one **burst**, from the start of the
+first to the end of the last, worth every tranche of the pool between them, marked or not.
+The thresholds and the quoted mints live in `core` (`domain/analytic/burst.rs`), once.
+
+Every cycle rewrites the bursts not yet settled. A burst is **extinct** once `BURST_GAP` has
+passed its last marked tranche, and **settled** once its last hour is written whole too:
+then it is final, written once with its volume per hour. Its volume is on the hourly facts'
+base, a pool-hour counted only valued whole: the volume outside the bursts never falls below
+zero. No backfill: `analytic_tranches.rotations` marks the tranches written with their
+rotation, and the first of them is when the bursts started being measured. A burst longer
+than the tranches' seven days starts at the first one still kept.
 
 `/api/protocols/…` reads the protocol aggregate and the TVL
 (`repositories/protocol_activity.rs` in `yog-persistence`).

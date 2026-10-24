@@ -12,6 +12,15 @@ WITH tranche AS (
       LEFT JOIN token_metadata tmb ON tmb.mint = p.token_b_mint::TEXT
      WHERE s.bucket = $1
 ),
+-- What each side traded over its mean reserve, from the raw swaps: the aggregate keeps no reserve.
+turnover AS (
+    SELECT pool_address,
+           SUM(amount_a)::NUMERIC / NULLIF(AVG(reserve_a_after), 0) AS rotation_a,
+           SUM(amount_b)::NUMERIC / NULLIF(AVG(reserve_b_after), 0) AS rotation_b
+      FROM meteora_damm_v2_swap_events
+     WHERE timestamp >= $1 AND timestamp < $1::TIMESTAMPTZ + $3::INTERVAL
+     GROUP BY pool_address
+),
 pools_per_mint AS (
     SELECT m.mint, COUNT(*) AS pools
       FROM tranche
@@ -85,14 +94,18 @@ prices AS (
 INSERT INTO analytic_pool_5min (
     pool_address, bucket, protocol, swap_count, valued,
     volume_in_a_usd, volume_in_b_usd, fees_usd, lp_fees_usd,
-    protocol_fees_usd, referral_fees_usd
+    protocol_fees_usd, referral_fees_usd, rotation
 )
 SELECT pool_address, $1, $2, swap_count, valued,
        volume_in_a_usd, volume_in_b_usd, fees_usd,
        fees_usd - protocol_fees_usd - referral_fees_usd,
-       protocol_fees_usd, referral_fees_usd
+       protocol_fees_usd, referral_fees_usd, rotation
   FROM (
     SELECT t.pool_address, t.swap_count, v.valued,
+           -- ⚠️ Both sides quoted, or neither: the smaller, so the thinner side does not mark.
+           CASE WHEN t.mint_a = ANY($4) AND NOT t.mint_b = ANY($4) THEN r.rotation_a
+                WHEN t.mint_b = ANY($4) AND NOT t.mint_a = ANY($4) THEN r.rotation_b
+                ELSE LEAST(r.rotation_a, r.rotation_b) END AS rotation,
            CASE WHEN v.valued THEN w.a_to_b END AS volume_in_a_usd,
            CASE WHEN v.valued THEN w.b_to_a END AS volume_in_b_usd,
            CASE WHEN v.valued THEN
@@ -109,6 +122,7 @@ SELECT pool_address, $1, $2, swap_count, valued,
            END AS referral_fees_usd
       FROM tranche t
       JOIN quoted q ON q.pool_address = t.pool_address
+      LEFT JOIN turnover r ON r.pool_address = t.pool_address
      -- ⚠️ A→B always pays its fee on the output, in B; B→A pays it in A in a BothToken
      -- pool, else on its input in B: the sales' B fees are what the buys' leave.
      CROSS JOIN LATERAL (
