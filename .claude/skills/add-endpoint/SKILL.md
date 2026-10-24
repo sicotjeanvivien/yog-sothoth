@@ -31,7 +31,7 @@ needs an answer the rules do not give is a question for the user, never a name m
    filter parameter.
 3. **The items, a measure, or the live stream?** The items: the collection itself
    (rule 3). A measure: the collection and one cut, or `tvl`, a reading at an instant (rule 4).
-   The live stream: `live` (rule 5).
+   The live stream: under the `/api/live` prefix (rules 2 and 5).
 4. **Does every field complete the route's name** (rule 6)? Live and computed in one
    response (rule 7) means two routes.
 5. **Is an existing route already this one?** Then extend it; and if it is in *Not yet

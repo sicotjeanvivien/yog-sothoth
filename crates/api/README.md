@@ -162,11 +162,13 @@ at the end of this section.
    added or removed, valued; `rotation-runs`, a pool's tranches whose quoted reserve turned
    over at least once, no more than 30 min apart, with the tranches between them;
    `vesting-unlocks`, the liquidity a vesting lock releases at an instant.
-2. **Three path forms**: `/api/<collection>`, every protocol; `/api/<collection>/{id}`, one
-   item; `/api/<entities>/{id}/<collection>`, the collection restricted to that entity
-   (`/api/protocols/meteora_damm_v2/swaps`). An entity is always in the path, never a filter
+2. **Three path forms for a request**: `/api/<collection>`, every protocol;
+   `/api/<collection>/{id}`, one item; `/api/<entities>/{id}/<collection>`, the collection
+   restricted to that entity (`/api/protocols/meteora_damm_v2/swaps`). **Two for the live
+   stream**, under its own prefix (rule 5): `/api/live`, every protocol;
+   `/api/live/<entities>/{id}`, one entity. An entity is always in the path, never a filter
    parameter. An identifier is a key of the data — a base58 key, a protocol name, a signal's
-   or an announcement's id — and never a reserved word (rules 4 and 5).
+   or an announcement's id — and never a reserved word (rule 4) nor `live`.
 3. **A collection returns its items**, cursor-paginated (`Page<T>`: `?limit=`, 50 by default,
    200 at most), with `?window=` when it is read over one and `?sort=` when it has more than
    one order; a measure and `tvl` return the rows of rule 4. A collection not paginated yet is
@@ -189,10 +191,12 @@ at the end of this section.
    ranked at that last reading, without a window. Every response of what `yog-analytic`
    computes carries the instant it reflects (`asOf`), its coverage (`coveredSince`), and its
    window when it is read over one.
-5. **`live` is the reserved word of the SSE routes**: `/api/live` for every protocol,
-   `/api/<entities>/{id}/live` for one entity, `?topics=` naming the collections it streams,
-   one connection for them all: the on-chain events and `signals`, never another. Each message
-   keeps its own shape.
+5. **The live stream has its own prefix, `/api/live`**, apart from the requests: an SSE
+   connection stays open where a request gets one answer, and the prefix says it before
+   anything else. `/api/live?topics=…` for every protocol, `/api/live/<entities>/{id}?topics=…`
+   for one entity (`/api/live/pools/{pool}?topics=signals`); `topics` names the collections it
+   streams, one connection for them all: the on-chain events and `signals`, never another.
+   Each message keeps its own shape.
 6. **Every field of a response completes the name of its route.** The route reads as a
    sentence ("the swaps of the DAMM v2 protocol over 24 h, in totals") and each field is an
    attribute of it. A field that needs another name to describe itself belongs to another
