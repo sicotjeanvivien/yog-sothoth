@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use axum::{
     Json,
-    extract::{Query, State},
+    extract::{Path, Query, State},
     response::{
         IntoResponse, Response,
         sse::{Event, KeepAlive, Sse},
@@ -20,7 +20,7 @@ use crate::http::{
     cursor::encode_cursor_opt,
     dto::{
         PageResponse, SignalResponse,
-        request::{ListSignalsRequest, SignalsQuery},
+        request::{EntitySignalsQuery, ListSignalsRequest, SignalsQuery, parse_protocol},
     },
     error::ApiError,
 };
@@ -39,7 +39,53 @@ pub(crate) async fn list_signals(
     State(state): State<AppState>,
     Query(query): Query<SignalsQuery>,
 ) -> Result<Json<PageResponse<SignalResponse>>, ApiError> {
-    let request = ListSignalsRequest::parse(query)?;
+    signal_page(&state, ListSignalsRequest::parse(query)?).await
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/protocols/{protocol}/signals",
+    params(EntitySignalsQuery),
+    responses((
+        status = 200,
+        description = "A page of the protocol's signals.",
+        body = PageResponse<SignalResponse>
+    ))
+)]
+pub(crate) async fn list_protocol_signals(
+    State(state): State<AppState>,
+    Path(protocol): Path<String>,
+    Query(query): Query<EntitySignalsQuery>,
+) -> Result<Json<PageResponse<SignalResponse>>, ApiError> {
+    let protocol = parse_protocol(&protocol)?;
+    let request = ListSignalsRequest::parse_for_entity(query, Some(protocol), None)?;
+    signal_page(&state, request).await
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/pools/{pool}/signals",
+    params(EntitySignalsQuery),
+    responses((
+        status = 200,
+        description = "A page of the pool's signals.",
+        body = PageResponse<SignalResponse>
+    ))
+)]
+pub(crate) async fn list_pool_signals(
+    State(state): State<AppState>,
+    Path(pool): Path<String>,
+    Query(query): Query<EntitySignalsQuery>,
+) -> Result<Json<PageResponse<SignalResponse>>, ApiError> {
+    let pool = super::known_pool(&state, &pool).await?;
+    let request = ListSignalsRequest::parse_for_entity(query, None, Some(pool.pool_address))?;
+    signal_page(&state, request).await
+}
+
+async fn signal_page(
+    state: &AppState,
+    request: ListSignalsRequest,
+) -> Result<Json<PageResponse<SignalResponse>>, ApiError> {
     let page = state
         .signal_service
         .list_signals(request.into_params())

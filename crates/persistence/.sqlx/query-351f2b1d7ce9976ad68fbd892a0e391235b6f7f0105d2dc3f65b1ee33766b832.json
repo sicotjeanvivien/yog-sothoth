@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT protocol AS \"protocol!\", bar_from AS \"bar_from!\",\n                   SUM(swap_count)::BIGINT AS \"swaps!\",\n                   SUM(volume_usd) AS volume_usd, SUM(fees_usd) AS fees_usd,\n                   SUM(lp_fees_usd) AS lp_fees_usd, SUM(protocol_fees_usd) AS protocol_fees_usd,\n                   SUM(referral_fees_usd) AS referral_fees_usd,\n                   SUM(active_pools)::BIGINT AS \"pool_hours!\",\n                   SUM(active_pools_valued)::BIGINT AS \"pool_hours_valued!\"\n              FROM (\n                  SELECT h.*,\n                         time_bucket(INTERVAL '1 day', bucket, origin => $2::TIMESTAMPTZ)\n                             AS bar_from\n                    FROM analytic_protocol_hourly h\n                   WHERE bucket >= $1 AND bucket < $2\n                     AND ($4::TEXT IS NULL OR protocol = $4)\n              ) hours\n             WHERE bar_from >= $3\n             GROUP BY protocol, bar_from\n             ORDER BY bar_from, protocol\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_hourly",
+            "name": "protocol"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "bar_from!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "swaps!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "volume_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "lp_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "protocol_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "referral_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "pool_hours!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
+        "name": "pool_hours_valued!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "351f2b1d7ce9976ad68fbd892a0e391235b6f7f0105d2dc3f65b1ee33766b832"
+}

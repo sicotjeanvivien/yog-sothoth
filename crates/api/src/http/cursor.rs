@@ -8,7 +8,7 @@ use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use yog_core::{
     Cursor,
-    domain::{SignalCursor, TokenActivityCursor},
+    domain::{LiquidityMoveCursor, LiquidityMoveOrder, SignalCursor, TokenActivityCursor},
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -22,6 +22,22 @@ struct TokenActivityCursorWire {
     last_hour: String,
     volume_usd: String,
     mint: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct LiquidityMoveCursorWire {
+    order: String,
+    amount_usd: String,
+    at: String,
+    signature: String,
+    event_index: i32,
+}
+
+fn order_tag(order: LiquidityMoveOrder) -> &'static str {
+    match order {
+        LiquidityMoveOrder::Amount => "amount",
+        LiquidityMoveOrder::At => "at",
+    }
 }
 
 pub(crate) fn encode_cursor_opt(cursor: Option<&Cursor>) -> Result<Option<String>, ApiError> {
@@ -38,6 +54,13 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
             last_hour: c.last_hour.to_rfc3339(),
             volume_usd: c.volume_usd.to_string(),
             mint: c.mint.to_string(),
+        }),
+        Cursor::LiquidityMove(c) => encode_b64_json(&LiquidityMoveCursorWire {
+            order: order_tag(c.order).to_owned(),
+            amount_usd: c.amount_usd.to_string(),
+            at: c.at.to_rfc3339(),
+            signature: c.signature.clone(),
+            event_index: c.event_index,
         }),
     }
 }
@@ -78,6 +101,27 @@ pub(crate) fn decode_token_activity_cursor(raw: &str) -> Result<TokenActivityCur
             .map_err(|_| ApiError::BadRequest("invalid cursor: malformed volume".to_string()))?,
         mint: Pubkey::from_str(&wire.mint)
             .map_err(|_| ApiError::BadRequest("invalid cursor: malformed mint".to_string()))?,
+    })
+}
+
+/// A cursor of a list in `order`; one taken in another order is refused, its key meaningless here.
+pub(crate) fn decode_liquidity_move_cursor(
+    raw: &str,
+    order: LiquidityMoveOrder,
+) -> Result<LiquidityMoveCursor, ApiError> {
+    let wire: LiquidityMoveCursorWire = decode_b64_json(raw)?;
+    if wire.order != order_tag(order) {
+        return Err(ApiError::BadRequest(
+            "invalid cursor: taken in another order".to_string(),
+        ));
+    }
+    Ok(LiquidityMoveCursor {
+        order,
+        amount_usd: Decimal::from_str(&wire.amount_usd)
+            .map_err(|_| ApiError::BadRequest("invalid cursor: malformed amount".to_string()))?,
+        at: parse_rfc3339(&wire.at)?,
+        signature: wire.signature,
+        event_index: wire.event_index,
     })
 }
 

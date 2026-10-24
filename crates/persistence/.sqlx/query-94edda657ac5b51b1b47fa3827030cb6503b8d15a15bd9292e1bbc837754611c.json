@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT ON (protocol)\n                   protocol, bucket + INTERVAL '1 hour' AS \"at!\", tvl_usd, pools_priced,\n                   pools_unvalued\n              FROM analytic_protocol_tvl\n             WHERE bucket <= $1 AND ($2::TEXT IS NULL OR protocol = $2)\n             ORDER BY protocol, bucket DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "protocol"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "at!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "tvl_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "tvl_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "pools_priced",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "pools_priced"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "pools_unvalued",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "pools_unvalued"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "94edda657ac5b51b1b47fa3827030cb6503b8d15a15bd9292e1bbc837754611c"
+}

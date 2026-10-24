@@ -8,7 +8,8 @@ use solana_pubkey::Pubkey;
 use yog_core::{
     Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
-        Pool, PoolCatalog, Severity, SignalCursor, SignalFeed, SignalRecord, TokenMetadataLookup,
+        Pool, PoolCatalog, Protocol, Severity, SignalCursor, SignalFeed, SignalFilter,
+        SignalRecord, TokenMetadataLookup,
     },
 };
 
@@ -17,6 +18,7 @@ use crate::application::{EnrichedSignal, EnrichedToken};
 /// Input to [`SignalService::list_signals`].
 pub(crate) struct SignalListParams {
     pub severity: Option<Severity>,
+    pub protocol: Option<Protocol>,
     pub pool: Option<Pubkey>,
     pub cursor: Option<SignalCursor>,
     pub direction: PageDirection,
@@ -53,8 +55,11 @@ impl SignalService {
         let page = self
             .repo
             .list(
-                params.severity,
-                params.pool,
+                SignalFilter {
+                    severity: params.severity,
+                    protocol: params.protocol,
+                    pool: params.pool,
+                },
                 params.cursor,
                 params.direction,
                 params.position,

@@ -2,7 +2,7 @@
 //! tables by protocol, read over the span the caller built. Summing the hours
 //! of a span is exact for every flow; the distinct pools are read as written.
 
-mod rows;
+pub(super) mod rows;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -277,7 +277,7 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
         let rows = sqlx::query_as!(
             LiquidityMoveRow,
             r#"
-            SELECT m.protocol, m.timestamp AS at, m.signature, m.pool_address,
+            SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index, m.pool_address,
                    ta.symbol AS "token_a_symbol?", tb.symbol AS "token_b_symbol?",
                    m.owner, m.kind, m.amount_usd AS "amount_usd!"
               FROM analytic_liquidity_moves m

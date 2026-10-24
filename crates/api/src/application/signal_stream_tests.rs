@@ -239,8 +239,7 @@ struct StuckFeed;
 impl yog_core::domain::SignalFeed for StuckFeed {
     async fn list(
         &self,
-        _severity: Option<yog_core::domain::Severity>,
-        _pool: Option<solana_pubkey::Pubkey>,
+        _filter: yog_core::domain::SignalFilter,
         _cursor: Option<SignalCursor>,
         _direction: yog_core::PageDirection,
         _position: Option<yog_core::PagePosition>,

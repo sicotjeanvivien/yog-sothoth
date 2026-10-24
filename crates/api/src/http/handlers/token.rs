@@ -30,6 +30,14 @@ pub(crate) async fn list_token_activity(
     State(state): State<AppState>,
     Query(query): Query<TokenActivityQuery>,
 ) -> Result<Json<TokenActivityPageResponse>, ApiError> {
+    token_ranking(&state, query).await
+}
+
+/// The ranking of the tokens by volume, every protocol summed.
+pub(super) async fn token_ranking(
+    state: &AppState,
+    query: TokenActivityQuery,
+) -> Result<Json<TokenActivityPageResponse>, ApiError> {
     let request = ListTokenActivityRequest::parse(query)?;
     match state
         .activity_service

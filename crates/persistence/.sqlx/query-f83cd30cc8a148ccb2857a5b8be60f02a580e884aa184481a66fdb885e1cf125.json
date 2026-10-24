@@ -1,0 +1,142 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index,\n                       m.pool_address, ta.symbol AS \"token_a_symbol?\",\n                       tb.symbol AS \"token_b_symbol?\", m.owner, m.kind,\n                       m.amount_usd AS \"amount_usd!\"\n                  FROM analytic_liquidity_moves m\n                  LEFT JOIN pools p ON p.pool_address = m.pool_address\n                  LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT\n                  LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT\n                 WHERE m.pool_address = $3\n                   AND m.timestamp >= $1 AND m.timestamp < $2\n                   AND m.amount_usd IS NOT NULL\n                   AND ($4::TIMESTAMPTZ IS NULL\n                        OR m.timestamp < $4\n                        OR (m.timestamp = $4 AND (m.signature, m.event_index) > ($5, $6)))\n                 ORDER BY m.timestamp DESC, m.signature, m.event_index\n                 LIMIT $7\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_liquidity_moves",
+            "name": "protocol"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "analytic_liquidity_moves",
+            "name": "timestamp"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "signature",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_liquidity_moves",
+            "name": "signature"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "event_index",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "analytic_liquidity_moves",
+            "name": "event_index"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "pool_address",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_liquidity_moves",
+            "name": "pool_address"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "token_a_symbol?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "symbol"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "token_b_symbol?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "symbol"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "owner",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_liquidity_moves",
+            "name": "owner"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "kind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_liquidity_moves",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "amount_usd!",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_liquidity_moves",
+            "name": "amount_usd"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "f83cd30cc8a148ccb2857a5b8be60f02a580e884aa184481a66fdb885e1cf125"
+}

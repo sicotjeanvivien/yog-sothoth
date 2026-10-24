@@ -8,7 +8,9 @@ use sqlx::PgPool;
 
 use yog_core::{
     Cursor, PageDirection, PagePosition,
-    domain::{Protocol, Severity, Signal, SignalCursor, SignalFeed, SignalRepository},
+    domain::{
+        Protocol, Severity, Signal, SignalCursor, SignalFeed, SignalFilter, SignalRepository,
+    },
 };
 use yog_persistence::PgSignalRepository;
 
@@ -62,7 +64,7 @@ async fn feed_paginates_newest_first(pool: PgPool) {
 
     // Page 1: newest two.
     let page1 = repo
-        .list(None, None, None, PageDirection::Next, None, 2)
+        .list(SignalFilter::default(), None, PageDirection::Next, None, 2)
         .await
         .unwrap();
     assert_eq!(ids(&page1), vec![5, 4]);
@@ -72,7 +74,13 @@ async fn feed_paginates_newest_first(pool: PgPool) {
     // Page 2 via the forward cursor.
     let cursor = signal_cursor(page1.next_cursor.as_ref().unwrap());
     let page2 = repo
-        .list(None, None, Some(cursor), PageDirection::Next, None, 2)
+        .list(
+            SignalFilter::default(),
+            Some(cursor),
+            PageDirection::Next,
+            None,
+            2,
+        )
         .await
         .unwrap();
     assert_eq!(ids(&page2), vec![3, 2]);
@@ -81,7 +89,13 @@ async fn feed_paginates_newest_first(pool: PgPool) {
     // Page 3: the tail.
     let cursor = signal_cursor(page2.next_cursor.as_ref().unwrap());
     let page3 = repo
-        .list(None, None, Some(cursor), PageDirection::Next, None, 2)
+        .list(
+            SignalFilter::default(),
+            Some(cursor),
+            PageDirection::Next,
+            None,
+            2,
+        )
         .await
         .unwrap();
     assert_eq!(ids(&page3), vec![1]);
@@ -91,7 +105,13 @@ async fn feed_paginates_newest_first(pool: PgPool) {
     // Backward from page 2 returns page 1, in display order.
     let cursor = signal_cursor(page2.prev_cursor.as_ref().unwrap());
     let back = repo
-        .list(None, None, Some(cursor), PageDirection::Prev, None, 2)
+        .list(
+            SignalFilter::default(),
+            Some(cursor),
+            PageDirection::Prev,
+            None,
+            2,
+        )
         .await
         .unwrap();
     assert_eq!(ids(&back), vec![5, 4]);
@@ -100,8 +120,7 @@ async fn feed_paginates_newest_first(pool: PgPool) {
     // Position jumps ignore cursors: Last = the oldest page.
     let last = repo
         .list(
-            None,
-            None,
+            SignalFilter::default(),
             None,
             PageDirection::Next,
             Some(PagePosition::Last),
@@ -126,7 +145,7 @@ async fn equal_timestamps_tie_break_on_id_desc(pool: PgPool) {
     .unwrap();
 
     let page1 = repo
-        .list(None, None, None, PageDirection::Next, None, 1)
+        .list(SignalFilter::default(), None, PageDirection::Next, None, 1)
         .await
         .unwrap();
     assert_eq!(ids(&page1), vec![2]);
@@ -135,7 +154,13 @@ async fn equal_timestamps_tie_break_on_id_desc(pool: PgPool) {
     // repeat the sibling row.
     let cursor = signal_cursor(page1.next_cursor.as_ref().unwrap());
     let page2 = repo
-        .list(None, None, Some(cursor), PageDirection::Next, None, 1)
+        .list(
+            SignalFilter::default(),
+            Some(cursor),
+            PageDirection::Next,
+            None,
+            1,
+        )
         .await
         .unwrap();
     assert_eq!(ids(&page2), vec![1]);
@@ -189,7 +214,16 @@ async fn pool_filter_restricts_the_feed(pool: PgPool) {
     .unwrap();
 
     let page = repo
-        .list(None, Some(pk(2)), None, PageDirection::Next, None, 10)
+        .list(
+            SignalFilter {
+                pool: Some(pk(2)),
+                ..SignalFilter::default()
+            },
+            None,
+            PageDirection::Next,
+            None,
+            10,
+        )
         .await
         .unwrap();
 
@@ -200,8 +234,11 @@ async fn pool_filter_restricts_the_feed(pool: PgPool) {
     // Combined with severity: AND semantics.
     let page = repo
         .list(
-            Some(Severity::Critical),
-            Some(pk(2)),
+            SignalFilter {
+                severity: Some(Severity::Critical),
+                pool: Some(pk(2)),
+                ..SignalFilter::default()
+            },
             None,
             PageDirection::Next,
             None,
@@ -213,7 +250,16 @@ async fn pool_filter_restricts_the_feed(pool: PgPool) {
 
     // A pool that never signalled yields an empty first/last page.
     let page = repo
-        .list(None, Some(pk(9)), None, PageDirection::Next, None, 10)
+        .list(
+            SignalFilter {
+                pool: Some(pk(9)),
+                ..SignalFilter::default()
+            },
+            None,
+            PageDirection::Next,
+            None,
+            10,
+        )
         .await
         .unwrap();
     assert!(page.items.is_empty());
@@ -226,8 +272,10 @@ async fn severity_filter_restricts_the_feed(pool: PgPool) {
 
     let page = repo
         .list(
-            Some(Severity::Critical),
-            None,
+            SignalFilter {
+                severity: Some(Severity::Critical),
+                ..SignalFilter::default()
+            },
             None,
             PageDirection::Next,
             None,

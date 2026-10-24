@@ -7,6 +7,7 @@ mod insert_outcome;
 mod kept_prices;
 mod liquidity_flow;
 mod materialization_backlog;
+mod measures;
 mod meteora;
 mod network_status;
 mod pool;
@@ -36,6 +37,11 @@ pub use insert_outcome::InsertOutcome;
 pub use kept_prices::{KeptPrices, PRICE_MAX_AGE_LATEST};
 pub use liquidity_flow::{LiquidityFlowRepository, PoolLiquidityFlow};
 pub use materialization_backlog::{MaterializationBacklog, MaterializationBacklogRepository};
+pub use measures::{
+    ByProtocol, LiquidityMoveCursor, LiquidityMoveMeasures, LiquidityMoveOrder, LiquidityMoveSums,
+    PoolCreationCount, PoolCreationMeasures, PoolDiscoveries, PoolDiscoveryMeasures, PoolSwapBar,
+    ProtocolBar, ProtocolSwapTotals, SwapMeasures, SwapSums, TvlReadings,
+};
 pub use meteora::{
     MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimPositionFeeEventRepository,
     MeteoraDammV2ClaimProtocolFeeEvent, MeteoraDammV2ClaimProtocolFeeEventRepository,
@@ -77,7 +83,7 @@ pub use protocol_activity::{
 };
 pub use signals::{
     DetectorError, EvalContext, Severity, Signal, SignalCursor, SignalDetector, SignalFeed,
-    SignalRecord, SignalRepository,
+    SignalFilter, SignalRecord, SignalRepository,
 };
 pub use swap_flow::{PoolSwapFlow, SwapFlowRepository};
 pub use token_activity::{

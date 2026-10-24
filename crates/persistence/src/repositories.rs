@@ -5,6 +5,7 @@ mod helper;
 
 mod liquidity_flow;
 mod materialization_backlog;
+mod measures;
 mod meteora;
 mod network_status;
 mod pool;
@@ -23,6 +24,7 @@ pub use announcement::PgAnnouncementRepository;
 pub use event_freshness::PgEventFreshnessRepository;
 pub use liquidity_flow::PgLiquidityFlowRepository;
 pub use materialization_backlog::PgMaterializationBacklogRepository;
+pub use measures::PgMeasureRepository;
 pub use meteora::{
     PgMeteoraDammV2ClaimPositionFeeEventRepository, PgMeteoraDammV2ClaimProtocolFeeEventRepository,
     PgMeteoraDammV2ClaimRewardEventRepository, PgMeteoraDammV2ClosePositionEventRepository,

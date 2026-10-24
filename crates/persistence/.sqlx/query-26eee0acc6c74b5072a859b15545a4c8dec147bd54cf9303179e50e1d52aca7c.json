@@ -1,0 +1,45 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT protocol AS \"protocol!\", bar_from AS \"bar_from?\",\n                   SUM(births)::BIGINT AS \"pools!\"\n              FROM (\n                  SELECT b.*,\n                         time_bucket(INTERVAL '1 day', bucket, origin => $2::TIMESTAMPTZ)\n                             AS bar_from\n                    FROM analytic_protocol_births_hourly b\n                   WHERE bucket >= $1 AND bucket < $2\n                     AND ($4::TEXT IS NULL OR protocol = $4)\n              ) hours\n             WHERE bar_from >= $3\n             GROUP BY protocol, bar_from\n             ORDER BY bar_from, protocol\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_births_hourly",
+            "name": "protocol"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "bar_from?",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "pools!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "26eee0acc6c74b5072a859b15545a4c8dec147bd54cf9303179e50e1d52aca7c"
+}

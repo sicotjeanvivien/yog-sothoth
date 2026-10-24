@@ -1,7 +1,5 @@
 //! Request DTO for `GET /api/protocols/{protocol}/liquidity-moves`.
 
-use std::str::FromStr;
-
 use serde::Deserialize;
 use utoipa::IntoParams;
 use yog_core::domain::{Protocol, Window};
@@ -29,8 +27,7 @@ pub(crate) struct ListLiquidityMovesRequest {
 
 impl ListLiquidityMovesRequest {
     pub(crate) fn parse(protocol: &str, query: LiquidityMovesQuery) -> Result<Self, ApiError> {
-        let protocol = Protocol::from_str(protocol)
-            .map_err(|_| ApiError::BadRequest(format!("unknown protocol: {protocol}")))?;
+        let protocol = super::parse_protocol(protocol)?;
         super::validate_limit(query.limit)?;
         Ok(Self {
             protocol,

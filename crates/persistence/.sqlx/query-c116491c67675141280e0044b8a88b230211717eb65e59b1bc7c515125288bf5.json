@@ -1,0 +1,73 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT protocol AS \"protocol!\", bar_from AS \"bar_from?\",\n                   SUM(created_usd) AS \"created_usd!\", SUM(added_usd) AS \"added_usd!\",\n                   SUM(removed_usd) AS \"removed_usd!\", SUM(moves)::BIGINT AS \"moves!\",\n                   SUM(moves_valued)::BIGINT AS \"moves_valued!\"\n              FROM (\n                  SELECT l.*,\n                         time_bucket(INTERVAL '1 day', bucket, origin => $2::TIMESTAMPTZ)\n                             AS bar_from\n                    FROM analytic_protocol_liquidity_hourly l\n                   WHERE protocol = $4 AND bucket >= $1 AND bucket < $2\n              ) hours\n             WHERE bar_from >= $3\n             GROUP BY protocol, bar_from\n             ORDER BY bar_from\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_liquidity_hourly",
+            "name": "protocol"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "bar_from?",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_usd!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "added_usd!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "removed_usd!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "moves!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "moves_valued!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "c116491c67675141280e0044b8a88b230211717eb65e59b1bc7c515125288bf5"
+}

@@ -66,6 +66,8 @@ pub struct LiquidityMove {
     pub protocol: Protocol,
     pub at: DateTime<Utc>,
     pub signature: String,
+    /// With `signature` and `at`, the key of the move.
+    pub event_index: i32,
     pub pool_address: Pubkey,
     pub token_a_symbol: Option<String>,
     pub token_b_symbol: Option<String>,

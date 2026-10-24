@@ -6,18 +6,23 @@
 use std::str::FromStr;
 
 use solana_pubkey::Pubkey;
+use yog_core::domain::Protocol;
 
 use crate::http::error::ApiError;
 
 mod get_token;
 mod list_liquidity_moves;
+mod list_pool_liquidity_moves;
 mod list_signals;
 mod list_token_activity;
 mod window_param;
 
 pub(crate) use get_token::GetTokenRequest;
 pub(crate) use list_liquidity_moves::{LiquidityMovesQuery, ListLiquidityMovesRequest};
-pub(crate) use list_signals::{ListSignalsRequest, SignalsQuery};
+pub(crate) use list_pool_liquidity_moves::{
+    ListPoolLiquidityMovesRequest, PoolLiquidityMovesQuery,
+};
+pub(crate) use list_signals::{EntitySignalsQuery, ListSignalsRequest, SignalsQuery};
 pub(crate) use list_token_activity::{ListTokenActivityRequest, TokenActivityQuery};
 pub(crate) use window_param::{ActivityQuery, WindowQuery};
 
@@ -50,4 +55,14 @@ fn non_empty<'a>(name: &str, raw: &'a str) -> Result<&'a str, ApiError> {
 fn parse_address(raw: &str, label: &str) -> Result<Pubkey, ApiError> {
     Pubkey::from_str(raw)
         .map_err(|_| ApiError::BadRequest(format!("invalid {label} address: {raw}")))
+}
+
+/// The `{protocol}` of a path, or a 400 naming it.
+pub(crate) fn parse_protocol(raw: &str) -> Result<Protocol, ApiError> {
+    Protocol::from_str(raw).map_err(|_| ApiError::BadRequest(format!("unknown protocol: {raw}")))
+}
+
+/// The `{pool}` of a path, or a 400.
+pub(crate) fn parse_pool(raw: &str) -> Result<Pubkey, ApiError> {
+    parse_address(raw, "pool")
 }

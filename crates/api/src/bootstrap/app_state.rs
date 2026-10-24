@@ -9,13 +9,15 @@ use yog_core::domain::{
 };
 use yog_persistence::{
     Database, PgAnnouncementRepository, PgEventFreshnessRepository, PgHealthChecker,
-    PgNetworkStatusRepository, PgPoolRepository, PgProtocolActivityRepository, PgSignalRepository,
-    PgTokenActivityRepository, PgTokenMetadataRepository, PgTokenPriceRepository, PoolSettings,
+    PgMeasureRepository, PgNetworkStatusRepository, PgPoolRepository, PgProtocolActivityRepository,
+    PgSignalRepository, PgTokenActivityRepository, PgTokenMetadataRepository,
+    PgTokenPriceRepository, PoolSettings,
 };
 
 use crate::application::{
-    ActivityService, AnnouncementService, IngestionService, NetworkService, ProtocolCatalogService,
-    STREAM_CHANNEL_CAPACITY, SignalService, SignalStreamPoller, TokenService, WorkSlots,
+    ActivityService, AnnouncementService, IngestionService, MeasureLenses, MeasureService,
+    NetworkService, ProtocolCatalogService, STREAM_CHANNEL_CAPACITY, SignalService,
+    SignalStreamPoller, TokenService, WorkSlots,
 };
 use crate::bootstrap::Config;
 use crate::http::{AppState, SSE_MAX_STREAMS, STATEMENT_TIMEOUT, WORK_SLOT_WAIT, WORK_SLOTS};
@@ -54,6 +56,16 @@ pub(crate) async fn build_app_state(
         Arc::new(PgProtocolActivityRepository::new(db_pool.clone()));
     let token_activity_repo: Arc<dyn TokenActivityFeed> =
         Arc::new(PgTokenActivityRepository::new(db_pool.clone()));
+    let measure_repo = Arc::new(PgMeasureRepository::new(db_pool.clone()));
+    let measure_service = Arc::new(MeasureService::new(MeasureLenses {
+        hours: protocol_activity_repo.clone(),
+        swaps: measure_repo.clone(),
+        pool_creations: measure_repo.clone(),
+        liquidity_moves: measure_repo.clone(),
+        tvl: measure_repo.clone(),
+        pool_discoveries: measure_repo,
+        pools: pool_repo.clone(),
+    }));
 
     let signal_service = Arc::new(SignalService::new(
         signal_repo.clone(),
@@ -86,6 +98,7 @@ pub(crate) async fn build_app_state(
             protocol_activity_repo,
             token_activity_repo,
         )),
+        measure_service,
         work_slots,
         token_service: Arc::new(TokenService::new(token_metadata_repo, token_price_repo)),
         announcement_service: Arc::new(AnnouncementService::new(announcement_repo)),

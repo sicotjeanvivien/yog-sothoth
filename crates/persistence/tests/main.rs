@@ -29,6 +29,7 @@ mod liquidity_cagg;
 mod liquidity_flow;
 mod liquidity_value;
 mod lock_position;
+mod measures;
 mod overview_periods;
 mod permanent_lock_position;
 mod pool_current_state_order;
