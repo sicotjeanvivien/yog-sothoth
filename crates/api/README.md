@@ -141,42 +141,44 @@ cursor carries that hour, and one taken before a freeze is refused (400).
 These rules hold for every `/api` route. The routes that do not follow them yet are listed
 at the end of this section.
 
-1. **A route names a thing of the data**, plural, in kebab-case. Two kinds:
+1. **A route names a thing of the data**, plural, in kebab-case:
    - **entities**, what exists: `protocols`, `pools`, `tokens`, `announcements`;
    - **events**, what happens: `swaps`, `liquidity-moves`, `pool-creations`,
-     `position-changes`, `fee-claims`, `reward-claims`, `signals`, and `rotation-runs`, the
-     runs of tranches whose quoted reserve turned over at least once.
+     `position-changes`, `position-fee-claims`, `protocol-fee-claims`, `reward-claims`,
+     `signals`, `rotation-runs`;
+   - **`tvl`**, the one measure of state: the collection of its hourly readings;
+   - **`network`** and **`ingestion`**, singletons: the state of the service.
 
-   The TVL is the one measure of state: `tvl`, the collection of its hourly readings, which
-   takes no cut — `?window=` returns the readings of the window, with the part held by the
-   pools discovered in it. `network` and `ingestion` are singletons, the state of the
-   service. A name says what is observed,
-   never an image or a category (`activity`, `stats`, `metrics`, `analytics`): an event
-   collection read from the chain takes the name of the on-chain event family it gathers
-   (`initialize_pool` → `pool-creations`); one drawn by `yog-analytic` names what it
-   observes (`rotation-runs`).
-2. **Three path forms**: `/api/<collection>`, every protocol;
-   `/api/<collection>/{id}`, one entity; `/api/<entities>/{id}/<collection>`, the
-   collection restricted to that entity (`/api/protocols/meteora_damm_v2/swaps`). An entity
-   is always in the path, never a filter parameter. A reserved word (rules 4 and 5) may end
-   any of them.
-3. **A collection returns its items**, with what it needs of `?window=`, `?sort=`, `?limit=`
-   and a cursor. A parameter may filter on an attribute of the items (`?severity=`), never
-   name an entity.
-4. **A measure is its collection followed by a cut**, a reserved word:
-   - `totals`, the whole window;
-   - `hourly`, `daily`, one row per bar, a day being the 24 hours ending at `asOf`;
-   - `by-token`, `by-pool`, one row per token or pool: a ranking, with `?sort=`, `?limit=`
-     and a cursor, as a collection.
+   A name says what is observed, never an image or a category (`activity`, `stats`,
+   `metrics`, `analytics`). An event collection read from the chain takes the name of the
+   on-chain event family it gathers (`initialize_pool` → `pool-creations`); one that
+   `yog-analytic` values or draws names what it observes: `liquidity-moves`, the liquidity
+   brought, added or removed, valued; `rotation-runs`, a pool's tranches whose quoted reserve
+   turned over at least once, no more than 30 min apart, with the tranches between them.
+2. **Three path forms**: `/api/<collection>`, every protocol; `/api/<collection>/{id}`, one
+   item; `/api/<entities>/{id}/<collection>`, the collection restricted to that entity
+   (`/api/protocols/meteora_damm_v2/swaps`). An entity is always in the path, never a filter
+   parameter. An identifier is a key of the data — a base58 key, a protocol name, a signal's
+   or an announcement's id — and never a reserved word (rules 4 and 5).
+3. **A collection returns its items**, cursor-paginated (`Page<T>`: `?limit=`, 50 by
+   default, 200 at most), with `?window=` when it is read over one and `?sort=` when it has
+   more than one order. A parameter may filter on an attribute of the items (`?severity=`),
+   never name an entity. Every item of a collection shared by several protocols carries its
+   protocol.
+4. **A measure is a collection followed by a cut**, a reserved word that ends the path:
+   - `totals`, the whole window: one row per protocol at the root, under an entity its own;
+   - `hourly`, `daily`: the same rows, one per bar, a day being the 24 hours ending at
+     `asOf`;
+   - `by-token`, `by-pool`: one row per token or pool in the path's scope, a ranking
+     paginated as a collection.
 
-   At the root `totals`, `hourly` and `daily` return one row per protocol; under a protocol,
-   its own, in the same shape. `by-token` and `by-pool` keep the path's scope. A reserved word is never an identifier: identifiers are base58 keys or protocol
-   names. A measure's response carries its window, the instant it reflects (`asOf`) and its
-   coverage (`coveredSince`).
-5. **`live` is the reserved word of the SSE routes**: `/api/live`,
-   `/api/protocols/{protocol}/live?topics=…`, one connection for every topic it names.
-   `topics` picks which messages come, each keeping its own shape: the one parameter that
-   selects what a response carries.
+   `tvl` takes no cut: its readings are its rows, `?window=` returns those of the window
+   with the part held by the pools discovered in it, unpaginated, the window bounding them.
+   A measure's response, `tvl`'s included, carries its window, the instant it reflects
+   (`asOf`) and its coverage (`coveredSince`).
+5. **`live` is the reserved word of the SSE routes**: `/api/live` for every protocol,
+   `/api/<entities>/{id}/live` for one entity, `?topics=` naming the event collections it
+   streams, one connection for them all. Each message keeps its own shape.
 6. **Every field of a response completes the name of its route.** The route reads as a
    sentence ("the swaps of the DAMM v2 protocol over 24 h, in totals") and each field is an
    attribute of it. A field that needs another name to describe itself belongs to another
@@ -184,11 +186,11 @@ at the end of this section.
    signal's tokens), nothing else: neither its state nor its measures. A field that exists in
    one protocol only goes in a block named after it.
 7. **A response does not mix what is read live and what `yog-analytic` computes.**
-   - Live: the entities and their current state (reserves, price, a pool's TVL), the events
-     as indexed, signals — written by the indexer and `yog-context`, fresh to the second.
-   - Computed: everything `yog-analytic` writes — every measure over a window, the TVL of a
-     protocol or a token and its history, the events it values (`liquidity-moves`) or draws
-     (`rotation-runs`) — fresh to a few minutes.
+   - Live: the entities and their current state (reserves, price, a pool's current TVL),
+     the events as indexed, the signals — written by the indexer, `yog-context` and
+     `yog-signals`, fresh to the second.
+   - Computed: everything `yog-analytic` writes — the measures, the `tvl` readings, the
+     events it values or draws — fresh to a few minutes.
    - Mixed, the slower makes the other unavailable, and a response can no longer state the
      age of what it holds.
    - The boundary is the nature of the data, not today's cost: a measure over a window is
@@ -203,9 +205,10 @@ at the end of this section.
     OpenAPI document drawn from the Rust types, from which the web's zod is generated
     ([The contract](#the-contract)).
 
-**Parameters.** `window=24h|7d|30d`, a closed list, 400 otherwise; `offset` for the previous
-window; `asOf` for the instant a response reflects. A parameter never changes the shape of a
-response. The protocol is written `meteora_damm_v2` everywhere (field, path); fields in
+**Parameters and fields.** `window=24h|7d|30d`, a closed list, 400 otherwise; `offset` for
+the previous window. A parameter never changes the shape of a response; `topics` (rule 5)
+chooses which messages come, not their shape. `asOf` is the field of the instant a response
+reflects. The protocol is written `meteora_damm_v2` everywhere (field, path); fields in
 camelCase.
 
 **Not yet following these rules**: `/api/protocols/activity` and its `/hourly` and `/daily`,

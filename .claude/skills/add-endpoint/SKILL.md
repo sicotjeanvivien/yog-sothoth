@@ -15,7 +15,8 @@ Scope: a route **reads data that exists**. A route that needs a new table starts
 Templates to copy, for the mechanics only (service, DTOs, handler): the token read path —
 `crates/api/src/application/services/token_service.rs`,
 `crates/api/src/http/handlers/token.rs`, and the matching DTOs under
-`crates/api/src/http/dto/`. Its path and names do not follow the rules: never copy them.
+`crates/api/src/http/dto/`. The path and names of its `/api/tokens/activity` do not follow
+the rules: never copy them.
 
 ## Step 0 — name the route, before any code
 
@@ -29,8 +30,8 @@ needs an answer the rules do not give is a question for the user, never a name m
 2. **For every protocol, or for one entity?** The form of rule 2. An entity is never a
    filter parameter.
 3. **The items, a measure, or the live stream?** The items: the collection itself
-   (rule 3). A measure: the collection and one cut (rule 4). The live stream: `live`
-   (rule 5).
+   (rule 3). A measure: the collection and one cut, or `tvl` and its readings (rule 4).
+   The live stream: `live` (rule 5).
 4. **Does every field complete the route's name** (rule 6)? Live and computed in one
    response (rule 7) means two routes.
 5. **Is an existing route already this one?** Then extend it; and if it is in *Not yet
@@ -41,8 +42,9 @@ reading another scope's route and filtering in the browser is the defect this st
 for: the page reads the route of its own scope.
 
 Confirm with the user as well (don't assume):
-- Whether the data is **cross-protocol** (read a VIEW: `swap_events`, `liquidity_events`, …)
-  or **protocol-specific** (read the per-protocol table directly).
+- Where the data is read: a measure or the `tvl` readings in `yog-analytic`'s tables
+  (rule 8); live data in a cross-protocol VIEW (`swap_events`, `liquidity_events`, …) or in
+  the per-protocol table.
 - Whether the query it needs **already exists** on a repository trait, or must be added.
 
 ## Step 1 — `core`: extend the repository trait (only if the query is new)
@@ -128,11 +130,11 @@ curl http://127.0.0.1:5000/api/<your-endpoint> | jq
 
 ## Renaming or reshaping a route
 
-Everything that names the old path changes in the same change: its web callers
-(`web/src/lib/api/server/`, `web/src/lib/api/browser/`), the handler tests that hard-code it
-(`crates/api/src/http/handlers/*_tests.rs`), the *Endpoints* table of `crates/api/README.md`,
-and its line in *Not yet following these rules* when it leaves it. The old path is removed
-when its last caller leaves it, in that same change.
+Every place that names the old path changes in the same change: `git grep -F '<old path>'`
+over the whole repository, web and docs included, and nothing it lists is left. Then
+regenerate the contract (`crates/api/openapi.json`, `web/src/lib/api/schema/`), and take the
+route out of *Not yet following these rules* when it leaves it. The old path is removed when
+its last caller leaves it, in that same change.
 
 ## Definition of done
 
