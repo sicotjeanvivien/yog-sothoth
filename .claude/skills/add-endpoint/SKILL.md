@@ -12,10 +12,10 @@ Scope: a route **reads data that exists**. A route that needs a new table starts
 `/add-migration`, then comes back here; a new protocol/product end-to-end is
 `/add-protocol`.
 
-Templates to copy: the token read path —
+Templates to copy, for the mechanics only (service, DTOs, handler): the token read path —
 `crates/api/src/application/services/token_service.rs`,
 `crates/api/src/http/handlers/token.rs`, and the matching DTOs under
-`crates/api/src/http/dto/`.
+`crates/api/src/http/dto/`. Its path and names do not follow the rules: never copy them.
 
 ## Step 0 — name the route, before any code
 
@@ -125,6 +125,14 @@ cargo test --workspace --all-features
 cargo run -p yog-api
 curl http://127.0.0.1:5000/api/<your-endpoint> | jq
 ```
+
+## Renaming or reshaping a route
+
+Everything that names the old path changes in the same change: its web callers
+(`web/src/lib/api/server/`, `web/src/lib/api/browser/`), the handler tests that hard-code it
+(`crates/api/src/http/handlers/*_tests.rs`), the *Endpoints* table of `crates/api/README.md`,
+and its line in *Not yet following these rules* when it leaves it. The old path is removed
+when its last caller leaves it, in that same change.
 
 ## Definition of done
 

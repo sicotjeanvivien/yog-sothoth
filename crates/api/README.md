@@ -120,8 +120,6 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/tokens/{mint}` | Token metadata + latest price (200 with `price: null` if no price yet) |
 | `GET` | `/api/announcements/active` | Operator announcements whose window is open — most severe first, non-paginated (hard cap); empty array is the nominal case |
 
-Public URLs stay protocol-agnostic (`/swap-events`, not `/damm-v2-swaps`).
-
 **The measures** (`/api/protocols/…` but the catalogue, `/api/tokens/activity`)
 read yog-analytic's tables over one span, built in `ActivityService`: the window
 ends at the close of the last frozen hour, `asOf`, the same for every route, and
@@ -152,25 +150,31 @@ at the end of this section.
    The TVL is the one measure of state: `tvl`, its hourly readings. `network` and
    `ingestion` are singletons, the state of the service. A name says what is observed,
    never an image or a category (`activity`, `stats`, `metrics`, `analytics`): an event
-   collection takes the name of the on-chain event family it gathers (`initialize_pool` →
-   `pool-creations`).
+   collection read from the chain takes the name of the on-chain event family it gathers
+   (`initialize_pool` → `pool-creations`); one drawn by `yog-analytic` names what it
+   observes (`rotation-runs`).
 2. **Three path forms**: `/api/<collection>`, every protocol;
    `/api/<collection>/{id}`, one entity; `/api/<entities>/{id}/<collection>`, the
    collection restricted to that entity (`/api/protocols/meteora_damm_v2/swaps`). An entity
    is always in the path, never a filter parameter. A reserved word (rules 4 and 5) may end
    any of them.
-3. **A collection returns its items**: `?window=`, `?sort=`, `?limit=` and a cursor.
+3. **A collection returns its items**, with what it needs of `?window=`, `?sort=`, `?limit=`
+   and a cursor. A parameter may filter on an attribute of the items (`?severity=`), never
+   name an entity.
 4. **A measure is its collection followed by a cut**, a reserved word:
    - `totals`, the whole window;
    - `hourly`, `daily`, one row per bar, a day being the 24 hours ending at `asOf`;
-   - `by-token`, `by-pool`, one row per token or pool.
+   - `by-token`, `by-pool`, one row per token or pool: a ranking, with `?sort=`, `?limit=`
+     and a cursor, as a collection.
 
-   At the root a measure returns one row per protocol; under a protocol, its own, in the same
-   shape. A reserved word is never an identifier: identifiers are base58 keys or protocol
+   At the root `totals`, `hourly` and `daily` return one row per protocol; under a protocol,
+   its own, in the same shape. `by-token` and `by-pool` keep the path's scope. A reserved word is never an identifier: identifiers are base58 keys or protocol
    names. A measure's response carries its window, the instant it reflects (`asOf`) and its
    coverage (`coveredSince`).
 5. **`live` is the reserved word of the SSE routes**: `/api/live`,
    `/api/protocols/{protocol}/live?topics=…`, one connection for every topic it names.
+   `topics` picks which messages come, each keeping its own shape: the one parameter that
+   selects what a response carries.
 6. **Every field of a response completes the name of its route.** The route reads as a
    sentence ("the swaps of the DAMM v2 protocol over 24 h, in totals") and each field is an
    attribute of it. A field that needs another name to describe itself belongs to another
@@ -178,10 +182,11 @@ at the end of this section.
    signal's tokens), nothing else: neither its state nor its measures. A field that exists in
    one protocol only goes in a block named after it.
 7. **A response does not mix what is read live and what `yog-analytic` computes.**
-   - Live: the entities and their current state (reserves, price, a pool's TVL), events,
-     signals — written by the indexer and `yog-context`, fresh to the second.
-   - Computed: every measure over a window — written by `yog-analytic`, fresh to a few
-     minutes.
+   - Live: the entities and their current state (reserves, price, a pool's TVL), the events
+     as indexed, signals — written by the indexer and `yog-context`, fresh to the second.
+   - Computed: everything `yog-analytic` writes — every measure over a window, the TVL of a
+     protocol or a token and its history, the events it values (`liquidity-moves`) or draws
+     (`rotation-runs`) — fresh to a few minutes.
    - Mixed, the slower makes the other unavailable, and a response can no longer state the
      age of what it holds.
    - The boundary is the nature of the data, not today's cost: a measure over a window is
@@ -203,7 +208,8 @@ camelCase.
 
 **Not yet following these rules**: `/api/protocols/activity` and its `/hourly` and `/daily`,
 `/api/protocols/tvl` and its `/hourly`, `/api/tokens/activity`, `/api/announcements/active`,
-`/api/signals/stream`, and the `pool` filter of `/api/signals`.
+`/api/signals/stream`, the `pool` filter of `/api/signals`, and
+`/api/protocols/{protocol}/liquidity-moves`, which has no `sort` and no cursor.
 
 **Delay.** Every route but the probes and the live stream answers in under
 **2 s** in production, network included, at the heaviest its parameters allow,

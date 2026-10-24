@@ -300,7 +300,7 @@ The two-level enums (`DomainEvent`, `PoolAccountProperties`) and the switch of `
 
 ## Adding a new API endpoint
 
-For endpoints that read existing data (no new tables, no new domain types), the workflow is contained:
+For a route that reads existing data (no new tables), the workflow is contained. A route's path comes first, from [the rules](./api/README.md#what-a-route-may-return):
 
 ### 1. Extend the relevant repository trait in `core`
 
