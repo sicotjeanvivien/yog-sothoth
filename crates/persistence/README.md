@@ -609,7 +609,7 @@ alone, nor at the pool's mid price. `analytic_protocol_liquidity_hourly` sums th
 protocol and hour, one row per hour written, zero included, and none before the first
 hour whose tranches were all valued with their moves: its first row is when the
 liquidity started being measured, which the reads take as its coverage. The moves are
-kept 30 days, as the raw ones; `tests/analytic_liquidity.rs` holds the price rule and
+kept 31 days, a day past the longest window: a chunk is dropped whole; `tests/analytic_liquidity.rs` holds the price rule and
 the start.
 031 recreates that aggregate with the buys' B fees. 032, outside a transaction,
 materialises it over every raw swap: its policy refreshes 6 days only, and older
