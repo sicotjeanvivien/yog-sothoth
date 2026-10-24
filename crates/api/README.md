@@ -161,7 +161,7 @@ at the end of this section.
    (`/api/protocols/meteora_damm_v2/swaps`). An entity is always in the path, never a filter
    parameter. An identifier is a key of the data — a base58 key, a protocol name, a signal's
    or an announcement's id — and never a reserved word (rules 4 and 5).
-3. **A collection returns its items**, cursor-paginated (`Page<T>`: `?limit=`, 50 by
+3. **A collection returns its items**, cursor-paginated but for `tvl` (rule 4) (`Page<T>`: `?limit=`, 50 by
    default, 200 at most), with `?window=` when it is read over one and `?sort=` when it has
    more than one order. A collection that is not paginated yet is listed below. A parameter
    may filter on an attribute of the items (`?severity=`),
@@ -192,9 +192,9 @@ at the end of this section.
    signal's tokens), nothing else: neither its state nor its measures. A field that exists in
    one protocol only goes in a block named after it.
 7. **A response does not mix what is read live and what `yog-analytic` computes.**
-   - Live: the entities and their current state (reserves, price, a pool's current TVL),
-     the events as indexed, the signals — written by the indexer, `yog-context` and
-     `yog-signals`, fresh to the second.
+   - Live: what is read as it was written — the entities and their current state
+     (reserves, price, a pool's current TVL) and the events as indexed, fresh to the second;
+     the signals, by `yog-signals`, once their detector has run.
    - Computed: everything `yog-analytic` writes — the measures, the `tvl` readings, the
      events it values or draws — fresh to a few minutes.
    - Mixed, the slower makes the other unavailable, and a response can no longer state the
@@ -219,8 +219,9 @@ camelCase.
 
 **Not yet following these rules**: `/api/protocols/activity` and its `/hourly` and `/daily`,
 `/api/protocols/tvl` and its `/hourly`, `/api/tokens/activity`, `/api/announcements/active`,
-`/api/signals/stream`, the `pool` filter of `/api/signals`, and two collections without a
-cursor, `/api/protocols` and `/api/protocols/{protocol}/liquidity-moves`.
+`/api/signals/stream`, the `pool` filter of `/api/signals`, `/api/protocols` (no cursor),
+and `/api/protocols/{protocol}/liquidity-moves` (no cursor, and a `coveredSince` that is the
+swaps', not the liquidity's).
 
 **Delay.** Every route but the probes and the live stream answers in under
 **2 s** in production, network included, at the heaviest its parameters allow,

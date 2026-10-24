@@ -132,8 +132,10 @@ curl http://127.0.0.1:5000/api/<your-endpoint> | jq
 
 Every place that names the old path changes in the same change: `git grep -F` its last
 fixed segment (`/liquidity-moves`, not the whole path: the web builds paths in template
-literals) over the whole repository, web and docs included. Every hit changes but the dated
-entries of `web/src/components/marketing/changelog/releases.ts`, which are history. Then
+literals) over the whole repository, web and docs included. Every hit that names the old
+route changes — not another route sharing the segment (`/activity` also hits
+`/api/tokens/activity`), nor the dated entries of
+`web/src/components/marketing/changelog/releases.ts`, which are history. Then
 regenerate the contract (`crates/api/openapi.json`, `web/src/lib/api/schema/`), and take the
 route out of *Not yet following these rules* when it leaves it. The old path is removed when
 its last caller leaves it, in that same change.
