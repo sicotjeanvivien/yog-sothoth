@@ -2,7 +2,8 @@
 -- it draws, written by yog-analytic. Apart from the swaps' facts: the published volume does
 -- not change. No backfill: measured from the first tranche after this migration.
 
--- NULL when a mean reserve is zero, and on the tranches written before.
+-- NULL without a mean reserve to divide by or with a mint unresolved, and on the tranches
+-- written before.
 ALTER TABLE analytic_pool_5min ADD COLUMN rotation NUMERIC;
 -- The first tranche with its rotation is when the bursts started being measured.
 ALTER TABLE analytic_tranches ADD COLUMN rotations BOOLEAN NOT NULL DEFAULT false;
@@ -21,6 +22,7 @@ CREATE TABLE analytic_bursts (
     PRIMARY KEY (pool_address, started_at)
 );
 CREATE INDEX analytic_bursts_by_protocol ON analytic_bursts (protocol, started_at DESC);
+CREATE INDEX analytic_bursts_unsettled ON analytic_bursts (protocol) WHERE NOT settled;
 
 CREATE TABLE analytic_burst_hours (
     pool_address TEXT        NOT NULL,

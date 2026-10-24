@@ -19,13 +19,24 @@ marked AS (
      ) t
     WINDOW w AS (PARTITION BY r.pool_address ORDER BY t.bucket)
 ),
-islands AS (
+drawn AS (
     SELECT pool_address, MIN(bucket) AS started_at, MAX(bucket) AS last
       FROM (SELECT pool_address, bucket,
                    SUM(opens) OVER (PARTITION BY pool_address ORDER BY bucket) AS island
               FROM marked) m
      GROUP BY pool_address, island
     HAVING MAX(bucket) >= $2::TIMESTAMPTZ - GREATEST($5::INTERVAL, INTERVAL '1 hour')
+),
+-- ⚠️ A settled burst is known by its end: the retention can drop its first tranches, and its
+-- start read again would write it a second time.
+islands AS (
+    SELECT i.*
+      FROM drawn i
+     WHERE NOT EXISTS (
+         SELECT 1 FROM analytic_bursts b
+          WHERE b.pool_address = i.pool_address AND b.ended_at = i.last + $6::INTERVAL
+            AND b.settled
+     )
 ),
 -- ⚠️ As the hourly facts: a pool-hour counts only valued whole, or the part outside
 -- the bursts could fall below zero.
@@ -71,11 +82,8 @@ written AS (
                     AS hours_whole
      ) s
      GROUP BY i.pool_address, i.started_at, i.last, s.extinct, s.hours_whole
-    ON CONFLICT (pool_address, started_at) DO NOTHING
 )
 INSERT INTO analytic_burst_hours (pool_address, started_at, bucket, protocol, volume_usd)
 SELECT pool_address, started_at, time_bucket('1 hour', bucket), $1, SUM(volume)
   FROM tranches
  GROUP BY pool_address, started_at, time_bucket('1 hour', bucket)
--- A settled burst kept its hours; the others lost theirs with it.
-ON CONFLICT (pool_address, started_at, bucket) DO NOTHING

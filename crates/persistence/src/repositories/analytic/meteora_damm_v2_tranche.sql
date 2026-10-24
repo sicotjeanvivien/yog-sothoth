@@ -103,7 +103,9 @@ SELECT pool_address, $1, $2, swap_count, valued,
   FROM (
     SELECT t.pool_address, t.swap_count, v.valued,
            -- ⚠️ Both sides quoted, or neither: the smaller, so the thinner side does not mark.
-           CASE WHEN t.mint_a = ANY($4) AND NOT t.mint_b = ANY($4) THEN r.rotation_a
+           -- A mint not resolved yet leaves the quoted side unknown: no rotation.
+           CASE WHEN t.mint_a IS NULL OR t.mint_b IS NULL THEN NULL
+                WHEN t.mint_a = ANY($4) AND NOT t.mint_b = ANY($4) THEN r.rotation_a
                 WHEN t.mint_b = ANY($4) AND NOT t.mint_a = ANY($4) THEN r.rotation_b
                 ELSE LEAST(r.rotation_a, r.rotation_b) END AS rotation,
            CASE WHEN v.valued THEN w.a_to_b END AS volume_in_a_usd,

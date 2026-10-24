@@ -22,7 +22,7 @@ pub(super) async fn value_tranche(
         tranche,
         Protocol::MeteoraDammV2.as_str(),
         width,
-        &QUOTED_MINTS[..] as &[&str],
+        &QUOTED_MINTS.map(|mint| mint.to_string())[..],
     )
     .execute(&mut **tx)
     .await

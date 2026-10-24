@@ -162,6 +162,24 @@ async fn a_tranche_turns_its_quoted_side_over(pool: PgPool) {
     assert_eq!(rotation(&pool, &address, tranche).await, Some(dec("2")));
 }
 
+/// Mutation: a pool whose mints are not resolved yet taken as a pair without a quoted side —
+/// its rotation, written once, would be the smaller of its two.
+#[sqlx::test]
+async fn a_pool_with_its_mints_unresolved_has_no_rotation(pool: PgPool) {
+    let tranche = settled_hour() + Duration::minutes(10);
+    let address = pk(1).to_string();
+    sqlx::query("INSERT INTO pools (pool_address, protocol) VALUES ($1, 'meteora_damm_v2')")
+        .bind(&address)
+        .execute(&pool)
+        .await
+        .unwrap();
+    insert_swap(&pool, &address, "s1", (2_000, 300), (100, 150), tranche).await;
+
+    value(&pool, tranche, tranche).await;
+
+    assert_eq!(rotation(&pool, &address, tranche).await, None);
+}
+
 /// Mutation: the larger rotation of a pair without a quoted side — the thin side would mark it.
 #[sqlx::test]
 async fn a_pair_without_a_quoted_side_takes_its_smaller_rotation(pool: PgPool) {
@@ -248,8 +266,8 @@ async fn a_burst_settles_once_its_last_hour_is_whole_and_counts_it_only_valued_w
     );
 }
 
-/// Mutation: the hours inserted without `ON CONFLICT` — every cycle after a burst settles
-/// would fail on them.
+/// Mutation: a settled burst drawn again — its row would be inserted a second time and fail
+/// the cycle.
 #[sqlx::test]
 async fn a_settled_bursts_hours_sum_its_volume_once(pool: PgPool) {
     let base = settled_hour();
@@ -268,6 +286,30 @@ async fn a_settled_bursts_hours_sum_its_volume_once(pool: PgPool) {
             .await
             .unwrap();
     assert_eq!(hours, vec![(base, dec("20")), (at(base, 60), dec("10"))],);
+    assert_eq!(
+        bursts(&pool).await,
+        vec![(at(base, 45), at(base, 70), dec("30"), true, true)],
+    );
+}
+
+/// Mutation: a settled burst known by its start — once the retention drops its first tranche,
+/// it would be written a second time from the next one.
+#[sqlx::test]
+async fn a_settled_burst_is_not_drawn_again_once_its_first_tranches_are_dropped(pool: PgPool) {
+    let base = settled_hour();
+    let address = pk(1).to_string();
+    for minutes in [45, 55, 65] {
+        insert_tranche(&pool, &address, at(base, minutes), "2", Some("10")).await;
+    }
+    value(&pool, at(base, 45), at(base, 115)).await;
+
+    sqlx::query("DELETE FROM analytic_pool_5min WHERE bucket = $1")
+        .bind(at(base, 45))
+        .execute(&pool)
+        .await
+        .unwrap();
+    value(&pool, at(base, 120), at(base, 120)).await;
+
     assert_eq!(
         bursts(&pool).await,
         vec![(at(base, 45), at(base, 70), dec("30"), true, true)],

@@ -20,7 +20,8 @@ core/src/
 │   ├── pool_current_state/(CQRS projection of the latest per-pool state)
 │   ├── analytic/          (CycleWrite — what one cycle of yog-analytic writes,
 │   │                       and which hours it freezes; AnalyticRepository;
-│   │                       Window and Span — what a measure is read over)
+│   │                       Window and Span — what a measure is read over;
+│   │                       burst.rs — the burst's two thresholds and quoted mints)
 │   ├── protocol_activity/ (ProtocolActivity, its bars and TVL — ProtocolActivityLookup)
 │   ├── token_activity/    (TokenActivity — TokenActivityFeed, by volume)
 │   ├── signals/           (Signal, Severity, SignalDetector, EvalContext,
