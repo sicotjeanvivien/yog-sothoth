@@ -20,7 +20,9 @@ use crate::http::{
     cursor::encode_cursor_opt,
     dto::{
         PageResponse, SignalResponse,
-        request::{EntitySignalsQuery, ListSignalsRequest, SignalsQuery, parse_protocol},
+        request::{
+            EntitySignalsQuery, ListSignalsRequest, SignalsQuery, parse_pool, parse_protocol,
+        },
     },
     error::ApiError,
 };
@@ -77,8 +79,9 @@ pub(crate) async fn list_pool_signals(
     Path(pool): Path<String>,
     Query(query): Query<EntitySignalsQuery>,
 ) -> Result<Json<PageResponse<SignalResponse>>, ApiError> {
-    let pool = super::known_pool(&state, &pool).await?;
-    let request = ListSignalsRequest::parse_for_entity(query, None, Some(pool.pool_address))?;
+    let address = parse_pool(&pool)?;
+    let request = ListSignalsRequest::parse_for_entity(query, None, Some(address))?;
+    super::known_pool(&state, &pool).await?;
     signal_page(&state, request).await
 }
 

@@ -10,10 +10,10 @@ use solana_pubkey::Pubkey;
 use yog_core::{
     Page, RepositoryResult,
     domain::{
-        ByProtocol, LiquidityMove, LiquidityMoveCursor, LiquidityMoveMeasures, LiquidityMoveOrder,
-        LiquidityMoveSums, Pool, PoolCatalog, PoolCreationCount, PoolCreationMeasures,
-        PoolDiscoveries, PoolDiscoveryMeasures, PoolSwapBar, Protocol, ProtocolActivityLookup,
-        ProtocolBar, ProtocolSwapTotals, ProtocolTvl, Span, SwapMeasures, SwapSums, TvlReadings,
+        ByProtocol, LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup, LiquidityMoveOrder,
+        LiquidityMoveSums, Pool, PoolCatalog, PoolCreationCount, PoolCreationLookup,
+        PoolDiscoveries, PoolDiscoveryLookup, PoolSwapBar, Protocol, ProtocolActivityLookup,
+        ProtocolBar, ProtocolSwapTotals, ProtocolTvl, Span, SwapLookup, SwapSums, TvlLookup,
         Window,
     },
 };
@@ -24,12 +24,19 @@ use super::Measured;
 pub(crate) struct MeasureLenses {
     /// Only for the frozen hours every span is built from.
     pub(crate) hours: Arc<dyn ProtocolActivityLookup>,
-    pub(crate) swaps: Arc<dyn SwapMeasures>,
-    pub(crate) pool_creations: Arc<dyn PoolCreationMeasures>,
-    pub(crate) liquidity_moves: Arc<dyn LiquidityMoveMeasures>,
-    pub(crate) tvl: Arc<dyn TvlReadings>,
-    pub(crate) pool_discoveries: Arc<dyn PoolDiscoveryMeasures>,
+    pub(crate) swaps: Arc<dyn SwapLookup>,
+    pub(crate) pool_creations: Arc<dyn PoolCreationLookup>,
+    pub(crate) liquidity_moves: Arc<dyn LiquidityMoveLookup>,
+    pub(crate) tvl: Arc<dyn TvlLookup>,
+    pub(crate) pool_discoveries: Arc<dyn PoolDiscoveryLookup>,
     pub(crate) pools: Arc<dyn PoolCatalog>,
+}
+
+/// A page of a pool's moves, or the refusal of a cursor taken before the last freeze.
+#[derive(Debug)]
+pub(crate) enum PoolMovesRead {
+    Page(Measured<Page<LiquidityMove>>),
+    CursorExpired,
 }
 
 /// A bar series is hourly over a day, by 24 hours beyond.
@@ -229,8 +236,13 @@ impl MeasureService {
         order: LiquidityMoveOrder,
         cursor: Option<LiquidityMoveCursor>,
         limit: i64,
-    ) -> RepositoryResult<Measured<Page<LiquidityMove>>> {
+    ) -> RepositoryResult<PoolMovesRead> {
         let span = self.liquidity_span(window, pool.protocol).await?;
+        if let (Some(span), Some(cursor)) = (&span, &cursor)
+            && cursor.as_of != span.as_of
+        {
+            return Ok(PoolMovesRead::CursorExpired);
+        }
         let items = match &span {
             Some(span) if span.is_covered() => {
                 self.lenses
@@ -240,7 +252,7 @@ impl MeasureService {
             }
             _ => Page::empty(),
         };
-        Ok(Measured { span, items })
+        Ok(PoolMovesRead::Page(Measured { span, items }))
     }
 
     /// Each protocol's last TVL reading by the last frozen hour; its span is a day, of which

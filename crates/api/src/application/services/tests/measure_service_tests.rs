@@ -4,7 +4,10 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, Duration, TimeZone, Utc};
-use yog_core::domain::{FrozenHours, LiquidityMoveOrder, Protocol, Window};
+use rust_decimal::Decimal;
+use yog_core::domain::{FrozenHours, LiquidityMoveCursor, LiquidityMoveOrder, Protocol, Window};
+
+use super::super::PoolMovesRead;
 
 use crate::testing::{MockMeasureRepo, make_pool, measure_service, pk};
 
@@ -125,4 +128,49 @@ async fn the_tvl_reads_the_last_frozen_hour_and_the_series_from_the_windows_star
             None
         )
     );
+}
+
+/// Mutation: the cursor's instant not compared — a page read after a freeze follows one read
+/// before it, over another window.
+#[tokio::test]
+async fn a_cursor_taken_before_the_last_freeze_is_refused() {
+    let pool = make_pool(pk(1), pk(2), pk(3));
+    let repo = Arc::new(MockMeasureRepo {
+        since: Some(at(13, 13)),
+        ..MockMeasureRepo::default()
+    });
+    let svc = measure_service(Some(hours()), repo.clone(), vec![]);
+    let cursor = |as_of| LiquidityMoveCursor {
+        as_of,
+        order: LiquidityMoveOrder::Amount,
+        amount_usd: Decimal::ONE,
+        at: at(20, 12),
+        signature: "sig".to_owned(),
+        event_index: 0,
+    };
+
+    let stale = svc
+        .pool_liquidity_moves(
+            Window::Day,
+            &pool,
+            LiquidityMoveOrder::Amount,
+            Some(cursor(at(20, 12))),
+            5,
+        )
+        .await
+        .unwrap();
+    let current = svc
+        .pool_liquidity_moves(
+            Window::Day,
+            &pool,
+            LiquidityMoveOrder::Amount,
+            Some(cursor(at(20, 13))),
+            5,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(stale, PoolMovesRead::CursorExpired));
+    assert!(matches!(current, PoolMovesRead::Page(_)));
+    assert_eq!(reads(&repo), vec!["pool_moves"]);
 }

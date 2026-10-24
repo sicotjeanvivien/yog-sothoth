@@ -6,7 +6,7 @@ use axum::{
     extract::{Path, Query, State},
 };
 
-use crate::application::Cut;
+use crate::application::{Cut, PoolMovesRead};
 use crate::http::{
     AppState,
     dto::{
@@ -120,9 +120,9 @@ pub(crate) async fn list_pool_liquidity_moves(
     Path(pool): Path<String>,
     Query(query): Query<PoolLiquidityMovesQuery>,
 ) -> Result<Json<WindowedPageResponse<LiquidityMoveResponse>>, ApiError> {
-    let pool = super::known_pool(&state, &pool).await?;
     let request = ListPoolLiquidityMovesRequest::parse(query)?;
-    let measured = state
+    let pool = super::known_pool(&state, &pool).await?;
+    match state
         .measure_service
         .pool_liquidity_moves(
             request.window,
@@ -131,6 +131,14 @@ pub(crate) async fn list_pool_liquidity_moves(
             request.cursor,
             request.limit,
         )
-        .await?;
-    Ok(Json(WindowedPageResponse::new(request.window, measured)?))
+        .await?
+    {
+        PoolMovesRead::Page(measured) => {
+            Ok(Json(WindowedPageResponse::new(request.window, measured)?))
+        }
+        PoolMovesRead::CursorExpired => Err(ApiError::BadRequest(
+            "`cursor` belongs to a list read before the last freeze: start again without it"
+                .to_string(),
+        )),
+    }
 }

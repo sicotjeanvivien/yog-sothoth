@@ -17,14 +17,14 @@ use yog_core::{
     domain::{
         Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity, ByProtocol,
         DiscoveredTvl, EventFreshnessRepository, FrozenHours, LatestProtocolTvl, LiquidityMove,
-        LiquidityMoveCursor, LiquidityMoveMeasures, LiquidityMoveOrder, LiquidityMoveSums,
+        LiquidityMoveCursor, LiquidityMoveLookup, LiquidityMoveOrder, LiquidityMoveSums,
         NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog, PoolCreationCount,
-        PoolCreationMeasures, PoolDiscoveries, PoolDiscoveryMeasures, PoolSwapBar, Protocol,
+        PoolCreationLookup, PoolDiscoveries, PoolDiscoveryLookup, PoolSwapBar, Protocol,
         ProtocolActivity, ProtocolActivityBar, ProtocolActivityLookup, ProtocolBar, ProtocolPools,
         ProtocolSwapTotals, ProtocolTvl, Severity, Signal, SignalCursor, SignalFeed, SignalFilter,
-        SignalRecord, Span, SwapMeasures, SwapSums, TokenActivityCursor, TokenActivityFeed,
+        SignalRecord, Span, SwapLookup, SwapSums, TokenActivityCursor, TokenActivityFeed,
         TokenActivityPage, TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceLookup,
-        TvlReadings, Window,
+        TvlLookup, Window,
     },
 };
 
@@ -643,7 +643,7 @@ impl MockMeasureRepo {
 }
 
 #[async_trait]
-impl SwapMeasures for MockMeasureRepo {
+impl SwapLookup for MockMeasureRepo {
     async fn protocol_totals(
         &self,
         span: &Span,
@@ -684,7 +684,7 @@ impl SwapMeasures for MockMeasureRepo {
 }
 
 #[async_trait]
-impl PoolCreationMeasures for MockMeasureRepo {
+impl PoolCreationLookup for MockMeasureRepo {
     async fn totals(
         &self,
         span: &Span,
@@ -712,7 +712,7 @@ impl PoolCreationMeasures for MockMeasureRepo {
 }
 
 #[async_trait]
-impl LiquidityMoveMeasures for MockMeasureRepo {
+impl LiquidityMoveLookup for MockMeasureRepo {
     async fn measured_since(&self, _: Protocol) -> RepositoryResult<Option<DateTime<Utc>>> {
         Ok(self.since)
     }
@@ -757,7 +757,7 @@ impl LiquidityMoveMeasures for MockMeasureRepo {
 }
 
 #[async_trait]
-impl TvlReadings for MockMeasureRepo {
+impl TvlLookup for MockMeasureRepo {
     async fn latest(
         &self,
         last: DateTime<Utc>,
@@ -781,7 +781,7 @@ impl TvlReadings for MockMeasureRepo {
 }
 
 #[async_trait]
-impl PoolDiscoveryMeasures for MockMeasureRepo {
+impl PoolDiscoveryLookup for MockMeasureRepo {
     async fn totals(
         &self,
         last: DateTime<Utc>,

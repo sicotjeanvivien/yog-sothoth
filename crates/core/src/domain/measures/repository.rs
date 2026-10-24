@@ -12,7 +12,7 @@ use crate::{Page, RepositoryResult};
 /// The swaps' measures. `protocol` narrows a read to one protocol, `None` reads them all;
 /// none counts an hour of `span` before its `covered_since`.
 #[async_trait]
-pub trait SwapMeasures: Send + Sync {
+pub trait SwapLookup: Send + Sync {
     /// One row per protocol with facts in `span`; its pools are those written for `window` at
     /// the span's last hour.
     async fn protocol_totals(
@@ -45,9 +45,9 @@ pub trait SwapMeasures: Send + Sync {
     async fn pool_daily(&self, span: &Span, pool: Pubkey) -> RepositoryResult<Vec<PoolSwapBar>>;
 }
 
-/// The pools created, by protocol, under the same span rules as [`SwapMeasures`].
+/// The pools created, by protocol, under the same span rules as [`SwapLookup`].
 #[async_trait]
-pub trait PoolCreationMeasures: Send + Sync {
+pub trait PoolCreationLookup: Send + Sync {
     async fn totals(
         &self,
         span: &Span,
@@ -70,7 +70,7 @@ pub trait PoolCreationMeasures: Send + Sync {
 /// The valued liquidity moves. ⚠️ Measured from a later hour than the swaps: every read
 /// takes its span from [`Self::measured_since`], not from the facts.
 #[async_trait]
-pub trait LiquidityMoveMeasures: Send + Sync {
+pub trait LiquidityMoveLookup: Send + Sync {
     /// The first hour the protocol's liquidity was measured; `None` before it was.
     async fn measured_since(&self, protocol: Protocol) -> RepositoryResult<Option<DateTime<Utc>>>;
 
@@ -105,7 +105,7 @@ pub trait LiquidityMoveMeasures: Send + Sync {
 
 /// The TVL, a reading at an instant: each protocol's reading of an hour, never a sum.
 #[async_trait]
-pub trait TvlReadings: Send + Sync {
+pub trait TvlLookup: Send + Sync {
     /// Each protocol's last reading at or before the hour `last`.
     async fn latest(
         &self,
@@ -124,7 +124,7 @@ pub trait TvlReadings: Send + Sync {
 
 /// The pools discovered in a window, read with the TVL reading they were measured at.
 #[async_trait]
-pub trait PoolDiscoveryMeasures: Send + Sync {
+pub trait PoolDiscoveryLookup: Send + Sync {
     /// Each protocol's discoveries for `window` at its last reading at or before the hour `last`.
     async fn totals(
         &self,

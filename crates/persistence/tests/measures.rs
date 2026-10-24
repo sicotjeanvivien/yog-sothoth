@@ -7,8 +7,8 @@ use sqlx::PgPool;
 use yog_core::{
     Cursor, PageDirection,
     domain::{
-        LiquidityMoveMeasures, LiquidityMoveOrder, PoolCreationMeasures, PoolDiscoveryMeasures,
-        Protocol, SignalFeed, SignalFilter, Span, SwapMeasures, TvlReadings, Window,
+        LiquidityMoveLookup, LiquidityMoveOrder, PoolCreationLookup, PoolDiscoveryLookup, Protocol,
+        SignalFeed, SignalFilter, Span, SwapLookup, TvlLookup, Window,
     },
 };
 use yog_persistence::{PgMeasureRepository, PgSignalRepository};
@@ -170,13 +170,13 @@ async fn a_protocols_creations_count_only_it(pool: PgPool) {
     let repository = repository(&pool).await;
     let day = span(24);
 
-    let totals = PoolCreationMeasures::totals(&repository, &day, Some(Protocol::MeteoraDammV2))
+    let totals = PoolCreationLookup::totals(&repository, &day, Some(Protocol::MeteoraDammV2))
         .await
         .unwrap();
-    let hourly = PoolCreationMeasures::hourly(&repository, &day, Some(Protocol::MeteoraDammV2))
+    let hourly = PoolCreationLookup::hourly(&repository, &day, Some(Protocol::MeteoraDammV2))
         .await
         .unwrap();
-    let all = PoolCreationMeasures::totals(&repository, &day, None)
+    let all = PoolCreationLookup::totals(&repository, &day, None)
         .await
         .unwrap();
 
@@ -219,11 +219,11 @@ async fn a_protocols_liquidity_starts_and_sums_on_its_own(pool: PgPool) {
         ..span(10)
     };
 
-    let totals = LiquidityMoveMeasures::totals(&repository, &covered, Protocol::MeteoraDammV2)
+    let totals = LiquidityMoveLookup::totals(&repository, &covered, Protocol::MeteoraDammV2)
         .await
         .unwrap()
         .unwrap();
-    let hourly = LiquidityMoveMeasures::hourly(&repository, &covered, Protocol::MeteoraDammV2)
+    let hourly = LiquidityMoveLookup::hourly(&repository, &covered, Protocol::MeteoraDammV2)
         .await
         .unwrap();
 
@@ -322,7 +322,7 @@ async fn the_tvl_is_the_last_reading_at_or_before_the_hour_with_its_instant(pool
         .latest(last, Some(Protocol::MeteoraDammV2))
         .await
         .unwrap();
-    let hourly = TvlReadings::hourly(
+    let hourly = TvlLookup::hourly(
         &repository,
         last - Duration::hours(3),
         last,
@@ -360,14 +360,14 @@ async fn the_discoveries_are_those_of_the_window_at_the_last_reading(pool: PgPoo
     }
     let repository = repository(&pool).await;
 
-    let found = PoolDiscoveryMeasures::totals(&repository, last, Window::Day, None)
+    let found = PoolDiscoveryLookup::totals(&repository, last, Window::Day, None)
         .await
         .unwrap();
 
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].pools, 3);
     assert_eq!(found[0].at, last);
-    let week = PoolDiscoveryMeasures::totals(&repository, last, Window::Week, None)
+    let week = PoolDiscoveryLookup::totals(&repository, last, Window::Week, None)
         .await
         .unwrap();
     assert_eq!(week[0].pools, 40);
@@ -408,4 +408,56 @@ async fn a_protocols_signals_are_its_own(pool: PgPool) {
 
     assert_eq!(page.items.len(), 1);
     assert_eq!(page.items[0].signal.protocol, Protocol::MeteoraDammV2);
+}
+
+/// Mutation: the amount compared exactly, not rounded as the cursor holds it — a `Decimal`
+/// keeps 28 digits, and the move past its rounding is repeated or skipped.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_page_follows_a_move_whose_amount_has_more_digits_than_a_cursor(pool: PgPool) {
+    let mine = pk(1).to_string();
+    for (signature, minutes, usd) in [
+        ("long", 30, "2.0000000000000000000000000000000000001"),
+        ("round", 20, "2"),
+        ("small", 10, "1"),
+    ] {
+        sqlx::query(
+            "INSERT INTO analytic_liquidity_moves
+               (signature, event_index, timestamp, bucket, pool_address, protocol, owner, kind,
+                amount_usd)
+             VALUES ($1, 0, $2, time_bucket('5 minutes', $2), $3, 'meteora_damm_v2', $4, 'add',
+                     $5::NUMERIC)",
+        )
+        .bind(signature)
+        .bind(as_of() - Duration::minutes(minutes))
+        .bind(&mine)
+        .bind(pk(9).to_string())
+        .bind(usd)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let repository = repository(&pool).await;
+
+    let mut seen = Vec::new();
+    let mut cursor = None;
+    loop {
+        let page = repository
+            .pool_moves(
+                &span(24),
+                pk(1),
+                LiquidityMoveOrder::Amount,
+                cursor.take(),
+                1,
+            )
+            .await
+            .unwrap();
+        seen.extend(page.items.iter().map(|m| m.signature.clone()));
+        match page.next_cursor {
+            Some(Cursor::LiquidityMove(next)) => cursor = Some(*next),
+            Some(other) => panic!("{other:?}"),
+            None => break,
+        }
+    }
+
+    assert_eq!(seen, ["round", "long", "small"]);
 }

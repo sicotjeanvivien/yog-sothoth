@@ -14,10 +14,10 @@ use sqlx::PgPool;
 use yog_core::{
     Cursor, Page, RepositoryResult,
     domain::{
-        ByProtocol, LiquidityMove, LiquidityMoveCursor, LiquidityMoveMeasures, LiquidityMoveOrder,
-        LiquidityMoveSums, PoolCreationCount, PoolCreationMeasures, PoolDiscoveries,
-        PoolDiscoveryMeasures, PoolSwapBar, Protocol, ProtocolBar, ProtocolSwapTotals, ProtocolTvl,
-        Span, SwapMeasures, SwapSums, TvlReadings, Window,
+        ByProtocol, LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup, LiquidityMoveOrder,
+        LiquidityMoveSums, PoolCreationCount, PoolCreationLookup, PoolDiscoveries,
+        PoolDiscoveryLookup, PoolSwapBar, Protocol, ProtocolBar, ProtocolSwapTotals, ProtocolTvl,
+        Span, SwapLookup, SwapSums, TvlLookup, Window,
     },
 };
 
@@ -41,7 +41,7 @@ fn protocol_filter(protocol: Option<Protocol>) -> Option<&'static str> {
 }
 
 #[async_trait]
-impl SwapMeasures for PgMeasureRepository {
+impl SwapLookup for PgMeasureRepository {
     async fn protocol_totals(
         &self,
         span: &Span,
@@ -238,7 +238,7 @@ impl SwapMeasures for PgMeasureRepository {
 }
 
 #[async_trait]
-impl PoolCreationMeasures for PgMeasureRepository {
+impl PoolCreationLookup for PgMeasureRepository {
     async fn totals(
         &self,
         span: &Span,
@@ -328,7 +328,7 @@ impl PoolCreationMeasures for PgMeasureRepository {
 }
 
 #[async_trait]
-impl LiquidityMoveMeasures for PgMeasureRepository {
+impl LiquidityMoveLookup for PgMeasureRepository {
     async fn measured_since(&self, protocol: Protocol) -> RepositoryResult<Option<DateTime<Utc>>> {
         let row = sqlx::query!(
             r#"
@@ -462,7 +462,7 @@ impl LiquidityMoveMeasures for PgMeasureRepository {
                 SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index,
                        m.pool_address, ta.symbol AS "token_a_symbol?",
                        tb.symbol AS "token_b_symbol?", m.owner, m.kind,
-                       m.amount_usd AS "amount_usd!"
+                       ROUND(m.amount_usd, 6) AS "amount_usd!"
                   FROM analytic_liquidity_moves m
                   LEFT JOIN pools p ON p.pool_address = m.pool_address
                   LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
@@ -470,11 +470,13 @@ impl LiquidityMoveMeasures for PgMeasureRepository {
                  WHERE m.pool_address = $3
                    AND m.timestamp >= $1 AND m.timestamp < $2
                    AND m.amount_usd IS NOT NULL
+                   -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits, the column more.
                    AND ($4::NUMERIC IS NULL
-                        OR m.amount_usd < $4
-                        OR (m.amount_usd = $4 AND (m.timestamp < $5
+                        OR ROUND(m.amount_usd, 6) < $4
+                        OR (ROUND(m.amount_usd, 6) = $4 AND (m.timestamp < $5
                             OR (m.timestamp = $5 AND (m.signature, m.event_index) > ($6, $7)))))
-                 ORDER BY m.amount_usd DESC, m.timestamp DESC, m.signature, m.event_index
+                 ORDER BY ROUND(m.amount_usd, 6) DESC, m.timestamp DESC, m.signature,
+                          m.event_index
                  LIMIT $8
                 "#,
                 span.from,
@@ -495,7 +497,7 @@ impl LiquidityMoveMeasures for PgMeasureRepository {
                 SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index,
                        m.pool_address, ta.symbol AS "token_a_symbol?",
                        tb.symbol AS "token_b_symbol?", m.owner, m.kind,
-                       m.amount_usd AS "amount_usd!"
+                       ROUND(m.amount_usd, 6) AS "amount_usd!"
                   FROM analytic_liquidity_moves m
                   LEFT JOIN pools p ON p.pool_address = m.pool_address
                   LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
@@ -527,6 +529,7 @@ impl LiquidityMoveMeasures for PgMeasureRepository {
             .collect::<RepositoryResult<Vec<_>>>()?;
         let page = PageBuilder::new(moves, limit, QueryMode::Forward, had_cursor).finalize(|m| {
             Cursor::LiquidityMove(Box::new(LiquidityMoveCursor {
+                as_of: span.as_of,
                 order,
                 amount_usd: m.amount_usd,
                 at: m.at,
@@ -543,7 +546,7 @@ impl LiquidityMoveMeasures for PgMeasureRepository {
 }
 
 #[async_trait]
-impl TvlReadings for PgMeasureRepository {
+impl TvlLookup for PgMeasureRepository {
     async fn latest(
         &self,
         last: DateTime<Utc>,
@@ -597,7 +600,7 @@ impl TvlReadings for PgMeasureRepository {
 }
 
 #[async_trait]
-impl PoolDiscoveryMeasures for PgMeasureRepository {
+impl PoolDiscoveryLookup for PgMeasureRepository {
     async fn totals(
         &self,
         last: DateTime<Utc>,

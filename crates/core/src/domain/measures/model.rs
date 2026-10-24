@@ -77,9 +77,11 @@ pub enum LiquidityMoveOrder {
     At,
 }
 
-/// The key of the last move of a page, in its order.
+/// The key of the last move of a page, in its order, and the instant its list was read at:
+/// a freeze moves the window, and a page read after it would not follow.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiquidityMoveCursor {
+    pub as_of: DateTime<Utc>,
     pub order: LiquidityMoveOrder,
     pub amount_usd: Decimal,
     pub at: DateTime<Utc>,

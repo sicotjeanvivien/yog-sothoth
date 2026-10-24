@@ -6,5 +6,5 @@ pub use model::{
     PoolDiscoveries, PoolSwapBar, ProtocolBar, ProtocolSwapTotals, SwapSums,
 };
 pub use repository::{
-    LiquidityMoveMeasures, PoolCreationMeasures, PoolDiscoveryMeasures, SwapMeasures, TvlReadings,
+    LiquidityMoveLookup, PoolCreationLookup, PoolDiscoveryLookup, SwapLookup, TvlLookup,
 };

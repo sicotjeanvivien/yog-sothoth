@@ -98,9 +98,9 @@
       true,
       false,
       false,
-      false,
-      false,
-      false
+      true,
+      true,
+      true
     ]
   },
   "hash": "3e87a910fc23cfb9553326df179d3edb63d1935c52b99a552e6d05b525bc1b32"

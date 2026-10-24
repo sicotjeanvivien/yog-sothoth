@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index,\n                       m.pool_address, ta.symbol AS \"token_a_symbol?\",\n                       tb.symbol AS \"token_b_symbol?\", m.owner, m.kind,\n                       m.amount_usd AS \"amount_usd!\"\n                  FROM analytic_liquidity_moves m\n                  LEFT JOIN pools p ON p.pool_address = m.pool_address\n                  LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT\n                  LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT\n                 WHERE m.pool_address = $3\n                   AND m.timestamp >= $1 AND m.timestamp < $2\n                   AND m.amount_usd IS NOT NULL\n                   AND ($4::NUMERIC IS NULL\n                        OR m.amount_usd < $4\n                        OR (m.amount_usd = $4 AND (m.timestamp < $5\n                            OR (m.timestamp = $5 AND (m.signature, m.event_index) > ($6, $7)))))\n                 ORDER BY m.amount_usd DESC, m.timestamp DESC, m.signature, m.event_index\n                 LIMIT $8\n                ",
+  "query": "\n                SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index,\n                       m.pool_address, ta.symbol AS \"token_a_symbol?\",\n                       tb.symbol AS \"token_b_symbol?\", m.owner, m.kind,\n                       ROUND(m.amount_usd, 6) AS \"amount_usd!\"\n                  FROM analytic_liquidity_moves m\n                  LEFT JOIN pools p ON p.pool_address = m.pool_address\n                  LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT\n                  LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT\n                 WHERE m.pool_address = $3\n                   AND m.timestamp >= $1 AND m.timestamp < $2\n                   AND m.amount_usd IS NOT NULL\n                   -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits, the column more.\n                   AND ($4::NUMERIC IS NULL\n                        OR ROUND(m.amount_usd, 6) < $4\n                        OR (ROUND(m.amount_usd, 6) = $4 AND (m.timestamp < $5\n                            OR (m.timestamp = $5 AND (m.signature, m.event_index) > ($6, $7)))))\n                 ORDER BY ROUND(m.amount_usd, 6) DESC, m.timestamp DESC, m.signature,\n                          m.event_index\n                 LIMIT $8\n                ",
   "describe": {
     "columns": [
       {
@@ -106,12 +106,7 @@
         "ordinal": 9,
         "name": "amount_usd!",
         "type_info": "Numeric",
-        "origin": {
-          "Table": {
-            "table": "analytic_liquidity_moves",
-            "name": "amount_usd"
-          }
-        }
+        "origin": "Expression"
       }
     ],
     "parameters": {
@@ -136,8 +131,8 @@
       true,
       false,
       false,
-      true
+      null
     ]
   },
-  "hash": "75a3b9bf1e8d0b0c57c4eb43c0b901d3382349f37687196922f893c34cec0ea5"
+  "hash": "0112fb3571d7ac1bc5d606963d3c15e1ccfea9c90f07b01ffc1ca7d5cf07925e"
 }

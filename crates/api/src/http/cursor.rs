@@ -26,6 +26,7 @@ struct TokenActivityCursorWire {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct LiquidityMoveCursorWire {
+    as_of: String,
     order: String,
     amount_usd: String,
     at: String,
@@ -56,6 +57,7 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
             mint: c.mint.to_string(),
         }),
         Cursor::LiquidityMove(c) => encode_b64_json(&LiquidityMoveCursorWire {
+            as_of: c.as_of.to_rfc3339(),
             order: order_tag(c.order).to_owned(),
             amount_usd: c.amount_usd.to_string(),
             at: c.at.to_rfc3339(),
@@ -116,6 +118,7 @@ pub(crate) fn decode_liquidity_move_cursor(
         ));
     }
     Ok(LiquidityMoveCursor {
+        as_of: parse_rfc3339(&wire.as_of)?,
         order,
         amount_usd: Decimal::from_str(&wire.amount_usd)
             .map_err(|_| ApiError::BadRequest("invalid cursor: malformed amount".to_string()))?,
