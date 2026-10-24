@@ -13,6 +13,11 @@ export function formatPercent(ratio: string, locale: string): string {
   return formatRatio(ratio, locale, "never");
 }
 
+/** 0.003 → "0.30 %": a fee rate, always two decimals, where a tenth of a percent is too coarse. */
+export function formatFeeRate(ratio: number, locale: string): string {
+  return formatRatio(String(ratio), locale, "never", 2);
+}
+
 /** 0.6812 → "× 0.68": how many times a base was turned over. */
 export function formatTimes(ratio: number, locale: string): string {
   return `× ${new Intl.NumberFormat(locale, {
@@ -25,6 +30,7 @@ function formatRatio(
   ratio: string,
   locale: string,
   signDisplay: "exceptZero" | "never",
+  fixedDigits?: number,
 ): string {
   const value = Number(ratio);
   if (!Number.isFinite(value)) {
@@ -33,7 +39,8 @@ function formatRatio(
   const magnitude = signDisplay === "never" ? Math.abs(value) : value;
   return new Intl.NumberFormat(locale, {
     style: "percent",
-    maximumFractionDigits: 1,
+    minimumFractionDigits: fixedDigits ?? 0,
+    maximumFractionDigits: fixedDigits ?? 1,
     signDisplay,
   }).format(magnitude);
 }

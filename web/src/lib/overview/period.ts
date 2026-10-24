@@ -19,6 +19,14 @@ export const PERIOD_HOURS: Record<Period, number> = {
 /** Closed whatever the facts hold, until its own times are measured on the prod. */
 export const CLOSED_PERIODS: ReadonlySet<Period> = new Set<Period>(["30d"]);
 
+/** A page's query: `period` left out at its default, the page's other parameters kept. */
+export function pageQuery(
+  period: Period,
+  keep: Record<string, string>,
+): Record<string, string> {
+  return period === DEFAULT_PERIOD ? keep : { ...keep, period };
+}
+
 export function periodMs(period: Period): number {
   return PERIOD_HOURS[period] * HOUR_MS;
 }

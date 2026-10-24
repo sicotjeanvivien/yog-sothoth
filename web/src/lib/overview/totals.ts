@@ -26,6 +26,14 @@ export function changeRatio(current: number | null, previous: number | null): nu
   return current / previous - 1;
 }
 
+/** `part / whole`, or `null` when either is unknown or the whole is zero. */
+export function shareOf(part: number | null, whole: number | null): number | null {
+  if (part === null || whole === null || whole <= 0) {
+    return null;
+  }
+  return part / whole;
+}
+
 /** The protocols' TVL held by pools discovered in `period`; `null` when one has no measure of it. */
 export function discoveredTvl(
   items: readonly { discovered: readonly { period: Period; tvlUsd: string }[] }[],

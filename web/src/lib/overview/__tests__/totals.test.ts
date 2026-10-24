@@ -4,6 +4,7 @@ import {
   changeRatio,
   discoveredTvl,
   rotation,
+  shareOf,
   sumUsd,
   swapsPerSecond,
   tvlChange,
@@ -32,6 +33,19 @@ describe("changeRatio", () => {
   // Mutation: the zero guard dropped renders "+∞ %".
   it("is unknown on a zero base", () => {
     expect(changeRatio(10, 0)).toBeNull();
+  });
+});
+
+describe("shareOf", () => {
+  it("is the part over the whole", () => {
+    expect(shareOf(18, 100)).toBeCloseTo(0.18);
+  });
+
+  // Mutation: the zero guard dropped renders a fee rate of "∞ %" on a period without volume.
+  it("is unknown on a zero whole, or an unknown term", () => {
+    expect(shareOf(1, 0)).toBeNull();
+    expect(shareOf(null, 10)).toBeNull();
+    expect(shareOf(1, null)).toBeNull();
   });
 });
 

@@ -165,6 +165,36 @@
         "validation": "The service returned an unexpected answer."
       }
     },
+    "Protocol": {
+      "page": {
+        "metaTitle": "Meteora DAMM v2",
+        "description": "Meteora's DAMM v2 protocol: TVL, volume, fees and active pools, over the chosen period.",
+        "platform": "Meteora",
+        "title": "DAMM v2",
+        "infoLabel": "About: DAMM v2 program",
+        "program": "Program {id}",
+        "measuredSince": "Measured since {since}.",
+        "measuredNone": "No hour is measured yet."
+      },
+      "kpis": {
+        "feesRate": "effective rate {rate}",
+        "protocolFees": "Protocol fees {period}",
+        "protocolFeesShare": "{share} of fees",
+        "info": {
+          "fees": "What this protocol's trades paid in fees over the chosen period: the depositors' (LP) share and the protocol's. The effective rate relates these fees to the volume.",
+          "protocolFees": "The share of fees that goes to the protocol over the chosen period, and what it is of all fees."
+        }
+      },
+      "tabsLabel": "Themes",
+      "tabs": {
+        "liquidity": "Liquidity",
+        "volume": "Volume",
+        "fees": "Fees",
+        "pools": "Pools & positions",
+        "tokens": "Tokens",
+        "activity": "Live activity"
+      }
+    },
     "BlockError": {
       "timeout": "This section couldn't be loaded — the upstream service took too long to respond.",
       "network": "This section couldn't be loaded — the upstream service is unreachable.",

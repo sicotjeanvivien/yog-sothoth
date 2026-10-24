@@ -1,16 +1,17 @@
 "use client";
 
 /**
- * 24H / 7D / 30D, links that change `?period=`. A closed period is a button that opens why,
- * not `aria-disabled`: it does something. ⚠️ No `title`, never shown on touch. Without
- * `availability` (still loading), the other periods wait, inert.
+ * 24H / 7D / 30D, links that change `?period=` and keep the page's other parameters. A closed
+ * period is a button that opens why, not `aria-disabled`. ⚠️ No `title`, never shown on touch.
+ * Without `availability` (still loading), the other periods wait, inert.
  */
 
 import { useCallback, useId, useRef, useState } from "react";
 
 import { useDismiss } from "@/components/shared/use-dismiss";
+import type { PagePath } from "@/config/site";
 import { Link } from "@/i18n/navigation";
-import { DEFAULT_PERIOD, PERIODS, type Period } from "@/lib/overview/period";
+import { pageQuery, PERIODS, type Period } from "@/lib/overview/period";
 
 const SEGMENT_CLASS =
   "inline-flex min-h-9 min-w-11 items-center justify-center border-r border-dash-rule px-3 font-dash-mono text-[12px] last:border-r-0";
@@ -19,12 +20,17 @@ const SEGMENT_CLASS =
 export type PeriodAvailability = Record<Period, { open: true } | { open: false; reason: string }>;
 
 export function PeriodSelector({
+  pathname,
+  keep,
   current,
   availability,
   labels,
   closedLabels,
   groupLabel,
 }: {
+  pathname: PagePath;
+  /** The page's other query parameters, kept across a period change. */
+  keep: Record<string, string>;
   current: Period;
   availability: PeriodAvailability | null;
   labels: Record<Period, string>;
@@ -66,11 +72,7 @@ export function PeriodSelector({
         return (
           <Link
             key={period}
-            href={
-              period === DEFAULT_PERIOD
-                ? "/overview"
-                : { pathname: "/overview", query: { period } }
-            }
+            href={{ pathname, query: pageQuery(period, keep) }}
             scroll={false}
             className={`${SEGMENT_CLASS} text-dash-ink-2 hover:bg-dash-surface hover:text-dash-ink`}
           >

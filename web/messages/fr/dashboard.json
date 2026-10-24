@@ -165,6 +165,36 @@
         "validation": "Le service a rendu une réponse inattendue."
       }
     },
+    "Protocol": {
+      "page": {
+        "metaTitle": "Meteora DAMM v2",
+        "description": "Le protocole DAMM v2 de Meteora : TVL, volume, fees et pools actives, sur la période choisie.",
+        "platform": "Meteora",
+        "title": "DAMM v2",
+        "infoLabel": "Infos : programme DAMM v2",
+        "program": "Programme {id}",
+        "measuredSince": "Mesuré depuis le {since}.",
+        "measuredNone": "Aucune heure n'est encore mesurée."
+      },
+      "kpis": {
+        "feesRate": "taux effectif {rate}",
+        "protocolFees": "Fees protocole {period}",
+        "protocolFeesShare": "{share} des fees",
+        "info": {
+          "fees": "Ce que les échanges de ce protocole ont payé en frais sur la période choisie : la part des déposants (LP) et celle du protocole. Le taux effectif rapporte ces fees au volume.",
+          "protocolFees": "La part des fees qui revient au protocole sur la période choisie, et ce qu'elle représente de toutes les fees."
+        }
+      },
+      "tabsLabel": "Thèmes",
+      "tabs": {
+        "liquidity": "Liquidité",
+        "volume": "Volume",
+        "fees": "Fees",
+        "pools": "Pools & positions",
+        "tokens": "Tokens",
+        "activity": "Activité en direct"
+      }
+    },
     "BlockError": {
       "timeout": "Cette section n'a pas pu être chargée — le service en amont a mis trop de temps à répondre.",
       "network": "Cette section n'a pas pu être chargée — le service en amont est injoignable.",
