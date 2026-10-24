@@ -56,3 +56,32 @@ export function roundTicks(max: number): number[] {
   }
   return [top, top / 2];
 }
+
+/** The step between axis labels; the last slot always has one. */
+const AXIS_EVERY: Record<Period, number> = { "24h": 6, "7d": 1, "30d": 7 };
+
+/** "14:00", the slot's hour in UTC. */
+export function hourOf(date: Date): string {
+  return `${String(date.getUTCHours()).padStart(2, "0")}:00`;
+}
+
+/** The axis under a series: hours over 24 h, day labels beyond, the last one always shown. */
+export function axisOf(
+  period: Period,
+  slots: readonly { from: Date }[],
+  dayLabel: (daysAgo: number) => string,
+): string[] {
+  const every = AXIS_EVERY[period];
+  const last = slots.length - 1;
+  return slots.flatMap((slot, i) =>
+    i === last || (i % every === 0 && i <= last - every / 2)
+      ? [
+          period !== "24h"
+            ? dayLabel(last - i)
+            : i === last
+              ? `${hourOf(slot.from)} UTC`
+              : hourOf(slot.from),
+        ]
+      : [],
+  );
+}

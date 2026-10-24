@@ -316,8 +316,8 @@ value, so its waiting slot keeps its size in both modes.
 ## Protocol page
 
 `(dashboard)/protocols/meteora-damm-v2/page.tsx`, after the canvas: a header,
-the protocol's KPIs, then the row of its tabs. Out of the menu and of the
-sitemap (`UNLISTED_PATHS`) until its first tab ships.
+the protocol's KPIs, then the row of its tabs and the content of the one
+chosen.
 
 **Header** — `protocol/protocol-header.tsx`: the platform, then the title, its ⓘ
 giving the program and since when the figures are measured (`coveredSince`,
@@ -331,6 +331,20 @@ show the same number for the same protocol. The page adds its fees with their
 effective rate and, in the advanced mode, the protocol's fees with their share
 (`protocol/protocol-kpis.tsx`). The advanced mode is one choice for the whole
 dashboard: same `OverviewMode`, same cookie.
+
+**01 Liquidity** — `protocol/liquidity/liquidity-tab.tsx`: the period's
+created, added, removed and net — a pool's creation deposits its first
+liquidity without an addition, so it has its own colour (`dash-flow-create`),
+stacked under the additions; the TVL hour by hour on a tight axis
+(`lib/protocol/liquidity.ts`), its reading fixed above and a dashed mark under
+the pointer; the liquidity created and added above the axis and removed under
+it (`dash-flow-out`, darker than the text red), per hour
+or per day, with symmetric marks; and, in the advanced mode, the largest moves
+beside the chart, so the page is no longer. The liquidity is measured from a
+later hour than the swaps: until a window is covered, its totals, bars and
+moves say so instead of a partial sum. Opening this tab opened the menu entry,
+with a green dot beside it while the ingestion is live
+(`sidebar/product-live-dot.tsx`), and put the page in the sitemap.
 
 **Tabs** — `lib/protocol/tabs.ts` lists the six tabs of the canvas, in order;
 a tab joins the row when its content ships (`READY_TABS`), numbered by its

@@ -16,7 +16,7 @@ use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
         Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity, DiscoveredTvl,
-        EventFreshnessRepository, FrozenHours, LatestProtocolTvl, NetworkStatus,
+        EventFreshnessRepository, FrozenHours, LatestProtocolTvl, LiquidityMove, NetworkStatus,
         NetworkStatusLookup, Pool, PoolCatalog, Protocol, ProtocolActivity, ProtocolActivityBar,
         ProtocolActivityLookup, ProtocolPools, ProtocolTvl, Severity, Signal, SignalCursor,
         SignalFeed, SignalRecord, Span, TokenActivityCursor, TokenActivityFeed, TokenActivityPage,
@@ -231,6 +231,7 @@ pub(crate) struct MockProtocolActivityRepo {
     pub(crate) tvl: Vec<ProtocolTvl>,
     /// The discovered parts `tvl_latest` hands with each of [`Self::tvl`].
     pub(crate) discovered: Vec<DiscoveredTvl>,
+    pub(crate) moves: Vec<LiquidityMove>,
     pub(crate) spans: Mutex<Vec<Span>>,
     pub(crate) tvl_ranges: Mutex<Vec<(DateTime<Utc>, DateTime<Utc>)>>,
 }
@@ -251,6 +252,7 @@ impl MockProtocolActivityRepo {
             bars: vec![],
             tvl: vec![],
             discovered: vec![],
+            moves: vec![],
             spans: Mutex::new(vec![]),
             tvl_ranges: Mutex::new(vec![]),
         }
@@ -290,6 +292,15 @@ impl ProtocolActivityLookup for MockProtocolActivityRepo {
         last: DateTime<Utc>,
     ) -> RepositoryResult<Vec<ProtocolTvl>> {
         Ok(self.record_tvl(first, last))
+    }
+    async fn liquidity_moves(
+        &self,
+        span: &Span,
+        _: Protocol,
+        _: i64,
+    ) -> RepositoryResult<Vec<LiquidityMove>> {
+        self.spans.lock().unwrap().push(*span);
+        Ok(self.moves.clone())
     }
 }
 

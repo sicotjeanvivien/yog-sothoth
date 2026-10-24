@@ -3,7 +3,9 @@
 The analytic writer. Every cycle — five minutes by default — it prices the
 two tokens of every pool **once** per closed 5-minute tranche into
 `analytic_pool_prices_5min`, and values that tranche's swaps at those prices
-into `analytic_pool_5min`; sums the tranches per pool and hour into
+into `analytic_pool_5min`, then each of its liquidity moves into
+`analytic_liquidity_moves`, summed per protocol and hour into
+`analytic_protocol_liquidity_hourly`; sums the tranches per pool and hour into
 `analytic_pool_hourly`, and those facts per protocol into
 `analytic_protocol_hourly`; counts the pools born per protocol and hour into
 `analytic_protocol_births_hourly`; measures the TVL of every protocol into
@@ -61,6 +63,22 @@ matter. Its protocol and referral parts follow it, direction by direction.
 
 A pool-tranche is valued when it has a trusted token and each direction and
 each fee can be computed; otherwise it is counted unvalued.
+
+## The value of a liquidity move
+
+A move — a deposit, a withdrawal, or a pool's creation, which deposits its first liquidity
+without a liquidity event — is worth its two amounts at its pool's prices in the tranche, the
+prices just written for the swaps: what the pool traded bounds them, not the market. As in the
+TVL, a token without a market price counts 0: one small trade's price never values a whole
+stock deposited (a pool created with 10¹⁴ units of such a token was worth $5,751 billion by
+its tranche's trade); a move none of whose moved tokens has a market price stays unvalued. A deposit of a
+token the market overprices is worth what the pool would pay for it — on the dev week,
+$3.09 million of deposits in tranches with a swap, $19.41 million at market. In a
+tranche where the pool did not swap, the anchor keeps its market price and the other
+token takes the lower of its market price and the pool's last bounded one: never higher
+than the pool last traded it, nor than the market now. A pool never priced in the last
+seven days — the price table's — has no bound, and its move stays unvalued, counted.
+Pools that only move liquidity stay out of the swaps' facts: they are not active pools.
 
 `/api/protocols/…` reads the protocol aggregate and the TVL
 (`repositories/protocol_activity.rs` in `yog-persistence`).

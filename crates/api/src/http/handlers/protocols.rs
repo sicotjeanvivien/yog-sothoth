@@ -1,17 +1,17 @@
 //! `/api/protocols`: the catalogue, read live, then the measures yog-analytic
-//! writes per protocol — activity, its series, and the TVL.
+//! writes per protocol — activity, its series, the TVL, and the largest liquidity moves.
 
 use axum::{
     Json,
-    extract::{Query, State},
+    extract::{Path, Query, State},
 };
 
 use crate::http::{
     AppState,
     dto::{
-        LatestTvlResponse, ProtocolActivityBarResponse, ProtocolActivityResponse,
-        ProtocolCatalogResponse, ProtocolTvlResponse, WindowedResponse,
-        request::{ActivityQuery, WindowQuery},
+        LatestTvlResponse, LiquidityMoveResponse, ProtocolActivityBarResponse,
+        ProtocolActivityResponse, ProtocolCatalogResponse, ProtocolTvlResponse, WindowedResponse,
+        request::{ActivityQuery, LiquidityMovesQuery, ListLiquidityMovesRequest, WindowQuery},
     },
     error::ApiError,
 };
@@ -131,6 +131,30 @@ pub(crate) async fn get_protocol_tvl_hourly(
     let window = query.window.into();
     let measured = state.activity_service.protocol_tvl_hourly(window).await?;
     Ok(Json(WindowedResponse::new(window, measured)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/protocols/{protocol}/liquidity-moves",
+    params(LiquidityMovesQuery),
+    responses((
+        status = 200,
+        description = "The protocol's valued liquidity moves over the window, largest first; \
+                       none while its liquidity does not cover the window whole.",
+        body = WindowedResponse<LiquidityMoveResponse>
+    ))
+)]
+pub(crate) async fn list_liquidity_moves(
+    State(state): State<AppState>,
+    Path(protocol): Path<String>,
+    Query(query): Query<LiquidityMovesQuery>,
+) -> Result<Json<WindowedResponse<LiquidityMoveResponse>>, ApiError> {
+    let request = ListLiquidityMovesRequest::parse(&protocol, query)?;
+    let measured = state
+        .activity_service
+        .liquidity_moves(request.protocol, request.window, request.limit)
+        .await?;
+    Ok(Json(WindowedResponse::new(request.window, measured)))
 }
 
 #[cfg(test)]

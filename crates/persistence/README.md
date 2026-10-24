@@ -594,10 +594,24 @@ tokens — the rate the tranche traded at, from the aggregate's `traded_a` and
 each direction's gross trusted leg through `yog_moved_amount_usd` (025): both read
 one snapshot of the aggregate, which carries the buys' input fees in B beside the
 B fees of both directions.
-Nothing else in the
-writer reads a price, and no view a binary reads values a swap by the hour
+Only the liquidity tranche below also reads a market price, to cap the last bounded one, and no
+view a binary reads values a swap by the hour
 (`tests/analytic_prices.rs`): the hourly priced view (023) is left to the
 activity view alone. The two 5-minute tables are kept 7 days, as the raw swaps.
+
+**The liquidity (035).** After a tranche's swaps, a second statement
+(`meteora_damm_v2_liquidity_tranche.sql`) reads its raw liquidity moves and its pools'
+creations (`initialize_pool`, kind `create`) and writes each one into
+`analytic_liquidity_moves`, valued once, a token without a market price counting 0: at the
+pool's prices of the tranche when it swapped; without a swap, the anchor at its market price and the other
+token at the lower of its market and the pool's last bounded price; without a last
+price, `amount_usd` stays `NULL`, the move counted unvalued. Never at a market price
+alone, nor at the pool's mid price. `analytic_protocol_liquidity_hourly` sums them per
+protocol and hour, one row per hour written, zero included, and none before the first
+hour whose tranches were all valued with their moves: its first row is when the
+liquidity started being measured, which the reads take as its coverage. The moves are
+kept 31 days, a day past the longest window: a chunk is dropped whole; `tests/analytic_liquidity.rs` holds the price rule and
+the start.
 031 recreates that aggregate with the buys' B fees. 032, outside a transaction,
 materialises it over every raw swap: its policy refreshes 6 days only, and older
 tranches, under its watermark yet never materialised, would read empty. 033 gives

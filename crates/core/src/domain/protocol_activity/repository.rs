@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
-use super::{LatestProtocolTvl, ProtocolActivity, ProtocolActivityBar, ProtocolTvl};
+use super::{LatestProtocolTvl, LiquidityMove, ProtocolActivity, ProtocolActivityBar, ProtocolTvl};
 use crate::RepositoryResult;
-use crate::domain::{FrozenHours, Span, Window};
+use crate::domain::{FrozenHours, Protocol, Span, Window};
 
 /// Read lens on yog-analytic's protocol tables, the api's. Every read takes a
 /// [`Span`] built from [`Self::frozen_hours`]; none counts an hour not frozen.
@@ -37,4 +37,12 @@ pub trait ProtocolActivityLookup: Send + Sync {
         first: DateTime<Utc>,
         last: DateTime<Utc>,
     ) -> RepositoryResult<Vec<ProtocolTvl>>;
+
+    /// The `limit` valued liquidity moves of `protocol` in `span` worth the most, largest first.
+    async fn liquidity_moves(
+        &self,
+        span: &Span,
+        protocol: Protocol,
+        limit: i64,
+    ) -> RepositoryResult<Vec<LiquidityMove>>;
 }

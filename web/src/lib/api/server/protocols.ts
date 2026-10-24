@@ -13,7 +13,9 @@ import {
   zGetProtocolActivityResponse,
   zGetProtocolTvlHourlyResponse,
   zGetProtocolTvlResponse,
+  zListLiquidityMovesResponse,
   zListProtocolsResponse,
+  type ProtocolResponse,
   type WindowResponse,
 } from "../schema/zod.gen";
 
@@ -47,4 +49,14 @@ export const fetchProtocolActivitySeries = cache((window: WindowResponse) =>
   window === "24h"
     ? apiGet("/api/protocols/activity/hourly", { window }, zGetProtocolActivityHourlyResponse)
     : apiGet("/api/protocols/activity/daily", { window }, zGetProtocolActivityDailyResponse),
+);
+
+/** The protocol's largest valued liquidity moves over the window. */
+export const fetchLiquidityMoves = cache(
+  (protocol: ProtocolResponse, window: WindowResponse, limit: number) =>
+    apiGet(
+      `/api/protocols/${protocol}/liquidity-moves`,
+      { window, limit: String(limit) },
+      zListLiquidityMovesResponse,
+    ),
 );

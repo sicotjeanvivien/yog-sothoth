@@ -111,8 +111,9 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` and `?pool=` filters); each item embeds its pool's token pair (`tokenA`/`tokenB`, `EmbeddedTokenResponse`) |
 | `GET` | `/api/signals/stream` | SSE stream of new signals (see below) |
 | `GET` | `/api/protocols` | Every protocol of the domain: observed by this build or not, pools seen — the catalogue, live |
-| `GET` | `/api/protocols/activity` | Per protocol over `?window=24h\|7d\|30d` (`?offset=` for the previous one): volume, fees and their shares, swaps, distinct active pools, births, pool-hours and the valued ones |
+| `GET` | `/api/protocols/activity` | Per protocol over `?window=24h\|7d\|30d` (`?offset=` for the previous one): volume, fees and their shares, swaps, distinct active pools, births, pool-hours and the valued ones, and the liquidity brought by creations, added and removed, with its moves valued |
 | `GET` | `/api/protocols/activity/hourly`, `/daily` | The same flows per protocol and bar: an hour, or 24 hours ending at `asOf` |
+| `GET` | `/api/protocols/{protocol}/liquidity-moves` | The protocol's valued liquidity moves (creations, additions, removals) over `?window=`, largest first, `?limit=` of them; its pool's token symbols embedded |
 | `GET` | `/api/protocols/tvl` | Per protocol, the TVL of the last frozen hour and, for each window, the part its discovered pools hold |
 | `GET` | `/api/protocols/tvl/hourly` | Per protocol, the TVL at the close of every hour from the window's start |
 | `GET` | `/api/tokens/activity` | Tokens by volume over `?window=`, identity embedded, forward-only cursor; a swap counts for both its tokens |
@@ -130,6 +131,9 @@ it returns no row rather than a partial sum; a series returns the bars the facts
 hold whole. The TVL is each protocol's last measure by that hour, its `at` said,
 with the part of it held by the pools discovered in each window, measured with it
 (a window without its part was not measured: the web then withholds the change).
+The liquidity is measured from a later hour than the swaps, its own start: its
+`liquidity` is `null` on a total, a bar or a ranking of moves whose window starts
+before it, rather than a partial sum.
 The tokens are the exception to one read of the frozen hours: their span ends at
 the hour of the ranking read with them, which each freeze rewrites whole — a
 cursor carries that hour, and one taken before a freeze is refused (400).

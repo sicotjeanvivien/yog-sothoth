@@ -12,7 +12,7 @@ import { fetchProtocolActivitySeries } from "@/lib/api/server/protocols";
 import { formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatUsdCompact } from "@/lib/format/format-usd";
-import { CHART_PX, roundTicks, slotsOf, type Slot } from "@/lib/overview/chart";
+import { axisOf, CHART_PX, hourOf, roundTicks, slotsOf, type Slot } from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
 import { sumUsd } from "@/lib/overview/totals";
 
@@ -22,9 +22,6 @@ import { BlockFailed, BlockSkeleton } from "./overview-states";
 import { VolumeBars } from "./volume-bars";
 
 const SECTION_CLASS = `${CELL_CLASS} ${SPAN.main} ${MIN_HEIGHT.volume}`;
-
-/** The step between axis labels; the last slot always has one. */
-const AXIS_EVERY: Record<Period, number> = { "24h": 6, "7d": 1, "30d": 7 };
 
 export async function VolumeChart({ period }: { period: Period }) {
   const t = await getTranslations("Dashboard.Overview.volume");
@@ -62,10 +59,8 @@ export async function VolumeChart({ period }: { period: Period }) {
   const slots = slotsFor((bar) => bar.volumeUsd);
   const feeSlots = slotsFor((bar) => bar.feesUsd);
 
-  const dayLabel = (i: number) => {
-    const days = slots.length - 1 - i;
-    return days === 0 ? t("today") : t("daysAgo", { days });
-  };
+  const daysAgo = (days: number) => (days === 0 ? t("today") : t("daysAgo", { days }));
+  const dayLabel = (i: number) => daysAgo(slots.length - 1 - i);
   const slotName = (slot: Slot, i: number) =>
     daily
       ? `${dayLabel(i)} · ${formatUtcMoment(slot.from, locale)} → ${formatUtcMoment(slot.to, locale)}`
@@ -92,13 +87,7 @@ export async function VolumeChart({ period }: { period: Period }) {
   const feesTotal = feeSlots.some((s) => s.value !== null)
     ? String(feeSlots.reduce((sum, s) => sum + (s.value ?? 0), 0))
     : null;
-  const every = AXIS_EVERY[period];
-  const last = slots.length - 1;
-  const axis = slots.flatMap((slot, i) =>
-    i === last || (i % every === 0 && i <= last - every / 2)
-      ? [daily ? dayLabel(i) : i === last ? `${hourOf(slot.from)} UTC` : hourOf(slot.from)]
-      : [],
-  );
+  const axis = axisOf(period, slots, daysAgo);
 
   // Like the API's totals, a bar without a valued volume adds nothing.
   const protocols = [...new Set(series.items.map((i) => i.protocol))].map((protocol) => {
@@ -171,8 +160,4 @@ export async function VolumeChartPlaceholder({ period }: { period: Period }) {
       shape="chart"
     />
   );
-}
-
-function hourOf(date: Date): string {
-  return `${String(date.getUTCHours()).padStart(2, "0")}:00`;
 }

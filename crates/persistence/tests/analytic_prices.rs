@@ -1158,8 +1158,8 @@ async fn the_guard_catches_a_flow_valued_by_the_hour(pool: PgPool) {
     );
 }
 
-/// Against a market price read in the writer outside the price table: a swap valued there
-/// would escape the bound.
+/// Against a market price read in the writer outside its two tranches: a swap or a move valued
+/// there would escape the bound.
 #[test]
 fn the_writer_reads_market_prices_in_the_price_table_alone() {
     let writer = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/repositories");
@@ -1179,6 +1179,17 @@ fn the_writer_reads_market_prices_in_the_price_table_alone() {
         .map(|(path, _)| path)
         .collect();
 
-    assert_eq!(readers.len(), 1, "{readers:?}");
-    assert!(readers[0].ends_with("meteora_damm_v2_tranche.sql"));
+    let mut names: Vec<&str> = readers
+        .iter()
+        .map(|path| path.rsplit('/').next().unwrap_or(path))
+        .collect();
+    names.sort_unstable();
+    assert_eq!(
+        names,
+        [
+            "meteora_damm_v2_liquidity_tranche.sql",
+            "meteora_damm_v2_tranche.sql"
+        ],
+        "{readers:?}"
+    );
 }

@@ -43,3 +43,27 @@ async fn the_tokens_activity_is_not_read_as_a_mint() {
     assert_eq!(status, StatusCode::OK, "{body}");
     assert!(body.contains("\"window\":\"7d\""), "{body}");
 }
+
+/// Mutation: the protocol read as a free string, an unknown one answered empty.
+#[tokio::test]
+async fn the_liquidity_moves_refuse_an_unknown_protocol_or_limit() {
+    for uri in [
+        "/api/protocols/meteora/liquidity-moves",
+        "/api/protocols/meteora_damm_v2/liquidity-moves?limit=0",
+        "/api/protocols/meteora_damm_v2/liquidity-moves?limit=201",
+        "/api/protocols/meteora_damm_v2/liquidity-moves?window=1h",
+    ] {
+        let (status, content_type, _) = get(uri).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}");
+        assert_eq!(content_type, "application/problem+json", "{uri}");
+    }
+}
+
+/// The control: a known protocol, its window and its limit reach the handler.
+#[tokio::test]
+async fn the_liquidity_moves_take_a_protocol_of_the_domain() {
+    let (status, _, body) =
+        get("/api/protocols/meteora_damm_v2/liquidity-moves?window=7d&limit=5").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(body.contains("\"window\":\"7d\""), "{body}");
+}

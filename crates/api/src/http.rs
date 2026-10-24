@@ -122,6 +122,7 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         .routes(routes!(handlers::protocols::get_protocol_activity_daily))
         .routes(routes!(handlers::protocols::get_protocol_tvl))
         .routes(routes!(handlers::protocols::get_protocol_tvl_hourly))
+        .routes(routes!(handlers::protocols::list_liquidity_moves))
         .merge(slotted)
 }
 

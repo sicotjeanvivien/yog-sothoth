@@ -7,9 +7,9 @@ use chrono::TimeDelta;
 use yog_core::{
     Page, RepositoryResult,
     domain::{
-        FrozenHours, LatestProtocolTvl, ProtocolActivity, ProtocolActivityBar,
-        ProtocolActivityLookup, ProtocolTvl, Span, TokenActivity, TokenActivityCursor,
-        TokenActivityFeed, Window,
+        FrozenHours, LatestProtocolTvl, LiquidityMove, Protocol, ProtocolActivity,
+        ProtocolActivityBar, ProtocolActivityLookup, ProtocolTvl, Span, TokenActivity,
+        TokenActivityCursor, TokenActivityFeed, Window,
     },
 };
 
@@ -108,6 +108,26 @@ impl ActivityService {
             Some(span) => {
                 self.protocols
                     .tvl_hourly(span.from - TimeDelta::hours(1), span.last_hour())
+                    .await?
+            }
+            None => Vec::new(),
+        };
+        Ok(Measured { span, items })
+    }
+
+    /// A protocol's largest valued liquidity moves over the window; nothing for a span its
+    /// liquidity does not cover whole, which the repository reads.
+    pub(crate) async fn liquidity_moves(
+        &self,
+        protocol: Protocol,
+        window: Window,
+        limit: i64,
+    ) -> RepositoryResult<Measured<Vec<LiquidityMove>>> {
+        let span = self.span(window, None).await?;
+        let items = match &span {
+            Some(span) => {
+                self.protocols
+                    .liquidity_moves(span, protocol, limit)
                     .await?
             }
             None => Vec::new(),

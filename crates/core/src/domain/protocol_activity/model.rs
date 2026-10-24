@@ -1,8 +1,9 @@
 //! What each protocol did over a span, from yog-analytic's tables: its flows,
-//! its births and its active pools, then its TVL.
+//! its liquidity, its births and its active pools, then its TVL and its largest moves.
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
+use solana_pubkey::Pubkey;
 
 use crate::domain::{Protocol, Window};
 
@@ -22,6 +23,19 @@ pub struct ProtocolActivity {
     pub births: i64,
     pub pool_hours: i64,
     pub pool_hours_valued: i64,
+    /// `None` when the span starts before the protocol's liquidity was first measured.
+    pub liquidity: Option<LiquidityFlows>,
+}
+
+/// The liquidity deposited at the pools' creation, added and removed over a span or a bar.
+/// The USD sums skip the moves not valued, which `moves - moves_valued` counts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LiquidityFlows {
+    pub created_usd: Decimal,
+    pub added_usd: Decimal,
+    pub removed_usd: Decimal,
+    pub moves: i64,
+    pub moves_valued: i64,
 }
 
 /// One protocol over one bar of a series, an hour or 24 hours from `from`.
@@ -34,6 +48,30 @@ pub struct ProtocolActivityBar {
     pub swap_count: i64,
     pub pool_hours: i64,
     pub pool_hours_valued: i64,
+    /// `None` for a bar that starts before the protocol's liquidity was first measured.
+    pub liquidity: Option<LiquidityFlows>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LiquidityMoveKind {
+    /// A pool's creation, which deposits its first liquidity.
+    Create,
+    Add,
+    Remove,
+}
+
+/// One valued liquidity move, with the identity of its pool's tokens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LiquidityMove {
+    pub protocol: Protocol,
+    pub at: DateTime<Utc>,
+    pub signature: String,
+    pub pool_address: Pubkey,
+    pub token_a_symbol: Option<String>,
+    pub token_b_symbol: Option<String>,
+    pub owner: Pubkey,
+    pub kind: LiquidityMoveKind,
+    pub amount_usd: Decimal,
 }
 
 /// One protocol's TVL as last measured during the hour that closes at `at`: its pools

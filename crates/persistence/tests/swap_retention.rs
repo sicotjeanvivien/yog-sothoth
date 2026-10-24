@@ -84,6 +84,9 @@ async fn the_raw_swaps_take_the_four_settings(pool: PgPool) {
 /// The tranches valued by yog-analytic (028), kept as long as the raw swaps.
 const TRANCHES: [&str; 2] = ["analytic_pool_prices_5min", "analytic_pool_5min"];
 
+/// The valued liquidity moves (035), kept a day past the 30-day window that ranks them.
+const LIQUIDITY_MOVES: &str = "analytic_liquidity_moves";
+
 /// Mutation this is written against: one line of 014 pointed at another
 /// table, or the swap settings made the house default.
 #[sqlx::test]
@@ -134,6 +137,8 @@ async fn no_other_hypertable_moves(pool: PgPool) {
     assert_house("drop_after", &retention, |table| {
         if TRANCHES.contains(&table) {
             7 * DAY
+        } else if table == LIQUIDITY_MOVES {
+            31 * DAY
         } else {
             30 * DAY
         }
