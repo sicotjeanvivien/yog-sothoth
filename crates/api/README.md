@@ -140,63 +140,70 @@ cursor carries that hour, and one taken before a freeze is refused (400).
 
 ## What a route may return
 
-These rules hold for every `/api` route.
+These rules hold for every `/api` route. The routes that do not follow them yet are listed
+at the end of this section.
 
-1. **A route names a resource of the data.** Its path is a noun phrase:
-   `/api/<collection>`, `/api/<collection>/<id>`,
-   `/api/<collection>/<id>/<sub-resource>`. Collections are the names of the
-   domain and of the analytic model: protocols, pools, tokens, signals, events,
-   announcements.
-2. **Every field of a response completes the name of its route.** The route
-   reads as a sentence ("the activity of the DAMM v2 protocol over 24 h") and
-   each field is an attribute of it. A field that needs another name to describe
-   itself belongs to another route. A response embeds the *identity* of another
-   resource (the symbol and logo of a signal's tokens), nothing else: neither
-   its state nor its measures.
-3. **A response does not mix what is read live and what `yog-analytic`
-   computes.**
-   - Live: the catalogue (pools, tokens, protocols), the current state
-     (reserves, price, a pool's TVL), events, signals — written by the indexer
-     and `yog-context`, fresh to the second.
-   - Computed: every measure over a window (volume, fees, swaps, active pools,
-     births, the TVL of a protocol or a token and its history) — written by
-     `yog-analytic`, fresh to a few minutes.
-   - Mixed, the slower makes the other unavailable, and a response can no longer
-     state the age of what it holds.
-   - The boundary is the nature of the data, not today's cost: a measure over a
-     window is computed, even if it would count fast live.
-   - A computed response embeds the identity of what it measures (a ranking by
-     volume carries each pool's address and tokens): an identity does not age
+1. **A route names a thing of the data**, plural, in kebab-case. Two kinds:
+   - **entities**, what exists: `protocols`, `pools`, `tokens`, `announcements`;
+   - **events**, what happens: `swaps`, `liquidity-moves`, `pool-creations`,
+     `position-changes`, `fee-claims`, `reward-claims`, `signals`, and `rotation-runs`, the
+     runs of tranches whose quoted reserve turned over at least once.
+
+   The TVL is the one measure of state: `tvl`, its hourly readings. `network` and
+   `ingestion` are singletons, the state of the service. A name says what is observed,
+   never an image or a category (`activity`, `stats`, `metrics`, `analytics`): an event
+   collection takes the name of the on-chain event family it gathers (`initialize_pool` →
+   `pool-creations`).
+2. **Three path forms**: `/api/<collection>`, every protocol;
+   `/api/<collection>/{id}`, one entity; `/api/<entities>/{id}/<collection>`, the
+   collection restricted to that entity (`/api/protocols/meteora_damm_v2/swaps`). An entity
+   is always in the path, never a filter parameter. A reserved word (rules 4 and 5) may end
+   any of them.
+3. **A collection returns its items**: `?window=`, `?sort=`, `?limit=` and a cursor.
+4. **A measure is its collection followed by a cut**, a reserved word:
+   - `totals`, the whole window;
+   - `hourly`, `daily`, one row per bar, a day being the 24 hours ending at `asOf`;
+   - `by-token`, `by-pool`, one row per token or pool.
+
+   At the root a measure returns one row per protocol; under a protocol, its own, in the same
+   shape. A reserved word is never an identifier: identifiers are base58 keys or protocol
+   names. A measure's response carries its window, the instant it reflects (`asOf`) and its
+   coverage (`coveredSince`).
+5. **`live` is the reserved word of the SSE routes**: `/api/live`,
+   `/api/protocols/{protocol}/live?topics=…`, one connection for every topic it names.
+6. **Every field of a response completes the name of its route.** The route reads as a
+   sentence ("the swaps of the DAMM v2 protocol over 24 h, in totals") and each field is an
+   attribute of it. A field that needs another name to describe itself belongs to another
+   route. A response embeds the *identity* of another resource (the symbol and logo of a
+   signal's tokens), nothing else: neither its state nor its measures. A field that exists in
+   one protocol only goes in a block named after it.
+7. **A response does not mix what is read live and what `yog-analytic` computes.**
+   - Live: the entities and their current state (reserves, price, a pool's TVL), events,
+     signals — written by the indexer and `yog-context`, fresh to the second.
+   - Computed: every measure over a window — written by `yog-analytic`, fresh to a few
+     minutes.
+   - Mixed, the slower makes the other unavailable, and a response can no longer state the
+     age of what it holds.
+   - The boundary is the nature of the data, not today's cost: a measure over a window is
+     computed, even if it would count fast live.
+   - A computed response embeds the identity of what it measures: an identity does not age
      and costs nothing. The reverse is forbidden.
-4. **A measure is read from `yog-analytic`'s tables**, never from a view that
-   values at read time. That is what holds the delay whatever the window.
-5. **Measures have one shape**: how many X, over the window W, grouped by G.
-   - The subject is in the path, the window in a parameter:
-     `/api/protocols/{protocol}/activity?window=24h` for the totals,
-     `/api/protocols/{protocol}/activity/hourly?window=24h` for the series. A
-     collection returns one row per subject: `/api/tokens/activity?window=24h`.
-   - TVL has its own routes on the same model: `/api/protocols/{protocol}/tvl`,
-     `/api/protocols/{protocol}/tvl/hourly`.
-   - A measure's response carries its window, the instant it reflects, and its
-     coverage.
-6. **What belongs to one protocol is named after it.** The shared resources
-   (pools, tokens, signals) carry the protocol as a field and accept it as a
-   filter. What exists in one protocol only goes in a block named after it or
-   under `/api/protocols/{protocol}/…`.
-7. **The form rules stay as they are** — cursor pagination, Problem Details,
-   camelCase, RFC 3339 — written once, in the contract.
-8. **The contract is written once, on the server, and the client derives from
-   it**: an OpenAPI document drawn from the Rust types, from which the web's zod
-   is generated ([The contract](#the-contract)).
+8. **A measure is read from `yog-analytic`'s tables**, never from a view that values at
+   read time. That is what holds the delay whatever the window.
+9. **The form rules stay as they are** — cursor pagination, Problem Details, camelCase,
+   RFC 3339 — written once, in the contract.
+10. **The contract is written once, on the server, and the client derives from it**: an
+    OpenAPI document drawn from the Rust types, from which the web's zod is generated
+    ([The contract](#the-contract)).
 
-**Names.** `activity` for the flows over a window (volume, fees, swaps,
-liquidity, claims, rewards, active pools, births), `tvl` for the value
-deposited. A series is a sub-resource, `hourly` then `daily`: a parameter never
-changes the shape of a response. `window=24h|7d|30d`, a closed list, 400
-otherwise; `offset` for the previous window; `asOf` for the instant a response
-reflects. The protocol is written `meteora_damm_v2` everywhere (field, filter,
-path); paths in kebab-case, collections plural, fields camelCase. No catch-all
-name (`analytics`, `metrics`, `stats`): a category name excludes nothing.
+**Parameters.** `window=24h|7d|30d`, a closed list, 400 otherwise; `offset` for the previous
+window; `asOf` for the instant a response reflects. A parameter never changes the shape of a
+response. The protocol is written `meteora_damm_v2` everywhere (field, path); fields in
+camelCase.
+
+**Not yet following these rules**: `/api/protocols/activity` and its `/hourly` and `/daily`,
+`/api/protocols/tvl` and its `/hourly`, `/api/tokens/activity`, `/api/announcements/active`,
+`/api/signals/stream`, and the `pool` filter of `/api/signals`.
 
 **Delay.** Every route but the probes and the live stream answers in under
 **2 s** in production, network included, at the heaviest its parameters allow,

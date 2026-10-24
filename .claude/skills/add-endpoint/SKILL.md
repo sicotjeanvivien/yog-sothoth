@@ -1,29 +1,46 @@
 ---
 name: add-endpoint
-description: Add a new read API endpoint to Yog-Sothoth (axum). Use when the user wants to expose existing data over HTTP — no new protocol, no new tables, no new domain types. Walks the contained core→persistence→api workflow from crates/README.md with real file paths, and respects cursor pagination, RFC 9457 errors, and the least-privilege RO api role.
+description: Create or change a Yog-Sothoth API route (axum). Use whenever a route is added, renamed or reshaped, or a page needs data the API does not serve. Derives the path from the route conventions of crates/api/README.md before any code, then walks the core→persistence→api workflow with real file paths, cursor pagination, RFC 9457 errors and the read-only api role.
 ---
 
-# Add a new API endpoint
+# Create or change an API route
 
 Authoritative recipe: `crates/README.md` → *Adding a new API endpoint*. This skill is the
 operational checklist with real file paths.
 
-Scope: this is for endpoints that **read existing data** — no new tables, no new domain
-types, no new protocol. If you need a new protocol/product end-to-end, use `/add-protocol`
-instead.
+Scope: a route **reads data that exists**. A route that needs a new table starts with
+`/add-migration`, then comes back here; a new protocol/product end-to-end is
+`/add-protocol`.
 
 Templates to copy: the token read path —
 `crates/api/src/application/services/token_service.rs`,
 `crates/api/src/http/handlers/token.rs`, and the matching DTOs under
 `crates/api/src/http/dto/`.
 
-## Before you start — clarify scope
+## Step 0 — name the route, before any code
 
-Read the rules first — `crates/api/README.md` → *What a route may return*: what a route
-may return, how it is named, and the 2 s it must answer in.
+The conventions are `crates/api/README.md` → *What a route may return*, and only there:
+read them, then answer each question below **from them**, citing the rule. A path that
+needs an answer the rules do not give is a question for the user, never a name made up.
 
-Confirm with the user (don't assume):
-- The **route** (e.g. `GET /api/tokens/{mint}`) and its path/query params.
+1. **What thing of the data is it?** An entity, an event collection, the TVL or a
+   singleton (rule 1). Its name is the one rule 1 lists; a thing not listed gets its name
+   from the user, by rule 1's naming rule.
+2. **For every protocol, or for one entity?** The form of rule 2. An entity is never a
+   filter parameter.
+3. **The items, a measure, or the live stream?** The items: the collection itself
+   (rule 3). A measure: the collection and one cut (rule 4). The live stream: `live`
+   (rule 5).
+4. **Does every field complete the route's name** (rule 6)? Live and computed in one
+   response (rule 7) means two routes.
+5. **Is an existing route already this one?** Then extend it; and if it is in *Not yet
+   following these rules*, say so to the user before building on it.
+
+Write the path and its answers to the user and wait for agreement before Step 1. A page
+reading another scope's route and filtering in the browser is the defect this step exists
+for: the page reads the route of its own scope.
+
+Confirm with the user as well (don't assume):
 - Whether the data is **cross-protocol** (read a VIEW: `swap_events`, `liquidity_events`, …)
   or **protocol-specific** (read the per-protocol table directly).
 - Whether the query it needs **already exists** on a repository trait, or must be added.
@@ -111,6 +128,7 @@ curl http://127.0.0.1:5000/api/<your-endpoint> | jq
 
 ## Definition of done
 
+- [ ] The path derived in Step 0 from the rules, agreed with the user
 - [ ] Repository trait method added + ordering/pagination contract documented (if new)
 - [ ] `Pg*` impl added; `.sqlx/` regenerated and committed
 - [ ] Service + request/response DTOs created; input validated at the handler boundary
