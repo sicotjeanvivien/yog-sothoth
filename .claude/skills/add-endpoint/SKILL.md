@@ -42,9 +42,9 @@ reading another scope's route and filtering in the browser is the defect this st
 for: the page reads the route of its own scope.
 
 Confirm with the user as well (don't assume):
-- Where the data is read: a measure or the `tvl` readings in `yog-analytic`'s tables
-  (rule 8); live data in a cross-protocol VIEW (`swap_events`, `liquidity_events`, …) or in
-  the per-protocol table.
+- Where the data is read: what `yog-analytic` computes — a measure, the `tvl` readings, a
+  valued or drawn event collection — in its tables (rules 7 and 8); live data in a
+  cross-protocol VIEW (`swap_events`, `liquidity_events`, …) or in the per-protocol table.
 - Whether the query it needs **already exists** on a repository trait, or must be added.
 
 ## Step 1 — `core`: extend the repository trait (only if the query is new)
@@ -130,8 +130,10 @@ curl http://127.0.0.1:5000/api/<your-endpoint> | jq
 
 ## Renaming or reshaping a route
 
-Every place that names the old path changes in the same change: `git grep -F '<old path>'`
-over the whole repository, web and docs included, and nothing it lists is left. Then
+Every place that names the old path changes in the same change: `git grep -F` its last
+fixed segment (`/liquidity-moves`, not the whole path: the web builds paths in template
+literals) over the whole repository, web and docs included. Every hit changes but the dated
+entries of `web/src/components/marketing/changelog/releases.ts`, which are history. Then
 regenerate the contract (`crates/api/openapi.json`, `web/src/lib/api/schema/`), and take the
 route out of *Not yet following these rules* when it leaves it. The old path is removed when
 its last caller leaves it, in that same change.

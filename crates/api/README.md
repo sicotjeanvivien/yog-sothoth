@@ -120,7 +120,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/tokens/{mint}` | Token metadata + latest price (200 with `price: null` if no price yet) |
 | `GET` | `/api/announcements/active` | Operator announcements whose window is open — most severe first, non-paginated (hard cap); empty array is the nominal case |
 
-**The measures** (`/api/protocols/…` but the catalogue, `/api/tokens/activity`)
+**What yog-analytic computes** (`/api/protocols/…` but the catalogue, `/api/tokens/activity`)
 read yog-analytic's tables over one span, built in `ActivityService`: the window
 ends at the close of the last frozen hour, `asOf`, the same for every route, and
 no read counts an open hour. Each response carries `from`, `asOf` and
@@ -141,13 +141,14 @@ cursor carries that hour, and one taken before a freeze is refused (400).
 These rules hold for every `/api` route. The routes that do not follow them yet are listed
 at the end of this section.
 
-1. **A route names a thing of the data**, plural, in kebab-case:
+1. **A route names a thing of the data**, in kebab-case, a collection in the plural:
    - **entities**, what exists: `protocols`, `pools`, `tokens`, `announcements`;
    - **events**, what happens: `swaps`, `liquidity-moves`, `pool-creations`,
      `position-changes`, `position-fee-claims`, `protocol-fee-claims`, `reward-claims`,
      `signals`, `rotation-runs`;
    - **`tvl`**, the one measure of state: the collection of its hourly readings;
-   - **`network`** and **`ingestion`**, singletons: the state of the service.
+   - **`network`** and **`ingestion`**, singletons, the state of the service, each at
+     `/api/<singleton>`.
 
    A name says what is observed, never an image or a category (`activity`, `stats`,
    `metrics`, `analytics`). An event collection read from the chain takes the name of the
@@ -162,23 +163,28 @@ at the end of this section.
    or an announcement's id — and never a reserved word (rules 4 and 5).
 3. **A collection returns its items**, cursor-paginated (`Page<T>`: `?limit=`, 50 by
    default, 200 at most), with `?window=` when it is read over one and `?sort=` when it has
-   more than one order. A parameter may filter on an attribute of the items (`?severity=`),
+   more than one order. A collection that is not paginated yet is listed below. A parameter
+   may filter on an attribute of the items (`?severity=`),
    never name an entity. Every item of a collection shared by several protocols carries its
    protocol.
 4. **A measure is a collection followed by a cut**, a reserved word that ends the path:
    - `totals`, the whole window: one row per protocol at the root, under an entity its own;
    - `hourly`, `daily`: the same rows, one per bar, a day being the 24 hours ending at
      `asOf`;
-   - `by-token`, `by-pool`: one row per token or pool in the path's scope, a ranking
-     paginated as a collection.
+   - `by-token`, `by-pool`: one row per token or pool, summed over the path's scope (every
+     protocol at the root), a ranking paginated as a collection.
 
-   `tvl` takes no cut: its readings are its rows, `?window=` returns those of the window
-   with the part held by the pools discovered in it, unpaginated, the window bounding them.
-   A measure's response, `tvl`'s included, carries its window, the instant it reflects
-   (`asOf`) and its coverage (`coveredSince`).
+   A measure's row is not an item: it carries a protocol only where it is cut by protocol.
+
+   `tvl` takes no cut: its readings are its rows, `?window=` returns those of the window,
+   unpaginated, the window bounding them, and once the part held at its last reading by the
+   pools discovered in it. Every response of what `yog-analytic` computes — a measure, the
+   `tvl` readings, a valued or drawn event collection — carries its window, the instant it
+   reflects (`asOf`) and its coverage (`coveredSince`).
 5. **`live` is the reserved word of the SSE routes**: `/api/live` for every protocol,
    `/api/<entities>/{id}/live` for one entity, `?topics=` naming the event collections it
-   streams, one connection for them all. Each message keeps its own shape.
+   streams, one connection for them all. A topic is a collection read live (rule 7), never
+   one `yog-analytic` computes. Each message keeps its own shape.
 6. **Every field of a response completes the name of its route.** The route reads as a
    sentence ("the swaps of the DAMM v2 protocol over 24 h, in totals") and each field is an
    attribute of it. A field that needs another name to describe itself belongs to another
@@ -213,8 +219,8 @@ camelCase.
 
 **Not yet following these rules**: `/api/protocols/activity` and its `/hourly` and `/daily`,
 `/api/protocols/tvl` and its `/hourly`, `/api/tokens/activity`, `/api/announcements/active`,
-`/api/signals/stream`, the `pool` filter of `/api/signals`, and
-`/api/protocols/{protocol}/liquidity-moves`, which has no `sort` and no cursor.
+`/api/signals/stream`, the `pool` filter of `/api/signals`, and two collections without a
+cursor, `/api/protocols` and `/api/protocols/{protocol}/liquidity-moves`.
 
 **Delay.** Every route but the probes and the live stream answers in under
 **2 s** in production, network included, at the heaviest its parameters allow,
