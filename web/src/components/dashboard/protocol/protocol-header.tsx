@@ -1,21 +1,15 @@
 /**
  * A protocol page's compact header: its platform, its title and an ⓘ with the program and since
- * when its figures are measured; at the right, "Live" over the period and the mode, as on the
- * Overview. ⚠️ The period links keep the tab, the tab links keep the period.
+ * when its figures are measured; at the right, the Overview's controls. ⚠️ The period links
+ * keep the tab, the tab links keep the period.
  */
 
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 
-import { LiveIndicator } from "@/components/dashboard/live-status/live-indicator";
-import { AdvancedSwitch } from "@/components/dashboard/overview/advanced-switch";
+import { HeaderControls } from "@/components/dashboard/overview/header-controls";
 import { LABEL_CLASS } from "@/components/dashboard/overview/overview-layout";
-import {
-  OverviewLiveRows,
-  OverviewLiveRowsFallback,
-} from "@/components/dashboard/overview/overview-live-rows";
 import { utcMoment } from "@/components/dashboard/overview/overview-parts";
-import { PeriodControl, PeriodSelect } from "@/components/dashboard/overview/period-control";
 import { InfoPopover } from "@/components/shared/info-popover";
 import type { PagePath } from "@/config/site";
 import { ApiClientError } from "@/lib/api/errors";
@@ -23,7 +17,7 @@ import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
 import { fetchProtocolActivity } from "@/lib/api/server/protocols";
 import { shortenPubkey } from "@/lib/format/pubkey";
 import type { Period } from "@/lib/overview/period";
-import type { ProtocolTab } from "@/lib/protocol/tabs";
+import { tabQuery, type ProtocolTab } from "@/lib/protocol/tabs";
 
 type HeaderProps = {
   pathname: PagePath;
@@ -35,8 +29,6 @@ type HeaderProps = {
 
 export async function ProtocolHeader({ pathname, period, tab, protocol, programId }: HeaderProps) {
   const t = await getTranslations("Dashboard.Protocol.page");
-  const tOverview = await getTranslations("Dashboard.Overview.page");
-  const page = { pathname, keep: tab === null ? {} : { tab } };
 
   return (
     <header className="flex flex-wrap items-start justify-between gap-x-8 gap-y-3 border-b border-dash-rule px-4 py-5 font-dash-sans rail:px-8 rail:pt-4 rail:pb-[14px]">
@@ -59,23 +51,7 @@ export async function ProtocolHeader({ pathname, period, tab, protocol, programI
           </InfoPopover>
         </span>
       </div>
-      <div className="flex flex-col items-start gap-2.5 rail:ml-auto rail:items-end">
-        <span className="-ml-[10px] rail:-mr-[10px] rail:ml-0">
-          <LiveIndicator
-            pageRows={
-              <Suspense key={period} fallback={<OverviewLiveRowsFallback />}>
-                <OverviewLiveRows period={period} scope={protocol} />
-              </Suspense>
-            }
-          />
-        </span>
-        <div className="flex flex-wrap items-center gap-3 rail:justify-end">
-          <Suspense fallback={<PeriodSelect period={period} {...page} availability={null} />}>
-            <PeriodControl period={period} {...page} />
-          </Suspense>
-          <AdvancedSwitch label={tOverview("advanced")} />
-        </div>
-      </div>
+      <HeaderControls period={period} scope={protocol} pathname={pathname} keep={tabQuery(tab)} />
     </header>
   );
 }

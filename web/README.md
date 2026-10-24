@@ -322,8 +322,8 @@ sitemap (`UNLISTED_PATHS`) until its first tab ships.
 **Header** — `protocol/protocol-header.tsx`: the platform, then the title, its ⓘ
 giving the program and since when the figures are measured (`coveredSince`,
 the first frozen hour), and at its right "Live", the period and the advanced
-mode, as on the Overview. The period selector (`overview/period-control.tsx`) is
-shared: it takes the page's path and the query it keeps.
+mode: `overview/header-controls.tsx`, shared with the Overview, takes the
+page's path, the query it keeps and the scope of its "Live" rows.
 
 **KPIs** — the Overview's cells take a `scope` (`lib/overview/scope.ts`): `"all"`
 on the Overview, the protocol here, so both pages compute each figure once and
@@ -335,8 +335,9 @@ dashboard: same `OverviewMode`, same cookie.
 **Tabs** — `lib/protocol/tabs.ts` lists the six tabs of the canvas, in order;
 a tab joins the row when its content ships (`READY_TABS`), numbered by its
 place in the full list so it never moves. `?tab=` picks one, a bad value falls
-back to the first ready; tab links keep the period, period links keep the tab,
-and a digit key opens its tab. The KPIs' `<Suspense>` is keyed by the period
+back to the first ready, which, like the default period, the URL leaves out
+(`pageQuery`, `tabQuery`); tab links keep the period, period links keep the
+tab, and a digit key opens its tab, Shift allowed for AZERTY. The KPIs' `<Suspense>` is keyed by the period
 only: a tab change re-reads them on the server and keeps them on screen.
 
 ## Site

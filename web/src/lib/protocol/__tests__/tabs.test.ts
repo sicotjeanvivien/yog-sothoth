@@ -6,6 +6,7 @@ import {
   readyTabs,
   tabForKey,
   tabNumber,
+  tabQuery,
   type ProtocolTab,
 } from "../tabs";
 
@@ -67,5 +68,17 @@ describe("tabForKey", () => {
     for (const key of ["0", "7", "12", "a", "Enter"]) {
       expect(tabForKey(key, shipped)).toBeNull();
     }
+  });
+});
+
+describe("tabQuery", () => {
+  // Mutation: the default tab written out gives the page without `?tab=` a second URL.
+  it("leaves the default tab out", () => {
+    expect(tabQuery("liquidity", ready("liquidity", "fees"))).toEqual({});
+    expect(tabQuery("fees", ready("liquidity", "fees"))).toEqual({ tab: "fees" });
+  });
+
+  it("adds nothing while no tab has shipped", () => {
+    expect(tabQuery(null, ready())).toEqual({});
   });
 });

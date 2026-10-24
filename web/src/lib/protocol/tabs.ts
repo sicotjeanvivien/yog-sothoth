@@ -43,3 +43,11 @@ export function tabForKey(
   const tab = PROTOCOL_TABS[Number.parseInt(key, 10) - 1];
   return /^[1-9]$/.test(key) && tab !== undefined && ready.has(tab) ? tab : null;
 }
+
+/** The query a tab adds: none for the default tab, the first ready one, so a view has one URL. */
+export function tabQuery(
+  tab: ProtocolTab | null,
+  ready: ReadonlySet<ProtocolTab> = READY_TABS,
+): Record<string, string> {
+  return tab === null || tab === readyTabs(ready)[0] ? {} : { tab };
+}
