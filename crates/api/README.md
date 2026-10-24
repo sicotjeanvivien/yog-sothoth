@@ -157,8 +157,8 @@ at the end of this section.
    `metrics`, `analytics`). An on-chain collection takes the name of the on-chain event
    family it gathers (`initialize_pool` → `pool-creations`, `EvtLiquidityChange` →
    `liquidity-changes`); a produced one names what it observes: `tvl`, the value deposited, a
-   reading at an instant; `liquidity-moves`, the deposits of the pool creations and the
-   liquidity changes, valued; `rotation-runs`, a pool's tranches whose quoted reserve turned
+   reading at an instant; `liquidity-moves`, the liquidity brought by the pool creations,
+   added or removed, valued; `rotation-runs`, a pool's tranches whose quoted reserve turned
    over at least once, no more than 30 min apart, with the tranches between them;
    `vesting-unlocks`, the liquidity a vesting lock releases at an instant.
 2. **Three path forms**: `/api/<collection>`, every protocol; `/api/<collection>/{id}`, one
@@ -167,11 +167,11 @@ at the end of this section.
    parameter. An identifier is a key of the data — a base58 key, a protocol name, a signal's
    or an announcement's id — and never a reserved word (rules 4 and 5).
 3. **A collection returns its items**, cursor-paginated (`Page<T>`: `?limit=`, 50 by
-   default, 200 at most) — all but `tvl/hourly`, which its window bounds (rule 4) — with
-   `?window=` when it is read over one and `?sort=` when it has more than one order. A
-   collection not paginated yet is listed below. A parameter may filter on an attribute of the
-   items (`?severity=`), never name an entity. Every item of a collection shared by several
-   protocols carries its protocol.
+   default, 200 at most) — all but `tvl`, a reading, and `tvl/hourly`, which its window
+   bounds (rule 4) — with `?window=` when it is read over one and `?sort=` when it has more
+   than one order. A collection not paginated yet is listed below. A parameter may filter on
+   an attribute of the items (`?severity=`), never name an entity. Every item of a collection
+   shared by several protocols carries its protocol.
 4. **A measure is a collection followed by a cut**, a reserved word that ends the path:
    - `totals`, the whole window: one row per protocol at the root, under an entity its own;
    - `hourly`, `daily`: the same rows, one per bar, a day being the 24 hours ending at
@@ -182,15 +182,15 @@ at the end of this section.
    A measure's row is not an item: it carries a protocol only where it is cut by protocol.
 
    `tvl` is a reading at an instant, never a sum over a period: `/tvl` gives the reading at
-   `asOf`, without a window; `hourly`, one reading per hour of the window, each at its hour's
+   `asOf`, without a window, one per protocol at the root, under a protocol its own; `hourly`, one reading per hour of the window, each at its hour's
    close, unpaginated, the window bounding them; `by-token` and `by-pool` rank at `asOf`,
    without a window. It has no `totals`. Every response of what `yog-analytic` computes carries
    the instant it reflects (`asOf`), its coverage (`coveredSince`), and its window when it is
    read over one.
 5. **`live` is the reserved word of the SSE routes**: `/api/live` for every protocol,
-   `/api/<entities>/{id}/live` for one entity, `?topics=` naming the event collections it
-   streams, one connection for them all. A topic is a collection read live (rule 7), never
-   one `yog-analytic` computes. Each message keeps its own shape.
+   `/api/<entities>/{id}/live` for one entity, `?topics=` naming the collections it streams,
+   one connection for them all: the on-chain events and `signals`, the collections read live
+   (rule 7), never one `yog-analytic` computes. Each message keeps its own shape.
 6. **Every field of a response completes the name of its route.** The route reads as a
    sentence ("the swaps of the DAMM v2 protocol over 24 h, in totals") and each field is an
    attribute of it. A field that needs another name to describe itself belongs to another

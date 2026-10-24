@@ -42,8 +42,8 @@ reading another scope's route and filtering in the browser is the defect this st
 for: the page reads the route of its own scope.
 
 Confirm with the user as well (don't assume):
-- Where the data is read: what `yog-analytic` computes — a measure, the `tvl` readings, a
-  valued or drawn event collection — in its tables (rules 7 and 8); live data in a
+- Where the data is read: what `yog-analytic` computes — the measures, `tvl`, the
+  collections it values or draws — in its tables (rules 7 and 8); live data in a
   cross-protocol VIEW (`swap_events`, `liquidity_events`, …) or in the per-protocol table.
 - Whether the query it needs **already exists** on a repository trait, or must be added.
 
