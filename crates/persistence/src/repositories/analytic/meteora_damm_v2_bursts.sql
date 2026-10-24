@@ -82,8 +82,11 @@ written AS (
                     AS hours_whole
      ) s
      GROUP BY i.pool_address, i.started_at, i.last, s.extinct, s.hours_whole
+    -- ⚠️ Skipped, not failed: a burst drawn twice must not stop the cycle that values the swaps.
+    ON CONFLICT (pool_address, started_at) DO NOTHING
 )
 INSERT INTO analytic_burst_hours (pool_address, started_at, bucket, protocol, volume_usd)
 SELECT pool_address, started_at, time_bucket('1 hour', bucket), $1, SUM(volume)
   FROM tranches
  GROUP BY pool_address, started_at, time_bucket('1 hour', bucket)
+ON CONFLICT (pool_address, started_at, bucket) DO NOTHING

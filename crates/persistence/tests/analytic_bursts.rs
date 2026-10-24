@@ -266,10 +266,9 @@ async fn a_burst_settles_once_its_last_hour_is_whole_and_counts_it_only_valued_w
     );
 }
 
-/// Mutation: a settled burst drawn again — its row would be inserted a second time and fail
-/// the cycle.
+/// Mutation: a burst's volume put in the hour it starts — the curve would show none in the next.
 #[sqlx::test]
-async fn a_settled_bursts_hours_sum_its_volume_once(pool: PgPool) {
+async fn a_bursts_volume_is_split_by_hour(pool: PgPool) {
     let base = settled_hour();
     let address = pk(1).to_string();
     for minutes in [45, 55, 65] {

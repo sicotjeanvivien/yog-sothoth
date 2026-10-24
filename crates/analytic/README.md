@@ -85,7 +85,7 @@ Pools that only move liquidity stay out of the swaps' facts: they are not active
 
 A tranche carries its **rotation**: what its quoted side — SOL, USDC or USDT — traded over
 its mean reserve, read in the raw swaps with the tranche; a pair with both or neither takes
-the smaller of its two sides. A tranche is marked at `BURST_ROTATION` (1); a pool's marked
+the smaller of its two sides, and a pool whose mints are not resolved yet has none. A tranche is marked at `BURST_ROTATION` (1); a pool's marked
 tranches no more than `BURST_GAP` (30 min) apart make one **burst**, from the start of the
 first to the end of the last, worth every tranche of the pool between them, marked or not.
 The thresholds and the quoted mints live in `core` (`domain/analytic/burst.rs`), once.
