@@ -122,7 +122,8 @@ with no wildcard arm, so adding a variant breaks the build there.
 
 **What yog-analytic computes** (`/api/protocols/…` but the catalogue, `/api/tokens/activity`)
 read yog-analytic's tables over one span, built in `ActivityService`: the window
-ends at the close of the last frozen hour, `asOf`, the same for every route, and
+ends at the close of the last frozen hour, `asOf`, the same for every route (a window of
+future events starts there), and
 no read counts an open hour. Each response carries `from`, `asOf` and
 `coveredSince`, the first hour of the facts: a total whose window starts before
 it returns no row rather than a partial sum; a series returns the bars the facts
@@ -166,31 +167,32 @@ at the end of this section.
    (`/api/protocols/meteora_damm_v2/swaps`). An entity is always in the path, never a filter
    parameter. An identifier is a key of the data — a base58 key, a protocol name, a signal's
    or an announcement's id — and never a reserved word (rules 4 and 5).
-3. **A collection returns its items**, cursor-paginated (`Page<T>`: `?limit=`, 50 by
-   default, 200 at most) — all but `tvl`, a reading, and `tvl/hourly`, which its window
-   bounds (rule 4) — with `?window=` when it is read over one and `?sort=` when it has more
-   than one order. A collection not paginated yet is listed below. A parameter may filter on
-   an attribute of the items (`?severity=`), never name an entity. Every item of a collection
-   shared by several protocols carries its protocol.
+3. **A collection returns its items**, cursor-paginated (`Page<T>`: `?limit=`, 50 by default,
+   200 at most), with `?window=` when it is read over one and `?sort=` when it has more than
+   one order; a measure and `tvl` return the rows of rule 4. A collection not paginated yet is
+   listed below. A parameter may filter on an attribute of the items (`?severity=`), never
+   name an entity. Every item of a collection shared by several protocols carries its
+   protocol.
 4. **A measure is a collection followed by a cut**, a reserved word that ends the path:
    - `totals`, the whole window: one row per protocol at the root, under an entity its own;
    - `hourly`, `daily`: the same rows, one per bar, a day being the 24 hours ending at
-     `asOf`;
+     `asOf`, unpaginated, the window bounding them;
    - `by-token`, `by-pool`, `by-owner`: one row per token, pool or owner address, summed over
      the path's scope (every protocol at the root), a ranking paginated as a collection.
 
    A measure's row is not an item: it carries a protocol only where it is cut by protocol.
 
-   `tvl` is a reading at an instant, never a sum over a period: `/tvl` gives the reading at
-   `asOf`, without a window, one per protocol at the root, under a protocol its own; `hourly`, one reading per hour of the window, each at its hour's
-   close, unpaginated, the window bounding them; `by-token` and `by-pool` rank at `asOf`,
-   without a window. It has no `totals`. Every response of what `yog-analytic` computes carries
-   the instant it reflects (`asOf`), its coverage (`coveredSince`), and its window when it is
-   read over one.
+   `tvl` is a reading at an instant, never a sum over a period, read at the root (one per
+   protocol) and under a protocol (its own), with three forms only: `/tvl`, the last reading
+   at or before `asOf`, its instant (`at`) said, without a window; `hourly`, the readings of
+   the window, one per hour measured, each at its hour's close; `by-token` and `by-pool`,
+   ranked at that last reading, without a window. Every response of what `yog-analytic`
+   computes carries the instant it reflects (`asOf`), its coverage (`coveredSince`), and its
+   window when it is read over one.
 5. **`live` is the reserved word of the SSE routes**: `/api/live` for every protocol,
    `/api/<entities>/{id}/live` for one entity, `?topics=` naming the collections it streams,
-   one connection for them all: the on-chain events and `signals`, the collections read live
-   (rule 7), never one `yog-analytic` computes. Each message keeps its own shape.
+   one connection for them all: the on-chain events and `signals`, never another. Each message
+   keeps its own shape.
 6. **Every field of a response completes the name of its route.** The route reads as a
    sentence ("the swaps of the DAMM v2 protocol over 24 h, in totals") and each field is an
    attribute of it. A field that needs another name to describe itself belongs to another
@@ -217,12 +219,12 @@ at the end of this section.
     OpenAPI document drawn from the Rust types, from which the web's zod is generated
     ([The contract](#the-contract)).
 
-**Parameters and fields.** `window=24h|7d|30d`, a closed list, 400 otherwise; `offset` for
-the previous window. For a collection of future events (`vesting-unlocks`), `window` covers
-the period after `asOf`. A parameter never changes the shape of a response; `topics` (rule 5)
-chooses which messages come, not their shape. `asOf` is the field of the instant a response
-reflects. The protocol is written `meteora_damm_v2` everywhere (field, path); fields in
-camelCase.
+**Parameters and fields.** `window=24h|7d|30d`, a closed list, 400 otherwise; `offset` for the
+previous window. For a collection of future events (`vesting-unlocks`), `window` covers the
+period after `asOf`, and takes no `offset`. A parameter never changes the shape of a response;
+`topics` (rule 5) chooses which messages come, not their shape. `asOf` is the field of the
+instant a response reflects. The protocol is written `meteora_damm_v2` everywhere (field,
+path); fields in camelCase.
 
 **Not yet following these rules**: `/api/protocols/activity` and its `/hourly` and `/daily`,
 `/api/protocols/tvl` and its `/hourly`, `/api/tokens/activity`, `/api/announcements/active`,
