@@ -300,7 +300,7 @@ The two-level enums (`DomainEvent`, `PoolAccountProperties`) and the switch of `
 
 ## Adding a new API endpoint
 
-For endpoints that read existing data (no new tables, no new domain types), the workflow is contained:
+For a route that reads existing data (no new tables), the workflow is contained. A route's path comes first, from [the rules](./api/README.md#what-a-route-may-return):
 
 ### 1. Extend the relevant repository trait in `core`
 
@@ -313,7 +313,6 @@ Add the SQL in the corresponding `Pg*Repository` impl (see the [query-shape poli
 ### 3. Add the handler in `api`
 
 - Create or extend a module under `api/src/http/handlers/`.
-- Read the rules first: [what a route may return](./api/README.md#what-a-route-may-return), and its name.
 - Create request/response DTOs in `api/src/http/dto/` (request validation happens here, before any DB call). They derive `ToSchema` (`IntoParams` for a query), with their wire forms named — see [the contract](./api/README.md#the-contract).
 - Declare the route on its handler with `#[utoipa::path]` and mount it in `http.rs::api_routes` with `.routes(routes!(…))` — never `.route("/api/…")`, which serves it without a contract.
 - Regenerate the contract and commit it: `YOG_WRITE_OPENAPI=1 cargo test -p yog-api contract`, then `npm run gen:api` in `web/`.
