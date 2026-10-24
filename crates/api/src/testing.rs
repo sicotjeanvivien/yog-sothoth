@@ -743,6 +743,7 @@ impl LiquidityMoveLookup for MockMeasureRepo {
     async fn pool_moves(
         &self,
         span: &Span,
+        _: Window,
         _: Pubkey,
         _: LiquidityMoveOrder,
         _: Option<LiquidityMoveCursor>,

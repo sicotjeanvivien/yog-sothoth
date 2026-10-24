@@ -32,14 +32,15 @@ pub(crate) struct MeasureLenses {
     pub(crate) pools: Arc<dyn PoolCatalog>,
 }
 
-/// A page of a pool's moves, or the refusal of a cursor taken before the last freeze.
+/// A page of a pool's moves, or the refusal of a cursor taken from another list or before
+/// the last freeze.
 #[derive(Debug)]
 pub(crate) enum PoolMovesRead {
     Page(Measured<Page<LiquidityMove>>),
-    CursorExpired,
+    CursorRefused,
 }
 
-/// A bar series is hourly over a day, by 24 hours beyond.
+/// The bars of a series: one per hour, or one per 24 hours ending at `as_of`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Cut {
     Hourly,
@@ -239,15 +240,17 @@ impl MeasureService {
     ) -> RepositoryResult<PoolMovesRead> {
         let span = self.liquidity_span(window, pool.protocol).await?;
         if let (Some(span), Some(cursor)) = (&span, &cursor)
-            && cursor.as_of != span.as_of
+            && (cursor.as_of != span.as_of
+                || cursor.window != window
+                || cursor.pool != pool.pool_address)
         {
-            return Ok(PoolMovesRead::CursorExpired);
+            return Ok(PoolMovesRead::CursorRefused);
         }
         let items = match &span {
             Some(span) if span.is_covered() => {
                 self.lenses
                     .liquidity_moves
-                    .pool_moves(span, pool.pool_address, order, cursor, limit)
+                    .pool_moves(span, window, pool.pool_address, order, cursor, limit)
                     .await?
             }
             _ => Page::empty(),
@@ -255,8 +258,7 @@ impl MeasureService {
         Ok(PoolMovesRead::Page(Measured { span, items }))
     }
 
-    /// Each protocol's last TVL reading by the last frozen hour; its span is a day, of which
-    /// only `as_of` counts.
+    /// Each protocol's last TVL reading by the last frozen hour.
     pub(crate) async fn tvl(
         &self,
         protocol: Option<Protocol>,
@@ -295,13 +297,13 @@ impl MeasureService {
     ) -> RepositoryResult<Measured<Vec<PoolDiscoveries>>> {
         let span = self.span(window, None).await?;
         let items = match &span {
-            Some(span) => {
+            Some(span) if span.is_covered() => {
                 self.lenses
                     .pool_discoveries
                     .totals(span.last_hour(), window, protocol)
                     .await?
             }
-            None => Vec::new(),
+            _ => Vec::new(),
         };
         Ok(Measured { span, items })
     }

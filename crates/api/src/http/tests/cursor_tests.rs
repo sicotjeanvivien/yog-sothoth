@@ -3,9 +3,15 @@
 
 use chrono::{DateTime, TimeZone, Utc};
 
-use super::{decode_signal_cursor, encode_cursor, encode_cursor_opt};
+use rust_decimal::Decimal;
+use solana_pubkey::Pubkey;
+
+use super::{decode_liquidity_move_cursor, decode_signal_cursor, encode_cursor, encode_cursor_opt};
 use crate::http::error::ApiError;
-use yog_core::{Cursor, domain::SignalCursor};
+use yog_core::{
+    Cursor,
+    domain::{LiquidityMoveCursor, LiquidityMoveOrder, SignalCursor, Window},
+};
 
 fn ts(secs: i64) -> DateTime<Utc> {
     Utc.timestamp_opt(secs, 0).unwrap()
@@ -30,6 +36,25 @@ fn signal_cursor_round_trip() {
     let original = signal_cursor();
     let encoded = encode_cursor(&Cursor::Signal(original.clone())).unwrap();
     let decoded = decode_signal_cursor(&encoded).unwrap();
+    assert_eq!(decoded, original);
+}
+
+/// Mutation: the pool or the window not written to, or not read from, the wire — the
+/// service would compare a cursor to its list on a default.
+#[test]
+fn liquidity_move_cursor_round_trip() {
+    let original = LiquidityMoveCursor {
+        pool: Pubkey::new_unique(),
+        window: Window::Week,
+        as_of: ts(1_700_000_400),
+        order: LiquidityMoveOrder::At,
+        amount_usd: Decimal::new(12_345, 2),
+        at: ts(1_700_000_123),
+        signature: "sig".to_owned(),
+        event_index: 3,
+    };
+    let encoded = encode_cursor(&Cursor::LiquidityMove(Box::new(original.clone()))).unwrap();
+    let decoded = decode_liquidity_move_cursor(&encoded, LiquidityMoveOrder::At).unwrap();
     assert_eq!(decoded, original);
 }
 

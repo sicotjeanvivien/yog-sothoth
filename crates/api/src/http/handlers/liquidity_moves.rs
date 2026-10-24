@@ -136,8 +136,9 @@ pub(crate) async fn list_pool_liquidity_moves(
         PoolMovesRead::Page(measured) => {
             Ok(Json(WindowedPageResponse::new(request.window, measured)?))
         }
-        PoolMovesRead::CursorExpired => Err(ApiError::BadRequest(
-            "`cursor` belongs to a list read before the last freeze: start again without it"
+        PoolMovesRead::CursorRefused => Err(ApiError::BadRequest(
+            "`cursor` belongs to another list, or to one read before the last freeze: start \
+             again without it"
                 .to_string(),
         )),
     }

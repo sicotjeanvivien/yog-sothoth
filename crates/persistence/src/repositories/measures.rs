@@ -437,6 +437,7 @@ impl LiquidityMoveLookup for PgMeasureRepository {
     async fn pool_moves(
         &self,
         span: &Span,
+        window: Window,
         pool: Pubkey,
         order: LiquidityMoveOrder,
         cursor: Option<LiquidityMoveCursor>,
@@ -529,6 +530,8 @@ impl LiquidityMoveLookup for PgMeasureRepository {
             .collect::<RepositoryResult<Vec<_>>>()?;
         let page = PageBuilder::new(moves, limit, QueryMode::Forward, had_cursor).finalize(|m| {
             Cursor::LiquidityMove(Box::new(LiquidityMoveCursor {
+                pool,
+                window,
                 as_of: span.as_of,
                 order,
                 amount_usd: m.amount_usd,

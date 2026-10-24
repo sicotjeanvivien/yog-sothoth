@@ -1,7 +1,9 @@
 //! What yog-analytic measured, read by resource and by scope: every protocol, one protocol,
 //! or one pool. A row is cut by protocol only where it carries one.
 
-use crate::domain::Protocol;
+use solana_pubkey::Pubkey;
+
+use crate::domain::{Protocol, Window};
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
@@ -77,10 +79,12 @@ pub enum LiquidityMoveOrder {
     At,
 }
 
-/// The key of the last move of a page, in its order, and the instant its list was read at:
-/// a freeze moves the window, and a page read after it would not follow.
+/// The key of the last move of a page, and the list it was read from — its pool, window,
+/// order and instant: a page of another list, or read after a freeze, would not follow.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiquidityMoveCursor {
+    pub pool: Pubkey,
+    pub window: Window,
     pub as_of: DateTime<Utc>,
     pub order: LiquidityMoveOrder,
     pub amount_usd: Decimal,

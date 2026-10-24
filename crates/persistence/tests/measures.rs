@@ -279,7 +279,7 @@ async fn a_pools_moves_page_without_repeat_nor_gap_in_each_order(pool: PgPool) {
         let mut cursor = None;
         loop {
             let page = repository
-                .pool_moves(&day, pk(1), order, cursor.take(), 3)
+                .pool_moves(&day, Window::Day, pk(1), order, cursor.take(), 3)
                 .await
                 .unwrap();
             seen.extend(page.items.iter().map(|m| m.signature.clone()));
@@ -444,6 +444,7 @@ async fn a_page_follows_a_move_whose_amount_has_more_digits_than_a_cursor(pool: 
         let page = repository
             .pool_moves(
                 &span(24),
+                Window::Day,
                 pk(1),
                 LiquidityMoveOrder::Amount,
                 cursor.take(),

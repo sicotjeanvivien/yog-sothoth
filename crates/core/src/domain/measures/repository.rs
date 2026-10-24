@@ -92,10 +92,12 @@ pub trait LiquidityMoveLookup: Send + Sync {
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBar<LiquidityMoveSums>>>;
 
-    /// A pool's valued moves in `span`, in `order`, after `cursor`'s key; forward only.
+    /// A pool's valued moves in `span`, the span of `window`, in `order`, after `cursor`'s key;
+    /// forward only.
     async fn pool_moves(
         &self,
         span: &Span,
+        window: Window,
         pool: Pubkey,
         order: LiquidityMoveOrder,
         cursor: Option<LiquidityMoveCursor>,

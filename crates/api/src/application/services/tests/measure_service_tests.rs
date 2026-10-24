@@ -130,17 +130,19 @@ async fn the_tvl_reads_the_last_frozen_hour_and_the_series_from_the_windows_star
     );
 }
 
-/// Mutation: the cursor's instant not compared — a page read after a freeze follows one read
-/// before it, over another window.
+/// Mutation: the cursor's instant, window or pool not compared — a page follows one read
+/// before a freeze, over another window or of another pool.
 #[tokio::test]
-async fn a_cursor_taken_before_the_last_freeze_is_refused() {
+async fn a_cursor_of_another_list_or_before_the_last_freeze_is_refused() {
     let pool = make_pool(pk(1), pk(2), pk(3));
     let repo = Arc::new(MockMeasureRepo {
         since: Some(at(13, 13)),
         ..MockMeasureRepo::default()
     });
     let svc = measure_service(Some(hours()), repo.clone(), vec![]);
-    let cursor = |as_of| LiquidityMoveCursor {
+    let cursor = |as_of, window, address| LiquidityMoveCursor {
+        pool: address,
+        window,
         as_of,
         order: LiquidityMoveOrder::Amount,
         amount_usd: Decimal::ONE,
@@ -148,29 +150,31 @@ async fn a_cursor_taken_before_the_last_freeze_is_refused() {
         signature: "sig".to_owned(),
         event_index: 0,
     };
+    let read =
+        |c| svc.pool_liquidity_moves(Window::Day, &pool, LiquidityMoveOrder::Amount, Some(c), 5);
 
-    let stale = svc
-        .pool_liquidity_moves(
-            Window::Day,
-            &pool,
-            LiquidityMoveOrder::Amount,
-            Some(cursor(at(20, 12))),
-            5,
-        )
-        .await
-        .unwrap();
-    let current = svc
-        .pool_liquidity_moves(
-            Window::Day,
-            &pool,
-            LiquidityMoveOrder::Amount,
-            Some(cursor(at(20, 13))),
-            5,
-        )
-        .await
-        .unwrap();
+    let stale = read(cursor(at(20, 12), Window::Day, pk(1))).await.unwrap();
+    let other_window = read(cursor(at(20, 13), Window::Week, pk(1))).await.unwrap();
+    let other_pool = read(cursor(at(20, 13), Window::Day, pk(7))).await.unwrap();
+    let current = read(cursor(at(20, 13), Window::Day, pk(1))).await.unwrap();
 
-    assert!(matches!(stale, PoolMovesRead::CursorExpired));
+    assert!(matches!(stale, PoolMovesRead::CursorRefused));
+    assert!(matches!(other_window, PoolMovesRead::CursorRefused));
+    assert!(matches!(other_pool, PoolMovesRead::CursorRefused));
     assert!(matches!(current, PoolMovesRead::Page(_)));
     assert_eq!(reads(&repo), vec!["pool_moves"]);
+}
+
+/// Mutation: the `is_covered` guard dropped from the discoveries — a 30-day part over seven
+/// days of facts.
+#[tokio::test]
+async fn the_discoveries_over_hours_the_facts_lack_are_not_read() {
+    let repo = Arc::new(MockMeasureRepo::default());
+    let svc = measure_service(Some(hours()), repo.clone(), vec![]);
+
+    svc.pool_discoveries(Window::Month, None).await.unwrap();
+    svc.pool_discoveries(Window::Week, None).await.unwrap();
+
+    let instants = repo.instants.lock().unwrap().clone();
+    assert_eq!(instants, vec![("discoveries", at(20, 12), None)]);
 }

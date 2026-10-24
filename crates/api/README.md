@@ -137,8 +137,8 @@ with no wildcard arm, so adding a variant breaks the build there.
 tables over one span, built in `ActivityService` and `MeasureService`: the window
 ends at the close of the last frozen hour, `asOf`, the same for every route (a window of
 future events starts there), and
-no read counts an open hour. Each response carries `from`, `asOf` and
-`coveredSince`, the first hour of the facts: a total whose window starts before
+no read counts an open hour. Each response carries `asOf`, `coveredSince`, the first
+hour of the facts, and `from` when it is read over a window: a total whose window starts before
 it returns no row rather than a partial sum; a series returns the bars the facts
 hold whole. The TVL is each protocol's last measure by that hour, its `at` said,
 with the part of it held by the pools discovered in each window, measured with it

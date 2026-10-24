@@ -8,7 +8,7 @@ use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use yog_core::{
     Cursor,
-    domain::{LiquidityMoveCursor, LiquidityMoveOrder, SignalCursor, TokenActivityCursor},
+    domain::{LiquidityMoveCursor, LiquidityMoveOrder, SignalCursor, TokenActivityCursor, Window},
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -26,6 +26,8 @@ struct TokenActivityCursorWire {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct LiquidityMoveCursorWire {
+    pool: String,
+    window: String,
     as_of: String,
     order: String,
     amount_usd: String,
@@ -57,6 +59,8 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
             mint: c.mint.to_string(),
         }),
         Cursor::LiquidityMove(c) => encode_b64_json(&LiquidityMoveCursorWire {
+            pool: c.pool.to_string(),
+            window: c.window.as_str().to_owned(),
             as_of: c.as_of.to_rfc3339(),
             order: order_tag(c.order).to_owned(),
             amount_usd: c.amount_usd.to_string(),
@@ -118,6 +122,12 @@ pub(crate) fn decode_liquidity_move_cursor(
         ));
     }
     Ok(LiquidityMoveCursor {
+        pool: Pubkey::from_str(&wire.pool)
+            .map_err(|_| ApiError::BadRequest("invalid cursor: malformed pool".to_string()))?,
+        window: Window::ALL
+            .into_iter()
+            .find(|w| w.as_str() == wire.window)
+            .ok_or_else(|| ApiError::BadRequest("invalid cursor: malformed window".to_string()))?,
         as_of: parse_rfc3339(&wire.as_of)?,
         order,
         amount_usd: Decimal::from_str(&wire.amount_usd)
