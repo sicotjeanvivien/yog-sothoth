@@ -24,14 +24,14 @@ The conventions are `crates/api/README.md` → *What a route may return*, and on
 read them, then answer each question below **from them**, citing the rule. A path that
 needs an answer the rules do not give is a question for the user, never a name made up.
 
-1. **What thing of the data is it?** An entity, an event collection, the TVL or a
-   singleton (rule 1). Its name is the one rule 1 lists; a thing not listed gets its name
-   from the user, by rule 1's naming rule.
+1. **What resource of the data is it?** Its kind — on-chain event, business, produced or
+   service resource — and its name, the one rule 1 lists; a resource not listed gets its
+   name from the user, by rule 1's naming rule.
 2. **For every protocol, or for one entity?** The form of rule 2. An entity is never a
    filter parameter.
 3. **The items, a measure, or the live stream?** The items: the collection itself
-   (rule 3). A measure: the collection and one cut, or `tvl` and its readings (rule 4).
-   The live stream: `live` (rule 5).
+   (rule 3). A measure: the collection and one cut, or `tvl`, a reading at an instant (rule 4).
+   The live stream: under the `/api/live` prefix (rules 2 and 5).
 4. **Does every field complete the route's name** (rule 6)? Live and computed in one
    response (rule 7) means two routes.
 5. **Is an existing route already this one?** Then extend it; and if it is in *Not yet
@@ -42,8 +42,8 @@ reading another scope's route and filtering in the browser is the defect this st
 for: the page reads the route of its own scope.
 
 Confirm with the user as well (don't assume):
-- Where the data is read: what `yog-analytic` computes — a measure, the `tvl` readings, a
-  valued or drawn event collection — in its tables (rules 7 and 8); live data in a
+- Where the data is read: what `yog-analytic` computes — the measures, `tvl`, the
+  collections it values or draws — in its tables (rules 7 and 8); live data in a
   cross-protocol VIEW (`swap_events`, `liquidity_events`, …) or in the per-protocol table.
 - Whether the query it needs **already exists** on a repository trait, or must be added.
 
