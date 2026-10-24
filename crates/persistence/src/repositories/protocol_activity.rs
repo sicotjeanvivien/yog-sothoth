@@ -80,7 +80,8 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
                  GROUP BY protocol
             ),
             liquidity AS (
-                SELECT protocol, SUM(added_usd) AS added_usd, SUM(removed_usd) AS removed_usd,
+                SELECT protocol, SUM(created_usd) AS created_usd,
+                       SUM(added_usd) AS added_usd, SUM(removed_usd) AS removed_usd,
                        SUM(moves)::BIGINT AS moves, SUM(moves_valued)::BIGINT AS moves_valued
                   FROM analytic_protocol_liquidity_hourly
                  WHERE bucket >= $1 AND bucket < $2
@@ -104,6 +105,7 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
                    COALESCE(j.pool_hours, 0) AS "pool_hours!",
                    COALESCE(j.pool_hours_valued, 0) AS "pool_hours_valued!",
                    -- ⚠️ Only a span its liquidity covers whole: before, a sum would read low.
+                   CASE WHEN s.since <= $1 THEN l.created_usd END AS liquidity_created_usd,
                    CASE WHEN s.since <= $1 THEN l.added_usd END AS liquidity_added_usd,
                    CASE WHEN s.since <= $1 THEN l.removed_usd END AS liquidity_removed_usd,
                    CASE WHEN s.since <= $1 THEN l.moves END AS liquidity_moves,
@@ -138,6 +140,7 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
             r#"
             SELECT h.protocol, h.bucket AS bar_from, h.volume_usd, h.fees_usd, h.swap_count,
                    h.active_pools AS pool_hours, h.active_pools_valued AS pool_hours_valued,
+                   l.created_usd AS "liquidity_created_usd?",
                    l.added_usd AS "liquidity_added_usd?", l.removed_usd AS "liquidity_removed_usd?",
                    l.moves AS "liquidity_moves?", l.moves_valued AS "liquidity_moves_valued?"
               FROM analytic_protocol_hourly h
@@ -170,6 +173,8 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
                    SUM(hours.active_pools)::BIGINT AS "pool_hours!",
                    SUM(hours.active_pools_valued)::BIGINT AS "pool_hours_valued!",
                    -- ⚠️ Only a bar its liquidity covers whole: before, a sum would read low.
+                   CASE WHEN hours.bar_from >= MIN(s.since) THEN SUM(l.created_usd) END
+                       AS liquidity_created_usd,
                    CASE WHEN hours.bar_from >= MIN(s.since) THEN SUM(l.added_usd) END
                        AS liquidity_added_usd,
                    CASE WHEN hours.bar_from >= MIN(s.since) THEN SUM(l.removed_usd) END

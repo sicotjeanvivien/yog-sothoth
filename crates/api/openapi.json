@@ -246,9 +246,12 @@
         "type": "object"
       },
       "LiquidityFlowsResponse": {
-        "description": "The liquidity added and removed; the sums skip the moves not valued.",
+        "description": "The liquidity deposited at the pools' creation, added and removed; the sums skip the\nmoves not valued.",
         "properties": {
           "addedUsd": {
+            "$ref": "#/components/schemas/UnsignedDecimal"
+          },
+          "createdUsd": {
             "$ref": "#/components/schemas/UnsignedDecimal"
           },
           "moves": {
@@ -262,6 +265,7 @@
           }
         },
         "required": [
+          "createdUsd",
           "addedUsd",
           "removedUsd",
           "moves",
@@ -271,6 +275,7 @@
       },
       "LiquidityMoveKindResponse": {
         "enum": [
+          "create",
           "add",
           "remove"
         ],

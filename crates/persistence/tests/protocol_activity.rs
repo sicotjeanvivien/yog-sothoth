@@ -407,12 +407,13 @@ async fn every_pool_seen_counts_under_its_protocol(pool: PgPool) {
     assert_eq!(counts, expected);
 }
 
-/// Liquidity measured from `since` through the open hour, each hour $2 added and $1 removed.
+/// Liquidity measured from `since` through the open hour, each hour $3 created, $2 added and
+/// $1 removed.
 async fn seed_liquidity_since(pool: &PgPool, since: DateTime<Utc>) {
     sqlx::query(
         "INSERT INTO analytic_protocol_liquidity_hourly
-           (protocol, bucket, added_usd, removed_usd, moves, moves_valued)
-         SELECT 'meteora_damm_v2', h, 2, 1, 2, 2
+           (protocol, bucket, created_usd, added_usd, removed_usd, moves, moves_valued)
+         SELECT 'meteora_damm_v2', h, 3, 2, 1, 2, 2
            FROM generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ + INTERVAL '1 hour', INTERVAL '1 hour') AS h",
     )
     .bind(since)
@@ -433,6 +434,7 @@ async fn liquidity_is_read_only_over_a_span_it_covers_whole(pool: PgPool) {
     assert_eq!(
         day_rows[0].liquidity,
         Some(LiquidityFlows {
+            created_usd: Decimal::from(72),
             added_usd: Decimal::from(48),
             removed_usd: Decimal::from(24),
             moves: 48,

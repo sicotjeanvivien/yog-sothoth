@@ -27,10 +27,11 @@ pub struct ProtocolActivity {
     pub liquidity: Option<LiquidityFlows>,
 }
 
-/// The liquidity added and removed over a span or a bar. The USD sums skip the moves
-/// not valued, which `moves - moves_valued` counts.
+/// The liquidity deposited at the pools' creation, added and removed over a span or a bar.
+/// The USD sums skip the moves not valued, which `moves - moves_valued` counts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiquidityFlows {
+    pub created_usd: Decimal,
     pub added_usd: Decimal,
     pub removed_usd: Decimal,
     pub moves: i64,
@@ -53,6 +54,8 @@ pub struct ProtocolActivityBar {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LiquidityMoveKind {
+    /// A pool's creation, which deposits its first liquidity.
+    Create,
     Add,
     Remove,
 }

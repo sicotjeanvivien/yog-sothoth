@@ -221,9 +221,93 @@ async fn a_side_the_last_rows_did_not_price_stays_unvalued(pool: PgPool) {
     assert_eq!(move_usd(&pool, "unbounded").await, None);
 }
 
-async fn hourly(pool: &PgPool) -> Vec<(DateTime<Utc>, BigDecimal, BigDecimal, i64, i64)> {
+/// A pool's creation, the way the indexer writes it: `token_a_amount` and `token_b_amount`
+/// deposited by `creator`.
+async fn insert_creation(
+    pool: &PgPool,
+    address: &str,
+    tag: &str,
+    (a, b): (i64, i64),
+    at: DateTime<Utc>,
+) {
+    sqlx::query(
+        "INSERT INTO meteora_damm_v2_initialize_pool_events
+           (pool_address, signature, token_a_mint, token_b_mint, creator, payer, alpha_vault,
+            sqrt_min_price, sqrt_max_price, sqrt_price, liquidity, activation_type,
+            activation_point, collect_fee_mode, pool_type, token_a_flag, token_b_flag,
+            token_a_amount, token_b_amount, total_amount_a, total_amount_b, pool_fees_raw,
+            timestamp, slot, event_index)
+         VALUES ($1, $2, 'mint_a', 'mint_b', 'creator', 'payer', 'vault', 0, 0, 0, 0, 0, 0, 0, 0,
+                 0, 0, $3, $4, $3, $4, ''::bytea, $5, 0, 0)",
+    )
+    .bind(address)
+    .bind(tag)
+    .bind(a)
+    .bind(b)
+    .bind(at)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// Mutation: the creation left out — the pool's first liquidity never counted as entering.
+#[sqlx::test]
+async fn a_pools_creation_is_a_move_valued_at_its_bounded_price(pool: PgPool) {
+    let tranche = settled_hour() + Duration::minutes(10);
+    let pool_x = setup_inflated_token(&pool, tranche).await;
+    insert_creation(&pool, &pool_x, "born", (10_000_000, 100_000_000), tranche).await;
+
+    value(&pool, tranche, tranche).await;
+
+    assert_eq!(move_usd(&pool, "born").await, Some(dec("10.1")));
+    let kind: String =
+        sqlx::query_scalar("SELECT kind FROM analytic_liquidity_moves WHERE signature = 'born'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(kind, "create");
+}
+
+/// Mutation: a token without a market price priced by its tranche's trade — one swap at $0.01
+/// would make 10 billion units deposited worth $100 million.
+#[sqlx::test]
+async fn a_token_without_a_market_price_counts_zero_as_in_the_tvl(pool: PgPool) {
+    let tranche = settled_hour() + Duration::minutes(10);
+    let (fwd, y, usdc) = (pk(20).to_string(), pk(21).to_string(), pk(22).to_string());
+    let pool_fwd = setup_pool(&pool, 5, &fwd, &usdc).await;
+    let pool_y = setup_pool(&pool, 6, &y, &usdc).await;
+    price_at(&pool, &usdc, "1", tranche - Duration::minutes(1)).await;
+    insert_swap(&pool, &pool_fwd, "tiny", 1_000_000, 10_000_000, tranche).await;
+    insert_swap(&pool, &pool_y, "y", 1_000_000, 1_000_000, tranche).await;
+    insert_creation(
+        &pool,
+        &pool_fwd,
+        "stock",
+        (10_000_000_000_000_000, 0),
+        tranche,
+    )
+    .await;
+    insert_move(
+        &pool,
+        &pool_fwd,
+        "both",
+        "add",
+        (10_000_000_000_000_000, 5_000_000_000),
+        tranche,
+    )
+    .await;
+
+    value(&pool, tranche, tranche).await;
+
+    assert_eq!(move_usd(&pool, "stock").await, None);
+    assert_eq!(move_usd(&pool, "both").await, Some(dec("5")));
+}
+
+type Hour = (DateTime<Utc>, BigDecimal, BigDecimal, BigDecimal, i64, i64);
+
+async fn hourly(pool: &PgPool) -> Vec<Hour> {
     sqlx::query_as(
-        "SELECT bucket, added_usd, removed_usd, moves, moves_valued
+        "SELECT bucket, created_usd, added_usd, removed_usd, moves, moves_valued
            FROM analytic_protocol_liquidity_hourly ORDER BY bucket",
     )
     .fetch_all(pool)
@@ -247,6 +331,6 @@ async fn the_hours_sum_their_moves_from_the_first_hour_valued_whole(pool: PgPool
 
     assert_eq!(
         hourly(&pool).await,
-        vec![(hour, dec("10.1"), dec("5"), 3, 2)],
+        vec![(hour, dec("0"), dec("10.1"), dec("5"), 3, 2)],
     );
 }

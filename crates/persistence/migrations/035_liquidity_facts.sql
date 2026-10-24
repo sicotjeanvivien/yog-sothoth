@@ -1,7 +1,7 @@
 -- 035_liquidity_facts.sql — every liquidity move valued once by yog-analytic, at its
--- pool's price in the tranche, and its sums per protocol and hour. Apart from the
--- swaps' facts: a pool that only moves liquidity is not an active pool. No backfill:
--- the moves are valued from the first tranche after this migration.
+-- pool's price in the tranche — its creation's deposit among them — and their sums per
+-- protocol and hour. Apart from the swaps' facts: a pool that only moves liquidity is not
+-- an active pool. No backfill: valued from the first tranche after this migration.
 
 -- `amount_usd` is NULL exactly when the move could not be valued.
 CREATE TABLE analytic_liquidity_moves (
@@ -12,7 +12,7 @@ CREATE TABLE analytic_liquidity_moves (
     pool_address TEXT        NOT NULL,
     protocol     TEXT        NOT NULL,
     owner        TEXT        NOT NULL,
-    kind         TEXT        NOT NULL CHECK (kind IN ('add', 'remove')),
+    kind         TEXT        NOT NULL CHECK (kind IN ('create', 'add', 'remove')),
     amount_usd   NUMERIC,
     PRIMARY KEY (signature, event_index, timestamp)
 );
@@ -30,6 +30,7 @@ SELECT add_retention_policy('analytic_liquidity_moves', INTERVAL '31 days');
 CREATE TABLE analytic_protocol_liquidity_hourly (
     protocol     TEXT        NOT NULL,
     bucket       TIMESTAMPTZ NOT NULL,
+    created_usd  NUMERIC     NOT NULL,
     added_usd    NUMERIC     NOT NULL,
     removed_usd  NUMERIC     NOT NULL,
     moves        BIGINT      NOT NULL,

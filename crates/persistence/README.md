@@ -600,9 +600,10 @@ view a binary reads values a swap by the hour
 activity view alone. The two 5-minute tables are kept 7 days, as the raw swaps.
 
 **The liquidity (035).** After a tranche's swaps, a second statement
-(`meteora_damm_v2_liquidity_tranche.sql`) reads its raw liquidity moves and writes
-each one into `analytic_liquidity_moves`, valued once: at the pool's prices of the
-tranche when it swapped; without a swap, the anchor at its market price and the other
+(`meteora_damm_v2_liquidity_tranche.sql`) reads its raw liquidity moves and its pools'
+creations (`initialize_pool`, kind `create`) and writes each one into
+`analytic_liquidity_moves`, valued once, a token without a market price counting 0: at the
+pool's prices of the tranche when it swapped; without a swap, the anchor at its market price and the other
 token at the lower of its market and the pool's last bounded price; without a last
 price, `amount_usd` stays `NULL`, the move counted unvalued. Never at a market price
 alone, nor at the pool's mid price. `analytic_protocol_liquidity_hourly` sums them per

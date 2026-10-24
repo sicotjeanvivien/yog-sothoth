@@ -46,10 +46,13 @@ pub(crate) struct ProtocolActivityResponse {
     liquidity: Option<LiquidityFlowsResponse>,
 }
 
-/// The liquidity added and removed; the sums skip the moves not valued.
+/// The liquidity deposited at the pools' creation, added and removed; the sums skip the
+/// moves not valued.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct LiquidityFlowsResponse {
+    #[schema(value_type = UnsignedDecimal)]
+    created_usd: Decimal,
     #[schema(value_type = UnsignedDecimal)]
     added_usd: Decimal,
     #[schema(value_type = UnsignedDecimal)]
@@ -63,6 +66,7 @@ pub(crate) struct LiquidityFlowsResponse {
 impl From<LiquidityFlows> for LiquidityFlowsResponse {
     fn from(f: LiquidityFlows) -> Self {
         Self {
+            created_usd: f.created_usd,
             added_usd: f.added_usd,
             removed_usd: f.removed_usd,
             moves: f.moves,
@@ -230,6 +234,7 @@ mod tests;
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum LiquidityMoveKindResponse {
+    Create,
     Add,
     Remove,
 }
@@ -261,6 +266,7 @@ impl From<LiquidityMove> for LiquidityMoveResponse {
             token_b_symbol: m.token_b_symbol,
             owner: m.owner.to_string(),
             kind: match m.kind {
+                LiquidityMoveKind::Create => LiquidityMoveKindResponse::Create,
                 LiquidityMoveKind::Add => LiquidityMoveKindResponse::Add,
                 LiquidityMoveKind::Remove => LiquidityMoveKindResponse::Remove,
             },

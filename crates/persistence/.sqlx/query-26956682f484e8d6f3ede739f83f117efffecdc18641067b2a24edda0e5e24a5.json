@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT h.protocol, h.bucket AS bar_from, h.volume_usd, h.fees_usd, h.swap_count,\n                   h.active_pools AS pool_hours, h.active_pools_valued AS pool_hours_valued,\n                   l.added_usd AS \"liquidity_added_usd?\", l.removed_usd AS \"liquidity_removed_usd?\",\n                   l.moves AS \"liquidity_moves?\", l.moves_valued AS \"liquidity_moves_valued?\"\n              FROM analytic_protocol_hourly h\n              LEFT JOIN analytic_protocol_liquidity_hourly l\n                     ON l.protocol = h.protocol AND l.bucket = h.bucket\n             WHERE h.bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND h.bucket < $2\n             ORDER BY h.bucket, h.protocol\n            ",
+  "query": "\n            SELECT h.protocol, h.bucket AS bar_from, h.volume_usd, h.fees_usd, h.swap_count,\n                   h.active_pools AS pool_hours, h.active_pools_valued AS pool_hours_valued,\n                   l.created_usd AS \"liquidity_created_usd?\",\n                   l.added_usd AS \"liquidity_added_usd?\", l.removed_usd AS \"liquidity_removed_usd?\",\n                   l.moves AS \"liquidity_moves?\", l.moves_valued AS \"liquidity_moves_valued?\"\n              FROM analytic_protocol_hourly h\n              LEFT JOIN analytic_protocol_liquidity_hourly l\n                     ON l.protocol = h.protocol AND l.bucket = h.bucket\n             WHERE h.bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND h.bucket < $2\n             ORDER BY h.bucket, h.protocol\n            ",
   "describe": {
     "columns": [
       {
@@ -82,6 +82,17 @@
       },
       {
         "ordinal": 7,
+        "name": "liquidity_created_usd?",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_liquidity_hourly",
+            "name": "created_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
         "name": "liquidity_added_usd?",
         "type_info": "Numeric",
         "origin": {
@@ -92,7 +103,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "liquidity_removed_usd?",
         "type_info": "Numeric",
         "origin": {
@@ -103,7 +114,7 @@
         }
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "liquidity_moves?",
         "type_info": "Int8",
         "origin": {
@@ -114,7 +125,7 @@
         }
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "liquidity_moves_valued?",
         "type_info": "Int8",
         "origin": {
@@ -143,8 +154,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "e2c1bf482e47320a19b550cb06cda68f93cf514f000b7c60e84f88c912349af9"
+  "hash": "26956682f484e8d6f3ede739f83f117efffecdc18641067b2a24edda0e5e24a5"
 }

@@ -56,9 +56,10 @@ pub(super) async fn upsert_liquidity_hourly(
     sqlx::query!(
         r#"
         INSERT INTO analytic_protocol_liquidity_hourly (
-            protocol, bucket, added_usd, removed_usd, moves, moves_valued
+            protocol, bucket, created_usd, added_usd, removed_usd, moves, moves_valued
         )
         SELECT $3, h.bucket,
+               COALESCE(SUM(m.amount_usd) FILTER (WHERE m.kind = 'create'), 0),
                COALESCE(SUM(m.amount_usd) FILTER (WHERE m.kind = 'add'), 0),
                COALESCE(SUM(m.amount_usd) FILTER (WHERE m.kind = 'remove'), 0),
                COUNT(m.signature), COUNT(m.amount_usd)
@@ -73,6 +74,7 @@ pub(super) async fn upsert_liquidity_hourly(
                    date_trunc('hour', $4::TIMESTAMPTZ - INTERVAL '1 microsecond') + INTERVAL '1 hour')
          GROUP BY h.bucket
         ON CONFLICT (protocol, bucket) DO UPDATE SET
+            created_usd  = EXCLUDED.created_usd,
             added_usd    = EXCLUDED.added_usd,
             removed_usd  = EXCLUDED.removed_usd,
             moves        = EXCLUDED.moves,

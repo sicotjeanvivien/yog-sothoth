@@ -25,6 +25,7 @@ pub(super) struct ProtocolActivityRow {
     pub(super) births: i64,
     pub(super) pool_hours: i64,
     pub(super) pool_hours_valued: i64,
+    pub(super) liquidity_created_usd: Option<BigDecimal>,
     pub(super) liquidity_added_usd: Option<BigDecimal>,
     pub(super) liquidity_removed_usd: Option<BigDecimal>,
     pub(super) liquidity_moves: Option<i64>,
@@ -39,6 +40,7 @@ pub(super) struct ProtocolActivityBarRow {
     pub(super) swap_count: i64,
     pub(super) pool_hours: i64,
     pub(super) pool_hours_valued: i64,
+    pub(super) liquidity_created_usd: Option<BigDecimal>,
     pub(super) liquidity_added_usd: Option<BigDecimal>,
     pub(super) liquidity_removed_usd: Option<BigDecimal>,
     pub(super) liquidity_moves: Option<i64>,
@@ -84,19 +86,23 @@ fn usd(value: Option<BigDecimal>, field: &str) -> RepositoryResult<Option<rust_d
 
 /// The liquidity columns read together: all set, or all `NULL` before it was measured.
 fn liquidity(
+    created: Option<BigDecimal>,
     added: Option<BigDecimal>,
     removed: Option<BigDecimal>,
     moves: Option<i64>,
     moves_valued: Option<i64>,
 ) -> RepositoryResult<Option<LiquidityFlows>> {
-    match (added, removed, moves, moves_valued) {
-        (Some(added), Some(removed), Some(moves), Some(moves_valued)) => Ok(Some(LiquidityFlows {
-            added_usd: convert_bigdecimal_to_decimal(added, "liquidity_added_usd")?,
-            removed_usd: convert_bigdecimal_to_decimal(removed, "liquidity_removed_usd")?,
-            moves,
-            moves_valued,
-        })),
-        (None, None, None, None) => Ok(None),
+    match (created, added, removed, moves, moves_valued) {
+        (Some(created), Some(added), Some(removed), Some(moves), Some(moves_valued)) => {
+            Ok(Some(LiquidityFlows {
+                created_usd: convert_bigdecimal_to_decimal(created, "liquidity_created_usd")?,
+                added_usd: convert_bigdecimal_to_decimal(added, "liquidity_added_usd")?,
+                removed_usd: convert_bigdecimal_to_decimal(removed, "liquidity_removed_usd")?,
+                moves,
+                moves_valued,
+            }))
+        }
+        (None, None, None, None, None) => Ok(None),
         _ => Err(RepositoryError::Integrity(
             "liquidity read without all of its columns".to_owned(),
         )),
@@ -120,6 +126,7 @@ impl TryFrom<ProtocolActivityRow> for ProtocolActivity {
             pool_hours: row.pool_hours,
             pool_hours_valued: row.pool_hours_valued,
             liquidity: liquidity(
+                row.liquidity_created_usd,
                 row.liquidity_added_usd,
                 row.liquidity_removed_usd,
                 row.liquidity_moves,
@@ -142,6 +149,7 @@ impl TryFrom<ProtocolActivityBarRow> for ProtocolActivityBar {
             pool_hours: row.pool_hours,
             pool_hours_valued: row.pool_hours_valued,
             liquidity: liquidity(
+                row.liquidity_created_usd,
                 row.liquidity_added_usd,
                 row.liquidity_removed_usd,
                 row.liquidity_moves,
@@ -164,6 +172,7 @@ impl TryFrom<LiquidityMoveRow> for LiquidityMove {
             token_b_symbol: row.token_b_symbol,
             owner: convert_string_to_pubkey(row.owner, "owner")?,
             kind: match row.kind.as_str() {
+                "create" => LiquidityMoveKind::Create,
                 "add" => LiquidityMoveKind::Add,
                 "remove" => LiquidityMoveKind::Remove,
                 other => {

@@ -66,8 +66,12 @@ each fee can be computed; otherwise it is counted unvalued.
 
 ## The value of a liquidity move
 
-A move is worth its two amounts at its pool's prices in the tranche, the prices just
-written for the swaps: what the pool traded bounds them, not the market. A deposit of a
+A move — a deposit, a withdrawal, or a pool's creation, which deposits its first liquidity
+without a liquidity event — is worth its two amounts at its pool's prices in the tranche, the
+prices just written for the swaps: what the pool traded bounds them, not the market. As in the
+TVL, a token without a market price counts 0: one small trade's price never values a whole
+stock deposited (a pool created with 10¹⁴ units of such a token was worth $5,751 billion by
+its tranche's trade); a move none of whose moved tokens has a market price stays unvalued. A deposit of a
 token the market overprices is worth what the pool would pay for it — on the dev week,
 $3.09 million of deposits in tranches with a swap, $19.41 million at market. In a
 tranche where the pool did not swap, the anchor keeps its market price and the other
