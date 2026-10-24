@@ -147,8 +147,10 @@ at the end of this section.
      `position-changes`, `fee-claims`, `reward-claims`, `signals`, and `rotation-runs`, the
      runs of tranches whose quoted reserve turned over at least once.
 
-   The TVL is the one measure of state: `tvl`, its hourly readings. `network` and
-   `ingestion` are singletons, the state of the service. A name says what is observed,
+   The TVL is the one measure of state: `tvl`, the collection of its hourly readings, which
+   takes no cut — `?window=` returns the readings of the window, with the part held by the
+   pools discovered in it. `network` and `ingestion` are singletons, the state of the
+   service. A name says what is observed,
    never an image or a category (`activity`, `stats`, `metrics`, `analytics`): an event
    collection read from the chain takes the name of the on-chain event family it gathers
    (`initialize_pool` → `pool-creations`); one drawn by `yog-analytic` names what it
