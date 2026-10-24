@@ -102,7 +102,6 @@ SELECT m.signature, m.event_index, m.timestamp, $1, m.pool_address, $2, m.owner,
             CASE WHEN m.amount_b = 0 OR pr.market_b_usd IS NULL THEN 0
                  WHEN pr.price_b_usd IS NOT NULL AND m.dec_b IS NOT NULL
                  THEN yog_token_amount(m.amount_b::NUMERIC, m.dec_b) * pr.price_b_usd END AS b,
-            -- Valued when a side moved with a market price: none, and the move is unvalued.
             (m.amount_a > 0 AND pr.market_a_usd IS NOT NULL)
                 OR (m.amount_b > 0 AND pr.market_b_usd IS NOT NULL) AS priced
  ) v

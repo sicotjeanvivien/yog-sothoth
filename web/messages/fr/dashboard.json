@@ -216,7 +216,7 @@
         "flowReading": "créé {created}, ajouté {added}, retiré {removed}, net {net}",
         "moves": {
           "title": "Plus gros mouvements LP · {period}",
-          "info": "Les dépôts et retraits de liquidité les plus importants de la période, valorisés au prix de leur pool. L'adresse est celle de leur propriétaire.",
+          "info": "Les créations, dépôts et retraits de liquidité les plus importants de la période, valorisés au prix de leur pool. L'adresse est celle de leur propriétaire.",
           "tableLabel": "Plus gros mouvements LP sur la période choisie",
           "owner": "Adresse",
           "pool": "Pool",

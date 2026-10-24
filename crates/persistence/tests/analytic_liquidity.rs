@@ -326,11 +326,13 @@ async fn the_hours_sum_their_moves_from_the_first_hour_valued_whole(pool: PgPool
     insert_move(&pool, &pool_x, "a1", "add", (10_000_000, 100_000_000), hour).await;
     insert_move(&pool, &pool_x, "r1", "remove", (0, 50_000_000), hour).await;
     insert_move(&pool, &pool_z, "z1", "add", (1_000_000, 0), hour).await;
+    insert_creation(&pool, &pool_x, "c1", (10_000_000, 100_000_000), hour).await;
 
     value(&pool, late, hour).await;
 
+    // Mutation: the creations summed with the additions, or left out of the hour.
     assert_eq!(
         hourly(&pool).await,
-        vec![(hour, dec("0"), dec("10.1"), dec("5"), 3, 2)],
+        vec![(hour, dec("10.1"), dec("10.1"), dec("5"), 4, 3)],
     );
 }

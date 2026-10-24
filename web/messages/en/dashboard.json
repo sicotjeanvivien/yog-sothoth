@@ -216,7 +216,7 @@
         "flowReading": "created {created}, added {added}, removed {removed}, net {net}",
         "moves": {
           "title": "Largest LP moves · {period}",
-          "info": "The largest liquidity deposits and withdrawals of the period, valued at their pool's price. The address is their owner's.",
+          "info": "The largest liquidity creations, deposits and withdrawals of the period, valued at their pool's price. The address is their owner's.",
           "tableLabel": "Largest LP moves over the chosen period",
           "owner": "Address",
           "pool": "Pool",
