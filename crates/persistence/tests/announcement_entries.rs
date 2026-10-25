@@ -18,7 +18,6 @@ fn at(seconds: i64) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 10, 20, 12, 0, 0).unwrap() + Duration::seconds(seconds)
 }
 
-/// Inserts an announcement starting and ending `seconds` from `at(0)`, and returns its id.
 async fn insert(pool: &PgPool, starts: i64, ends: Option<i64>) -> i64 {
     sqlx::query_scalar(
         "INSERT INTO announcements (kind, severity, message, starts_at, ends_at)

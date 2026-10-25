@@ -41,3 +41,14 @@ async fn an_unknown_status_or_a_cursor_of_another_is_refused() {
         assert_eq!(content_type, "application/problem+json", "{uri}");
     }
 }
+
+/// Mutation: the status of the query not passed on to the read — every announcement listed
+/// under a status.
+#[tokio::test]
+async fn the_status_of_the_query_reaches_the_read() {
+    let (status, _, body) = get("/api/announcements?status=closed").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let page: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+    assert_eq!(page["items"][0]["status"], "closed", "{page}");
+}

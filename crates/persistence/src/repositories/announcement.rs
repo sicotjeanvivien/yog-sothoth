@@ -67,7 +67,7 @@ impl AnnouncementLookup for PgAnnouncementRepository {
         cursor: Option<AnnouncementCursor>,
         limit: i64,
     ) -> RepositoryResult<Page<AnnouncementEntry>> {
-        // ⚠️ The status is computed here only: the filter and the item read the same one.
+        // ⚠️ Computed once: the filter and the item read the same status.
         let rows = sqlx::query_as!(
             AnnouncementEntryRow,
             r#"

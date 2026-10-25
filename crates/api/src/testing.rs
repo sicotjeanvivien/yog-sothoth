@@ -598,14 +598,32 @@ impl AnnouncementLookup for MockAnnouncementRepo {
         take(&self.list_active)
     }
 
+    /// One announcement of the status asked for, none without one: the status echoed back.
     async fn list_entries(
         &self,
-        _: Option<AnnouncementStatus>,
+        status: Option<AnnouncementStatus>,
         _: DateTime<Utc>,
         _: Option<AnnouncementCursor>,
         _: i64,
     ) -> RepositoryResult<Page<AnnouncementEntry>> {
-        Ok(Page::empty())
+        let Some(status) = status else {
+            return Ok(Page::empty());
+        };
+        Ok(Page {
+            items: vec![AnnouncementEntry {
+                announcement: Announcement {
+                    id: 1,
+                    kind: AnnouncementKind::Release,
+                    severity: AnnouncementSeverity::Info,
+                    message: "m".to_owned(),
+                    link_url: None,
+                    starts_at: ts(1_000),
+                    ends_at: None,
+                },
+                status,
+            }],
+            ..Page::empty()
+        })
     }
 }
 

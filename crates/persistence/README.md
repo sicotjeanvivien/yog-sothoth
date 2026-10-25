@@ -656,7 +656,7 @@ instants.
 **The announcements.** `announcement.rs` reads the banner's open set (`list_active`), and the
 list of every announcement (`list_entries`), whose status — upcoming, open or closed at the
 request's instant — is computed once, in a subquery, that both the `?status=` filter and the
-item read. The table is the operator's handful of rows, keyed by `(starts_at, id)`, with no index
+item read. The table is the operator's handful of rows, ordered by `(starts_at, id)`, with no index
 beyond its primary key. `tests/announcement_entries.rs` holds the bounds of each status, the
 filter, the pages, and that the open ones are the active ones.
 
