@@ -47,7 +47,7 @@ impl PoolLiquidityMoveRow {
 
 pub(super) struct LiquidityFlowsRow {
     pub(super) protocol: String,
-    pub(super) bar_from: Option<DateTime<Utc>>,
+    pub(super) bucket_from: Option<DateTime<Utc>>,
     pub(super) created_usd: BigDecimal,
     pub(super) added_usd: BigDecimal,
     pub(super) removed_usd: BigDecimal,
@@ -75,7 +75,7 @@ impl TryFrom<LiquidityFlowsRow> for ProtocolBucket<LiquidityFlows> {
     fn try_from(row: LiquidityFlowsRow) -> Result<Self, Self::Error> {
         Ok(ProtocolBucket {
             protocol: parse_protocol(&row.protocol)?,
-            from: parse_bucket_from(row.bar_from)?,
+            from: parse_bucket_from(row.bucket_from)?,
             value: row.try_into()?,
         })
     }

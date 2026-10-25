@@ -59,7 +59,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
         let row = sqlx::query_as!(
             LiquidityFlowsRow,
             r#"
-            SELECT $3::TEXT AS "protocol!", NULL::TIMESTAMPTZ AS bar_from,
+            SELECT $3::TEXT AS "protocol!", NULL::TIMESTAMPTZ AS bucket_from,
                    SUM(created_usd) AS "created_usd!", SUM(added_usd) AS "added_usd!",
                    SUM(removed_usd) AS "removed_usd!", SUM(moves)::BIGINT AS "moves!",
                    SUM(moves_valued)::BIGINT AS "moves_valued!"
@@ -86,7 +86,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
         let rows = sqlx::query_as!(
             LiquidityFlowsRow,
             r#"
-            SELECT protocol, bucket AS "bar_from?", created_usd, added_usd, removed_usd,
+            SELECT protocol, bucket AS "bucket_from?", created_usd, added_usd, removed_usd,
                    moves, moves_valued
               FROM analytic_protocol_liquidity_hourly
              WHERE protocol = $4
@@ -113,20 +113,20 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
         let rows = sqlx::query_as!(
             LiquidityFlowsRow,
             r#"
-            SELECT protocol AS "protocol!", bar_from AS "bar_from?",
+            SELECT protocol AS "protocol!", bucket_from AS "bucket_from?",
                    SUM(created_usd) AS "created_usd!", SUM(added_usd) AS "added_usd!",
                    SUM(removed_usd) AS "removed_usd!", SUM(moves)::BIGINT AS "moves!",
                    SUM(moves_valued)::BIGINT AS "moves_valued!"
               FROM (
                   SELECT l.*,
                          time_bucket(INTERVAL '1 day', bucket, origin => $2::TIMESTAMPTZ)
-                             AS bar_from
+                             AS bucket_from
                     FROM analytic_protocol_liquidity_hourly l
                    WHERE protocol = $4 AND bucket >= $1 AND bucket < $2
               ) hours
-             WHERE bar_from >= $3
-             GROUP BY protocol, bar_from
-             ORDER BY bar_from
+             WHERE bucket_from >= $3
+             GROUP BY protocol, bucket_from
+             ORDER BY bucket_from
             "#,
             period.from,
             period.as_of,

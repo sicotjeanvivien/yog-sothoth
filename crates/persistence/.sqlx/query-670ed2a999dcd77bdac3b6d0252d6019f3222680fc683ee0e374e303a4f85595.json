@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT bucket AS bar_from, swap_count AS swaps,\n                   volume_in_a_usd + volume_in_b_usd AS volume_usd,\n                   fees_usd, lp_fees_usd, protocol_fees_usd, referral_fees_usd,\n                   1::BIGINT AS \"pool_hours!\",\n                   (CASE WHEN valued THEN 1 ELSE 0 END)::BIGINT AS \"pool_hours_valued!\"\n              FROM analytic_pool_hourly\n             WHERE pool_address = $4\n               AND bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND bucket < $2\n             ORDER BY bucket\n            ",
+  "query": "\n            SELECT bucket AS bucket_from, swap_count AS swaps,\n                   volume_in_a_usd + volume_in_b_usd AS volume_usd,\n                   fees_usd, lp_fees_usd, protocol_fees_usd, referral_fees_usd,\n                   1::BIGINT AS \"pool_hours!\",\n                   (CASE WHEN valued THEN 1 ELSE 0 END)::BIGINT AS \"pool_hours_valued!\"\n              FROM analytic_pool_hourly\n             WHERE pool_address = $4\n               AND bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND bucket < $2\n             ORDER BY bucket\n            ",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "bar_from",
+        "name": "bucket_from",
         "type_info": "Timestamptz",
         "origin": {
           "Table": {
@@ -108,5 +108,5 @@
       null
     ]
   },
-  "hash": "aeaa0889b0cfa2ae82e4539d8f00947cda93748f78dc8f3391813ad23d6f523e"
+  "hash": "670ed2a999dcd77bdac3b6d0252d6019f3222680fc683ee0e374e303a4f85595"
 }

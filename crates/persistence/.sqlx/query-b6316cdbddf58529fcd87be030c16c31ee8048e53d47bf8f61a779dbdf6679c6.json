@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT protocol, bucket AS \"bar_from?\", created_usd, added_usd, removed_usd,\n                   moves, moves_valued\n              FROM analytic_protocol_liquidity_hourly\n             WHERE protocol = $4\n               AND bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND bucket < $2\n             ORDER BY bucket\n            ",
+  "query": "\n            SELECT protocol, bucket AS \"bucket_from?\", created_usd, added_usd, removed_usd,\n                   moves, moves_valued\n              FROM analytic_protocol_liquidity_hourly\n             WHERE protocol = $4\n               AND bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND bucket < $2\n             ORDER BY bucket\n            ",
   "describe": {
     "columns": [
       {
@@ -16,7 +16,7 @@
       },
       {
         "ordinal": 1,
-        "name": "bar_from?",
+        "name": "bucket_from?",
         "type_info": "Timestamptz",
         "origin": {
           "Table": {
@@ -99,5 +99,5 @@
       false
     ]
   },
-  "hash": "5639da34fa401946edd0fb7309abac3198a1f98fd4462da9a9539c646d558fb4"
+  "hash": "b6316cdbddf58529fcd87be030c16c31ee8048e53d47bf8f61a779dbdf6679c6"
 }

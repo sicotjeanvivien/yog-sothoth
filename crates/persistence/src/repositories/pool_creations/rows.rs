@@ -8,7 +8,7 @@ use crate::repositories::helper::{parse_bucket_from, parse_protocol};
 
 pub(super) struct PoolCreationsRow {
     pub(super) protocol: String,
-    pub(super) bar_from: Option<DateTime<Utc>>,
+    pub(super) bucket_from: Option<DateTime<Utc>>,
     pub(super) pools: i64,
 }
 
@@ -29,7 +29,7 @@ impl TryFrom<PoolCreationsRow> for ProtocolBucket<PoolCreations> {
     fn try_from(row: PoolCreationsRow) -> Result<Self, Self::Error> {
         Ok(ProtocolBucket {
             protocol: parse_protocol(&row.protocol)?,
-            from: parse_bucket_from(row.bar_from)?,
+            from: parse_bucket_from(row.bucket_from)?,
             value: PoolCreations { pools: row.pools },
         })
     }

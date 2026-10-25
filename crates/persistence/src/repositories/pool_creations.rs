@@ -36,7 +36,7 @@ impl PoolCreationLookup for PgPoolCreationRepository {
         let rows = sqlx::query_as!(
             PoolCreationsRow,
             r#"
-            SELECT protocol AS "protocol!", NULL::TIMESTAMPTZ AS bar_from,
+            SELECT protocol AS "protocol!", NULL::TIMESTAMPTZ AS bucket_from,
                    SUM(births)::BIGINT AS "pools!"
               FROM analytic_protocol_births_hourly
              WHERE bucket >= $1 AND bucket < $2
@@ -65,7 +65,7 @@ impl PoolCreationLookup for PgPoolCreationRepository {
         let rows = sqlx::query_as!(
             PoolCreationsRow,
             r#"
-            SELECT protocol, bucket AS "bar_from?", births::BIGINT AS "pools!"
+            SELECT protocol, bucket AS "bucket_from?", births::BIGINT AS "pools!"
               FROM analytic_protocol_births_hourly
              WHERE bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND bucket < $2
                AND ($4::TEXT IS NULL OR protocol = $4)
@@ -91,19 +91,19 @@ impl PoolCreationLookup for PgPoolCreationRepository {
         let rows = sqlx::query_as!(
             PoolCreationsRow,
             r#"
-            SELECT protocol AS "protocol!", bar_from AS "bar_from?",
+            SELECT protocol AS "protocol!", bucket_from AS "bucket_from?",
                    SUM(births)::BIGINT AS "pools!"
               FROM (
                   SELECT b.*,
                          time_bucket(INTERVAL '1 day', bucket, origin => $2::TIMESTAMPTZ)
-                             AS bar_from
+                             AS bucket_from
                     FROM analytic_protocol_births_hourly b
                    WHERE bucket >= $1 AND bucket < $2
                      AND ($4::TEXT IS NULL OR protocol = $4)
               ) hours
-             WHERE bar_from >= $3
-             GROUP BY protocol, bar_from
-             ORDER BY bar_from, protocol
+             WHERE bucket_from >= $3
+             GROUP BY protocol, bucket_from
+             ORDER BY bucket_from, protocol
             "#,
             period.from,
             period.as_of,

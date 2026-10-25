@@ -78,7 +78,7 @@ impl SwapLookup for PgSwapRepository {
         let rows = sqlx::query_as!(
             ProtocolSwapBucketRow,
             r#"
-            SELECT protocol, bucket AS bar_from, swap_count AS swaps,
+            SELECT protocol, bucket AS bucket_from, swap_count AS swaps,
                    volume_usd, fees_usd, lp_fees_usd, protocol_fees_usd, referral_fees_usd,
                    active_pools AS pool_hours, active_pools_valued AS pool_hours_valued
               FROM analytic_protocol_hourly
@@ -107,7 +107,7 @@ impl SwapLookup for PgSwapRepository {
         let rows = sqlx::query_as!(
             ProtocolSwapBucketRow,
             r#"
-            SELECT protocol AS "protocol!", bar_from AS "bar_from!",
+            SELECT protocol AS "protocol!", bucket_from AS "bucket_from!",
                    SUM(swap_count)::BIGINT AS "swaps!",
                    SUM(volume_usd) AS volume_usd, SUM(fees_usd) AS fees_usd,
                    SUM(lp_fees_usd) AS lp_fees_usd, SUM(protocol_fees_usd) AS protocol_fees_usd,
@@ -117,14 +117,14 @@ impl SwapLookup for PgSwapRepository {
               FROM (
                   SELECT h.*,
                          time_bucket(INTERVAL '1 day', bucket, origin => $2::TIMESTAMPTZ)
-                             AS bar_from
+                             AS bucket_from
                     FROM analytic_protocol_hourly h
                    WHERE bucket >= $1 AND bucket < $2
                      AND ($4::TEXT IS NULL OR protocol = $4)
               ) hours
-             WHERE bar_from >= $3
-             GROUP BY protocol, bar_from
-             ORDER BY bar_from, protocol
+             WHERE bucket_from >= $3
+             GROUP BY protocol, bucket_from
+             ORDER BY bucket_from, protocol
             "#,
             period.from,
             period.as_of,
@@ -176,7 +176,7 @@ impl SwapLookup for PgSwapRepository {
         let rows = sqlx::query_as!(
             PoolSwapBucketRow,
             r#"
-            SELECT bucket AS bar_from, swap_count AS swaps,
+            SELECT bucket AS bucket_from, swap_count AS swaps,
                    volume_in_a_usd + volume_in_b_usd AS volume_usd,
                    fees_usd, lp_fees_usd, protocol_fees_usd, referral_fees_usd,
                    1::BIGINT AS "pool_hours!",
@@ -206,7 +206,7 @@ impl SwapLookup for PgSwapRepository {
         let rows = sqlx::query_as!(
             PoolSwapBucketRow,
             r#"
-            SELECT bar_from AS "bar_from!",
+            SELECT bucket_from AS "bucket_from!",
                    SUM(swap_count)::BIGINT AS "swaps!",
                    SUM(volume_in_a_usd + volume_in_b_usd) AS volume_usd,
                    SUM(fees_usd) AS fees_usd, SUM(lp_fees_usd) AS lp_fees_usd,
@@ -217,13 +217,13 @@ impl SwapLookup for PgSwapRepository {
               FROM (
                   SELECT h.*,
                          time_bucket(INTERVAL '1 day', bucket, origin => $2::TIMESTAMPTZ)
-                             AS bar_from
+                             AS bucket_from
                     FROM analytic_pool_hourly h
                    WHERE pool_address = $4 AND bucket >= $1 AND bucket < $2
               ) hours
-             WHERE bar_from >= $3
-             GROUP BY bar_from
-             ORDER BY bar_from
+             WHERE bucket_from >= $3
+             GROUP BY bucket_from
+             ORDER BY bucket_from
             "#,
             period.from,
             period.as_of,

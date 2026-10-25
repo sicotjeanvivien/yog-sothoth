@@ -36,7 +36,7 @@ pub(super) struct ProtocolSwapActivityRow {
 
 pub(super) struct ProtocolSwapBucketRow {
     pub(super) protocol: String,
-    pub(super) bar_from: DateTime<Utc>,
+    pub(super) bucket_from: DateTime<Utc>,
     pub(super) swaps: i64,
     pub(super) volume_usd: Option<BigDecimal>,
     pub(super) fees_usd: Option<BigDecimal>,
@@ -48,7 +48,7 @@ pub(super) struct ProtocolSwapBucketRow {
 }
 
 pub(super) struct PoolSwapBucketRow {
-    pub(super) bar_from: DateTime<Utc>,
+    pub(super) bucket_from: DateTime<Utc>,
     pub(super) swaps: i64,
     pub(super) volume_usd: Option<BigDecimal>,
     pub(super) fees_usd: Option<BigDecimal>,
@@ -111,7 +111,7 @@ impl TryFrom<ProtocolSwapBucketRow> for ProtocolBucket<SwapActivity> {
     fn try_from(row: ProtocolSwapBucketRow) -> Result<Self, Self::Error> {
         Ok(ProtocolBucket {
             protocol: parse_protocol(&row.protocol)?,
-            from: row.bar_from,
+            from: row.bucket_from,
             value: SwapActivityRow {
                 swaps: row.swaps,
                 volume_usd: row.volume_usd,
@@ -132,7 +132,7 @@ impl TryFrom<PoolSwapBucketRow> for PoolSwapBucket {
 
     fn try_from(row: PoolSwapBucketRow) -> Result<Self, Self::Error> {
         Ok(PoolSwapBucket {
-            from: row.bar_from,
+            from: row.bucket_from,
             activity: SwapActivityRow {
                 swaps: row.swaps,
                 volume_usd: row.volume_usd,
