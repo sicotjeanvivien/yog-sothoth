@@ -116,6 +116,11 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` and `?pool=` filters); each item embeds its pool's token pair (`tokenA`/`tokenB`, `EmbeddedTokenResponse`) |
 | `GET` | `/api/signals/stream` | SSE stream of new signals (see below) |
 | `GET` | `/api/protocols` | Every protocol of the domain: observed by this build or not, pools seen — the catalogue, live |
+| `GET` | `/api/protocols/{protocol}` | The protocol's entry of the catalogue |
+| `GET` | `/api/pools`, `/api/protocols/{protocol}/pools`, `/api/tokens/{mint}/pools` | A page of pools, the most recently first seen first, forward-only cursor refused (400) under another list: identity, the token pair embedded, and the state now — last event, reserves, the value of each side and their TVL (`pool_current_tvl`); 404 for a mint without metadata |
+| `GET` | `/api/pools/{pool}` | The pool of the lists, and the properties of its protocol under the protocol's name (`meteoraDammV2`: fee shares, base-fee kind, the fee its curve charges now); 404 for a pool unknown |
+| `GET` | `/api/tokens` | A page of tokens, the most recently first fetched first, each as `/api/tokens/{mint}`, forward-only cursor |
+| `GET` | `/api/tokens/{mint}/prices` | A page of the token's prices over `?window=`, the most recent first; the window ends at the first page, whose start the cursor carries, refused (400) for another mint; 404 for a mint without metadata |
 | `GET` | `/api/protocols/activity` | Per protocol over `?window=24h\|7d\|30d` (`?offset=` for the previous one): volume, fees and their shares, swaps, distinct active pools, births, pool-hours and the valued ones, and the liquidity brought by creations, added and removed, with its moves valued |
 | `GET` | `/api/protocols/activity/hourly`, `/daily` | The same flows per protocol and bar: an hour, or 24 hours ending at `asOf` |
 | `GET` | `/api/protocols/{protocol}/liquidity-moves` | The protocol's valued liquidity moves (creations, additions, removals) over `?window=`, largest first, `?limit=` of them; its pool's token symbols embedded |
