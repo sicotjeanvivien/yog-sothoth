@@ -4,7 +4,7 @@ use axum::{
 };
 use tracing::{error, warn};
 
-use crate::application::PoolMovesError;
+use crate::application::{PoolMovesError, RotationRunsError};
 use crate::http::dto::response::{PROBLEM_CONTENT_TYPE, ProblemDetailsResponse};
 
 /// API-level errors, served as RFC 9457 Problem Details. `Unavailable` is capacity or time
@@ -93,6 +93,19 @@ impl From<yog_core::RepositoryError> for ApiError {
                 ApiError::Unavailable(TIMEOUT_REASON)
             }
             other => ApiError::Internal(other.to_string()),
+        }
+    }
+}
+
+impl From<RotationRunsError> for ApiError {
+    fn from(err: RotationRunsError) -> Self {
+        match err {
+            RotationRunsError::Repository(err) => err.into(),
+            RotationRunsError::CursorRefused => ApiError::BadRequest(
+                "`cursor` was read more than an hour of tranches ago, or is forged: start again \
+                 without it"
+                    .to_string(),
+            ),
         }
     }
 }

@@ -44,7 +44,7 @@ pub(crate) use protocol_fee_claim_event_service::ProtocolFeeClaimEventService;
 pub(crate) use protocol_tvl_service::ProtocolTvlService;
 pub(crate) use reward_change_event_service::RewardChangeEventService;
 pub(crate) use reward_claim_event_service::RewardClaimEventService;
-pub(crate) use rotation_run_service::RotationRunService;
+pub(crate) use rotation_run_service::{RotationRunService, RotationRunsError};
 pub(crate) use signal_service::{SignalListParams, SignalService};
 pub(crate) use swap_activity_service::SwapActivityService;
 pub(crate) use swap_event_service::SwapEventService;

@@ -6,15 +6,32 @@ use std::sync::Arc;
 use chrono::{DateTime, DurationRound, TimeDelta, Utc};
 use rust_decimal::Decimal;
 use yog_core::{
-    Page, RepositoryResult,
+    Page, RepositoryError, RepositoryResult,
     domain::{
-        FrozenPeriod, Protocol, ProtocolActivityLookup, ProtocolBucket, RotationRun,
+        FrozenPeriod, Protocol, ProtocolActivityLookup, ProtocolBucket, RUN_GAP, RotationRun,
         RotationRunCursor, RotationRunLookup, RotationRunOrder, RotationRunScope,
         RotationRunTotals, TranchePeriod, Window,
     },
 };
 
 use super::period::{BucketPeriod, Measured, build_frozen_period};
+
+/// How far behind the last tranche written a cursor's end stays accepted, for pages read slowly.
+const CURSOR_END_MARGIN: TimeDelta = TimeDelta::hours(1);
+
+/// Why a page of runs is not read.
+#[derive(Debug)]
+pub(crate) enum RotationRunsError {
+    Repository(RepositoryError),
+    /// The cursor's end is past the last tranche written, or more than the margin behind it.
+    CursorRefused,
+}
+
+impl From<RepositoryError> for RotationRunsError {
+    fn from(err: RepositoryError) -> Self {
+        Self::Repository(err)
+    }
+}
 
 pub(crate) struct RotationRunService {
     hours: Arc<dyn ProtocolActivityLookup>,
@@ -29,8 +46,8 @@ impl RotationRunService {
         Self { hours, runs }
     }
 
-    /// `window` through `as_of`, else through the last tranche written; covered from the first
-    /// tranche whose rotation was measured.
+    /// `window` through `as_of`, else through the last tranche written; covered a gap after the
+    /// first tranche measured, a run drawn sooner having maybe begun unmeasured.
     async fn build_tranche_period(
         &self,
         window: Window,
@@ -45,10 +62,15 @@ impl RotationRunService {
             },
         };
         let since = self.runs.find_measured_since(protocol).await?;
-        Ok(Some(TranchePeriod::of(as_of, window, since)))
+        Ok(Some(TranchePeriod::of(
+            as_of,
+            window,
+            since.map(|since| since + RUN_GAP),
+        )))
     }
 
-    /// The frozen period of the bars: covered from the first whole hour of the rotation.
+    /// The frozen period of the bars: covered from the first whole hour a gap after the first
+    /// tranche measured.
     async fn build_bar_period(
         &self,
         window: Window,
@@ -61,7 +83,7 @@ impl RotationRunService {
             .runs
             .find_measured_since(protocol)
             .await?
-            .map(first_whole_hour);
+            .map(|since| first_whole_hour(since + RUN_GAP));
         // ⚠️ Not measured yet: covered from `as_of` on, so no period reads as covered.
         let covered_since = since.map_or(period.as_of, |since| since.max(period.covered_since));
         Ok(Some(FrozenPeriod {
@@ -94,8 +116,21 @@ impl RotationRunService {
         order: RotationRunOrder,
         cursor: Option<RotationRunCursor>,
         limit: i64,
-    ) -> RepositoryResult<Measured<Page<RotationRun>, TranchePeriod>> {
-        let as_of = cursor.as_ref().map(|c| c.as_of);
+    ) -> Result<Measured<Page<RotationRun>, TranchePeriod>, RotationRunsError> {
+        let as_of = match &cursor {
+            Some(c) => {
+                let through = self.runs.find_written_through().await?;
+                match through {
+                    Some(through)
+                        if c.as_of <= through && c.as_of >= through - CURSOR_END_MARGIN =>
+                    {
+                        Some(c.as_of)
+                    }
+                    _ => return Err(RotationRunsError::CursorRefused),
+                }
+            }
+            None => None,
+        };
         let period = self.build_tranche_period(window, protocol, as_of).await?;
         let items = match &period {
             Some(period) if period.is_covered() => {

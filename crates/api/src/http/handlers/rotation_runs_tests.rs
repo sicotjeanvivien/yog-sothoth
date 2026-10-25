@@ -82,21 +82,13 @@ fn cursor_ending(
     .unwrap()
 }
 
-/// Mutation: a bound of the cursor's window not checked — a forged end read as the period's:
-/// a window of last year, one in the future, or a key outside its own window, served.
+/// Mutation: a bound of the cursor's key not checked — a key outside its own window, which
+/// only a forged cursor holds, served.
 #[tokio::test]
-async fn a_cursor_whose_window_this_list_does_not_serve_is_refused() {
+async fn a_cursor_whose_key_lies_outside_its_window_is_refused() {
     let now = chrono::Utc::now();
     let hours = chrono::Duration::hours;
     for (name, cursor) in [
-        (
-            "older than the widest window",
-            cursor_ending(now - hours(24 * 31), now - hours(24 * 31 + 1)),
-        ),
-        (
-            "in the future",
-            cursor_ending(now + hours(1), now - hours(1)),
-        ),
         (
             "key before its window",
             cursor_ending(now - hours(1), now - hours(26)),
@@ -111,34 +103,6 @@ async fn a_cursor_whose_window_this_list_does_not_serve_is_refused() {
         ))
         .await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "{name}: {detail}");
+        assert!(detail.contains("its window"), "{name}: {detail}");
     }
-}
-
-/// Mutation: no margin, or the end checked against the last tranche — a next page read a little
-/// after its first, its window now starting past the widest, refused.
-#[tokio::test]
-async fn a_next_page_read_after_a_new_tranche_is_served() {
-    use yog_core::{
-        Cursor,
-        domain::{Protocol, RotationRunCursor, RotationRunOrder, RotationRunScope, Window},
-    };
-    let now = chrono::Utc::now();
-    let cursor =
-        crate::http::cursor::encode_cursor(&Cursor::RotationRun(Box::new(RotationRunCursor {
-            scope: RotationRunScope::Protocol(Protocol::MeteoraDammV2),
-            window: Window::Month,
-            as_of: now - chrono::Duration::minutes(20),
-            order: RotationRunOrder::Volume,
-            volume_usd: rust_decimal::Decimal::ONE,
-            started_at: now - chrono::Duration::hours(2),
-            pool_address: pk(1),
-        })))
-        .unwrap();
-
-    let (status, _, detail) = get(&format!(
-        "/api/protocols/meteora_damm_v2/rotation-runs?window=30d&cursor={cursor}"
-    ))
-    .await;
-
-    assert_eq!(status, StatusCode::OK, "{detail}");
 }

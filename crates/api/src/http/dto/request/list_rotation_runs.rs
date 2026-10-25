@@ -2,12 +2,10 @@
 
 mod sort_param;
 
-use chrono::Utc;
 use serde::Deserialize;
 use utoipa::IntoParams;
 use yog_core::domain::{RotationRunCursor, RotationRunOrder, RotationRunScope, Window};
 
-use super::list_events::CURSOR_WINDOW_MARGIN;
 use super::window_param::WindowParam;
 use crate::http::{cursor::decode_rotation_run_cursor, error::ApiError};
 
@@ -53,16 +51,10 @@ impl ListRotationRunsRequest {
                     .and_then(|raw| decode_rotation_run_cursor(raw, scope, window, order))
             })
             .transpose()?;
-        // ⚠️ The cursor's end becomes the period's: one past now, older than the widest window
-        // the list serves, or whose key lies outside its own window, is forged.
+        // ⚠️ A key outside its own window is forged; the end is checked by the service.
         if let Some(c) = &cursor {
-            let now = Utc::now();
             let from = c.as_of - window.duration();
-            if c.as_of > now
-                || from < now - Window::Month.duration() - CURSOR_WINDOW_MARGIN
-                || c.started_at < from
-                || c.started_at >= c.as_of
-            {
+            if c.started_at < from || c.started_at >= c.as_of {
                 return Err(ApiError::BadRequest(
                     "invalid cursor: its window is not one this list serves".to_string(),
                 ));
