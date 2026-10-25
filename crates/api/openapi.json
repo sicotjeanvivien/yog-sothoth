@@ -881,7 +881,7 @@
           },
           "reserveA": {
             "$ref": "#/components/schemas/U128String",
-            "description": "In raw units: `tokenA.decimals` scales it."
+            "description": "In raw units."
           },
           "reserveB": {
             "$ref": "#/components/schemas/U128String"

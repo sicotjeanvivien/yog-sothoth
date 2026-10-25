@@ -13,7 +13,7 @@ use crate::http::dto::schema::{U128String, UnsignedDecimal};
 pub(in crate::http::dto::response) struct PoolStateResponse {
     last_event_at: DateTime<Utc>,
     last_event_kind: PoolLastEventKindResponse,
-    /// In raw units: `tokenA.decimals` scales it.
+    /// In raw units.
     #[schema(value_type = U128String)]
     reserve_a: String,
     #[schema(value_type = U128String)]

@@ -25,11 +25,13 @@ pub(super) struct MeteoraDammV2PoolPropertiesRow {
 /// a confident wrong fee. ⚠️ Only the two time-scheduler kinds yield one — the decoder's gate,
 /// restated because this side reads columns.
 fn scheduler_from(row: &MeteoraDammV2PoolPropertiesRow) -> Option<FeeSchedulerParams> {
-    let kind = match row.base_fee_kind.as_deref()? {
-        "scheduler_linear" => BaseFeeKind::SchedulerLinear,
-        "scheduler_exponential" => BaseFeeKind::SchedulerExponential,
-        _ => return None,
-    };
+    let stored = row.base_fee_kind.as_deref()?;
+    let kind = [
+        BaseFeeKind::SchedulerLinear,
+        BaseFeeKind::SchedulerExponential,
+    ]
+    .into_iter()
+    .find(|kind| kind.as_str() == stored)?;
     Some(FeeSchedulerParams {
         cliff_fee_numerator: u64::try_from(row.cliff_fee_numerator?).ok()?,
         number_of_period: u16::try_from(row.number_of_period?).ok()?,

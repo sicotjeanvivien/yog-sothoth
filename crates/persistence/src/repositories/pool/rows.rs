@@ -125,14 +125,14 @@ fn convert_side(side: SideColumns) -> RepositoryResult<Option<TokenMetadata>> {
 }
 
 fn parse_last_event_kind(raw: &str) -> RepositoryResult<LastEventKind> {
-    match raw {
-        "swap" => Ok(LastEventKind::Swap),
-        "liquidity_add" => Ok(LastEventKind::LiquidityAdd),
-        "liquidity_remove" => Ok(LastEventKind::LiquidityRemove),
-        other => Err(RepositoryError::Integrity(format!(
-            "invalid last_event_kind: {other}"
-        ))),
-    }
+    [
+        LastEventKind::Swap,
+        LastEventKind::LiquidityAdd,
+        LastEventKind::LiquidityRemove,
+    ]
+    .into_iter()
+    .find(|kind| kind.as_str() == raw)
+    .ok_or_else(|| RepositoryError::Integrity(format!("invalid last_event_kind: {raw}")))
 }
 
 impl TryFrom<PoolEntryRow> for PoolEntry {
