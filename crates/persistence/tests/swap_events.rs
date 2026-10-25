@@ -93,18 +93,18 @@ async fn a_page_follows_through_shared_instants_without_repeat_nor_gap(pool: PgP
     }
     let repository = PgSwapEventRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
 
-    let mut expected = read_all(&repository, EventScope::All, 50).await;
+    let expected = read_all(&repository, EventScope::All, 50).await;
     let by_two = read_all(&repository, EventScope::All, 2).await;
     let pool_by_two = read_all(&repository, EventScope::Pool(pk(1)), 2).await;
 
+    // The database's own order, its collation's: compared against itself, never against Rust's.
     assert_eq!(expected.len(), 7);
+    assert!(
+        expected.windows(2).all(|w| w[0].0 >= w[1].0),
+        "{expected:?}"
+    );
     assert_eq!(by_two, expected);
     assert_eq!(pool_by_two, expected);
-    let sorted = {
-        expected.sort_by(|a, b| b.cmp(a));
-        expected
-    };
-    assert_eq!(by_two, sorted);
 }
 
 /// Mutation: the pool filter, the protocol dispatch or the window's start dropped — another

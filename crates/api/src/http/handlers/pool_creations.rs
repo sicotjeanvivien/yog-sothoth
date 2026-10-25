@@ -173,7 +173,7 @@ pub(crate) async fn list_pool_creations(
         EventScope::All,
         Window::Month,
     )?;
-    list_event_page(&state, request).await
+    list_event_page(&state, request, None).await
 }
 
 #[utoipa::path(
@@ -198,16 +198,17 @@ pub(crate) async fn list_protocol_pool_creations(
         EventScope::Protocol(protocol),
         Window::Month,
     )?;
-    list_event_page(&state, request).await
+    list_event_page(&state, request, Some(protocol)).await
 }
 
 async fn list_event_page(
     state: &AppState,
     request: ListEventsRequest,
+    protocol: Option<Protocol>,
 ) -> Result<Json<PageResponse<PoolCreationEventResponse>>, ApiError> {
     let page = state
         .pool_creation_event_service
-        .list_events(request.scope, request.window, request.cursor, request.limit)
+        .list_events(protocol, request.window, request.cursor, request.limit)
         .await?;
     Ok(Json(PageResponse::from_page(page)?))
 }

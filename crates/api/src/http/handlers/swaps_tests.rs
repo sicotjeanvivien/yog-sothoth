@@ -111,8 +111,9 @@ async fn the_event_routes_are_mounted() {
     }
 }
 
-/// Mutation: the widest window not checked — every pool's swaps read over 7 days; or a cursor
-/// decoded without its collection or scope — a page of another list followed.
+/// Mutation: the widest window not checked — every pool's swaps read over 7 days, a pool's over
+/// 30 days its swaps are not kept, or a forged cursor's start past the day; or a cursor decoded
+/// without its collection or scope — a page of another list followed.
 #[tokio::test]
 async fn a_window_past_a_lists_widest_or_a_cursor_of_another_list_is_refused() {
     use yog_core::{
@@ -127,12 +128,29 @@ async fn a_window_past_a_lists_widest_or_a_cursor_of_another_list_is_refused() {
         event_index: 0,
     };
     let encode = |cursor: Cursor| crate::http::cursor::encode_cursor(&cursor).unwrap();
-    let liquidity = encode(Cursor::LiquidityChangeEvent(Box::new(of(EventScope::All))));
-    let all_swaps = encode(Cursor::SwapEvent(Box::new(of(EventScope::All))));
+    let recent = |scope| EventCursor {
+        from: chrono::Utc::now() - chrono::Duration::hours(2),
+        at: chrono::Utc::now() - chrono::Duration::hours(1),
+        ..of(scope)
+    };
+    let liquidity = encode(Cursor::LiquidityChangeEvent(Box::new(recent(
+        EventScope::All,
+    ))));
+    let all_swaps = encode(Cursor::SwapEvent(Box::new(recent(EventScope::All))));
+    let forged = encode(Cursor::SwapEvent(Box::new(EventCursor {
+        from: chrono::Utc::now() - chrono::Duration::days(8),
+        ..recent(EventScope::All)
+    })));
+    let backwards = encode(Cursor::SwapEvent(Box::new(EventCursor {
+        at: chrono::Utc::now() - chrono::Duration::hours(3),
+        ..recent(EventScope::All)
+    })));
     for uri in [
         "/api/swaps?window=7d".to_owned(),
         "/api/protocols/meteora_damm_v2/swaps?window=30d".to_owned(),
-        format!("/api/pools/{}/swaps?window=90d", pk(1)),
+        format!("/api/pools/{}/swaps?window=30d", pk(1)),
+        format!("/api/swaps?cursor={forged}"),
+        format!("/api/swaps?cursor={backwards}"),
         "/api/protocols/meteora/liquidity-changes".to_owned(),
         format!("/api/swaps?cursor={liquidity}"),
         format!("/api/protocols/meteora_damm_v2/swaps?cursor={all_swaps}"),

@@ -1,6 +1,7 @@
 //! Request DTO for the on-chain event collections: `swaps`, `liquidity-changes` and
 //! `pool-creations`, at the root, under a protocol and under a pool.
 
+use chrono::{TimeDelta, Utc};
 use serde::Deserialize;
 use utoipa::IntoParams;
 use yog_core::domain::{EventCursor, EventScope, Window};
@@ -23,6 +24,9 @@ pub(crate) struct EventsParams {
     #[param(value_type = u8, minimum = 1, maximum = 200)]
     limit: i64,
 }
+
+/// How long past its widest window a cursor's start stays accepted, for pages read slowly.
+const CURSOR_WINDOW_MARGIN: TimeDelta = TimeDelta::hours(1);
 
 #[derive(Debug)]
 pub(crate) struct ListEventsRequest {
@@ -56,6 +60,15 @@ impl ListEventsRequest {
                     .and_then(|raw| decode_event_cursor(raw, collection, scope))
             })
             .transpose()?;
+        // ⚠️ The cursor's start is the client's to send: unchecked, a forged one reads past the
+        // widest window the list serves.
+        if let Some(c) = &cursor
+            && (c.at < c.from || c.from < Utc::now() - longest.duration() - CURSOR_WINDOW_MARGIN)
+        {
+            return Err(ApiError::BadRequest(
+                "invalid cursor: its window is not one this list serves".to_string(),
+            ));
+        }
         Ok(Self {
             scope,
             window,

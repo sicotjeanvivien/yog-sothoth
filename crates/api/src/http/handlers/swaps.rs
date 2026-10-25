@@ -313,7 +313,8 @@ pub(crate) async fn list_pool_swaps(
         params,
         EventCollection::Swaps,
         EventScope::Pool(address),
-        Window::Month,
+        // ⚠️ Raw swaps are kept 7 days (migration 014): a longer window would read a week as more.
+        Window::Week,
     )?;
     super::known_pool(&state, &pool).await?;
     list_event_page(&state, request).await

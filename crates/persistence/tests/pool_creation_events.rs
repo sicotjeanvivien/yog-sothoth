@@ -6,7 +6,7 @@ use solana_signature::Signature;
 use sqlx::PgPool;
 use yog_core::{
     Cursor,
-    domain::{EventScope, PoolCreationEvent, PoolCreationEventLookup, Protocol},
+    domain::{PoolCreationEvent, PoolCreationEventLookup, Protocol},
 };
 use yog_persistence::PgPoolCreationEventRepository;
 
@@ -51,7 +51,7 @@ async fn a_page_follows_through_shared_instants_from_the_windows_start(pool: PgP
     let mut cursor = None;
     loop {
         let page = repository
-            .list_events(EventScope::All, at(-60), cursor.take(), 2)
+            .list_events(None, at(-60), cursor.take(), 2)
             .await
             .unwrap();
         seen.extend(
@@ -66,25 +66,28 @@ async fn a_page_follows_through_shared_instants_from_the_windows_start(pool: PgP
         }
     }
     let dlmm = repository
-        .list_events(
-            EventScope::Protocol(Protocol::MeteoraDlmm),
-            at(-60),
-            None,
-            50,
-        )
+        .list_events(Some(Protocol::MeteoraDlmm), at(-60), None, 50)
         .await
         .unwrap();
 
-    // The three of one instant, by signature descending, then the earlier one.
-    let mut tied: Vec<(String, _)> = [1u8, 2, 3]
-        .map(|seed| (Signature::from([seed; 64]).to_string(), pk(seed)))
-        .to_vec();
-    tied.sort_by(|a, b| b.0.cmp(&a.0));
-    let expected: Vec<_> = tied
-        .into_iter()
-        .map(|(_, address)| address)
-        .chain([pk(4)])
+    let in_one_page: Vec<_> = repository
+        .list_events(None, at(-60), None, 50)
+        .await
+        .unwrap()
+        .items
+        .iter()
+        .map(|PoolCreationEvent::MeteoraDammV2(e)| e.pool_address)
         .collect();
-    assert_eq!(seen, expected);
+
+    // The database's own order, its collation's: compared against itself, never against Rust's.
+    assert_eq!(seen, in_one_page);
+    let mut tied = seen[..3].to_vec();
+    tied.sort();
+    assert_eq!(tied, {
+        let mut three = vec![pk(1), pk(2), pk(3)];
+        three.sort();
+        three
+    });
+    assert_eq!(seen[3..], [pk(4)]);
     assert!(dlmm.items.is_empty());
 }

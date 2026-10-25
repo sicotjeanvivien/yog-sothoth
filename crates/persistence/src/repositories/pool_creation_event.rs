@@ -30,7 +30,7 @@ impl PgPoolCreationEventRepository {
 impl PoolCreationEventLookup for PgPoolCreationEventRepository {
     async fn list_events(
         &self,
-        scope: EventScope,
+        protocol: Option<Protocol>,
         from: DateTime<Utc>,
         cursor: Option<EventCursor>,
         limit: i64,
@@ -44,8 +44,8 @@ impl PoolCreationEventLookup for PgPoolCreationEventRepository {
             ),
             None => (None, None, None),
         };
-        let rows = match scope {
-            EventScope::All | EventScope::Protocol(Protocol::MeteoraDammV2) => sqlx::query_as!(
+        let rows = match protocol {
+            None | Some(Protocol::MeteoraDammV2) => sqlx::query_as!(
                 MeteoraDammV2InitializePoolEventRow,
                 r#"
                 SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,
@@ -70,33 +70,7 @@ impl PoolCreationEventLookup for PgPoolCreationEventRepository {
             .fetch_all(&self.pool)
             .await
             .map_err(map_sqlx_error)?,
-            EventScope::Pool(pool) => sqlx::query_as!(
-                MeteoraDammV2InitializePoolEventRow,
-                r#"
-                SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,
-                       token_a_mint, token_b_mint, creator, payer, alpha_vault, sqrt_min_price,
-                       sqrt_max_price, sqrt_price, liquidity, activation_type, activation_point,
-                       collect_fee_mode, pool_type, token_a_flag, token_b_flag, token_a_amount,
-                       token_b_amount, total_amount_a, total_amount_b, pool_fees_raw
-                  FROM meteora_damm_v2_initialize_pool_events
-                 WHERE pool_address = $1 AND timestamp >= $2
-                   AND timestamp <= COALESCE($3, 'infinity'::TIMESTAMPTZ)
-                   AND (timestamp < COALESCE($3, 'infinity'::TIMESTAMPTZ)
-                        OR (signature, event_index) < ($4, $5))
-                 ORDER BY timestamp DESC, signature DESC, event_index DESC
-                 LIMIT $6
-                "#,
-                pool.to_string(),
-                from,
-                after_at,
-                after_signature,
-                after_index,
-                limit + 1,
-            )
-            .fetch_all(&self.pool)
-            .await
-            .map_err(map_sqlx_error)?,
-            EventScope::Protocol(Protocol::MeteoraDlmm) => return Ok(Page::empty()),
+            Some(Protocol::MeteoraDlmm) => return Ok(Page::empty()),
         };
         let events = rows
             .into_iter()
@@ -109,7 +83,7 @@ impl PoolCreationEventLookup for PgPoolCreationEventRepository {
             PageBuilder::new(events, limit, QueryMode::Forward, had_cursor).finalize(|event| {
                 let PoolCreationEvent::MeteoraDammV2(e) = event;
                 Cursor::PoolCreationEvent(Box::new(EventCursor {
-                    scope,
+                    scope: protocol.map_or(EventScope::All, EventScope::Protocol),
                     from,
                     at: e.timestamp,
                     signature: e.signature,

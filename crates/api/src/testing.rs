@@ -1029,7 +1029,7 @@ pub(crate) struct MockPoolCreationEventRepo;
 impl PoolCreationEventLookup for MockPoolCreationEventRepo {
     async fn list_events(
         &self,
-        _: EventScope,
+        _: Option<Protocol>,
         _: DateTime<Utc>,
         _: Option<EventCursor>,
         _: i64,
