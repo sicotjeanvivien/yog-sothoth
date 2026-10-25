@@ -123,11 +123,11 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/tokens/activity` | Tokens by volume over `?window=`, identity embedded, forward-only cursor; a swap counts for both its tokens |
 | `GET` | `/api/tokens/{mint}` | Token metadata + latest price (200 with `price: null` if no price yet) |
 | `GET` | `/api/announcements/active` | Operator announcements whose window is open — most severe first, non-paginated (hard cap); empty array is the nominal case |
-| `GET` | `/api/swaps/totals` (`?offset=`), `/hourly`, `/daily` | Per protocol, the swaps over `?window=`, then per bar: swaps, volume, fees and their shares, pool-hours and the valued ones; the totals with the distinct pools that swapped |
+| `GET` | `/api/swaps/totals` (`?offset=`), `/hourly`, `/daily` | Per protocol, the swaps over `?window=`, then per bucket: swaps, volume, fees and their shares, pool-hours and the valued ones; the totals with the distinct pools that swapped |
 | `GET` | `/api/protocols/{protocol}/swaps/totals`, `/hourly`, `/daily` | The same, the protocol's own |
 | `GET` | `/api/pools/{pool}/swaps/totals`, `/hourly`, `/daily` | The same for one pool, without the protocol nor the distinct pools; 404 for a pool unknown |
 | `GET` | `/api/swaps/by-token` | Tokens by volume over `?window=`, every protocol summed, forward-only cursor |
-| `GET` | `/api/pool-creations/totals`, `/hourly`, `/daily`, and under `/api/protocols/{protocol}/` | Per protocol, the pools created over the window, then per bar |
+| `GET` | `/api/pool-creations/totals`, `/hourly`, `/daily`, and under `/api/protocols/{protocol}/` | Per protocol, the pools created over the window, then per bucket |
 | `GET` | `/api/protocols/{protocol}/liquidity-moves/totals`, `/hourly`, `/daily` | The protocol's liquidity created, added and removed, valued, with its moves valued; its `coveredSince` is the liquidity's |
 | `GET` | `/api/pools/{pool}/liquidity-moves` | A page of the pool's valued moves, `?sort=amount` (default) or `at`, forward-only cursor, refused (400) for another pool or window or after a freeze; empty while its protocol's liquidity does not cover the window |
 | `GET` | `/api/tvl`, `/api/protocols/{protocol}/tvl` | Per protocol, the last TVL reading at or before `asOf`, its `at` said |
@@ -143,12 +143,12 @@ ends at the close of the last frozen hour, `asOf`, the same for every route (a w
 future events starts there), and
 no read counts an open hour. Each response carries `asOf`, `coveredSince`, the first
 hour of the facts, and `from` when it is read over a window: a total whose window starts before
-it returns no row rather than a partial sum; a series returns the bars the facts
+it returns no row rather than a partial sum; a series returns the buckets the facts
 hold whole. The TVL is each protocol's last measure by that hour, its `at` said,
 with the part of it held by the pools discovered in each window, measured with it
 (a window without its part was not measured: the web then withholds the change).
 The liquidity is measured from a later hour than the swaps, its own start: its
-`liquidity` is `null` on a total, a bar or a ranking of moves whose window starts
+`liquidity` is `null` on a total, a bucket or a ranking of moves whose window starts
 before it, rather than a partial sum.
 The tokens are the exception to one read of the frozen hours: their span ends at
 the hour of the ranking read with them, which each freeze rewrites whole — a
