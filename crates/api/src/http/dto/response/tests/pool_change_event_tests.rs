@@ -13,13 +13,32 @@ fn key(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
 }
 
+/// The fields every protocol's item says, the protocol's own block left out.
+fn common(wire: &serde_json::Value) -> serde_json::Value {
+    let fields = wire.as_object().unwrap();
+    serde_json::Value::Object(
+        fields
+            .iter()
+            .filter(|(name, _)| *name != "meteoraDammV2")
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect(),
+    )
+}
+
+fn expected_common(signature: Signature) -> serde_json::Value {
+    json!({
+        "protocol": "meteora_damm_v2", "poolAddress": key(1).to_string(),
+        "signature": signature.to_string(), "eventIndex": 2, "slot": 9,
+        "at": "2026-10-25T12:00:00Z"
+    })
+}
+
 fn block(change: MeteoraDammV2PoolChange) -> serde_json::Value {
     let wire = serde_json::to_value(PoolChangeEventResponse::from(
         PoolChangeEvent::MeteoraDammV2(change),
     ))
     .unwrap();
-    assert_eq!(wire["poolAddress"], key(1).to_string());
-    assert_eq!(wire["eventIndex"], 2);
+    assert_eq!(common(&wire), expected_common(Signature::from([2; 64])));
     wire["meteoraDammV2"].clone()
 }
 

@@ -599,7 +599,12 @@
             "$ref": "#/components/schemas/U128String"
           },
           "rewardDurationEnd": {
-            "$ref": "#/components/schemas/U128String"
+            "description": "`null` when the chain's seconds are past what an instant can hold.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "rewardIndex": {
             "format": "u-int8",
@@ -621,9 +626,9 @@
           "rewardIndex",
           "amount",
           "transferFeeExcludedAmountIn",
-          "rewardDurationEnd",
           "preRewardRate",
-          "postRewardRate"
+          "postRewardRate",
+          "rewardDurationEnd"
         ],
         "type": "object"
       },

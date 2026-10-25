@@ -275,7 +275,7 @@ export const zMeteoraDammV2RewardFundResponse = z.object({
     funder: z.string().min(1),
     postRewardRate: zU128String,
     preRewardRate: zU128String,
-    rewardDurationEnd: zU128String,
+    rewardDurationEnd: z.iso.datetime({ offset: true }).nullable(),
     rewardIndex: z.int().gte(0).lte(255),
     rewardMint: z.string().min(1),
     transferFeeExcludedAmountIn: zU128String

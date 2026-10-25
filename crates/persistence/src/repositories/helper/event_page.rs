@@ -55,7 +55,6 @@ pub(crate) fn instants_of(keys: &[MergedEventKey]) -> Option<(DateTime<Utc>, Dat
     Some((first, last))
 }
 
-/// The ids of `keys` read from the table `kind`.
 pub(crate) fn ids_of(keys: &[MergedEventKey], kind: &str) -> Vec<i64> {
     keys.iter()
         .filter(|k| k.kind == kind)

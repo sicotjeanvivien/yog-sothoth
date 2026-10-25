@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::{
@@ -48,8 +49,8 @@ pub(super) struct MeteoraDammV2RewardFundResponse {
     amount: String,
     #[schema(value_type = U128String)]
     transfer_fee_excluded_amount_in: String,
-    #[schema(value_type = U128String)]
-    reward_duration_end: String,
+    /// `null` when the chain's seconds are past what an instant can hold.
+    reward_duration_end: Option<DateTime<Utc>>,
     #[schema(value_type = U128String)]
     pre_reward_rate: String,
     #[schema(value_type = U128String)]
@@ -143,7 +144,9 @@ impl From<MeteoraDammV2FundRewardEvent> for MeteoraDammV2RewardFundResponse {
             reward_index: e.reward_index,
             amount: e.amount.to_string(),
             transfer_fee_excluded_amount_in: e.transfer_fee_excluded_amount_in.to_string(),
-            reward_duration_end: e.reward_duration_end.to_string(),
+            reward_duration_end: i64::try_from(e.reward_duration_end)
+                .ok()
+                .and_then(|seconds| DateTime::from_timestamp(seconds, 0)),
             pre_reward_rate: e.pre_reward_rate.to_string(),
             post_reward_rate: e.post_reward_rate.to_string(),
         }

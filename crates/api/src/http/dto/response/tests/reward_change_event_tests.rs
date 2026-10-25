@@ -15,13 +15,32 @@ fn key(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
 }
 
+/// The fields every protocol's item says, the protocol's own block left out.
+fn common(wire: &serde_json::Value) -> serde_json::Value {
+    let fields = wire.as_object().unwrap();
+    serde_json::Value::Object(
+        fields
+            .iter()
+            .filter(|(name, _)| *name != "meteoraDammV2")
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect(),
+    )
+}
+
+fn expected_common(signature: Signature) -> serde_json::Value {
+    json!({
+        "protocol": "meteora_damm_v2", "poolAddress": key(1).to_string(),
+        "signature": signature.to_string(), "eventIndex": 2, "slot": 9,
+        "at": "2026-10-25T12:00:00Z"
+    })
+}
+
 fn block(change: MeteoraDammV2RewardChange) -> serde_json::Value {
     let wire = serde_json::to_value(RewardChangeEventResponse::from(
         RewardChangeEvent::MeteoraDammV2(change),
     ))
     .unwrap();
-    assert_eq!(wire["poolAddress"], key(1).to_string());
-    assert_eq!(wire["eventIndex"], 2);
+    assert_eq!(common(&wire), expected_common(Signature::from([2; 64])));
     wire["meteoraDammV2"].clone()
 }
 
@@ -61,7 +80,7 @@ fn each_change_says_its_kind_and_its_own_fields() {
             reward_index: 1,
             amount: 11,
             transfer_fee_excluded_amount_in: 12,
-            reward_duration_end: 13,
+            reward_duration_end: 1_792_211_733,
             pre_reward_rate: 14,
             post_reward_rate: 1 << 64,
         }
@@ -104,7 +123,7 @@ fn each_change_says_its_kind_and_its_own_fields() {
         fund,
         json!({
             "kind": "fund", "funder": k(13), "rewardMint": k(14), "rewardIndex": 1,
-            "amount": "11", "transferFeeExcludedAmountIn": "12", "rewardDurationEnd": "13",
+            "amount": "11", "transferFeeExcludedAmountIn": "12", "rewardDurationEnd": "2026-10-17T04:35:33Z",
             "preRewardRate": "14", "postRewardRate": "18446744073709551616"
         })
     );
@@ -127,4 +146,24 @@ fn each_change_says_its_kind_and_its_own_fields() {
         dead,
         json!({"kind": "dead_liquidity_withdrawal", "rewardMint": k(18), "amount": "41"})
     );
+}
+
+/// Mutation: the seconds out of an instant's range unwrapped, or served as another instant — a
+/// page that fails, or a date the chain never wrote.
+#[test]
+fn a_funding_end_past_any_instant_is_null() {
+    let fund = block(MeteoraDammV2RewardChange::Fund(event!(
+        MeteoraDammV2FundRewardEvent {
+            funder: key(13),
+            mint_reward: key(14),
+            reward_index: 1,
+            amount: 11,
+            transfer_fee_excluded_amount_in: 12,
+            reward_duration_end: u64::MAX,
+            pre_reward_rate: 14,
+            post_reward_rate: 15,
+        }
+    )));
+
+    assert!(fund["rewardDurationEnd"].is_null(), "{fund}");
 }

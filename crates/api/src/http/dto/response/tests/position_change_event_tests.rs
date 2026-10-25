@@ -22,6 +22,26 @@ fn key(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
 }
 
+/// The fields every protocol's item says, the protocol's own block left out.
+fn common(wire: &serde_json::Value) -> serde_json::Value {
+    let fields = wire.as_object().unwrap();
+    serde_json::Value::Object(
+        fields
+            .iter()
+            .filter(|(name, _)| *name != "meteoraDammV2")
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect(),
+    )
+}
+
+fn expected_common(signature: Signature) -> serde_json::Value {
+    json!({
+        "protocol": "meteora_damm_v2", "poolAddress": key(1).to_string(),
+        "signature": signature.to_string(), "eventIndex": 2, "slot": 9,
+        "at": "2026-10-25T12:00:00Z"
+    })
+}
+
 /// Mutation: two variants or two fields swapped in the conversion, or the tag renamed — a
 /// change read as another kind, a field as another, or its kind under another name.
 #[test]
@@ -127,7 +147,9 @@ fn each_change_says_its_kind_and_its_own_fields() {
     let split = wire(MeteoraDammV2PositionChange::Split(Box::new(split)));
 
     let k = |seed: u8| key(seed).to_string();
-    assert_eq!(open["eventIndex"], 2);
+    for change in [&open, &close, &lock, &permanent, &split] {
+        assert_eq!(common(change), expected_common(signature));
+    }
     assert_eq!(
         open["meteoraDammV2"],
         json!({"kind": "open", "owner": k(10), "position": k(11), "positionNftMint": k(12)})
