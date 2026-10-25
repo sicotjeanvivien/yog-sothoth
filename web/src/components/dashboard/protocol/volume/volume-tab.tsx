@@ -37,7 +37,13 @@ import { formatUsdCompact } from "@/lib/format/format-usd";
 import { shortenPubkey } from "@/lib/format/pubkey";
 import { axisOf, hourOf, roundTicks } from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
-import { durationOf, outsideRuns, splitSlotsOf, splitTotalsOf } from "@/lib/protocol/volume";
+import {
+  durationOf,
+  outsideRuns,
+  runsMeasuredSince,
+  splitSlotsOf,
+  splitTotalsOf,
+} from "@/lib/protocol/volume";
 
 import { SPLIT_TONE, VolumeSplitBars, type SplitDetail } from "./volume-split-bars";
 
@@ -147,19 +153,20 @@ async function VolumeSources({ period, protocol }: TabProps) {
   const moment = (date: Date) => formatUtcMoment(date, locale) ?? "—";
 
   const detailOf = (when: string, inRuns: number, outside: number, unsplit: number): SplitDetail => {
-    const whole = inRuns + outside + unsplit;
+    // ⚠️ The shares over the split volume only, as the legend's: an unsplit part is not outside.
+    const split = inRuns + outside;
     return {
       when,
-      total: usd(whole),
+      total: usd(split + unsplit),
       rows: [
         ...(inRuns + outside > 0 || unsplit === 0
           ? [
-              { tone: "in" as const, name: t("inRuns"), value: usd(inRuns), share: share(inRuns, whole) },
-              { tone: "out" as const, name: t("outside"), value: usd(outside), share: share(outside, whole) },
+              { tone: "in" as const, name: t("inRuns"), value: usd(inRuns), share: share(inRuns, split) },
+              { tone: "out" as const, name: t("outside"), value: usd(outside), share: share(outside, split) },
             ]
           : []),
         ...(unsplit > 0
-          ? [{ tone: "unsplit" as const, name: t("unsplit"), value: usd(unsplit), share: share(unsplit, whole) }]
+          ? [{ tone: "unsplit" as const, name: t("unsplit"), value: usd(unsplit), share: "" }]
           : []),
       ],
     };
@@ -189,7 +196,7 @@ async function VolumeSources({ period, protocol }: TabProps) {
     };
   });
 
-  const coveredSince = runs.coveredSince;
+  const measuredSince = runsMeasuredSince(runs);
   const partly = totals.unsplit > 0;
   const legend = (
     <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] text-dash-ink-2">
@@ -223,9 +230,9 @@ async function VolumeSources({ period, protocol }: TabProps) {
             <span className={LABEL_CLASS}>{t(daily ? "perDay" : "perHour")}</span>
             {partly && (
               <span className="text-[12px] text-dash-ink-3">
-                {coveredSince === null
+                {measuredSince === null
                   ? t("notMeasured")
-                  : t("measuredSince", { since: await utcMoment(coveredSince) })}
+                  : t("measuredSince", { since: await utcMoment(measuredSince) })}
               </span>
             )}
           </p>

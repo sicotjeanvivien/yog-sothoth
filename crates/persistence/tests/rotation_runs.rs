@@ -296,7 +296,7 @@ async fn the_coverage_is_the_first_tranche_measured_and_the_end_the_last_written
     assert_eq!(dlmm, None);
 }
 
-/// Inserts a run of `pool` lasting `minutes`, extinct or not.
+/// Inserts a run of `address` lasting `minutes`, extinct or not.
 async fn insert_lasting(pool: &PgPool, address: u8, start: i64, minutes: i64, extinct: bool) {
     sqlx::query(
         "INSERT INTO analytic_rotation_runs (pool_address, started_at, protocol, ended_at,

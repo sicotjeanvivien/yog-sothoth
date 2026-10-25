@@ -244,7 +244,7 @@
         "chartLabelDaily": "Volume par jour, en rafale et hors rafale",
         "stats": {
           "title": "Les rafales · {period}",
-          "info": "Les rafales commencées sur la période : leur nombre et celui de leurs pools, combien durent encore, leur durée du début à la fin, et la part de leur volume échangée dans leur première heure.",
+          "info": "Les rafales commencées sur la période : leur nombre et celui de leurs pools, combien durent encore, leur durée du début à la fin (jusqu'ici pour celles en cours), et la part de leur volume échangée dans leur première heure.",
           "runs": "Rafales",
           "onPools": "sur {pools} {count, plural, one {pool} other {pools}}",
           "inProgress": "{count} en cours",

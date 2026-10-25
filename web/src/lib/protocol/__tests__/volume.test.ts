@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
 
-import { durationOf, outsideRuns, splitSlotsOf, splitTotalsOf, type SplitSlot } from "../volume";
+import {
+  durationOf,
+  outsideRuns,
+  runsMeasuredSince,
+  splitSlotsOf,
+  splitTotalsOf,
+  type SplitSlot,
+} from "../volume";
 
 const bar = (from: string, volumeUsd: string | null, protocol: ProtocolResponse = "meteora_damm_v2") => ({
   protocol,
@@ -117,5 +124,16 @@ describe("durationOf", () => {
     expect(durationOf(3_300)).toBe("55 min");
     expect(durationOf(3_900)).toBe("1 h 05");
     expect(durationOf(9_000)).toBe("2 h 30");
+  });
+});
+
+describe("runsMeasuredSince", () => {
+  // Mutation: `coveredSince` taken as is — runs never measured said measured since the last hour.
+  it("is nothing while the coverage starts at the end", () => {
+    expect(runsMeasuredSince({ asOf: AS_OF, coveredSince: AS_OF })).toBeNull();
+    expect(runsMeasuredSince({ asOf: null, coveredSince: null })).toBeNull();
+    expect(runsMeasuredSince({ asOf: AS_OF, coveredSince: "2026-10-18T04:00:00Z" })).toBe(
+      "2026-10-18T04:00:00Z",
+    );
   });
 });

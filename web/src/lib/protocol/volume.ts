@@ -75,6 +75,18 @@ export function splitTotalsOf(slots: readonly SplitSlot[]): {
   return { inRuns, outside, share: inRuns + outside > 0 ? inRuns / (inRuns + outside) : null, unsplit };
 }
 
+/**
+ * Since when the runs are measured, `null` before any is. ⚠️ Not `coveredSince` alone: the API
+ * sets it to `asOf` while no run is measured.
+ */
+export function runsMeasuredSince(runs: { asOf: string | null; coveredSince: string | null }): string | null {
+  return runs.coveredSince !== null &&
+    runs.asOf !== null &&
+    Date.parse(runs.coveredSince) < Date.parse(runs.asOf)
+    ? runs.coveredSince
+    : null;
+}
+
 /** "18 min" under an hour, "2 h 05" beyond, from whole minutes. */
 export function durationOf(seconds: number): string {
   const minutes = Math.round(seconds / 60);

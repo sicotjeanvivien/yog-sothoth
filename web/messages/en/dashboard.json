@@ -244,7 +244,7 @@
         "chartLabelDaily": "Volume per day, in runs and outside them",
         "stats": {
           "title": "Rotation runs · {period}",
-          "info": "The runs that started in the period: how many, on how many pools, how many still go on, how long they last from start to end, and the share of their volume traded in their first hour.",
+          "info": "The runs that started in the period: how many, on how many pools, how many still go on, how long they last from start to end (so far for those in progress), and the share of their volume traded in their first hour.",
           "runs": "Runs",
           "onPools": "on {pools} {count, plural, one {pool} other {pools}}",
           "inProgress": "{count} in progress",
