@@ -292,8 +292,8 @@ There is no central registry. A protocol is added by writing isolated per-protoc
 | `pool_account_resolvers` vec (`bootstrap/daemon.rs`) | `context` | property backfill |
 | `From<domain::Protocol>` in `http/dto/response/protocol.rs` | `api` | protocol name in the contract (then regenerate it) |
 | `PoolService::get_pool` (`application/services/pool_service.rs`) | `api` | the pool's protocol properties in `/api/pools/{pool}` |
-| the `match` of the seven `Pg*EventRepository` of the on-chain lists (`PgSwapEventRepository`, …, `PgRewardClaimEventRepository`) | `persistence` | the protocol's event tables in the on-chain lists (a `UNION ALL` at the root) |
-| `SwapEvent`, `LiquidityChangeEvent`, `PoolCreationEvent`, `PositionChangeEvent`, `PositionFeeClaimEvent`, `ProtocolFeeClaimEvent`, `RewardClaimEvent` and their `From` in `http/dto/response/` | `core`, `api` | the protocol's variant and its block in the on-chain lists |
+| the `match` of the nine `Pg*EventRepository` of the on-chain lists (`PgSwapEventRepository`, …, `PgPoolChangeEventRepository`) | `persistence` | the protocol's event tables in the on-chain lists (a `UNION ALL` at the root) |
+| `SwapEvent`, `LiquidityChangeEvent`, `PoolCreationEvent`, `PositionChangeEvent`, `PositionFeeClaimEvent`, `ProtocolFeeClaimEvent`, `RewardClaimEvent`, `RewardChangeEvent`, `PoolChangeEvent` and their `From` in `http/dto/response/` | `core`, `api` | the protocol's variant and its block in the on-chain lists |
 | `spot_price_a_in_b` (`application/detectors/price_oracle_deviation.rs`) | `signals` | `sqrt_price` → spot price, or `None` |
 | `formatProtocolLabel` (`web/src/lib/format/format-protocol.ts`) | `web` | display label |
 
