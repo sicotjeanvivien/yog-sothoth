@@ -234,7 +234,7 @@ async fn a_scope_and_its_window_read_only_their_changes(pool: PgPool) {
 }
 
 /// Mutation: a column of a table read into another field, or a first and second side of a
-/// split swapped — a change that comes back other than written. Every column holds its own value.
+/// split swapped — a change that comes back other than written.
 #[sqlx::test(migrations = "./migrations")]
 async fn each_kind_comes_back_as_written(pool: PgPool) {
     let base = |table: &str, columns: &str, values: &str| {

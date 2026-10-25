@@ -599,7 +599,7 @@
             "$ref": "#/components/schemas/U128String"
           },
           "rewardDurationEnd": {
-            "description": "`null` when the chain's seconds are past what an instant can hold.",
+            "description": "`null` when the chain's seconds fall past the year 9999, which RFC 3339 cannot write.",
             "format": "date-time",
             "type": [
               "string",

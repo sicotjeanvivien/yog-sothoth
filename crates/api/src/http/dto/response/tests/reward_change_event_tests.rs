@@ -148,22 +148,25 @@ fn each_change_says_its_kind_and_its_own_fields() {
     );
 }
 
-/// Mutation: the seconds out of an instant's range unwrapped, or served as another instant — a
-/// page that fails, or a date the chain never wrote.
+/// Mutation: the year bound dropped, or the seconds past chrono's range unwrapped — a date
+/// RFC 3339 cannot write, which fails the page in the client, or a handler that panics.
 #[test]
-fn a_funding_end_past_any_instant_is_null() {
-    let fund = block(MeteoraDammV2RewardChange::Fund(event!(
-        MeteoraDammV2FundRewardEvent {
-            funder: key(13),
-            mint_reward: key(14),
-            reward_index: 1,
-            amount: 11,
-            transfer_fee_excluded_amount_in: 12,
-            reward_duration_end: u64::MAX,
-            pre_reward_rate: 14,
-            post_reward_rate: 15,
-        }
-    )));
+fn a_funding_end_past_the_year_9999_is_null() {
+    // Past 9999 but within chrono's range, then past chrono's range: both fit in a BIGINT.
+    for seconds in [300_000_000_000_u64, 9_000_000_000_000] {
+        let fund = block(MeteoraDammV2RewardChange::Fund(event!(
+            MeteoraDammV2FundRewardEvent {
+                funder: key(13),
+                mint_reward: key(14),
+                reward_index: 1,
+                amount: 11,
+                transfer_fee_excluded_amount_in: 12,
+                reward_duration_end: seconds,
+                pre_reward_rate: 14,
+                post_reward_rate: 15,
+            }
+        )));
 
-    assert!(fund["rewardDurationEnd"].is_null(), "{fund}");
+        assert!(fund["rewardDurationEnd"].is_null(), "{seconds}: {fund}");
+    }
 }

@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::{
@@ -49,7 +49,7 @@ pub(super) struct MeteoraDammV2RewardFundResponse {
     amount: String,
     #[schema(value_type = U128String)]
     transfer_fee_excluded_amount_in: String,
-    /// `null` when the chain's seconds are past what an instant can hold.
+    /// `null` when the chain's seconds fall past the year 9999, which RFC 3339 cannot write.
     reward_duration_end: Option<DateTime<Utc>>,
     #[schema(value_type = U128String)]
     pre_reward_rate: String,
@@ -146,7 +146,8 @@ impl From<MeteoraDammV2FundRewardEvent> for MeteoraDammV2RewardFundResponse {
             transfer_fee_excluded_amount_in: e.transfer_fee_excluded_amount_in.to_string(),
             reward_duration_end: i64::try_from(e.reward_duration_end)
                 .ok()
-                .and_then(|seconds| DateTime::from_timestamp(seconds, 0)),
+                .and_then(|seconds| DateTime::from_timestamp(seconds, 0))
+                .filter(|end| end.year() <= 9999),
             pre_reward_rate: e.pre_reward_rate.to_string(),
             post_reward_rate: e.post_reward_rate.to_string(),
         }

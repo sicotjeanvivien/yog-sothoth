@@ -139,7 +139,7 @@ async fn a_scope_and_its_window_read_only_their_claims(pool: PgPool) {
 }
 
 /// Mutation: a column read into another field — two of its values swapped, or one read for
-/// another. Every column holds its own value.
+/// another.
 #[sqlx::test(migrations = "./migrations")]
 async fn a_claim_comes_back_as_written(pool: PgPool) {
     sqlx::query(
