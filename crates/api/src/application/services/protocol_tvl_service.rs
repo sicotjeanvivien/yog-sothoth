@@ -6,19 +6,25 @@ use std::sync::Arc;
 use chrono::TimeDelta;
 use yog_core::{
     RepositoryResult,
-    domain::{Protocol, ProtocolActivityLookup, ProtocolTvl, TvlLookup, Window},
+    domain::{Protocol, ProtocolActivityLookup, ProtocolTvl, ProtocolTvlLookup, Window},
 };
 
 use super::period::{Measured, build_frozen_period};
 
-pub(crate) struct TvlService {
+pub(crate) struct ProtocolTvlService {
     hours: Arc<dyn ProtocolActivityLookup>,
-    tvl: Arc<dyn TvlLookup>,
+    protocol_tvl: Arc<dyn ProtocolTvlLookup>,
 }
 
-impl TvlService {
-    pub(crate) fn new(hours: Arc<dyn ProtocolActivityLookup>, tvl: Arc<dyn TvlLookup>) -> Self {
-        Self { hours, tvl }
+impl ProtocolTvlService {
+    pub(crate) fn new(
+        hours: Arc<dyn ProtocolActivityLookup>,
+        protocol_tvl: Arc<dyn ProtocolTvlLookup>,
+    ) -> Self {
+        Self {
+            hours,
+            protocol_tvl,
+        }
     }
 
     /// Each protocol's last TVL reading by the last frozen hour.
@@ -28,7 +34,11 @@ impl TvlService {
     ) -> RepositoryResult<Measured<Vec<ProtocolTvl>>> {
         let period = build_frozen_period(self.hours.as_ref(), Window::Day, None).await?;
         let items = match &period {
-            Some(period) => self.tvl.list_latest(period.last_hour(), protocol).await?,
+            Some(period) => {
+                self.protocol_tvl
+                    .list_latest(period.last_hour(), protocol)
+                    .await?
+            }
             None => Vec::new(),
         };
         Ok(Measured { period, items })
@@ -43,7 +53,7 @@ impl TvlService {
         let period = build_frozen_period(self.hours.as_ref(), window, None).await?;
         let items = match &period {
             Some(period) => {
-                self.tvl
+                self.protocol_tvl
                     .list_hourly(
                         period.from - TimeDelta::hours(1),
                         period.last_hour(),
@@ -58,5 +68,5 @@ impl TvlService {
 }
 
 #[cfg(test)]
-#[path = "tests/tvl_service_tests.rs"]
+#[path = "tests/protocol_tvl_service_tests.rs"]
 mod tests;

@@ -24,9 +24,10 @@ api/src/
 │   ├── services/          ← cross-protocol services at the root (SignalService,
 │   │                        TokenService, NetworkService, IngestionService,
 │   │                        AnnouncementService, ActivityService, PoolService), one
-│   │                        per produced resource (SwapService, PoolCreationService,
-│   │                        LiquidityMoveService, TvlService, PoolDiscoveryService),
-│   │                        and period.rs, the frozen period they all read over
+│   │                        per produced resource (SwapActivityService,
+│   │                        PoolCreationsService, LiquidityMoveService,
+│   │                        ProtocolTvlService, DiscoveredTvlService), and period.rs,
+│   │                        the frozen period they all read over
 │   ├── signal_stream.rs   ← SignalStreamPoller (enriches once, feeds the SSE broadcast)
 │   ├── cache.rs           ← SharedCache (moka) and its named CachePolicy per use
 │   ├── enriched_token.rs  ← one token side of a pool, identity only

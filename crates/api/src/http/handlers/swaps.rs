@@ -59,7 +59,7 @@ async fn get_totals(
 ) -> Result<Json<WindowedResponse<ProtocolSwapActivityResponse>>, ApiError> {
     let window = params.window.into();
     let measured = state
-        .swap_service
+        .swap_activity_service
         .get_swap_totals(window, params.offset.map(Into::into), protocol)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
@@ -145,7 +145,7 @@ async fn list_buckets(
 ) -> Result<Json<WindowedResponse<ProtocolSwapActivityBucketResponse>>, ApiError> {
     let window = params.window.into();
     let measured = state
-        .swap_service
+        .swap_activity_service
         .list_swap_buckets(window, bucket, protocol)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
@@ -169,7 +169,7 @@ pub(crate) async fn get_pool_swap_totals(
     let pool = super::known_pool(&state, &pool).await?;
     let window = params.window.into();
     let measured = state
-        .swap_service
+        .swap_activity_service
         .get_pool_swap_totals(window, pool.pool_address)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
@@ -220,7 +220,7 @@ async fn list_pool_buckets(
     let pool = super::known_pool(state, pool).await?;
     let window = params.window.into();
     let measured = state
-        .swap_service
+        .swap_activity_service
         .list_pool_swap_buckets(window, bucket, pool.pool_address)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))

@@ -13,13 +13,14 @@ pub use database::{Database, PoolSettings};
 pub use error::BackupError;
 pub use health::{HealthError, PgHealthChecker};
 pub use repositories::{
-    PgAnalyticRepository, PgAnnouncementRepository, PgEventFreshnessRepository,
-    PgLiquidityFlowRepository, PgLiquidityMoveRepository, PgMaterializationBacklogRepository,
-    PgMeteoraDammV2ClaimPositionFeeEventRepository, PgMeteoraDammV2ClaimProtocolFeeEventRepository,
-    PgMeteoraDammV2ClaimRewardEventRepository, PgMeteoraDammV2ClosePositionEventRepository,
-    PgMeteoraDammV2CreatePositionEventRepository, PgMeteoraDammV2FundRewardEventRepository,
-    PgMeteoraDammV2InitializePoolEventRepository, PgMeteoraDammV2InitializeRewardEventRepository,
-    PgMeteoraDammV2LiquidityEventRepository, PgMeteoraDammV2LockPositionEventRepository,
+    PgAnalyticRepository, PgAnnouncementRepository, PgDiscoveredTvlRepository,
+    PgEventFreshnessRepository, PgLiquidityFlowRepository, PgLiquidityMoveRepository,
+    PgMaterializationBacklogRepository, PgMeteoraDammV2ClaimPositionFeeEventRepository,
+    PgMeteoraDammV2ClaimProtocolFeeEventRepository, PgMeteoraDammV2ClaimRewardEventRepository,
+    PgMeteoraDammV2ClosePositionEventRepository, PgMeteoraDammV2CreatePositionEventRepository,
+    PgMeteoraDammV2FundRewardEventRepository, PgMeteoraDammV2InitializePoolEventRepository,
+    PgMeteoraDammV2InitializeRewardEventRepository, PgMeteoraDammV2LiquidityEventRepository,
+    PgMeteoraDammV2LockPositionEventRepository,
     PgMeteoraDammV2PermanentLockPositionEventRepository, PgMeteoraDammV2PoolPropertiesRepository,
     PgMeteoraDammV2SetPoolStatusEventRepository, PgMeteoraDammV2SplitPositionEventRepository,
     PgMeteoraDammV2SwapEventRepository, PgMeteoraDammV2UpdatePoolFeesEventRepository,
@@ -27,10 +28,10 @@ pub use repositories::{
     PgMeteoraDammV2UpdateRewardFunderEventRepository,
     PgMeteoraDammV2WithdrawDeadLiquidityRewardEventRepository,
     PgMeteoraDammV2WithdrawIneligibleRewardEventRepository, PgMeteoraDlmmPoolPropertiesRepository,
-    PgNetworkStatusRepository, PgPoolCreationRepository, PgPoolCurrentStateRepository,
-    PgPoolDiscoveryRepository, PgPoolPriceSnapshotRepository, PgPoolRepository,
-    PgProtocolActivityRepository, PgSignalRepository, PgSwapFlowRepository, PgSwapRepository,
-    PgTokenActivityRepository, PgTokenMetadataRepository, PgTokenPriceRepository, PgTvlRepository,
+    PgNetworkStatusRepository, PgPoolCreationsRepository, PgPoolCurrentStateRepository,
+    PgPoolPriceSnapshotRepository, PgPoolRepository, PgProtocolActivityRepository,
+    PgProtocolTvlRepository, PgSignalRepository, PgSwapActivityRepository, PgSwapFlowRepository,
+    PgTokenActivityRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
     PgWatchedPoolRepository,
 };
 pub use server_info::{PgServerInfo, ServerVersions};

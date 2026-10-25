@@ -59,7 +59,7 @@ async fn get_totals(
 ) -> Result<Json<WindowedResponse<ProtocolDiscoveredTvlResponse>>, ApiError> {
     let window = params.window.into();
     let measured = state
-        .pool_discovery_service
+        .discovered_tvl_service
         .get_discovered_tvl(window, protocol)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))

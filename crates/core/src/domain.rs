@@ -1,5 +1,6 @@
 mod analytic;
 mod announcements;
+mod discovered_tvl;
 mod domain_event;
 mod event_position;
 mod freshness_status;
@@ -14,18 +15,17 @@ mod pool;
 mod pool_account;
 mod pool_creations;
 mod pool_current_state;
-mod pool_discoveries;
 mod pool_price_snapshot;
 mod protocol;
 mod protocol_activity;
+mod protocol_tvl;
 mod signals;
+mod swap_activity;
 mod swap_flow;
-mod swaps;
 mod token_activity;
 mod token_metadata;
 mod token_price;
 mod trade_direction;
-mod tvl;
 mod unpriced_mints;
 mod watched_pool;
 
@@ -35,6 +35,7 @@ pub use analytic::{
     TRANCHE, Window,
 };
 pub use announcements::{Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity};
+pub use discovered_tvl::{DiscoveredTvl, DiscoveredTvlLookup, ProtocolDiscoveredTvl};
 pub use domain_event::DomainEvent;
 pub use event_position::{EventPosition, TransactionPosition};
 pub use freshness_status::{EventFreshnessRepository, FreshnessStatus};
@@ -75,23 +76,23 @@ pub use pool::{Pool, PoolCatalog, PoolRepository, ProtocolPools};
 pub use pool_account::{
     DecodedPoolAccount, PoolAccountProperties, PoolAccountResolver, PoolRegistryProperties,
 };
-pub use pool_creations::{PoolCreationLookup, PoolCreations, ProtocolPoolCreations};
+pub use pool_creations::{PoolCreations, PoolCreationsLookup, ProtocolPoolCreations};
 pub use pool_current_state::{
     LastEventKind, PoolCurrentStateRepository, PoolCurrentStateUpsert,
     PoolCurrentStateUpsertOutcome,
 };
-pub use pool_discoveries::{DiscoveredTvl, PoolDiscoveryLookup, ProtocolDiscoveredTvl};
 pub use pool_price_snapshot::{PoolPriceSnapshot, PoolPriceSnapshotRepository};
 pub use protocol::Protocol;
 pub use protocol_activity::{
     LatestProtocolTvl, ProtocolActivity, ProtocolActivityBar, ProtocolActivityLookup,
 };
+pub use protocol_tvl::{ProtocolTvl, ProtocolTvlLookup};
 pub use signals::{
     DetectorError, EvalContext, Severity, Signal, SignalCursor, SignalDetector, SignalFeed,
     SignalFilter, SignalRecord, SignalRepository,
 };
+pub use swap_activity::{PoolSwapBucket, ProtocolSwapActivity, SwapActivity, SwapActivityLookup};
 pub use swap_flow::{PoolSwapFlow, SwapFlowRepository};
-pub use swaps::{PoolSwapBucket, ProtocolSwapActivity, SwapActivity, SwapLookup};
 pub use token_activity::{
     TokenActivity, TokenActivityCursor, TokenActivityFeed, TokenActivityPage,
 };
@@ -104,6 +105,5 @@ pub use token_price::{
     TokenPriceRepository,
 };
 pub use trade_direction::TradeDirection;
-pub use tvl::{ProtocolTvl, TvlLookup};
 pub use unpriced_mints::UnpricedMints;
 pub use watched_pool::{WatchedPool, WatchedPoolRepository};

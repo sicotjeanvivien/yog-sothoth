@@ -5,9 +5,9 @@ use crate::RepositoryResult;
 use crate::domain::{FrozenPeriod, Protocol, ProtocolBucket};
 
 /// The pools created, by protocol, under the same period rules as
-/// [`SwapLookup`](crate::domain::SwapLookup).
+/// [`SwapActivityLookup`](crate::domain::SwapActivityLookup).
 #[async_trait]
-pub trait PoolCreationLookup: Send + Sync {
+pub trait PoolCreationsLookup: Send + Sync {
     async fn list_totals(
         &self,
         period: &FrozenPeriod,

@@ -5,25 +5,25 @@ use std::sync::Arc;
 use yog_core::{
     RepositoryResult,
     domain::{
-        PoolDiscoveryLookup, Protocol, ProtocolActivityLookup, ProtocolDiscoveredTvl, Window,
+        DiscoveredTvlLookup, Protocol, ProtocolActivityLookup, ProtocolDiscoveredTvl, Window,
     },
 };
 
 use super::period::{Measured, build_frozen_period};
 
-pub(crate) struct PoolDiscoveryService {
+pub(crate) struct DiscoveredTvlService {
     hours: Arc<dyn ProtocolActivityLookup>,
-    pool_discoveries: Arc<dyn PoolDiscoveryLookup>,
+    discovered_tvl: Arc<dyn DiscoveredTvlLookup>,
 }
 
-impl PoolDiscoveryService {
+impl DiscoveredTvlService {
     pub(crate) fn new(
         hours: Arc<dyn ProtocolActivityLookup>,
-        pool_discoveries: Arc<dyn PoolDiscoveryLookup>,
+        discovered_tvl: Arc<dyn DiscoveredTvlLookup>,
     ) -> Self {
         Self {
             hours,
-            pool_discoveries,
+            discovered_tvl,
         }
     }
 
@@ -36,7 +36,7 @@ impl PoolDiscoveryService {
         let period = build_frozen_period(self.hours.as_ref(), window, None).await?;
         let items = match &period {
             Some(period) if period.is_covered() => {
-                self.pool_discoveries
+                self.discovered_tvl
                     .list_totals(period.last_hour(), window, protocol)
                     .await?
             }
@@ -47,5 +47,5 @@ impl PoolDiscoveryService {
 }
 
 #[cfg(test)]
-#[path = "tests/pool_discovery_service_tests.rs"]
+#[path = "tests/discovered_tvl_service_tests.rs"]
 mod tests;

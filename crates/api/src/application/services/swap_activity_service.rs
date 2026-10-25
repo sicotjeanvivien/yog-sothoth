@@ -7,20 +7,26 @@ use yog_core::{
     RepositoryResult,
     domain::{
         PoolSwapBucket, Protocol, ProtocolActivityLookup, ProtocolBucket, ProtocolSwapActivity,
-        SwapActivity, SwapLookup, Window,
+        SwapActivity, SwapActivityLookup, Window,
     },
 };
 
 use super::period::{BucketPeriod, Measured, build_frozen_period};
 
-pub(crate) struct SwapService {
+pub(crate) struct SwapActivityService {
     hours: Arc<dyn ProtocolActivityLookup>,
-    swaps: Arc<dyn SwapLookup>,
+    swap_activity: Arc<dyn SwapActivityLookup>,
 }
 
-impl SwapService {
-    pub(crate) fn new(hours: Arc<dyn ProtocolActivityLookup>, swaps: Arc<dyn SwapLookup>) -> Self {
-        Self { hours, swaps }
+impl SwapActivityService {
+    pub(crate) fn new(
+        hours: Arc<dyn ProtocolActivityLookup>,
+        swap_activity: Arc<dyn SwapActivityLookup>,
+    ) -> Self {
+        Self {
+            hours,
+            swap_activity,
+        }
     }
 
     /// Totals: nothing for a period the facts do not cover whole.
@@ -33,7 +39,7 @@ impl SwapService {
         let period = build_frozen_period(self.hours.as_ref(), window, offset).await?;
         let items = match &period {
             Some(period) if period.is_covered() => {
-                self.swaps
+                self.swap_activity
                     .find_protocol_totals(period, window, protocol)
                     .await?
             }
@@ -51,10 +57,14 @@ impl SwapService {
         let period = build_frozen_period(self.hours.as_ref(), window, None).await?;
         let items = match (&period, bucket) {
             (Some(period), BucketPeriod::Hour) => {
-                self.swaps.list_protocol_hourly(period, protocol).await?
+                self.swap_activity
+                    .list_protocol_hourly(period, protocol)
+                    .await?
             }
             (Some(period), BucketPeriod::Day) => {
-                self.swaps.list_protocol_daily(period, protocol).await?
+                self.swap_activity
+                    .list_protocol_daily(period, protocol)
+                    .await?
             }
             (None, _) => Vec::new(),
         };
@@ -69,7 +79,7 @@ impl SwapService {
         let period = build_frozen_period(self.hours.as_ref(), window, None).await?;
         let items = match &period {
             Some(period) if period.is_covered() => self
-                .swaps
+                .swap_activity
                 .find_pool_totals(period, pool)
                 .await?
                 .into_iter()
@@ -87,8 +97,12 @@ impl SwapService {
     ) -> RepositoryResult<Measured<Vec<PoolSwapBucket>>> {
         let period = build_frozen_period(self.hours.as_ref(), window, None).await?;
         let items = match (&period, bucket) {
-            (Some(period), BucketPeriod::Hour) => self.swaps.list_pool_hourly(period, pool).await?,
-            (Some(period), BucketPeriod::Day) => self.swaps.list_pool_daily(period, pool).await?,
+            (Some(period), BucketPeriod::Hour) => {
+                self.swap_activity.list_pool_hourly(period, pool).await?
+            }
+            (Some(period), BucketPeriod::Day) => {
+                self.swap_activity.list_pool_daily(period, pool).await?
+            }
             (None, _) => Vec::new(),
         };
         Ok(Measured { period, items })
@@ -96,5 +110,5 @@ impl SwapService {
 }
 
 #[cfg(test)]
-#[path = "tests/swap_service_tests.rs"]
+#[path = "tests/swap_activity_service_tests.rs"]
 mod tests;

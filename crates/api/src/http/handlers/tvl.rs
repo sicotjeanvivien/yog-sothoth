@@ -51,7 +51,7 @@ async fn get_latest(
     state: &AppState,
     protocol: Option<Protocol>,
 ) -> Result<Json<ReadingResponse<ProtocolTvlResponse>>, ApiError> {
-    let measured = state.tvl_service.get_tvl(protocol).await?;
+    let measured = state.protocol_tvl_service.get_tvl(protocol).await?;
     Ok(Json(ReadingResponse::new(measured)))
 }
 
@@ -97,6 +97,9 @@ async fn list_hourly(
     protocol: Option<Protocol>,
 ) -> Result<Json<WindowedResponse<ProtocolTvlResponse>>, ApiError> {
     let window = params.window.into();
-    let measured = state.tvl_service.list_tvl_hourly(window, protocol).await?;
+    let measured = state
+        .protocol_tvl_service
+        .list_tvl_hourly(window, protocol)
+        .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }

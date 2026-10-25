@@ -1,13 +1,13 @@
-//! `PgPoolCreationRepository` under `yog_api`: the births of one protocol, seeded here.
+//! `PgPoolCreationsRepository` under `yog_api`: the births of one protocol, seeded here.
 
 use sqlx::PgPool;
-use yog_core::domain::{PoolCreationLookup, Protocol};
-use yog_persistence::PgPoolCreationRepository;
+use yog_core::domain::{PoolCreationsLookup, Protocol};
+use yog_persistence::PgPoolCreationsRepository;
 
 use super::helpers::{DAMM, DLMM, as_of, period, setup_roles_and_connect_as};
 
-async fn repository(pool: &PgPool) -> PgPoolCreationRepository {
-    PgPoolCreationRepository::new(setup_roles_and_connect_as(pool, "yog_api").await)
+async fn repository(pool: &PgPool) -> PgPoolCreationsRepository {
+    PgPoolCreationsRepository::new(setup_roles_and_connect_as(pool, "yog_api").await)
 }
 
 /// Mutation: the protocol filter of the creations dropped — DLMM's counted.
@@ -28,13 +28,13 @@ async fn a_protocols_creations_count_only_it(pool: PgPool) {
     let repository = repository(&pool).await;
     let day = period(24);
 
-    let totals = PoolCreationLookup::list_totals(&repository, &day, Some(Protocol::MeteoraDammV2))
+    let totals = PoolCreationsLookup::list_totals(&repository, &day, Some(Protocol::MeteoraDammV2))
         .await
         .unwrap();
-    let hourly = PoolCreationLookup::list_hourly(&repository, &day, Some(Protocol::MeteoraDammV2))
+    let hourly = PoolCreationsLookup::list_hourly(&repository, &day, Some(Protocol::MeteoraDammV2))
         .await
         .unwrap();
-    let all = PoolCreationLookup::list_totals(&repository, &day, None)
+    let all = PoolCreationsLookup::list_totals(&repository, &day, None)
         .await
         .unwrap();
 

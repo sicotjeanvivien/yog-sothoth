@@ -5,22 +5,22 @@ use std::sync::Arc;
 use yog_core::{
     RepositoryResult,
     domain::{
-        PoolCreationLookup, PoolCreations, Protocol, ProtocolActivityLookup, ProtocolBucket,
+        PoolCreations, PoolCreationsLookup, Protocol, ProtocolActivityLookup, ProtocolBucket,
         ProtocolPoolCreations, Window,
     },
 };
 
 use super::period::{BucketPeriod, Measured, build_frozen_period};
 
-pub(crate) struct PoolCreationService {
+pub(crate) struct PoolCreationsService {
     hours: Arc<dyn ProtocolActivityLookup>,
-    pool_creations: Arc<dyn PoolCreationLookup>,
+    pool_creations: Arc<dyn PoolCreationsLookup>,
 }
 
-impl PoolCreationService {
+impl PoolCreationsService {
     pub(crate) fn new(
         hours: Arc<dyn ProtocolActivityLookup>,
-        pool_creations: Arc<dyn PoolCreationLookup>,
+        pool_creations: Arc<dyn PoolCreationsLookup>,
     ) -> Self {
         Self {
             hours,

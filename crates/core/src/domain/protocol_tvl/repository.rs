@@ -6,7 +6,7 @@ use crate::RepositoryResult;
 use crate::domain::Protocol;
 
 #[async_trait]
-pub trait TvlLookup: Send + Sync {
+pub trait ProtocolTvlLookup: Send + Sync {
     /// Each protocol's last reading at or before the hour `last`.
     async fn list_latest(
         &self,

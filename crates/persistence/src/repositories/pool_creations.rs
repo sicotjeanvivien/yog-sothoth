@@ -1,4 +1,4 @@
-//! PostgreSQL implementation of [`PoolCreationLookup`]: the births yog-analytic counted, by
+//! PostgreSQL implementation of [`PoolCreationsLookup`]: the births yog-analytic counted, by
 //! protocol and hour.
 
 mod rows;
@@ -9,25 +9,25 @@ use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
     domain::{
-        FrozenPeriod, PoolCreationLookup, PoolCreations, Protocol, ProtocolBucket,
+        FrozenPeriod, PoolCreations, PoolCreationsLookup, Protocol, ProtocolBucket,
         ProtocolPoolCreations,
     },
 };
 
 use crate::repositories::helper::{bind_protocol_filter, map_sqlx_error};
 
-pub struct PgPoolCreationRepository {
+pub struct PgPoolCreationsRepository {
     pool: PgPool,
 }
 
-impl PgPoolCreationRepository {
+impl PgPoolCreationsRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }
 
 #[async_trait]
-impl PoolCreationLookup for PgPoolCreationRepository {
+impl PoolCreationsLookup for PgPoolCreationsRepository {
     async fn list_totals(
         &self,
         period: &FrozenPeriod,

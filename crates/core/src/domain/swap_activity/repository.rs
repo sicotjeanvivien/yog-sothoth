@@ -8,7 +8,7 @@ use crate::domain::{FrozenPeriod, Protocol, ProtocolBucket, Window};
 /// The swaps' measures. `protocol` narrows a read to one protocol, `None` reads them all;
 /// none counts an hour of `period` before its `covered_since`.
 #[async_trait]
-pub trait SwapLookup: Send + Sync {
+pub trait SwapActivityLookup: Send + Sync {
     /// One row per protocol with facts in `period`; its pools are those written for `window` at
     /// the period's last hour.
     async fn find_protocol_totals(

@@ -1,15 +1,15 @@
-//! `PgTvlRepository` under `yog_api`: the readings of one protocol, seeded here.
+//! `PgProtocolTvlRepository` under `yog_api`: the readings of one protocol, seeded here.
 
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
-use yog_core::domain::{Protocol, TvlLookup};
-use yog_persistence::PgTvlRepository;
+use yog_core::domain::{Protocol, ProtocolTvlLookup};
+use yog_persistence::PgProtocolTvlRepository;
 
 use super::helpers::{DAMM, DLMM, as_of, setup_roles_and_connect_as};
 
-async fn repository(pool: &PgPool) -> PgTvlRepository {
-    PgTvlRepository::new(setup_roles_and_connect_as(pool, "yog_api").await)
+async fn repository(pool: &PgPool) -> PgProtocolTvlRepository {
+    PgProtocolTvlRepository::new(setup_roles_and_connect_as(pool, "yog_api").await)
 }
 
 async fn insert_tvl(pool: &PgPool, protocol: &str, bucket: DateTime<Utc>, tvl: i64) {
@@ -41,7 +41,7 @@ async fn the_tvl_is_the_last_reading_at_or_before_the_hour_with_its_instant(pool
         .list_latest(last, Some(Protocol::MeteoraDammV2))
         .await
         .unwrap();
-    let hourly = TvlLookup::list_hourly(
+    let hourly = ProtocolTvlLookup::list_hourly(
         &repository,
         last - Duration::hours(3),
         last,

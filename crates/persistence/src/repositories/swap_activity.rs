@@ -1,4 +1,4 @@
-//! PostgreSQL implementation of [`SwapLookup`]: yog-analytic's protocol and pool hours, read
+//! PostgreSQL implementation of [`SwapActivityLookup`]: yog-analytic's protocol and pool hours, read
 //! over the period the caller built.
 
 mod rows;
@@ -11,24 +11,24 @@ use yog_core::{
     RepositoryResult,
     domain::{
         FrozenPeriod, PoolSwapBucket, Protocol, ProtocolBucket, ProtocolSwapActivity, SwapActivity,
-        SwapLookup, Window,
+        SwapActivityLookup, Window,
     },
 };
 
 use crate::repositories::helper::{bind_protocol_filter, map_sqlx_error};
 
-pub struct PgSwapRepository {
+pub struct PgSwapActivityRepository {
     pool: PgPool,
 }
 
-impl PgSwapRepository {
+impl PgSwapActivityRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }
 
 #[async_trait]
-impl SwapLookup for PgSwapRepository {
+impl SwapActivityLookup for PgSwapActivityRepository {
     async fn find_protocol_totals(
         &self,
         period: &FrozenPeriod,

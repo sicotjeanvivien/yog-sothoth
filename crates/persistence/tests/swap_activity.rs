@@ -1,16 +1,16 @@
-//! `PgSwapRepository` under `yog_api`: the swaps read by scope, from the hours as yog-analytic
+//! `PgSwapActivityRepository` under `yog_api`: the swaps read by scope, from the hours as yog-analytic
 //! leaves them, seeded here.
 
 use chrono::Duration;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
-use yog_core::domain::{FrozenPeriod, Protocol, SwapLookup, Window};
-use yog_persistence::PgSwapRepository;
+use yog_core::domain::{FrozenPeriod, Protocol, SwapActivityLookup, Window};
+use yog_persistence::PgSwapActivityRepository;
 
 use super::helpers::{DAMM, DLMM, as_of, period, pk, setup_roles_and_connect_as};
 
-async fn repository(pool: &PgPool) -> PgSwapRepository {
-    PgSwapRepository::new(setup_roles_and_connect_as(pool, "yog_api").await)
+async fn repository(pool: &PgPool) -> PgSwapActivityRepository {
+    PgSwapActivityRepository::new(setup_roles_and_connect_as(pool, "yog_api").await)
 }
 
 /// One protocol-hour per hour of `period(hours)`: `volume` dollars and one swap each.

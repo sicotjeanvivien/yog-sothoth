@@ -59,7 +59,7 @@ async fn get_totals(
 ) -> Result<Json<WindowedResponse<ProtocolPoolCreationsResponse>>, ApiError> {
     let window = params.window.into();
     let measured = state
-        .pool_creation_service
+        .pool_creations_service
         .get_pool_creation_totals(window, protocol)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
@@ -145,7 +145,7 @@ async fn list_buckets(
 ) -> Result<Json<WindowedResponse<ProtocolPoolCreationsBucketResponse>>, ApiError> {
     let window = params.window.into();
     let measured = state
-        .pool_creation_service
+        .pool_creations_service
         .list_pool_creation_buckets(window, bucket, protocol)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))

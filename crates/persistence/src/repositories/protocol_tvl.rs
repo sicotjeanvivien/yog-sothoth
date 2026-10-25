@@ -1,28 +1,28 @@
-//! PostgreSQL implementation of [`TvlLookup`]: yog-analytic's hourly TVL readings.
+//! PostgreSQL implementation of [`ProtocolTvlLookup`]: yog-analytic's hourly TVL readings.
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
-    domain::{Protocol, ProtocolTvl, TvlLookup},
+    domain::{Protocol, ProtocolTvl, ProtocolTvlLookup},
 };
 
 use super::protocol_activity::rows::ProtocolTvlRow;
 use crate::repositories::helper::{bind_protocol_filter, map_sqlx_error};
 
-pub struct PgTvlRepository {
+pub struct PgProtocolTvlRepository {
     pool: PgPool,
 }
 
-impl PgTvlRepository {
+impl PgProtocolTvlRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }
 
 #[async_trait]
-impl TvlLookup for PgTvlRepository {
+impl ProtocolTvlLookup for PgProtocolTvlRepository {
     async fn list_latest(
         &self,
         last: DateTime<Utc>,

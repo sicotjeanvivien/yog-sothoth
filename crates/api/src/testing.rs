@@ -16,22 +16,23 @@ use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
         Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity, DiscoveredTvl,
-        EventFreshnessRepository, FrozenHours, FrozenPeriod, LatestProtocolTvl, LiquidityFlows,
-        LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup, LiquidityMoveOrder, NetworkStatus,
-        NetworkStatusLookup, Pool, PoolCatalog, PoolCreationLookup, PoolCreations,
-        PoolDiscoveryLookup, PoolSwapBucket, Protocol, ProtocolActivity, ProtocolActivityBar,
+        DiscoveredTvlLookup, EventFreshnessRepository, FrozenHours, FrozenPeriod,
+        LatestProtocolTvl, LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup,
+        LiquidityMoveOrder, NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog, PoolCreations,
+        PoolCreationsLookup, PoolSwapBucket, Protocol, ProtocolActivity, ProtocolActivityBar,
         ProtocolActivityLookup, ProtocolBucket, ProtocolDiscoveredTvl, ProtocolPoolCreations,
-        ProtocolPools, ProtocolSwapActivity, ProtocolTvl, Severity, Signal, SignalCursor,
-        SignalFeed, SignalFilter, SignalRecord, SwapActivity, SwapLookup, TokenActivityCursor,
-        TokenActivityFeed, TokenActivityPage, TokenMetadata, TokenMetadataLookup, TokenPrice,
-        TokenPriceLookup, TvlLookup, Window,
+        ProtocolPools, ProtocolSwapActivity, ProtocolTvl, ProtocolTvlLookup, Severity, Signal,
+        SignalCursor, SignalFeed, SignalFilter, SignalRecord, SwapActivity, SwapActivityLookup,
+        TokenActivityCursor, TokenActivityFeed, TokenActivityPage, TokenMetadata,
+        TokenMetadataLookup, TokenPrice, TokenPriceLookup, Window,
     },
 };
 
 use crate::application::{
-    ActivityService, AnnouncementService, IngestionService, LiquidityMoveService, NetworkService,
-    PoolCreationService, PoolDiscoveryService, PoolService, ProtocolCatalogService, SignalService,
-    SwapService, TokenService, TvlService, WorkSlots,
+    ActivityService, AnnouncementService, DiscoveredTvlService, IngestionService,
+    LiquidityMoveService, NetworkService, PoolCreationsService, PoolService,
+    ProtocolCatalogService, ProtocolTvlService, SignalService, SwapActivityService, TokenService,
+    WorkSlots,
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
@@ -66,25 +67,25 @@ pub(crate) fn app_state() -> AppState {
             Arc::new(MockProtocolActivityRepo::new(None)),
             Arc::new(MockTokenActivityRepo::default()),
         )),
-        swap_service: Arc::new(SwapService::new(
+        swap_activity_service: Arc::new(SwapActivityService::new(
             frozen_hours_repo(None),
-            Arc::new(MockSwapRepo::default()),
+            Arc::new(MockSwapActivityRepo::default()),
         )),
-        pool_creation_service: Arc::new(PoolCreationService::new(
+        pool_creations_service: Arc::new(PoolCreationsService::new(
             frozen_hours_repo(None),
-            Arc::new(MockPoolCreationRepo),
+            Arc::new(MockPoolCreationsRepo),
         )),
         liquidity_move_service: Arc::new(LiquidityMoveService::new(
             frozen_hours_repo(None),
             Arc::new(MockLiquidityMoveRepo::default()),
         )),
-        tvl_service: Arc::new(TvlService::new(
+        protocol_tvl_service: Arc::new(ProtocolTvlService::new(
             frozen_hours_repo(None),
-            Arc::new(MockTvlRepo::default()),
+            Arc::new(MockProtocolTvlRepo::default()),
         )),
-        pool_discovery_service: Arc::new(PoolDiscoveryService::new(
+        discovered_tvl_service: Arc::new(DiscoveredTvlService::new(
             frozen_hours_repo(None),
-            Arc::new(MockPoolDiscoveryRepo::default()),
+            Arc::new(MockDiscoveredTvlRepo::default()),
         )),
         pool_service: Arc::new(PoolService::new(Arc::new(PoolRepoOnce::with_pools(vec![])))),
         work_slots,
@@ -670,20 +671,20 @@ pub(crate) fn frozen_hours_repo(frozen: Option<FrozenHours>) -> Arc<MockProtocol
     Arc::new(MockProtocolActivityRepo::new(frozen))
 }
 
-/// A `SwapLookup` that answers nothing and records the period and the scope of each read.
+/// A `SwapActivityLookup` that answers nothing and records the period and the scope of each read.
 #[derive(Default)]
-pub(crate) struct MockSwapRepo {
+pub(crate) struct MockSwapActivityRepo {
     pub(crate) reads: Mutex<Vec<PeriodRead>>,
 }
 
-impl MockSwapRepo {
+impl MockSwapActivityRepo {
     fn record(&self, name: &'static str, period: &FrozenPeriod, protocol: Option<Protocol>) {
         self.reads.lock().unwrap().push((name, *period, protocol));
     }
 }
 
 #[async_trait]
-impl SwapLookup for MockSwapRepo {
+impl SwapActivityLookup for MockSwapActivityRepo {
     async fn find_protocol_totals(
         &self,
         period: &FrozenPeriod,
@@ -735,12 +736,12 @@ impl SwapLookup for MockSwapRepo {
     }
 }
 
-/// A `PoolCreationLookup` that answers nothing.
+/// A `PoolCreationsLookup` that answers nothing.
 #[derive(Default)]
-pub(crate) struct MockPoolCreationRepo;
+pub(crate) struct MockPoolCreationsRepo;
 
 #[async_trait]
-impl PoolCreationLookup for MockPoolCreationRepo {
+impl PoolCreationsLookup for MockPoolCreationsRepo {
     async fn list_totals(
         &self,
         _: &FrozenPeriod,
@@ -821,14 +822,14 @@ impl LiquidityMoveLookup for MockLiquidityMoveRepo {
     }
 }
 
-/// A `TvlLookup` that answers nothing and records the instant and the scope of each read.
+/// A `ProtocolTvlLookup` that answers nothing and records the instant and the scope of each read.
 #[derive(Default)]
-pub(crate) struct MockTvlRepo {
+pub(crate) struct MockProtocolTvlRepo {
     pub(crate) instants: Mutex<Vec<InstantRead>>,
 }
 
 #[async_trait]
-impl TvlLookup for MockTvlRepo {
+impl ProtocolTvlLookup for MockProtocolTvlRepo {
     async fn list_latest(
         &self,
         last: DateTime<Utc>,
@@ -851,15 +852,15 @@ impl TvlLookup for MockTvlRepo {
     }
 }
 
-/// A `PoolDiscoveryLookup` that answers nothing and records the instant and the scope of each
+/// A `DiscoveredTvlLookup` that answers nothing and records the instant and the scope of each
 /// read.
 #[derive(Default)]
-pub(crate) struct MockPoolDiscoveryRepo {
+pub(crate) struct MockDiscoveredTvlRepo {
     pub(crate) instants: Mutex<Vec<InstantRead>>,
 }
 
 #[async_trait]
-impl PoolDiscoveryLookup for MockPoolDiscoveryRepo {
+impl DiscoveredTvlLookup for MockDiscoveredTvlRepo {
     async fn list_totals(
         &self,
         last: DateTime<Utc>,
