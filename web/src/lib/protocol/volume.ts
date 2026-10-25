@@ -36,9 +36,10 @@ export function splitSlotsOf(
   const totals = pick(swaps);
   const inRuns = pick(runs.items);
   const coveredFrom = runs.coveredSince === null ? Infinity : Date.parse(runs.coveredSince);
-  const coveredTo = runs.asOf === null ? -Infinity : Date.parse(runs.asOf);
+  // ⚠️ Read at another freeze, the runs' days start at other hours: no bar of theirs is ours.
+  const sameEnd = runs.asOf !== null && Date.parse(runs.asOf) === Date.parse(asOf);
   return totals.map((slot, i) => {
-    const covered = slot.from.getTime() >= coveredFrom && slot.to.getTime() <= coveredTo;
+    const covered = sameEnd && slot.from.getTime() >= coveredFrom;
     return {
       from: slot.from,
       to: slot.to,

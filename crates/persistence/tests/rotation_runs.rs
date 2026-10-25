@@ -333,8 +333,6 @@ async fn the_totals_say_their_pools_runs_in_progress_and_durations(pool: PgPool)
         .await
         .unwrap();
 
-    // 300, 600, 1 200 and 2 400 seconds: the median halfway between the middle two, the p90
-    // 70 % of the way from the third to the fourth.
     assert_eq!(
         (
             totals.runs,

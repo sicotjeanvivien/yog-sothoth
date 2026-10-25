@@ -45,7 +45,8 @@ import {
   splitTotalsOf,
 } from "@/lib/protocol/volume";
 
-import { SPLIT_TONE, VolumeSplitBars, type SplitDetail } from "./volume-split-bars";
+import { SPLIT_TONE } from "./split-tones";
+import { VolumeSplitBars, type SplitDetail } from "./volume-split-bars";
 
 /** The chart's height, and its tallest bar a little under it for the top mark's label. */
 const CHART_PX = { height: 122, top: 112 } as const;

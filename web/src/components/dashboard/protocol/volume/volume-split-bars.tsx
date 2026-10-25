@@ -10,18 +10,12 @@ import { useState, type KeyboardEvent } from "react";
 
 import { LABEL_CLASS } from "@/components/dashboard/overview/overview-layout";
 
-export type SplitTone = "in" | "out" | "unsplit";
+import { SPLIT_TONE, type SplitTone } from "./split-tones";
 
 export type SplitDetail = {
   when: string;
   total: string;
   rows: readonly { tone: SplitTone; name: string; value: string; share: string }[];
-};
-
-export const SPLIT_TONE: Record<SplitTone, string> = {
-  in: "bg-dash-run",
-  out: "bg-dash-run-out",
-  unsplit: "bg-dash-ink-3/45",
 };
 
 export function VolumeSplitBars({

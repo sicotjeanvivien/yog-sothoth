@@ -61,17 +61,19 @@ describe("splitSlotsOf", () => {
     ]);
   });
 
-  // Mutation: the runs' end not checked — an hour they have not frozen yet read as none in runs.
-  it("leaves unsplit a bar past the runs' last hour", () => {
-    const slots = splitSlotsOf(
-      "24h",
+  // Mutation: the runs' end not checked — read an hour later, their days start an hour later,
+  // and every day reads as none in runs.
+  it("leaves every bar unsplit when the runs end at another hour", () => {
+    const later = "2026-10-25T04:00:00Z";
+    const days = splitSlotsOf(
+      "7d",
       AS_OF,
-      [bar(hour(23), "50")],
-      runsOf([], "2026-10-01T00:00:00Z", hour(23)),
+      [bar("2026-10-24T03:00:00Z", "300")],
+      runsOf([bar("2026-10-24T04:00:00Z", "200")], "2026-10-01T00:00:00Z", later),
       "meteora_damm_v2",
     );
 
-    expect(slots[23]?.inRuns).toBeNull();
+    expect(days.map((s) => s.inRuns)).toEqual(Array(7).fill(null));
   });
 
   // Mutation: another protocol's bars kept, its volume split into this one's.
