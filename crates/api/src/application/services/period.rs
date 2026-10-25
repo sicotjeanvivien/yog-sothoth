@@ -1,5 +1,5 @@
-//! What every read of a produced resource shares: the period it covers, closed at the last
-//! frozen hour, and the buckets a series is cut into.
+//! What every read of a produced resource shares: the period it covers, and the buckets a
+//! series is cut into.
 
 use chrono::{DateTime, Utc};
 use yog_core::{

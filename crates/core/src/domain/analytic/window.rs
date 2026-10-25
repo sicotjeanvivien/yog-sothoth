@@ -1,5 +1,4 @@
-//! The windows a measure is read over, and the period one read covers: every
-//! window ends at the close of the last frozen hour.
+//! The windows a measure is read over, and the period one read covers.
 
 use chrono::{DateTime, TimeDelta, Utc};
 
@@ -81,7 +80,7 @@ impl FrozenPeriod {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TranchePeriod {
     pub from: DateTime<Utc>,
-    /// The end of the last tranche written: the instant the read reflects.
+    /// The end of the last tranche written: the runs read started before it.
     pub as_of: DateTime<Utc>,
     /// The first tranche the read's measure holds: a period starting earlier misses some.
     pub covered_since: DateTime<Utc>,

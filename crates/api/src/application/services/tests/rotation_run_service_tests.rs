@@ -60,7 +60,7 @@ async fn the_totals_are_covered_from_the_first_measured_tranche() {
 }
 
 /// Mutation: a later page read through the last tranche written instead of its cursor's end —
-/// the window slides between pages, and a run is skipped or repeated.
+/// the window slides between pages, a run started in between listed on a later page.
 #[tokio::test]
 async fn a_later_page_keeps_the_end_of_its_cursor() {
     let repo = Arc::new(MockRotationRunRepo {

@@ -17,7 +17,6 @@ pub(crate) struct TrancheWindowedResponse<T> {
     from: Option<DateTime<Utc>>,
     /// The end of the last tranche written: the instant the rows reflect.
     as_of: Option<DateTime<Utc>>,
-    /// The first tranche the measure holds.
     covered_since: Option<DateTime<Utc>>,
     items: Vec<T>,
 }

@@ -26,7 +26,7 @@ pub(crate) struct EventsParams {
 }
 
 /// How long past its widest window a cursor's start stays accepted, for pages read slowly.
-const CURSOR_WINDOW_MARGIN: TimeDelta = TimeDelta::hours(1);
+pub(super) const CURSOR_WINDOW_MARGIN: TimeDelta = TimeDelta::hours(1);
 
 #[derive(Debug)]
 pub(crate) struct ListEventsRequest {

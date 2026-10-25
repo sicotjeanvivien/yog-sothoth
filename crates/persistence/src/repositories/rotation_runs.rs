@@ -135,9 +135,9 @@ impl RotationRunLookup for PgRotationRunRepository {
                     period.from,
                     period.as_of,
                     key,
-                    after_volume.clone(),
-                    after_started.as_ref().copied(),
-                    after_pool.clone(),
+                    after_volume,
+                    after_started,
+                    after_pool,
                     limit + 1,
                 )
                 .fetch_all(&self.pool)
@@ -162,8 +162,8 @@ impl RotationRunLookup for PgRotationRunRepository {
                     period.from,
                     period.as_of,
                     key,
-                    after_started.as_ref().copied(),
-                    after_pool.clone(),
+                    after_started,
+                    after_pool,
                     limit + 1,
                 )
                 .fetch_all(&self.pool)
@@ -190,9 +190,9 @@ impl RotationRunLookup for PgRotationRunRepository {
                     period.from,
                     period.as_of,
                     key,
-                    after_volume.clone(),
-                    after_started.as_ref().copied(),
-                    after_pool.clone(),
+                    after_volume,
+                    after_started,
+                    after_pool,
                     limit + 1,
                 )
                 .fetch_all(&self.pool)
@@ -217,8 +217,8 @@ impl RotationRunLookup for PgRotationRunRepository {
                     period.from,
                     period.as_of,
                     key,
-                    after_started.as_ref().copied(),
-                    after_pool.clone(),
+                    after_started,
+                    after_pool,
                     limit + 1,
                 )
                 .fetch_all(&self.pool)

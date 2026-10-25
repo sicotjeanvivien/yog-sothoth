@@ -4151,7 +4151,6 @@
             ]
           },
           "coveredSince": {
-            "description": "The first tranche the measure holds.",
             "format": "date-time",
             "type": [
               "string",
