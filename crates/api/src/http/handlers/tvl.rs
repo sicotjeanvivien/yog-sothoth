@@ -27,7 +27,7 @@ use crate::http::{
 pub(crate) async fn get_tvl(
     State(state): State<AppState>,
 ) -> Result<Json<ReadingResponse<ProtocolTvlResponse>>, ApiError> {
-    latest(&state, None).await
+    get_latest(&state, None).await
 }
 
 #[utoipa::path(
@@ -44,14 +44,14 @@ pub(crate) async fn get_protocol_tvl_reading(
     Path(protocol): Path<String>,
 ) -> Result<Json<ReadingResponse<ProtocolTvlResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
-    latest(&state, Some(protocol)).await
+    get_latest(&state, Some(protocol)).await
 }
 
-async fn latest(
+async fn get_latest(
     state: &AppState,
     protocol: Option<Protocol>,
 ) -> Result<Json<ReadingResponse<ProtocolTvlResponse>>, ApiError> {
-    let measured = state.measure_service.tvl(protocol).await?;
+    let measured = state.tvl_service.get_tvl(protocol).await?;
     Ok(Json(ReadingResponse::new(measured)))
 }
 
@@ -69,7 +69,7 @@ pub(crate) async fn get_tvl_hourly(
     State(state): State<AppState>,
     Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolTvlResponse>>, ApiError> {
-    hourly(&state, params, None).await
+    list_hourly(&state, params, None).await
 }
 
 #[utoipa::path(
@@ -88,15 +88,15 @@ pub(crate) async fn get_protocol_tvl_readings_hourly(
     Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolTvlResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
-    hourly(&state, params, Some(protocol)).await
+    list_hourly(&state, params, Some(protocol)).await
 }
 
-async fn hourly(
+async fn list_hourly(
     state: &AppState,
     params: WindowParams,
     protocol: Option<Protocol>,
 ) -> Result<Json<WindowedResponse<ProtocolTvlResponse>>, ApiError> {
     let window = params.window.into();
-    let measured = state.measure_service.tvl_hourly(window, protocol).await?;
+    let measured = state.tvl_service.list_tvl_hourly(window, protocol).await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }

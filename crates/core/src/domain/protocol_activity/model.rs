@@ -3,9 +3,8 @@
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
-use solana_pubkey::Pubkey;
 
-use crate::domain::{Protocol, Window};
+use crate::domain::{DiscoveredTvl, LiquidityFlows, Protocol, ProtocolTvl};
 
 /// One protocol over a period. The USD sums skip the unvalued pool-hours, which
 /// `pool_hours - pool_hours_valued` counts.
@@ -27,17 +26,6 @@ pub struct ProtocolActivity {
     pub liquidity: Option<LiquidityFlows>,
 }
 
-/// The liquidity deposited at the pools' creation, added and removed over a period or a bar.
-/// The USD sums skip the moves not valued, which `moves - moves_valued` counts.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LiquidityFlows {
-    pub created_usd: Decimal,
-    pub added_usd: Decimal,
-    pub removed_usd: Decimal,
-    pub moves: i64,
-    pub moves_valued: i64,
-}
-
 /// One protocol over one bar of a series, an hour or 24 hours from `from`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolActivityBar {
@@ -50,49 +38,6 @@ pub struct ProtocolActivityBar {
     pub pool_hours_valued: i64,
     /// `None` for a bar that starts before the protocol's liquidity was first measured.
     pub liquidity: Option<LiquidityFlows>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LiquidityMoveKind {
-    /// A pool's creation, which deposits its first liquidity.
-    Create,
-    Add,
-    Remove,
-}
-
-/// One valued liquidity move, with the identity of its pool's tokens.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LiquidityMove {
-    pub protocol: Protocol,
-    pub at: DateTime<Utc>,
-    pub signature: String,
-    /// With `signature` and `at`, the key of the move.
-    pub event_index: i32,
-    pub pool_address: Pubkey,
-    pub token_a_symbol: Option<String>,
-    pub token_b_symbol: Option<String>,
-    pub owner: Pubkey,
-    pub kind: LiquidityMoveKind,
-    pub amount_usd: Decimal,
-}
-
-/// One protocol's TVL as last measured during the hour that closes at `at`: its pools
-/// valued by their priced sides; `pools_unvalued` counts those with no side valued.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProtocolTvl {
-    pub protocol: Protocol,
-    pub at: DateTime<Utc>,
-    pub tvl_usd: Option<Decimal>,
-    pub pools_priced: i64,
-    pub pools_unvalued: i64,
-}
-
-/// The part of a TVL held by the pools first seen in `window`, their birth unobserved.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DiscoveredTvl {
-    pub window: Window,
-    pub tvl_usd: Decimal,
-    pub pools: i64,
 }
 
 /// The last TVL of a protocol, with its discovered part for each window measured.

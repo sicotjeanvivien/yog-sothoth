@@ -332,33 +332,6 @@
         ],
         "type": "object"
       },
-      "LiquidityMoveSumsResponse": {
-        "properties": {
-          "addedUsd": {
-            "$ref": "#/components/schemas/UnsignedDecimal"
-          },
-          "createdUsd": {
-            "$ref": "#/components/schemas/UnsignedDecimal"
-          },
-          "moves": {
-            "$ref": "#/components/schemas/Count"
-          },
-          "movesValued": {
-            "$ref": "#/components/schemas/Count"
-          },
-          "removedUsd": {
-            "$ref": "#/components/schemas/UnsignedDecimal"
-          }
-        },
-        "required": [
-          "createdUsd",
-          "addedUsd",
-          "removedUsd",
-          "moves",
-          "movesValued"
-        ],
-        "type": "object"
-      },
       "NetworkResponse": {
         "description": "Where the chain is, as the probe last saw it. The probe's endpoint is not\nthe one ingestion uses: this says nothing about our ingestion.",
         "properties": {
@@ -487,69 +460,10 @@
         ],
         "type": "object"
       },
-      "PoolCreationBarResponse": {
-        "properties": {
-          "from": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "pools": {
-            "$ref": "#/components/schemas/Count"
-          },
-          "protocol": {
-            "$ref": "#/components/schemas/ProtocolResponse"
-          }
-        },
-        "required": [
-          "protocol",
-          "from",
-          "pools"
-        ],
-        "type": "object"
-      },
-      "PoolCreationsResponse": {
-        "properties": {
-          "pools": {
-            "$ref": "#/components/schemas/Count"
-          },
-          "protocol": {
-            "$ref": "#/components/schemas/ProtocolResponse"
-          }
-        },
-        "required": [
-          "protocol",
-          "pools"
-        ],
-        "type": "object"
-      },
-      "PoolDiscoveriesResponse": {
-        "properties": {
-          "at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "pools": {
-            "$ref": "#/components/schemas/Count"
-          },
-          "protocol": {
-            "$ref": "#/components/schemas/ProtocolResponse"
-          },
-          "tvlUsd": {
-            "$ref": "#/components/schemas/UnsignedDecimal"
-          }
-        },
-        "required": [
-          "protocol",
-          "at",
-          "pools",
-          "tvlUsd"
-        ],
-        "type": "object"
-      },
-      "PoolSwapBarResponse": {
+      "PoolSwapBucketResponse": {
         "allOf": [
           {
-            "$ref": "#/components/schemas/SwapSumsResponse"
+            "$ref": "#/components/schemas/SwapActivityResponse"
           },
           {
             "properties": {
@@ -791,10 +705,34 @@
         ],
         "type": "object"
       },
-      "ProtocolLiquidityMoveBarResponse": {
+      "ProtocolDiscoveredTvlResponse": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "pools": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          },
+          "tvlUsd": {
+            "$ref": "#/components/schemas/UnsignedDecimal"
+          }
+        },
+        "required": [
+          "protocol",
+          "at",
+          "pools",
+          "tvlUsd"
+        ],
+        "type": "object"
+      },
+      "ProtocolLiquidityFlowsBucketResponse": {
         "allOf": [
           {
-            "$ref": "#/components/schemas/LiquidityMoveSumsResponse"
+            "$ref": "#/components/schemas/LiquidityFlowsResponse"
           },
           {
             "properties": {
@@ -814,10 +752,10 @@
           }
         ]
       },
-      "ProtocolLiquidityMoveTotalsResponse": {
+      "ProtocolLiquidityFlowsResponse": {
         "allOf": [
           {
-            "$ref": "#/components/schemas/LiquidityMoveSumsResponse"
+            "$ref": "#/components/schemas/LiquidityFlowsResponse"
           },
           {
             "properties": {
@@ -832,6 +770,41 @@
           }
         ]
       },
+      "ProtocolPoolCreationsBucketResponse": {
+        "properties": {
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "pools": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          }
+        },
+        "required": [
+          "protocol",
+          "from",
+          "pools"
+        ],
+        "type": "object"
+      },
+      "ProtocolPoolCreationsResponse": {
+        "properties": {
+          "pools": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          }
+        },
+        "required": [
+          "protocol",
+          "pools"
+        ],
+        "type": "object"
+      },
       "ProtocolResponse": {
         "description": "The protocol a pool, an event or a signal belongs to.",
         "enum": [
@@ -840,10 +813,10 @@
         ],
         "type": "string"
       },
-      "ProtocolSwapBarResponse": {
+      "ProtocolSwapActivityBucketResponse": {
         "allOf": [
           {
-            "$ref": "#/components/schemas/SwapSumsResponse"
+            "$ref": "#/components/schemas/SwapActivityResponse"
           },
           {
             "properties": {
@@ -863,10 +836,10 @@
           }
         ]
       },
-      "ProtocolSwapTotalsResponse": {
+      "ProtocolSwapActivityResponse": {
         "allOf": [
           {
-            "$ref": "#/components/schemas/SwapSumsResponse"
+            "$ref": "#/components/schemas/SwapActivityResponse"
           },
           {
             "properties": {
@@ -1077,7 +1050,7 @@
         "pattern": "^-?\\d+(\\.\\d+)?$",
         "type": "string"
       },
-      "SwapSumsResponse": {
+      "SwapActivityResponse": {
         "properties": {
           "feesUsd": {
             "oneOf": [
@@ -1560,192 +1533,7 @@
         ],
         "type": "object"
       },
-      "WindowedResponse_PoolCreationBarResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
-        "properties": {
-          "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "The first hour the facts hold.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "properties": {
-                "from": {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "pools": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                }
-              },
-              "required": [
-                "protocol",
-                "from",
-                "pools"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
-      "WindowedResponse_PoolCreationsResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
-        "properties": {
-          "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "The first hour the facts hold.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "properties": {
-                "pools": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                }
-              },
-              "required": [
-                "protocol",
-                "pools"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
-      "WindowedResponse_PoolDiscoveriesResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
-        "properties": {
-          "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "The first hour the facts hold.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "properties": {
-                "at": {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "pools": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                },
-                "tvlUsd": {
-                  "$ref": "#/components/schemas/UnsignedDecimal"
-                }
-              },
-              "required": [
-                "protocol",
-                "at",
-                "pools",
-                "tvlUsd"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
-      "WindowedResponse_PoolSwapBarResponse": {
+      "WindowedResponse_PoolSwapBucketResponse": {
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
@@ -1775,7 +1563,7 @@
             "items": {
               "allOf": [
                 {
-                  "$ref": "#/components/schemas/SwapSumsResponse"
+                  "$ref": "#/components/schemas/SwapActivityResponse"
                 },
                 {
                   "properties": {
@@ -2060,7 +1848,73 @@
         ],
         "type": "object"
       },
-      "WindowedResponse_ProtocolLiquidityMoveBarResponse": {
+      "WindowedResponse_ProtocolDiscoveredTvlResponse": {
+        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "properties": {
+          "asOf": {
+            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "description": "The first hour the facts hold.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "pools": {
+                  "$ref": "#/components/schemas/Count"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "tvlUsd": {
+                  "$ref": "#/components/schemas/UnsignedDecimal"
+                }
+              },
+              "required": [
+                "protocol",
+                "at",
+                "pools",
+                "tvlUsd"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
+      "WindowedResponse_ProtocolLiquidityFlowsBucketResponse": {
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
@@ -2090,7 +1944,7 @@
             "items": {
               "allOf": [
                 {
-                  "$ref": "#/components/schemas/LiquidityMoveSumsResponse"
+                  "$ref": "#/components/schemas/LiquidityFlowsResponse"
                 },
                 {
                   "properties": {
@@ -2125,7 +1979,7 @@
         ],
         "type": "object"
       },
-      "WindowedResponse_ProtocolLiquidityMoveTotalsResponse": {
+      "WindowedResponse_ProtocolLiquidityFlowsResponse": {
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
@@ -2155,7 +2009,7 @@
             "items": {
               "allOf": [
                 {
-                  "$ref": "#/components/schemas/LiquidityMoveSumsResponse"
+                  "$ref": "#/components/schemas/LiquidityFlowsResponse"
                 },
                 {
                   "properties": {
@@ -2185,7 +2039,126 @@
         ],
         "type": "object"
       },
-      "WindowedResponse_ProtocolSwapBarResponse": {
+      "WindowedResponse_ProtocolPoolCreationsBucketResponse": {
+        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "properties": {
+          "asOf": {
+            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "description": "The first hour the facts hold.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "from": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "pools": {
+                  "$ref": "#/components/schemas/Count"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                }
+              },
+              "required": [
+                "protocol",
+                "from",
+                "pools"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
+      "WindowedResponse_ProtocolPoolCreationsResponse": {
+        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "properties": {
+          "asOf": {
+            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "description": "The first hour the facts hold.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "pools": {
+                  "$ref": "#/components/schemas/Count"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                }
+              },
+              "required": [
+                "protocol",
+                "pools"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
+      "WindowedResponse_ProtocolSwapActivityBucketResponse": {
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
@@ -2215,7 +2188,7 @@
             "items": {
               "allOf": [
                 {
-                  "$ref": "#/components/schemas/SwapSumsResponse"
+                  "$ref": "#/components/schemas/SwapActivityResponse"
                 },
                 {
                   "properties": {
@@ -2250,7 +2223,7 @@
         ],
         "type": "object"
       },
-      "WindowedResponse_ProtocolSwapTotalsResponse": {
+      "WindowedResponse_ProtocolSwapActivityResponse": {
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
@@ -2280,7 +2253,7 @@
             "items": {
               "allOf": [
                 {
-                  "$ref": "#/components/schemas/SwapSumsResponse"
+                  "$ref": "#/components/schemas/SwapActivityResponse"
                 },
                 {
                   "properties": {
@@ -2402,7 +2375,7 @@
         ],
         "type": "object"
       },
-      "WindowedResponse_SwapSumsResponse": {
+      "WindowedResponse_SwapActivityResponse": {
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
@@ -2636,7 +2609,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_PoolCreationBarResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPoolCreationsBucketResponse"
                 }
               }
             },
@@ -2678,7 +2651,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_PoolCreationBarResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPoolCreationsBucketResponse"
                 }
               }
             },
@@ -2720,7 +2693,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_PoolCreationsResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPoolCreationsResponse"
                 }
               }
             },
@@ -2762,7 +2735,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_PoolDiscoveriesResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolDiscoveredTvlResponse"
                 }
               }
             },
@@ -3009,7 +2982,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_PoolSwapBarResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_PoolSwapBucketResponse"
                 }
               }
             },
@@ -3059,7 +3032,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_PoolSwapBarResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_PoolSwapBucketResponse"
                 }
               }
             },
@@ -3109,7 +3082,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_SwapSumsResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_SwapActivityResponse"
                 }
               }
             },
@@ -3465,7 +3438,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolLiquidityMoveBarResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolLiquidityFlowsBucketResponse"
                 }
               }
             },
@@ -3515,7 +3488,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolLiquidityMoveBarResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolLiquidityFlowsBucketResponse"
                 }
               }
             },
@@ -3565,7 +3538,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolLiquidityMoveTotalsResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolLiquidityFlowsResponse"
                 }
               }
             },
@@ -3615,7 +3588,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_PoolCreationBarResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPoolCreationsBucketResponse"
                 }
               }
             },
@@ -3665,7 +3638,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_PoolCreationBarResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPoolCreationsBucketResponse"
                 }
               }
             },
@@ -3715,7 +3688,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_PoolCreationsResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPoolCreationsResponse"
                 }
               }
             },
@@ -3765,7 +3738,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_PoolDiscoveriesResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolDiscoveredTvlResponse"
                 }
               }
             },
@@ -3926,7 +3899,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapBarResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapActivityBucketResponse"
                 }
               }
             },
@@ -3976,7 +3949,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapBarResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapActivityBucketResponse"
                 }
               }
             },
@@ -4046,7 +4019,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapTotalsResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapActivityResponse"
                 }
               }
             },
@@ -4396,7 +4369,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapBarResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapActivityBucketResponse"
                 }
               }
             },
@@ -4438,7 +4411,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapBarResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapActivityBucketResponse"
                 }
               }
             },
@@ -4500,7 +4473,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapTotalsResponse"
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapActivityResponse"
                 }
               }
             },

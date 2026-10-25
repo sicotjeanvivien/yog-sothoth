@@ -3,6 +3,8 @@
 
 use chrono::{DateTime, TimeDelta, Utc};
 
+use crate::domain::Protocol;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Window {
     Day,
@@ -72,6 +74,14 @@ impl FrozenPeriod {
     pub fn last_hour(&self) -> DateTime<Utc> {
         self.as_of - TimeDelta::hours(1)
     }
+}
+
+/// One protocol's measure over one bucket of a series, an hour or 24 hours from `from`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProtocolBucket<T> {
+    pub protocol: Protocol,
+    pub from: DateTime<Utc>,
+    pub value: T,
 }
 
 #[cfg(test)]

@@ -6,28 +6,33 @@ mod freshness_status;
 mod insert_outcome;
 mod kept_prices;
 mod liquidity_flow;
+mod liquidity_moves;
 mod materialization_backlog;
-mod measures;
 mod meteora;
 mod network_status;
 mod pool;
 mod pool_account;
+mod pool_creations;
 mod pool_current_state;
+mod pool_discoveries;
 mod pool_price_snapshot;
 mod protocol;
 mod protocol_activity;
 mod signals;
 mod swap_flow;
+mod swaps;
 mod token_activity;
 mod token_metadata;
 mod token_price;
 mod trade_direction;
+mod tvl;
 mod unpriced_mints;
 mod watched_pool;
 
 pub use analytic::{
     AnalyticProgress, AnalyticRepository, BURST_GAP, BURST_ROTATION, CycleOutcome, CycleWrite,
-    FREEZE_MARGIN, FrozenHours, FrozenPeriod, MAX_HOURS_PER_CYCLE, QUOTED_MINTS, TRANCHE, Window,
+    FREEZE_MARGIN, FrozenHours, FrozenPeriod, MAX_HOURS_PER_CYCLE, ProtocolBucket, QUOTED_MINTS,
+    TRANCHE, Window,
 };
 pub use announcements::{Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity};
 pub use domain_event::DomainEvent;
@@ -36,12 +41,11 @@ pub use freshness_status::{EventFreshnessRepository, FreshnessStatus};
 pub use insert_outcome::InsertOutcome;
 pub use kept_prices::{KeptPrices, PRICE_MAX_AGE_LATEST};
 pub use liquidity_flow::{LiquidityFlowRepository, PoolLiquidityFlow};
-pub use materialization_backlog::{MaterializationBacklog, MaterializationBacklogRepository};
-pub use measures::{
-    ByProtocol, LiquidityMoveCursor, LiquidityMoveLookup, LiquidityMoveOrder, LiquidityMoveSums,
-    PoolCreationCount, PoolCreationLookup, PoolDiscoveries, PoolDiscoveryLookup, PoolSwapBar,
-    ProtocolBar, ProtocolSwapTotals, SwapLookup, SwapSums, TvlLookup,
+pub use liquidity_moves::{
+    LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveKind, LiquidityMoveLookup,
+    LiquidityMoveOrder,
 };
+pub use materialization_backlog::{MaterializationBacklog, MaterializationBacklogRepository};
 pub use meteora::{
     MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimPositionFeeEventRepository,
     MeteoraDammV2ClaimProtocolFeeEvent, MeteoraDammV2ClaimProtocolFeeEventRepository,
@@ -71,21 +75,23 @@ pub use pool::{Pool, PoolCatalog, PoolRepository, ProtocolPools};
 pub use pool_account::{
     DecodedPoolAccount, PoolAccountProperties, PoolAccountResolver, PoolRegistryProperties,
 };
+pub use pool_creations::{PoolCreationLookup, PoolCreations, ProtocolPoolCreations};
 pub use pool_current_state::{
     LastEventKind, PoolCurrentStateRepository, PoolCurrentStateUpsert,
     PoolCurrentStateUpsertOutcome,
 };
+pub use pool_discoveries::{DiscoveredTvl, PoolDiscoveryLookup, ProtocolDiscoveredTvl};
 pub use pool_price_snapshot::{PoolPriceSnapshot, PoolPriceSnapshotRepository};
 pub use protocol::Protocol;
 pub use protocol_activity::{
-    DiscoveredTvl, LatestProtocolTvl, LiquidityFlows, LiquidityMove, LiquidityMoveKind,
-    ProtocolActivity, ProtocolActivityBar, ProtocolActivityLookup, ProtocolTvl,
+    LatestProtocolTvl, ProtocolActivity, ProtocolActivityBar, ProtocolActivityLookup,
 };
 pub use signals::{
     DetectorError, EvalContext, Severity, Signal, SignalCursor, SignalDetector, SignalFeed,
     SignalFilter, SignalRecord, SignalRepository,
 };
 pub use swap_flow::{PoolSwapFlow, SwapFlowRepository};
+pub use swaps::{PoolSwapBucket, ProtocolSwapActivity, SwapActivity, SwapLookup};
 pub use token_activity::{
     TokenActivity, TokenActivityCursor, TokenActivityFeed, TokenActivityPage,
 };
@@ -98,5 +104,6 @@ pub use token_price::{
     TokenPriceRepository,
 };
 pub use trade_direction::TradeDirection;
+pub use tvl::{ProtocolTvl, TvlLookup};
 pub use unpriced_mints::UnpricedMints;
 pub use watched_pool::{WatchedPool, WatchedPoolRepository};

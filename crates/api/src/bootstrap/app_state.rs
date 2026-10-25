@@ -9,15 +9,17 @@ use yog_core::domain::{
 };
 use yog_persistence::{
     Database, PgAnnouncementRepository, PgEventFreshnessRepository, PgHealthChecker,
-    PgMeasureRepository, PgNetworkStatusRepository, PgPoolRepository, PgProtocolActivityRepository,
-    PgSignalRepository, PgTokenActivityRepository, PgTokenMetadataRepository,
-    PgTokenPriceRepository, PoolSettings,
+    PgLiquidityMoveRepository, PgNetworkStatusRepository, PgPoolCreationRepository,
+    PgPoolDiscoveryRepository, PgPoolRepository, PgProtocolActivityRepository, PgSignalRepository,
+    PgSwapRepository, PgTokenActivityRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
+    PgTvlRepository, PoolSettings,
 };
 
 use crate::application::{
-    ActivityService, AnnouncementService, IngestionService, MeasureLenses, MeasureService,
-    NetworkService, ProtocolCatalogService, STREAM_CHANNEL_CAPACITY, SignalService,
-    SignalStreamPoller, TokenService, WorkSlots,
+    ActivityService, AnnouncementService, IngestionService, LiquidityMoveService, NetworkService,
+    PoolCreationService, PoolDiscoveryService, PoolService, ProtocolCatalogService,
+    STREAM_CHANNEL_CAPACITY, SignalService, SignalStreamPoller, SwapService, TokenService,
+    TvlService, WorkSlots,
 };
 use crate::bootstrap::Config;
 use crate::http::{AppState, SSE_MAX_STREAMS, STATEMENT_TIMEOUT, WORK_SLOT_WAIT, WORK_SLOTS};
@@ -56,16 +58,27 @@ pub(crate) async fn build_app_state(
         Arc::new(PgProtocolActivityRepository::new(db_pool.clone()));
     let token_activity_repo: Arc<dyn TokenActivityFeed> =
         Arc::new(PgTokenActivityRepository::new(db_pool.clone()));
-    let measure_repo = Arc::new(PgMeasureRepository::new(db_pool.clone()));
-    let measure_service = Arc::new(MeasureService::new(MeasureLenses {
-        hours: protocol_activity_repo.clone(),
-        swaps: measure_repo.clone(),
-        pool_creations: measure_repo.clone(),
-        liquidity_moves: measure_repo.clone(),
-        tvl: measure_repo.clone(),
-        pool_discoveries: measure_repo,
-        pools: pool_repo.clone(),
-    }));
+    let swap_service = Arc::new(SwapService::new(
+        protocol_activity_repo.clone(),
+        Arc::new(PgSwapRepository::new(db_pool.clone())),
+    ));
+    let pool_creation_service = Arc::new(PoolCreationService::new(
+        protocol_activity_repo.clone(),
+        Arc::new(PgPoolCreationRepository::new(db_pool.clone())),
+    ));
+    let liquidity_move_service = Arc::new(LiquidityMoveService::new(
+        protocol_activity_repo.clone(),
+        Arc::new(PgLiquidityMoveRepository::new(db_pool.clone())),
+    ));
+    let tvl_service = Arc::new(TvlService::new(
+        protocol_activity_repo.clone(),
+        Arc::new(PgTvlRepository::new(db_pool.clone())),
+    ));
+    let pool_discovery_service = Arc::new(PoolDiscoveryService::new(
+        protocol_activity_repo.clone(),
+        Arc::new(PgPoolDiscoveryRepository::new(db_pool.clone())),
+    ));
+    let pool_service = Arc::new(PoolService::new(pool_repo.clone()));
 
     let signal_service = Arc::new(SignalService::new(
         signal_repo.clone(),
@@ -98,7 +111,12 @@ pub(crate) async fn build_app_state(
             protocol_activity_repo,
             token_activity_repo,
         )),
-        measure_service,
+        swap_service,
+        pool_creation_service,
+        liquidity_move_service,
+        tvl_service,
+        pool_discovery_service,
+        pool_service,
         work_slots,
         token_service: Arc::new(TokenService::new(token_metadata_repo, token_price_repo)),
         announcement_service: Arc::new(AnnouncementService::new(announcement_repo)),

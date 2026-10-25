@@ -1,7 +1,7 @@
 //! `PgSignalRepository::list` on the real `signals` hypertable: display order, keyset
 //! navigation, the id tie-break, and the filters.
 
-use super::helpers::pk;
+use super::helpers::{DAMM, DLMM, as_of, pk, setup_roles_and_connect_as};
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
@@ -291,4 +291,41 @@ async fn severity_filter_restricts_the_feed(pool: PgPool) {
             .all(|r| r.signal.severity == Severity::Critical)
     );
     assert!(page.is_first && page.is_last);
+}
+
+/// Mutation: the protocol filter of the feed dropped — DLMM's signal listed.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_protocols_signals_are_its_own(pool: PgPool) {
+    for protocol in [DAMM, DLMM] {
+        sqlx::query(
+            "INSERT INTO signals
+               (detector, protocol, pool_address, severity, value, threshold, message,
+                triggered_at)
+             VALUES ('flow_imbalance', $1, $2, 'warning', 1, 1, NULL, $3)",
+        )
+        .bind(protocol)
+        .bind(pk(1).to_string())
+        .bind(as_of())
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let repository = PgSignalRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+
+    let page = repository
+        .list(
+            SignalFilter {
+                protocol: Some(Protocol::MeteoraDammV2),
+                ..SignalFilter::default()
+            },
+            None,
+            PageDirection::Next,
+            None,
+            50,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(page.items[0].signal.protocol, Protocol::MeteoraDammV2);
 }

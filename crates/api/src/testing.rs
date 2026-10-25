@@ -15,22 +15,23 @@ use yog_persistence::{PgHealthChecker, PgPool};
 use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
-        Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity, ByProtocol,
-        DiscoveredTvl, EventFreshnessRepository, FrozenHours, FrozenPeriod, LatestProtocolTvl,
-        LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup, LiquidityMoveOrder,
-        LiquidityMoveSums, NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog,
-        PoolCreationCount, PoolCreationLookup, PoolDiscoveries, PoolDiscoveryLookup, PoolSwapBar,
-        Protocol, ProtocolActivity, ProtocolActivityBar, ProtocolActivityLookup, ProtocolBar,
-        ProtocolPools, ProtocolSwapTotals, ProtocolTvl, Severity, Signal, SignalCursor, SignalFeed,
-        SignalFilter, SignalRecord, SwapLookup, SwapSums, TokenActivityCursor, TokenActivityFeed,
-        TokenActivityPage, TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceLookup,
-        TvlLookup, Window,
+        Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity, DiscoveredTvl,
+        EventFreshnessRepository, FrozenHours, FrozenPeriod, LatestProtocolTvl, LiquidityFlows,
+        LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup, LiquidityMoveOrder, NetworkStatus,
+        NetworkStatusLookup, Pool, PoolCatalog, PoolCreationLookup, PoolCreations,
+        PoolDiscoveryLookup, PoolSwapBucket, Protocol, ProtocolActivity, ProtocolActivityBar,
+        ProtocolActivityLookup, ProtocolBucket, ProtocolDiscoveredTvl, ProtocolPoolCreations,
+        ProtocolPools, ProtocolSwapActivity, ProtocolTvl, Severity, Signal, SignalCursor,
+        SignalFeed, SignalFilter, SignalRecord, SwapActivity, SwapLookup, TokenActivityCursor,
+        TokenActivityFeed, TokenActivityPage, TokenMetadata, TokenMetadataLookup, TokenPrice,
+        TokenPriceLookup, TvlLookup, Window,
     },
 };
 
 use crate::application::{
-    ActivityService, AnnouncementService, IngestionService, MeasureLenses, MeasureService,
-    NetworkService, ProtocolCatalogService, SignalService, TokenService, WorkSlots,
+    ActivityService, AnnouncementService, IngestionService, LiquidityMoveService, NetworkService,
+    PoolCreationService, PoolDiscoveryService, PoolService, ProtocolCatalogService, SignalService,
+    SwapService, TokenService, TvlService, WorkSlots,
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
@@ -65,11 +66,27 @@ pub(crate) fn app_state() -> AppState {
             Arc::new(MockProtocolActivityRepo::new(None)),
             Arc::new(MockTokenActivityRepo::default()),
         )),
-        measure_service: Arc::new(measure_service(
-            None,
-            Arc::new(MockMeasureRepo::default()),
-            vec![],
+        swap_service: Arc::new(SwapService::new(
+            frozen_hours_repo(None),
+            Arc::new(MockSwapRepo::default()),
         )),
+        pool_creation_service: Arc::new(PoolCreationService::new(
+            frozen_hours_repo(None),
+            Arc::new(MockPoolCreationRepo),
+        )),
+        liquidity_move_service: Arc::new(LiquidityMoveService::new(
+            frozen_hours_repo(None),
+            Arc::new(MockLiquidityMoveRepo::default()),
+        )),
+        tvl_service: Arc::new(TvlService::new(
+            frozen_hours_repo(None),
+            Arc::new(MockTvlRepo::default()),
+        )),
+        pool_discovery_service: Arc::new(PoolDiscoveryService::new(
+            frozen_hours_repo(None),
+            Arc::new(MockPoolDiscoveryRepo::default()),
+        )),
+        pool_service: Arc::new(PoolService::new(Arc::new(PoolRepoOnce::with_pools(vec![])))),
         work_slots,
         token_service: Arc::new(TokenService::new(
             Arc::new(MockMetadataRepo::empty()),
@@ -632,137 +649,165 @@ pub(crate) fn work_slots() -> crate::application::WorkSlots {
     crate::application::WorkSlots::new(8, std::time::Duration::from_millis(100))
 }
 
-type MeasureRead = (&'static str, FrozenPeriod, Option<Protocol>);
+type PeriodRead = (&'static str, FrozenPeriod, Option<Protocol>);
 type InstantRead = (&'static str, DateTime<Utc>, Option<Protocol>);
 
-/// Every measure lens at once: it records the period and the scope of each read and answers the
-/// seeded rows, `since` for the liquidity's first measured hour.
-#[derive(Default)]
-pub(crate) struct MockMeasureRepo {
-    pub(crate) since: Option<DateTime<Utc>>,
-    pub(crate) swap_totals: Vec<ProtocolSwapTotals>,
-    pub(crate) moves: Vec<LiquidityMove>,
-    pub(crate) reads: Mutex<Vec<MeasureRead>>,
-    pub(crate) instants: Mutex<Vec<InstantRead>>,
+/// A day of the month of the frozen hours of [`make_frozen_hours`].
+pub(crate) fn at_october(day: u32, hour: u32) -> DateTime<Utc> {
+    Utc.with_ymd_and_hms(2026, 10, day, hour, 0, 0).unwrap()
 }
 
-impl MockMeasureRepo {
-    fn read(&self, name: &'static str, period: &FrozenPeriod, protocol: Option<Protocol>) {
+/// Facts from the 13th at 13:00 through the 20th at 12:00: 24h and 7d are covered, 30d is not.
+pub(crate) fn make_frozen_hours() -> FrozenHours {
+    FrozenHours {
+        first: at_october(13, 13),
+        last_frozen: at_october(20, 12),
+    }
+}
+
+/// The frozen hours `frozen` answers, the only read the produced-resource services make of it.
+pub(crate) fn frozen_hours_repo(frozen: Option<FrozenHours>) -> Arc<MockProtocolActivityRepo> {
+    Arc::new(MockProtocolActivityRepo::new(frozen))
+}
+
+/// A `SwapLookup` that answers nothing and records the period and the scope of each read.
+#[derive(Default)]
+pub(crate) struct MockSwapRepo {
+    pub(crate) reads: Mutex<Vec<PeriodRead>>,
+}
+
+impl MockSwapRepo {
+    fn record(&self, name: &'static str, period: &FrozenPeriod, protocol: Option<Protocol>) {
         self.reads.lock().unwrap().push((name, *period, protocol));
     }
 }
 
 #[async_trait]
-impl SwapLookup for MockMeasureRepo {
-    async fn protocol_totals(
+impl SwapLookup for MockSwapRepo {
+    async fn find_protocol_totals(
         &self,
         period: &FrozenPeriod,
         _: Window,
         protocol: Option<Protocol>,
-    ) -> RepositoryResult<Vec<ProtocolSwapTotals>> {
-        self.read("swap_totals", period, protocol);
-        Ok(self.swap_totals.clone())
+    ) -> RepositoryResult<Vec<ProtocolSwapActivity>> {
+        self.record("swap_totals", period, protocol);
+        Ok(vec![])
     }
-    async fn protocol_hourly(
+    async fn list_protocol_hourly(
         &self,
         period: &FrozenPeriod,
         protocol: Option<Protocol>,
-    ) -> RepositoryResult<Vec<ProtocolBar<SwapSums>>> {
-        self.read("swap_hourly", period, protocol);
+    ) -> RepositoryResult<Vec<ProtocolBucket<SwapActivity>>> {
+        self.record("swap_hourly", period, protocol);
         Ok(vec![])
     }
-    async fn protocol_daily(
+    async fn list_protocol_daily(
         &self,
         period: &FrozenPeriod,
         protocol: Option<Protocol>,
-    ) -> RepositoryResult<Vec<ProtocolBar<SwapSums>>> {
-        self.read("swap_daily", period, protocol);
+    ) -> RepositoryResult<Vec<ProtocolBucket<SwapActivity>>> {
+        self.record("swap_daily", period, protocol);
         Ok(vec![])
     }
-    async fn pool_totals(
+    async fn find_pool_totals(
         &self,
         period: &FrozenPeriod,
         _: Pubkey,
-    ) -> RepositoryResult<Option<SwapSums>> {
-        self.read("pool_swap_totals", period, None);
+    ) -> RepositoryResult<Option<SwapActivity>> {
+        self.record("pool_swap_totals", period, None);
         Ok(None)
     }
-    async fn pool_hourly(
+    async fn list_pool_hourly(
         &self,
         period: &FrozenPeriod,
         _: Pubkey,
-    ) -> RepositoryResult<Vec<PoolSwapBar>> {
-        self.read("pool_swap_hourly", period, None);
+    ) -> RepositoryResult<Vec<PoolSwapBucket>> {
+        self.record("pool_swap_hourly", period, None);
         Ok(vec![])
     }
-    async fn pool_daily(
+    async fn list_pool_daily(
         &self,
         period: &FrozenPeriod,
         _: Pubkey,
-    ) -> RepositoryResult<Vec<PoolSwapBar>> {
-        self.read("pool_swap_daily", period, None);
+    ) -> RepositoryResult<Vec<PoolSwapBucket>> {
+        self.record("pool_swap_daily", period, None);
         Ok(vec![])
     }
 }
 
+/// A `PoolCreationLookup` that answers nothing.
+#[derive(Default)]
+pub(crate) struct MockPoolCreationRepo;
+
 #[async_trait]
-impl PoolCreationLookup for MockMeasureRepo {
-    async fn totals(
+impl PoolCreationLookup for MockPoolCreationRepo {
+    async fn list_totals(
         &self,
-        period: &FrozenPeriod,
-        protocol: Option<Protocol>,
-    ) -> RepositoryResult<Vec<ByProtocol<PoolCreationCount>>> {
-        self.read("creation_totals", period, protocol);
+        _: &FrozenPeriod,
+        _: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolPoolCreations>> {
         Ok(vec![])
     }
-    async fn hourly(
+    async fn list_hourly(
         &self,
-        period: &FrozenPeriod,
-        protocol: Option<Protocol>,
-    ) -> RepositoryResult<Vec<ProtocolBar<PoolCreationCount>>> {
-        self.read("creation_hourly", period, protocol);
+        _: &FrozenPeriod,
+        _: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolBucket<PoolCreations>>> {
         Ok(vec![])
     }
-    async fn daily(
+    async fn list_daily(
         &self,
-        period: &FrozenPeriod,
-        protocol: Option<Protocol>,
-    ) -> RepositoryResult<Vec<ProtocolBar<PoolCreationCount>>> {
-        self.read("creation_daily", period, protocol);
+        _: &FrozenPeriod,
+        _: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolBucket<PoolCreations>>> {
         Ok(vec![])
     }
 }
 
+/// A `LiquidityMoveLookup` measured from `since`, answering nothing, which records the period
+/// and the scope of each read.
+#[derive(Default)]
+pub(crate) struct MockLiquidityMoveRepo {
+    pub(crate) since: Option<DateTime<Utc>>,
+    pub(crate) reads: Mutex<Vec<PeriodRead>>,
+}
+
+impl MockLiquidityMoveRepo {
+    fn record(&self, name: &'static str, period: &FrozenPeriod, protocol: Option<Protocol>) {
+        self.reads.lock().unwrap().push((name, *period, protocol));
+    }
+}
+
 #[async_trait]
-impl LiquidityMoveLookup for MockMeasureRepo {
-    async fn measured_since(&self, _: Protocol) -> RepositoryResult<Option<DateTime<Utc>>> {
+impl LiquidityMoveLookup for MockLiquidityMoveRepo {
+    async fn find_measured_since(&self, _: Protocol) -> RepositoryResult<Option<DateTime<Utc>>> {
         Ok(self.since)
     }
-    async fn totals(
+    async fn find_totals(
         &self,
         period: &FrozenPeriod,
         protocol: Protocol,
-    ) -> RepositoryResult<Option<LiquidityMoveSums>> {
-        self.read("liquidity_totals", period, Some(protocol));
+    ) -> RepositoryResult<Option<LiquidityFlows>> {
+        self.record("liquidity_totals", period, Some(protocol));
         Ok(None)
     }
-    async fn hourly(
+    async fn list_hourly(
         &self,
         period: &FrozenPeriod,
         protocol: Protocol,
-    ) -> RepositoryResult<Vec<ProtocolBar<LiquidityMoveSums>>> {
-        self.read("liquidity_hourly", period, Some(protocol));
+    ) -> RepositoryResult<Vec<ProtocolBucket<LiquidityFlows>>> {
+        self.record("liquidity_hourly", period, Some(protocol));
         Ok(vec![])
     }
-    async fn daily(
+    async fn list_daily(
         &self,
         period: &FrozenPeriod,
         protocol: Protocol,
-    ) -> RepositoryResult<Vec<ProtocolBar<LiquidityMoveSums>>> {
-        self.read("liquidity_daily", period, Some(protocol));
+    ) -> RepositoryResult<Vec<ProtocolBucket<LiquidityFlows>>> {
+        self.record("liquidity_daily", period, Some(protocol));
         Ok(vec![])
     }
-    async fn pool_moves(
+    async fn list_pool_moves(
         &self,
         period: &FrozenPeriod,
         _: Window,
@@ -771,17 +816,20 @@ impl LiquidityMoveLookup for MockMeasureRepo {
         _: Option<LiquidityMoveCursor>,
         _: i64,
     ) -> RepositoryResult<Page<LiquidityMove>> {
-        self.read("pool_moves", period, None);
-        Ok(Page {
-            items: self.moves.clone(),
-            ..Page::empty()
-        })
+        self.record("pool_moves", period, None);
+        Ok(Page::empty())
     }
 }
 
+/// A `TvlLookup` that answers nothing and records the instant and the scope of each read.
+#[derive(Default)]
+pub(crate) struct MockTvlRepo {
+    pub(crate) instants: Mutex<Vec<InstantRead>>,
+}
+
 #[async_trait]
-impl TvlLookup for MockMeasureRepo {
-    async fn latest(
+impl TvlLookup for MockTvlRepo {
+    async fn list_latest(
         &self,
         last: DateTime<Utc>,
         protocol: Option<Protocol>,
@@ -789,7 +837,7 @@ impl TvlLookup for MockMeasureRepo {
         self.instants.lock().unwrap().push(("tvl", last, protocol));
         Ok(vec![])
     }
-    async fn hourly(
+    async fn list_hourly(
         &self,
         first: DateTime<Utc>,
         _: DateTime<Utc>,
@@ -803,35 +851,25 @@ impl TvlLookup for MockMeasureRepo {
     }
 }
 
+/// A `PoolDiscoveryLookup` that answers nothing and records the instant and the scope of each
+/// read.
+#[derive(Default)]
+pub(crate) struct MockPoolDiscoveryRepo {
+    pub(crate) instants: Mutex<Vec<InstantRead>>,
+}
+
 #[async_trait]
-impl PoolDiscoveryLookup for MockMeasureRepo {
-    async fn totals(
+impl PoolDiscoveryLookup for MockPoolDiscoveryRepo {
+    async fn list_totals(
         &self,
         last: DateTime<Utc>,
         _: Window,
         protocol: Option<Protocol>,
-    ) -> RepositoryResult<Vec<PoolDiscoveries>> {
+    ) -> RepositoryResult<Vec<ProtocolDiscoveredTvl>> {
         self.instants
             .lock()
             .unwrap()
             .push(("discoveries", last, protocol));
         Ok(vec![])
     }
-}
-
-/// A measure service on `measures`, its periods built from `frozen`, its pools from `pools`.
-pub(crate) fn measure_service(
-    frozen: Option<FrozenHours>,
-    measures: Arc<MockMeasureRepo>,
-    pools: Vec<Pool>,
-) -> MeasureService {
-    MeasureService::new(MeasureLenses {
-        hours: Arc::new(MockProtocolActivityRepo::new(frozen)),
-        swaps: measures.clone(),
-        pool_creations: measures.clone(),
-        liquidity_moves: measures.clone(),
-        tvl: measures.clone(),
-        pool_discoveries: measures,
-        pools: Arc::new(PoolRepoOnce::with_pools(pools)),
-    })
 }

@@ -13,12 +13,7 @@ use yog_core::{
     },
 };
 
-/// What a read found over its period; `period` is `None` before the first freeze.
-#[derive(Debug, Clone)]
-pub(crate) struct Measured<T> {
-    pub(crate) period: Option<FrozenPeriod>,
-    pub(crate) items: T,
-}
+use super::period::Measured;
 
 /// A page of tokens, or the refusal of a cursor taken in a ranking since rewritten.
 #[derive(Debug)]

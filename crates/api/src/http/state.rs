@@ -10,8 +10,9 @@ use tokio_util::sync::CancellationToken;
 use yog_persistence::PgHealthChecker;
 
 use crate::application::{
-    ActivityService, AnnouncementService, EnrichedSignal, IngestionService, MeasureService,
-    NetworkService, ProtocolCatalogService, SignalService, TokenService, WorkSlots,
+    ActivityService, AnnouncementService, EnrichedSignal, IngestionService, LiquidityMoveService,
+    NetworkService, PoolCreationService, PoolDiscoveryService, PoolService, ProtocolCatalogService,
+    SignalService, SwapService, TokenService, TvlService, WorkSlots,
 };
 
 /// The services and the runtime handles the router and handlers read. Handlers never reach a
@@ -31,7 +32,12 @@ pub(crate) struct AppState {
     pub(crate) work_slots: WorkSlots,
     pub(crate) protocol_catalog_service: Arc<ProtocolCatalogService>,
     pub(crate) activity_service: Arc<ActivityService>,
-    pub(crate) measure_service: Arc<MeasureService>,
+    pub(crate) swap_service: Arc<SwapService>,
+    pub(crate) pool_creation_service: Arc<PoolCreationService>,
+    pub(crate) liquidity_move_service: Arc<LiquidityMoveService>,
+    pub(crate) tvl_service: Arc<TvlService>,
+    pub(crate) pool_discovery_service: Arc<PoolDiscoveryService>,
+    pub(crate) pool_service: Arc<PoolService>,
     pub(crate) token_service: Arc<TokenService>,
     pub(crate) announcement_service: Arc<AnnouncementService>,
     /// Infra probe, exposed directly: no application logic surrounds it.

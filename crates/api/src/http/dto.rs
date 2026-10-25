@@ -5,10 +5,11 @@ pub(crate) mod response;
 
 pub(crate) use response::{
     AnnouncementResponse, IngestionResponse, LatestTvlResponse, LiquidityMoveResponse,
-    NetworkResponse, PageResponse, PoolCreationBarResponse, PoolCreationsResponse,
-    PoolDiscoveriesResponse, PoolSwapBarResponse, ProtocolActivityBarResponse,
-    ProtocolActivityResponse, ProtocolCatalogResponse, ProtocolLiquidityMoveBarResponse,
-    ProtocolLiquidityMoveTotalsResponse, ProtocolSwapBarResponse, ProtocolSwapTotalsResponse,
-    ProtocolTvlResponse, ReadingResponse, SignalResponse, SwapSumsResponse,
-    TokenActivityPageResponse, TokenResponse, WindowedPageResponse, WindowedResponse,
+    NetworkResponse, PageResponse, PoolSwapBucketResponse, ProtocolActivityBarResponse,
+    ProtocolActivityResponse, ProtocolCatalogResponse, ProtocolDiscoveredTvlResponse,
+    ProtocolLiquidityFlowsBucketResponse, ProtocolLiquidityFlowsResponse,
+    ProtocolPoolCreationsBucketResponse, ProtocolPoolCreationsResponse,
+    ProtocolSwapActivityBucketResponse, ProtocolSwapActivityResponse, ProtocolTvlResponse,
+    ReadingResponse, SignalResponse, SwapActivityResponse, TokenActivityPageResponse,
+    TokenResponse, WindowedPageResponse, WindowedResponse,
 };

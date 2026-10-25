@@ -6,12 +6,12 @@ use axum::{
     extract::{Path, Query, State},
 };
 
-use crate::application::{Cut, PoolMovesRead};
+use crate::application::BucketPeriod;
 use crate::http::{
     AppState,
     dto::{
-        LiquidityMoveResponse, ProtocolLiquidityMoveBarResponse,
-        ProtocolLiquidityMoveTotalsResponse, WindowedPageResponse, WindowedResponse,
+        LiquidityMoveResponse, ProtocolLiquidityFlowsBucketResponse,
+        ProtocolLiquidityFlowsResponse, WindowedPageResponse, WindowedResponse,
         request::{
             ListPoolLiquidityMovesRequest, PoolLiquidityMovesParams, WindowParams, parse_protocol,
         },
@@ -27,26 +27,26 @@ use crate::http::{
         status = 200,
         description = "The protocol's liquidity created, added and removed over the window; \
                        no row while its liquidity does not cover the window whole.",
-        body = WindowedResponse<ProtocolLiquidityMoveTotalsResponse>
+        body = WindowedResponse<ProtocolLiquidityFlowsResponse>
     ))
 )]
 pub(crate) async fn get_protocol_liquidity_move_totals(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
     Query(params): Query<WindowParams>,
-) -> Result<Json<WindowedResponse<ProtocolLiquidityMoveTotalsResponse>>, ApiError> {
+) -> Result<Json<WindowedResponse<ProtocolLiquidityFlowsResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
     let window = params.window.into();
     let measured = state
-        .measure_service
-        .liquidity_totals(window, protocol)
+        .liquidity_move_service
+        .get_liquidity_totals(window, protocol)
         .await?;
     let measured = crate::application::Measured {
         period: measured.period,
         items: measured
             .items
             .into_iter()
-            .map(|sums| ProtocolLiquidityMoveTotalsResponse::new(protocol, sums))
+            .map(|flows| ProtocolLiquidityFlowsResponse::new(protocol, flows))
             .collect::<Vec<_>>(),
     };
     Ok(Json(WindowedResponse::new(window, measured)))
@@ -59,15 +59,15 @@ pub(crate) async fn get_protocol_liquidity_move_totals(
     responses((
         status = 200,
         description = "The protocol's liquidity created, added and removed, hour by hour.",
-        body = WindowedResponse<ProtocolLiquidityMoveBarResponse>
+        body = WindowedResponse<ProtocolLiquidityFlowsBucketResponse>
     ))
 )]
 pub(crate) async fn get_protocol_liquidity_moves_hourly(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
     Query(params): Query<WindowParams>,
-) -> Result<Json<WindowedResponse<ProtocolLiquidityMoveBarResponse>>, ApiError> {
-    bars(&state, &protocol, params, Cut::Hourly).await
+) -> Result<Json<WindowedResponse<ProtocolLiquidityFlowsBucketResponse>>, ApiError> {
+    list_buckets(&state, &protocol, params, BucketPeriod::Hour).await
 }
 
 #[utoipa::path(
@@ -78,28 +78,28 @@ pub(crate) async fn get_protocol_liquidity_moves_hourly(
         status = 200,
         description = "The protocol's liquidity created, added and removed, by 24 hours \
                        ending at `asOf`.",
-        body = WindowedResponse<ProtocolLiquidityMoveBarResponse>
+        body = WindowedResponse<ProtocolLiquidityFlowsBucketResponse>
     ))
 )]
 pub(crate) async fn get_protocol_liquidity_moves_daily(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
     Query(params): Query<WindowParams>,
-) -> Result<Json<WindowedResponse<ProtocolLiquidityMoveBarResponse>>, ApiError> {
-    bars(&state, &protocol, params, Cut::Daily).await
+) -> Result<Json<WindowedResponse<ProtocolLiquidityFlowsBucketResponse>>, ApiError> {
+    list_buckets(&state, &protocol, params, BucketPeriod::Day).await
 }
 
-async fn bars(
+async fn list_buckets(
     state: &AppState,
     protocol: &str,
     params: WindowParams,
-    cut: Cut,
-) -> Result<Json<WindowedResponse<ProtocolLiquidityMoveBarResponse>>, ApiError> {
+    bucket: BucketPeriod,
+) -> Result<Json<WindowedResponse<ProtocolLiquidityFlowsBucketResponse>>, ApiError> {
     let protocol = parse_protocol(protocol)?;
     let window = params.window.into();
     let measured = state
-        .measure_service
-        .liquidity_bars(window, cut, protocol)
+        .liquidity_move_service
+        .list_liquidity_buckets(window, bucket, protocol)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }
@@ -122,24 +122,15 @@ pub(crate) async fn list_pool_liquidity_moves(
 ) -> Result<Json<WindowedPageResponse<LiquidityMoveResponse>>, ApiError> {
     let request = ListPoolLiquidityMovesRequest::parse(params)?;
     let pool = super::known_pool(&state, &pool).await?;
-    match state
-        .measure_service
-        .pool_liquidity_moves(
+    let measured = state
+        .liquidity_move_service
+        .list_pool_liquidity_moves(
             request.window,
             &pool,
             request.order,
             request.cursor,
             request.limit,
         )
-        .await?
-    {
-        PoolMovesRead::Page(measured) => {
-            Ok(Json(WindowedPageResponse::new(request.window, measured)?))
-        }
-        PoolMovesRead::CursorRefused => Err(ApiError::BadRequest(
-            "`cursor` belongs to another list, or to one read before the last freeze: start \
-             again without it"
-                .to_string(),
-        )),
-    }
+        .await?;
+    Ok(Json(WindowedPageResponse::new(request.window, measured)?))
 }

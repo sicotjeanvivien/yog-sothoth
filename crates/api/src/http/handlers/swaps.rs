@@ -1,12 +1,12 @@
 //! The swaps' measures: their totals, their series, by token — for every protocol, one
 //! protocol, or one pool.
 
-use crate::application::Cut;
+use crate::application::BucketPeriod;
 use crate::http::{
     AppState,
     dto::{
-        PoolSwapBarResponse, ProtocolSwapBarResponse, ProtocolSwapTotalsResponse, SwapSumsResponse,
-        TokenActivityPageResponse, WindowedResponse,
+        PoolSwapBucketResponse, ProtocolSwapActivityBucketResponse, ProtocolSwapActivityResponse,
+        SwapActivityResponse, TokenActivityPageResponse, WindowedResponse,
         request::{ActivityParams, TokenActivityParams, WindowParams, parse_protocol},
     },
     error::ApiError,
@@ -23,14 +23,14 @@ use axum::{
     responses((
         status = 200,
         description = "Each protocol's swaps over the window.",
-        body = WindowedResponse<ProtocolSwapTotalsResponse>
+        body = WindowedResponse<ProtocolSwapActivityResponse>
     ))
 )]
 pub(crate) async fn get_swap_totals(
     State(state): State<AppState>,
     Query(params): Query<ActivityParams>,
-) -> Result<Json<WindowedResponse<ProtocolSwapTotalsResponse>>, ApiError> {
-    swap_totals(&state, params, None).await
+) -> Result<Json<WindowedResponse<ProtocolSwapActivityResponse>>, ApiError> {
+    get_totals(&state, params, None).await
 }
 
 #[utoipa::path(
@@ -40,27 +40,27 @@ pub(crate) async fn get_swap_totals(
     responses((
         status = 200,
         description = "The protocol's swaps over the window.",
-        body = WindowedResponse<ProtocolSwapTotalsResponse>
+        body = WindowedResponse<ProtocolSwapActivityResponse>
     ))
 )]
 pub(crate) async fn get_protocol_swap_totals(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
     Query(params): Query<ActivityParams>,
-) -> Result<Json<WindowedResponse<ProtocolSwapTotalsResponse>>, ApiError> {
+) -> Result<Json<WindowedResponse<ProtocolSwapActivityResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
-    swap_totals(&state, params, Some(protocol)).await
+    get_totals(&state, params, Some(protocol)).await
 }
 
-async fn swap_totals(
+async fn get_totals(
     state: &AppState,
     params: ActivityParams,
     protocol: Option<yog_core::domain::Protocol>,
-) -> Result<Json<WindowedResponse<ProtocolSwapTotalsResponse>>, ApiError> {
+) -> Result<Json<WindowedResponse<ProtocolSwapActivityResponse>>, ApiError> {
     let window = params.window.into();
     let measured = state
-        .measure_service
-        .swap_totals(window, params.offset.map(Into::into), protocol)
+        .swap_service
+        .get_swap_totals(window, params.offset.map(Into::into), protocol)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }
@@ -72,14 +72,14 @@ async fn swap_totals(
     responses((
         status = 200,
         description = "Each protocol's swaps, hour by hour.",
-        body = WindowedResponse<ProtocolSwapBarResponse>
+        body = WindowedResponse<ProtocolSwapActivityBucketResponse>
     ))
 )]
 pub(crate) async fn get_swaps_hourly(
     State(state): State<AppState>,
     Query(params): Query<WindowParams>,
-) -> Result<Json<WindowedResponse<ProtocolSwapBarResponse>>, ApiError> {
-    swap_bars(&state, params, Cut::Hourly, None).await
+) -> Result<Json<WindowedResponse<ProtocolSwapActivityBucketResponse>>, ApiError> {
+    list_buckets(&state, params, BucketPeriod::Hour, None).await
 }
 
 #[utoipa::path(
@@ -89,14 +89,14 @@ pub(crate) async fn get_swaps_hourly(
     responses((
         status = 200,
         description = "Each protocol's swaps, by 24 hours ending at `asOf`.",
-        body = WindowedResponse<ProtocolSwapBarResponse>
+        body = WindowedResponse<ProtocolSwapActivityBucketResponse>
     ))
 )]
 pub(crate) async fn get_swaps_daily(
     State(state): State<AppState>,
     Query(params): Query<WindowParams>,
-) -> Result<Json<WindowedResponse<ProtocolSwapBarResponse>>, ApiError> {
-    swap_bars(&state, params, Cut::Daily, None).await
+) -> Result<Json<WindowedResponse<ProtocolSwapActivityBucketResponse>>, ApiError> {
+    list_buckets(&state, params, BucketPeriod::Day, None).await
 }
 
 #[utoipa::path(
@@ -106,16 +106,16 @@ pub(crate) async fn get_swaps_daily(
     responses((
         status = 200,
         description = "The protocol's swaps, hour by hour.",
-        body = WindowedResponse<ProtocolSwapBarResponse>
+        body = WindowedResponse<ProtocolSwapActivityBucketResponse>
     ))
 )]
 pub(crate) async fn get_protocol_swaps_hourly(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
     Query(params): Query<WindowParams>,
-) -> Result<Json<WindowedResponse<ProtocolSwapBarResponse>>, ApiError> {
+) -> Result<Json<WindowedResponse<ProtocolSwapActivityBucketResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
-    swap_bars(&state, params, Cut::Hourly, Some(protocol)).await
+    list_buckets(&state, params, BucketPeriod::Hour, Some(protocol)).await
 }
 
 #[utoipa::path(
@@ -125,28 +125,28 @@ pub(crate) async fn get_protocol_swaps_hourly(
     responses((
         status = 200,
         description = "The protocol's swaps, by 24 hours ending at `asOf`.",
-        body = WindowedResponse<ProtocolSwapBarResponse>
+        body = WindowedResponse<ProtocolSwapActivityBucketResponse>
     ))
 )]
 pub(crate) async fn get_protocol_swaps_daily(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
     Query(params): Query<WindowParams>,
-) -> Result<Json<WindowedResponse<ProtocolSwapBarResponse>>, ApiError> {
+) -> Result<Json<WindowedResponse<ProtocolSwapActivityBucketResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
-    swap_bars(&state, params, Cut::Daily, Some(protocol)).await
+    list_buckets(&state, params, BucketPeriod::Day, Some(protocol)).await
 }
 
-async fn swap_bars(
+async fn list_buckets(
     state: &AppState,
     params: WindowParams,
-    cut: Cut,
+    bucket: BucketPeriod,
     protocol: Option<yog_core::domain::Protocol>,
-) -> Result<Json<WindowedResponse<ProtocolSwapBarResponse>>, ApiError> {
+) -> Result<Json<WindowedResponse<ProtocolSwapActivityBucketResponse>>, ApiError> {
     let window = params.window.into();
     let measured = state
-        .measure_service
-        .swap_bars(window, cut, protocol)
+        .swap_service
+        .list_swap_buckets(window, bucket, protocol)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }
@@ -158,19 +158,19 @@ async fn swap_bars(
     responses((
         status = 200,
         description = "The pool's swaps over the window; no row when it did not swap.",
-        body = WindowedResponse<SwapSumsResponse>
+        body = WindowedResponse<SwapActivityResponse>
     ))
 )]
 pub(crate) async fn get_pool_swap_totals(
     State(state): State<AppState>,
     Path(pool): Path<String>,
     Query(params): Query<WindowParams>,
-) -> Result<Json<WindowedResponse<SwapSumsResponse>>, ApiError> {
+) -> Result<Json<WindowedResponse<SwapActivityResponse>>, ApiError> {
     let pool = super::known_pool(&state, &pool).await?;
     let window = params.window.into();
     let measured = state
-        .measure_service
-        .pool_swap_totals(window, pool.pool_address)
+        .swap_service
+        .get_pool_swap_totals(window, pool.pool_address)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }
@@ -182,15 +182,15 @@ pub(crate) async fn get_pool_swap_totals(
     responses((
         status = 200,
         description = "The pool's swaps, hour by hour.",
-        body = WindowedResponse<PoolSwapBarResponse>
+        body = WindowedResponse<PoolSwapBucketResponse>
     ))
 )]
 pub(crate) async fn get_pool_swaps_hourly(
     State(state): State<AppState>,
     Path(pool): Path<String>,
     Query(params): Query<WindowParams>,
-) -> Result<Json<WindowedResponse<PoolSwapBarResponse>>, ApiError> {
-    pool_swap_bars(&state, &pool, params, Cut::Hourly).await
+) -> Result<Json<WindowedResponse<PoolSwapBucketResponse>>, ApiError> {
+    list_pool_buckets(&state, &pool, params, BucketPeriod::Hour).await
 }
 
 #[utoipa::path(
@@ -200,28 +200,28 @@ pub(crate) async fn get_pool_swaps_hourly(
     responses((
         status = 200,
         description = "The pool's swaps, by 24 hours ending at `asOf`.",
-        body = WindowedResponse<PoolSwapBarResponse>
+        body = WindowedResponse<PoolSwapBucketResponse>
     ))
 )]
 pub(crate) async fn get_pool_swaps_daily(
     State(state): State<AppState>,
     Path(pool): Path<String>,
     Query(params): Query<WindowParams>,
-) -> Result<Json<WindowedResponse<PoolSwapBarResponse>>, ApiError> {
-    pool_swap_bars(&state, &pool, params, Cut::Daily).await
+) -> Result<Json<WindowedResponse<PoolSwapBucketResponse>>, ApiError> {
+    list_pool_buckets(&state, &pool, params, BucketPeriod::Day).await
 }
 
-async fn pool_swap_bars(
+async fn list_pool_buckets(
     state: &AppState,
     pool: &str,
     params: WindowParams,
-    cut: Cut,
-) -> Result<Json<WindowedResponse<PoolSwapBarResponse>>, ApiError> {
+    bucket: BucketPeriod,
+) -> Result<Json<WindowedResponse<PoolSwapBucketResponse>>, ApiError> {
     let pool = super::known_pool(state, pool).await?;
     let window = params.window.into();
     let measured = state
-        .measure_service
-        .pool_swap_bars(window, cut, pool.pool_address)
+        .swap_service
+        .list_pool_swap_buckets(window, bucket, pool.pool_address)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }

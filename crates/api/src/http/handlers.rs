@@ -19,8 +19,8 @@ pub(super) mod tvl;
 async fn known_pool(state: &AppState, raw: &str) -> Result<yog_core::domain::Pool, ApiError> {
     let address: Pubkey = parse_pool(raw)?;
     state
-        .measure_service
-        .pool(address)
+        .pool_service
+        .find_pool(address)
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("pool not found: {address}")))
 }

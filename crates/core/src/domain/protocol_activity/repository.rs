@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
-use super::{LatestProtocolTvl, LiquidityMove, ProtocolActivity, ProtocolActivityBar, ProtocolTvl};
+use super::{LatestProtocolTvl, ProtocolActivity, ProtocolActivityBar};
 use crate::RepositoryResult;
-use crate::domain::{FrozenHours, FrozenPeriod, Protocol, Window};
+use crate::domain::{FrozenHours, FrozenPeriod, LiquidityMove, Protocol, ProtocolTvl, Window};
 
 /// Read lens on yog-analytic's protocol tables, the api's. Every read takes a
 /// [`FrozenPeriod`] built from [`Self::frozen_hours`]; none counts an hour not frozen.
