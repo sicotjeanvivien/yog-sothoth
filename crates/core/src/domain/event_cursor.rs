@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 
-use crate::domain::Protocol;
+use crate::domain::{Protocol, Window};
 
 /// Which events a list reads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,3 +26,19 @@ pub struct EventCursor {
     pub signature: Signature,
     pub event_index: u16,
 }
+
+impl EventCursor {
+    /// The start of the window a page reads from: its cursor's, fixed at the first page, else
+    /// `window` back from `now`.
+    pub fn window_start(
+        cursor: Option<&Self>,
+        window: Window,
+        now: DateTime<Utc>,
+    ) -> DateTime<Utc> {
+        cursor.map_or_else(|| now - window.duration(), |c| c.from)
+    }
+}
+
+#[cfg(test)]
+#[path = "event_cursor_tests.rs"]
+mod tests;

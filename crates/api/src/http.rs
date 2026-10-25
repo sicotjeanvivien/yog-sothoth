@@ -152,6 +152,36 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         .routes(routes!(
             handlers::liquidity_changes::list_pool_liquidity_changes
         ))
+        .routes(routes!(handlers::position_changes::list_position_changes))
+        .routes(routes!(
+            handlers::position_changes::list_protocol_position_changes
+        ))
+        .routes(routes!(
+            handlers::position_changes::list_pool_position_changes
+        ))
+        .routes(routes!(
+            handlers::position_fee_claims::list_position_fee_claims
+        ))
+        .routes(routes!(
+            handlers::position_fee_claims::list_protocol_position_fee_claims
+        ))
+        .routes(routes!(
+            handlers::position_fee_claims::list_pool_position_fee_claims
+        ))
+        .routes(routes!(
+            handlers::protocol_fee_claims::list_protocol_fee_claims
+        ))
+        .routes(routes!(
+            handlers::protocol_fee_claims::list_protocol_protocol_fee_claims
+        ))
+        .routes(routes!(
+            handlers::protocol_fee_claims::list_pool_protocol_fee_claims
+        ))
+        .routes(routes!(handlers::reward_claims::list_reward_claims))
+        .routes(routes!(
+            handlers::reward_claims::list_protocol_reward_claims
+        ))
+        .routes(routes!(handlers::reward_claims::list_pool_reward_claims))
         .routes(routes!(handlers::pool_creations::list_pool_creations))
         .routes(routes!(
             handlers::pool_creations::list_protocol_pool_creations

@@ -78,12 +78,16 @@ struct EventCursorWire {
     event_index: u16,
 }
 
-/// The on-chain collections a page of events is read from: one shape of cursor for all three.
+/// The on-chain collections a page of events is read from: one shape of cursor for all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EventCollection {
     Swaps,
     LiquidityChanges,
     PoolCreations,
+    PositionChanges,
+    PositionFeeClaims,
+    ProtocolFeeClaims,
+    RewardClaims,
 }
 
 impl EventCollection {
@@ -92,6 +96,10 @@ impl EventCollection {
             Self::Swaps => "swaps",
             Self::LiquidityChanges => "liquidity-changes",
             Self::PoolCreations => "pool-creations",
+            Self::PositionChanges => "position-changes",
+            Self::PositionFeeClaims => "position-fee-claims",
+            Self::ProtocolFeeClaims => "protocol-fee-claims",
+            Self::RewardClaims => "reward-claims",
         }
     }
 }
@@ -174,6 +182,14 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
             encode_event_cursor(EventCollection::LiquidityChanges, c)
         }
         Cursor::PoolCreationEvent(c) => encode_event_cursor(EventCollection::PoolCreations, c),
+        Cursor::PositionChangeEvent(c) => encode_event_cursor(EventCollection::PositionChanges, c),
+        Cursor::PositionFeeClaimEvent(c) => {
+            encode_event_cursor(EventCollection::PositionFeeClaims, c)
+        }
+        Cursor::ProtocolFeeClaimEvent(c) => {
+            encode_event_cursor(EventCollection::ProtocolFeeClaims, c)
+        }
+        Cursor::RewardClaimEvent(c) => encode_event_cursor(EventCollection::RewardClaims, c),
     }
 }
 

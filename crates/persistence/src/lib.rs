@@ -30,10 +30,11 @@ pub use repositories::{
     PgMeteoraDammV2WithdrawIneligibleRewardEventRepository, PgMeteoraDlmmPoolPropertiesRepository,
     PgNetworkStatusRepository, PgPoolCreationEventRepository, PgPoolCreationsRepository,
     PgPoolCurrentStateRepository, PgPoolPriceSnapshotRepository, PgPoolRepository,
-    PgProtocolActivityRepository, PgProtocolTvlRepository, PgSignalRepository,
-    PgSwapActivityRepository, PgSwapEventRepository, PgSwapFlowRepository,
-    PgTokenActivityRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
-    PgWatchedPoolRepository,
+    PgPositionChangeEventRepository, PgPositionFeeClaimEventRepository,
+    PgProtocolActivityRepository, PgProtocolFeeClaimEventRepository, PgProtocolTvlRepository,
+    PgRewardClaimEventRepository, PgSignalRepository, PgSwapActivityRepository,
+    PgSwapEventRepository, PgSwapFlowRepository, PgTokenActivityRepository,
+    PgTokenMetadataRepository, PgTokenPriceRepository, PgWatchedPoolRepository,
 };
 pub use server_info::{PgServerInfo, ServerVersions};
 

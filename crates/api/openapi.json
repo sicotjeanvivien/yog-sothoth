@@ -422,6 +422,50 @@
         ],
         "type": "object"
       },
+      "MeteoraDammV2PermanentLockResponse": {
+        "description": "The position's liquidity locked for good, and the position's total so locked after it.",
+        "properties": {
+          "lockedLiquidity": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "position": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "totalPermanentLockedLiquidity": {
+            "$ref": "#/components/schemas/U128String"
+          }
+        },
+        "required": [
+          "position",
+          "lockedLiquidity",
+          "totalPermanentLockedLiquidity"
+        ],
+        "type": "object"
+      },
+      "MeteoraDammV2PositionNftResponse": {
+        "description": "The position opened or closed, its owner, and the mint of the NFT that holds it.",
+        "properties": {
+          "owner": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "position": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "positionNftMint": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "position",
+          "owner",
+          "positionNftMint"
+        ],
+        "type": "object"
+      },
       "MeteoraDammV2PropertiesResponse": {
         "description": "DAMM v2-only pool properties (baseline §8's satellite table).",
         "properties": {
@@ -484,6 +528,229 @@
           "hasDynamicFee",
           "protocolFeePercent",
           "referralFeePercent"
+        ],
+        "type": "object"
+      },
+      "MeteoraDammV2SplitAmountsResponse": {
+        "description": "What a split moved to the second position.",
+        "properties": {
+          "feeA": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "feeB": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "permanentLockedLiquidity": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "reward0": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "reward1": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "unlockedLiquidity": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "vestedLiquidity": {
+            "$ref": "#/components/schemas/U128String"
+          }
+        },
+        "required": [
+          "permanentLockedLiquidity",
+          "unlockedLiquidity",
+          "vestedLiquidity",
+          "feeA",
+          "feeB",
+          "reward0",
+          "reward1"
+        ],
+        "type": "object"
+      },
+      "MeteoraDammV2SplitNumeratorsResponse": {
+        "description": "The numerators of the shares a split moved.",
+        "properties": {
+          "feeA": {
+            "format": "u-int32",
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "feeB": {
+            "format": "u-int32",
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "innerVestingLiquidity": {
+            "format": "u-int32",
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "permanentLockedLiquidity": {
+            "format": "u-int32",
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "reward0": {
+            "format": "u-int32",
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "reward1": {
+            "format": "u-int32",
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "unlockedLiquidity": {
+            "format": "u-int32",
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "unlockedLiquidity",
+          "permanentLockedLiquidity",
+          "feeA",
+          "feeB",
+          "reward0",
+          "reward1",
+          "innerVestingLiquidity"
+        ],
+        "type": "object"
+      },
+      "MeteoraDammV2SplitResponse": {
+        "description": "A position split in two: what moved from the first to the second, both after it, and the\nnumerators of the shares moved.",
+        "properties": {
+          "amounts": {
+            "$ref": "#/components/schemas/MeteoraDammV2SplitAmountsResponse"
+          },
+          "currentSqrtPrice": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "firstOwner": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "firstPosition": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "firstPositionAfter": {
+            "$ref": "#/components/schemas/MeteoraDammV2SplitStateResponse"
+          },
+          "numerators": {
+            "$ref": "#/components/schemas/MeteoraDammV2SplitNumeratorsResponse"
+          },
+          "secondOwner": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "secondPosition": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "secondPositionAfter": {
+            "$ref": "#/components/schemas/MeteoraDammV2SplitStateResponse"
+          }
+        },
+        "required": [
+          "firstPosition",
+          "secondPosition",
+          "firstOwner",
+          "secondOwner",
+          "currentSqrtPrice",
+          "amounts",
+          "firstPositionAfter",
+          "secondPositionAfter",
+          "numerators"
+        ],
+        "type": "object"
+      },
+      "MeteoraDammV2SplitStateResponse": {
+        "description": "A position after the split.",
+        "properties": {
+          "feeA": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "feeB": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "permanentLockedLiquidity": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "reward0": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "reward1": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "unlockedLiquidity": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "vestedLiquidity": {
+            "$ref": "#/components/schemas/U128String"
+          }
+        },
+        "required": [
+          "unlockedLiquidity",
+          "permanentLockedLiquidity",
+          "vestedLiquidity",
+          "feeA",
+          "feeB",
+          "reward0",
+          "reward1"
+        ],
+        "type": "object"
+      },
+      "MeteoraDammV2VestingLockResponse": {
+        "description": "The position's liquidity put under a vesting: released at the cliff, then by period.",
+        "properties": {
+          "cliffPoint": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "cliffUnlockLiquidity": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "liquidityPerPeriod": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "numberOfPeriod": {
+            "format": "u-int16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "owner": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "periodFrequency": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "position": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "vesting": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "position",
+          "owner",
+          "vesting",
+          "cliffPoint",
+          "periodFrequency",
+          "cliffUnlockLiquidity",
+          "liquidityPerPeriod",
+          "numberOfPeriod"
         ],
         "type": "object"
       },
@@ -772,6 +1039,345 @@
                 "lastSeenAt",
                 "feeBps",
                 "state"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prevCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "isFirst",
+          "isLast",
+          "nextCursor",
+          "prevCursor"
+        ],
+        "type": "object"
+      },
+      "PageResponse_PositionChangeEventResponse": {
+        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
+        "properties": {
+          "isFirst": {
+            "type": "boolean"
+          },
+          "isLast": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "eventIndex": {
+                  "format": "u-int16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "meteoraDammV2": {
+                  "$ref": "#/components/schemas/PositionChangeEventMeteoraDammV2Response"
+                },
+                "poolAddress": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "signature": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "slot": {
+                  "$ref": "#/components/schemas/Count"
+                }
+              },
+              "required": [
+                "protocol",
+                "poolAddress",
+                "signature",
+                "eventIndex",
+                "slot",
+                "at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prevCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "isFirst",
+          "isLast",
+          "nextCursor",
+          "prevCursor"
+        ],
+        "type": "object"
+      },
+      "PageResponse_PositionFeeClaimEventResponse": {
+        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
+        "properties": {
+          "isFirst": {
+            "type": "boolean"
+          },
+          "isLast": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "eventIndex": {
+                  "format": "u-int16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "feeA": {
+                  "$ref": "#/components/schemas/U128String"
+                },
+                "feeB": {
+                  "$ref": "#/components/schemas/U128String"
+                },
+                "owner": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "poolAddress": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "position": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "signature": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "slot": {
+                  "$ref": "#/components/schemas/Count"
+                }
+              },
+              "required": [
+                "protocol",
+                "poolAddress",
+                "signature",
+                "eventIndex",
+                "slot",
+                "at",
+                "position",
+                "owner",
+                "feeA",
+                "feeB"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prevCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "isFirst",
+          "isLast",
+          "nextCursor",
+          "prevCursor"
+        ],
+        "type": "object"
+      },
+      "PageResponse_ProtocolFeeClaimEventResponse": {
+        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
+        "properties": {
+          "isFirst": {
+            "type": "boolean"
+          },
+          "isLast": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "amountA": {
+                  "$ref": "#/components/schemas/U128String"
+                },
+                "amountB": {
+                  "$ref": "#/components/schemas/U128String"
+                },
+                "at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "eventIndex": {
+                  "format": "u-int16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "poolAddress": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "signature": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "slot": {
+                  "$ref": "#/components/schemas/Count"
+                }
+              },
+              "required": [
+                "protocol",
+                "poolAddress",
+                "signature",
+                "eventIndex",
+                "slot",
+                "at",
+                "amountA",
+                "amountB"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prevCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "isFirst",
+          "isLast",
+          "nextCursor",
+          "prevCursor"
+        ],
+        "type": "object"
+      },
+      "PageResponse_RewardClaimEventResponse": {
+        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
+        "properties": {
+          "isFirst": {
+            "type": "boolean"
+          },
+          "isLast": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "amount": {
+                  "$ref": "#/components/schemas/U128String"
+                },
+                "at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "eventIndex": {
+                  "format": "u-int16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "owner": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "poolAddress": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "position": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "rewardIndex": {
+                  "format": "u-int8",
+                  "maximum": 255,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "rewardMint": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "signature": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "slot": {
+                  "$ref": "#/components/schemas/Count"
+                }
+              },
+              "required": [
+                "protocol",
+                "poolAddress",
+                "signature",
+                "eventIndex",
+                "slot",
+                "at",
+                "position",
+                "owner",
+                "rewardMint",
+                "rewardIndex",
+                "amount"
               ],
               "type": "object"
             },
@@ -1471,6 +2077,211 @@
           }
         ]
       },
+      "PositionChangeEventMeteoraDammV2Response": {
+        "description": "What a DAMM v2 position change is, named by `kind`, and what that change says.",
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2PositionNftResponse"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "open"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2PositionNftResponse"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "close"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2VestingLockResponse"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "vesting_lock"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2PermanentLockResponse"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "permanent_lock"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2SplitResponse"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "split"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        ]
+      },
+      "PositionChangeEventResponse": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "eventIndex": {
+            "format": "u-int16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "meteoraDammV2": {
+            "$ref": "#/components/schemas/PositionChangeEventMeteoraDammV2Response"
+          },
+          "poolAddress": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          },
+          "signature": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "slot": {
+            "$ref": "#/components/schemas/Count"
+          }
+        },
+        "required": [
+          "protocol",
+          "poolAddress",
+          "signature",
+          "eventIndex",
+          "slot",
+          "at"
+        ],
+        "type": "object"
+      },
+      "PositionFeeClaimEventResponse": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "eventIndex": {
+            "format": "u-int16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "feeA": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "feeB": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "owner": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "poolAddress": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "position": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          },
+          "signature": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "slot": {
+            "$ref": "#/components/schemas/Count"
+          }
+        },
+        "required": [
+          "protocol",
+          "poolAddress",
+          "signature",
+          "eventIndex",
+          "slot",
+          "at",
+          "position",
+          "owner",
+          "feeA",
+          "feeB"
+        ],
+        "type": "object"
+      },
       "PriceProviderResponse": {
         "description": "Where a price came from.",
         "enum": [
@@ -1721,6 +2532,51 @@
         ],
         "type": "object"
       },
+      "ProtocolFeeClaimEventResponse": {
+        "properties": {
+          "amountA": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "amountB": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "eventIndex": {
+            "format": "u-int16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "poolAddress": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          },
+          "signature": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "slot": {
+            "$ref": "#/components/schemas/Count"
+          }
+        },
+        "required": [
+          "protocol",
+          "poolAddress",
+          "signature",
+          "eventIndex",
+          "slot",
+          "at",
+          "amountA",
+          "amountB"
+        ],
+        "type": "object"
+      },
       "ProtocolLiquidityFlowsBucketResponse": {
         "allOf": [
           {
@@ -1959,6 +2815,69 @@
           "items",
           "asOf",
           "coveredSince"
+        ],
+        "type": "object"
+      },
+      "RewardClaimEventResponse": {
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "eventIndex": {
+            "format": "u-int16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "owner": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "poolAddress": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "position": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          },
+          "rewardIndex": {
+            "format": "u-int8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "rewardMint": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "signature": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "slot": {
+            "$ref": "#/components/schemas/Count"
+          }
+        },
+        "required": [
+          "protocol",
+          "poolAddress",
+          "signature",
+          "eventIndex",
+          "slot",
+          "at",
+          "position",
+          "owner",
+          "rewardMint",
+          "rewardIndex",
+          "amount"
         ],
         "type": "object"
       },
@@ -4233,6 +5152,298 @@
         }
       }
     },
+    "/api/pools/{pool}/position-changes": {
+      "get": {
+        "operationId": "list_pool_position_changes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pool",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_PositionChangeEventResponse"
+                }
+              }
+            },
+            "description": "A page of the pool's position changes, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/pools/{pool}/position-fee-claims": {
+      "get": {
+        "operationId": "list_pool_position_fee_claims",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pool",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_PositionFeeClaimEventResponse"
+                }
+              }
+            },
+            "description": "A page of the pool's position fee claims, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/pools/{pool}/protocol-fee-claims": {
+      "get": {
+        "operationId": "list_pool_protocol_fee_claims",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pool",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_ProtocolFeeClaimEventResponse"
+                }
+              }
+            },
+            "description": "A page of the pool's protocol fee claims, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/pools/{pool}/reward-claims": {
+      "get": {
+        "operationId": "list_pool_reward_claims",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pool",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_RewardClaimEventResponse"
+                }
+              }
+            },
+            "description": "A page of the pool's reward claims, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/pools/{pool}/signals": {
       "get": {
         "operationId": "list_pool_signals",
@@ -4553,6 +5764,201 @@
               }
             },
             "description": "The pool's swaps over the window; no row when it did not swap."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/position-changes": {
+      "get": {
+        "operationId": "list_position_changes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_PositionChangeEventResponse"
+                }
+              }
+            },
+            "description": "A page of every protocol's position changes, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/position-fee-claims": {
+      "get": {
+        "operationId": "list_position_fee_claims",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_PositionFeeClaimEventResponse"
+                }
+              }
+            },
+            "description": "A page of every protocol's position fee claims, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/protocol-fee-claims": {
+      "get": {
+        "operationId": "list_protocol_fee_claims",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_ProtocolFeeClaimEventResponse"
+                }
+              }
+            },
+            "description": "A page of every protocol's protocol fee claims, the most recent first; the window ends at the first page."
           },
           "default": {
             "content": {
@@ -5466,6 +6872,298 @@
         }
       }
     },
+    "/api/protocols/{protocol}/position-changes": {
+      "get": {
+        "operationId": "list_protocol_position_changes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_PositionChangeEventResponse"
+                }
+              }
+            },
+            "description": "A page of the protocol's position changes, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/protocols/{protocol}/position-fee-claims": {
+      "get": {
+        "operationId": "list_protocol_position_fee_claims",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_PositionFeeClaimEventResponse"
+                }
+              }
+            },
+            "description": "A page of the protocol's position fee claims, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/protocols/{protocol}/protocol-fee-claims": {
+      "get": {
+        "operationId": "list_protocol_protocol_fee_claims",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_ProtocolFeeClaimEventResponse"
+                }
+              }
+            },
+            "description": "A page of the protocol's protocol fee claims, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/protocols/{protocol}/reward-claims": {
+      "get": {
+        "operationId": "list_protocol_reward_claims",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_RewardClaimEventResponse"
+                }
+              }
+            },
+            "description": "A page of the protocol's reward claims, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/protocols/{protocol}/signals": {
       "get": {
         "operationId": "list_protocol_signals",
@@ -5893,6 +7591,71 @@
               }
             },
             "description": "The protocol's TVL reading of every hour measured, from the window's start."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/reward-claims": {
+      "get": {
+        "operationId": "list_reward_claims",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_RewardClaimEventResponse"
+                }
+              }
+            },
+            "description": "A page of every protocol's reward claims, the most recent first; the window ends at the first page."
           },
           "default": {
             "content": {

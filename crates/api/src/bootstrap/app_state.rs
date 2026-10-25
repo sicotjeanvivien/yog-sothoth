@@ -12,17 +12,20 @@ use yog_persistence::{
     PgHealthChecker, PgLiquidityChangeEventRepository, PgLiquidityMoveRepository,
     PgMeteoraDammV2PoolPropertiesRepository, PgNetworkStatusRepository,
     PgPoolCreationEventRepository, PgPoolCreationsRepository, PgPoolRepository,
-    PgProtocolActivityRepository, PgProtocolTvlRepository, PgSignalRepository,
-    PgSwapActivityRepository, PgSwapEventRepository, PgTokenActivityRepository,
-    PgTokenMetadataRepository, PgTokenPriceRepository, PoolSettings,
+    PgPositionChangeEventRepository, PgPositionFeeClaimEventRepository,
+    PgProtocolActivityRepository, PgProtocolFeeClaimEventRepository, PgProtocolTvlRepository,
+    PgRewardClaimEventRepository, PgSignalRepository, PgSwapActivityRepository,
+    PgSwapEventRepository, PgTokenActivityRepository, PgTokenMetadataRepository,
+    PgTokenPriceRepository, PoolSettings,
 };
 
 use crate::application::{
     ActivityService, AnnouncementService, DiscoveredTvlService, IngestionService,
     LiquidityChangeEventService, LiquidityMoveService, NetworkService, PoolCreationEventService,
-    PoolCreationsService, PoolService, ProtocolCatalogService, ProtocolTvlService,
-    STREAM_CHANNEL_CAPACITY, SignalService, SignalStreamPoller, SwapActivityService,
-    SwapEventService, TokenService, WorkSlots,
+    PoolCreationsService, PoolService, PositionChangeEventService, PositionFeeClaimEventService,
+    ProtocolCatalogService, ProtocolFeeClaimEventService, ProtocolTvlService,
+    RewardClaimEventService, STREAM_CHANNEL_CAPACITY, SignalService, SignalStreamPoller,
+    SwapActivityService, SwapEventService, TokenService, WorkSlots,
 };
 use crate::bootstrap::Config;
 use crate::http::{AppState, SSE_MAX_STREAMS, STATEMENT_TIMEOUT, WORK_SLOT_WAIT, WORK_SLOTS};
@@ -90,6 +93,18 @@ pub(crate) async fn build_app_state(
     let pool_creation_event_service = Arc::new(PoolCreationEventService::new(Arc::new(
         PgPoolCreationEventRepository::new(db_pool.clone()),
     )));
+    let position_change_event_service = Arc::new(PositionChangeEventService::new(Arc::new(
+        PgPositionChangeEventRepository::new(db_pool.clone()),
+    )));
+    let position_fee_claim_event_service = Arc::new(PositionFeeClaimEventService::new(Arc::new(
+        PgPositionFeeClaimEventRepository::new(db_pool.clone()),
+    )));
+    let protocol_fee_claim_event_service = Arc::new(ProtocolFeeClaimEventService::new(Arc::new(
+        PgProtocolFeeClaimEventRepository::new(db_pool.clone()),
+    )));
+    let reward_claim_event_service = Arc::new(RewardClaimEventService::new(Arc::new(
+        PgRewardClaimEventRepository::new(db_pool.clone()),
+    )));
     let pool_service = Arc::new(PoolService::new(
         pool_repo.clone(),
         Arc::new(PgMeteoraDammV2PoolPropertiesRepository::new(
@@ -137,6 +152,10 @@ pub(crate) async fn build_app_state(
         swap_event_service,
         liquidity_change_event_service,
         pool_creation_event_service,
+        position_change_event_service,
+        position_fee_claim_event_service,
+        protocol_fee_claim_event_service,
+        reward_claim_event_service,
         work_slots,
         token_service: Arc::new(TokenService::new(token_metadata_repo, token_price_repo)),
         announcement_service: Arc::new(AnnouncementService::new(announcement_repo)),

@@ -1,5 +1,5 @@
-//! Request DTO for the on-chain event collections: `swaps`, `liquidity-changes` and
-//! `pool-creations`, at the root, under a protocol and under a pool.
+//! Request DTO for the on-chain event collections, at the root, under a protocol and under a
+//! pool.
 
 use chrono::{TimeDelta, Utc};
 use serde::Deserialize;

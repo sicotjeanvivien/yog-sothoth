@@ -26,9 +26,7 @@ impl SwapEventService {
         cursor: Option<EventCursor>,
         limit: i64,
     ) -> RepositoryResult<Page<SwapEvent>> {
-        let from = cursor
-            .as_ref()
-            .map_or_else(|| Utc::now() - window.duration(), |c| c.from);
+        let from = EventCursor::window_start(cursor.as_ref(), window, Utc::now());
         self.events.list_events(scope, from, cursor, limit).await
     }
 }

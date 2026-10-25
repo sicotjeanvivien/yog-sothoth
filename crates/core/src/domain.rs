@@ -19,9 +19,13 @@ mod pool_creation_event;
 mod pool_creations;
 mod pool_current_state;
 mod pool_price_snapshot;
+mod position_change_event;
+mod position_fee_claim_event;
 mod protocol;
 mod protocol_activity;
+mod protocol_fee_claim_event;
 mod protocol_tvl;
+mod reward_claim_event;
 mod signals;
 mod swap_activity;
 mod swap_event;
@@ -92,11 +96,17 @@ pub use pool_current_state::{
     PoolCurrentStateUpsertOutcome,
 };
 pub use pool_price_snapshot::{PoolPriceSnapshot, PoolPriceSnapshotRepository};
+pub use position_change_event::{
+    MeteoraDammV2PositionChange, PositionChangeEvent, PositionChangeEventLookup,
+};
+pub use position_fee_claim_event::{PositionFeeClaimEvent, PositionFeeClaimEventLookup};
 pub use protocol::Protocol;
 pub use protocol_activity::{
     LatestProtocolTvl, ProtocolActivity, ProtocolActivityBar, ProtocolActivityLookup,
 };
+pub use protocol_fee_claim_event::{ProtocolFeeClaimEvent, ProtocolFeeClaimEventLookup};
 pub use protocol_tvl::{ProtocolTvl, ProtocolTvlLookup};
+pub use reward_claim_event::{RewardClaimEvent, RewardClaimEventLookup};
 pub use signals::{
     DetectorError, EvalContext, Severity, Signal, SignalCursor, SignalDetector, SignalFeed,
     SignalFilter, SignalRecord, SignalRepository,

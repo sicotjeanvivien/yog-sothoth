@@ -123,6 +123,10 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/swaps`, `/api/protocols/{protocol}/swaps`, `/api/pools/{pool}/swaps` | A page of swaps, the most recent first, ties by signature then event index, over `?window=` (`24h` at the root and under a protocol, `7d` at most under a pool): direction, amounts and reserves after in raw units, and the protocol's own fields under its name (`meteoraDammV2`: price after, fees and their token) |
 | `GET` | `/api/liquidity-changes`, `/api/protocols/{protocol}/liquidity-changes`, `/api/pools/{pool}/liquidity-changes` | A page of liquidity added and removed, as the swaps: kind, amounts, reserves after, position, owner; `meteoraDammV2.liquidityDelta` |
 | `GET` | `/api/pool-creations`, `/api/protocols/{protocol}/pool-creations` | A page of pool creations, as the swaps: mints and creator; `meteoraDammV2`, the payer, price range and first price, liquidity, activation, fee and pool modes, amounts deposited |
+| `GET` | `/api/position-changes`, `/api/protocols/{protocol}/position-changes`, `/api/pools/{pool}/position-changes` | A page of positions opened, closed, locked and split, as the swaps, every kind in one list; the change under the protocol's name, tagged by `kind` (`meteoraDammV2`: `open`, `close`, `vesting_lock`, `permanent_lock`, `split`, each with its own fields) |
+| `GET` | `/api/position-fee-claims`, `/api/protocols/{protocol}/position-fee-claims`, `/api/pools/{pool}/position-fee-claims` | A page of fees claimed by the positions, as the swaps: position, owner, fees A and B |
+| `GET` | `/api/protocol-fee-claims`, `/api/protocols/{protocol}/protocol-fee-claims`, `/api/pools/{pool}/protocol-fee-claims` | A page of protocol fees claimed, as the swaps: amounts A and B |
+| `GET` | `/api/reward-claims`, `/api/protocols/{protocol}/reward-claims`, `/api/pools/{pool}/reward-claims` | A page of rewards claimed by the positions, as the swaps: position, owner, reward mint and index, amount |
 | `GET` | `/api/tokens/{mint}/prices` | A page of the token's prices over `?window=`, the most recent first; the window ends at the first page, whose start the cursor carries, refused (400) for another mint; 404 for a mint without metadata |
 | `GET` | `/api/protocols/activity` | Per protocol over `?window=24h\|7d\|30d` (`?offset=` for the previous one): volume, fees and their shares, swaps, distinct active pools, births, pool-hours and the valued ones, and the liquidity brought by creations, added and removed, with its moves valued |
 | `GET` | `/api/protocols/activity/hourly`, `/daily` | The same flows per protocol and bar: an hour, or 24 hours ending at `asOf` |
@@ -255,8 +259,8 @@ period after `asOf`, and takes no `offset`. An on-chain collection read live end
 at its first page, whose start the cursor carries. The swaps of every pool, at the root and
 under a protocol, are served over `24h` only: past a day they are compressed by pool, and
 reading every pool in time order decompresses all of them; under a pool, `24h` and `7d`, the
-raw swaps' retention. The liquidity changes and pool creations, compressed by pool after a
-week but hundreds of times fewer, are served over `30d` everywhere: a page past the week
+raw swaps' retention. The other on-chain lists, compressed by pool after a week but
+hundreds of times fewer, are served over `30d` everywhere: a page past the week
 decompresses one chunk of them. A cursor whose window starts past the widest its list serves (an hour of
 margin) or after its own key is refused (400). A parameter never changes the shape of a response;
 `topics` (rule 5) chooses which messages come, not their shape. `asOf` is the field of the

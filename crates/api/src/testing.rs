@@ -22,21 +22,25 @@ use yog_core::{
         LiquidityMoveOrder, MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesLookup,
         NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog, PoolCreationEvent,
         PoolCreationEventLookup, PoolCreations, PoolCreationsLookup, PoolCursor, PoolEntry,
-        PoolScope, PoolSwapBucket, Protocol, ProtocolActivity, ProtocolActivityBar,
-        ProtocolActivityLookup, ProtocolBucket, ProtocolDiscoveredTvl, ProtocolPoolCreations,
-        ProtocolPools, ProtocolSwapActivity, ProtocolTvl, ProtocolTvlLookup, Severity, Signal,
-        SignalCursor, SignalFeed, SignalFilter, SignalRecord, SwapActivity, SwapActivityLookup,
-        SwapEvent, SwapEventLookup, TokenActivityCursor, TokenActivityFeed, TokenActivityPage,
-        TokenCursor, TokenEntry, TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceCursor,
-        TokenPriceLookup, Window,
+        PoolScope, PoolSwapBucket, PositionChangeEvent, PositionChangeEventLookup,
+        PositionFeeClaimEvent, PositionFeeClaimEventLookup, Protocol, ProtocolActivity,
+        ProtocolActivityBar, ProtocolActivityLookup, ProtocolBucket, ProtocolDiscoveredTvl,
+        ProtocolFeeClaimEvent, ProtocolFeeClaimEventLookup, ProtocolPoolCreations, ProtocolPools,
+        ProtocolSwapActivity, ProtocolTvl, ProtocolTvlLookup, RewardClaimEvent,
+        RewardClaimEventLookup, Severity, Signal, SignalCursor, SignalFeed, SignalFilter,
+        SignalRecord, SwapActivity, SwapActivityLookup, SwapEvent, SwapEventLookup,
+        TokenActivityCursor, TokenActivityFeed, TokenActivityPage, TokenCursor, TokenEntry,
+        TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceCursor, TokenPriceLookup, Window,
     },
 };
 
 use crate::application::{
     ActivityService, AnnouncementService, DiscoveredTvlService, IngestionService,
     LiquidityChangeEventService, LiquidityMoveService, NetworkService, PoolCreationEventService,
-    PoolCreationsService, PoolService, ProtocolCatalogService, ProtocolTvlService, SignalService,
-    SwapActivityService, SwapEventService, TokenService, WorkSlots,
+    PoolCreationsService, PoolService, PositionChangeEventService, PositionFeeClaimEventService,
+    ProtocolCatalogService, ProtocolFeeClaimEventService, ProtocolTvlService,
+    RewardClaimEventService, SignalService, SwapActivityService, SwapEventService, TokenService,
+    WorkSlots,
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
@@ -99,6 +103,18 @@ pub(crate) fn app_state() -> AppState {
         ))),
         pool_creation_event_service: Arc::new(PoolCreationEventService::new(Arc::new(
             MockPoolCreationEventRepo::default(),
+        ))),
+        position_change_event_service: Arc::new(PositionChangeEventService::new(Arc::new(
+            MockPositionChangeEventRepo::default(),
+        ))),
+        position_fee_claim_event_service: Arc::new(PositionFeeClaimEventService::new(Arc::new(
+            MockPositionFeeClaimEventRepo::default(),
+        ))),
+        protocol_fee_claim_event_service: Arc::new(ProtocolFeeClaimEventService::new(Arc::new(
+            MockProtocolFeeClaimEventRepo::default(),
+        ))),
+        reward_claim_event_service: Arc::new(RewardClaimEventService::new(Arc::new(
+            MockRewardClaimEventRepo::default(),
         ))),
         pool_service: Arc::new(PoolService::new(
             Arc::new(PoolRepoOnce::with_pools(vec![])),
@@ -1024,6 +1040,90 @@ impl LiquidityChangeEventLookup for MockLiquidityChangeEventRepo {
         _: Option<EventCursor>,
         _: i64,
     ) -> RepositoryResult<Page<LiquidityChangeEvent>> {
+        self.windows_from.lock().unwrap().push(from);
+        Ok(Page::empty())
+    }
+}
+
+/// A `PositionChangeEventLookup` answering an empty page, which records the start of each
+/// window read.
+#[derive(Default)]
+pub(crate) struct MockPositionChangeEventRepo {
+    pub(crate) windows_from: Mutex<Vec<DateTime<Utc>>>,
+}
+
+#[async_trait]
+impl PositionChangeEventLookup for MockPositionChangeEventRepo {
+    async fn list_events(
+        &self,
+        _: EventScope,
+        from: DateTime<Utc>,
+        _: Option<EventCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<PositionChangeEvent>> {
+        self.windows_from.lock().unwrap().push(from);
+        Ok(Page::empty())
+    }
+}
+
+/// A `PositionFeeClaimEventLookup` answering an empty page, which records the start of each
+/// window read.
+#[derive(Default)]
+pub(crate) struct MockPositionFeeClaimEventRepo {
+    pub(crate) windows_from: Mutex<Vec<DateTime<Utc>>>,
+}
+
+#[async_trait]
+impl PositionFeeClaimEventLookup for MockPositionFeeClaimEventRepo {
+    async fn list_events(
+        &self,
+        _: EventScope,
+        from: DateTime<Utc>,
+        _: Option<EventCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<PositionFeeClaimEvent>> {
+        self.windows_from.lock().unwrap().push(from);
+        Ok(Page::empty())
+    }
+}
+
+/// A `ProtocolFeeClaimEventLookup` answering an empty page, which records the start of each
+/// window read.
+#[derive(Default)]
+pub(crate) struct MockProtocolFeeClaimEventRepo {
+    pub(crate) windows_from: Mutex<Vec<DateTime<Utc>>>,
+}
+
+#[async_trait]
+impl ProtocolFeeClaimEventLookup for MockProtocolFeeClaimEventRepo {
+    async fn list_events(
+        &self,
+        _: EventScope,
+        from: DateTime<Utc>,
+        _: Option<EventCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<ProtocolFeeClaimEvent>> {
+        self.windows_from.lock().unwrap().push(from);
+        Ok(Page::empty())
+    }
+}
+
+/// A `RewardClaimEventLookup` answering an empty page, which records the start of each
+/// window read.
+#[derive(Default)]
+pub(crate) struct MockRewardClaimEventRepo {
+    pub(crate) windows_from: Mutex<Vec<DateTime<Utc>>>,
+}
+
+#[async_trait]
+impl RewardClaimEventLookup for MockRewardClaimEventRepo {
+    async fn list_events(
+        &self,
+        _: EventScope,
+        from: DateTime<Utc>,
+        _: Option<EventCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<RewardClaimEvent>> {
         self.windows_from.lock().unwrap().push(from);
         Ok(Page::empty())
     }
