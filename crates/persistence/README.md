@@ -637,6 +637,16 @@ checked at compile time. The swaps by pool read `analytic_pool_hourly`, which 03
 instant, then signature and `event_index` — forward only. The tests of the same names hold the
 scopes, the days, the TVL's last reading and the pages.
 
+**The on-chain events.** `swap_event.rs`, `liquidity_change_event.rs` and
+`pool_creation_event.rs` read each protocol's event table — the cross-protocol views hold
+neither `event_index` nor the protocol's columns — into the protocol's own event type. A page
+is keyed on `(timestamp, signature, event_index)`, newest first. The swaps read it in two
+steps: the instant of the `limit+1`-th row by the index of `timestamp`, then only the rows
+from that instant on, sorted on the whole key; in one step the tie-break sorts every swap of
+the window. `tests/swap_events.rs`, `tests/liquidity_change_events.rs` and
+`tests/pool_creation_events.rs` hold the scopes, the window and the pages through shared
+instants.
+
 **The catalog (038).** The business routes page the registry live: `pool.rs` reads a page of
 addresses per scope, then their entries whole — the tokens' metadata, `pool_current_state`
 and `pool_current_tvl` joined on those rows only, the view otherwise valuing every pool
