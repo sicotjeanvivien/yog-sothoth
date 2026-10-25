@@ -653,6 +653,13 @@ each repository keeps its SQL. `position_fee_claim_event.rs`,
 the same names, under `tests/`, hold the scopes, the window and the pages through shared
 instants.
 
+**The announcements.** `announcement.rs` reads the banner's open set (`list_active`), and the
+list of every announcement (`list_entries`), whose status — upcoming, open or closed at the
+request's instant — is computed once, in a subquery, that both the `?status=` filter and the
+item read. The table is the operator's handful of rows, ordered by `(starts_at, id)`, with no index
+beyond its primary key. `tests/announcement_entries.rs` holds the bounds of each status, the
+filter, the pages, and that the open ones are the active ones.
+
 **The catalog (038).** The business routes page the registry live: `pool.rs` reads a page of
 addresses per scope, then their entries whole — the tokens' metadata, `pool_current_state`
 and `pool_current_tvl` joined on those rows only, the view otherwise valuing every pool

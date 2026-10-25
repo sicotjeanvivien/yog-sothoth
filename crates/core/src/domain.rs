@@ -44,7 +44,10 @@ pub use analytic::{
     FREEZE_MARGIN, FrozenHours, FrozenPeriod, MAX_HOURS_PER_CYCLE, ProtocolBucket, QUOTED_MINTS,
     TRANCHE, Window,
 };
-pub use announcements::{Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity};
+pub use announcements::{
+    Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementKind, AnnouncementLookup,
+    AnnouncementSeverity, AnnouncementStatus,
+};
 pub use discovered_tvl::{DiscoveredTvl, DiscoveredTvlLookup, ProtocolDiscoveredTvl};
 pub use domain_event::DomainEvent;
 pub use event_cursor::{EventCursor, EventScope};

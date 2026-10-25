@@ -12,6 +12,7 @@ mod analytic_liquidity;
 mod analytic_prices;
 mod analytic_rebuild;
 mod analytic_writer;
+mod announcement_entries;
 mod archive_role;
 mod cagg_materialization;
 mod cagg_retention;

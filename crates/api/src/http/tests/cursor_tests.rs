@@ -7,8 +7,8 @@ use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 
 use super::{
-    EventCollection, decode_event_cursor, decode_liquidity_move_cursor, decode_signal_cursor,
-    encode_cursor, encode_cursor_opt,
+    EventCollection, decode_announcement_cursor, decode_event_cursor, decode_liquidity_move_cursor,
+    decode_signal_cursor, encode_cursor, encode_cursor_opt,
 };
 use crate::http::error::ApiError;
 use yog_core::{
@@ -174,4 +174,25 @@ fn event_cursor_round_trip() {
 
         assert_eq!(decoded, cursor, "{collection:?}");
     }
+}
+
+/// Mutation: the status of the cursor dropped or not compared — a page of another status
+/// followed, or the key read back as another.
+#[test]
+fn announcement_cursor_round_trip_and_status() {
+    use yog_core::domain::{AnnouncementCursor, AnnouncementStatus};
+    let cursor = AnnouncementCursor {
+        status: Some(AnnouncementStatus::Open),
+        starts_at: ts(1_700_000_000),
+        id: 42,
+    };
+
+    let encoded = encode_cursor(&Cursor::Announcement(Box::new(cursor.clone()))).unwrap();
+
+    assert_eq!(
+        decode_announcement_cursor(&encoded, Some(AnnouncementStatus::Open)).unwrap(),
+        cursor
+    );
+    assert!(decode_announcement_cursor(&encoded, None).is_err());
+    assert!(decode_announcement_cursor(&encoded, Some(AnnouncementStatus::Closed)).is_err());
 }

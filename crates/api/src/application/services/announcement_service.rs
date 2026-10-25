@@ -5,8 +5,10 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use yog_core::{
-    RepositoryError,
-    domain::{Announcement, AnnouncementLookup},
+    Page, RepositoryError,
+    domain::{
+        Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementLookup, AnnouncementStatus,
+    },
 };
 
 pub(crate) struct AnnouncementService {
@@ -21,6 +23,18 @@ impl AnnouncementService {
     /// The announcements in their display window, most severe then most recent.
     pub(crate) async fn list_active(&self) -> Result<Vec<Announcement>, RepositoryError> {
         self.announcement_repo.list_active(Utc::now()).await
+    }
+
+    /// A page of every announcement, or of those of `status`, read against the request clock.
+    pub(crate) async fn list_entries(
+        &self,
+        status: Option<AnnouncementStatus>,
+        cursor: Option<AnnouncementCursor>,
+        limit: i64,
+    ) -> Result<Page<AnnouncementEntry>, RepositoryError> {
+        self.announcement_repo
+            .list_entries(status, Utc::now(), cursor, limit)
+            .await
     }
 }
 

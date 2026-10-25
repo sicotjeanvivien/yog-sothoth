@@ -35,7 +35,7 @@ mod token_activity;
 mod window;
 mod windowed_page;
 
-pub(crate) use announcement::AnnouncementResponse;
+pub(crate) use announcement::{AnnouncementEntryResponse, AnnouncementResponse};
 pub(crate) use ingestion::IngestionResponse;
 pub(crate) use liquidity_change_event::LiquidityChangeEventResponse;
 pub(crate) use network::NetworkResponse;
