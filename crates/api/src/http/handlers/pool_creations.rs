@@ -11,7 +11,7 @@ use crate::http::{
     AppState,
     dto::{
         PoolCreationBarResponse, PoolCreationsResponse, WindowedResponse,
-        request::{WindowQuery, parse_protocol},
+        request::{WindowParams, parse_protocol},
     },
     error::ApiError,
 };
@@ -19,7 +19,7 @@ use crate::http::{
 #[utoipa::path(
     get,
     path = "/api/pool-creations/totals",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "Each protocol's pools created over the window.",
@@ -28,15 +28,15 @@ use crate::http::{
 )]
 pub(crate) async fn get_pool_creation_totals(
     State(state): State<AppState>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<PoolCreationsResponse>>, ApiError> {
-    totals(&state, query, None).await
+    totals(&state, params, None).await
 }
 
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/pool-creations/totals",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "The protocol's pools created over the window.",
@@ -46,18 +46,18 @@ pub(crate) async fn get_pool_creation_totals(
 pub(crate) async fn get_protocol_pool_creation_totals(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<PoolCreationsResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
-    totals(&state, query, Some(protocol)).await
+    totals(&state, params, Some(protocol)).await
 }
 
 async fn totals(
     state: &AppState,
-    query: WindowQuery,
+    params: WindowParams,
     protocol: Option<Protocol>,
 ) -> Result<Json<WindowedResponse<PoolCreationsResponse>>, ApiError> {
-    let window = query.window.into();
+    let window = params.window.into();
     let measured = state
         .measure_service
         .pool_creation_totals(window, protocol)
@@ -68,7 +68,7 @@ async fn totals(
 #[utoipa::path(
     get,
     path = "/api/pool-creations/hourly",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "Each protocol's pools created, hour by hour.",
@@ -77,15 +77,15 @@ async fn totals(
 )]
 pub(crate) async fn get_pool_creations_hourly(
     State(state): State<AppState>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<PoolCreationBarResponse>>, ApiError> {
-    bars(&state, query, Cut::Hourly, None).await
+    bars(&state, params, Cut::Hourly, None).await
 }
 
 #[utoipa::path(
     get,
     path = "/api/pool-creations/daily",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "Each protocol's pools created, by 24 hours ending at `asOf`.",
@@ -94,15 +94,15 @@ pub(crate) async fn get_pool_creations_hourly(
 )]
 pub(crate) async fn get_pool_creations_daily(
     State(state): State<AppState>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<PoolCreationBarResponse>>, ApiError> {
-    bars(&state, query, Cut::Daily, None).await
+    bars(&state, params, Cut::Daily, None).await
 }
 
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/pool-creations/hourly",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "The protocol's pools created, hour by hour.",
@@ -112,16 +112,16 @@ pub(crate) async fn get_pool_creations_daily(
 pub(crate) async fn get_protocol_pool_creations_hourly(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<PoolCreationBarResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
-    bars(&state, query, Cut::Hourly, Some(protocol)).await
+    bars(&state, params, Cut::Hourly, Some(protocol)).await
 }
 
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/pool-creations/daily",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "The protocol's pools created, by 24 hours ending at `asOf`.",
@@ -131,19 +131,19 @@ pub(crate) async fn get_protocol_pool_creations_hourly(
 pub(crate) async fn get_protocol_pool_creations_daily(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<PoolCreationBarResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
-    bars(&state, query, Cut::Daily, Some(protocol)).await
+    bars(&state, params, Cut::Daily, Some(protocol)).await
 }
 
 async fn bars(
     state: &AppState,
-    query: WindowQuery,
+    params: WindowParams,
     cut: Cut,
     protocol: Option<Protocol>,
 ) -> Result<Json<WindowedResponse<PoolCreationBarResponse>>, ApiError> {
-    let window = query.window.into();
+    let window = params.window.into();
     let measured = state
         .measure_service
         .pool_creation_bars(window, cut, protocol)

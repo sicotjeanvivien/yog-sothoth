@@ -7,17 +7,17 @@ use yog_core::{PageDirection, PagePosition};
 use crate::application::SignalListParams;
 use crate::http::{cursor::decode_signal_cursor, error::ApiError};
 
-mod entity_signals_query;
+mod entity_signals_params;
 mod page_direction_param;
 mod page_position_param;
 mod severity_param;
-mod signals_query;
+mod signals_params;
 
-pub(crate) use entity_signals_query::EntitySignalsQuery;
+pub(crate) use entity_signals_params::EntitySignalsParams;
 use page_direction_param::PageDirectionParam;
 use page_position_param::PagePositionParam;
 use severity_param::SeverityParam;
-pub(crate) use signals_query::SignalsQuery;
+pub(crate) use signals_params::SignalsParams;
 
 #[derive(Debug)]
 pub(crate) struct ListSignalsRequest {
@@ -31,10 +31,10 @@ pub(crate) struct ListSignalsRequest {
 }
 
 impl ListSignalsRequest {
-    pub(crate) fn parse(query: SignalsQuery) -> Result<Self, ApiError> {
-        super::validate_limit(query.limit)?;
+    pub(crate) fn parse(params: SignalsParams) -> Result<Self, ApiError> {
+        super::validate_limit(params.limit)?;
 
-        let pool = query
+        let pool = params
             .pool
             .as_deref()
             .map(|raw| {
@@ -42,35 +42,35 @@ impl ListSignalsRequest {
             })
             .transpose()?;
 
-        let cursor = parse_cursor(query.cursor.as_deref(), query.position.is_some())?;
+        let cursor = parse_cursor(params.cursor.as_deref(), params.position.is_some())?;
 
         Ok(Self {
-            severity: query.severity.map(Into::into),
+            severity: params.severity.map(Into::into),
             protocol: None,
             pool,
             cursor,
-            direction: query.dir.into(),
-            position: query.position.map(Into::into),
-            limit: query.limit,
+            direction: params.dir.into(),
+            position: params.position.map(Into::into),
+            limit: params.limit,
         })
     }
 
     /// The signals of one protocol, or of one pool, the entity of the path.
     pub(crate) fn parse_for_entity(
-        query: EntitySignalsQuery,
+        params: EntitySignalsParams,
         protocol: Option<Protocol>,
         pool: Option<Pubkey>,
     ) -> Result<Self, ApiError> {
-        super::validate_limit(query.limit)?;
-        let cursor = parse_cursor(query.cursor.as_deref(), query.position.is_some())?;
+        super::validate_limit(params.limit)?;
+        let cursor = parse_cursor(params.cursor.as_deref(), params.position.is_some())?;
         Ok(Self {
-            severity: query.severity.map(Into::into),
+            severity: params.severity.map(Into::into),
             protocol,
             pool,
             cursor,
-            direction: query.dir.into(),
-            position: query.position.map(Into::into),
-            limit: query.limit,
+            direction: params.dir.into(),
+            position: params.position.map(Into::into),
+            limit: params.limit,
         })
     }
 

@@ -10,7 +10,7 @@ use crate::http::{
     AppState,
     dto::{
         ProtocolTvlResponse, ReadingResponse, WindowedResponse,
-        request::{WindowQuery, parse_protocol},
+        request::{WindowParams, parse_protocol},
     },
     error::ApiError,
 };
@@ -58,7 +58,7 @@ async fn latest(
 #[utoipa::path(
     get,
     path = "/api/tvl/hourly",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "Each protocol's TVL reading of every hour measured, from the window's start.",
@@ -67,15 +67,15 @@ async fn latest(
 )]
 pub(crate) async fn get_tvl_hourly(
     State(state): State<AppState>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolTvlResponse>>, ApiError> {
-    hourly(&state, query, None).await
+    hourly(&state, params, None).await
 }
 
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/tvl/hourly",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "The protocol's TVL reading of every hour measured, from the window's start.",
@@ -85,18 +85,18 @@ pub(crate) async fn get_tvl_hourly(
 pub(crate) async fn get_protocol_tvl_readings_hourly(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolTvlResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
-    hourly(&state, query, Some(protocol)).await
+    hourly(&state, params, Some(protocol)).await
 }
 
 async fn hourly(
     state: &AppState,
-    query: WindowQuery,
+    params: WindowParams,
     protocol: Option<Protocol>,
 ) -> Result<Json<WindowedResponse<ProtocolTvlResponse>>, ApiError> {
-    let window = query.window.into();
+    let window = params.window.into();
     let measured = state.measure_service.tvl_hourly(window, protocol).await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }

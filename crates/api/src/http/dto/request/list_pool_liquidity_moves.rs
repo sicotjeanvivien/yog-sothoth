@@ -13,7 +13,7 @@ use liquidity_move_order_param::LiquidityMoveOrderParam;
 
 /// A window, the order, and forward-only cursor pagination.
 #[derive(Debug, Deserialize, IntoParams)]
-pub(crate) struct PoolLiquidityMovesQuery {
+pub(crate) struct PoolLiquidityMovesParams {
     #[serde(default)]
     #[param(inline)]
     window: WindowParam,
@@ -36,10 +36,10 @@ pub(crate) struct ListPoolLiquidityMovesRequest {
 }
 
 impl ListPoolLiquidityMovesRequest {
-    pub(crate) fn parse(query: PoolLiquidityMovesQuery) -> Result<Self, ApiError> {
-        super::validate_limit(query.limit)?;
-        let order = query.sort.into();
-        let cursor = query
+    pub(crate) fn parse(params: PoolLiquidityMovesParams) -> Result<Self, ApiError> {
+        super::validate_limit(params.limit)?;
+        let order = params.sort.into();
+        let cursor = params
             .cursor
             .as_deref()
             .map(|raw| {
@@ -48,10 +48,10 @@ impl ListPoolLiquidityMovesRequest {
             })
             .transpose()?;
         Ok(Self {
-            window: query.window.into(),
+            window: params.window.into(),
             order,
             cursor,
-            limit: query.limit,
+            limit: params.limit,
         })
     }
 }

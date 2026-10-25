@@ -11,7 +11,7 @@ use crate::http::{
     AppState,
     dto::{
         TokenActivityPageResponse, TokenResponse,
-        request::{GetTokenRequest, ListTokenActivityRequest, TokenActivityQuery},
+        request::{GetTokenRequest, ListTokenActivityRequest, TokenActivityParams},
     },
     error::ApiError,
 };
@@ -19,7 +19,7 @@ use crate::http::{
 #[utoipa::path(
     get,
     path = "/api/tokens/activity",
-    params(TokenActivityQuery),
+    params(TokenActivityParams),
     responses((
         status = 200,
         description = "A page of tokens, the most traded first.",
@@ -28,17 +28,17 @@ use crate::http::{
 )]
 pub(crate) async fn list_token_activity(
     State(state): State<AppState>,
-    Query(query): Query<TokenActivityQuery>,
+    Query(params): Query<TokenActivityParams>,
 ) -> Result<Json<TokenActivityPageResponse>, ApiError> {
-    token_ranking(&state, query).await
+    token_ranking(&state, params).await
 }
 
 /// The ranking of the tokens by volume, every protocol summed.
 pub(super) async fn token_ranking(
     state: &AppState,
-    query: TokenActivityQuery,
+    params: TokenActivityParams,
 ) -> Result<Json<TokenActivityPageResponse>, ApiError> {
-    let request = ListTokenActivityRequest::parse(query)?;
+    let request = ListTokenActivityRequest::parse(params)?;
     match state
         .activity_service
         .token_activity(request.window, request.cursor, request.limit)

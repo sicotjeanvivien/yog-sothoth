@@ -13,7 +13,7 @@ use crate::http::{
         LiquidityMoveResponse, ProtocolLiquidityMoveBarResponse,
         ProtocolLiquidityMoveTotalsResponse, WindowedPageResponse, WindowedResponse,
         request::{
-            ListPoolLiquidityMovesRequest, PoolLiquidityMovesQuery, WindowQuery, parse_protocol,
+            ListPoolLiquidityMovesRequest, PoolLiquidityMovesParams, WindowParams, parse_protocol,
         },
     },
     error::ApiError,
@@ -22,7 +22,7 @@ use crate::http::{
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/liquidity-moves/totals",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "The protocol's liquidity created, added and removed over the window; \
@@ -33,10 +33,10 @@ use crate::http::{
 pub(crate) async fn get_protocol_liquidity_move_totals(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolLiquidityMoveTotalsResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
-    let window = query.window.into();
+    let window = params.window.into();
     let measured = state
         .measure_service
         .liquidity_totals(window, protocol)
@@ -55,7 +55,7 @@ pub(crate) async fn get_protocol_liquidity_move_totals(
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/liquidity-moves/hourly",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "The protocol's liquidity created, added and removed, hour by hour.",
@@ -65,15 +65,15 @@ pub(crate) async fn get_protocol_liquidity_move_totals(
 pub(crate) async fn get_protocol_liquidity_moves_hourly(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolLiquidityMoveBarResponse>>, ApiError> {
-    bars(&state, &protocol, query, Cut::Hourly).await
+    bars(&state, &protocol, params, Cut::Hourly).await
 }
 
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/liquidity-moves/daily",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "The protocol's liquidity created, added and removed, by 24 hours \
@@ -84,19 +84,19 @@ pub(crate) async fn get_protocol_liquidity_moves_hourly(
 pub(crate) async fn get_protocol_liquidity_moves_daily(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolLiquidityMoveBarResponse>>, ApiError> {
-    bars(&state, &protocol, query, Cut::Daily).await
+    bars(&state, &protocol, params, Cut::Daily).await
 }
 
 async fn bars(
     state: &AppState,
     protocol: &str,
-    query: WindowQuery,
+    params: WindowParams,
     cut: Cut,
 ) -> Result<Json<WindowedResponse<ProtocolLiquidityMoveBarResponse>>, ApiError> {
     let protocol = parse_protocol(protocol)?;
-    let window = query.window.into();
+    let window = params.window.into();
     let measured = state
         .measure_service
         .liquidity_bars(window, cut, protocol)
@@ -107,7 +107,7 @@ async fn bars(
 #[utoipa::path(
     get,
     path = "/api/pools/{pool}/liquidity-moves",
-    params(PoolLiquidityMovesQuery),
+    params(PoolLiquidityMovesParams),
     responses((
         status = 200,
         description = "A page of the pool's valued liquidity moves, in the order asked; \
@@ -118,9 +118,9 @@ async fn bars(
 pub(crate) async fn list_pool_liquidity_moves(
     State(state): State<AppState>,
     Path(pool): Path<String>,
-    Query(query): Query<PoolLiquidityMovesQuery>,
+    Query(params): Query<PoolLiquidityMovesParams>,
 ) -> Result<Json<WindowedPageResponse<LiquidityMoveResponse>>, ApiError> {
-    let request = ListPoolLiquidityMovesRequest::parse(query)?;
+    let request = ListPoolLiquidityMovesRequest::parse(params)?;
     let pool = super::known_pool(&state, &pool).await?;
     match state
         .measure_service

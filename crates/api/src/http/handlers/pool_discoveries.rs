@@ -11,7 +11,7 @@ use crate::http::{
     AppState,
     dto::{
         PoolDiscoveriesResponse, WindowedResponse,
-        request::{WindowQuery, parse_protocol},
+        request::{WindowParams, parse_protocol},
     },
     error::ApiError,
 };
@@ -19,7 +19,7 @@ use crate::http::{
 #[utoipa::path(
     get,
     path = "/api/pool-discoveries/totals",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "Each protocol's pools discovered in the window, and what they hold.",
@@ -28,15 +28,15 @@ use crate::http::{
 )]
 pub(crate) async fn get_pool_discovery_totals(
     State(state): State<AppState>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<PoolDiscoveriesResponse>>, ApiError> {
-    totals(&state, query, None).await
+    totals(&state, params, None).await
 }
 
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/pool-discoveries/totals",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "The protocol's pools discovered in the window, and what they hold.",
@@ -46,18 +46,18 @@ pub(crate) async fn get_pool_discovery_totals(
 pub(crate) async fn get_protocol_pool_discovery_totals(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<PoolDiscoveriesResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
-    totals(&state, query, Some(protocol)).await
+    totals(&state, params, Some(protocol)).await
 }
 
 async fn totals(
     state: &AppState,
-    query: WindowQuery,
+    params: WindowParams,
     protocol: Option<Protocol>,
 ) -> Result<Json<WindowedResponse<PoolDiscoveriesResponse>>, ApiError> {
-    let window = query.window.into();
+    let window = params.window.into();
     let measured = state
         .measure_service
         .pool_discoveries(window, protocol)

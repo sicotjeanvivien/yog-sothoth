@@ -18,13 +18,13 @@ mod list_token_activity;
 mod window_param;
 
 pub(crate) use get_token::GetTokenRequest;
-pub(crate) use list_liquidity_moves::{LiquidityMovesQuery, ListLiquidityMovesRequest};
+pub(crate) use list_liquidity_moves::{LiquidityMovesParams, ListLiquidityMovesRequest};
 pub(crate) use list_pool_liquidity_moves::{
-    ListPoolLiquidityMovesRequest, PoolLiquidityMovesQuery,
+    ListPoolLiquidityMovesRequest, PoolLiquidityMovesParams,
 };
-pub(crate) use list_signals::{EntitySignalsQuery, ListSignalsRequest, SignalsQuery};
-pub(crate) use list_token_activity::{ListTokenActivityRequest, TokenActivityQuery};
-pub(crate) use window_param::{ActivityQuery, WindowQuery};
+pub(crate) use list_signals::{EntitySignalsParams, ListSignalsRequest, SignalsParams};
+pub(crate) use list_token_activity::{ListTokenActivityRequest, TokenActivityParams};
+pub(crate) use window_param::{ActivityParams, WindowParams};
 
 const DEFAULT_LIMIT: i64 = 50;
 pub(crate) const MAX_LIMIT: i64 = 200;

@@ -7,7 +7,7 @@ use crate::http::{
     dto::{
         PoolSwapBarResponse, ProtocolSwapBarResponse, ProtocolSwapTotalsResponse, SwapSumsResponse,
         TokenActivityPageResponse, WindowedResponse,
-        request::{ActivityQuery, TokenActivityQuery, WindowQuery, parse_protocol},
+        request::{ActivityParams, TokenActivityParams, WindowParams, parse_protocol},
     },
     error::ApiError,
 };
@@ -19,7 +19,7 @@ use axum::{
 #[utoipa::path(
     get,
     path = "/api/swaps/totals",
-    params(ActivityQuery),
+    params(ActivityParams),
     responses((
         status = 200,
         description = "Each protocol's swaps over the window.",
@@ -28,15 +28,15 @@ use axum::{
 )]
 pub(crate) async fn get_swap_totals(
     State(state): State<AppState>,
-    Query(query): Query<ActivityQuery>,
+    Query(params): Query<ActivityParams>,
 ) -> Result<Json<WindowedResponse<ProtocolSwapTotalsResponse>>, ApiError> {
-    swap_totals(&state, query, None).await
+    swap_totals(&state, params, None).await
 }
 
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/swaps/totals",
-    params(ActivityQuery),
+    params(ActivityParams),
     responses((
         status = 200,
         description = "The protocol's swaps over the window.",
@@ -46,21 +46,21 @@ pub(crate) async fn get_swap_totals(
 pub(crate) async fn get_protocol_swap_totals(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(query): Query<ActivityQuery>,
+    Query(params): Query<ActivityParams>,
 ) -> Result<Json<WindowedResponse<ProtocolSwapTotalsResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
-    swap_totals(&state, query, Some(protocol)).await
+    swap_totals(&state, params, Some(protocol)).await
 }
 
 async fn swap_totals(
     state: &AppState,
-    query: ActivityQuery,
+    params: ActivityParams,
     protocol: Option<yog_core::domain::Protocol>,
 ) -> Result<Json<WindowedResponse<ProtocolSwapTotalsResponse>>, ApiError> {
-    let window = query.window.into();
+    let window = params.window.into();
     let measured = state
         .measure_service
-        .swap_totals(window, query.offset.map(Into::into), protocol)
+        .swap_totals(window, params.offset.map(Into::into), protocol)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }
@@ -68,7 +68,7 @@ async fn swap_totals(
 #[utoipa::path(
     get,
     path = "/api/swaps/hourly",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "Each protocol's swaps, hour by hour.",
@@ -77,15 +77,15 @@ async fn swap_totals(
 )]
 pub(crate) async fn get_swaps_hourly(
     State(state): State<AppState>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolSwapBarResponse>>, ApiError> {
-    swap_bars(&state, query, Cut::Hourly, None).await
+    swap_bars(&state, params, Cut::Hourly, None).await
 }
 
 #[utoipa::path(
     get,
     path = "/api/swaps/daily",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "Each protocol's swaps, by 24 hours ending at `asOf`.",
@@ -94,15 +94,15 @@ pub(crate) async fn get_swaps_hourly(
 )]
 pub(crate) async fn get_swaps_daily(
     State(state): State<AppState>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolSwapBarResponse>>, ApiError> {
-    swap_bars(&state, query, Cut::Daily, None).await
+    swap_bars(&state, params, Cut::Daily, None).await
 }
 
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/swaps/hourly",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "The protocol's swaps, hour by hour.",
@@ -112,16 +112,16 @@ pub(crate) async fn get_swaps_daily(
 pub(crate) async fn get_protocol_swaps_hourly(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolSwapBarResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
-    swap_bars(&state, query, Cut::Hourly, Some(protocol)).await
+    swap_bars(&state, params, Cut::Hourly, Some(protocol)).await
 }
 
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/swaps/daily",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "The protocol's swaps, by 24 hours ending at `asOf`.",
@@ -131,19 +131,19 @@ pub(crate) async fn get_protocol_swaps_hourly(
 pub(crate) async fn get_protocol_swaps_daily(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolSwapBarResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
-    swap_bars(&state, query, Cut::Daily, Some(protocol)).await
+    swap_bars(&state, params, Cut::Daily, Some(protocol)).await
 }
 
 async fn swap_bars(
     state: &AppState,
-    query: WindowQuery,
+    params: WindowParams,
     cut: Cut,
     protocol: Option<yog_core::domain::Protocol>,
 ) -> Result<Json<WindowedResponse<ProtocolSwapBarResponse>>, ApiError> {
-    let window = query.window.into();
+    let window = params.window.into();
     let measured = state
         .measure_service
         .swap_bars(window, cut, protocol)
@@ -154,7 +154,7 @@ async fn swap_bars(
 #[utoipa::path(
     get,
     path = "/api/pools/{pool}/swaps/totals",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "The pool's swaps over the window; no row when it did not swap.",
@@ -164,10 +164,10 @@ async fn swap_bars(
 pub(crate) async fn get_pool_swap_totals(
     State(state): State<AppState>,
     Path(pool): Path<String>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<SwapSumsResponse>>, ApiError> {
     let pool = super::known_pool(&state, &pool).await?;
-    let window = query.window.into();
+    let window = params.window.into();
     let measured = state
         .measure_service
         .pool_swap_totals(window, pool.pool_address)
@@ -178,7 +178,7 @@ pub(crate) async fn get_pool_swap_totals(
 #[utoipa::path(
     get,
     path = "/api/pools/{pool}/swaps/hourly",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "The pool's swaps, hour by hour.",
@@ -188,15 +188,15 @@ pub(crate) async fn get_pool_swap_totals(
 pub(crate) async fn get_pool_swaps_hourly(
     State(state): State<AppState>,
     Path(pool): Path<String>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<PoolSwapBarResponse>>, ApiError> {
-    pool_swap_bars(&state, &pool, query, Cut::Hourly).await
+    pool_swap_bars(&state, &pool, params, Cut::Hourly).await
 }
 
 #[utoipa::path(
     get,
     path = "/api/pools/{pool}/swaps/daily",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "The pool's swaps, by 24 hours ending at `asOf`.",
@@ -206,19 +206,19 @@ pub(crate) async fn get_pool_swaps_hourly(
 pub(crate) async fn get_pool_swaps_daily(
     State(state): State<AppState>,
     Path(pool): Path<String>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<PoolSwapBarResponse>>, ApiError> {
-    pool_swap_bars(&state, &pool, query, Cut::Daily).await
+    pool_swap_bars(&state, &pool, params, Cut::Daily).await
 }
 
 async fn pool_swap_bars(
     state: &AppState,
     pool: &str,
-    query: WindowQuery,
+    params: WindowParams,
     cut: Cut,
 ) -> Result<Json<WindowedResponse<PoolSwapBarResponse>>, ApiError> {
     let pool = super::known_pool(state, pool).await?;
-    let window = query.window.into();
+    let window = params.window.into();
     let measured = state
         .measure_service
         .pool_swap_bars(window, cut, pool.pool_address)
@@ -229,7 +229,7 @@ async fn pool_swap_bars(
 #[utoipa::path(
     get,
     path = "/api/swaps/by-token",
-    params(TokenActivityQuery),
+    params(TokenActivityParams),
     responses((
         status = 200,
         description = "A page of tokens, the most traded first, every protocol summed.",
@@ -238,9 +238,9 @@ async fn pool_swap_bars(
 )]
 pub(crate) async fn list_swaps_by_token(
     State(state): State<AppState>,
-    Query(query): Query<TokenActivityQuery>,
+    Query(params): Query<TokenActivityParams>,
 ) -> Result<Json<TokenActivityPageResponse>, ApiError> {
-    super::token::token_ranking(&state, query).await
+    super::token::token_ranking(&state, params).await
 }
 
 #[cfg(test)]

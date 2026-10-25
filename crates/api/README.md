@@ -77,7 +77,7 @@ with no wildcard arm, so adding a variant breaks the build there.
   protocol prefix when its response has none.
   `every_schema_is_a_response_or_a_wire_form` fails on a schema of the
   contract named otherwise. On the request side, `*Request` is what a route
-  takes once validated, `*Query` the raw query string it parses, `*Param` an
+  takes once validated, `*Params` the raw query string it parses, `*Param` an
   enum of that query, named like the domain type it translates
   (`domain::Severity` → `SeverityParam`).
 - **Place.** One type per file. At the top level, what a route returns — its
@@ -92,7 +92,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 - **Visibility.** Each item and field declares the reach it has. A field is
   private unless something outside its file builds or reads it — the handlers
   build `PageResponse` and the readiness types, `ListSignalsRequest::parse`
-  reads `SignalsQuery`. `pub(super)` is for what only its folder and that
+  reads `SignalsParams`. `pub(super)` is for what only its folder and that
   folder's tests use, `pub(in crate::http::dto::response)` for a part other
   responses reach, `pub(crate)` for what the handlers see.
 - **Conversions** live with the type they build, and a behaviour two DTOs

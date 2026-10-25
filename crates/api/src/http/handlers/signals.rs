@@ -21,7 +21,7 @@ use crate::http::{
     dto::{
         PageResponse, SignalResponse,
         request::{
-            EntitySignalsQuery, ListSignalsRequest, SignalsQuery, parse_pool, parse_protocol,
+            EntitySignalsParams, ListSignalsRequest, SignalsParams, parse_pool, parse_protocol,
         },
     },
     error::ApiError,
@@ -30,7 +30,7 @@ use crate::http::{
 #[utoipa::path(
     get,
     path = "/api/signals",
-    params(SignalsQuery),
+    params(SignalsParams),
     responses((
         status = 200,
         description = "A page of signals.",
@@ -39,15 +39,15 @@ use crate::http::{
 )]
 pub(crate) async fn list_signals(
     State(state): State<AppState>,
-    Query(query): Query<SignalsQuery>,
+    Query(params): Query<SignalsParams>,
 ) -> Result<Json<PageResponse<SignalResponse>>, ApiError> {
-    signal_page(&state, ListSignalsRequest::parse(query)?).await
+    signal_page(&state, ListSignalsRequest::parse(params)?).await
 }
 
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/signals",
-    params(EntitySignalsQuery),
+    params(EntitySignalsParams),
     responses((
         status = 200,
         description = "A page of the protocol's signals.",
@@ -57,17 +57,17 @@ pub(crate) async fn list_signals(
 pub(crate) async fn list_protocol_signals(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(query): Query<EntitySignalsQuery>,
+    Query(params): Query<EntitySignalsParams>,
 ) -> Result<Json<PageResponse<SignalResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
-    let request = ListSignalsRequest::parse_for_entity(query, Some(protocol), None)?;
+    let request = ListSignalsRequest::parse_for_entity(params, Some(protocol), None)?;
     signal_page(&state, request).await
 }
 
 #[utoipa::path(
     get,
     path = "/api/pools/{pool}/signals",
-    params(EntitySignalsQuery),
+    params(EntitySignalsParams),
     responses((
         status = 200,
         description = "A page of the pool's signals.",
@@ -77,10 +77,10 @@ pub(crate) async fn list_protocol_signals(
 pub(crate) async fn list_pool_signals(
     State(state): State<AppState>,
     Path(pool): Path<String>,
-    Query(query): Query<EntitySignalsQuery>,
+    Query(params): Query<EntitySignalsParams>,
 ) -> Result<Json<PageResponse<SignalResponse>>, ApiError> {
     let address = parse_pool(&pool)?;
-    let request = ListSignalsRequest::parse_for_entity(query, None, Some(address))?;
+    let request = ListSignalsRequest::parse_for_entity(params, None, Some(address))?;
     super::known_pool(&state, &pool).await?;
     signal_page(&state, request).await
 }

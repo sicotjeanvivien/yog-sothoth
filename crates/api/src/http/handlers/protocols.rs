@@ -11,7 +11,7 @@ use crate::http::{
     dto::{
         LatestTvlResponse, LiquidityMoveResponse, ProtocolActivityBarResponse,
         ProtocolActivityResponse, ProtocolCatalogResponse, ProtocolTvlResponse, WindowedResponse,
-        request::{ActivityQuery, LiquidityMovesQuery, ListLiquidityMovesRequest, WindowQuery},
+        request::{ActivityParams, LiquidityMovesParams, ListLiquidityMovesRequest, WindowParams},
     },
     error::ApiError,
 };
@@ -35,7 +35,7 @@ pub(crate) async fn list_protocols(
 #[utoipa::path(
     get,
     path = "/api/protocols/activity",
-    params(ActivityQuery),
+    params(ActivityParams),
     responses((
         status = 200,
         description = "Each protocol's activity over the window.",
@@ -44,12 +44,12 @@ pub(crate) async fn list_protocols(
 )]
 pub(crate) async fn get_protocol_activity(
     State(state): State<AppState>,
-    Query(query): Query<ActivityQuery>,
+    Query(params): Query<ActivityParams>,
 ) -> Result<Json<WindowedResponse<ProtocolActivityResponse>>, ApiError> {
-    let window = query.window.into();
+    let window = params.window.into();
     let measured = state
         .activity_service
-        .protocol_activity(window, query.offset.map(Into::into))
+        .protocol_activity(window, params.offset.map(Into::into))
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }
@@ -57,7 +57,7 @@ pub(crate) async fn get_protocol_activity(
 #[utoipa::path(
     get,
     path = "/api/protocols/activity/hourly",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "Each protocol's activity, hour by hour.",
@@ -66,9 +66,9 @@ pub(crate) async fn get_protocol_activity(
 )]
 pub(crate) async fn get_protocol_activity_hourly(
     State(state): State<AppState>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolActivityBarResponse>>, ApiError> {
-    let window = query.window.into();
+    let window = params.window.into();
     let measured = state
         .activity_service
         .protocol_activity_hourly(window)
@@ -79,7 +79,7 @@ pub(crate) async fn get_protocol_activity_hourly(
 #[utoipa::path(
     get,
     path = "/api/protocols/activity/daily",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "Each protocol's activity, by 24 hours ending at `asOf`.",
@@ -88,9 +88,9 @@ pub(crate) async fn get_protocol_activity_hourly(
 )]
 pub(crate) async fn get_protocol_activity_daily(
     State(state): State<AppState>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolActivityBarResponse>>, ApiError> {
-    let window = query.window.into();
+    let window = params.window.into();
     let measured = state
         .activity_service
         .protocol_activity_daily(window)
@@ -117,7 +117,7 @@ pub(crate) async fn get_protocol_tvl(
 #[utoipa::path(
     get,
     path = "/api/protocols/tvl/hourly",
-    params(WindowQuery),
+    params(WindowParams),
     responses((
         status = 200,
         description = "Each protocol's TVL at the close of every hour, from the window's start.",
@@ -126,9 +126,9 @@ pub(crate) async fn get_protocol_tvl(
 )]
 pub(crate) async fn get_protocol_tvl_hourly(
     State(state): State<AppState>,
-    Query(query): Query<WindowQuery>,
+    Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolTvlResponse>>, ApiError> {
-    let window = query.window.into();
+    let window = params.window.into();
     let measured = state.activity_service.protocol_tvl_hourly(window).await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }
@@ -136,7 +136,7 @@ pub(crate) async fn get_protocol_tvl_hourly(
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/liquidity-moves",
-    params(LiquidityMovesQuery),
+    params(LiquidityMovesParams),
     responses((
         status = 200,
         description = "The protocol's valued liquidity moves over the window, largest first; \
@@ -147,9 +147,9 @@ pub(crate) async fn get_protocol_tvl_hourly(
 pub(crate) async fn list_liquidity_moves(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(query): Query<LiquidityMovesQuery>,
+    Query(params): Query<LiquidityMovesParams>,
 ) -> Result<Json<WindowedResponse<LiquidityMoveResponse>>, ApiError> {
-    let request = ListLiquidityMovesRequest::parse(&protocol, query)?;
+    let request = ListLiquidityMovesRequest::parse(&protocol, params)?;
     let measured = state
         .activity_service
         .liquidity_moves(request.protocol, request.window, request.limit)
