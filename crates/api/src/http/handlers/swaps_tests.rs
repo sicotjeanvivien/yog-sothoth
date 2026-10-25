@@ -175,3 +175,25 @@ async fn an_unknown_pool_has_no_events() {
         assert_eq!(content_type, "application/problem+json", "{uri}");
     }
 }
+
+/// Mutation: no margin past the widest window — a next page read moments after its first,
+/// whose window then started a little more than a day ago, refused.
+#[tokio::test]
+async fn a_next_page_of_the_day_is_served() {
+    use yog_core::{
+        Cursor,
+        domain::{EventCursor, EventScope},
+    };
+    let next = crate::http::cursor::encode_cursor(&Cursor::SwapEvent(Box::new(EventCursor {
+        scope: EventScope::All,
+        from: chrono::Utc::now() - chrono::Duration::hours(24) - chrono::Duration::minutes(1),
+        at: chrono::Utc::now() - chrono::Duration::hours(1),
+        signature: solana_signature::Signature::from([1; 64]),
+        event_index: 0,
+    })))
+    .unwrap();
+
+    let (status, _, detail) = get(&format!("/api/swaps?cursor={next}")).await;
+
+    assert_eq!(status, StatusCode::OK, "{detail}");
+}
