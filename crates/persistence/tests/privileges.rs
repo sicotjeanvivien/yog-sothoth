@@ -358,7 +358,10 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     ("swap_events", &[("yog_api", &["SELECT"])]),
     (
         "token_last_price",
-        &[("yog_context", &["INSERT", "SELECT", "UPDATE"])],
+        &[
+            ("yog_api", &["SELECT"]),
+            ("yog_context", &["INSERT", "SELECT", "UPDATE"]),
+        ],
     ),
     (
         "token_metadata",
