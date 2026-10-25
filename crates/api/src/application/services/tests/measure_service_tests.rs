@@ -1,5 +1,5 @@
-//! Unit tests for `MeasureService`: the span each read covers, the liquidity's own coverage,
-//! and the reads a span not covered never makes.
+//! Unit tests for `MeasureService`: the period each read covers, the liquidity's own coverage,
+//! and the reads a period not covered never makes.
 
 use std::sync::Arc;
 
@@ -40,18 +40,18 @@ async fn a_swap_total_over_hours_the_facts_lack_is_not_read() {
         .unwrap();
 
     assert!(month.items.is_empty());
-    assert_eq!(week.span.unwrap().as_of, at(20, 13));
+    assert_eq!(week.period.unwrap().as_of, at(20, 13));
     assert_eq!(
         *repo.reads.lock().unwrap(),
         vec![(
             "swap_totals",
-            week.span.unwrap(),
+            week.period.unwrap(),
             Some(Protocol::MeteoraDammV2)
         )]
     );
 }
 
-/// Mutation: the liquidity's coverage left at the facts' — a span its liquidity starts inside
+/// Mutation: the liquidity's coverage left at the facts' — a period its liquidity starts inside
 /// summed as whole; or an unmeasured liquidity covered from the facts' first hour.
 #[tokio::test]
 async fn the_liquidity_is_covered_from_its_own_first_hour() {
@@ -72,11 +72,11 @@ async fn the_liquidity_is_covered_from_its_own_first_hour() {
         .await
         .unwrap();
 
-    assert_eq!(day.span.unwrap().covered_since, at(20, 0));
+    assert_eq!(day.period.unwrap().covered_since, at(20, 0));
     assert!(reads(&measured).is_empty(), "{:?}", reads(&measured));
     assert_eq!(
-        not_yet.span.unwrap().covered_since,
-        not_yet.span.unwrap().as_of
+        not_yet.period.unwrap().covered_since,
+        not_yet.period.unwrap().as_of
     );
     assert!(reads(&unmeasured).is_empty());
 }
@@ -124,7 +124,7 @@ async fn the_tvl_reads_the_last_frozen_hour_and_the_series_from_the_windows_star
         instants[1],
         (
             "tvl_hourly",
-            day.span.unwrap().from - Duration::hours(1),
+            day.period.unwrap().from - Duration::hours(1),
             None
         )
     );

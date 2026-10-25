@@ -1,5 +1,5 @@
 //! The produced resources read by scope — every protocol, one protocol, one pool — each over a
-//! span ending at the close of the last frozen hour, as [`ActivityService`] builds it.
+//! period ending at the close of the last frozen hour, as [`ActivityService`] builds it.
 //!
 //! [`ActivityService`]: super::ActivityService
 
@@ -10,11 +10,11 @@ use solana_pubkey::Pubkey;
 use yog_core::{
     Page, RepositoryResult,
     domain::{
-        ByProtocol, LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup, LiquidityMoveOrder,
-        LiquidityMoveSums, Pool, PoolCatalog, PoolCreationCount, PoolCreationLookup,
-        PoolDiscoveries, PoolDiscoveryLookup, PoolSwapBar, Protocol, ProtocolActivityLookup,
-        ProtocolBar, ProtocolSwapTotals, ProtocolTvl, Span, SwapLookup, SwapSums, TvlLookup,
-        Window,
+        ByProtocol, FrozenPeriod, LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup,
+        LiquidityMoveOrder, LiquidityMoveSums, Pool, PoolCatalog, PoolCreationCount,
+        PoolCreationLookup, PoolDiscoveries, PoolDiscoveryLookup, PoolSwapBar, Protocol,
+        ProtocolActivityLookup, ProtocolBar, ProtocolSwapTotals, ProtocolTvl, SwapLookup, SwapSums,
+        TvlLookup, Window,
     },
 };
 
@@ -22,7 +22,7 @@ use super::Measured;
 
 /// The lenses [`MeasureService`] reads.
 pub(crate) struct MeasureLenses {
-    /// Only for the frozen hours every span is built from.
+    /// Only for the frozen hours every period is built from.
     pub(crate) hours: Arc<dyn ProtocolActivityLookup>,
     pub(crate) swaps: Arc<dyn SwapLookup>,
     pub(crate) pool_creations: Arc<dyn PoolCreationLookup>,
@@ -56,13 +56,17 @@ impl MeasureService {
         Self { lenses }
     }
 
-    async fn span(&self, window: Window, offset: Option<Window>) -> RepositoryResult<Option<Span>> {
+    async fn period(
+        &self,
+        window: Window,
+        offset: Option<Window>,
+    ) -> RepositoryResult<Option<FrozenPeriod>> {
         Ok(self
             .lenses
             .hours
             .frozen_hours()
             .await?
-            .map(|hours| Span::of(hours, window, offset)))
+            .map(|hours| FrozenPeriod::of(hours, window, offset)))
     }
 
     /// The pool at `address`, `None` when the catalog does not know it.
@@ -76,24 +80,24 @@ impl MeasureService {
             .find(|pool| pool.pool_address == address))
     }
 
-    /// Totals: nothing for a span the facts do not cover whole.
+    /// Totals: nothing for a period the facts do not cover whole.
     pub(crate) async fn swap_totals(
         &self,
         window: Window,
         offset: Option<Window>,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Measured<Vec<ProtocolSwapTotals>>> {
-        let span = self.span(window, offset).await?;
-        let items = match &span {
-            Some(span) if span.is_covered() => {
+        let period = self.period(window, offset).await?;
+        let items = match &period {
+            Some(period) if period.is_covered() => {
                 self.lenses
                     .swaps
-                    .protocol_totals(span, window, protocol)
+                    .protocol_totals(period, window, protocol)
                     .await?
             }
             _ => Vec::new(),
         };
-        Ok(Measured { span, items })
+        Ok(Measured { period, items })
     }
 
     pub(crate) async fn swap_bars(
@@ -102,13 +106,17 @@ impl MeasureService {
         cut: Cut,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Measured<Vec<ProtocolBar<SwapSums>>>> {
-        let span = self.span(window, None).await?;
-        let items = match (&span, cut) {
-            (Some(span), Cut::Hourly) => self.lenses.swaps.protocol_hourly(span, protocol).await?,
-            (Some(span), Cut::Daily) => self.lenses.swaps.protocol_daily(span, protocol).await?,
+        let period = self.period(window, None).await?;
+        let items = match (&period, cut) {
+            (Some(period), Cut::Hourly) => {
+                self.lenses.swaps.protocol_hourly(period, protocol).await?
+            }
+            (Some(period), Cut::Daily) => {
+                self.lenses.swaps.protocol_daily(period, protocol).await?
+            }
             (None, _) => Vec::new(),
         };
-        Ok(Measured { span, items })
+        Ok(Measured { period, items })
     }
 
     pub(crate) async fn pool_swap_totals(
@@ -116,18 +124,18 @@ impl MeasureService {
         window: Window,
         pool: Pubkey,
     ) -> RepositoryResult<Measured<Vec<SwapSums>>> {
-        let span = self.span(window, None).await?;
-        let items = match &span {
-            Some(span) if span.is_covered() => self
+        let period = self.period(window, None).await?;
+        let items = match &period {
+            Some(period) if period.is_covered() => self
                 .lenses
                 .swaps
-                .pool_totals(span, pool)
+                .pool_totals(period, pool)
                 .await?
                 .into_iter()
                 .collect(),
             _ => Vec::new(),
         };
-        Ok(Measured { span, items })
+        Ok(Measured { period, items })
     }
 
     pub(crate) async fn pool_swap_bars(
@@ -136,13 +144,13 @@ impl MeasureService {
         cut: Cut,
         pool: Pubkey,
     ) -> RepositoryResult<Measured<Vec<PoolSwapBar>>> {
-        let span = self.span(window, None).await?;
-        let items = match (&span, cut) {
-            (Some(span), Cut::Hourly) => self.lenses.swaps.pool_hourly(span, pool).await?,
-            (Some(span), Cut::Daily) => self.lenses.swaps.pool_daily(span, pool).await?,
+        let period = self.period(window, None).await?;
+        let items = match (&period, cut) {
+            (Some(period), Cut::Hourly) => self.lenses.swaps.pool_hourly(period, pool).await?,
+            (Some(period), Cut::Daily) => self.lenses.swaps.pool_daily(period, pool).await?,
             (None, _) => Vec::new(),
         };
-        Ok(Measured { span, items })
+        Ok(Measured { period, items })
     }
 
     pub(crate) async fn pool_creation_totals(
@@ -150,14 +158,14 @@ impl MeasureService {
         window: Window,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Measured<Vec<ByProtocol<PoolCreationCount>>>> {
-        let span = self.span(window, None).await?;
-        let items = match &span {
-            Some(span) if span.is_covered() => {
-                self.lenses.pool_creations.totals(span, protocol).await?
+        let period = self.period(window, None).await?;
+        let items = match &period {
+            Some(period) if period.is_covered() => {
+                self.lenses.pool_creations.totals(period, protocol).await?
             }
             _ => Vec::new(),
         };
-        Ok(Measured { span, items })
+        Ok(Measured { period, items })
     }
 
     pub(crate) async fn pool_creation_bars(
@@ -166,31 +174,35 @@ impl MeasureService {
         cut: Cut,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Measured<Vec<ProtocolBar<PoolCreationCount>>>> {
-        let span = self.span(window, None).await?;
-        let items = match (&span, cut) {
-            (Some(span), Cut::Hourly) => self.lenses.pool_creations.hourly(span, protocol).await?,
-            (Some(span), Cut::Daily) => self.lenses.pool_creations.daily(span, protocol).await?,
+        let period = self.period(window, None).await?;
+        let items = match (&period, cut) {
+            (Some(period), Cut::Hourly) => {
+                self.lenses.pool_creations.hourly(period, protocol).await?
+            }
+            (Some(period), Cut::Daily) => {
+                self.lenses.pool_creations.daily(period, protocol).await?
+            }
             (None, _) => Vec::new(),
         };
-        Ok(Measured { span, items })
+        Ok(Measured { period, items })
     }
 
-    /// The span of `protocol`'s liquidity: its coverage starts at the first hour the liquidity
+    /// The period of `protocol`'s liquidity: its coverage starts at the first hour the liquidity
     /// was measured, not at the facts'.
     async fn liquidity_span(
         &self,
         window: Window,
         protocol: Protocol,
-    ) -> RepositoryResult<Option<Span>> {
-        let Some(span) = self.span(window, None).await? else {
+    ) -> RepositoryResult<Option<FrozenPeriod>> {
+        let Some(period) = self.period(window, None).await? else {
             return Ok(None);
         };
         let since = self.lenses.liquidity_moves.measured_since(protocol).await?;
-        // ⚠️ Not measured yet: covered from `as_of` on, so no span reads as covered.
-        let covered_since = since.map_or(span.as_of, |since| since.max(span.covered_since));
-        Ok(Some(Span {
+        // ⚠️ Not measured yet: covered from `as_of` on, so no period reads as covered.
+        let covered_since = since.map_or(period.as_of, |since| since.max(period.covered_since));
+        Ok(Some(FrozenPeriod {
             covered_since,
-            ..span
+            ..period
         }))
     }
 
@@ -199,18 +211,18 @@ impl MeasureService {
         window: Window,
         protocol: Protocol,
     ) -> RepositoryResult<Measured<Vec<LiquidityMoveSums>>> {
-        let span = self.liquidity_span(window, protocol).await?;
-        let items = match &span {
-            Some(span) if span.is_covered() => self
+        let period = self.liquidity_span(window, protocol).await?;
+        let items = match &period {
+            Some(period) if period.is_covered() => self
                 .lenses
                 .liquidity_moves
-                .totals(span, protocol)
+                .totals(period, protocol)
                 .await?
                 .into_iter()
                 .collect(),
             _ => Vec::new(),
         };
-        Ok(Measured { span, items })
+        Ok(Measured { period, items })
     }
 
     pub(crate) async fn liquidity_bars(
@@ -219,16 +231,20 @@ impl MeasureService {
         cut: Cut,
         protocol: Protocol,
     ) -> RepositoryResult<Measured<Vec<ProtocolBar<LiquidityMoveSums>>>> {
-        let span = self.liquidity_span(window, protocol).await?;
-        let items = match (&span, cut) {
-            (Some(span), Cut::Hourly) => self.lenses.liquidity_moves.hourly(span, protocol).await?,
-            (Some(span), Cut::Daily) => self.lenses.liquidity_moves.daily(span, protocol).await?,
+        let period = self.liquidity_span(window, protocol).await?;
+        let items = match (&period, cut) {
+            (Some(period), Cut::Hourly) => {
+                self.lenses.liquidity_moves.hourly(period, protocol).await?
+            }
+            (Some(period), Cut::Daily) => {
+                self.lenses.liquidity_moves.daily(period, protocol).await?
+            }
             (None, _) => Vec::new(),
         };
-        Ok(Measured { span, items })
+        Ok(Measured { period, items })
     }
 
-    /// A pool's valued moves; an empty page over a span its protocol's liquidity does not
+    /// A pool's valued moves; an empty page over a period its protocol's liquidity does not
     /// cover whole.
     pub(crate) async fn pool_liquidity_moves(
         &self,
@@ -238,24 +254,24 @@ impl MeasureService {
         cursor: Option<LiquidityMoveCursor>,
         limit: i64,
     ) -> RepositoryResult<PoolMovesRead> {
-        let span = self.liquidity_span(window, pool.protocol).await?;
-        if let (Some(span), Some(cursor)) = (&span, &cursor)
-            && (cursor.as_of != span.as_of
+        let period = self.liquidity_span(window, pool.protocol).await?;
+        if let (Some(period), Some(cursor)) = (&period, &cursor)
+            && (cursor.as_of != period.as_of
                 || cursor.window != window
                 || cursor.pool != pool.pool_address)
         {
             return Ok(PoolMovesRead::CursorRefused);
         }
-        let items = match &span {
-            Some(span) if span.is_covered() => {
+        let items = match &period {
+            Some(period) if period.is_covered() => {
                 self.lenses
                     .liquidity_moves
-                    .pool_moves(span, window, pool.pool_address, order, cursor, limit)
+                    .pool_moves(period, window, pool.pool_address, order, cursor, limit)
                     .await?
             }
             _ => Page::empty(),
         };
-        Ok(PoolMovesRead::Page(Measured { span, items }))
+        Ok(PoolMovesRead::Page(Measured { period, items }))
     }
 
     /// Each protocol's last TVL reading by the last frozen hour.
@@ -263,12 +279,12 @@ impl MeasureService {
         &self,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Measured<Vec<ProtocolTvl>>> {
-        let span = self.span(Window::Day, None).await?;
-        let items = match &span {
-            Some(span) => self.lenses.tvl.latest(span.last_hour(), protocol).await?,
+        let period = self.period(Window::Day, None).await?;
+        let items = match &period {
+            Some(period) => self.lenses.tvl.latest(period.last_hour(), protocol).await?,
             None => Vec::new(),
         };
-        Ok(Measured { span, items })
+        Ok(Measured { period, items })
     }
 
     /// The readings from the window's start through `as_of`: the first is the start's.
@@ -277,17 +293,21 @@ impl MeasureService {
         window: Window,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Measured<Vec<ProtocolTvl>>> {
-        let span = self.span(window, None).await?;
-        let items = match &span {
-            Some(span) => {
+        let period = self.period(window, None).await?;
+        let items = match &period {
+            Some(period) => {
                 self.lenses
                     .tvl
-                    .hourly(span.from - TimeDelta::hours(1), span.last_hour(), protocol)
+                    .hourly(
+                        period.from - TimeDelta::hours(1),
+                        period.last_hour(),
+                        protocol,
+                    )
                     .await?
             }
             None => Vec::new(),
         };
-        Ok(Measured { span, items })
+        Ok(Measured { period, items })
     }
 
     pub(crate) async fn pool_discoveries(
@@ -295,17 +315,17 @@ impl MeasureService {
         window: Window,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Measured<Vec<PoolDiscoveries>>> {
-        let span = self.span(window, None).await?;
-        let items = match &span {
-            Some(span) if span.is_covered() => {
+        let period = self.period(window, None).await?;
+        let items = match &period {
+            Some(period) if period.is_covered() => {
                 self.lenses
                     .pool_discoveries
-                    .totals(span.last_hour(), window, protocol)
+                    .totals(period.last_hour(), window, protocol)
                     .await?
             }
             _ => Vec::new(),
         };
-        Ok(Measured { span, items })
+        Ok(Measured { period, items })
     }
 }
 

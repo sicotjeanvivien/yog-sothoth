@@ -30,13 +30,13 @@ impl<T> WindowedPageResponse<T> {
     where
         T: From<U>,
     {
-        let span = measured.span;
+        let period = measured.period;
         let page = measured.items;
         Ok(Self {
             window: window.into(),
-            from: span.map(|s| s.from),
-            as_of: span.map(|s| s.as_of),
-            covered_since: span.map(|s| s.covered_since),
+            from: period.map(|s| s.from),
+            as_of: period.map(|s| s.as_of),
+            covered_since: period.map(|s| s.covered_since),
             next_cursor: encode_cursor_opt(page.next_cursor.as_ref())?,
             prev_cursor: encode_cursor_opt(page.prev_cursor.as_ref())?,
             is_first: page.is_first,

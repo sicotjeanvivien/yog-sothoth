@@ -1,4 +1,4 @@
-//! PostgreSQL implementation of the measure reads: yog-analytic's tables, read over the span
+//! PostgreSQL implementation of the measure reads: yog-analytic's tables, read over the period
 //! the caller built, for every protocol, one protocol, or one pool.
 
 mod rows;
@@ -14,10 +14,10 @@ use sqlx::PgPool;
 use yog_core::{
     Cursor, Page, RepositoryResult,
     domain::{
-        ByProtocol, LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup, LiquidityMoveOrder,
-        LiquidityMoveSums, PoolCreationCount, PoolCreationLookup, PoolDiscoveries,
-        PoolDiscoveryLookup, PoolSwapBar, Protocol, ProtocolBar, ProtocolSwapTotals, ProtocolTvl,
-        Span, SwapLookup, SwapSums, TvlLookup, Window,
+        ByProtocol, FrozenPeriod, LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup,
+        LiquidityMoveOrder, LiquidityMoveSums, PoolCreationCount, PoolCreationLookup,
+        PoolDiscoveries, PoolDiscoveryLookup, PoolSwapBar, Protocol, ProtocolBar,
+        ProtocolSwapTotals, ProtocolTvl, SwapLookup, SwapSums, TvlLookup, Window,
     },
 };
 
@@ -44,7 +44,7 @@ fn protocol_filter(protocol: Option<Protocol>) -> Option<&'static str> {
 impl SwapLookup for PgMeasureRepository {
     async fn protocol_totals(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         window: Window,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolSwapTotals>> {
@@ -68,10 +68,10 @@ impl SwapLookup for PgMeasureRepository {
              GROUP BY h.protocol
              ORDER BY h.protocol
             "#,
-            span.from,
-            span.as_of,
+            period.from,
+            period.as_of,
             window.as_str(),
-            span.last_hour(),
+            period.last_hour(),
             protocol_filter(protocol),
         )
         .fetch_all(&self.pool)
@@ -83,7 +83,7 @@ impl SwapLookup for PgMeasureRepository {
 
     async fn protocol_hourly(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBar<SwapSums>>> {
         let rows = sqlx::query_as!(
@@ -97,9 +97,9 @@ impl SwapLookup for PgMeasureRepository {
                AND ($4::TEXT IS NULL OR protocol = $4)
              ORDER BY bucket, protocol
             "#,
-            span.from,
-            span.as_of,
-            span.covered_since,
+            period.from,
+            period.as_of,
+            period.covered_since,
             protocol_filter(protocol),
         )
         .fetch_all(&self.pool)
@@ -111,10 +111,10 @@ impl SwapLookup for PgMeasureRepository {
 
     async fn protocol_daily(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBar<SwapSums>>> {
-        // ⚠️ Days aligned on `as_of`, not on midnight: the bars then add up to the span.
+        // ⚠️ Days aligned on `as_of`, not on midnight: the bars then add up to the period.
         let rows = sqlx::query_as!(
             ProtocolSwapBarRow,
             r#"
@@ -137,9 +137,9 @@ impl SwapLookup for PgMeasureRepository {
              GROUP BY protocol, bar_from
              ORDER BY bar_from, protocol
             "#,
-            span.from,
-            span.as_of,
-            span.covered_since,
+            period.from,
+            period.as_of,
+            period.covered_since,
             protocol_filter(protocol),
         )
         .fetch_all(&self.pool)
@@ -149,7 +149,11 @@ impl SwapLookup for PgMeasureRepository {
         rows.into_iter().map(ProtocolBar::try_from).collect()
     }
 
-    async fn pool_totals(&self, span: &Span, pool: Pubkey) -> RepositoryResult<Option<SwapSums>> {
+    async fn pool_totals(
+        &self,
+        period: &FrozenPeriod,
+        pool: Pubkey,
+    ) -> RepositoryResult<Option<SwapSums>> {
         let row = sqlx::query_as!(
             SwapSumsRow,
             r#"
@@ -164,8 +168,8 @@ impl SwapLookup for PgMeasureRepository {
              WHERE pool_address = $3 AND bucket >= $1 AND bucket < $2
             HAVING COUNT(*) > 0
             "#,
-            span.from,
-            span.as_of,
+            period.from,
+            period.as_of,
             pool.to_string(),
         )
         .fetch_optional(&self.pool)
@@ -175,7 +179,11 @@ impl SwapLookup for PgMeasureRepository {
         row.map(SwapSums::try_from).transpose()
     }
 
-    async fn pool_hourly(&self, span: &Span, pool: Pubkey) -> RepositoryResult<Vec<PoolSwapBar>> {
+    async fn pool_hourly(
+        &self,
+        period: &FrozenPeriod,
+        pool: Pubkey,
+    ) -> RepositoryResult<Vec<PoolSwapBar>> {
         let rows = sqlx::query_as!(
             PoolSwapBarRow,
             r#"
@@ -189,9 +197,9 @@ impl SwapLookup for PgMeasureRepository {
                AND bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND bucket < $2
              ORDER BY bucket
             "#,
-            span.from,
-            span.as_of,
-            span.covered_since,
+            period.from,
+            period.as_of,
+            period.covered_since,
             pool.to_string(),
         )
         .fetch_all(&self.pool)
@@ -201,7 +209,11 @@ impl SwapLookup for PgMeasureRepository {
         rows.into_iter().map(PoolSwapBar::try_from).collect()
     }
 
-    async fn pool_daily(&self, span: &Span, pool: Pubkey) -> RepositoryResult<Vec<PoolSwapBar>> {
+    async fn pool_daily(
+        &self,
+        period: &FrozenPeriod,
+        pool: Pubkey,
+    ) -> RepositoryResult<Vec<PoolSwapBar>> {
         let rows = sqlx::query_as!(
             PoolSwapBarRow,
             r#"
@@ -224,9 +236,9 @@ impl SwapLookup for PgMeasureRepository {
              GROUP BY bar_from
              ORDER BY bar_from
             "#,
-            span.from,
-            span.as_of,
-            span.covered_since,
+            period.from,
+            period.as_of,
+            period.covered_since,
             pool.to_string(),
         )
         .fetch_all(&self.pool)
@@ -241,7 +253,7 @@ impl SwapLookup for PgMeasureRepository {
 impl PoolCreationLookup for PgMeasureRepository {
     async fn totals(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ByProtocol<PoolCreationCount>>> {
         let rows = sqlx::query_as!(
@@ -255,8 +267,8 @@ impl PoolCreationLookup for PgMeasureRepository {
              GROUP BY protocol
              ORDER BY protocol
             "#,
-            span.from,
-            span.as_of,
+            period.from,
+            period.as_of,
             protocol_filter(protocol),
         )
         .fetch_all(&self.pool)
@@ -268,7 +280,7 @@ impl PoolCreationLookup for PgMeasureRepository {
 
     async fn hourly(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBar<PoolCreationCount>>> {
         let rows = sqlx::query_as!(
@@ -280,9 +292,9 @@ impl PoolCreationLookup for PgMeasureRepository {
                AND ($4::TEXT IS NULL OR protocol = $4)
              ORDER BY bucket, protocol
             "#,
-            span.from,
-            span.as_of,
-            span.covered_since,
+            period.from,
+            period.as_of,
+            period.covered_since,
             protocol_filter(protocol),
         )
         .fetch_all(&self.pool)
@@ -294,7 +306,7 @@ impl PoolCreationLookup for PgMeasureRepository {
 
     async fn daily(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBar<PoolCreationCount>>> {
         let rows = sqlx::query_as!(
@@ -314,9 +326,9 @@ impl PoolCreationLookup for PgMeasureRepository {
              GROUP BY protocol, bar_from
              ORDER BY bar_from, protocol
             "#,
-            span.from,
-            span.as_of,
-            span.covered_since,
+            period.from,
+            period.as_of,
+            period.covered_since,
             protocol_filter(protocol),
         )
         .fetch_all(&self.pool)
@@ -347,7 +359,7 @@ impl LiquidityMoveLookup for PgMeasureRepository {
 
     async fn totals(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         protocol: Protocol,
     ) -> RepositoryResult<Option<LiquidityMoveSums>> {
         let row = sqlx::query_as!(
@@ -361,8 +373,8 @@ impl LiquidityMoveLookup for PgMeasureRepository {
              WHERE protocol = $3 AND bucket >= $1 AND bucket < $2
             HAVING COUNT(*) > 0
             "#,
-            span.from,
-            span.as_of,
+            period.from,
+            period.as_of,
             protocol.as_str(),
         )
         .fetch_optional(&self.pool)
@@ -374,7 +386,7 @@ impl LiquidityMoveLookup for PgMeasureRepository {
 
     async fn hourly(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBar<LiquidityMoveSums>>> {
         let rows = sqlx::query_as!(
@@ -387,9 +399,9 @@ impl LiquidityMoveLookup for PgMeasureRepository {
                AND bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND bucket < $2
              ORDER BY bucket
             "#,
-            span.from,
-            span.as_of,
-            span.covered_since,
+            period.from,
+            period.as_of,
+            period.covered_since,
             protocol.as_str(),
         )
         .fetch_all(&self.pool)
@@ -401,7 +413,7 @@ impl LiquidityMoveLookup for PgMeasureRepository {
 
     async fn daily(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBar<LiquidityMoveSums>>> {
         let rows = sqlx::query_as!(
@@ -422,9 +434,9 @@ impl LiquidityMoveLookup for PgMeasureRepository {
              GROUP BY protocol, bar_from
              ORDER BY bar_from
             "#,
-            span.from,
-            span.as_of,
-            span.covered_since,
+            period.from,
+            period.as_of,
+            period.covered_since,
             protocol.as_str(),
         )
         .fetch_all(&self.pool)
@@ -436,7 +448,7 @@ impl LiquidityMoveLookup for PgMeasureRepository {
 
     async fn pool_moves(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         window: Window,
         pool: Pubkey,
         order: LiquidityMoveOrder,
@@ -481,8 +493,8 @@ impl LiquidityMoveLookup for PgMeasureRepository {
                           m.event_index
                  LIMIT $8
                 "#,
-                span.from,
-                span.as_of,
+                period.from,
+                period.as_of,
                 pool.to_string(),
                 after_amount,
                 after_at,
@@ -514,8 +526,8 @@ impl LiquidityMoveLookup for PgMeasureRepository {
                  ORDER BY m.timestamp DESC, m.signature, m.event_index
                  LIMIT $7
                 "#,
-                span.from,
-                span.as_of,
+                period.from,
+                period.as_of,
                 pool.to_string(),
                 after_at,
                 after_signature,
@@ -535,7 +547,7 @@ impl LiquidityMoveLookup for PgMeasureRepository {
                 Cursor::LiquidityMove(Box::new(LiquidityMoveCursor {
                     pool,
                     window,
-                    as_of: span.as_of,
+                    as_of: period.as_of,
                     order,
                     amount_usd: *key,
                     at: m.at,

@@ -6,69 +6,81 @@ use super::{
     ByProtocol, LiquidityMoveCursor, LiquidityMoveOrder, LiquidityMoveSums, PoolCreationCount,
     PoolDiscoveries, PoolSwapBar, ProtocolBar, ProtocolSwapTotals, SwapSums,
 };
-use crate::domain::{LiquidityMove, Protocol, ProtocolTvl, Span, Window};
+use crate::domain::{FrozenPeriod, LiquidityMove, Protocol, ProtocolTvl, Window};
 use crate::{Page, RepositoryResult};
 
 /// The swaps' measures. `protocol` narrows a read to one protocol, `None` reads them all;
-/// none counts an hour of `span` before its `covered_since`.
+/// none counts an hour of `period` before its `covered_since`.
 #[async_trait]
 pub trait SwapLookup: Send + Sync {
-    /// One row per protocol with facts in `span`; its pools are those written for `window` at
-    /// the span's last hour.
+    /// One row per protocol with facts in `period`; its pools are those written for `window` at
+    /// the period's last hour.
     async fn protocol_totals(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         window: Window,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolSwapTotals>>;
 
-    /// The hours of `span` the facts hold, oldest first.
+    /// The hours of `period` the facts hold, oldest first.
     async fn protocol_hourly(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBar<SwapSums>>>;
 
-    /// The 24 hours ending at `span.as_of`, then the 24 before: a bar the facts do not hold
+    /// The 24 hours ending at `period.as_of`, then the 24 before: a bar the facts do not hold
     /// whole is left out.
     async fn protocol_daily(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBar<SwapSums>>>;
 
-    /// `None` when the pool did not swap in `span`.
-    async fn pool_totals(&self, span: &Span, pool: Pubkey) -> RepositoryResult<Option<SwapSums>>;
+    /// `None` when the pool did not swap in `period`.
+    async fn pool_totals(
+        &self,
+        period: &FrozenPeriod,
+        pool: Pubkey,
+    ) -> RepositoryResult<Option<SwapSums>>;
 
-    async fn pool_hourly(&self, span: &Span, pool: Pubkey) -> RepositoryResult<Vec<PoolSwapBar>>;
+    async fn pool_hourly(
+        &self,
+        period: &FrozenPeriod,
+        pool: Pubkey,
+    ) -> RepositoryResult<Vec<PoolSwapBar>>;
 
-    async fn pool_daily(&self, span: &Span, pool: Pubkey) -> RepositoryResult<Vec<PoolSwapBar>>;
+    async fn pool_daily(
+        &self,
+        period: &FrozenPeriod,
+        pool: Pubkey,
+    ) -> RepositoryResult<Vec<PoolSwapBar>>;
 }
 
-/// The pools created, by protocol, under the same span rules as [`SwapLookup`].
+/// The pools created, by protocol, under the same period rules as [`SwapLookup`].
 #[async_trait]
 pub trait PoolCreationLookup: Send + Sync {
     async fn totals(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ByProtocol<PoolCreationCount>>>;
 
     async fn hourly(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBar<PoolCreationCount>>>;
 
     async fn daily(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBar<PoolCreationCount>>>;
 }
 
 /// The valued liquidity moves. ⚠️ Measured from a later hour than the swaps: every read
-/// takes its span from [`Self::measured_since`], not from the facts.
+/// takes its period from [`Self::measured_since`], not from the facts.
 #[async_trait]
 pub trait LiquidityMoveLookup: Send + Sync {
     /// The first hour the protocol's liquidity was measured; `None` before it was.
@@ -76,27 +88,27 @@ pub trait LiquidityMoveLookup: Send + Sync {
 
     async fn totals(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         protocol: Protocol,
     ) -> RepositoryResult<Option<LiquidityMoveSums>>;
 
     async fn hourly(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBar<LiquidityMoveSums>>>;
 
     async fn daily(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBar<LiquidityMoveSums>>>;
 
-    /// A pool's valued moves in `span`, the span of `window`, in `order`, after `cursor`'s key;
+    /// A pool's valued moves in `period`, the period of `window`, in `order`, after `cursor`'s key;
     /// forward only.
     async fn pool_moves(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         window: Window,
         pool: Pubkey,
         order: LiquidityMoveOrder,

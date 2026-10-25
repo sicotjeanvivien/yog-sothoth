@@ -1,6 +1,6 @@
 //! PostgreSQL implementation of [`ProtocolActivityLookup`]: yog-analytic's
-//! tables by protocol, read over the span the caller built. Summing the hours
-//! of a span is exact for every flow; the distinct pools are read as written.
+//! tables by protocol, read over the period the caller built. Summing the hours
+//! of a period is exact for every flow; the distinct pools are read as written.
 
 pub(super) mod rows;
 
@@ -14,8 +14,8 @@ use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
     domain::{
-        FrozenHours, LatestProtocolTvl, LiquidityMove, Protocol, ProtocolActivity,
-        ProtocolActivityBar, ProtocolActivityLookup, ProtocolTvl, Span, Window,
+        FrozenHours, FrozenPeriod, LatestProtocolTvl, LiquidityMove, Protocol, ProtocolActivity,
+        ProtocolActivityBar, ProtocolActivityLookup, ProtocolTvl, Window,
     },
 };
 
@@ -54,7 +54,7 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
 
     async fn activity(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         window: Window,
     ) -> RepositoryResult<Vec<ProtocolActivity>> {
         let rows = sqlx::query_as!(
@@ -122,10 +122,10 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
               ) s ON true
              ORDER BY j.protocol
             "#,
-            span.from,
-            span.as_of,
+            period.from,
+            period.as_of,
             window.as_str(),
-            span.last_hour(),
+            period.last_hour(),
         )
         .fetch_all(&self.pool)
         .await
@@ -134,7 +134,10 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
         rows.into_iter().map(ProtocolActivity::try_from).collect()
     }
 
-    async fn activity_hourly(&self, span: &Span) -> RepositoryResult<Vec<ProtocolActivityBar>> {
+    async fn activity_hourly(
+        &self,
+        period: &FrozenPeriod,
+    ) -> RepositoryResult<Vec<ProtocolActivityBar>> {
         let rows = sqlx::query_as!(
             ProtocolActivityBarRow,
             r#"
@@ -149,9 +152,9 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
              WHERE h.bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND h.bucket < $2
              ORDER BY h.bucket, h.protocol
             "#,
-            span.from,
-            span.as_of,
-            span.covered_since,
+            period.from,
+            period.as_of,
+            period.covered_since,
         )
         .fetch_all(&self.pool)
         .await
@@ -162,8 +165,11 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
             .collect()
     }
 
-    async fn activity_daily(&self, span: &Span) -> RepositoryResult<Vec<ProtocolActivityBar>> {
-        // ⚠️ Days aligned on `as_of`, not on midnight: the bars then add up to the span.
+    async fn activity_daily(
+        &self,
+        period: &FrozenPeriod,
+    ) -> RepositoryResult<Vec<ProtocolActivityBar>> {
+        // ⚠️ Days aligned on `as_of`, not on midnight: the bars then add up to the period.
         let rows = sqlx::query_as!(
             ProtocolActivityBarRow,
             r#"
@@ -200,9 +206,9 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
              GROUP BY hours.protocol, hours.bar_from
              ORDER BY hours.bar_from, hours.protocol
             "#,
-            span.from,
-            span.as_of,
-            span.covered_since,
+            period.from,
+            period.as_of,
+            period.covered_since,
         )
         .fetch_all(&self.pool)
         .await
@@ -270,7 +276,7 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
 
     async fn liquidity_moves(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         protocol: Protocol,
         limit: i64,
     ) -> RepositoryResult<Vec<LiquidityMove>> {
@@ -293,8 +299,8 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
              ORDER BY m.amount_usd DESC, m.timestamp DESC, m.signature, m.event_index
              LIMIT $4
             "#,
-            span.from,
-            span.as_of,
+            period.from,
+            period.as_of,
             protocol.as_str(),
             limit,
         )

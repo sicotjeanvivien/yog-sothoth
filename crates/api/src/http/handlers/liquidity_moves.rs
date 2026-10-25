@@ -42,7 +42,7 @@ pub(crate) async fn get_protocol_liquidity_move_totals(
         .liquidity_totals(window, protocol)
         .await?;
     let measured = crate::application::Measured {
-        span: measured.span,
+        period: measured.period,
         items: measured
             .items
             .into_iter()

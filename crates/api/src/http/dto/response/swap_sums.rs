@@ -1,4 +1,4 @@
-//! The swaps of a scope over a span or a bar; the row of a pool's `swaps/totals`, and the
+//! The swaps of a scope over a period or a bar; the row of a pool's `swaps/totals`, and the
 //! fields every other swap row flattens in. `poolHoursValued` of `poolHours` is the coverage.
 
 use rust_decimal::Decimal;

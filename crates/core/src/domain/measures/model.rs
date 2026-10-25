@@ -7,7 +7,7 @@ use crate::domain::{Protocol, Window};
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
-/// The swaps of a scope summed over a span or a bar. The USD sums skip the pool-hours not
+/// The swaps of a scope summed over a period or a bar. The USD sums skip the pool-hours not
 /// valued, which `pool_hours - pool_hours_valued` counts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SwapSums {
@@ -21,16 +21,16 @@ pub struct SwapSums {
     pub pool_hours_valued: i64,
 }
 
-/// One protocol's swaps over a span, with its pools that swapped in it.
+/// One protocol's swaps over a period, with its pools that swapped in it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolSwapTotals {
     pub protocol: Protocol,
     pub sums: SwapSums,
-    /// Distinct over the window; `None` when no cycle wrote it at the span's last hour.
+    /// Distinct over the window; `None` when no cycle wrote it at the period's last hour.
     pub pools: Option<i64>,
 }
 
-/// One protocol's measure over a span.
+/// One protocol's measure over a period.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ByProtocol<T> {
     pub protocol: Protocol,
@@ -52,7 +52,7 @@ pub struct PoolSwapBar {
     pub sums: SwapSums,
 }
 
-/// The pools created over a span or a bar.
+/// The pools created over a period or a bar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PoolCreationCount {
     pub pools: i64,

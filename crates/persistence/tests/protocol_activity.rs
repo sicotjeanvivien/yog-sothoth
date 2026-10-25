@@ -6,7 +6,7 @@ use chrono::{DateTime, Duration, TimeZone, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use yog_core::domain::{
-    LiquidityFlows, LiquidityMoveKind, PoolCatalog, Protocol, ProtocolActivityLookup, Span,
+    FrozenPeriod, LiquidityFlows, LiquidityMoveKind, PoolCatalog, Protocol, ProtocolActivityLookup,
     TokenActivityCursor, TokenActivityFeed, Window,
 };
 use yog_persistence::{PgPoolRepository, PgProtocolActivityRepository, PgTokenActivityRepository};
@@ -58,14 +58,14 @@ async fn insert_period(pool: &PgPool, window: &str, at: DateTime<Utc>, active_po
     .unwrap();
 }
 
-async fn lookup(pool: &PgPool) -> (PgProtocolActivityRepository, Span, Span) {
+async fn lookup(pool: &PgPool) -> (PgProtocolActivityRepository, FrozenPeriod, FrozenPeriod) {
     let repository =
         PgProtocolActivityRepository::new(setup_roles_and_connect_as(pool, "yog_api").await);
     let hours = repository.frozen_hours().await.unwrap().unwrap();
     (
         repository,
-        Span::of(hours, Window::Day, None),
-        Span::of(hours, Window::Week, None),
+        FrozenPeriod::of(hours, Window::Day, None),
+        FrozenPeriod::of(hours, Window::Week, None),
     )
 }
 
@@ -115,8 +115,8 @@ async fn a_day_the_facts_do_not_hold_whole_is_left_out(pool: PgPool) {
     assert_eq!(bars[0].from, week.from + Duration::days(1));
 }
 
-/// Mutation: the active pools joined without the span's last hour — every
-/// window written, 10 and 7, for each span.
+/// Mutation: the active pools joined without the period's last hour — every
+/// window written, 10 and 7, for each period.
 #[sqlx::test(migrations = "./migrations")]
 async fn the_previous_window_reads_the_pools_written_a_window_earlier(pool: PgPool) {
     seed_hours(&pool, 24 * 8).await;
@@ -126,13 +126,13 @@ async fn the_previous_window_reads_the_pools_written_a_window_earlier(pool: PgPo
         PgProtocolActivityRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
     let hours = repository.frozen_hours().await.unwrap().unwrap();
 
-    let now = Span::of(hours, Window::Day, None);
-    let before = Span::of(hours, Window::Day, Some(Window::Day));
-    let week_before = Span::of(hours, Window::Day, Some(Window::Week));
-    let read = |span: Span| {
+    let now = FrozenPeriod::of(hours, Window::Day, None);
+    let before = FrozenPeriod::of(hours, Window::Day, Some(Window::Day));
+    let week_before = FrozenPeriod::of(hours, Window::Day, Some(Window::Week));
+    let read = |period: FrozenPeriod| {
         let repository = &repository;
         async move {
-            let rows = repository.activity(&span, Window::Day).await.unwrap();
+            let rows = repository.activity(&period, Window::Day).await.unwrap();
             rows.iter().map(|row| row.active_pools).collect::<Vec<_>>()
         }
     };

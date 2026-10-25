@@ -22,8 +22,8 @@ impl<T> ReadingResponse<T> {
         T: From<U>,
     {
         Self {
-            as_of: measured.span.map(|s| s.as_of),
-            covered_since: measured.span.map(|s| s.covered_since),
+            as_of: measured.period.map(|s| s.as_of),
+            covered_since: measured.period.map(|s| s.covered_since),
             items: measured.items.into_iter().map(T::from).collect(),
         }
     }

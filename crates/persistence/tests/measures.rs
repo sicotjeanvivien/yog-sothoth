@@ -7,8 +7,8 @@ use sqlx::PgPool;
 use yog_core::{
     Cursor, PageDirection,
     domain::{
-        LiquidityMoveLookup, LiquidityMoveOrder, PoolCreationLookup, PoolDiscoveryLookup, Protocol,
-        SignalFeed, SignalFilter, Span, SwapLookup, TvlLookup, Window,
+        FrozenPeriod, LiquidityMoveLookup, LiquidityMoveOrder, PoolCreationLookup,
+        PoolDiscoveryLookup, Protocol, SignalFeed, SignalFilter, SwapLookup, TvlLookup, Window,
     },
 };
 use yog_persistence::{PgMeasureRepository, PgSignalRepository};
@@ -24,8 +24,8 @@ fn as_of() -> DateTime<Utc> {
 }
 
 /// `hours` hours ending at [`as_of`], the facts holding them all.
-fn span(hours: i64) -> Span {
-    Span {
+fn period(hours: i64) -> FrozenPeriod {
+    FrozenPeriod {
         from: as_of() - Duration::hours(hours),
         as_of: as_of(),
         covered_since: as_of() - Duration::hours(hours),
@@ -36,7 +36,7 @@ async fn repository(pool: &PgPool) -> PgMeasureRepository {
     PgMeasureRepository::new(setup_roles_and_connect_as(pool, "yog_api").await)
 }
 
-/// One protocol-hour per hour of `span(hours)`: `volume` dollars and one swap each.
+/// One protocol-hour per hour of `period(hours)`: `volume` dollars and one swap each.
 async fn seed_protocol_hours(pool: &PgPool, protocol: &str, hours: i32, volume: i64) {
     sqlx::query(
         "INSERT INTO analytic_protocol_hourly
@@ -55,7 +55,7 @@ async fn seed_protocol_hours(pool: &PgPool, protocol: &str, hours: i32, volume: 
     .unwrap();
 }
 
-/// One pool-hour per hour of `span(hours)`, `volume` dollars on side A; the last one unvalued.
+/// One pool-hour per hour of `period(hours)`, `volume` dollars on side A; the last one unvalued.
 async fn seed_pool_hours(pool: &PgPool, address: &str, hours: i32, volume: i64) {
     sqlx::query(
         "INSERT INTO analytic_pool_hourly
@@ -82,7 +82,7 @@ async fn a_protocols_swaps_count_only_it(pool: PgPool) {
     seed_protocol_hours(&pool, DAMM, 24, 1).await;
     seed_protocol_hours(&pool, DLMM, 24, 100).await;
     let repository = repository(&pool).await;
-    let day = span(24);
+    let day = period(24);
 
     let all = repository
         .protocol_totals(&day, Window::Day, None)
@@ -119,7 +119,7 @@ async fn a_pools_swaps_count_only_it_and_say_their_coverage(pool: PgPool) {
     seed_pool_hours(&pool, &mine.to_string(), 24, 10).await;
     seed_pool_hours(&pool, &other.to_string(), 24, 1000).await;
     let repository = repository(&pool).await;
-    let day = span(24);
+    let day = period(24);
 
     let totals = repository.pool_totals(&day, mine).await.unwrap().unwrap();
     let hourly = repository.pool_hourly(&day, mine).await.unwrap();
@@ -140,9 +140,9 @@ async fn a_pools_day_is_24_hours_ending_at_as_of_and_held_whole(pool: PgPool) {
     let mine = pk(1);
     seed_pool_hours(&pool, &mine.to_string(), 24 * 2 + 12, 1).await;
     let repository = repository(&pool).await;
-    let three_days = Span {
+    let three_days = FrozenPeriod {
         covered_since: as_of() - Duration::hours(24 * 2 + 12),
-        ..span(24 * 3)
+        ..period(24 * 3)
     };
 
     let daily = repository.pool_daily(&three_days, mine).await.unwrap();
@@ -168,7 +168,7 @@ async fn a_protocols_creations_count_only_it(pool: PgPool) {
         .unwrap();
     }
     let repository = repository(&pool).await;
-    let day = span(24);
+    let day = period(24);
 
     let totals = PoolCreationLookup::totals(&repository, &day, Some(Protocol::MeteoraDammV2))
         .await
@@ -214,9 +214,9 @@ async fn a_protocols_liquidity_starts_and_sums_on_its_own(pool: PgPool) {
         .measured_since(Protocol::MeteoraDammV2)
         .await
         .unwrap();
-    let covered = Span {
+    let covered = FrozenPeriod {
         covered_since: start,
-        ..span(10)
+        ..period(10)
     };
 
     let totals = LiquidityMoveLookup::totals(&repository, &covered, Protocol::MeteoraDammV2)
@@ -272,7 +272,7 @@ async fn a_pools_moves_page_without_repeat_nor_gap_in_each_order(pool: PgPool) {
     insert_move(&pool, &mine, "unvalued", 1, None).await;
     insert_move(&pool, &other, "other", 2, Some(1_000)).await;
     let repository = repository(&pool).await;
-    let day = span(24);
+    let day = period(24);
 
     for order in [LiquidityMoveOrder::Amount, LiquidityMoveOrder::At] {
         let mut seen = Vec::new();
@@ -444,7 +444,7 @@ async fn a_page_follows_a_move_whose_amount_has_more_digits_than_a_cursor(pool: 
     for _ in 0..10 {
         let page = repository
             .pool_moves(
-                &span(24),
+                &period(24),
                 Window::Day,
                 pk(1),
                 LiquidityMoveOrder::Amount,
@@ -485,7 +485,7 @@ async fn a_pools_move_keeps_its_amount_whole_whatever_its_order(pool: PgPool) {
 
     for order in [LiquidityMoveOrder::Amount, LiquidityMoveOrder::At] {
         let page = repository
-            .pool_moves(&span(24), Window::Day, pk(1), order, None, 5)
+            .pool_moves(&period(24), Window::Day, pk(1), order, None, 5)
             .await
             .unwrap();
         assert_eq!(

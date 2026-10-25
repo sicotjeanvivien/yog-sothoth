@@ -1,10 +1,10 @@
-//! The envelope of a measure over a window: the window, the span it covers,
-//! and the rows. ⚠️ A total whose span starts before `coveredSince` has no row.
+//! The envelope of a measure over a window: the window, the period it covers,
+//! and the rows. ⚠️ A total whose period starts before `coveredSince` has no row.
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
-use yog_core::domain::{Span, Window};
+use yog_core::domain::{FrozenPeriod, Window};
 
 use crate::application::Measured;
 
@@ -46,12 +46,12 @@ impl<T> WindowedResponse<T> {
     where
         T: From<U>,
     {
-        let span: Option<Span> = measured.span;
+        let period: Option<FrozenPeriod> = measured.period;
         Self {
             window: window.into(),
-            from: span.map(|s| s.from),
-            as_of: span.map(|s| s.as_of),
-            covered_since: span.map(|s| s.covered_since),
+            from: period.map(|s| s.from),
+            as_of: period.map(|s| s.as_of),
+            covered_since: period.map(|s| s.covered_since),
             items: measured.items.into_iter().map(T::from).collect(),
         }
     }

@@ -1,4 +1,4 @@
-//! What each protocol did over a span, from yog-analytic's tables: its flows,
+//! What each protocol did over a period, from yog-analytic's tables: its flows,
 //! its liquidity, its births and its active pools, then its TVL and its largest moves.
 
 use chrono::{DateTime, Utc};
@@ -7,7 +7,7 @@ use solana_pubkey::Pubkey;
 
 use crate::domain::{Protocol, Window};
 
-/// One protocol over a span. The USD sums skip the unvalued pool-hours, which
+/// One protocol over a period. The USD sums skip the unvalued pool-hours, which
 /// `pool_hours - pool_hours_valued` counts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolActivity {
@@ -18,16 +18,16 @@ pub struct ProtocolActivity {
     pub protocol_fees_usd: Option<Decimal>,
     pub referral_fees_usd: Option<Decimal>,
     pub swap_count: i64,
-    /// Distinct over the span; `None` when no cycle wrote it at the span's last hour.
+    /// Distinct over the period; `None` when no cycle wrote it at the period's last hour.
     pub active_pools: Option<i64>,
     pub births: i64,
     pub pool_hours: i64,
     pub pool_hours_valued: i64,
-    /// `None` when the span starts before the protocol's liquidity was first measured.
+    /// `None` when the period starts before the protocol's liquidity was first measured.
     pub liquidity: Option<LiquidityFlows>,
 }
 
-/// The liquidity deposited at the pools' creation, added and removed over a span or a bar.
+/// The liquidity deposited at the pools' creation, added and removed over a period or a bar.
 /// The USD sums skip the moves not valued, which `moves - moves_valued` counts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiquidityFlows {

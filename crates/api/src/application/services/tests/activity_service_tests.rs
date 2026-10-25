@@ -1,5 +1,5 @@
-//! Unit tests for `ActivityService`: the span each read covers, and the reads
-//! a span the facts do not cover never makes.
+//! Unit tests for `ActivityService`: the period each read covers, and the reads
+//! a period the facts do not cover never makes.
 
 use std::sync::Arc;
 
@@ -51,12 +51,12 @@ async fn a_total_over_hours_the_facts_lack_is_not_read() {
         panic!("no cursor, no expiry");
     };
 
-    assert!(protocols.spans.lock().unwrap().is_empty());
-    assert_eq!(month.span.unwrap().as_of, at(20, 13));
-    assert!(!tokens_month.span.unwrap().is_covered());
+    assert!(protocols.periods.lock().unwrap().is_empty());
+    assert_eq!(month.period.unwrap().as_of, at(20, 13));
+    assert!(!tokens_month.period.unwrap().is_covered());
 }
 
-/// Mutation: the offset ignored, or the last frozen hour taken as the span's end.
+/// Mutation: the offset ignored, or the last frozen hour taken as the period's end.
 #[tokio::test]
 async fn a_total_ends_at_the_close_of_the_last_frozen_hour_moved_by_its_offset() {
     let protocols = Arc::new(MockProtocolActivityRepo::new(Some(hours())));
@@ -68,12 +68,18 @@ async fn a_total_ends_at_the_close_of_the_last_frozen_hour_moved_by_its_offset()
         .await
         .unwrap();
 
-    let spans = protocols.spans.lock().unwrap();
-    assert_eq!((spans[0].from, spans[0].as_of), (at(19, 13), at(20, 13)));
-    assert_eq!((spans[1].from, spans[1].as_of), (at(18, 13), at(19, 13)));
+    let periods = protocols.periods.lock().unwrap();
+    assert_eq!(
+        (periods[0].from, periods[0].as_of),
+        (at(19, 13), at(20, 13))
+    );
+    assert_eq!(
+        (periods[1].from, periods[1].as_of),
+        (at(18, 13), at(19, 13))
+    );
 }
 
-/// Mutation: the tokens' span built from a separate read of the last frozen
+/// Mutation: the tokens' period built from a separate read of the last frozen
 /// hour — a freeze in between, and the page names an hour it was not ranked at.
 #[tokio::test]
 async fn the_tokens_span_ends_at_the_hour_of_their_ranking() {
@@ -86,7 +92,7 @@ async fn the_tokens_span_ends_at_the_hour_of_their_ranking() {
         panic!("no cursor, no expiry");
     };
 
-    assert_eq!(page.span.unwrap().as_of, at(20, 12));
+    assert_eq!(page.period.unwrap().as_of, at(20, 12));
     assert_eq!(*tokens.reads.lock().unwrap(), [Window::Week]);
 }
 
@@ -135,7 +141,7 @@ async fn the_tvl_series_starts_with_the_hour_that_closes_at_the_window_start() {
     );
 }
 
-/// Mutation: a read run with an invented span before any hour is frozen.
+/// Mutation: a read run with an invented period before any hour is frozen.
 #[tokio::test]
 async fn before_the_first_freeze_nothing_is_read() {
     let protocols = Arc::new(MockProtocolActivityRepo::new(None));
@@ -146,7 +152,7 @@ async fn before_the_first_freeze_nothing_is_read() {
     let hourly = svc.protocol_activity_hourly(Window::Day).await.unwrap();
     let tvl = svc.protocol_tvl().await.unwrap();
 
-    assert!(activity.span.is_none() && hourly.span.is_none() && tvl.span.is_none());
-    assert!(protocols.spans.lock().unwrap().is_empty());
+    assert!(activity.period.is_none() && hourly.period.is_none() && tvl.period.is_none());
+    assert!(protocols.periods.lock().unwrap().is_empty());
     assert!(protocols.tvl_ranges.lock().unwrap().is_empty());
 }
