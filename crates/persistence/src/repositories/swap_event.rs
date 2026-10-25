@@ -13,7 +13,7 @@ use yog_core::{
     },
 };
 
-use crate::repositories::helper::{PageBuilder, QueryMode, map_sqlx_error};
+use crate::repositories::helper::{EventKey, finish_event_page, map_sqlx_error};
 
 pub struct PgSwapEventRepository {
     pool: PgPool,
@@ -34,39 +34,28 @@ impl SwapEventLookup for PgSwapEventRepository {
         cursor: Option<EventCursor>,
         limit: i64,
     ) -> RepositoryResult<Page<SwapEvent>> {
-        let had_cursor = cursor.is_some();
-        let (after_at, after_signature, after_index) = match &cursor {
-            Some(c) => (
-                Some(c.at),
-                Some(c.signature.to_string()),
-                Some(i32::from(c.event_index)),
-            ),
-            None => (None, None, None),
-        };
+        let key = EventKey::of(cursor.as_ref());
         let rows = match scope {
-            EventScope::All | EventScope::Protocol(Protocol::MeteoraDammV2) => {
-                self.list_all(from, after_at, after_signature, after_index, limit + 1)
-                    .await?
-            }
-            EventScope::Pool(pool) => {
-                self.list_pool(
-                    &pool.to_string(),
-                    from,
-                    after_at,
-                    after_signature,
-                    after_index,
-                    limit + 1,
-                )
-                .await?
+            // Every protocol's swaps: DAMM v2's table is the only one yet.
+            EventScope::All => self.list_meteora_damm_v2(from, &key, limit + 1).await?,
+            EventScope::Protocol(Protocol::MeteoraDammV2) => {
+                self.list_meteora_damm_v2(from, &key, limit + 1).await?
             }
             EventScope::Protocol(Protocol::MeteoraDlmm) => return Ok(Page::empty()),
+            EventScope::Pool(pool) => {
+                self.list_meteora_damm_v2_pool(&pool.to_string(), from, &key, limit + 1)
+                    .await?
+            }
         };
         let events = rows
             .into_iter()
             .map(|row| MeteoraDammV2SwapEvent::try_from(row).map(SwapEvent::MeteoraDammV2))
             .collect::<RepositoryResult<Vec<_>>>()?;
-        let page =
-            PageBuilder::new(events, limit, QueryMode::Forward, had_cursor).finalize(|event| {
+        Ok(finish_event_page(
+            events,
+            limit,
+            cursor.is_some(),
+            |event| {
                 let SwapEvent::MeteoraDammV2(e) = event;
                 Cursor::SwapEvent(Box::new(EventCursor {
                     scope,
@@ -75,25 +64,19 @@ impl SwapEventLookup for PgSwapEventRepository {
                     signature: e.signature,
                     event_index: e.event_index,
                 }))
-            });
-        // ⚠️ Forward only: a previous cursor would be read forward from the first item.
-        Ok(Page {
-            prev_cursor: None,
-            ..page
-        })
+            },
+        ))
     }
 }
 
 impl PgSwapEventRepository {
-    /// Every pool's swaps after the key, in two reads: the instant of the `limit`-th one by the
+    /// DAMM v2's swaps after the key, in two reads: the instant of the `limit`-th one by the
     /// index of `timestamp`, then only the swaps from it on, sorted on the whole key.
     /// ⚠️ In one read, the tie-break by signature sorts every swap of the window.
-    async fn list_all(
+    async fn list_meteora_damm_v2(
         &self,
         from: DateTime<Utc>,
-        after_at: Option<DateTime<Utc>>,
-        after_signature: Option<String>,
-        after_index: Option<i32>,
+        key: &EventKey,
         limit: i64,
     ) -> RepositoryResult<Vec<MeteoraDammV2SwapEventRow>> {
         let floor = sqlx::query_scalar!(
@@ -109,9 +92,9 @@ impl PgSwapEventRepository {
              LIMIT 1
             "#,
             from,
-            after_at,
-            after_signature.clone(),
-            after_index,
+            key.at,
+            key.signature,
+            key.event_index,
             limit,
         )
         .fetch_optional(&self.pool)
@@ -135,9 +118,9 @@ impl PgSwapEventRepository {
             "#,
             from,
             floor,
-            after_at,
-            after_signature,
-            after_index,
+            key.at,
+            key.signature,
+            key.event_index,
             limit,
         )
         .fetch_all(&self.pool)
@@ -145,15 +128,13 @@ impl PgSwapEventRepository {
         .map_err(map_sqlx_error)
     }
 
-    /// One pool's swaps after the key, in the same two reads as [`Self::list_all`], on the
-    /// index of `(pool_address, timestamp)`.
-    async fn list_pool(
+    /// One DAMM v2 pool's swaps after the key, in the same two reads as
+    /// [`Self::list_meteora_damm_v2`], on the index of `(pool_address, timestamp)`.
+    async fn list_meteora_damm_v2_pool(
         &self,
         pool: &str,
         from: DateTime<Utc>,
-        after_at: Option<DateTime<Utc>>,
-        after_signature: Option<String>,
-        after_index: Option<i32>,
+        key: &EventKey,
         limit: i64,
     ) -> RepositoryResult<Vec<MeteoraDammV2SwapEventRow>> {
         let floor = sqlx::query_scalar!(
@@ -170,9 +151,9 @@ impl PgSwapEventRepository {
             "#,
             pool,
             from,
-            after_at,
-            after_signature.clone(),
-            after_index,
+            key.at,
+            key.signature,
+            key.event_index,
             limit,
         )
         .fetch_optional(&self.pool)
@@ -198,9 +179,9 @@ impl PgSwapEventRepository {
             pool,
             from,
             floor,
-            after_at,
-            after_signature,
-            after_index,
+            key.at,
+            key.signature,
+            key.event_index,
             limit,
         )
         .fetch_all(&self.pool)

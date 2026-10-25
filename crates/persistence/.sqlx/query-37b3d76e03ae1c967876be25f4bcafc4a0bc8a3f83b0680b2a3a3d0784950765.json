@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,\n                       liquidity_event_kind, amount_a, amount_b, liquidity_delta, reserve_a_after,\n                       reserve_b_after, position, owner\n                  FROM meteora_damm_v2_liquidity_events\n                 WHERE timestamp >= $1\n                   AND timestamp <= COALESCE($2, 'infinity'::TIMESTAMPTZ)\n                   AND (timestamp < COALESCE($2, 'infinity'::TIMESTAMPTZ)\n                        OR (signature, event_index) < ($3, $4))\n                 ORDER BY timestamp DESC, signature DESC, event_index DESC\n                 LIMIT $5\n                ",
+  "query": "\n            SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,\n                   liquidity_event_kind, amount_a, amount_b, liquidity_delta, reserve_a_after,\n                   reserve_b_after, position, owner\n              FROM meteora_damm_v2_liquidity_events\n             WHERE pool_address = $1 AND timestamp >= $2\n               AND timestamp <= COALESCE($3, 'infinity'::TIMESTAMPTZ)\n               AND (timestamp < COALESCE($3, 'infinity'::TIMESTAMPTZ)\n                    OR (signature, event_index) < ($4, $5))\n             ORDER BY timestamp DESC, signature DESC, event_index DESC\n             LIMIT $6\n            ",
   "describe": {
     "columns": [
       {
@@ -160,6 +160,7 @@
     ],
     "parameters": {
       "Left": [
+        "Text",
         "Timestamptz",
         "Timestamptz",
         "Text",
@@ -184,5 +185,5 @@
       false
     ]
   },
-  "hash": "7fb14ad09e340037442861bef817b02329d8edf58e5345ae61ada0b165e7b1fe"
+  "hash": "37b3d76e03ae1c967876be25f4bcafc4a0bc8a3f83b0680b2a3a3d0784950765"
 }
