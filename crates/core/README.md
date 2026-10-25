@@ -55,7 +55,8 @@ core/src/
 │   │                       continuous aggregate's oldest raw row has waited,
 │   │                       and the lateness rule; the alarm's read model)
 │   ├── announcements/     (Announcement + AnnouncementLookup — operator → users
-│   │                       banner; severity deliberately distinct from signals')
+│   │                       banner; severity deliberately distinct from signals';
+│   │                       AnnouncementEntry, its status and cursor, for the list)
 │   ├── watched_pool/      (allowlist)
 │   ├── protocol/          (Protocol enum), trade_direction.rs, freshness_status/
 │   ├── domain_event.rs    (two-level DomainEvent enum)

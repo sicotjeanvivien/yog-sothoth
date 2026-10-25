@@ -15,23 +15,23 @@ use yog_persistence::{PgHealthChecker, PgPool};
 use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
-        Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity, DiscoveredTvl,
-        DiscoveredTvlLookup, EventCursor, EventFreshnessRepository, EventScope, FrozenHours,
-        FrozenPeriod, LatestProtocolTvl, LiquidityChangeEvent, LiquidityChangeEventLookup,
-        LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup,
-        LiquidityMoveOrder, MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesLookup,
-        NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog, PoolChangeEvent,
-        PoolChangeEventLookup, PoolCreationEvent, PoolCreationEventLookup, PoolCreations,
-        PoolCreationsLookup, PoolCursor, PoolEntry, PoolScope, PoolSwapBucket, PositionChangeEvent,
-        PositionChangeEventLookup, PositionFeeClaimEvent, PositionFeeClaimEventLookup, Protocol,
-        ProtocolActivity, ProtocolActivityBar, ProtocolActivityLookup, ProtocolBucket,
-        ProtocolDiscoveredTvl, ProtocolFeeClaimEvent, ProtocolFeeClaimEventLookup,
-        ProtocolPoolCreations, ProtocolPools, ProtocolSwapActivity, ProtocolTvl, ProtocolTvlLookup,
-        RewardChangeEvent, RewardChangeEventLookup, RewardClaimEvent, RewardClaimEventLookup,
-        Severity, Signal, SignalCursor, SignalFeed, SignalFilter, SignalRecord, SwapActivity,
-        SwapActivityLookup, SwapEvent, SwapEventLookup, TokenActivityCursor, TokenActivityFeed,
-        TokenActivityPage, TokenCursor, TokenEntry, TokenMetadata, TokenMetadataLookup, TokenPrice,
-        TokenPriceCursor, TokenPriceLookup, Window,
+        Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementKind, AnnouncementLookup,
+        AnnouncementSeverity, AnnouncementStatus, DiscoveredTvl, DiscoveredTvlLookup, EventCursor,
+        EventFreshnessRepository, EventScope, FrozenHours, FrozenPeriod, LatestProtocolTvl,
+        LiquidityChangeEvent, LiquidityChangeEventLookup, LiquidityFlows, LiquidityMove,
+        LiquidityMoveCursor, LiquidityMoveLookup, LiquidityMoveOrder, MeteoraDammV2PoolProperties,
+        MeteoraDammV2PoolPropertiesLookup, NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog,
+        PoolChangeEvent, PoolChangeEventLookup, PoolCreationEvent, PoolCreationEventLookup,
+        PoolCreations, PoolCreationsLookup, PoolCursor, PoolEntry, PoolScope, PoolSwapBucket,
+        PositionChangeEvent, PositionChangeEventLookup, PositionFeeClaimEvent,
+        PositionFeeClaimEventLookup, Protocol, ProtocolActivity, ProtocolActivityBar,
+        ProtocolActivityLookup, ProtocolBucket, ProtocolDiscoveredTvl, ProtocolFeeClaimEvent,
+        ProtocolFeeClaimEventLookup, ProtocolPoolCreations, ProtocolPools, ProtocolSwapActivity,
+        ProtocolTvl, ProtocolTvlLookup, RewardChangeEvent, RewardChangeEventLookup,
+        RewardClaimEvent, RewardClaimEventLookup, Severity, Signal, SignalCursor, SignalFeed,
+        SignalFilter, SignalRecord, SwapActivity, SwapActivityLookup, SwapEvent, SwapEventLookup,
+        TokenActivityCursor, TokenActivityFeed, TokenActivityPage, TokenCursor, TokenEntry,
+        TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceCursor, TokenPriceLookup, Window,
     },
 };
 
@@ -596,6 +596,16 @@ impl MockAnnouncementRepo {
 impl AnnouncementLookup for MockAnnouncementRepo {
     async fn list_active(&self, _now: DateTime<Utc>) -> RepositoryResult<Vec<Announcement>> {
         take(&self.list_active)
+    }
+
+    async fn list_entries(
+        &self,
+        _: Option<AnnouncementStatus>,
+        _: DateTime<Utc>,
+        _: Option<AnnouncementCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<AnnouncementEntry>> {
+        Ok(Page::empty())
     }
 }
 

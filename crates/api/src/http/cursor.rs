@@ -11,8 +11,9 @@ use solana_pubkey::Pubkey;
 use yog_core::{
     Cursor,
     domain::{
-        EventCursor, EventScope, LiquidityMoveCursor, LiquidityMoveOrder, PoolCursor, PoolScope,
-        SignalCursor, TokenActivityCursor, TokenCursor, TokenPriceCursor, Window,
+        AnnouncementCursor, AnnouncementStatus, EventCursor, EventScope, LiquidityMoveCursor,
+        LiquidityMoveOrder, PoolCursor, PoolScope, SignalCursor, TokenActivityCursor, TokenCursor,
+        TokenPriceCursor, Window,
     },
 };
 
@@ -65,6 +66,14 @@ struct TokenPriceCursorWire {
     mint: String,
     from: String,
     fetched_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AnnouncementCursorWire {
+    status: Option<String>,
+    starts_at: String,
+    id: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -196,6 +205,11 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
         Cursor::RewardClaimEvent(c) => encode_event_cursor(EventCollection::RewardClaims, c),
         Cursor::RewardChangeEvent(c) => encode_event_cursor(EventCollection::RewardChanges, c),
         Cursor::PoolChangeEvent(c) => encode_event_cursor(EventCollection::PoolChanges, c),
+        Cursor::Announcement(c) => encode_b64_json(&AnnouncementCursorWire {
+            status: c.status.map(|s| s.as_str().to_owned()),
+            starts_at: c.starts_at.to_rfc3339(),
+            id: c.id,
+        }),
     }
 }
 
@@ -288,6 +302,24 @@ pub(crate) fn decode_token_cursor(raw: &str) -> Result<TokenCursor, ApiError> {
         fetched_at: parse_rfc3339(&wire.fetched_at)?,
         mint: Pubkey::from_str(&wire.mint)
             .map_err(|_| ApiError::BadRequest("invalid cursor: malformed mint".to_string()))?,
+    })
+}
+
+/// A cursor of the announcements of `status`; one taken under another status is refused.
+pub(crate) fn decode_announcement_cursor(
+    raw: &str,
+    status: Option<AnnouncementStatus>,
+) -> Result<AnnouncementCursor, ApiError> {
+    let wire: AnnouncementCursorWire = decode_b64_json(raw)?;
+    if wire.status.as_deref() != status.map(|s| s.as_str()) {
+        return Err(ApiError::BadRequest(
+            "invalid cursor: taken under another status".to_string(),
+        ));
+    }
+    Ok(AnnouncementCursor {
+        status,
+        starts_at: parse_rfc3339(&wire.starts_at)?,
+        id: wire.id,
     })
 }
 

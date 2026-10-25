@@ -1,6 +1,55 @@
 {
   "components": {
     "schemas": {
+      "AnnouncementEntryResponse": {
+        "description": "An announcement of `/api/announcements`, and where its window stands at the request.",
+        "properties": {
+          "endsAt": {
+            "description": "`null` until the operator closes it.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AnnouncementKindResponse"
+          },
+          "linkUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/AnnouncementSeverityResponse"
+          },
+          "startsAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AnnouncementStatusResponse"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "severity",
+          "message",
+          "startsAt",
+          "status",
+          "endsAt",
+          "linkUrl"
+        ],
+        "type": "object"
+      },
       "AnnouncementKindResponse": {
         "description": "What an announcement is about.",
         "enum": [
@@ -68,6 +117,15 @@
           "info",
           "warning",
           "critical"
+        ],
+        "type": "string"
+      },
+      "AnnouncementStatusResponse": {
+        "description": "Where the announcement's window stands at the request: not begun, open, or ended.",
+        "enum": [
+          "upcoming",
+          "open",
+          "closed"
         ],
         "type": "string"
       },
@@ -955,6 +1013,89 @@
           "slot",
           "rpcLatencyMs",
           "observedAt"
+        ],
+        "type": "object"
+      },
+      "PageResponse_AnnouncementEntryResponse": {
+        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
+        "properties": {
+          "isFirst": {
+            "type": "boolean"
+          },
+          "isLast": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "description": "An announcement of `/api/announcements`, and where its window stands at the request.",
+              "properties": {
+                "endsAt": {
+                  "description": "`null` until the operator closes it.",
+                  "format": "date-time",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "$ref": "#/components/schemas/Count"
+                },
+                "kind": {
+                  "$ref": "#/components/schemas/AnnouncementKindResponse"
+                },
+                "linkUrl": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "severity": {
+                  "$ref": "#/components/schemas/AnnouncementSeverityResponse"
+                },
+                "startsAt": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "status": {
+                  "$ref": "#/components/schemas/AnnouncementStatusResponse"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "severity",
+                "message",
+                "startsAt",
+                "status",
+                "endsAt",
+                "linkUrl"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prevCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "isFirst",
+          "isLast",
+          "nextCursor",
+          "prevCursor"
         ],
         "type": "object"
       },
@@ -5102,6 +5243,79 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/announcements": {
+      "get": {
+        "operationId": "list_announcements",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "oneOf": [
+                {
+                  "description": "Where an announcement's window stands now: not begun, open, or ended.",
+                  "enum": [
+                    "upcoming",
+                    "open",
+                    "closed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_AnnouncementEntryResponse"
+                }
+              }
+            },
+            "description": "A page of every announcement, or of one status, the latest start first."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/announcements/active": {
       "get": {
         "operationId": "list_active_announcements",

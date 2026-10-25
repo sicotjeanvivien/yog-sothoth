@@ -1,7 +1,9 @@
 //! Response DTO for `GET /api/announcements/active`.
 
+mod entry_response;
 mod kind_response;
 mod severity_response;
+mod status_response;
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -10,6 +12,7 @@ use yog_core::domain::Announcement;
 
 use crate::http::dto::schema::Count;
 
+pub(crate) use entry_response::AnnouncementEntryResponse;
 use kind_response::AnnouncementKindResponse;
 use severity_response::AnnouncementSeverityResponse;
 

@@ -19,9 +19,30 @@ export const zAnnouncementSeverityResponse = z.enum([
 
 export type AnnouncementSeverityResponse = z.infer<typeof zAnnouncementSeverityResponse>;
 
+export const zAnnouncementStatusResponse = z.enum([
+    'upcoming',
+    'open',
+    'closed'
+]);
+
+export type AnnouncementStatusResponse = z.infer<typeof zAnnouncementStatusResponse>;
+
 export const zCount = z.int().gte(0);
 
 export type Count = z.infer<typeof zCount>;
+
+export const zAnnouncementEntryResponse = z.object({
+    endsAt: z.iso.datetime({ offset: true }).nullable(),
+    id: zCount,
+    kind: zAnnouncementKindResponse,
+    linkUrl: z.string().nullable(),
+    message: z.string(),
+    severity: zAnnouncementSeverityResponse,
+    startsAt: z.iso.datetime({ offset: true }),
+    status: zAnnouncementStatusResponse
+});
+
+export type AnnouncementEntryResponse = z.infer<typeof zAnnouncementEntryResponse>;
 
 export const zAnnouncementResponse = z.object({
     endsAt: z.iso.datetime({ offset: true }).nullable(),
@@ -111,6 +132,25 @@ export const zMeteoraDammV2SplitNumeratorsResponse = z.object({
 });
 
 export type MeteoraDammV2SplitNumeratorsResponse = z.infer<typeof zMeteoraDammV2SplitNumeratorsResponse>;
+
+export const zPageResponseAnnouncementEntryResponse = z.object({
+    isFirst: z.boolean(),
+    isLast: z.boolean(),
+    items: z.array(z.object({
+        endsAt: z.iso.datetime({ offset: true }).nullable(),
+        id: zCount,
+        kind: zAnnouncementKindResponse,
+        linkUrl: z.string().nullable(),
+        message: z.string(),
+        severity: zAnnouncementSeverityResponse,
+        startsAt: z.iso.datetime({ offset: true }),
+        status: zAnnouncementStatusResponse
+    })),
+    nextCursor: z.string().nullable(),
+    prevCursor: z.string().nullable()
+});
+
+export type PageResponseAnnouncementEntryResponse = z.infer<typeof zPageResponseAnnouncementEntryResponse>;
 
 export const zPoolChangeEventMeteoraDammV2Response = z.union([
     zMeteoraDammV2PoolStatusResponse.and(z.object({
@@ -1275,6 +1315,18 @@ export const zWindowedResponseSwapActivityResponse = z.object({
 });
 
 export type WindowedResponseSwapActivityResponse = z.infer<typeof zWindowedResponseSwapActivityResponse>;
+
+export const zListAnnouncementsQuery = z.object({
+    status: z.union([
+        z.literal('upcoming'),
+        z.literal('open'),
+        z.literal('closed')
+    ]).nullish(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListAnnouncementsResponse = zPageResponseAnnouncementEntryResponse;
 
 export const zListActiveAnnouncementsResponse = z.array(zAnnouncementResponse);
 

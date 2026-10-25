@@ -1,0 +1,111 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id AS \"id!\", kind AS \"kind!\", severity AS \"severity!\", message AS \"message!\",\n                   link_url AS \"link_url?\", starts_at AS \"starts_at!\", ends_at AS \"ends_at?\",\n                   status AS \"status!\"\n              FROM (\n                SELECT id, kind, severity, message, link_url, starts_at, ends_at,\n                       CASE\n                           WHEN starts_at > $1 THEN 'upcoming'\n                           WHEN ends_at IS NOT NULL AND ends_at <= $1 THEN 'closed'\n                           ELSE 'open'\n                       END AS status\n                  FROM announcements\n              ) AS entries\n             WHERE ($2::TEXT IS NULL OR status = $2)\n               AND starts_at <= COALESCE($3, 'infinity'::TIMESTAMPTZ)\n               AND (starts_at < COALESCE($3, 'infinity'::TIMESTAMPTZ) OR id < $4)\n             ORDER BY starts_at DESC, id DESC\n             LIMIT $5\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "announcements",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "kind!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "announcements",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "severity!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "announcements",
+            "name": "severity"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "message!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "announcements",
+            "name": "message"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "link_url?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "announcements",
+            "name": "link_url"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "starts_at!",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "announcements",
+            "name": "starts_at"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "ends_at?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "announcements",
+            "name": "ends_at"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "status!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Text",
+        "Timestamptz",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "59b21e7f58ffc70ede058f48ebb4e2c01285075c761673dbf6f10aa89f8ae113"
+}
