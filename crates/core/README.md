@@ -34,6 +34,9 @@ core/src/
 │   │                       EventScope, EventCursor and its window_start in event_cursor.rs)
 │   ├── pool_creations/    (PoolCreations, by protocol — PoolCreationsLookup)
 │   ├── liquidity_moves/   (LiquidityMove, LiquidityFlows — LiquidityMoveLookup)
+│   ├── rotation_runs/     (RotationRun, its totals, order, scope and cursor —
+│   │                       RotationRunLookup; TranchePeriod, through the last tranche
+│   │                       written, in analytic/window.rs)
 │   ├── protocol_tvl/      (ProtocolTvl, a reading at an instant — ProtocolTvlLookup)
 │   ├── discovered_tvl/    (DiscoveredTvl — DiscoveredTvlLookup)
 │   ├── protocol_activity/ (ProtocolActivity, its bars and TVL — ProtocolActivityLookup)
