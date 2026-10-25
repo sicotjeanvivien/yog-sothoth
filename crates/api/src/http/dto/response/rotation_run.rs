@@ -15,6 +15,9 @@ pub(crate) struct RotationRunResponse {
     protocol: ProtocolResponse,
     #[schema(min_length = 1)]
     pool_address: String,
+    /// `null` before its metadata is fetched.
+    token_a_symbol: Option<String>,
+    token_b_symbol: Option<String>,
     started_at: DateTime<Utc>,
     /// The end of its last marked tranche.
     ended_at: DateTime<Utc>,
@@ -31,6 +34,8 @@ impl From<RotationRun> for RotationRunResponse {
         Self {
             protocol: run.protocol.into(),
             pool_address: run.pool_address.to_string(),
+            token_a_symbol: run.token_a_symbol,
+            token_b_symbol: run.token_b_symbol,
             started_at: run.started_at,
             ended_at: run.ended_at,
             volume_usd: run.volume_usd,

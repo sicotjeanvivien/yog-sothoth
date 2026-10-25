@@ -227,6 +227,47 @@
           "empty": "Aucun mouvement valorisé sur la période.",
           "create": "création"
         }
+      },
+      "volume": {
+        "title": "D'où vient le volume",
+        "info": "Une rafale : une pool dont le côté SOL, USDC ou USDT change de mains au moins une fois toutes les 5 minutes, sans pause de plus de 30 minutes. Le volume affiché reste le volume réel ; la rafale dit d'où il vient.",
+        "inRuns": "En rafale",
+        "outside": "Hors rafale",
+        "unsplit": "Avant la mesure des rafales",
+        "share": "Part en rafale",
+        "perHour": "Volume par heure",
+        "perDay": "Volume par jour",
+        "measuredSince": "Rafales mesurées depuis le {since}",
+        "notMeasured": "Les rafales ne sont pas encore mesurées.",
+        "periodTotal": "Total sur {period}",
+        "chartLabelHourly": "Volume par heure, en rafale et hors rafale",
+        "chartLabelDaily": "Volume par jour, en rafale et hors rafale",
+        "stats": {
+          "title": "Les rafales · {period}",
+          "info": "Les rafales commencées sur la période : leur nombre et celui de leurs pools, combien durent encore, leur durée du début à la fin, et la part de leur volume échangée dans leur première heure.",
+          "runs": "Rafales",
+          "onPools": "sur {pools} {count, plural, one {pool} other {pools}}",
+          "inProgress": "{count} en cours",
+          "duration": "Durée d'une rafale",
+          "median": "médiane",
+          "medianAndP90": "médiane · 9 sur 10 durent moins de {p90}",
+          "firstHour": "Vu dans la première heure",
+          "firstHourSub": "du volume d'une rafale",
+          "none": "Aucune rafale sur la période."
+        },
+        "runs": {
+          "title": "Plus grosses rafales · {period}",
+          "info": "Les rafales de plus gros volume commencées sur la période, avec leur début en UTC et leur durée. Une rafale en cours peut encore grandir ; une rafale éteinte n'a plus eu de tranche en rafale depuis 30 minutes.",
+          "tableLabel": "Plus grosses rafales sur la période choisie",
+          "pool": "Pool",
+          "start": "Début",
+          "duration": "Durée",
+          "volume": "Volume",
+          "state": "État",
+          "live": "en cours",
+          "done": "éteinte",
+          "empty": "Aucune rafale sur la période."
+        }
       }
     },
     "BlockError": {

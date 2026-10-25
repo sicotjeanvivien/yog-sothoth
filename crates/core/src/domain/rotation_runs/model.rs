@@ -17,12 +17,22 @@ pub struct RotationRun {
     pub first_hour_volume_usd: Decimal,
     /// No marked tranche followed within the gap: the run will not grow.
     pub extinct: bool,
+    /// The symbols of its pool's tokens, `None` before their metadata is fetched.
+    pub token_a_symbol: Option<String>,
+    pub token_b_symbol: Option<String>,
 }
 
 /// The runs that started in a period, and their volume.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RotationRunTotals {
     pub runs: i64,
+    /// The distinct pools the runs are of.
+    pub pools: i64,
+    /// The runs not extinct yet.
+    pub in_progress: i64,
+    /// From start to end, `None` without a run.
+    pub median_duration_seconds: Option<i64>,
+    pub p90_duration_seconds: Option<i64>,
     pub volume_usd: Decimal,
     pub first_hour_volume_usd: Decimal,
 }

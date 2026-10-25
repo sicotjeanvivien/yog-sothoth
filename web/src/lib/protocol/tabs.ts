@@ -8,7 +8,7 @@ export const PROTOCOL_TABS = ["liquidity", "volume", "fees", "pools", "tokens", 
 export type ProtocolTab = (typeof PROTOCOL_TABS)[number];
 
 /** The tabs whose content has shipped. */
-export const READY_TABS: ReadonlySet<ProtocolTab> = new Set<ProtocolTab>(["liquidity"]);
+export const READY_TABS: ReadonlySet<ProtocolTab> = new Set<ProtocolTab>(["liquidity", "volume"]);
 
 /** "01" to "06", shown before the tab's label. */
 export function tabNumber(tab: ProtocolTab): string {

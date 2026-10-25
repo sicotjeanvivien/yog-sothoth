@@ -929,6 +929,10 @@ export type ProtocolRotationRunBucketResponse = z.infer<typeof zProtocolRotation
 
 export const zProtocolRotationRunTotalsResponse = z.object({
     firstHourVolumeUsd: zUnsignedDecimal,
+    inProgress: zCount,
+    medianDurationSeconds: zCount.nullable(),
+    p90DurationSeconds: zCount.nullable(),
+    pools: zCount,
     protocol: zProtocolResponse,
     runs: zCount,
     volumeUsd: zUnsignedDecimal
@@ -967,6 +971,8 @@ export const zRotationRunResponse = z.object({
     poolAddress: z.string().min(1),
     protocol: zProtocolResponse,
     startedAt: z.iso.datetime({ offset: true }),
+    tokenASymbol: z.string().nullable(),
+    tokenBSymbol: z.string().nullable(),
     volumeUsd: zUnsignedDecimal
 });
 
@@ -1125,6 +1131,10 @@ export const zTrancheWindowedResponseProtocolRotationRunTotalsResponse = z.objec
     from: z.iso.datetime({ offset: true }).nullable(),
     items: z.array(z.object({
         firstHourVolumeUsd: zUnsignedDecimal,
+        inProgress: zCount,
+        medianDurationSeconds: zCount.nullable(),
+        p90DurationSeconds: zCount.nullable(),
+        pools: zCount,
         protocol: zProtocolResponse,
         runs: zCount,
         volumeUsd: zUnsignedDecimal
@@ -1171,6 +1181,8 @@ export const zWindowedPageResponseRotationRunResponse = z.object({
         poolAddress: z.string().min(1),
         protocol: zProtocolResponse,
         startedAt: z.iso.datetime({ offset: true }),
+        tokenASymbol: z.string().nullable(),
+        tokenBSymbol: z.string().nullable(),
         volumeUsd: zUnsignedDecimal
     })),
     nextCursor: z.string().nullable(),

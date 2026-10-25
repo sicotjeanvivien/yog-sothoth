@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT protocol, pool_address, started_at, ended_at, volume_usd,\n                       first_hour_volume_usd, extinct, ROUND(volume_usd, 6) AS \"volume_key!\"\n                  FROM analytic_rotation_runs\n                 WHERE protocol = $3 AND started_at >= $1 AND started_at < $2\n                   AND ($4::TIMESTAMPTZ IS NULL\n                        OR started_at < $4\n                        OR (started_at = $4 AND pool_address > $5))\n                 ORDER BY started_at DESC, pool_address\n                 LIMIT $6\n                ",
+  "query": "\n                SELECT r.protocol, r.pool_address, r.started_at, r.ended_at, r.volume_usd,\n                       r.first_hour_volume_usd, r.extinct, ROUND(r.volume_usd, 6) AS \"volume_key!\",\n                       ta.symbol AS \"token_a_symbol?\", tb.symbol AS \"token_b_symbol?\"\n                  FROM analytic_rotation_runs r\n                  LEFT JOIN pools p ON p.pool_address = r.pool_address\n                  LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT\n                  LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT\n                 WHERE r.pool_address = $3 AND r.started_at >= $1 AND r.started_at < $2\n                   AND ($4::TIMESTAMPTZ IS NULL\n                        OR r.started_at < $4\n                        OR (r.started_at = $4 AND r.pool_address > $5))\n                 ORDER BY r.started_at DESC, r.pool_address\n                 LIMIT $6\n                ",
   "describe": {
     "columns": [
       {
@@ -85,6 +85,28 @@
         "name": "volume_key!",
         "type_info": "Numeric",
         "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "token_a_symbol?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "symbol"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "token_b_symbol?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "symbol"
+          }
+        }
       }
     ],
     "parameters": {
@@ -105,8 +127,10 @@
       false,
       false,
       false,
-      null
+      null,
+      true,
+      true
     ]
   },
-  "hash": "e7c7dda4df82c795b5e8cd13a5c95d837299e8d6633127c024ee28db1f2c65c9"
+  "hash": "eab949e73f2e02836a4714606437a6f5755a0d38962a25192acd172b439d921a"
 }

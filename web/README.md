@@ -346,6 +346,22 @@ moves say so instead of a partial sum. Opening this tab opened the menu entry,
 with a green dot beside it while the ingestion is live
 (`sidebar/product-live-dot.tsx`), and put the page in the sitemap.
 
+**02 Volume** — `protocol/volume/volume-tab.tsx`: where the volume comes from,
+each bar of the protocol's swaps split between its rotation runs
+(`dash-run`) and the rest (`dash-run-out`) by `lib/protocol/volume.ts`, from
+two routes on the same frozen hours: `swaps/hourly|daily` and
+`rotation-runs/hourly|daily`. The runs are measured from a later hour than the
+swaps: a bar they do not cover whole keeps its volume, unsplit, in a neutral
+tint, and the legend says since when they are measured. Under the chart, the
+period's detail, replaced by the bar's under the pointer
+(`volume-split-bars.tsx`). Beside it, the runs of the period
+(`rotation-runs/totals`: their count and pools, those in progress over 24 h,
+the median and p90 length, the share seen in the first hour), and under both
+the five largest (`rotation-runs?sort=volume`), named by their tokens. The
+runs' totals and list end at the last tranche written: until a window is
+covered, they say so instead of a partial count. The words are "rafale" and
+"rotation run": what is seen, never an intent.
+
 **Tabs** — `lib/protocol/tabs.ts` lists the six tabs of the canvas, in order;
 a tab joins the row when its content ships (`READY_TABS`), numbered by its
 place in the full list so it never moves. `?tab=` picks one, a bad value falls

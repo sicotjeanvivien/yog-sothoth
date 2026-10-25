@@ -1,0 +1,85 @@
+/** The volume tab's chart, as data: each bar's volume split between the rotation runs and the rest. */
+
+import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
+import { slotsOf } from "@/lib/overview/chart";
+import type { Period } from "@/lib/overview/period";
+
+/**
+ * One bar: `total` is `null` where no volume is valued; `inRuns` is `null` where the runs do not
+ * cover the bar whole, so it cannot be split.
+ */
+export type SplitSlot = {
+  from: Date;
+  to: Date;
+  total: number | null;
+  inRuns: number | null;
+};
+
+type VolumeBar = { protocol: ProtocolResponse; from: string; volumeUsd: string | null };
+
+/** The protocol's volume in the period's slots, ending at the swaps' `asOf`, split by its runs. */
+export function splitSlotsOf(
+  period: Period,
+  asOf: string,
+  swaps: readonly VolumeBar[],
+  runs: { asOf: string | null; coveredSince: string | null; items: readonly VolumeBar[] },
+  protocol: ProtocolResponse,
+): SplitSlot[] {
+  const pick = (bars: readonly VolumeBar[]) =>
+    slotsOf(
+      period,
+      asOf,
+      bars
+        .filter((bar) => bar.protocol === protocol)
+        .map((bar) => ({ from: bar.from, value: bar.volumeUsd })),
+    );
+  const totals = pick(swaps);
+  const inRuns = pick(runs.items);
+  const coveredFrom = runs.coveredSince === null ? Infinity : Date.parse(runs.coveredSince);
+  const coveredTo = runs.asOf === null ? -Infinity : Date.parse(runs.asOf);
+  return totals.map((slot, i) => {
+    const covered = slot.from.getTime() >= coveredFrom && slot.to.getTime() <= coveredTo;
+    return {
+      from: slot.from,
+      to: slot.to,
+      total: slot.value,
+      inRuns: slot.value === null || !covered ? null : (inRuns[i]?.value ?? 0),
+    };
+  });
+}
+
+/** What a split bar shows: the volume outside the runs, never under zero. */
+export function outsideRuns(slot: SplitSlot): number | null {
+  return slot.total === null || slot.inRuns === null ? null : Math.max(0, slot.total - slot.inRuns);
+}
+
+/** The legend: the split bars summed, the share in runs `null` without volume, and what is unsplit. */
+export function splitTotalsOf(slots: readonly SplitSlot[]): {
+  inRuns: number;
+  outside: number;
+  share: number | null;
+  unsplit: number;
+} {
+  let inRuns = 0;
+  let outside = 0;
+  let unsplit = 0;
+  for (const slot of slots) {
+    const out = outsideRuns(slot);
+    if (slot.inRuns !== null && out !== null) {
+      inRuns += slot.inRuns;
+      outside += out;
+    } else {
+      unsplit += slot.total ?? 0;
+    }
+  }
+  return { inRuns, outside, share: inRuns + outside > 0 ? inRuns / (inRuns + outside) : null, unsplit };
+}
+
+/** "18 min" under an hour, "2 h 05" beyond, from whole minutes. */
+export function durationOf(seconds: number): string {
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes} min`;
+  }
+  return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}`;
+}

@@ -11,9 +11,15 @@ import {
   zGetProtocolActivityDailyResponse,
   zGetProtocolActivityHourlyResponse,
   zGetProtocolActivityResponse,
+  zGetProtocolRotationRunsDailyResponse,
+  zGetProtocolRotationRunsHourlyResponse,
+  zGetProtocolRotationRunTotalsResponse,
+  zGetProtocolSwapsDailyResponse,
+  zGetProtocolSwapsHourlyResponse,
   zGetProtocolTvlHourlyResponse,
   zGetProtocolTvlResponse,
   zListLiquidityMovesResponse,
+  zListProtocolRotationRunsResponse,
   zListProtocolsResponse,
   type ProtocolResponse,
   type WindowResponse,
@@ -58,5 +64,45 @@ export const fetchLiquidityMoves = cache(
       `/api/protocols/${protocol}/liquidity-moves`,
       { window, limit: String(limit) },
       zListLiquidityMovesResponse,
+    ),
+);
+
+/** The protocol's volume, hour by hour over 24 h, by 24-hour slices ending at `asOf` beyond. */
+export const fetchProtocolSwapsSeries = cache((protocol: ProtocolResponse, window: WindowResponse) =>
+  window === "24h"
+    ? apiGet(`/api/protocols/${protocol}/swaps/hourly`, { window }, zGetProtocolSwapsHourlyResponse)
+    : apiGet(`/api/protocols/${protocol}/swaps/daily`, { window }, zGetProtocolSwapsDailyResponse),
+);
+
+/** The protocol's volume in rotation runs, on the bars of `fetchProtocolSwapsSeries`. */
+export const fetchRotationRunsSeries = cache((protocol: ProtocolResponse, window: WindowResponse) =>
+  window === "24h"
+    ? apiGet(
+        `/api/protocols/${protocol}/rotation-runs/hourly`,
+        { window },
+        zGetProtocolRotationRunsHourlyResponse,
+      )
+    : apiGet(
+        `/api/protocols/${protocol}/rotation-runs/daily`,
+        { window },
+        zGetProtocolRotationRunsDailyResponse,
+      ),
+);
+
+export const fetchRotationRunTotals = cache((protocol: ProtocolResponse, window: WindowResponse) =>
+  apiGet(
+    `/api/protocols/${protocol}/rotation-runs/totals`,
+    { window },
+    zGetProtocolRotationRunTotalsResponse,
+  ),
+);
+
+/** The protocol's rotation runs of largest volume over the window. */
+export const fetchLargestRotationRuns = cache(
+  (protocol: ProtocolResponse, window: WindowResponse, limit: number) =>
+    apiGet(
+      `/api/protocols/${protocol}/rotation-runs`,
+      { window, sort: "volume", limit: String(limit) },
+      zListProtocolRotationRunsResponse,
     ),
 );

@@ -3239,6 +3239,35 @@
           "firstHourVolumeUsd": {
             "$ref": "#/components/schemas/UnsignedDecimal"
           },
+          "inProgress": {
+            "$ref": "#/components/schemas/Count",
+            "description": "The runs not extinct yet."
+          },
+          "medianDurationSeconds": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Count",
+                "description": "From start to end; `null` without a run."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "p90DurationSeconds": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Count"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pools": {
+            "$ref": "#/components/schemas/Count",
+            "description": "The distinct pools the runs are of."
+          },
           "protocol": {
             "$ref": "#/components/schemas/ProtocolResponse"
           },
@@ -3252,8 +3281,12 @@
         "required": [
           "protocol",
           "runs",
+          "pools",
+          "inProgress",
           "volumeUsd",
-          "firstHourVolumeUsd"
+          "firstHourVolumeUsd",
+          "medianDurationSeconds",
+          "p90DurationSeconds"
         ],
         "type": "object"
       },
@@ -3673,6 +3706,19 @@
             "format": "date-time",
             "type": "string"
           },
+          "tokenASymbol": {
+            "description": "`null` before its metadata is fetched.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tokenBSymbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "volumeUsd": {
             "$ref": "#/components/schemas/UnsignedDecimal"
           }
@@ -3684,7 +3730,9 @@
           "endedAt",
           "volumeUsd",
           "firstHourVolumeUsd",
-          "extinct"
+          "extinct",
+          "tokenASymbol",
+          "tokenBSymbol"
         ],
         "type": "object"
       },
@@ -4170,6 +4218,35 @@
                 "firstHourVolumeUsd": {
                   "$ref": "#/components/schemas/UnsignedDecimal"
                 },
+                "inProgress": {
+                  "$ref": "#/components/schemas/Count",
+                  "description": "The runs not extinct yet."
+                },
+                "medianDurationSeconds": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Count",
+                      "description": "From start to end; `null` without a run."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "p90DurationSeconds": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Count"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "pools": {
+                  "$ref": "#/components/schemas/Count",
+                  "description": "The distinct pools the runs are of."
+                },
                 "protocol": {
                   "$ref": "#/components/schemas/ProtocolResponse"
                 },
@@ -4183,8 +4260,12 @@
               "required": [
                 "protocol",
                 "runs",
+                "pools",
+                "inProgress",
                 "volumeUsd",
-                "firstHourVolumeUsd"
+                "firstHourVolumeUsd",
+                "medianDurationSeconds",
+                "p90DurationSeconds"
               ],
               "type": "object"
             },
@@ -4386,6 +4467,19 @@
                   "format": "date-time",
                   "type": "string"
                 },
+                "tokenASymbol": {
+                  "description": "`null` before its metadata is fetched.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "tokenBSymbol": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "volumeUsd": {
                   "$ref": "#/components/schemas/UnsignedDecimal"
                 }
@@ -4397,7 +4491,9 @@
                 "endedAt",
                 "volumeUsd",
                 "firstHourVolumeUsd",
-                "extinct"
+                "extinct",
+                "tokenASymbol",
+                "tokenBSymbol"
               ],
               "type": "object"
             },

@@ -145,8 +145,8 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/swaps/by-token` | Tokens by volume over `?window=`, every protocol summed, forward-only cursor |
 | `GET` | `/api/pool-creations/totals`, `/hourly`, `/daily`, and under `/api/protocols/{protocol}/` | Per protocol, the pools created over the window, then per bucket |
 | `GET` | `/api/protocols/{protocol}/liquidity-moves/totals`, `/hourly`, `/daily` | The protocol's liquidity created, added and removed, valued, with its moves valued; its `coveredSince` is the liquidity's |
-| `GET` | `/api/protocols/{protocol}/rotation-runs`, `/api/pools/{pool}/rotation-runs` | A page of the rotation runs started in the window, through the last tranche written: pool, start, end, volume, first hour's volume, extinct; `?sort=volume` (default) or `at`, forward-only cursor that keeps its first page's end, refused (400) under another list; empty while the rotation does not cover the window |
-| `GET` | `/api/protocols/{protocol}/rotation-runs/totals` | The runs started in the window, their volume and first hour's volume, through the last tranche written; its `coveredSince` is the first tranche whose rotation was measured |
+| `GET` | `/api/protocols/{protocol}/rotation-runs`, `/api/pools/{pool}/rotation-runs` | A page of the rotation runs started in the window, through the last tranche written: pool and its tokens' symbols, start, end, volume, first hour's volume, extinct; `?sort=volume` (default) or `at`, forward-only cursor that keeps its first page's end, refused (400) under another list; empty while the rotation does not cover the window |
+| `GET` | `/api/protocols/{protocol}/rotation-runs/totals` | The runs started in the window, their distinct pools, those still in progress, their median and p90 duration, their volume and first hour's volume, through the last tranche written; its `coveredSince` is the first tranche whose rotation was measured |
 | `GET` | `/api/protocols/{protocol}/rotation-runs/hourly`, `/daily` | The volume in runs by frozen hour, or by 24 hours ending at `asOf`, from the first whole hour measured |
 | `GET` | `/api/pools/{pool}/liquidity-moves` | A page of the pool's valued moves, `?sort=amount` (default) or `at`, forward-only cursor, refused (400) for another pool or window or after a freeze; empty while its protocol's liquidity does not cover the window |
 | `GET` | `/api/tvl`, `/api/protocols/{protocol}/tvl` | Per protocol, the last TVL reading at or before `asOf`, its `at` said |
@@ -186,7 +186,7 @@ at the end of this section.
    - **business resources**, the entities of the domain and their state, observed on the chain
      or fetched from a provider: `protocols`, `pools`, `tokens`, and a token's `prices`;
    - **produced resources**, what we compute from the first two: the measures (rule 4),
-     `tvl`, `liquidity-moves`, `rotation-runs`, `vesting-unlocks`, `signals`;
+     `tvl`, `pool-discoveries`, `liquidity-moves`, `rotation-runs`, `vesting-unlocks`, `signals`;
    - **service resources**, the state and the messages of the service: `network` and
      `ingestion`, singletons each at `/api/<singleton>`, and `announcements`.
 

@@ -20,6 +20,8 @@ pub(super) struct RotationRunRow {
     pub(super) first_hour_volume_usd: BigDecimal,
     pub(super) extinct: bool,
     pub(super) volume_key: BigDecimal,
+    pub(super) token_a_symbol: Option<String>,
+    pub(super) token_b_symbol: Option<String>,
 }
 
 impl RotationRunRow {
@@ -37,6 +39,8 @@ impl RotationRunRow {
                     "first_hour_volume_usd",
                 )?,
                 extinct: self.extinct,
+                token_a_symbol: self.token_a_symbol,
+                token_b_symbol: self.token_b_symbol,
             },
             key,
         ))
@@ -45,6 +49,10 @@ impl RotationRunRow {
 
 pub(super) struct RotationRunTotalsRow {
     pub(super) runs: i64,
+    pub(super) pools: i64,
+    pub(super) in_progress: i64,
+    pub(super) median_duration_seconds: Option<i64>,
+    pub(super) p90_duration_seconds: Option<i64>,
     pub(super) volume_usd: BigDecimal,
     pub(super) first_hour_volume_usd: BigDecimal,
 }
@@ -55,6 +63,10 @@ impl TryFrom<RotationRunTotalsRow> for RotationRunTotals {
     fn try_from(row: RotationRunTotalsRow) -> Result<Self, Self::Error> {
         Ok(RotationRunTotals {
             runs: row.runs,
+            pools: row.pools,
+            in_progress: row.in_progress,
+            median_duration_seconds: row.median_duration_seconds,
+            p90_duration_seconds: row.p90_duration_seconds,
             volume_usd: convert_bigdecimal_to_decimal(row.volume_usd, "volume_usd")?,
             first_hour_volume_usd: convert_bigdecimal_to_decimal(
                 row.first_hour_volume_usd,
