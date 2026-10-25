@@ -22,7 +22,8 @@ async fn the_business_routes_are_mounted() {
 }
 
 /// Mutation: a cursor decoded without its list — a page of every pool followed under one
-/// protocol, or another mint's prices; or a path read without parsing — a malformed one served.
+/// protocol, another mint's prices, or prices as tokens; or a path read without parsing — a
+/// malformed one served.
 #[tokio::test]
 async fn a_malformed_path_or_a_cursor_of_another_list_is_refused() {
     let all = encode_cursor(&Cursor::Pool(Box::new(PoolCursor {
@@ -48,6 +49,7 @@ async fn a_malformed_path_or_a_cursor_of_another_list_is_refused() {
         format!("/api/tokens/{}/prices?window=1h", pk(2)),
         format!("/api/protocols/meteora_damm_v2/pools?cursor={all}"),
         format!("/api/tokens/{}/prices?cursor={other_mint}", pk(2)),
+        format!("/api/tokens?cursor={other_mint}"),
     ] {
         let (status, content_type, _) = get(&uri).await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}");

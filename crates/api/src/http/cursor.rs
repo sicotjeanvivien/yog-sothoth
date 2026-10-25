@@ -1,4 +1,6 @@
 // The blob is URL-safe unpadded base64 over a JSON object.
+// ⚠️ Unknown fields refused: a cursor of another list holding every field of this one would
+// otherwise decode as one.
 use crate::http::error::ApiError;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
@@ -15,12 +17,14 @@ use yog_core::{
 };
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct SignalCursorWire {
     triggered_at: String,
     id: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TokenActivityCursorWire {
     last_hour: String,
     volume_usd: String,
@@ -28,6 +32,7 @@ struct TokenActivityCursorWire {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct LiquidityMoveCursorWire {
     pool: String,
     window: String,
@@ -40,6 +45,7 @@ struct LiquidityMoveCursorWire {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct PoolCursorWire {
     scope: String,
     first_seen_at: String,
@@ -47,12 +53,14 @@ struct PoolCursorWire {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TokenCursorWire {
     fetched_at: String,
     mint: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TokenPriceCursorWire {
     mint: String,
     from: String,
