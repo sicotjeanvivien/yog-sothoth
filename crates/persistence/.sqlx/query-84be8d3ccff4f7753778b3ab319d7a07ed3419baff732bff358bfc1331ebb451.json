@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM analytic_rotation_runs WHERE protocol = $1 AND NOT settled",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "84be8d3ccff4f7753778b3ab319d7a07ed3419baff732bff358bfc1331ebb451"
+}

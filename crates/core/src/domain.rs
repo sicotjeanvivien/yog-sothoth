@@ -40,8 +40,8 @@ mod unpriced_mints;
 mod watched_pool;
 
 pub use analytic::{
-    AnalyticProgress, AnalyticRepository, BURST_GAP, BURST_ROTATION, CycleOutcome, CycleWrite,
-    FREEZE_MARGIN, FrozenHours, FrozenPeriod, MAX_HOURS_PER_CYCLE, ProtocolBucket, QUOTED_MINTS,
+    AnalyticProgress, AnalyticRepository, CycleOutcome, CycleWrite, FREEZE_MARGIN, FrozenHours,
+    FrozenPeriod, MAX_HOURS_PER_CYCLE, ProtocolBucket, QUOTED_MINTS, RUN_GAP, RUN_ROTATION,
     TRANCHE, Window,
 };
 pub use announcements::{

@@ -23,7 +23,7 @@ core/src/
 │   │                       and which hours it freezes; AnalyticRepository;
 │   │                       Window and FrozenPeriod — what a measure is read over,
 │   │                       ProtocolBucket — one bucket of a series;
-│   │                       burst.rs — the burst's two thresholds and quoted mints)
+│   │                       rotation_run.rs — the run's two thresholds and quoted mints)
 │   ├── swap_activity/     (SwapActivity, by protocol and by pool — SwapActivityLookup)
 │   ├── swap_event/, liquidity_change_event/, pool_creation_event/,
 │   │   position_change_event/, position_fee_claim_event/, protocol_fee_claim_event/,

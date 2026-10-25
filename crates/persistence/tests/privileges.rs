@@ -17,14 +17,14 @@ type TablePrivileges<'a> = (&'a str, &'a [RolePrivileges<'a>]);
 /// though it updates none: the grant states ownership, not today's statements — do not tighten it.
 const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     (
-        "analytic_burst_hours",
+        "analytic_rotation_run_hours",
         &[
             ("yog_analytic", &["DELETE", "INSERT", "SELECT"]),
             ("yog_api", &["SELECT"]),
         ],
     ),
     (
-        "analytic_bursts",
+        "analytic_rotation_runs",
         &[
             ("yog_analytic", &["DELETE", "INSERT", "SELECT"]),
             ("yog_api", &["SELECT"]),

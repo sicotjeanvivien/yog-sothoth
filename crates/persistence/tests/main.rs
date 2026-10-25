@@ -7,10 +7,10 @@
 mod helpers;
 
 mod amount_usd;
-mod analytic_bursts;
 mod analytic_liquidity;
 mod analytic_prices;
 mod analytic_rebuild;
+mod analytic_rotation_runs;
 mod analytic_writer;
 mod announcement_entries;
 mod archive_role;

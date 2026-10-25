@@ -1,6 +1,6 @@
-//! The bursts of `PgAnalyticRepository` (036): each tranche's quoted side turned over, read in
-//! the raw swaps; the tranches marked at `BURST_ROTATION` drawn into bursts `BURST_GAP` apart,
-//! rewritten until settled, then written once with their hours.
+//! The rotation runs of `PgAnalyticRepository` (036): each tranche's quoted side turned over, read
+//! in the raw swaps; the tranches marked at `RUN_ROTATION` drawn into rotation runs `RUN_GAP`
+//! apart, rewritten until settled, then written once with their hours.
 
 use chrono::{DateTime, Duration, DurationRound, Utc};
 use sqlx::PgPool;
@@ -86,7 +86,7 @@ async fn insert_swap(
     .unwrap();
 }
 
-/// A tranche already valued, its rotation given: what the bursts read.
+/// A tranche already valued, its rotation given: what the rotation runs read.
 async fn insert_tranche(
     pool: &PgPool,
     address: &str,
@@ -136,12 +136,12 @@ async fn rotation(pool: &PgPool, address: &str, bucket: DateTime<Utc>) -> Option
     .unwrap()
 }
 
-type Burst = (DateTime<Utc>, DateTime<Utc>, BigDecimal, bool, bool);
+type RotationRun = (DateTime<Utc>, DateTime<Utc>, BigDecimal, bool, bool);
 
-async fn bursts(pool: &PgPool) -> Vec<Burst> {
+async fn rotation_runs(pool: &PgPool) -> Vec<RotationRun> {
     sqlx::query_as(
         "SELECT started_at, ended_at, volume_usd, extinct, settled
-           FROM analytic_bursts ORDER BY started_at",
+           FROM analytic_rotation_runs ORDER BY started_at",
     )
     .fetch_all(pool)
     .await
@@ -192,10 +192,10 @@ async fn a_pair_without_a_quoted_side_takes_its_smaller_rotation(pool: PgPool) {
     assert_eq!(rotation(&pool, &address, tranche).await, Some(dec("2")));
 }
 
-/// Mutation: `BURST_GAP` at 35 min — the two bursts would read as one; `BURST_ROTATION` under
-/// 0.99 — a third burst at 120.
+/// Mutation: `RUN_GAP` at 35 min — the two rotation runs would read as one; `RUN_ROTATION` under
+/// 0.99 — a third rotation run at 120.
 #[sqlx::test]
-async fn marked_tranches_at_most_the_gap_apart_make_one_burst(pool: PgPool) {
+async fn marked_tranches_at_most_the_gap_apart_make_one_rotation_run(pool: PgPool) {
     let base = settled_hour();
     let address = pk(1).to_string();
     for (minutes, rotation) in [(0, "2"), (15, "0.1"), (30, "1"), (65, "3"), (120, "0.99")] {
@@ -205,7 +205,7 @@ async fn marked_tranches_at_most_the_gap_apart_make_one_burst(pool: PgPool) {
     value(&pool, base, at(base, 170)).await;
 
     assert_eq!(
-        bursts(&pool).await,
+        rotation_runs(&pool).await,
         vec![
             (base, at(base, 35), dec("30"), true, true),
             (at(base, 65), at(base, 70), dec("10"), true, true),
@@ -213,10 +213,10 @@ async fn marked_tranches_at_most_the_gap_apart_make_one_burst(pool: PgPool) {
     );
 }
 
-/// Mutation: a burst written extinct, or settled, before `BURST_GAP` has passed its last
+/// Mutation: a rotation run written extinct, or settled, before `RUN_GAP` has passed its last
 /// marked tranche — it would be final while it may still grow.
 #[sqlx::test]
-async fn a_burst_in_progress_is_rewritten_until_it_settles(pool: PgPool) {
+async fn a_rotation_run_in_progress_is_rewritten_until_it_settles(pool: PgPool) {
     let base = settled_hour();
     let address = pk(1).to_string();
     for minutes in [0, 65] {
@@ -225,7 +225,7 @@ async fn a_burst_in_progress_is_rewritten_until_it_settles(pool: PgPool) {
 
     value(&pool, base, at(base, 90)).await;
     assert_eq!(
-        bursts(&pool).await,
+        rotation_runs(&pool).await,
         vec![
             (base, at(base, 5), dec("10"), true, true),
             (at(base, 65), at(base, 70), dec("10"), false, false),
@@ -235,7 +235,7 @@ async fn a_burst_in_progress_is_rewritten_until_it_settles(pool: PgPool) {
     insert_tranche(&pool, &address, at(base, 120), "2", Some("10")).await;
     value(&pool, at(base, 95), at(base, 175)).await;
     assert_eq!(
-        bursts(&pool).await,
+        rotation_runs(&pool).await,
         vec![
             (base, at(base, 5), dec("10"), true, true),
             (at(base, 65), at(base, 70), dec("10"), true, true),
@@ -244,10 +244,13 @@ async fn a_burst_in_progress_is_rewritten_until_it_settles(pool: PgPool) {
     );
 }
 
-/// Mutation: an extinct burst settled before its last hour is written whole — a tranche of
-/// that hour, unvalued later, would leave its volume counted in the burst and not in the hour.
+/// Mutation: an extinct rotation run settled before its last hour is written whole — a tranche of
+/// that hour, unvalued later, would leave its volume counted in the rotation run and not in the
+/// hour.
 #[sqlx::test]
-async fn a_burst_settles_once_its_last_hour_is_whole_and_counts_it_only_valued_whole(pool: PgPool) {
+async fn a_rotation_run_settles_once_its_last_hour_is_whole_and_counts_it_only_valued_whole(
+    pool: PgPool,
+) {
     let base = settled_hour();
     let address = pk(1).to_string();
     insert_tranche(&pool, &address, at(base, 0), "2", Some("10")).await;
@@ -255,20 +258,21 @@ async fn a_burst_settles_once_its_last_hour_is_whole_and_counts_it_only_valued_w
 
     value(&pool, base, at(base, 50)).await;
     assert_eq!(
-        bursts(&pool).await,
+        rotation_runs(&pool).await,
         vec![(base, at(base, 5), dec("0"), true, false)],
     );
 
     value(&pool, at(base, 55), at(base, 55)).await;
     assert_eq!(
-        bursts(&pool).await,
+        rotation_runs(&pool).await,
         vec![(base, at(base, 5), dec("0"), true, true)],
     );
 }
 
-/// Mutation: a burst's volume put in the hour it starts — the curve would show none in the next.
+/// Mutation: a rotation run's volume put in the hour it starts — the curve would show none in the
+/// next.
 #[sqlx::test]
-async fn a_bursts_volume_is_split_by_hour(pool: PgPool) {
+async fn a_rotation_runs_volume_is_split_by_hour(pool: PgPool) {
     let base = settled_hour();
     let address = pk(1).to_string();
     for minutes in [45, 55, 65] {
@@ -279,22 +283,25 @@ async fn a_bursts_volume_is_split_by_hour(pool: PgPool) {
     value(&pool, at(base, 105), at(base, 115)).await;
     value(&pool, at(base, 120), at(base, 120)).await;
 
-    let hours: Vec<(DateTime<Utc>, BigDecimal)> =
-        sqlx::query_as("SELECT bucket, volume_usd FROM analytic_burst_hours ORDER BY bucket")
-            .fetch_all(&pool)
-            .await
-            .unwrap();
+    let hours: Vec<(DateTime<Utc>, BigDecimal)> = sqlx::query_as(
+        "SELECT bucket, volume_usd FROM analytic_rotation_run_hours ORDER BY bucket",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
     assert_eq!(hours, vec![(base, dec("20")), (at(base, 60), dec("10"))],);
     assert_eq!(
-        bursts(&pool).await,
+        rotation_runs(&pool).await,
         vec![(at(base, 45), at(base, 70), dec("30"), true, true)],
     );
 }
 
-/// Mutation: a settled burst known by its start — once the retention drops its first tranche,
-/// it would be written a second time from the next one.
+/// Mutation: a settled rotation run known by its start — once the retention drops its first
+/// tranche, it would be written a second time from the next one.
 #[sqlx::test]
-async fn a_settled_burst_is_not_drawn_again_once_its_first_tranches_are_dropped(pool: PgPool) {
+async fn a_settled_rotation_run_is_not_drawn_again_once_its_first_tranches_are_dropped(
+    pool: PgPool,
+) {
     let base = settled_hour();
     let address = pk(1).to_string();
     for minutes in [45, 55, 65] {
@@ -310,7 +317,7 @@ async fn a_settled_burst_is_not_drawn_again_once_its_first_tranches_are_dropped(
     value(&pool, at(base, 120), at(base, 120)).await;
 
     assert_eq!(
-        bursts(&pool).await,
+        rotation_runs(&pool).await,
         vec![(at(base, 45), at(base, 70), dec("30"), true, true)],
     );
 }
