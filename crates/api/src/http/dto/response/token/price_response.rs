@@ -10,7 +10,7 @@ use crate::http::dto::schema::UnsignedDecimal;
 /// A token's latest price, in `TokenResponse`.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct TokenPriceResponse {
+pub(crate) struct TokenPriceResponse {
     /// USD price.
     #[schema(value_type = UnsignedDecimal)]
     usd: Decimal,

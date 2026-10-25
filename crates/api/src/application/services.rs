@@ -23,7 +23,7 @@ pub(crate) use liquidity_move_service::{LiquidityMoveService, PoolMovesError};
 pub(crate) use network_service::NetworkService;
 pub(crate) use period::{BucketPeriod, Measured};
 pub(crate) use pool_creations_service::PoolCreationsService;
-pub(crate) use pool_service::PoolService;
+pub(crate) use pool_service::{PoolDetail, PoolProperties, PoolService};
 pub(crate) use protocol_catalog_service::{ProtocolCatalogService, ProtocolEntry};
 pub(crate) use protocol_tvl_service::ProtocolTvlService;
 pub(crate) use signal_service::{SignalListParams, SignalService};

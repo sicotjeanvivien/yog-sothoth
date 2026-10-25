@@ -60,6 +60,7 @@ pub use meteora::{
     MeteoraDammV2LiquidityEventRepository, MeteoraDammV2LockPositionEvent,
     MeteoraDammV2LockPositionEventRepository, MeteoraDammV2PermanentLockPositionEvent,
     MeteoraDammV2PermanentLockPositionEventRepository, MeteoraDammV2PoolAccountProperties,
+    MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesLookup,
     MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SetPoolStatusEventRepository,
     MeteoraDammV2SplitAmounts, MeteoraDammV2SplitNumerators, MeteoraDammV2SplitPositionEvent,
     MeteoraDammV2SplitPositionEventRepository, MeteoraDammV2SplitPositionState,
@@ -72,13 +73,15 @@ pub use meteora::{
     MeteoraDammV2WithdrawIneligibleRewardEventRepository, MeteoraDlmmPoolAccountProperties,
 };
 pub use network_status::{NetworkStatus, NetworkStatusLookup, NetworkStatusRepository};
-pub use pool::{Pool, PoolCatalog, PoolRepository, ProtocolPools};
+pub use pool::{
+    Pool, PoolCatalog, PoolCursor, PoolEntry, PoolRepository, PoolScope, PoolValue, ProtocolPools,
+};
 pub use pool_account::{
     DecodedPoolAccount, PoolAccountProperties, PoolAccountResolver, PoolRegistryProperties,
 };
 pub use pool_creations::{PoolCreations, PoolCreationsLookup, ProtocolPoolCreations};
 pub use pool_current_state::{
-    LastEventKind, PoolCurrentStateRepository, PoolCurrentStateUpsert,
+    LastEventKind, PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert,
     PoolCurrentStateUpsertOutcome,
 };
 pub use pool_price_snapshot::{PoolPriceSnapshot, PoolPriceSnapshotRepository};
@@ -97,12 +100,12 @@ pub use token_activity::{
     TokenActivity, TokenActivityCursor, TokenActivityFeed, TokenActivityPage,
 };
 pub use token_metadata::{
-    MISSING_MINT_DISCOVERY_WINDOW, MetadataProvider, PRICE_CANDIDATE_WINDOW, TokenMetadata,
-    TokenMetadataLookup, TokenMetadataRepository,
+    MISSING_MINT_DISCOVERY_WINDOW, MetadataProvider, PRICE_CANDIDATE_WINDOW, TokenCursor,
+    TokenEntry, TokenMetadata, TokenMetadataLookup, TokenMetadataRepository,
 };
 pub use token_price::{
-    PRICE_STORAGE_PRECISION, PRICE_STORAGE_SCALE, PriceProvider, TokenPrice, TokenPriceLookup,
-    TokenPriceRepository,
+    PRICE_STORAGE_PRECISION, PRICE_STORAGE_SCALE, PriceProvider, TokenPrice, TokenPriceCursor,
+    TokenPriceLookup, TokenPriceRepository,
 };
 pub use trade_direction::TradeDirection;
 pub use unpriced_mints::UnpricedMints;

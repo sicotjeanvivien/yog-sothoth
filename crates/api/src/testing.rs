@@ -18,13 +18,15 @@ use yog_core::{
         Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity, DiscoveredTvl,
         DiscoveredTvlLookup, EventFreshnessRepository, FrozenHours, FrozenPeriod,
         LatestProtocolTvl, LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup,
-        LiquidityMoveOrder, NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog, PoolCreations,
-        PoolCreationsLookup, PoolSwapBucket, Protocol, ProtocolActivity, ProtocolActivityBar,
-        ProtocolActivityLookup, ProtocolBucket, ProtocolDiscoveredTvl, ProtocolPoolCreations,
-        ProtocolPools, ProtocolSwapActivity, ProtocolTvl, ProtocolTvlLookup, Severity, Signal,
-        SignalCursor, SignalFeed, SignalFilter, SignalRecord, SwapActivity, SwapActivityLookup,
-        TokenActivityCursor, TokenActivityFeed, TokenActivityPage, TokenMetadata,
-        TokenMetadataLookup, TokenPrice, TokenPriceLookup, Window,
+        LiquidityMoveOrder, MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesLookup,
+        NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog, PoolCreations, PoolCreationsLookup,
+        PoolCursor, PoolEntry, PoolScope, PoolSwapBucket, Protocol, ProtocolActivity,
+        ProtocolActivityBar, ProtocolActivityLookup, ProtocolBucket, ProtocolDiscoveredTvl,
+        ProtocolPoolCreations, ProtocolPools, ProtocolSwapActivity, ProtocolTvl, ProtocolTvlLookup,
+        Severity, Signal, SignalCursor, SignalFeed, SignalFilter, SignalRecord, SwapActivity,
+        SwapActivityLookup, TokenActivityCursor, TokenActivityFeed, TokenActivityPage, TokenCursor,
+        TokenEntry, TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceCursor,
+        TokenPriceLookup, Window,
     },
 };
 
@@ -87,7 +89,10 @@ pub(crate) fn app_state() -> AppState {
             frozen_hours_repo(None),
             Arc::new(MockDiscoveredTvlRepo::default()),
         )),
-        pool_service: Arc::new(PoolService::new(Arc::new(PoolRepoOnce::with_pools(vec![])))),
+        pool_service: Arc::new(PoolService::new(
+            Arc::new(PoolRepoOnce::with_pools(vec![])),
+            Arc::new(MockDammV2PropertiesRepo::default()),
+        )),
         work_slots,
         token_service: Arc::new(TokenService::new(
             Arc::new(MockMetadataRepo::empty()),
@@ -219,6 +224,70 @@ impl PoolCatalog for PoolRepoOnce {
     async fn find_by_addresses(&self, _addrs: &[Pubkey]) -> RepositoryResult<Vec<Pool>> {
         take(&self.by_addresses)
     }
+    async fn list_entries(
+        &self,
+        _: PoolScope,
+        _: Option<PoolCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<PoolEntry>> {
+        Ok(Page::empty())
+    }
+    async fn find_entry(&self, _: &Pubkey) -> RepositoryResult<Option<PoolEntry>> {
+        Ok(None)
+    }
+}
+
+/// A `PoolCatalog` for `PoolService::get_pool`: it knows `entries` and answers them by address.
+#[derive(Default)]
+pub(crate) struct MockPoolEntriesRepo {
+    pub(crate) entries: Vec<PoolEntry>,
+}
+
+#[async_trait]
+impl PoolCatalog for MockPoolEntriesRepo {
+    async fn counts_by_protocol(&self) -> RepositoryResult<Vec<ProtocolPools>> {
+        unreachable!("counts_by_protocol not used by PoolService")
+    }
+    async fn find_by_addresses(&self, _: &[Pubkey]) -> RepositoryResult<Vec<Pool>> {
+        unreachable!("find_by_addresses not used by PoolService::get_pool")
+    }
+    async fn list_entries(
+        &self,
+        _: PoolScope,
+        _: Option<PoolCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<PoolEntry>> {
+        unreachable!("list_entries not used by PoolService::get_pool")
+    }
+    async fn find_entry(&self, address: &Pubkey) -> RepositoryResult<Option<PoolEntry>> {
+        Ok(self
+            .entries
+            .iter()
+            .find(|entry| entry.pool.pool_address == *address)
+            .cloned())
+    }
+}
+
+/// A DAMM v2 satellite that knows `properties` and records each pool read.
+#[derive(Default)]
+pub(crate) struct MockDammV2PropertiesRepo {
+    pub(crate) properties: Vec<MeteoraDammV2PoolProperties>,
+    pub(crate) reads: Mutex<Vec<Pubkey>>,
+}
+
+#[async_trait]
+impl MeteoraDammV2PoolPropertiesLookup for MockDammV2PropertiesRepo {
+    async fn find_by_pool(
+        &self,
+        pool_address: &Pubkey,
+    ) -> RepositoryResult<Option<MeteoraDammV2PoolProperties>> {
+        self.reads.lock().unwrap().push(*pool_address);
+        Ok(self
+            .properties
+            .iter()
+            .find(|p| p.pool_address == *pool_address)
+            .cloned())
+    }
 }
 
 /// A `PoolCatalog` for `ProtocolCatalogService`: only the counts by protocol answer.
@@ -246,6 +315,17 @@ impl PoolCatalog for PoolCountsRepo {
     }
     async fn find_by_addresses(&self, _addrs: &[Pubkey]) -> RepositoryResult<Vec<Pool>> {
         unreachable!("find_by_addresses not used by ProtocolCatalogService")
+    }
+    async fn list_entries(
+        &self,
+        _: PoolScope,
+        _: Option<PoolCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<PoolEntry>> {
+        unreachable!("list_entries not used by ProtocolCatalogService")
+    }
+    async fn find_entry(&self, _: &Pubkey) -> RepositoryResult<Option<PoolEntry>> {
+        unreachable!("find_entry not used by ProtocolCatalogService")
     }
 }
 
@@ -399,11 +479,20 @@ impl TokenMetadataLookup for MockMetadataRepo {
         }
         Ok(self.by_mint.get(mint).cloned())
     }
+    async fn list_entries(
+        &self,
+        _: Option<TokenCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<TokenEntry>> {
+        Ok(Page::empty())
+    }
 }
 
 pub(crate) struct MockPriceRepo {
     by_mint: HashMap<Pubkey, TokenPrice>,
     fail: bool,
+    /// The start of each window `list_prices` was asked about.
+    pub(crate) windows_from: Mutex<Vec<DateTime<Utc>>>,
 }
 
 impl MockPriceRepo {
@@ -411,18 +500,21 @@ impl MockPriceRepo {
         Self {
             by_mint: entries.into_iter().collect(),
             fail: false,
+            windows_from: Mutex::new(vec![]),
         }
     }
     pub(crate) fn empty() -> Self {
         Self {
             by_mint: HashMap::new(),
             fail: false,
+            windows_from: Mutex::new(vec![]),
         }
     }
     pub(crate) fn failing() -> Self {
         Self {
             by_mint: HashMap::new(),
             fail: true,
+            windows_from: Mutex::new(vec![]),
         }
     }
 }
@@ -434,6 +526,16 @@ impl TokenPriceLookup for MockPriceRepo {
             return Err(RepositoryError::Integrity("price boom".into()));
         }
         Ok(self.by_mint.get(mint).cloned())
+    }
+    async fn list_prices(
+        &self,
+        _: &Pubkey,
+        from: DateTime<Utc>,
+        _: Option<TokenPriceCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<TokenPrice>> {
+        self.windows_from.lock().unwrap().push(from);
+        Ok(Page::empty())
     }
 }
 

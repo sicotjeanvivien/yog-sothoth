@@ -108,3 +108,33 @@ async fn price_repo_error_propagates() {
         RepositoryError::Integrity(_)
     ));
 }
+
+/// Mutation: the window's start recomputed on every page — a later page's start slides with
+/// the clock and drops the prices between.
+#[tokio::test]
+async fn a_later_page_keeps_the_start_of_its_cursor() {
+    let mint = pk(20);
+    let prices = Arc::new(MockPriceRepo::empty());
+    let svc = TokenService::new(Arc::new(MockMetadataRepo::empty()), prices.clone());
+    let cursor = yog_core::domain::TokenPriceCursor {
+        mint,
+        from: crate::testing::ts(1_000),
+        fetched_at: crate::testing::ts(2_000),
+    };
+
+    let before = chrono::Utc::now();
+    svc.list_token_prices(&mint, yog_core::domain::Window::Day, None, 50)
+        .await
+        .unwrap();
+    svc.list_token_prices(&mint, yog_core::domain::Window::Day, Some(cursor), 50)
+        .await
+        .unwrap();
+
+    let starts = prices.windows_from.lock().unwrap().clone();
+    assert!(
+        starts[0] >= before - chrono::Duration::hours(24),
+        "{starts:?}"
+    );
+    assert!(starts[0] <= chrono::Utc::now() - chrono::Duration::hours(24));
+    assert_eq!(starts[1], crate::testing::ts(1_000));
+}

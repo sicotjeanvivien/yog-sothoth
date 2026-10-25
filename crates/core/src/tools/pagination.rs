@@ -19,6 +19,9 @@ pub enum Cursor {
     Signal(crate::domain::SignalCursor),
     TokenActivity(crate::domain::TokenActivityCursor),
     LiquidityMove(Box<crate::domain::LiquidityMoveCursor>),
+    Pool(Box<crate::domain::PoolCursor>),
+    Token(crate::domain::TokenCursor),
+    TokenPrice(Box<crate::domain::TokenPriceCursor>),
 }
 
 impl<T> Page<T> {

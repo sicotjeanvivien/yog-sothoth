@@ -51,6 +51,18 @@ impl ProtocolCatalogService {
             .await
     }
 
+    /// `protocol`'s entry of [`Self::list`].
+    pub(crate) async fn get_protocol(
+        &self,
+        protocol: Protocol,
+    ) -> RepositoryResult<Option<ProtocolEntry>> {
+        Ok(self
+            .list()
+            .await?
+            .into_iter()
+            .find(|entry| entry.protocol == protocol))
+    }
+
     async fn compute(&self) -> RepositoryResult<Vec<ProtocolEntry>> {
         let counts = self.pool_repo.counts_by_protocol().await?;
         Ok(Protocol::all()

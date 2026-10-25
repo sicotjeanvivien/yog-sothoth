@@ -10,8 +10,11 @@ use crate::application::TokenActivityRead;
 use crate::http::{
     AppState,
     dto::{
-        TokenActivityPageResponse, TokenResponse,
-        request::{GetTokenRequest, ListTokenActivityRequest, TokenActivityParams},
+        PageResponse, TokenActivityPageResponse, TokenPriceResponse, TokenResponse,
+        request::{
+            GetTokenRequest, ListTokenActivityRequest, ListTokenPricesRequest, ListTokensRequest,
+            TokenActivityParams, TokenPricesParams, TokensParams,
+        },
     },
     error::ApiError,
 };
@@ -76,6 +79,54 @@ pub(crate) async fn get_token(
         .ok_or_else(|| ApiError::NotFound(format!("token not found: {}", request.mint)))?;
 
     Ok(Json(TokenResponse::new(agg.metadata, agg.price)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/tokens",
+    params(TokensParams),
+    responses((
+        status = 200,
+        description = "A page of tokens, the most recently first fetched first, each with its \
+                       latest price.",
+        body = PageResponse<TokenResponse>
+    ))
+)]
+pub(crate) async fn list_tokens(
+    State(state): State<AppState>,
+    Query(params): Query<TokensParams>,
+) -> Result<Json<PageResponse<TokenResponse>>, ApiError> {
+    let request = ListTokensRequest::parse(params)?;
+    let page = state
+        .token_service
+        .list_tokens(request.cursor, request.limit)
+        .await?;
+    Ok(Json(PageResponse::from_page(page)?))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/tokens/{mint}/prices",
+    params(TokenPricesParams),
+    responses((
+        status = 200,
+        description = "A page of the token's prices over the window, the most recent first; \
+                       the window ends at the first page.",
+        body = PageResponse<TokenPriceResponse>
+    ))
+)]
+pub(crate) async fn list_token_prices(
+    State(state): State<AppState>,
+    Path(mint): Path<String>,
+    Query(params): Query<TokenPricesParams>,
+) -> Result<Json<PageResponse<TokenPriceResponse>>, ApiError> {
+    let request = ListTokenPricesRequest::parse(&mint, params)?;
+    super::known_token(&state, request.mint).await?;
+    let page = state
+        .token_service
+        .list_token_prices(&request.mint, request.window, request.cursor, request.limit)
+        .await?;
+    Ok(Json(PageResponse::from_page(page)?))
 }
 
 #[cfg(test)]

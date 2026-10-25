@@ -13,8 +13,11 @@ use crate::http::error::ApiError;
 mod get_token;
 mod list_liquidity_moves;
 mod list_pool_liquidity_moves;
+mod list_pools;
 mod list_signals;
 mod list_token_activity;
+mod list_token_prices;
+mod list_tokens;
 mod window_param;
 
 pub(crate) use get_token::GetTokenRequest;
@@ -22,8 +25,11 @@ pub(crate) use list_liquidity_moves::{LiquidityMovesParams, ListLiquidityMovesRe
 pub(crate) use list_pool_liquidity_moves::{
     ListPoolLiquidityMovesRequest, PoolLiquidityMovesParams,
 };
+pub(crate) use list_pools::{ListPoolsRequest, PoolsParams};
 pub(crate) use list_signals::{EntitySignalsParams, ListSignalsRequest, SignalsParams};
 pub(crate) use list_token_activity::{ListTokenActivityRequest, TokenActivityParams};
+pub(crate) use list_token_prices::{ListTokenPricesRequest, TokenPricesParams};
+pub(crate) use list_tokens::{ListTokensRequest, TokensParams};
 pub(crate) use window_param::{ActivityParams, WindowParams};
 
 const DEFAULT_LIMIT: i64 = 50;
@@ -65,4 +71,9 @@ pub(crate) fn parse_protocol(raw: &str) -> Result<Protocol, ApiError> {
 /// The `{pool}` of a path, or a 400.
 pub(crate) fn parse_pool(raw: &str) -> Result<Pubkey, ApiError> {
     parse_address(raw, "pool")
+}
+
+/// The `{mint}` of a path, or a 400.
+pub(crate) fn parse_mint(raw: &str) -> Result<Pubkey, ApiError> {
+    parse_address(raw, "mint")
 }

@@ -1,6 +1,7 @@
 //! Latest observed on-chain state per pool, upserted by the indexer after each
 //! swap or liquidity event it persists.
 
+use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 
 use crate::domain::{EventPosition, MeteoraDammV2LiquidityEventKind, Protocol};
@@ -39,6 +40,16 @@ impl From<MeteoraDammV2LiquidityEventKind> for LastEventKind {
             MeteoraDammV2LiquidityEventKind::Remove => LastEventKind::LiquidityRemove,
         }
     }
+}
+
+/// A pool's state after the last event that touched it, as read. Reserves in raw units.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PoolCurrentState {
+    pub last_event_at: DateTime<Utc>,
+    pub last_event_kind: LastEventKind,
+    pub reserve_a: u64,
+    pub reserve_b: u64,
+    pub last_swap_at: Option<DateTime<Utc>>,
 }
 
 /// A state change for [`crate::domain::PoolCurrentStateRepository::upsert`]: only

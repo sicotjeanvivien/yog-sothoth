@@ -1,0 +1,364 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT p.pool_address, p.protocol, p.token_a_mint, p.token_b_mint,\n                   p.fee_bps AS \"fee_bps?: rust_decimal::Decimal\",\n                   p.first_seen_at, p.last_seen_at,\n                   ta.symbol AS \"a_symbol?\", ta.name AS \"a_name?\", ta.decimals AS \"a_decimals?\",\n                   ta.logo_uri AS \"a_logo_uri?\", ta.metadata_provider AS \"a_metadata_provider?\",\n                   ta.fetched_at AS \"a_fetched_at?\", ta.last_refresh_at AS \"a_last_refresh_at?\",\n                   tb.symbol AS \"b_symbol?\", tb.name AS \"b_name?\", tb.decimals AS \"b_decimals?\",\n                   tb.logo_uri AS \"b_logo_uri?\", tb.metadata_provider AS \"b_metadata_provider?\",\n                   tb.fetched_at AS \"b_fetched_at?\", tb.last_refresh_at AS \"b_last_refresh_at?\",\n                   s.last_event_at AS \"last_event_at?\", s.last_event_kind AS \"last_event_kind?\",\n                   s.reserve_a AS \"reserve_a?\", s.reserve_b AS \"reserve_b?\",\n                   s.last_swap_at AS \"last_swap_at?\",\n                   t.value_a_usd AS \"value_a_usd?\", t.value_b_usd AS \"value_b_usd?\",\n                   t.tvl_usd AS \"tvl_usd?\"\n              FROM pools p\n              LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint\n              LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint\n              LEFT JOIN pool_current_state s ON s.pool_address = p.pool_address\n              LEFT JOIN pool_current_tvl t ON t.pool_address = p.pool_address\n             WHERE p.pool_address = ANY($1::TEXT[])\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "pools",
+            "name": "pool_address"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "protocol",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "pools",
+            "name": "protocol"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "token_a_mint",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "pools",
+            "name": "token_a_mint"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "token_b_mint",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "pools",
+            "name": "token_b_mint"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "fee_bps?: rust_decimal::Decimal",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "pools",
+            "name": "fee_bps"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "first_seen_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "pools",
+            "name": "first_seen_at"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "last_seen_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "pools",
+            "name": "last_seen_at"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "a_symbol?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "symbol"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "a_name?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "a_decimals?",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "decimals"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "a_logo_uri?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "logo_uri"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "a_metadata_provider?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "metadata_provider"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "a_fetched_at?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "fetched_at"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "a_last_refresh_at?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "last_refresh_at"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "b_symbol?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "symbol"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "b_name?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "b_decimals?",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "decimals"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "b_logo_uri?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "logo_uri"
+          }
+        }
+      },
+      {
+        "ordinal": 18,
+        "name": "b_metadata_provider?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "metadata_provider"
+          }
+        }
+      },
+      {
+        "ordinal": 19,
+        "name": "b_fetched_at?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "fetched_at"
+          }
+        }
+      },
+      {
+        "ordinal": 20,
+        "name": "b_last_refresh_at?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "last_refresh_at"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
+        "name": "last_event_at?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "pool_current_state",
+            "name": "last_event_at"
+          }
+        }
+      },
+      {
+        "ordinal": 22,
+        "name": "last_event_kind?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "pool_current_state",
+            "name": "last_event_kind"
+          }
+        }
+      },
+      {
+        "ordinal": 23,
+        "name": "reserve_a?",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "pool_current_state",
+            "name": "reserve_a"
+          }
+        }
+      },
+      {
+        "ordinal": 24,
+        "name": "reserve_b?",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "pool_current_state",
+            "name": "reserve_b"
+          }
+        }
+      },
+      {
+        "ordinal": 25,
+        "name": "last_swap_at?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "pool_current_state",
+            "name": "last_swap_at"
+          }
+        }
+      },
+      {
+        "ordinal": 26,
+        "name": "value_a_usd?",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "pool_current_tvl",
+            "name": "value_a_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 27,
+        "name": "value_b_usd?",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "pool_current_tvl",
+            "name": "value_b_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 28,
+        "name": "tvl_usd?",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "pool_current_tvl",
+            "name": "tvl_usd"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "fd72ec7bfce28ba9706dd83104bc9f15f8b80b92499f6a089a6e6a764735fb20"
+}

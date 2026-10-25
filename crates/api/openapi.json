@@ -332,6 +332,71 @@
         ],
         "type": "object"
       },
+      "MeteoraDammV2PropertiesResponse": {
+        "description": "DAMM v2-only pool properties (baseline §8's satellite table).",
+        "properties": {
+          "baseFeeKind": {
+            "description": "How the base fee behaves over time, from the on-chain account. `None`\nwhile the pool is unresolved, or for a `BaseFeeMode` this crate does not map.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "currentFeeBps": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal",
+                "description": "The base fee in force right now, in bps; `feeBps` is the genesis tier, the\ntop of a decaying curve. `None` without a time scheduler (constant fee,\nmarket-cap scheduler, rate limiter), for an unresolved or slot-activated pool."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feeSchedulerExpired": {
+            "description": "Whether the decay has finished — `currentFeeBps` will not move again.\n`None` under the same conditions as `currentFeeBps`.\n⚠️ A zero `period_frequency` stays at its cliff while reporting finished;\ncp-amm's `validate` makes it unreachable on chain.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "hasDynamicFee": {
+            "description": "Whether a volatility-based dynamic fee sits on top of the base fee.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "protocolFeePercent": {
+            "description": "Fee-split percents (0..=100) from the on-chain pool account: Meteora's\ncut and a referrer's cut of the trading fee.",
+            "format": "u-int8",
+            "maximum": 100,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "referralFeePercent": {
+            "format": "u-int8",
+            "maximum": 100,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "baseFeeKind",
+          "currentFeeBps",
+          "feeSchedulerExpired",
+          "hasDynamicFee",
+          "protocolFeePercent",
+          "referralFeePercent"
+        ],
+        "type": "object"
+      },
       "NetworkResponse": {
         "description": "Where the chain is, as the probe last saw it. The probe's endpoint is not\nthe one ingestion uses: this says nothing about our ingestion.",
         "properties": {
@@ -356,6 +421,98 @@
           "slot",
           "rpcLatencyMs",
           "observedAt"
+        ],
+        "type": "object"
+      },
+      "PageResponse_PoolResponse": {
+        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
+        "properties": {
+          "isFirst": {
+            "type": "boolean"
+          },
+          "isLast": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "feeBps": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/UnsignedDecimal",
+                      "description": "Base trading fee in basis points, the genesis tier; `null` while the pool is unresolved."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "firstSeenAt": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "lastSeenAt": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "poolAddress": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "state": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/PoolStateResponse",
+                      "description": "`null` before the first event that moved the pool."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "tokenA": {
+                  "$ref": "#/components/schemas/EmbeddedTokenResponse"
+                },
+                "tokenB": {
+                  "$ref": "#/components/schemas/EmbeddedTokenResponse"
+                }
+              },
+              "required": [
+                "poolAddress",
+                "protocol",
+                "tokenA",
+                "tokenB",
+                "firstSeenAt",
+                "lastSeenAt",
+                "feeBps",
+                "state"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prevCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "isFirst",
+          "isLast",
+          "nextCursor",
+          "prevCursor"
         ],
         "type": "object"
       },
@@ -457,6 +614,320 @@
           "isLast",
           "nextCursor",
           "prevCursor"
+        ],
+        "type": "object"
+      },
+      "PageResponse_TokenPriceResponse": {
+        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
+        "properties": {
+          "isFirst": {
+            "type": "boolean"
+          },
+          "isLast": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "description": "A token's latest price, in `TokenResponse`.",
+              "properties": {
+                "fetchedAt": {
+                  "description": "When the price was observed.",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "provider": {
+                  "$ref": "#/components/schemas/PriceProviderResponse",
+                  "description": "Origin tag: \"jupiter\" | \"helius\" | \"fallback\"."
+                },
+                "usd": {
+                  "$ref": "#/components/schemas/UnsignedDecimal",
+                  "description": "USD price."
+                }
+              },
+              "required": [
+                "usd",
+                "provider",
+                "fetchedAt"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prevCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "isFirst",
+          "isLast",
+          "nextCursor",
+          "prevCursor"
+        ],
+        "type": "object"
+      },
+      "PageResponse_TokenResponse": {
+        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
+        "properties": {
+          "isFirst": {
+            "type": "boolean"
+          },
+          "isLast": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "description": "The token detail payload.",
+              "properties": {
+                "decimals": {
+                  "description": "Decimal precision of the mint.",
+                  "format": "u-int8",
+                  "maximum": 255,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "fetchedAt": {
+                  "description": "When the metadata was first fetched.",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "lastRefreshAt": {
+                  "description": "When the metadata was last refreshed.",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "logoUri": {
+                  "description": "Logo URL, as returned by DAS. `null` unless it is `http` or `https`.",
+                  "format": "uri",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "mint": {
+                  "description": "SPL mint address, base58.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Token name (e.g. \"USD Coin\"). `null` for the same reason as\n`symbol`.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "price": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TokenPriceResponse",
+                      "description": "Latest price observation, or `null` if the mint has never\nbeen priced."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "symbol": {
+                  "description": "Token symbol (e.g. \"USDC\"). `null` when DAS returned no\nMetaplex metadata.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "mint",
+                "decimals",
+                "fetchedAt",
+                "lastRefreshAt",
+                "logoUri",
+                "name",
+                "price",
+                "symbol"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prevCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "isFirst",
+          "isLast",
+          "nextCursor",
+          "prevCursor"
+        ],
+        "type": "object"
+      },
+      "PoolDetailResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PoolResponse"
+          },
+          {
+            "properties": {
+              "meteoraDammV2": {
+                "$ref": "#/components/schemas/MeteoraDammV2PropertiesResponse"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "description": "The block is absent until yog-context first resolves the pool's account."
+      },
+      "PoolLastEventKindResponse": {
+        "description": "The kind of the event that last moved the pool.",
+        "enum": [
+          "swap",
+          "liquidity_add",
+          "liquidity_remove"
+        ],
+        "type": "string"
+      },
+      "PoolResponse": {
+        "properties": {
+          "feeBps": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal",
+                "description": "Base trading fee in basis points, the genesis tier; `null` while the pool is unresolved."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "firstSeenAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "lastSeenAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "poolAddress": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          },
+          "state": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PoolStateResponse",
+                "description": "`null` before the first event that moved the pool."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tokenA": {
+            "$ref": "#/components/schemas/EmbeddedTokenResponse"
+          },
+          "tokenB": {
+            "$ref": "#/components/schemas/EmbeddedTokenResponse"
+          }
+        },
+        "required": [
+          "poolAddress",
+          "protocol",
+          "tokenA",
+          "tokenB",
+          "firstSeenAt",
+          "lastSeenAt",
+          "feeBps",
+          "state"
+        ],
+        "type": "object"
+      },
+      "PoolStateResponse": {
+        "description": "A pool's state after the last event that moved it, and the value of its reserves now.",
+        "properties": {
+          "lastEventAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "lastEventKind": {
+            "$ref": "#/components/schemas/PoolLastEventKindResponse"
+          },
+          "lastSwapAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reserveA": {
+            "$ref": "#/components/schemas/U128String",
+            "description": "In raw units: `tokenA.decimals` scales it."
+          },
+          "reserveB": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "tvlUsd": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal",
+                "description": "The sides valued, summed; `null` when neither is."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "valueAUsd": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal",
+                "description": "`null` when token A's price is stale or unknown, or its decimals unresolved."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "valueBUsd": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "lastEventAt",
+          "lastEventKind",
+          "reserveA",
+          "reserveB",
+          "lastSwapAt",
+          "tvlUsd",
+          "valueAUsd",
+          "valueBUsd"
         ],
         "type": "object"
       },
@@ -2754,6 +3225,95 @@
         }
       }
     },
+    "/api/pools": {
+      "get": {
+        "operationId": "list_pools",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_PoolResponse"
+                }
+              }
+            },
+            "description": "A page of every protocol's pools, the most recently first seen first."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/pools/{pool}": {
+      "get": {
+        "operationId": "get_pool",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pool",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PoolDetailResponse"
+                }
+              }
+            },
+            "description": "The pool, its state now, and its protocol's properties."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/pools/{pool}/liquidity-moves": {
       "get": {
         "operationId": "list_pool_liquidity_moves",
@@ -3346,6 +3906,43 @@
         }
       }
     },
+    "/api/protocols/{protocol}": {
+      "get": {
+        "operationId": "get_protocol",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolCatalogResponse"
+                }
+              }
+            },
+            "description": "The protocol's entry of the catalogue, observed or not."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/protocols/{protocol}/liquidity-moves": {
       "get": {
         "operationId": "list_liquidity_moves",
@@ -3743,6 +4340,66 @@
               }
             },
             "description": "The protocol's pools discovered in the window, and what they hold."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/protocols/{protocol}/pools": {
+      "get": {
+        "operationId": "list_protocol_pools",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_PoolResponse"
+                }
+              }
+            },
+            "description": "A page of the protocol's pools, the most recently first seen first."
           },
           "default": {
             "content": {
@@ -4492,6 +5149,58 @@
         }
       }
     },
+    "/api/tokens": {
+      "get": {
+        "operationId": "list_tokens",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_TokenResponse"
+                }
+              }
+            },
+            "description": "A page of tokens, the most recently first fetched first, each with its latest price."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/tokens/activity": {
       "get": {
         "operationId": "list_token_activity",
@@ -4592,6 +5301,139 @@
               }
             },
             "description": "The token, with its latest price."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/tokens/{mint}/pools": {
+      "get": {
+        "operationId": "list_token_pools",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mint",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_PoolResponse"
+                }
+              }
+            },
+            "description": "A page of the pools the token is either side of, the most recently first seen first."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/tokens/{mint}/prices": {
+      "get": {
+        "operationId": "list_token_prices",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mint",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_TokenPriceResponse"
+                }
+              }
+            },
+            "description": "A page of the token's prices over the window, the most recent first; the window ends at the first page."
           },
           "default": {
             "content": {

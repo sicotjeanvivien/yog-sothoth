@@ -4,7 +4,10 @@ use async_trait::async_trait;
 use chrono::Duration;
 use solana_pubkey::Pubkey;
 
-use crate::{RepositoryResult, domain::TokenMetadata};
+use crate::{
+    Page, RepositoryResult,
+    domain::{TokenCursor, TokenEntry, TokenMetadata},
+};
 
 /// How recent an event on one of its pools, or a price from the source, keeps a
 /// mint worth asking: one quiet on both counts waits for its pools to move.
@@ -39,4 +42,12 @@ pub trait TokenMetadataRepository: Send + Sync {
 pub trait TokenMetadataLookup: Send + Sync {
     /// The metadata of a mint, `None` before its first fetch.
     async fn find_by_mint(&self, mint: &Pubkey) -> RepositoryResult<Option<TokenMetadata>>;
+
+    /// A page of tokens, the most recently first fetched first, ties by mint descending,
+    /// after `cursor`'s key; forward only.
+    async fn list_entries(
+        &self,
+        cursor: Option<TokenCursor>,
+        limit: i64,
+    ) -> RepositoryResult<Page<TokenEntry>>;
 }

@@ -9,11 +9,22 @@ pub(super) mod liquidity_moves;
 pub(super) mod network;
 pub(super) mod pool_creations;
 pub(super) mod pool_discoveries;
+pub(super) mod pools;
 pub(super) mod protocols;
 pub(super) mod signals;
 pub(super) mod swaps;
 pub(super) mod token;
 pub(super) mod tvl;
+
+/// The token of the path, or a 404 when the catalog has not fetched its metadata.
+async fn known_token(state: &AppState, mint: Pubkey) -> Result<(), ApiError> {
+    state
+        .token_service
+        .find_metadata(&mint)
+        .await?
+        .map(|_| ())
+        .ok_or_else(|| ApiError::NotFound(format!("token not found: {mint}")))
+}
 
 /// The pool of the path, or a 404 when the catalog does not know it.
 async fn known_pool(state: &AppState, raw: &str) -> Result<yog_core::domain::Pool, ApiError> {
