@@ -16,17 +16,23 @@ use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
         Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity, DiscoveredTvl,
-        EventFreshnessRepository, FrozenHours, LatestProtocolTvl, LiquidityMove, NetworkStatus,
-        NetworkStatusLookup, Pool, PoolCatalog, Protocol, ProtocolActivity, ProtocolActivityBar,
-        ProtocolActivityLookup, ProtocolPools, ProtocolTvl, Severity, Signal, SignalCursor,
-        SignalFeed, SignalRecord, Span, TokenActivityCursor, TokenActivityFeed, TokenActivityPage,
-        TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceLookup, Window,
+        DiscoveredTvlLookup, EventFreshnessRepository, FrozenHours, FrozenPeriod,
+        LatestProtocolTvl, LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup,
+        LiquidityMoveOrder, NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog, PoolCreations,
+        PoolCreationsLookup, PoolSwapBucket, Protocol, ProtocolActivity, ProtocolActivityBar,
+        ProtocolActivityLookup, ProtocolBucket, ProtocolDiscoveredTvl, ProtocolPoolCreations,
+        ProtocolPools, ProtocolSwapActivity, ProtocolTvl, ProtocolTvlLookup, Severity, Signal,
+        SignalCursor, SignalFeed, SignalFilter, SignalRecord, SwapActivity, SwapActivityLookup,
+        TokenActivityCursor, TokenActivityFeed, TokenActivityPage, TokenMetadata,
+        TokenMetadataLookup, TokenPrice, TokenPriceLookup, Window,
     },
 };
 
 use crate::application::{
-    ActivityService, AnnouncementService, IngestionService, NetworkService, ProtocolCatalogService,
-    SignalService, TokenService, WorkSlots,
+    ActivityService, AnnouncementService, DiscoveredTvlService, IngestionService,
+    LiquidityMoveService, NetworkService, PoolCreationsService, PoolService,
+    ProtocolCatalogService, ProtocolTvlService, SignalService, SwapActivityService, TokenService,
+    WorkSlots,
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
@@ -61,6 +67,27 @@ pub(crate) fn app_state() -> AppState {
             Arc::new(MockProtocolActivityRepo::new(None)),
             Arc::new(MockTokenActivityRepo::default()),
         )),
+        swap_activity_service: Arc::new(SwapActivityService::new(
+            frozen_hours_repo(None),
+            Arc::new(MockSwapActivityRepo::default()),
+        )),
+        pool_creations_service: Arc::new(PoolCreationsService::new(
+            frozen_hours_repo(None),
+            Arc::new(MockPoolCreationsRepo),
+        )),
+        liquidity_move_service: Arc::new(LiquidityMoveService::new(
+            frozen_hours_repo(None),
+            Arc::new(MockLiquidityMoveRepo::default()),
+        )),
+        protocol_tvl_service: Arc::new(ProtocolTvlService::new(
+            frozen_hours_repo(None),
+            Arc::new(MockProtocolTvlRepo::default()),
+        )),
+        discovered_tvl_service: Arc::new(DiscoveredTvlService::new(
+            frozen_hours_repo(None),
+            Arc::new(MockDiscoveredTvlRepo::default()),
+        )),
+        pool_service: Arc::new(PoolService::new(Arc::new(PoolRepoOnce::with_pools(vec![])))),
         work_slots,
         token_service: Arc::new(TokenService::new(
             Arc::new(MockMetadataRepo::empty()),
@@ -223,7 +250,7 @@ impl PoolCatalog for PoolCountsRepo {
 }
 
 /// A `ProtocolActivityLookup` that answers `frozen` and the seeded rows every time, and
-/// records the span of each read.
+/// records the period of each read.
 pub(crate) struct MockProtocolActivityRepo {
     frozen: Option<FrozenHours>,
     pub(crate) activity: Vec<ProtocolActivity>,
@@ -232,7 +259,7 @@ pub(crate) struct MockProtocolActivityRepo {
     /// The discovered parts `tvl_latest` hands with each of [`Self::tvl`].
     pub(crate) discovered: Vec<DiscoveredTvl>,
     pub(crate) moves: Vec<LiquidityMove>,
-    pub(crate) spans: Mutex<Vec<Span>>,
+    pub(crate) periods: Mutex<Vec<FrozenPeriod>>,
     pub(crate) tvl_ranges: Mutex<Vec<(DateTime<Utc>, DateTime<Utc>)>>,
 }
 
@@ -253,7 +280,7 @@ impl MockProtocolActivityRepo {
             tvl: vec![],
             discovered: vec![],
             moves: vec![],
-            spans: Mutex::new(vec![]),
+            periods: Mutex::new(vec![]),
             tvl_ranges: Mutex::new(vec![]),
         }
     }
@@ -264,16 +291,26 @@ impl ProtocolActivityLookup for MockProtocolActivityRepo {
     async fn frozen_hours(&self) -> RepositoryResult<Option<FrozenHours>> {
         Ok(self.frozen)
     }
-    async fn activity(&self, span: &Span, _: Window) -> RepositoryResult<Vec<ProtocolActivity>> {
-        self.spans.lock().unwrap().push(*span);
+    async fn activity(
+        &self,
+        period: &FrozenPeriod,
+        _: Window,
+    ) -> RepositoryResult<Vec<ProtocolActivity>> {
+        self.periods.lock().unwrap().push(*period);
         Ok(self.activity.clone())
     }
-    async fn activity_hourly(&self, span: &Span) -> RepositoryResult<Vec<ProtocolActivityBar>> {
-        self.spans.lock().unwrap().push(*span);
+    async fn activity_hourly(
+        &self,
+        period: &FrozenPeriod,
+    ) -> RepositoryResult<Vec<ProtocolActivityBar>> {
+        self.periods.lock().unwrap().push(*period);
         Ok(self.bars.clone())
     }
-    async fn activity_daily(&self, span: &Span) -> RepositoryResult<Vec<ProtocolActivityBar>> {
-        self.spans.lock().unwrap().push(*span);
+    async fn activity_daily(
+        &self,
+        period: &FrozenPeriod,
+    ) -> RepositoryResult<Vec<ProtocolActivityBar>> {
+        self.periods.lock().unwrap().push(*period);
         Ok(self.bars.clone())
     }
     async fn tvl_latest(&self, last: DateTime<Utc>) -> RepositoryResult<Vec<LatestProtocolTvl>> {
@@ -295,11 +332,11 @@ impl ProtocolActivityLookup for MockProtocolActivityRepo {
     }
     async fn liquidity_moves(
         &self,
-        span: &Span,
+        period: &FrozenPeriod,
         _: Protocol,
         _: i64,
     ) -> RepositoryResult<Vec<LiquidityMove>> {
-        self.spans.lock().unwrap().push(*span);
+        self.periods.lock().unwrap().push(*period);
         Ok(self.moves.clone())
     }
 }
@@ -508,6 +545,8 @@ pub(crate) struct MockSignalRepo {
     list: Mutex<Option<RepositoryResult<Page<SignalRecord>>>>,
     latest_cursor: Mutex<Option<RepositoryResult<Option<SignalCursor>>>>,
     newer_than: Mutex<Option<RepositoryResult<Vec<SignalRecord>>>>,
+    /// The filter of each `list`.
+    pub(crate) filters: Mutex<Vec<SignalFilter>>,
 }
 
 impl MockSignalRepo {
@@ -516,6 +555,7 @@ impl MockSignalRepo {
             list: Mutex::new(Some(Ok(page))),
             latest_cursor: Mutex::new(None),
             newer_than: Mutex::new(None),
+            filters: Mutex::new(vec![]),
         }
     }
     pub(crate) fn empty() -> Self {
@@ -526,6 +566,7 @@ impl MockSignalRepo {
             list: Mutex::new(Some(Err(RepositoryError::Integrity("signal boom".into())))),
             latest_cursor: Mutex::new(None),
             newer_than: Mutex::new(None),
+            filters: Mutex::new(vec![]),
         }
     }
     /// Seed the streaming lens (poller tests): what `latest_cursor` and
@@ -538,6 +579,7 @@ impl MockSignalRepo {
             list: Mutex::new(None),
             latest_cursor: Mutex::new(Some(latest_cursor)),
             newer_than: Mutex::new(Some(newer_than)),
+            filters: Mutex::new(vec![]),
         }
     }
 }
@@ -546,13 +588,13 @@ impl MockSignalRepo {
 impl SignalFeed for MockSignalRepo {
     async fn list(
         &self,
-        _severity: Option<Severity>,
-        _pool: Option<Pubkey>,
+        filter: SignalFilter,
         _cursor: Option<SignalCursor>,
         _direction: PageDirection,
         _position: Option<PagePosition>,
         _limit: i64,
     ) -> RepositoryResult<Page<SignalRecord>> {
+        self.filters.lock().unwrap().push(filter);
         take(&self.list)
     }
     async fn latest_cursor(&self) -> RepositoryResult<Option<SignalCursor>> {
@@ -606,4 +648,229 @@ pub(crate) fn make_signal_page(records: Vec<SignalRecord>, is_last: bool) -> Pag
 /// Slots for tests that do not exercise them: plenty, and a short wait.
 pub(crate) fn work_slots() -> crate::application::WorkSlots {
     crate::application::WorkSlots::new(8, std::time::Duration::from_millis(100))
+}
+
+type PeriodRead = (&'static str, FrozenPeriod, Option<Protocol>);
+type InstantRead = (&'static str, DateTime<Utc>, Option<Protocol>);
+
+/// A day of the month of the frozen hours of [`make_frozen_hours`].
+pub(crate) fn at_october(day: u32, hour: u32) -> DateTime<Utc> {
+    Utc.with_ymd_and_hms(2026, 10, day, hour, 0, 0).unwrap()
+}
+
+/// Facts from the 13th at 13:00 through the 20th at 12:00: 24h and 7d are covered, 30d is not.
+pub(crate) fn make_frozen_hours() -> FrozenHours {
+    FrozenHours {
+        first: at_october(13, 13),
+        last_frozen: at_october(20, 12),
+    }
+}
+
+/// The frozen hours `frozen` answers, the only read the produced-resource services make of it.
+pub(crate) fn frozen_hours_repo(frozen: Option<FrozenHours>) -> Arc<MockProtocolActivityRepo> {
+    Arc::new(MockProtocolActivityRepo::new(frozen))
+}
+
+/// A `SwapActivityLookup` that answers nothing and records the period and the scope of each read.
+#[derive(Default)]
+pub(crate) struct MockSwapActivityRepo {
+    pub(crate) reads: Mutex<Vec<PeriodRead>>,
+}
+
+impl MockSwapActivityRepo {
+    fn record(&self, name: &'static str, period: &FrozenPeriod, protocol: Option<Protocol>) {
+        self.reads.lock().unwrap().push((name, *period, protocol));
+    }
+}
+
+#[async_trait]
+impl SwapActivityLookup for MockSwapActivityRepo {
+    async fn find_protocol_totals(
+        &self,
+        period: &FrozenPeriod,
+        _: Window,
+        protocol: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolSwapActivity>> {
+        self.record("swap_totals", period, protocol);
+        Ok(vec![])
+    }
+    async fn list_protocol_hourly(
+        &self,
+        period: &FrozenPeriod,
+        protocol: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolBucket<SwapActivity>>> {
+        self.record("swap_hourly", period, protocol);
+        Ok(vec![])
+    }
+    async fn list_protocol_daily(
+        &self,
+        period: &FrozenPeriod,
+        protocol: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolBucket<SwapActivity>>> {
+        self.record("swap_daily", period, protocol);
+        Ok(vec![])
+    }
+    async fn find_pool_totals(
+        &self,
+        period: &FrozenPeriod,
+        _: Pubkey,
+    ) -> RepositoryResult<Option<SwapActivity>> {
+        self.record("pool_swap_totals", period, None);
+        Ok(None)
+    }
+    async fn list_pool_hourly(
+        &self,
+        period: &FrozenPeriod,
+        _: Pubkey,
+    ) -> RepositoryResult<Vec<PoolSwapBucket>> {
+        self.record("pool_swap_hourly", period, None);
+        Ok(vec![])
+    }
+    async fn list_pool_daily(
+        &self,
+        period: &FrozenPeriod,
+        _: Pubkey,
+    ) -> RepositoryResult<Vec<PoolSwapBucket>> {
+        self.record("pool_swap_daily", period, None);
+        Ok(vec![])
+    }
+}
+
+/// A `PoolCreationsLookup` that answers nothing.
+#[derive(Default)]
+pub(crate) struct MockPoolCreationsRepo;
+
+#[async_trait]
+impl PoolCreationsLookup for MockPoolCreationsRepo {
+    async fn list_totals(
+        &self,
+        _: &FrozenPeriod,
+        _: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolPoolCreations>> {
+        Ok(vec![])
+    }
+    async fn list_hourly(
+        &self,
+        _: &FrozenPeriod,
+        _: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolBucket<PoolCreations>>> {
+        Ok(vec![])
+    }
+    async fn list_daily(
+        &self,
+        _: &FrozenPeriod,
+        _: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolBucket<PoolCreations>>> {
+        Ok(vec![])
+    }
+}
+
+/// A `LiquidityMoveLookup` measured from `since`, answering nothing, which records the period
+/// and the scope of each read.
+#[derive(Default)]
+pub(crate) struct MockLiquidityMoveRepo {
+    pub(crate) since: Option<DateTime<Utc>>,
+    pub(crate) reads: Mutex<Vec<PeriodRead>>,
+}
+
+impl MockLiquidityMoveRepo {
+    fn record(&self, name: &'static str, period: &FrozenPeriod, protocol: Option<Protocol>) {
+        self.reads.lock().unwrap().push((name, *period, protocol));
+    }
+}
+
+#[async_trait]
+impl LiquidityMoveLookup for MockLiquidityMoveRepo {
+    async fn find_measured_since(&self, _: Protocol) -> RepositoryResult<Option<DateTime<Utc>>> {
+        Ok(self.since)
+    }
+    async fn find_totals(
+        &self,
+        period: &FrozenPeriod,
+        protocol: Protocol,
+    ) -> RepositoryResult<Option<LiquidityFlows>> {
+        self.record("liquidity_totals", period, Some(protocol));
+        Ok(None)
+    }
+    async fn list_hourly(
+        &self,
+        period: &FrozenPeriod,
+        protocol: Protocol,
+    ) -> RepositoryResult<Vec<ProtocolBucket<LiquidityFlows>>> {
+        self.record("liquidity_hourly", period, Some(protocol));
+        Ok(vec![])
+    }
+    async fn list_daily(
+        &self,
+        period: &FrozenPeriod,
+        protocol: Protocol,
+    ) -> RepositoryResult<Vec<ProtocolBucket<LiquidityFlows>>> {
+        self.record("liquidity_daily", period, Some(protocol));
+        Ok(vec![])
+    }
+    async fn list_pool_moves(
+        &self,
+        period: &FrozenPeriod,
+        _: Window,
+        _: Pubkey,
+        _: LiquidityMoveOrder,
+        _: Option<LiquidityMoveCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<LiquidityMove>> {
+        self.record("pool_moves", period, None);
+        Ok(Page::empty())
+    }
+}
+
+/// A `ProtocolTvlLookup` that answers nothing and records the instant and the scope of each read.
+#[derive(Default)]
+pub(crate) struct MockProtocolTvlRepo {
+    pub(crate) instants: Mutex<Vec<InstantRead>>,
+}
+
+#[async_trait]
+impl ProtocolTvlLookup for MockProtocolTvlRepo {
+    async fn list_latest(
+        &self,
+        last: DateTime<Utc>,
+        protocol: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolTvl>> {
+        self.instants.lock().unwrap().push(("tvl", last, protocol));
+        Ok(vec![])
+    }
+    async fn list_hourly(
+        &self,
+        first: DateTime<Utc>,
+        _: DateTime<Utc>,
+        protocol: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolTvl>> {
+        self.instants
+            .lock()
+            .unwrap()
+            .push(("tvl_hourly", first, protocol));
+        Ok(vec![])
+    }
+}
+
+/// A `DiscoveredTvlLookup` that answers nothing and records the instant and the scope of each
+/// read.
+#[derive(Default)]
+pub(crate) struct MockDiscoveredTvlRepo {
+    pub(crate) instants: Mutex<Vec<InstantRead>>,
+}
+
+#[async_trait]
+impl DiscoveredTvlLookup for MockDiscoveredTvlRepo {
+    async fn list_totals(
+        &self,
+        last: DateTime<Utc>,
+        _: Window,
+        protocol: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolDiscoveredTvl>> {
+        self.instants
+            .lock()
+            .unwrap()
+            .push(("discoveries", last, protocol));
+        Ok(vec![])
+    }
 }

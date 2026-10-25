@@ -1,0 +1,139 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT protocol, bucket AS bucket_from, swap_count AS swaps,\n                   volume_usd, fees_usd, lp_fees_usd, protocol_fees_usd, referral_fees_usd,\n                   active_pools AS pool_hours, active_pools_valued AS pool_hours_valued\n              FROM analytic_protocol_hourly\n             WHERE bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND bucket < $2\n               AND ($4::TEXT IS NULL OR protocol = $4)\n             ORDER BY bucket, protocol\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_hourly",
+            "name": "protocol"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "bucket_from",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_hourly",
+            "name": "bucket"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "swaps",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_hourly",
+            "name": "swap_count"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "volume_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_hourly",
+            "name": "volume_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "fees_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_hourly",
+            "name": "fees_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "lp_fees_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_hourly",
+            "name": "lp_fees_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "protocol_fees_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_hourly",
+            "name": "protocol_fees_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "referral_fees_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_hourly",
+            "name": "referral_fees_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "pool_hours",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_hourly",
+            "name": "active_pools"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "pool_hours_valued",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_hourly",
+            "name": "active_pools_valued"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "12f86994a7ffb9e3d380bfe87a8af7995ce5aae0751d723c365755d977c509b6"
+}

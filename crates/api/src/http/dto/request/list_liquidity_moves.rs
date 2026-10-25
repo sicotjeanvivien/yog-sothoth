@@ -1,7 +1,5 @@
 //! Request DTO for `GET /api/protocols/{protocol}/liquidity-moves`.
 
-use std::str::FromStr;
-
 use serde::Deserialize;
 use utoipa::IntoParams;
 use yog_core::domain::{Protocol, Window};
@@ -11,7 +9,7 @@ use crate::http::error::ApiError;
 
 /// The largest moves of a window: no cursor, a ranking read from its top.
 #[derive(Debug, Deserialize, IntoParams)]
-pub(crate) struct LiquidityMovesQuery {
+pub(crate) struct LiquidityMovesParams {
     #[serde(default)]
     #[param(inline)]
     window: WindowParam,
@@ -28,14 +26,13 @@ pub(crate) struct ListLiquidityMovesRequest {
 }
 
 impl ListLiquidityMovesRequest {
-    pub(crate) fn parse(protocol: &str, query: LiquidityMovesQuery) -> Result<Self, ApiError> {
-        let protocol = Protocol::from_str(protocol)
-            .map_err(|_| ApiError::BadRequest(format!("unknown protocol: {protocol}")))?;
-        super::validate_limit(query.limit)?;
+    pub(crate) fn parse(protocol: &str, params: LiquidityMovesParams) -> Result<Self, ApiError> {
+        let protocol = super::parse_protocol(protocol)?;
+        super::validate_limit(params.limit)?;
         Ok(Self {
             protocol,
-            window: query.window.into(),
-            limit: query.limit,
+            window: params.window.into(),
+            limit: params.limit,
         })
     }
 }

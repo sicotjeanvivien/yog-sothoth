@@ -2,31 +2,53 @@ mod announcement;
 mod ingestion;
 mod network;
 mod page;
+mod pool_swap_bucket;
 // Visible: target of a doc link (http/error.rs).
 pub(crate) mod problem;
 mod protocol;
 mod protocol_activity;
 mod protocol_catalog;
+mod protocol_discovered_tvl;
+mod protocol_liquidity_flows;
+mod protocol_liquidity_flows_bucket;
+mod protocol_pool_creations;
+mod protocol_pool_creations_bucket;
+mod protocol_swap_activity;
+mod protocol_swap_activity_bucket;
 mod readiness;
+mod reading;
 mod signal;
+mod swap_activity;
 mod token;
 mod token_activity;
 mod window;
+mod windowed_page;
 
 pub(crate) use announcement::AnnouncementResponse;
 pub(crate) use ingestion::IngestionResponse;
 pub(crate) use network::NetworkResponse;
 pub(crate) use page::PageResponse;
+pub(crate) use pool_swap_bucket::PoolSwapBucketResponse;
 pub(crate) use problem::{PROBLEM_CONTENT_TYPE, ProblemDetailsResponse};
 pub(crate) use protocol_activity::{
     LatestTvlResponse, LiquidityMoveResponse, ProtocolActivityBarResponse,
     ProtocolActivityResponse, ProtocolTvlResponse,
 };
 pub(crate) use protocol_catalog::ProtocolCatalogResponse;
+pub(crate) use protocol_discovered_tvl::ProtocolDiscoveredTvlResponse;
+pub(crate) use protocol_liquidity_flows::ProtocolLiquidityFlowsResponse;
+pub(crate) use protocol_liquidity_flows_bucket::ProtocolLiquidityFlowsBucketResponse;
+pub(crate) use protocol_pool_creations::ProtocolPoolCreationsResponse;
+pub(crate) use protocol_pool_creations_bucket::ProtocolPoolCreationsBucketResponse;
+pub(crate) use protocol_swap_activity::ProtocolSwapActivityResponse;
+pub(crate) use protocol_swap_activity_bucket::ProtocolSwapActivityBucketResponse;
 pub(crate) use readiness::{
     ChecksReportResponse, ComponentStatusResponse, ReadinessResponse, ReadinessStatusResponse,
 };
+pub(crate) use reading::ReadingResponse;
 pub(crate) use signal::SignalResponse;
+pub(crate) use swap_activity::SwapActivityResponse;
 pub(crate) use token::TokenResponse;
 pub(crate) use token_activity::TokenActivityPageResponse;
 pub(crate) use window::WindowedResponse;
+pub(crate) use windowed_page::WindowedPageResponse;

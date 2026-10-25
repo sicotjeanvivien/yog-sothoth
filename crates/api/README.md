@@ -22,8 +22,12 @@ api/src/
 │   └── serve.rs           ← serve() — the server and the poller, and their stop
 ├── application/
 │   ├── services/          ← cross-protocol services at the root (SignalService,
-│   │                        TokenService, NetworkService,
-│   │                        IngestionService, AnnouncementService)
+│   │                        TokenService, NetworkService, IngestionService,
+│   │                        AnnouncementService, ActivityService, PoolService), one
+│   │                        per produced resource (SwapActivityService,
+│   │                        PoolCreationsService, LiquidityMoveService,
+│   │                        ProtocolTvlService, DiscoveredTvlService), and period.rs,
+│   │                        the frozen period they all read over
 │   ├── signal_stream.rs   ← SignalStreamPoller (enriches once, feeds the SSE broadcast)
 │   ├── cache.rs           ← SharedCache (moka) and its named CachePolicy per use
 │   ├── enriched_token.rs  ← one token side of a pool, identity only
@@ -77,9 +81,10 @@ with no wildcard arm, so adding a variant breaks the build there.
   protocol prefix when its response has none.
   `every_schema_is_a_response_or_a_wire_form` fails on a schema of the
   contract named otherwise. On the request side, `*Request` is what a route
-  takes once validated, `*Query` the raw query string it parses, `*Param` an
-  enum of that query, named like the domain type it translates
-  (`domain::Severity` → `SeverityParam`).
+  takes once validated, `*Params` the raw query string it parses, `*Param` an
+  enum of one of its parameters, named like the parameter a client writes
+  (`severity` → `SeverityParam`, `sort` → `SortParam`): its module says which
+  route it belongs to.
 - **Place.** One type per file. At the top level, what a route returns — its
   body, or the item of a page — or takes, its `*Request`. A part lives in its
   owner's folder, one level deep; a response part's file drops the owner's
@@ -92,7 +97,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 - **Visibility.** Each item and field declares the reach it has. A field is
   private unless something outside its file builds or reads it — the handlers
   build `PageResponse` and the readiness types, `ListSignalsRequest::parse`
-  reads `SignalsQuery`. `pub(super)` is for what only its folder and that
+  reads `SignalsParams`. `pub(super)` is for what only its folder and that
   folder's tests use, `pub(in crate::http::dto::response)` for a part other
   responses reach, `pub(crate)` for what the handlers see.
 - **Conversions** live with the type they build, and a behaviour two DTOs
@@ -119,19 +124,32 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/tokens/activity` | Tokens by volume over `?window=`, identity embedded, forward-only cursor; a swap counts for both its tokens |
 | `GET` | `/api/tokens/{mint}` | Token metadata + latest price (200 with `price: null` if no price yet) |
 | `GET` | `/api/announcements/active` | Operator announcements whose window is open — most severe first, non-paginated (hard cap); empty array is the nominal case |
+| `GET` | `/api/swaps/totals` (`?offset=`), `/hourly`, `/daily` | Per protocol, the swaps over `?window=`, then per bucket: swaps, volume, fees and their shares, pool-hours and the valued ones; the totals with the distinct pools that swapped |
+| `GET` | `/api/protocols/{protocol}/swaps/totals`, `/hourly`, `/daily` | The same, the protocol's own |
+| `GET` | `/api/pools/{pool}/swaps/totals`, `/hourly`, `/daily` | The same for one pool, without the protocol nor the distinct pools; 404 for a pool unknown |
+| `GET` | `/api/swaps/by-token` | Tokens by volume over `?window=`, every protocol summed, forward-only cursor |
+| `GET` | `/api/pool-creations/totals`, `/hourly`, `/daily`, and under `/api/protocols/{protocol}/` | Per protocol, the pools created over the window, then per bucket |
+| `GET` | `/api/protocols/{protocol}/liquidity-moves/totals`, `/hourly`, `/daily` | The protocol's liquidity created, added and removed, valued, with its moves valued; its `coveredSince` is the liquidity's |
+| `GET` | `/api/pools/{pool}/liquidity-moves` | A page of the pool's valued moves, `?sort=amount` (default) or `at`, forward-only cursor, refused (400) for another pool or window or after a freeze; empty while its protocol's liquidity does not cover the window |
+| `GET` | `/api/tvl`, `/api/protocols/{protocol}/tvl` | Per protocol, the last TVL reading at or before `asOf`, its `at` said |
+| `GET` | `/api/tvl/hourly`, `/api/protocols/{protocol}/tvl/hourly` | Per protocol, the reading of every hour measured from the window's start |
+| `GET` | `/api/pool-discoveries/totals`, and under `/api/protocols/{protocol}/` | Per protocol, the pools first seen in the window without their birth observed, and what they hold at the last reading |
+| `GET` | `/api/protocols/{protocol}/signals`, `/api/pools/{pool}/signals` | The signals of one protocol or one pool, paginated as `/api/signals`, `?severity=` |
 
-**What yog-analytic computes** (`/api/protocols/…` but the catalogue, `/api/tokens/activity`)
-read yog-analytic's tables over one span, built in `ActivityService`: the window
+**What yog-analytic computes** (`/api/protocols/…` but the catalogue and the signals,
+`/api/tokens/activity`, `/api/swaps/…`, `/api/pool-creations/…`, `/api/tvl…`,
+`/api/pool-discoveries/…`, `/api/pools/{pool}/…` but the signals) read yog-analytic's
+tables over one frozen period, built in `ActivityService` and `period.rs`: the window
 ends at the close of the last frozen hour, `asOf`, the same for every route (a window of
 future events starts there), and
-no read counts an open hour. Each response carries `from`, `asOf` and
-`coveredSince`, the first hour of the facts: a total whose window starts before
-it returns no row rather than a partial sum; a series returns the bars the facts
+no read counts an open hour. Each response carries `asOf`, `coveredSince`, the first
+hour of the facts, and `from` when it is read over a window: a total whose window starts before
+it returns no row rather than a partial sum; a series returns the buckets the facts
 hold whole. The TVL is each protocol's last measure by that hour, its `at` said,
 with the part of it held by the pools discovered in each window, measured with it
 (a window without its part was not measured: the web then withholds the change).
 The liquidity is measured from a later hour than the swaps, its own start: its
-`liquidity` is `null` on a total, a bar or a ranking of moves whose window starts
+`liquidity` is `null` on a total, a bucket or a ranking of moves whose window starts
 before it, rather than a partial sum.
 The tokens are the exception to one read of the frozen hours: their span ends at
 the hour of the ranking read with them, which each freeze rewrites whole — a
@@ -177,7 +195,7 @@ at the end of this section.
    protocol.
 4. **A measure is a collection followed by a cut**, a reserved word that ends the path:
    - `totals`, the whole window: one row per protocol at the root, under an entity its own;
-   - `hourly`, `daily`: the same rows, one per bar, a day being the 24 hours ending at
+   - `hourly`, `daily`: the same rows, one per bucket, a day being the 24 hours ending at
      `asOf`, unpaginated, the window bounding them;
    - `by-token`, `by-pool`, `by-owner`: one row per token, pool or owner address, summed over
      the path's scope (every protocol at the root), a ranking paginated as a collection.

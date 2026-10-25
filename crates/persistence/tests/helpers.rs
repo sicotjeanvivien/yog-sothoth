@@ -8,7 +8,7 @@ use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 use sqlx::PgPool;
 use yog_core::domain::{
-    AnalyticRepository, CycleWrite, PriceProvider, TokenPrice, TokenPriceRepository,
+    AnalyticRepository, CycleWrite, FrozenPeriod, PriceProvider, TokenPrice, TokenPriceRepository,
 };
 use yog_persistence::{PgAnalyticRepository, PgTokenPriceRepository};
 
@@ -253,4 +253,22 @@ pub async fn the_only_bucket(pool: &PgPool, pool_addr: &str) -> SwapActivity {
     let mut buckets = swap_activity(pool, pool_addr).await;
     assert_eq!(buckets.len(), 1, "expected one bucket: {buckets:?}");
     buckets.remove(0)
+}
+
+pub const DAMM: &str = "meteora_damm_v2";
+pub const DLMM: &str = "meteora_dlmm";
+
+/// The close of the last frozen hour of the produced-resource reads: a day never starts at
+/// midnight.
+pub fn as_of() -> DateTime<Utc> {
+    Utc.with_ymd_and_hms(2026, 10, 20, 13, 0, 0).unwrap()
+}
+
+/// `hours` hours ending at [`as_of`], the facts holding them all.
+pub fn period(hours: i64) -> FrozenPeriod {
+    FrozenPeriod {
+        from: as_of() - Duration::hours(hours),
+        as_of: as_of(),
+        covered_since: as_of() - Duration::hours(hours),
+    }
 }

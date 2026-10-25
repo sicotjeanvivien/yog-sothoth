@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT MIN(bucket) AS \"since?: DateTime<Utc>\"\n              FROM analytic_protocol_liquidity_hourly\n             WHERE protocol = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "since?: DateTime<Utc>",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d448240934e8652b696107fcc2b562ed99bd8549752e138dcaa2f3f27b2c144e"
+}

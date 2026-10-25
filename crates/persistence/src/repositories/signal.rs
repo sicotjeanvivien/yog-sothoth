@@ -19,7 +19,9 @@ use solana_pubkey::Pubkey;
 use sqlx::{PgPool, QueryBuilder};
 use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
-    domain::{Severity, Signal, SignalCursor, SignalFeed, SignalRecord, SignalRepository},
+    domain::{
+        Severity, Signal, SignalCursor, SignalFeed, SignalFilter, SignalRecord, SignalRepository,
+    },
 };
 
 /// Page size cap, whatever the caller's `limit`.
@@ -111,8 +113,7 @@ impl SignalFeed for PgSignalRepository {
     /// reverses the ORDER BY, then the vector, to return the page in display order.
     async fn list(
         &self,
-        severity: Option<Severity>,
-        pool: Option<Pubkey>,
+        filter: SignalFilter,
         cursor: Option<SignalCursor>,
         direction: PageDirection,
         position: Option<PagePosition>,
@@ -129,8 +130,9 @@ impl SignalFeed for PgSignalRepository {
             Some(c) => (Some(c.triggered_at), Some(c.id)),
             None => (None, None),
         };
-        let severity_filter = severity.map(|s| s.as_str().to_string());
-        let pool_filter = pool.map(|p| p.to_string());
+        let severity_filter = filter.severity.map(|s| s.as_str().to_string());
+        let protocol_filter = filter.protocol.map(|p| p.as_str());
+        let pool_filter = filter.pool.map(|p| p.to_string());
 
         let rows: Vec<SignalRow> = match mode {
             QueryMode::Forward => sqlx::query_as!(
@@ -142,6 +144,7 @@ impl SignalFeed for PgSignalRepository {
                 FROM signals
                 WHERE ($1::TEXT IS NULL OR severity = $1)
                   AND ($2::TEXT IS NULL OR pool_address = $2)
+                  AND ($6::TEXT IS NULL OR protocol = $6)
                   AND (
                       $3::TIMESTAMPTZ IS NULL
                       OR triggered_at < $3
@@ -155,6 +158,7 @@ impl SignalFeed for PgSignalRepository {
                 cursor_triggered_at,
                 cursor_id,
                 fetch_limit,
+                protocol_filter,
             )
             .fetch_all(&self.pool)
             .await
@@ -169,6 +173,7 @@ impl SignalFeed for PgSignalRepository {
                 FROM signals
                 WHERE ($1::TEXT IS NULL OR severity = $1)
                   AND ($2::TEXT IS NULL OR pool_address = $2)
+                  AND ($6::TEXT IS NULL OR protocol = $6)
                   AND (
                       $3::TIMESTAMPTZ IS NULL
                       OR triggered_at > $3
@@ -182,6 +187,7 @@ impl SignalFeed for PgSignalRepository {
                 cursor_triggered_at,
                 cursor_id,
                 fetch_limit,
+                protocol_filter,
             )
             .fetch_all(&self.pool)
             .await

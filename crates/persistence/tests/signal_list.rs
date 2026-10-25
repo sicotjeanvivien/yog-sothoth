@@ -1,14 +1,16 @@
 //! `PgSignalRepository::list` on the real `signals` hypertable: display order, keyset
 //! navigation, the id tie-break, and the filters.
 
-use super::helpers::pk;
+use super::helpers::{DAMM, DLMM, as_of, pk, setup_roles_and_connect_as};
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 
 use yog_core::{
     Cursor, PageDirection, PagePosition,
-    domain::{Protocol, Severity, Signal, SignalCursor, SignalFeed, SignalRepository},
+    domain::{
+        Protocol, Severity, Signal, SignalCursor, SignalFeed, SignalFilter, SignalRepository,
+    },
 };
 use yog_persistence::PgSignalRepository;
 
@@ -62,7 +64,7 @@ async fn feed_paginates_newest_first(pool: PgPool) {
 
     // Page 1: newest two.
     let page1 = repo
-        .list(None, None, None, PageDirection::Next, None, 2)
+        .list(SignalFilter::default(), None, PageDirection::Next, None, 2)
         .await
         .unwrap();
     assert_eq!(ids(&page1), vec![5, 4]);
@@ -72,7 +74,13 @@ async fn feed_paginates_newest_first(pool: PgPool) {
     // Page 2 via the forward cursor.
     let cursor = signal_cursor(page1.next_cursor.as_ref().unwrap());
     let page2 = repo
-        .list(None, None, Some(cursor), PageDirection::Next, None, 2)
+        .list(
+            SignalFilter::default(),
+            Some(cursor),
+            PageDirection::Next,
+            None,
+            2,
+        )
         .await
         .unwrap();
     assert_eq!(ids(&page2), vec![3, 2]);
@@ -81,7 +89,13 @@ async fn feed_paginates_newest_first(pool: PgPool) {
     // Page 3: the tail.
     let cursor = signal_cursor(page2.next_cursor.as_ref().unwrap());
     let page3 = repo
-        .list(None, None, Some(cursor), PageDirection::Next, None, 2)
+        .list(
+            SignalFilter::default(),
+            Some(cursor),
+            PageDirection::Next,
+            None,
+            2,
+        )
         .await
         .unwrap();
     assert_eq!(ids(&page3), vec![1]);
@@ -91,7 +105,13 @@ async fn feed_paginates_newest_first(pool: PgPool) {
     // Backward from page 2 returns page 1, in display order.
     let cursor = signal_cursor(page2.prev_cursor.as_ref().unwrap());
     let back = repo
-        .list(None, None, Some(cursor), PageDirection::Prev, None, 2)
+        .list(
+            SignalFilter::default(),
+            Some(cursor),
+            PageDirection::Prev,
+            None,
+            2,
+        )
         .await
         .unwrap();
     assert_eq!(ids(&back), vec![5, 4]);
@@ -100,8 +120,7 @@ async fn feed_paginates_newest_first(pool: PgPool) {
     // Position jumps ignore cursors: Last = the oldest page.
     let last = repo
         .list(
-            None,
-            None,
+            SignalFilter::default(),
             None,
             PageDirection::Next,
             Some(PagePosition::Last),
@@ -126,7 +145,7 @@ async fn equal_timestamps_tie_break_on_id_desc(pool: PgPool) {
     .unwrap();
 
     let page1 = repo
-        .list(None, None, None, PageDirection::Next, None, 1)
+        .list(SignalFilter::default(), None, PageDirection::Next, None, 1)
         .await
         .unwrap();
     assert_eq!(ids(&page1), vec![2]);
@@ -135,7 +154,13 @@ async fn equal_timestamps_tie_break_on_id_desc(pool: PgPool) {
     // repeat the sibling row.
     let cursor = signal_cursor(page1.next_cursor.as_ref().unwrap());
     let page2 = repo
-        .list(None, None, Some(cursor), PageDirection::Next, None, 1)
+        .list(
+            SignalFilter::default(),
+            Some(cursor),
+            PageDirection::Next,
+            None,
+            1,
+        )
         .await
         .unwrap();
     assert_eq!(ids(&page2), vec![1]);
@@ -189,7 +214,16 @@ async fn pool_filter_restricts_the_feed(pool: PgPool) {
     .unwrap();
 
     let page = repo
-        .list(None, Some(pk(2)), None, PageDirection::Next, None, 10)
+        .list(
+            SignalFilter {
+                pool: Some(pk(2)),
+                ..SignalFilter::default()
+            },
+            None,
+            PageDirection::Next,
+            None,
+            10,
+        )
         .await
         .unwrap();
 
@@ -200,8 +234,11 @@ async fn pool_filter_restricts_the_feed(pool: PgPool) {
     // Combined with severity: AND semantics.
     let page = repo
         .list(
-            Some(Severity::Critical),
-            Some(pk(2)),
+            SignalFilter {
+                severity: Some(Severity::Critical),
+                pool: Some(pk(2)),
+                ..SignalFilter::default()
+            },
             None,
             PageDirection::Next,
             None,
@@ -213,7 +250,16 @@ async fn pool_filter_restricts_the_feed(pool: PgPool) {
 
     // A pool that never signalled yields an empty first/last page.
     let page = repo
-        .list(None, Some(pk(9)), None, PageDirection::Next, None, 10)
+        .list(
+            SignalFilter {
+                pool: Some(pk(9)),
+                ..SignalFilter::default()
+            },
+            None,
+            PageDirection::Next,
+            None,
+            10,
+        )
         .await
         .unwrap();
     assert!(page.items.is_empty());
@@ -226,8 +272,10 @@ async fn severity_filter_restricts_the_feed(pool: PgPool) {
 
     let page = repo
         .list(
-            Some(Severity::Critical),
-            None,
+            SignalFilter {
+                severity: Some(Severity::Critical),
+                ..SignalFilter::default()
+            },
             None,
             PageDirection::Next,
             None,
@@ -243,4 +291,41 @@ async fn severity_filter_restricts_the_feed(pool: PgPool) {
             .all(|r| r.signal.severity == Severity::Critical)
     );
     assert!(page.is_first && page.is_last);
+}
+
+/// Mutation: the protocol filter of the feed dropped — DLMM's signal listed.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_protocols_signals_are_its_own(pool: PgPool) {
+    for protocol in [DAMM, DLMM] {
+        sqlx::query(
+            "INSERT INTO signals
+               (detector, protocol, pool_address, severity, value, threshold, message,
+                triggered_at)
+             VALUES ('flow_imbalance', $1, $2, 'warning', 1, 1, NULL, $3)",
+        )
+        .bind(protocol)
+        .bind(pk(1).to_string())
+        .bind(as_of())
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let repository = PgSignalRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+
+    let page = repository
+        .list(
+            SignalFilter {
+                protocol: Some(Protocol::MeteoraDammV2),
+                ..SignalFilter::default()
+            },
+            None,
+            PageDirection::Next,
+            None,
+            50,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(page.items[0].signal.protocol, Protocol::MeteoraDammV2);
 }

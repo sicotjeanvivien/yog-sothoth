@@ -47,12 +47,12 @@ pub(super) struct ProtocolActivityBarRow {
     pub(super) liquidity_moves_valued: Option<i64>,
 }
 
-pub(super) struct ProtocolTvlRow {
-    pub(super) protocol: String,
-    pub(super) at: DateTime<Utc>,
-    pub(super) tvl_usd: Option<BigDecimal>,
-    pub(super) pools_priced: i64,
-    pub(super) pools_unvalued: i64,
+pub(in crate::repositories) struct ProtocolTvlRow {
+    pub(in crate::repositories) protocol: String,
+    pub(in crate::repositories) at: DateTime<Utc>,
+    pub(in crate::repositories) tvl_usd: Option<BigDecimal>,
+    pub(in crate::repositories) pools_priced: i64,
+    pub(in crate::repositories) pools_unvalued: i64,
 }
 
 /// A protocol's last TVL row, once per discovered part measured with it; the
@@ -68,16 +68,17 @@ pub(super) struct LatestProtocolTvlRow {
     pub(super) discovered_pools: Option<i64>,
 }
 
-pub(super) struct LiquidityMoveRow {
-    pub(super) protocol: String,
-    pub(super) at: DateTime<Utc>,
-    pub(super) signature: String,
-    pub(super) pool_address: String,
-    pub(super) token_a_symbol: Option<String>,
-    pub(super) token_b_symbol: Option<String>,
-    pub(super) owner: String,
-    pub(super) kind: String,
-    pub(super) amount_usd: BigDecimal,
+pub(in crate::repositories) struct LiquidityMoveRow {
+    pub(in crate::repositories) protocol: String,
+    pub(in crate::repositories) at: DateTime<Utc>,
+    pub(in crate::repositories) signature: String,
+    pub(in crate::repositories) event_index: i32,
+    pub(in crate::repositories) pool_address: String,
+    pub(in crate::repositories) token_a_symbol: Option<String>,
+    pub(in crate::repositories) token_b_symbol: Option<String>,
+    pub(in crate::repositories) owner: String,
+    pub(in crate::repositories) kind: String,
+    pub(in crate::repositories) amount_usd: BigDecimal,
 }
 
 fn usd(value: Option<BigDecimal>, field: &str) -> RepositoryResult<Option<rust_decimal::Decimal>> {
@@ -167,6 +168,7 @@ impl TryFrom<LiquidityMoveRow> for LiquidityMove {
             protocol: parse_protocol(&row.protocol)?,
             at: row.at,
             signature: row.signature,
+            event_index: row.event_index,
             pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
             token_a_symbol: row.token_a_symbol,
             token_b_symbol: row.token_b_symbol,

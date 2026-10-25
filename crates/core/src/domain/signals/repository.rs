@@ -9,7 +9,7 @@ use solana_pubkey::Pubkey;
 use crate::tools::Page;
 use crate::{
     PageDirection, PagePosition, RepositoryResult,
-    domain::{Severity, Signal, SignalRecord},
+    domain::{Protocol, Severity, Signal, SignalRecord},
 };
 
 /// The last item of a page in the feed ordering, `(triggered_at, id)` descending.
@@ -17,6 +17,14 @@ use crate::{
 pub struct SignalCursor {
     pub triggered_at: DateTime<Utc>,
     pub id: i64,
+}
+
+/// What a page of the feed keeps: each set field narrows it, and they combine with AND.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SignalFilter {
+    pub severity: Option<Severity>,
+    pub protocol: Option<Protocol>,
+    pub pool: Option<Pubkey>,
 }
 
 /// Read/write contract for emitted signals.
@@ -37,12 +45,11 @@ pub trait SignalRepository: Send + Sync {
 /// Read contract for the signal feed, the api's lens.
 #[async_trait]
 pub trait SignalFeed: Send + Sync {
-    /// Paginate the feed, newest first; `severity` and `pool` combine with AND.
+    /// Paginate the feed kept by `filter`, newest first.
     /// The returned cursors chain the pages; `limit` may be capped.
     async fn list(
         &self,
-        severity: Option<Severity>,
-        pool: Option<Pubkey>,
+        filter: SignalFilter,
         cursor: Option<SignalCursor>,
         direction: PageDirection,
         position: Option<PagePosition>,

@@ -51,7 +51,10 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     ),
     (
         "analytic_pool_hourly",
-        &[("yog_analytic", &["INSERT", "SELECT", "UPDATE"])],
+        &[
+            ("yog_analytic", &["INSERT", "SELECT", "UPDATE"]),
+            ("yog_api", &["SELECT"]),
+        ],
     ),
     (
         "analytic_pool_prices_5min",

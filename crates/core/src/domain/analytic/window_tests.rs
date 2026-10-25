@@ -13,30 +13,30 @@ fn hours() -> FrozenHours {
     }
 }
 
-/// Against a span that ends at the last frozen hour instead of its close.
+/// Against a period that ends at the last frozen hour instead of its close.
 #[test]
 fn a_span_ends_at_the_close_of_the_last_frozen_hour() {
-    let span = Span::of(hours(), Window::Day, None);
-    assert_eq!(span.as_of, at(20, 13));
-    assert_eq!(span.from, at(19, 13));
-    assert_eq!(span.last_hour(), at(20, 12));
+    let period = FrozenPeriod::of(hours(), Window::Day, None);
+    assert_eq!(period.as_of, at(20, 13));
+    assert_eq!(period.from, at(19, 13));
+    assert_eq!(period.last_hour(), at(20, 12));
 }
 
 /// Against an offset added instead of taken back.
 #[test]
 fn an_offset_moves_the_span_back_by_its_length() {
-    let span = Span::of(hours(), Window::Day, Some(Window::Day));
-    assert_eq!(span.as_of, at(19, 13));
-    assert_eq!(span.from, at(18, 13));
+    let period = FrozenPeriod::of(hours(), Window::Day, Some(Window::Day));
+    assert_eq!(period.as_of, at(19, 13));
+    assert_eq!(period.from, at(18, 13));
 }
 
-/// Against `>` in place of `>=`: a span starting at the first hour is covered.
+/// Against `>` in place of `>=`: a period starting at the first hour is covered.
 #[test]
 fn a_span_is_covered_from_the_first_hour_on() {
-    let week = Span::of(hours(), Window::Week, None);
+    let week = FrozenPeriod::of(hours(), Window::Week, None);
     assert_eq!(week.from, at(13, 13));
     assert!(week.is_covered());
-    assert!(!Span::of(hours(), Window::Week, Some(Window::Day)).is_covered());
+    assert!(!FrozenPeriod::of(hours(), Window::Week, Some(Window::Day)).is_covered());
 }
 
 /// Against a label that no longer matches what `window=` and migration 029 take.

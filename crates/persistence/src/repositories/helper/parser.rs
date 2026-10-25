@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use sqlx::Error as SqlxError;
@@ -12,6 +13,16 @@ use yog_core::{
 pub(crate) fn parse_protocol(raw: &str) -> RepositoryResult<Protocol> {
     Protocol::from_str(raw)
         .map_err(|e| RepositoryError::Integrity(format!("invalid protocol: {e}")))
+}
+
+/// The bind of an optional protocol filter: `None` reads every protocol.
+pub(crate) fn bind_protocol_filter(protocol: Option<Protocol>) -> Option<&'static str> {
+    protocol.map(|p| p.as_str())
+}
+
+/// The start of a bucket a read selected; `None` is `RepositoryError::Integrity`.
+pub(crate) fn parse_bucket_from(from: Option<DateTime<Utc>>) -> RepositoryResult<DateTime<Utc>> {
+    from.ok_or_else(|| RepositoryError::Integrity("a bucket read without its start".to_owned()))
 }
 
 /// Parses a stored window label (`Window::as_str`); an unknown one is `RepositoryError::Integrity`.

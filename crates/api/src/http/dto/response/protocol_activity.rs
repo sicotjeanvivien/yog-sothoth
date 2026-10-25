@@ -221,7 +221,7 @@ pub(crate) struct LatestTvlResponse {
 impl From<Measured<Vec<LatestProtocolTvl>>> for LatestTvlResponse {
     fn from(measured: Measured<Vec<LatestProtocolTvl>>) -> Self {
         Self {
-            as_of: measured.span.map(|s| s.as_of),
+            as_of: measured.period.map(|s| s.as_of),
             items: measured.items.into_iter().map(Into::into).collect(),
         }
     }

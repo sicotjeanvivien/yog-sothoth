@@ -1,5 +1,5 @@
 //! The measures yog-analytic writes, by protocol and by token: every read
-//! covers a span ending at the close of the last frozen hour, the same for all.
+//! covers a period ending at the close of the last frozen hour, the same for all.
 
 use std::sync::Arc;
 
@@ -7,18 +7,13 @@ use chrono::TimeDelta;
 use yog_core::{
     Page, RepositoryResult,
     domain::{
-        FrozenHours, LatestProtocolTvl, LiquidityMove, Protocol, ProtocolActivity,
-        ProtocolActivityBar, ProtocolActivityLookup, ProtocolTvl, Span, TokenActivity,
+        FrozenHours, FrozenPeriod, LatestProtocolTvl, LiquidityMove, Protocol, ProtocolActivity,
+        ProtocolActivityBar, ProtocolActivityLookup, ProtocolTvl, TokenActivity,
         TokenActivityCursor, TokenActivityFeed, Window,
     },
 };
 
-/// What a read found over its span; `span` is `None` before the first freeze.
-#[derive(Debug, Clone)]
-pub(crate) struct Measured<T> {
-    pub(crate) span: Option<Span>,
-    pub(crate) items: T,
-}
+use super::period::Measured;
 
 /// A page of tokens, or the refusal of a cursor taken in a ranking since rewritten.
 #[derive(Debug)]
@@ -40,82 +35,86 @@ impl ActivityService {
         Self { protocols, tokens }
     }
 
-    async fn span(&self, window: Window, offset: Option<Window>) -> RepositoryResult<Option<Span>> {
+    async fn period(
+        &self,
+        window: Window,
+        offset: Option<Window>,
+    ) -> RepositoryResult<Option<FrozenPeriod>> {
         Ok(self
             .protocols
             .frozen_hours()
             .await?
-            .map(|hours| Span::of(hours, window, offset)))
+            .map(|hours| FrozenPeriod::of(hours, window, offset)))
     }
 
-    /// Totals: nothing for a span the facts do not cover whole.
+    /// Totals: nothing for a period the facts do not cover whole.
     pub(crate) async fn protocol_activity(
         &self,
         window: Window,
         offset: Option<Window>,
     ) -> RepositoryResult<Measured<Vec<ProtocolActivity>>> {
-        let span = self.span(window, offset).await?;
-        let items = match &span {
-            Some(span) if span.is_covered() => self.protocols.activity(span, window).await?,
+        let period = self.period(window, offset).await?;
+        let items = match &period {
+            Some(period) if period.is_covered() => self.protocols.activity(period, window).await?,
             _ => Vec::new(),
         };
-        Ok(Measured { span, items })
+        Ok(Measured { period, items })
     }
 
     pub(crate) async fn protocol_activity_hourly(
         &self,
         window: Window,
     ) -> RepositoryResult<Measured<Vec<ProtocolActivityBar>>> {
-        let span = self.span(window, None).await?;
-        let items = match &span {
-            Some(span) => self.protocols.activity_hourly(span).await?,
+        let period = self.period(window, None).await?;
+        let items = match &period {
+            Some(period) => self.protocols.activity_hourly(period).await?,
             None => Vec::new(),
         };
-        Ok(Measured { span, items })
+        Ok(Measured { period, items })
     }
 
     pub(crate) async fn protocol_activity_daily(
         &self,
         window: Window,
     ) -> RepositoryResult<Measured<Vec<ProtocolActivityBar>>> {
-        let span = self.span(window, None).await?;
-        let items = match &span {
-            Some(span) => self.protocols.activity_daily(span).await?,
+        let period = self.period(window, None).await?;
+        let items = match &period {
+            Some(period) => self.protocols.activity_daily(period).await?,
             None => Vec::new(),
         };
-        Ok(Measured { span, items })
+        Ok(Measured { period, items })
     }
 
-    /// Each protocol's last TVL measured by the last frozen hour; its span is a
+    /// Each protocol's last TVL measured by the last frozen hour; its period is a
     /// day, of which only `as_of` counts.
     pub(crate) async fn protocol_tvl(&self) -> RepositoryResult<Measured<Vec<LatestProtocolTvl>>> {
-        let span = self.span(Window::Day, None).await?;
-        let items = match &span {
-            Some(span) => self.protocols.tvl_latest(span.last_hour()).await?,
+        let period = self.period(Window::Day, None).await?;
+        let items = match &period {
+            Some(period) => self.protocols.tvl_latest(period.last_hour()).await?,
             None => Vec::new(),
         };
-        Ok(Measured { span, items })
+        Ok(Measured { period, items })
     }
 
-    /// The TVL at the close of every hour from `span.from` through `span.as_of`:
+    /// The TVL at the close of every hour from `period.from` through `period.as_of`:
     /// the first point is the window's start.
     pub(crate) async fn protocol_tvl_hourly(
         &self,
         window: Window,
     ) -> RepositoryResult<Measured<Vec<ProtocolTvl>>> {
-        let span = self.span(window, None).await?;
-        let items = match &span {
-            Some(span) => {
+        let period = self.period(window, None).await?;
+        let items = match &period {
+            Some(period) => {
                 self.protocols
-                    .tvl_hourly(span.from - TimeDelta::hours(1), span.last_hour())
+                    .tvl_hourly(period.from - TimeDelta::hours(1), period.last_hour())
                     .await?
             }
             None => Vec::new(),
         };
-        Ok(Measured { span, items })
+        Ok(Measured { period, items })
     }
 
-    /// A protocol's largest valued liquidity moves over the window; nothing for a span its
+    /// A protocol's largest valued liquidity moves over the window; nothing for a period its
     /// liquidity does not cover whole, which the repository reads.
     pub(crate) async fn liquidity_moves(
         &self,
@@ -123,20 +122,20 @@ impl ActivityService {
         window: Window,
         limit: i64,
     ) -> RepositoryResult<Measured<Vec<LiquidityMove>>> {
-        let span = self.span(window, None).await?;
-        let items = match &span {
-            Some(span) => {
+        let period = self.period(window, None).await?;
+        let items = match &period {
+            Some(period) => {
                 self.protocols
-                    .liquidity_moves(span, protocol, limit)
+                    .liquidity_moves(period, protocol, limit)
                     .await?
             }
             None => Vec::new(),
         };
-        Ok(Measured { span, items })
+        Ok(Measured { period, items })
     }
 
-    /// The span ends at the hour of the ranking read, not at a separate read of
-    /// the last frozen one; nothing for a span the facts do not cover whole.
+    /// The period ends at the hour of the ranking read, not at a separate read of
+    /// the last frozen one; nothing for a period the facts do not cover whole.
     pub(crate) async fn token_activity(
         &self,
         window: Window,
@@ -146,15 +145,15 @@ impl ActivityService {
         let ranked_at = cursor.as_ref().map(|c| c.last_hour);
         let Some(read) = self.tokens.list(window, cursor, limit).await? else {
             return Ok(TokenActivityRead::Page(Measured {
-                span: None,
+                period: None,
                 items: Page::empty(),
             }));
         };
         if ranked_at.is_some_and(|hour| hour != read.last_hour) {
             return Ok(TokenActivityRead::CursorExpired);
         }
-        let span = self.protocols.frozen_hours().await?.map(|hours| {
-            Span::of(
+        let period = self.protocols.frozen_hours().await?.map(|hours| {
+            FrozenPeriod::of(
                 FrozenHours {
                     first: hours.first,
                     last_frozen: read.last_hour,
@@ -163,11 +162,11 @@ impl ActivityService {
                 None,
             )
         });
-        let items = match &span {
-            Some(span) if span.is_covered() => read.page,
+        let items = match &period {
+            Some(period) if period.is_covered() => read.page,
             _ => Page::empty(),
         };
-        Ok(TokenActivityRead::Page(Measured { span, items }))
+        Ok(TokenActivityRead::Page(Measured { period, items }))
     }
 }
 

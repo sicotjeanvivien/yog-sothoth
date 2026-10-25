@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT m.protocol, m.timestamp AS at, m.signature, m.pool_address,\n                   ta.symbol AS \"token_a_symbol?\", tb.symbol AS \"token_b_symbol?\",\n                   m.owner, m.kind, m.amount_usd AS \"amount_usd!\"\n              FROM analytic_liquidity_moves m\n              LEFT JOIN pools p ON p.pool_address = m.pool_address\n              LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT\n              LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT\n             WHERE m.protocol = $3\n               AND m.timestamp >= $1 AND m.timestamp < $2\n               AND m.amount_usd IS NOT NULL\n               -- ⚠️ Only a span its liquidity covers whole, as the totals: else a ranking of part of it.\n               AND (SELECT MIN(bucket) FROM analytic_protocol_liquidity_hourly\n                     WHERE protocol = $3) <= $1\n             ORDER BY m.amount_usd DESC, m.timestamp DESC, m.signature, m.event_index\n             LIMIT $4\n            ",
+  "query": "\n            SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index, m.pool_address,\n                   ta.symbol AS \"token_a_symbol?\", tb.symbol AS \"token_b_symbol?\",\n                   m.owner, m.kind, m.amount_usd AS \"amount_usd!\"\n              FROM analytic_liquidity_moves m\n              LEFT JOIN pools p ON p.pool_address = m.pool_address\n              LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT\n              LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT\n             WHERE m.protocol = $3\n               AND m.timestamp >= $1 AND m.timestamp < $2\n               AND m.amount_usd IS NOT NULL\n               -- ⚠️ Only a span its liquidity covers whole, as the totals: else a ranking of part of it.\n               AND (SELECT MIN(bucket) FROM analytic_protocol_liquidity_hourly\n                     WHERE protocol = $3) <= $1\n             ORDER BY m.amount_usd DESC, m.timestamp DESC, m.signature, m.event_index\n             LIMIT $4\n            ",
   "describe": {
     "columns": [
       {
@@ -38,6 +38,17 @@
       },
       {
         "ordinal": 3,
+        "name": "event_index",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "analytic_liquidity_moves",
+            "name": "event_index"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
         "name": "pool_address",
         "type_info": "Text",
         "origin": {
@@ -48,7 +59,7 @@
         }
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "token_a_symbol?",
         "type_info": "Text",
         "origin": {
@@ -59,7 +70,7 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "token_b_symbol?",
         "type_info": "Text",
         "origin": {
@@ -70,7 +81,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "owner",
         "type_info": "Text",
         "origin": {
@@ -81,7 +92,7 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "kind",
         "type_info": "Text",
         "origin": {
@@ -92,7 +103,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "amount_usd!",
         "type_info": "Numeric",
         "origin": {
@@ -116,6 +127,7 @@
       false,
       false,
       false,
+      false,
       true,
       true,
       false,
@@ -123,5 +135,5 @@
       true
     ]
   },
-  "hash": "327225c7ed777e4b1a0d098c8705f3cee03d2c81f802e0d81d595e8cb2bf7958"
+  "hash": "eba35233ea1f9b6dfcb5b6d6b278daecf648e4c6bd3a7b3eb179383760c8b055"
 }

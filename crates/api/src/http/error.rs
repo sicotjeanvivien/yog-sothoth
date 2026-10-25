@@ -4,6 +4,7 @@ use axum::{
 };
 use tracing::{error, warn};
 
+use crate::application::PoolMovesError;
 use crate::http::dto::response::{PROBLEM_CONTENT_TYPE, ProblemDetailsResponse};
 
 /// API-level errors, served as RFC 9457 Problem Details. `Unavailable` is capacity or time
@@ -92,6 +93,19 @@ impl From<yog_core::RepositoryError> for ApiError {
                 ApiError::Unavailable(TIMEOUT_REASON)
             }
             other => ApiError::Internal(other.to_string()),
+        }
+    }
+}
+
+impl From<PoolMovesError> for ApiError {
+    fn from(err: PoolMovesError) -> Self {
+        match err {
+            PoolMovesError::Repository(err) => err.into(),
+            PoolMovesError::CursorRefused => ApiError::BadRequest(
+                "`cursor` belongs to another list, or to one read before the last freeze: start \
+                 again without it"
+                    .to_string(),
+            ),
         }
     }
 }

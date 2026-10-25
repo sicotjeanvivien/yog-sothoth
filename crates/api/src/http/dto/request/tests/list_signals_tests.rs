@@ -5,15 +5,15 @@ use yog_core::domain::{Severity, SignalCursor};
 use yog_core::{Cursor, PageDirection};
 
 use super::{
-    ListSignalsRequest, PageDirectionParam, PagePositionParam, SeverityParam, SignalsQuery,
+    ListSignalsRequest, PageDirectionParam, PagePositionParam, SeverityParam, SignalsParams,
     validate_cursor_position_exclusive,
 };
 use crate::http::cursor::encode_cursor;
 use crate::http::dto::request::{MAX_LIMIT, default_limit, validate_limit};
 use crate::http::error::ApiError;
 
-fn valid_query() -> SignalsQuery {
-    SignalsQuery {
+fn valid_query() -> SignalsParams {
+    SignalsParams {
         cursor: None,
         dir: PageDirectionParam::Next,
         position: None,

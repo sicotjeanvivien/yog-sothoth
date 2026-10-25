@@ -18,6 +18,7 @@ pub struct Page<T> {
 pub enum Cursor {
     Signal(crate::domain::SignalCursor),
     TokenActivity(crate::domain::TokenActivityCursor),
+    LiquidityMove(Box<crate::domain::LiquidityMoveCursor>),
 }
 
 impl<T> Page<T> {

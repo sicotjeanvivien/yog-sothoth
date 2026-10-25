@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT id, detector, protocol, pool_address,\n                       severity, value, threshold, message,\n                       triggered_at\n                FROM signals\n                WHERE ($1::TEXT IS NULL OR severity = $1)\n                  AND ($2::TEXT IS NULL OR pool_address = $2)\n                  AND (\n                      $3::TIMESTAMPTZ IS NULL\n                      OR triggered_at < $3\n                      OR (triggered_at = $3 AND id < $4)\n                  )\n                ORDER BY triggered_at DESC, id DESC\n                LIMIT $5\n                ",
+  "query": "\n                SELECT id, detector, protocol, pool_address,\n                       severity, value, threshold, message,\n                       triggered_at\n                FROM signals\n                WHERE ($1::TEXT IS NULL OR severity = $1)\n                  AND ($2::TEXT IS NULL OR pool_address = $2)\n                  AND ($6::TEXT IS NULL OR protocol = $6)\n                  AND (\n                      $3::TIMESTAMPTZ IS NULL\n                      OR triggered_at > $3\n                      OR (triggered_at = $3 AND id > $4)\n                  )\n                ORDER BY triggered_at ASC, id ASC\n                LIMIT $5\n                ",
   "describe": {
     "columns": [
       {
@@ -109,7 +109,8 @@
         "Text",
         "Timestamptz",
         "Int8",
-        "Int8"
+        "Int8",
+        "Text"
       ]
     },
     "nullable": [
@@ -124,5 +125,5 @@
       false
     ]
   },
-  "hash": "a550b4139f69b9ce9684de9d0a69cfc45dd12c649fe8c65c8c61efe0165acbaf"
+  "hash": "26ed0a08431a1299aa6a8093e4f0d9ff62ca17b23116747ff88c53a6e154b498"
 }

@@ -106,6 +106,8 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
     // inside the cache, so its waiters hold none.
     let slotted = OpenApiRouter::new()
         .routes(routes!(handlers::signals::list_signals))
+        .routes(routes!(handlers::signals::list_protocol_signals))
+        .routes(routes!(handlers::signals::list_pool_signals))
         .route_layer(from_fn_with_state(work_slots, work_slot_limit));
 
     OpenApiRouter::new()
@@ -123,6 +125,50 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         .routes(routes!(handlers::protocols::get_protocol_tvl))
         .routes(routes!(handlers::protocols::get_protocol_tvl_hourly))
         .routes(routes!(handlers::protocols::list_liquidity_moves))
+        .routes(routes!(handlers::swaps::get_swap_totals))
+        .routes(routes!(handlers::swaps::get_protocol_swap_totals))
+        .routes(routes!(handlers::swaps::get_swaps_hourly))
+        .routes(routes!(handlers::swaps::get_swaps_daily))
+        .routes(routes!(handlers::swaps::get_protocol_swaps_hourly))
+        .routes(routes!(handlers::swaps::get_protocol_swaps_daily))
+        .routes(routes!(handlers::swaps::get_pool_swap_totals))
+        .routes(routes!(handlers::swaps::get_pool_swaps_hourly))
+        .routes(routes!(handlers::swaps::get_pool_swaps_daily))
+        .routes(routes!(handlers::swaps::list_swaps_by_token))
+        .routes(routes!(handlers::pool_creations::get_pool_creation_totals))
+        .routes(routes!(
+            handlers::pool_creations::get_protocol_pool_creation_totals
+        ))
+        .routes(routes!(handlers::pool_creations::get_pool_creations_hourly))
+        .routes(routes!(handlers::pool_creations::get_pool_creations_daily))
+        .routes(routes!(
+            handlers::pool_creations::get_protocol_pool_creations_hourly
+        ))
+        .routes(routes!(
+            handlers::pool_creations::get_protocol_pool_creations_daily
+        ))
+        .routes(routes!(
+            handlers::liquidity_moves::get_protocol_liquidity_move_totals
+        ))
+        .routes(routes!(
+            handlers::liquidity_moves::get_protocol_liquidity_moves_hourly
+        ))
+        .routes(routes!(
+            handlers::liquidity_moves::get_protocol_liquidity_moves_daily
+        ))
+        .routes(routes!(
+            handlers::liquidity_moves::list_pool_liquidity_moves
+        ))
+        .routes(routes!(handlers::tvl::get_tvl))
+        .routes(routes!(handlers::tvl::get_protocol_tvl_reading))
+        .routes(routes!(handlers::tvl::get_tvl_hourly))
+        .routes(routes!(handlers::tvl::get_protocol_tvl_readings_hourly))
+        .routes(routes!(
+            handlers::pool_discoveries::get_pool_discovery_totals
+        ))
+        .routes(routes!(
+            handlers::pool_discoveries::get_protocol_pool_discovery_totals
+        ))
         .merge(slotted)
 }
 

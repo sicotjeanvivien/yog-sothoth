@@ -18,7 +18,7 @@ pub(crate) enum SortParam {
 /// Query params for `GET /api/tokens/activity`: a window, the order, and
 /// forward-only cursor pagination.
 #[derive(Debug, Deserialize, IntoParams)]
-pub(crate) struct TokenActivityQuery {
+pub(crate) struct TokenActivityParams {
     #[serde(default)]
     #[param(inline)]
     window: WindowParam,
@@ -40,18 +40,18 @@ pub(crate) struct ListTokenActivityRequest {
 }
 
 impl ListTokenActivityRequest {
-    pub(crate) fn parse(query: TokenActivityQuery) -> Result<Self, ApiError> {
-        super::validate_limit(query.limit)?;
-        let SortParam::Volume = query.sort;
-        let cursor = query
+    pub(crate) fn parse(params: TokenActivityParams) -> Result<Self, ApiError> {
+        super::validate_limit(params.limit)?;
+        let SortParam::Volume = params.sort;
+        let cursor = params
             .cursor
             .as_deref()
             .map(|raw| super::non_empty("cursor", raw).and_then(decode_token_activity_cursor))
             .transpose()?;
         Ok(Self {
-            window: query.window.into(),
+            window: params.window.into(),
             cursor,
-            limit: query.limit,
+            limit: params.limit,
         })
     }
 }

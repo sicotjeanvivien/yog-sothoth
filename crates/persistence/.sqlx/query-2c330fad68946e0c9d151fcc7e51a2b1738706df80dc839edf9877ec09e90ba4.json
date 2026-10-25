@@ -1,0 +1,61 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT ON (protocol)\n                   protocol, bucket + INTERVAL '1 hour' AS \"at!\", pools, tvl_usd\n              FROM analytic_protocol_tvl_discovered\n             WHERE period = $2 AND bucket <= $1 AND ($3::TEXT IS NULL OR protocol = $3)\n             ORDER BY protocol, bucket DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl_discovered",
+            "name": "protocol"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "at!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "pools",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl_discovered",
+            "name": "pools"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "tvl_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl_discovered",
+            "name": "tvl_usd"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "2c330fad68946e0c9d151fcc7e51a2b1738706df80dc839edf9877ec09e90ba4"
+}

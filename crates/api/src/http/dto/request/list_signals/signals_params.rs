@@ -8,7 +8,7 @@ use crate::http::dto::request::default_limit;
 /// optional exact severity and pool filters. No sort (the feed ordering
 /// is fixed by contract) and no free-text search.
 #[derive(Debug, Deserialize, IntoParams)]
-pub(crate) struct SignalsQuery {
+pub(crate) struct SignalsParams {
     #[param(min_length = 1)]
     pub(super) cursor: Option<String>,
     #[serde(default)]
