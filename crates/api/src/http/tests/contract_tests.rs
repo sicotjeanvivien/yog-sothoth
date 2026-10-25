@@ -95,7 +95,7 @@ fn file_name(path: &Path) -> String {
 fn every_api_route_is_in_the_document() {
     let doc = document();
     let paths = doc["paths"].as_object().expect("paths");
-    assert_eq!(paths.len(), 49, "{:?}", paths.keys().collect::<Vec<_>>());
+    assert_eq!(paths.len(), 57, "{:?}", paths.keys().collect::<Vec<_>>());
 }
 
 /// A document of one schema, as `finish` receives it.
@@ -193,9 +193,9 @@ fn the_documented_bounds_are_the_validated_ones() {
         }
     }
     assert_eq!(
-        seen, 12,
+        seen, 20,
         "limit on the three signal feeds, the two token rankings, the two liquidity moves, the \
-         three pool lists, the tokens and a token's prices"
+         three pool lists, the tokens, a token's prices and the eight on-chain event lists"
     );
 }
 
@@ -328,7 +328,7 @@ fn every_handler_declares_the_body_and_query_it_has() {
             checked += 1;
         }
     }
-    assert_eq!(checked, 49, "one #[utoipa::path] per /api route");
+    assert_eq!(checked, 57, "one #[utoipa::path] per /api route");
     assert!(drift.is_empty(), "{drift:?}");
 }
 

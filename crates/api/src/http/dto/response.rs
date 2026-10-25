@@ -1,8 +1,10 @@
 mod announcement;
 mod ingestion;
+mod liquidity_change_event;
 mod network;
 mod page;
 mod pool;
+mod pool_creation_event;
 mod pool_detail;
 mod pool_swap_bucket;
 // Visible: target of a doc link (http/error.rs).
@@ -21,6 +23,7 @@ mod readiness;
 mod reading;
 mod signal;
 mod swap_activity;
+mod swap_event;
 mod token;
 mod token_activity;
 mod window;
@@ -28,9 +31,11 @@ mod windowed_page;
 
 pub(crate) use announcement::AnnouncementResponse;
 pub(crate) use ingestion::IngestionResponse;
+pub(crate) use liquidity_change_event::LiquidityChangeEventResponse;
 pub(crate) use network::NetworkResponse;
 pub(crate) use page::PageResponse;
 pub(crate) use pool::PoolResponse;
+pub(crate) use pool_creation_event::PoolCreationEventResponse;
 pub(crate) use pool_detail::PoolDetailResponse;
 pub(crate) use pool_swap_bucket::PoolSwapBucketResponse;
 pub(crate) use problem::{PROBLEM_CONTENT_TYPE, ProblemDetailsResponse};
@@ -52,6 +57,7 @@ pub(crate) use readiness::{
 pub(crate) use reading::ReadingResponse;
 pub(crate) use signal::SignalResponse;
 pub(crate) use swap_activity::SwapActivityResponse;
+pub(crate) use swap_event::SwapEventResponse;
 pub(crate) use token::{TokenPriceResponse, TokenResponse};
 pub(crate) use token_activity::TokenActivityPageResponse;
 pub(crate) use window::WindowedResponse;

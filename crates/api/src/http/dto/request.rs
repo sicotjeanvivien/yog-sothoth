@@ -11,6 +11,7 @@ use yog_core::domain::Protocol;
 use crate::http::error::ApiError;
 
 mod get_token;
+mod list_events;
 mod list_liquidity_moves;
 mod list_pool_liquidity_moves;
 mod list_pools;
@@ -21,6 +22,7 @@ mod list_tokens;
 mod window_param;
 
 pub(crate) use get_token::GetTokenRequest;
+pub(crate) use list_events::{EventsParams, ListEventsRequest};
 pub(crate) use list_liquidity_moves::{LiquidityMovesParams, ListLiquidityMovesRequest};
 pub(crate) use list_pool_liquidity_moves::{
     ListPoolLiquidityMovesRequest, PoolLiquidityMovesParams,

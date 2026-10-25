@@ -11,8 +11,8 @@ use solana_pubkey::Pubkey;
 use yog_core::{
     Cursor,
     domain::{
-        LiquidityMoveCursor, LiquidityMoveOrder, PoolCursor, PoolScope, SignalCursor,
-        TokenActivityCursor, TokenCursor, TokenPriceCursor, Window,
+        EventCursor, EventScope, LiquidityMoveCursor, LiquidityMoveOrder, PoolCursor, PoolScope,
+        SignalCursor, TokenActivityCursor, TokenCursor, TokenPriceCursor, Window,
     },
 };
 
@@ -65,6 +65,54 @@ struct TokenPriceCursorWire {
     mint: String,
     from: String,
     fetched_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EventCursorWire {
+    collection: String,
+    scope: String,
+    from: String,
+    at: String,
+    signature: String,
+    event_index: u16,
+}
+
+/// The on-chain collections a page of events is read from: one shape of cursor for all three.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum EventCollection {
+    Swaps,
+    LiquidityChanges,
+    PoolCreations,
+}
+
+impl EventCollection {
+    fn tag(self) -> &'static str {
+        match self {
+            Self::Swaps => "swaps",
+            Self::LiquidityChanges => "liquidity-changes",
+            Self::PoolCreations => "pool-creations",
+        }
+    }
+}
+
+fn event_scope_tag(scope: EventScope) -> String {
+    match scope {
+        EventScope::All => "all".to_owned(),
+        EventScope::Protocol(protocol) => format!("protocol:{}", protocol.as_str()),
+        EventScope::Pool(pool) => format!("pool:{pool}"),
+    }
+}
+
+fn encode_event_cursor(collection: EventCollection, c: &EventCursor) -> Result<String, ApiError> {
+    encode_b64_json(&EventCursorWire {
+        collection: collection.tag().to_owned(),
+        scope: event_scope_tag(c.scope),
+        from: c.from.to_rfc3339(),
+        at: c.at.to_rfc3339(),
+        signature: c.signature.to_string(),
+        event_index: c.event_index,
+    })
 }
 
 fn scope_tag(scope: PoolScope) -> String {
@@ -121,6 +169,11 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
             from: c.from.to_rfc3339(),
             fetched_at: c.fetched_at.to_rfc3339(),
         }),
+        Cursor::SwapEvent(c) => encode_event_cursor(EventCollection::Swaps, c),
+        Cursor::LiquidityChangeEvent(c) => {
+            encode_event_cursor(EventCollection::LiquidityChanges, c)
+        }
+        Cursor::PoolCreationEvent(c) => encode_event_cursor(EventCollection::PoolCreations, c),
     }
 }
 
@@ -231,6 +284,28 @@ pub(crate) fn decode_token_price_cursor(
         mint,
         from: parse_rfc3339(&wire.from)?,
         fetched_at: parse_rfc3339(&wire.fetched_at)?,
+    })
+}
+
+/// A cursor of `collection`'s events in `scope`; one of another collection or scope is refused.
+pub(crate) fn decode_event_cursor(
+    raw: &str,
+    collection: EventCollection,
+    scope: EventScope,
+) -> Result<EventCursor, ApiError> {
+    let wire: EventCursorWire = decode_b64_json(raw)?;
+    if wire.collection != collection.tag() || wire.scope != event_scope_tag(scope) {
+        return Err(ApiError::BadRequest(
+            "invalid cursor: taken in another list".to_string(),
+        ));
+    }
+    Ok(EventCursor {
+        scope,
+        from: parse_rfc3339(&wire.from)?,
+        at: parse_rfc3339(&wire.at)?,
+        signature: solana_signature::Signature::from_str(&wire.signature)
+            .map_err(|_| ApiError::BadRequest("invalid cursor: malformed signature".to_string()))?,
+        event_index: wire.event_index,
     })
 }
 

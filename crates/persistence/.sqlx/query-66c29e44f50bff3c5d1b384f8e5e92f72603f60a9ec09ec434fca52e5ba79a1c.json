@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT timestamp\n              FROM meteora_damm_v2_swap_events\n             WHERE pool_address = $1 AND timestamp >= $2\n               AND timestamp <= COALESCE($3, 'infinity'::TIMESTAMPTZ)\n               AND (timestamp < COALESCE($3, 'infinity'::TIMESTAMPTZ)\n                    OR (signature, event_index) < ($4, $5))\n             ORDER BY timestamp DESC\n             OFFSET $6::BIGINT - 1\n             LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "timestamp",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_swap_events",
+            "name": "timestamp"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "66c29e44f50bff3c5d1b384f8e5e92f72603f60a9ec09ec434fca52e5ba79a1c"
+}

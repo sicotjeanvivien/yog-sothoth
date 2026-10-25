@@ -4,14 +4,16 @@ use axum::{
     Json,
     extract::{Path, Query, State},
 };
-use yog_core::domain::Protocol;
+use yog_core::domain::{EventScope, Protocol, Window};
 
 use crate::application::BucketPeriod;
+use crate::http::cursor::EventCollection;
 use crate::http::{
     AppState,
     dto::{
-        ProtocolPoolCreationsBucketResponse, ProtocolPoolCreationsResponse, WindowedResponse,
-        request::{WindowParams, parse_protocol},
+        PageResponse, PoolCreationEventResponse, ProtocolPoolCreationsBucketResponse,
+        ProtocolPoolCreationsResponse, WindowedResponse,
+        request::{EventsParams, ListEventsRequest, WindowParams, parse_protocol},
     },
     error::ApiError,
 };
@@ -149,4 +151,63 @@ async fn list_buckets(
         .list_pool_creation_buckets(window, bucket, protocol)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/pool-creations",
+    params(EventsParams),
+    responses((
+        status = 200,
+        description = "A page of every protocol's pool creations, the most recent first; the window ends at the first page.",
+        body = PageResponse<PoolCreationEventResponse>
+    ))
+)]
+pub(crate) async fn list_pool_creations(
+    State(state): State<AppState>,
+    Query(params): Query<EventsParams>,
+) -> Result<Json<PageResponse<PoolCreationEventResponse>>, ApiError> {
+    let request = ListEventsRequest::parse(
+        params,
+        EventCollection::PoolCreations,
+        EventScope::All,
+        Window::Month,
+    )?;
+    list_event_page(&state, request).await
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/protocols/{protocol}/pool-creations",
+    params(EventsParams),
+    responses((
+        status = 200,
+        description = "A page of the protocol's pool creations, the most recent first; the window ends at the first page.",
+        body = PageResponse<PoolCreationEventResponse>
+    ))
+)]
+pub(crate) async fn list_protocol_pool_creations(
+    State(state): State<AppState>,
+    Path(protocol): Path<String>,
+    Query(params): Query<EventsParams>,
+) -> Result<Json<PageResponse<PoolCreationEventResponse>>, ApiError> {
+    let protocol = parse_protocol(&protocol)?;
+    let request = ListEventsRequest::parse(
+        params,
+        EventCollection::PoolCreations,
+        EventScope::Protocol(protocol),
+        Window::Month,
+    )?;
+    list_event_page(&state, request).await
+}
+
+async fn list_event_page(
+    state: &AppState,
+    request: ListEventsRequest,
+) -> Result<Json<PageResponse<PoolCreationEventResponse>>, ApiError> {
+    let page = state
+        .pool_creation_event_service
+        .list_events(request.scope, request.window, request.cursor, request.limit)
+        .await?;
+    Ok(Json(PageResponse::from_page(page)?))
 }
