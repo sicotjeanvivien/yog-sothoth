@@ -43,7 +43,6 @@ impl MeteoraDammV2PositionChange {
         }
     }
 
-    /// The slot of its transaction.
     pub fn slot(&self) -> u64 {
         match self {
             Self::Open(e) => e.slot,
@@ -54,7 +53,6 @@ impl MeteoraDammV2PositionChange {
         }
     }
 
-    /// The pool of the position.
     pub fn pool_address(&self) -> solana_pubkey::Pubkey {
         match self {
             Self::Open(e) => e.pool_address,
