@@ -2,6 +2,8 @@ mod announcement;
 mod ingestion;
 mod network;
 mod page;
+mod pool;
+mod pool_detail;
 mod pool_swap_bucket;
 // Visible: target of a doc link (http/error.rs).
 pub(crate) mod problem;
@@ -28,6 +30,8 @@ pub(crate) use announcement::AnnouncementResponse;
 pub(crate) use ingestion::IngestionResponse;
 pub(crate) use network::NetworkResponse;
 pub(crate) use page::PageResponse;
+pub(crate) use pool::PoolResponse;
+pub(crate) use pool_detail::PoolDetailResponse;
 pub(crate) use pool_swap_bucket::PoolSwapBucketResponse;
 pub(crate) use problem::{PROBLEM_CONTENT_TYPE, ProblemDetailsResponse};
 pub(crate) use protocol_activity::{
@@ -48,7 +52,7 @@ pub(crate) use readiness::{
 pub(crate) use reading::ReadingResponse;
 pub(crate) use signal::SignalResponse;
 pub(crate) use swap_activity::SwapActivityResponse;
-pub(crate) use token::TokenResponse;
+pub(crate) use token::{TokenPriceResponse, TokenResponse};
 pub(crate) use token_activity::TokenActivityPageResponse;
 pub(crate) use window::WindowedResponse;
 pub(crate) use windowed_page::WindowedPageResponse;

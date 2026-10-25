@@ -1,4 +1,6 @@
 // The blob is URL-safe unpadded base64 over a JSON object.
+// ⚠️ Unknown fields refused: a cursor of another list holding every field of this one would
+// otherwise decode as one.
 use crate::http::error::ApiError;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
@@ -8,16 +10,21 @@ use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use yog_core::{
     Cursor,
-    domain::{LiquidityMoveCursor, LiquidityMoveOrder, SignalCursor, TokenActivityCursor, Window},
+    domain::{
+        LiquidityMoveCursor, LiquidityMoveOrder, PoolCursor, PoolScope, SignalCursor,
+        TokenActivityCursor, TokenCursor, TokenPriceCursor, Window,
+    },
 };
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct SignalCursorWire {
     triggered_at: String,
     id: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TokenActivityCursorWire {
     last_hour: String,
     volume_usd: String,
@@ -25,6 +32,7 @@ struct TokenActivityCursorWire {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct LiquidityMoveCursorWire {
     pool: String,
     window: String,
@@ -34,6 +42,37 @@ struct LiquidityMoveCursorWire {
     at: String,
     signature: String,
     event_index: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PoolCursorWire {
+    scope: String,
+    first_seen_at: String,
+    pool: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TokenCursorWire {
+    fetched_at: String,
+    mint: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TokenPriceCursorWire {
+    mint: String,
+    from: String,
+    fetched_at: String,
+}
+
+fn scope_tag(scope: PoolScope) -> String {
+    match scope {
+        PoolScope::All => "all".to_owned(),
+        PoolScope::Protocol(protocol) => format!("protocol:{}", protocol.as_str()),
+        PoolScope::Token(mint) => format!("token:{mint}"),
+    }
 }
 
 fn order_tag(order: LiquidityMoveOrder) -> &'static str {
@@ -67,6 +106,20 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
             at: c.at.to_rfc3339(),
             signature: c.signature.clone(),
             event_index: c.event_index,
+        }),
+        Cursor::Pool(c) => encode_b64_json(&PoolCursorWire {
+            scope: scope_tag(c.scope),
+            first_seen_at: c.first_seen_at.to_rfc3339(),
+            pool: c.pool_address.to_string(),
+        }),
+        Cursor::Token(c) => encode_b64_json(&TokenCursorWire {
+            fetched_at: c.fetched_at.to_rfc3339(),
+            mint: c.mint.to_string(),
+        }),
+        Cursor::TokenPrice(c) => encode_b64_json(&TokenPriceCursorWire {
+            mint: c.mint.to_string(),
+            from: c.from.to_rfc3339(),
+            fetched_at: c.fetched_at.to_rfc3339(),
         }),
     }
 }
@@ -135,6 +188,49 @@ pub(crate) fn decode_liquidity_move_cursor(
         at: parse_rfc3339(&wire.at)?,
         signature: wire.signature,
         event_index: wire.event_index,
+    })
+}
+
+/// A cursor of the pools of `scope`; one of another scope is refused, its key from another list.
+pub(crate) fn decode_pool_cursor(raw: &str, scope: PoolScope) -> Result<PoolCursor, ApiError> {
+    let wire: PoolCursorWire = decode_b64_json(raw)?;
+    if wire.scope != scope_tag(scope) {
+        return Err(ApiError::BadRequest(
+            "invalid cursor: taken in another list".to_string(),
+        ));
+    }
+    Ok(PoolCursor {
+        scope,
+        first_seen_at: parse_rfc3339(&wire.first_seen_at)?,
+        pool_address: Pubkey::from_str(&wire.pool)
+            .map_err(|_| ApiError::BadRequest("invalid cursor: malformed pool".to_string()))?,
+    })
+}
+
+pub(crate) fn decode_token_cursor(raw: &str) -> Result<TokenCursor, ApiError> {
+    let wire: TokenCursorWire = decode_b64_json(raw)?;
+    Ok(TokenCursor {
+        fetched_at: parse_rfc3339(&wire.fetched_at)?,
+        mint: Pubkey::from_str(&wire.mint)
+            .map_err(|_| ApiError::BadRequest("invalid cursor: malformed mint".to_string()))?,
+    })
+}
+
+/// A cursor of `mint`'s prices; one of another mint is refused.
+pub(crate) fn decode_token_price_cursor(
+    raw: &str,
+    mint: Pubkey,
+) -> Result<TokenPriceCursor, ApiError> {
+    let wire: TokenPriceCursorWire = decode_b64_json(raw)?;
+    if wire.mint != mint.to_string() {
+        return Err(ApiError::BadRequest(
+            "invalid cursor: taken in another list".to_string(),
+        ));
+    }
+    Ok(TokenPriceCursor {
+        mint,
+        from: parse_rfc3339(&wire.from)?,
+        fetched_at: parse_rfc3339(&wire.fetched_at)?,
     })
 }
 

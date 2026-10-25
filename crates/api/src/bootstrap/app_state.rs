@@ -9,10 +9,11 @@ use yog_core::domain::{
 };
 use yog_persistence::{
     Database, PgAnnouncementRepository, PgDiscoveredTvlRepository, PgEventFreshnessRepository,
-    PgHealthChecker, PgLiquidityMoveRepository, PgNetworkStatusRepository,
-    PgPoolCreationsRepository, PgPoolRepository, PgProtocolActivityRepository,
-    PgProtocolTvlRepository, PgSignalRepository, PgSwapActivityRepository,
-    PgTokenActivityRepository, PgTokenMetadataRepository, PgTokenPriceRepository, PoolSettings,
+    PgHealthChecker, PgLiquidityMoveRepository, PgMeteoraDammV2PoolPropertiesRepository,
+    PgNetworkStatusRepository, PgPoolCreationsRepository, PgPoolRepository,
+    PgProtocolActivityRepository, PgProtocolTvlRepository, PgSignalRepository,
+    PgSwapActivityRepository, PgTokenActivityRepository, PgTokenMetadataRepository,
+    PgTokenPriceRepository, PoolSettings,
 };
 
 use crate::application::{
@@ -78,7 +79,12 @@ pub(crate) async fn build_app_state(
         protocol_activity_repo.clone(),
         Arc::new(PgDiscoveredTvlRepository::new(db_pool.clone())),
     ));
-    let pool_service = Arc::new(PoolService::new(pool_repo.clone()));
+    let pool_service = Arc::new(PoolService::new(
+        pool_repo.clone(),
+        Arc::new(PgMeteoraDammV2PoolPropertiesRepository::new(
+            db_pool.clone(),
+        )),
+    ));
 
     let signal_service = Arc::new(SignalService::new(
         signal_repo.clone(),

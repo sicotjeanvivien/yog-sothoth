@@ -8,10 +8,10 @@ mod price_response;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
-use yog_core::domain::{TokenMetadata, TokenPrice};
+use yog_core::domain::{TokenEntry, TokenMetadata, TokenPrice};
 
 pub(super) use embedded_token_response::EmbeddedTokenResponse;
-use price_response::TokenPriceResponse;
+pub(crate) use price_response::TokenPriceResponse;
 
 /// The token detail payload.
 #[derive(Debug, Serialize, ToSchema)]
@@ -58,6 +58,12 @@ impl TokenResponse {
             last_refresh_at: metadata.last_refresh_at,
             price: price.map(TokenPriceResponse::from),
         }
+    }
+}
+
+impl From<TokenEntry> for TokenResponse {
+    fn from(entry: TokenEntry) -> Self {
+        Self::new(entry.metadata, entry.price)
     }
 }
 

@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT pool_address\n                  FROM pools\n                 WHERE (token_a_mint = $1 OR token_b_mint = $1)\n                   AND first_seen_at <= COALESCE($2, 'infinity'::TIMESTAMPTZ)\n                   AND (first_seen_at < COALESCE($2, 'infinity'::TIMESTAMPTZ)\n                        OR pool_address < $3)\n                 ORDER BY first_seen_at DESC, pool_address DESC\n                 LIMIT $4\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "pools",
+            "name": "pool_address"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1178551469ea1e2a160299f90071252153b6cc2f50e993e72c55429fd3b015a6"
+}

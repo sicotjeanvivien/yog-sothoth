@@ -35,7 +35,8 @@ persistence/
 │   │   │                     plus the cp-amm pool-properties satellite)
 │   │   ├── meteora/dlmm/    (the DLMM pool-properties satellite; no event
 │   │   │                     repositories yet)
-│   │   ├── pool/, pool_current_state/
+│   │   ├── pool/, pool_current_state/ (the registry, and the catalog the API pages:
+│   │   │                     a page of keys first, then their entries)
 │   │   ├── swap_activity/, pool_creations/, liquidity_moves/, discovered_tvl/, protocol_tvl.rs
 │   │   │                     (the produced resources the API reads by scope:
 │   │   │                     every protocol, one protocol, one pool)
@@ -635,6 +636,15 @@ checked at compile time. The swaps by pool read `analytic_pool_hourly`, which 03
 `yog_api`, read only; 037 also indexes the liquidity moves by pool. A pool's liquidity moves page by a key of their order — amount or
 instant, then signature and `event_index` — forward only. The tests of the same names hold the
 scopes, the days, the TVL's last reading and the pages.
+
+**The catalog (038).** The business routes page the registry live: `pool.rs` reads a page of
+addresses per scope, then their entries whole — the tokens' metadata, `pool_current_state`
+and `pool_current_tvl` joined on those rows only, the view otherwise valuing every pool
+before the cut. The tokens read their latest price through `token_last_price`, written by
+the same statement as `token_prices`, and fetch its row by key. 038 indexes a protocol's
+pools, a token's on either side, and the tokens newest first, and opens `token_last_price`
+to `yog_api`, read only. `tests/pool_entries.rs`, `tests/token_entries.rs` and
+`tests/token_prices.rs` hold the scopes, the pages and the window.
 
 **The bursts (036).** The tranche statement also writes each tranche's `rotation`, from the
 raw swaps. A third statement (`meteora_damm_v2_bursts.sql`), after the tranches, draws the

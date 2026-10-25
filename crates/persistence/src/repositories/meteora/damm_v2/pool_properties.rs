@@ -1,15 +1,21 @@
 //! DAMM v2 pool-properties satellite (baseline §8): the cp-amm-only properties,
-//! kept out of the cross-protocol `pools` registry, resolved by yog-context through
-//! [`PoolAccountResolver`].
+//! kept out of the cross-protocol `pools` registry. Read by the api through
+//! [`MeteoraDammV2PoolPropertiesLookup`], resolved by yog-context through [`PoolAccountResolver`].
 //! It writes this satellite and nothing else: the registry columns of the same
 //! account go through `PoolRepository`, without a transaction.
 
+mod rows;
+
 use async_trait::async_trait;
+use rows::MeteoraDammV2PoolPropertiesRow;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
-    domain::{PoolAccountProperties, PoolAccountResolver, Protocol},
+    domain::{
+        MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesLookup, PoolAccountProperties,
+        PoolAccountResolver, Protocol,
+    },
 };
 
 use crate::repositories::helper::{convert_string_to_pubkey, convert_u64_to_i64, map_sqlx_error};
@@ -21,6 +27,32 @@ pub struct PgMeteoraDammV2PoolPropertiesRepository {
 impl PgMeteoraDammV2PoolPropertiesRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+}
+
+#[async_trait]
+impl MeteoraDammV2PoolPropertiesLookup for PgMeteoraDammV2PoolPropertiesRepository {
+    async fn find_by_pool(
+        &self,
+        pool_address: &Pubkey,
+    ) -> RepositoryResult<Option<MeteoraDammV2PoolProperties>> {
+        let row = sqlx::query_as!(
+            MeteoraDammV2PoolPropertiesRow,
+            r#"
+            SELECT pool_address, protocol_fee_percent,
+                   referral_fee_percent, base_fee_kind, has_dynamic_fee,
+                   cliff_fee_numerator, number_of_period, period_frequency,
+                   reduction_factor, activation_point, activation_type
+            FROM meteora_damm_v2_pool_properties
+            WHERE pool_address = $1
+            "#,
+            pool_address.to_string(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        row.map(MeteoraDammV2PoolProperties::try_from).transpose()
     }
 }
 

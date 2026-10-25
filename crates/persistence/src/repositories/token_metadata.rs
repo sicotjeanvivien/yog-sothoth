@@ -2,15 +2,19 @@
 
 pub(super) mod rows;
 
-use crate::repositories::helper::{convert_string_to_pubkey, map_sqlx_error};
+use crate::repositories::helper::{
+    PageBuilder, QueryMode, convert_string_to_pubkey, map_sqlx_error,
+};
 use async_trait::async_trait;
 use chrono::Duration;
-use rows::TokenMetadataRow;
+use rows::{TokenEntryRow, TokenMetadataRow};
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
-    RepositoryResult,
-    domain::{TokenMetadata, TokenMetadataLookup, TokenMetadataRepository},
+    Cursor, Page, RepositoryResult,
+    domain::{
+        TokenCursor, TokenEntry, TokenMetadata, TokenMetadataLookup, TokenMetadataRepository,
+    },
 };
 
 #[derive(Clone)]
@@ -157,5 +161,71 @@ impl TokenMetadataLookup for PgTokenMetadataRepository {
         .map_err(map_sqlx_error)?;
 
         row.map(TokenMetadata::try_from).transpose()
+    }
+
+    async fn list_entries(
+        &self,
+        cursor: Option<TokenCursor>,
+        limit: i64,
+    ) -> RepositoryResult<Page<TokenEntry>> {
+        let had_cursor = cursor.is_some();
+        let (after_at, after_mint) = match &cursor {
+            Some(c) => (Some(c.fetched_at), Some(c.mint.to_string())),
+            None => (None, None),
+        };
+        // ⚠️ `token_last_price` points at the latest row of `token_prices`, read by its key: the
+        // `LIMIT 1` keeps the lookup a nested loop, which Postgres would turn into a full join.
+        let rows = sqlx::query_as!(
+            TokenEntryRow,
+            r#"
+            WITH page AS (
+                SELECT mint, symbol, name, decimals, logo_uri, metadata_provider,
+                       fetched_at, last_refresh_at
+                  FROM token_metadata
+                 WHERE fetched_at <= COALESCE($1, 'infinity'::TIMESTAMPTZ)
+                   AND (fetched_at < COALESCE($1, 'infinity'::TIMESTAMPTZ) OR mint < $2)
+                 ORDER BY fetched_at DESC, mint DESC
+                 LIMIT $3
+            )
+            SELECT page.mint AS "mint!", page.symbol, page.name, page.decimals AS "decimals!",
+                   page.logo_uri, page.metadata_provider AS "metadata_provider!",
+                   page.fetched_at AS "fetched_at!", page.last_refresh_at AS "last_refresh_at!",
+                   tp.price_usd AS "price_usd?: rust_decimal::Decimal",
+                   tp.price_provider AS "price_provider?", tp.confidence AS "confidence?",
+                   tp.fetched_at AS "price_fetched_at?"
+              FROM page
+              LEFT JOIN token_last_price l ON l.mint = page.mint
+              LEFT JOIN LATERAL (
+                  SELECT price_usd, price_provider, confidence, fetched_at
+                    FROM token_prices
+                   WHERE mint = l.mint AND fetched_at = l.fetched_at
+                   LIMIT 1
+              ) tp ON true
+             ORDER BY page.fetched_at DESC, page.mint DESC
+            "#,
+            after_at,
+            after_mint,
+            limit + 1,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        let entries = rows
+            .into_iter()
+            .map(TokenEntry::try_from)
+            .collect::<RepositoryResult<Vec<_>>>()?;
+        let page =
+            PageBuilder::new(entries, limit, QueryMode::Forward, had_cursor).finalize(|entry| {
+                Cursor::Token(TokenCursor {
+                    fetched_at: entry.metadata.fetched_at,
+                    mint: entry.metadata.mint,
+                })
+            });
+        // ⚠️ Forward only: a previous cursor would be read forward from the first item.
+        Ok(Page {
+            prev_cursor: None,
+            ..page
+        })
     }
 }

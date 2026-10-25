@@ -291,6 +291,7 @@ There is no central registry. A protocol is added by writing isolated per-protoc
 | `init_event_persistor` (`bootstrap/daemon/init.rs`) | `indexer` | sub-persistor instantiation |
 | `pool_account_resolvers` vec (`bootstrap/daemon.rs`) | `context` | property backfill |
 | `From<domain::Protocol>` in `http/dto/response/protocol.rs` | `api` | protocol name in the contract (then regenerate it) |
+| `PoolService::get_pool` (`application/services/pool_service.rs`) | `api` | the pool's protocol properties in `/api/pools/{pool}` |
 | `spot_price_a_in_b` (`application/detectors/price_oracle_deviation.rs`) | `signals` | `sqrt_price` → spot price, or `None` |
 | `formatProtocolLabel` (`web/src/lib/format/format-protocol.ts`) | `web` | display label |
 

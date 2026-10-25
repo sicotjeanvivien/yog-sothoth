@@ -16,6 +16,7 @@ pub use damm_v2::{
     MeteoraDammV2LiquidityEventRepository, MeteoraDammV2LockPositionEvent,
     MeteoraDammV2LockPositionEventRepository, MeteoraDammV2PermanentLockPositionEvent,
     MeteoraDammV2PermanentLockPositionEventRepository, MeteoraDammV2PoolAccountProperties,
+    MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesLookup,
     MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SetPoolStatusEventRepository,
     MeteoraDammV2SplitAmounts, MeteoraDammV2SplitNumerators, MeteoraDammV2SplitPositionEvent,
     MeteoraDammV2SplitPositionEventRepository, MeteoraDammV2SplitPositionState,

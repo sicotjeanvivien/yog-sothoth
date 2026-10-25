@@ -11,12 +11,12 @@ use crate::repositories::helper::convert_string_to_pubkey;
 
 /// Row shape of `token_prices`.
 #[derive(sqlx::FromRow)]
-pub(super) struct TokenPriceRow {
-    pub(super) mint: String,
-    pub(super) price_usd: Decimal,
-    pub(super) price_provider: String,
-    pub(super) confidence: Option<f32>,
-    pub(super) fetched_at: DateTime<Utc>,
+pub(in crate::repositories) struct TokenPriceRow {
+    pub(in crate::repositories) mint: String,
+    pub(in crate::repositories) price_usd: Decimal,
+    pub(in crate::repositories) price_provider: String,
+    pub(in crate::repositories) confidence: Option<f32>,
+    pub(in crate::repositories) fetched_at: DateTime<Utc>,
 }
 
 impl TryFrom<TokenPriceRow> for TokenPrice {

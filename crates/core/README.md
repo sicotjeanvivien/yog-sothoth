@@ -16,7 +16,8 @@ core/src/
 │   │                       MeteoraDammV2Event sub-enum; pool_properties/ holds
 │   │                       this protocol's satellite payload)
 │   ├── meteora/dlmm/      (pool_properties/ only — events not extracted yet)
-│   ├── pool/              (Pool, PoolRepository — cross-protocol registry)
+│   ├── pool/              (Pool, PoolRepository — cross-protocol registry; PoolEntry,
+│   │                       PoolScope — the catalog PoolCatalog pages)
 │   ├── pool_current_state/(CQRS projection of the latest per-pool state)
 │   ├── analytic/          (CycleWrite — what one cycle of yog-analytic writes,
 │   │                       and which hours it freezes; AnalyticRepository;
@@ -36,7 +37,7 @@ core/src/
 │   ├── swap_flow/         (PoolSwapFlow — directional volume read model)
 │   ├── liquidity_flow/    (PoolLiquidityFlow — windowed add/remove + TVL read model)
 │   ├── pool_price_snapshot/ (spot-vs-oracle read model)
-│   ├── token_metadata/    (TokenMetadata + repo)
+│   ├── token_metadata/    (TokenMetadata + repo; TokenEntry, its latest price beside it)
 │   ├── token_price/       (TokenPrice + repo, PriceProvider)
 │   ├── kept_prices/       (KeptPrices — what the price series already records,
 │   │                       and what a new observation must say to earn a row)

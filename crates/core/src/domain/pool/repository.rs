@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 
 use crate::{
-    RepositoryResult,
-    domain::{Pool, PoolRegistryProperties, Protocol},
+    Page, RepositoryResult,
+    domain::{Pool, PoolCursor, PoolEntry, PoolRegistryProperties, PoolScope, Protocol},
 };
 
 /// How many pools of one protocol were ever recorded.
@@ -45,4 +45,16 @@ pub trait PoolCatalog: Send + Sync {
 
     /// Many pools in one query, unordered, unknown addresses omitted.
     async fn find_by_addresses(&self, pool_addresses: &[Pubkey]) -> RepositoryResult<Vec<Pool>>;
+
+    /// A page of `scope`'s pools, the most recently first seen first, ties by address
+    /// descending, after `cursor`'s key; forward only. `cursor` is of `scope`.
+    async fn list_entries(
+        &self,
+        scope: PoolScope,
+        cursor: Option<PoolCursor>,
+        limit: i64,
+    ) -> RepositoryResult<Page<PoolEntry>>;
+
+    /// The pool at `pool_address`, `None` if never recorded.
+    async fn find_entry(&self, pool_address: &Pubkey) -> RepositoryResult<Option<PoolEntry>>;
 }

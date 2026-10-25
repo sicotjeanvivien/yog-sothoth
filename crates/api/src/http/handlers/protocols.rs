@@ -11,7 +11,10 @@ use crate::http::{
     dto::{
         LatestTvlResponse, LiquidityMoveResponse, ProtocolActivityBarResponse,
         ProtocolActivityResponse, ProtocolCatalogResponse, ProtocolTvlResponse, WindowedResponse,
-        request::{ActivityParams, LiquidityMovesParams, ListLiquidityMovesRequest, WindowParams},
+        request::{
+            ActivityParams, LiquidityMovesParams, ListLiquidityMovesRequest, WindowParams,
+            parse_protocol,
+        },
     },
     error::ApiError,
 };
@@ -30,6 +33,28 @@ pub(crate) async fn list_protocols(
 ) -> Result<Json<Vec<ProtocolCatalogResponse>>, ApiError> {
     let entries = state.protocol_catalog_service.list().await?;
     Ok(Json(entries.into_iter().map(Into::into).collect()))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/protocols/{protocol}",
+    responses((
+        status = 200,
+        description = "The protocol's entry of the catalogue, observed or not.",
+        body = ProtocolCatalogResponse
+    ))
+)]
+pub(crate) async fn get_protocol(
+    State(state): State<AppState>,
+    Path(protocol): Path<String>,
+) -> Result<Json<ProtocolCatalogResponse>, ApiError> {
+    let protocol = parse_protocol(&protocol)?;
+    let entry = state
+        .protocol_catalog_service
+        .get_protocol(protocol)
+        .await?
+        .ok_or_else(|| ApiError::NotFound(format!("protocol not in the catalogue: {protocol}")))?;
+    Ok(Json(entry.into()))
 }
 
 #[utoipa::path(

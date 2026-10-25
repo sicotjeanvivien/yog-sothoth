@@ -2,16 +2,17 @@
 //!
 //! Backed by the `token_prices` hypertable (baseline §7) and the
 //! `token_last_price` table (017), written together by one statement.
-mod rows;
+pub(super) mod rows;
 
-use crate::repositories::helper::map_sqlx_error;
+use crate::repositories::helper::{PageBuilder, QueryMode, map_sqlx_error};
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use rows::TokenPriceRow;
 use solana_pubkey::Pubkey;
 use sqlx::{PgPool, QueryBuilder};
 use yog_core::{
-    RepositoryResult,
-    domain::{TokenPrice, TokenPriceLookup, TokenPriceRepository},
+    Cursor, Page, RepositoryResult,
+    domain::{TokenPrice, TokenPriceCursor, TokenPriceLookup, TokenPriceRepository},
 };
 
 #[derive(Clone)]
@@ -100,5 +101,53 @@ impl TokenPriceLookup for PgTokenPriceRepository {
         .map_err(map_sqlx_error)?;
 
         row.map(TokenPrice::try_from).transpose()
+    }
+
+    async fn list_prices(
+        &self,
+        mint: &Pubkey,
+        from: DateTime<Utc>,
+        cursor: Option<TokenPriceCursor>,
+        limit: i64,
+    ) -> RepositoryResult<Page<TokenPrice>> {
+        let had_cursor = cursor.is_some();
+        let rows = sqlx::query_as!(
+            TokenPriceRow,
+            r#"
+            SELECT mint,
+                  price_usd AS "price_usd!: rust_decimal::Decimal",
+                  price_provider, confidence, fetched_at
+            FROM token_prices
+            WHERE mint = $1 AND fetched_at >= $2
+              AND fetched_at < COALESCE($3, 'infinity'::TIMESTAMPTZ)
+            ORDER BY fetched_at DESC
+            LIMIT $4
+            "#,
+            mint.to_string(),
+            from,
+            cursor.map(|c| c.fetched_at),
+            limit + 1,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        let prices = rows
+            .into_iter()
+            .map(TokenPrice::try_from)
+            .collect::<RepositoryResult<Vec<_>>>()?;
+        let page =
+            PageBuilder::new(prices, limit, QueryMode::Forward, had_cursor).finalize(|price| {
+                Cursor::TokenPrice(Box::new(TokenPriceCursor {
+                    mint: price.mint,
+                    from,
+                    fetched_at: price.fetched_at,
+                }))
+            });
+        // ⚠️ Forward only: a previous cursor would be read forward from the first item.
+        Ok(Page {
+            prev_cursor: None,
+            ..page
+        })
     }
 }

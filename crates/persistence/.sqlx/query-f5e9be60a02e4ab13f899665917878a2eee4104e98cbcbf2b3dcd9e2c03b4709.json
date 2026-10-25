@@ -1,0 +1,162 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH page AS (\n                SELECT mint, symbol, name, decimals, logo_uri, metadata_provider,\n                       fetched_at, last_refresh_at\n                  FROM token_metadata\n                 WHERE fetched_at <= COALESCE($1, 'infinity'::TIMESTAMPTZ)\n                   AND (fetched_at < COALESCE($1, 'infinity'::TIMESTAMPTZ) OR mint < $2)\n                 ORDER BY fetched_at DESC, mint DESC\n                 LIMIT $3\n            )\n            SELECT page.mint AS \"mint!\", page.symbol, page.name, page.decimals AS \"decimals!\",\n                   page.logo_uri, page.metadata_provider AS \"metadata_provider!\",\n                   page.fetched_at AS \"fetched_at!\", page.last_refresh_at AS \"last_refresh_at!\",\n                   tp.price_usd AS \"price_usd?: rust_decimal::Decimal\",\n                   tp.price_provider AS \"price_provider?\", tp.confidence AS \"confidence?\",\n                   tp.fetched_at AS \"price_fetched_at?\"\n              FROM page\n              LEFT JOIN token_last_price l ON l.mint = page.mint\n              LEFT JOIN LATERAL (\n                  SELECT price_usd, price_provider, confidence, fetched_at\n                    FROM token_prices\n                   WHERE mint = l.mint AND fetched_at = l.fetched_at\n                   LIMIT 1\n              ) tp ON true\n             ORDER BY page.fetched_at DESC, page.mint DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mint!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "mint"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "symbol",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "symbol"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "decimals!",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "decimals"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "logo_uri",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "logo_uri"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "metadata_provider!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "metadata_provider"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "fetched_at!",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "fetched_at"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "last_refresh_at!",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "last_refresh_at"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "price_usd?: rust_decimal::Decimal",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "token_prices",
+            "name": "price_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "price_provider?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_prices",
+            "name": "price_provider"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "confidence?",
+        "type_info": "Float4",
+        "origin": {
+          "Table": {
+            "table": "token_prices",
+            "name": "confidence"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "price_fetched_at?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "token_prices",
+            "name": "fetched_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "f5e9be60a02e4ab13f899665917878a2eee4104e98cbcbf2b3dcd9e2c03b4709"
+}
