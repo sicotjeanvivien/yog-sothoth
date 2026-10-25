@@ -50,7 +50,7 @@ pub(super) async fn write_rotation_runs(
         Protocol::MeteoraDammV2.as_str(),
         from,
         through,
-        convert_decimal_to_bigdecimal(RUN_ROTATION, "run rotation")?,
+        convert_decimal_to_bigdecimal(RUN_ROTATION, "RUN_ROTATION")?,
         interval_of(RUN_GAP),
         width,
     )

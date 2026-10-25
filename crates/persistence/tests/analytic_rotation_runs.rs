@@ -1,4 +1,4 @@
-//! The rotation runs of `PgAnalyticRepository` (036): each tranche's quoted side turned over, read
+//! The rotation runs of `PgAnalyticRepository`: each tranche's quoted side turned over, read
 //! in the raw swaps; the tranches marked at `RUN_ROTATION` drawn into rotation runs `RUN_GAP`
 //! apart, rewritten until settled, then written once with their hours.
 
