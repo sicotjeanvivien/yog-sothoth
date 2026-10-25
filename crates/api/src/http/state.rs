@@ -11,11 +11,11 @@ use yog_persistence::PgHealthChecker;
 
 use crate::application::{
     ActivityService, AnnouncementService, DiscoveredTvlService, EnrichedSignal, IngestionService,
-    LiquidityChangeEventService, LiquidityMoveService, NetworkService, PoolCreationEventService,
-    PoolCreationsService, PoolService, PositionChangeEventService, PositionFeeClaimEventService,
-    ProtocolCatalogService, ProtocolFeeClaimEventService, ProtocolTvlService,
-    RewardClaimEventService, SignalService, SwapActivityService, SwapEventService, TokenService,
-    WorkSlots,
+    LiquidityChangeEventService, LiquidityMoveService, NetworkService, PoolChangeEventService,
+    PoolCreationEventService, PoolCreationsService, PoolService, PositionChangeEventService,
+    PositionFeeClaimEventService, ProtocolCatalogService, ProtocolFeeClaimEventService,
+    ProtocolTvlService, RewardChangeEventService, RewardClaimEventService, SignalService,
+    SwapActivityService, SwapEventService, TokenService, WorkSlots,
 };
 
 /// The services and the runtime handles the router and handlers read. Handlers never reach a
@@ -45,6 +45,8 @@ pub(crate) struct AppState {
     pub(crate) liquidity_change_event_service: Arc<LiquidityChangeEventService>,
     pub(crate) pool_creation_event_service: Arc<PoolCreationEventService>,
     pub(crate) position_change_event_service: Arc<PositionChangeEventService>,
+    pub(crate) reward_change_event_service: Arc<RewardChangeEventService>,
+    pub(crate) pool_change_event_service: Arc<PoolChangeEventService>,
     pub(crate) position_fee_claim_event_service: Arc<PositionFeeClaimEventService>,
     pub(crate) protocol_fee_claim_event_service: Arc<ProtocolFeeClaimEventService>,
     pub(crate) reward_claim_event_service: Arc<RewardClaimEventService>,

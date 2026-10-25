@@ -20,27 +20,28 @@ use yog_core::{
         FrozenPeriod, LatestProtocolTvl, LiquidityChangeEvent, LiquidityChangeEventLookup,
         LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup,
         LiquidityMoveOrder, MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesLookup,
-        NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog, PoolCreationEvent,
-        PoolCreationEventLookup, PoolCreations, PoolCreationsLookup, PoolCursor, PoolEntry,
-        PoolScope, PoolSwapBucket, PositionChangeEvent, PositionChangeEventLookup,
-        PositionFeeClaimEvent, PositionFeeClaimEventLookup, Protocol, ProtocolActivity,
-        ProtocolActivityBar, ProtocolActivityLookup, ProtocolBucket, ProtocolDiscoveredTvl,
-        ProtocolFeeClaimEvent, ProtocolFeeClaimEventLookup, ProtocolPoolCreations, ProtocolPools,
-        ProtocolSwapActivity, ProtocolTvl, ProtocolTvlLookup, RewardClaimEvent,
-        RewardClaimEventLookup, Severity, Signal, SignalCursor, SignalFeed, SignalFilter,
-        SignalRecord, SwapActivity, SwapActivityLookup, SwapEvent, SwapEventLookup,
-        TokenActivityCursor, TokenActivityFeed, TokenActivityPage, TokenCursor, TokenEntry,
-        TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceCursor, TokenPriceLookup, Window,
+        NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog, PoolChangeEvent,
+        PoolChangeEventLookup, PoolCreationEvent, PoolCreationEventLookup, PoolCreations,
+        PoolCreationsLookup, PoolCursor, PoolEntry, PoolScope, PoolSwapBucket, PositionChangeEvent,
+        PositionChangeEventLookup, PositionFeeClaimEvent, PositionFeeClaimEventLookup, Protocol,
+        ProtocolActivity, ProtocolActivityBar, ProtocolActivityLookup, ProtocolBucket,
+        ProtocolDiscoveredTvl, ProtocolFeeClaimEvent, ProtocolFeeClaimEventLookup,
+        ProtocolPoolCreations, ProtocolPools, ProtocolSwapActivity, ProtocolTvl, ProtocolTvlLookup,
+        RewardChangeEvent, RewardChangeEventLookup, RewardClaimEvent, RewardClaimEventLookup,
+        Severity, Signal, SignalCursor, SignalFeed, SignalFilter, SignalRecord, SwapActivity,
+        SwapActivityLookup, SwapEvent, SwapEventLookup, TokenActivityCursor, TokenActivityFeed,
+        TokenActivityPage, TokenCursor, TokenEntry, TokenMetadata, TokenMetadataLookup, TokenPrice,
+        TokenPriceCursor, TokenPriceLookup, Window,
     },
 };
 
 use crate::application::{
     ActivityService, AnnouncementService, DiscoveredTvlService, IngestionService,
-    LiquidityChangeEventService, LiquidityMoveService, NetworkService, PoolCreationEventService,
-    PoolCreationsService, PoolService, PositionChangeEventService, PositionFeeClaimEventService,
-    ProtocolCatalogService, ProtocolFeeClaimEventService, ProtocolTvlService,
-    RewardClaimEventService, SignalService, SwapActivityService, SwapEventService, TokenService,
-    WorkSlots,
+    LiquidityChangeEventService, LiquidityMoveService, NetworkService, PoolChangeEventService,
+    PoolCreationEventService, PoolCreationsService, PoolService, PositionChangeEventService,
+    PositionFeeClaimEventService, ProtocolCatalogService, ProtocolFeeClaimEventService,
+    ProtocolTvlService, RewardChangeEventService, RewardClaimEventService, SignalService,
+    SwapActivityService, SwapEventService, TokenService, WorkSlots,
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
@@ -106,6 +107,12 @@ pub(crate) fn app_state() -> AppState {
         ))),
         position_change_event_service: Arc::new(PositionChangeEventService::new(Arc::new(
             MockPositionChangeEventRepo::default(),
+        ))),
+        reward_change_event_service: Arc::new(RewardChangeEventService::new(Arc::new(
+            MockRewardChangeEventRepo::default(),
+        ))),
+        pool_change_event_service: Arc::new(PoolChangeEventService::new(Arc::new(
+            MockPoolChangeEventRepo::default(),
         ))),
         position_fee_claim_event_service: Arc::new(PositionFeeClaimEventService::new(Arc::new(
             MockPositionFeeClaimEventRepo::default(),
@@ -1061,6 +1068,48 @@ impl PositionChangeEventLookup for MockPositionChangeEventRepo {
         _: Option<EventCursor>,
         _: i64,
     ) -> RepositoryResult<Page<PositionChangeEvent>> {
+        self.windows_from.lock().unwrap().push(from);
+        Ok(Page::empty())
+    }
+}
+
+/// A `RewardChangeEventLookup` answering an empty page, which records the start of each
+/// window read.
+#[derive(Default)]
+pub(crate) struct MockRewardChangeEventRepo {
+    pub(crate) windows_from: Mutex<Vec<DateTime<Utc>>>,
+}
+
+#[async_trait]
+impl RewardChangeEventLookup for MockRewardChangeEventRepo {
+    async fn list_events(
+        &self,
+        _: EventScope,
+        from: DateTime<Utc>,
+        _: Option<EventCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<RewardChangeEvent>> {
+        self.windows_from.lock().unwrap().push(from);
+        Ok(Page::empty())
+    }
+}
+
+/// A `PoolChangeEventLookup` answering an empty page, which records the start of each
+/// window read.
+#[derive(Default)]
+pub(crate) struct MockPoolChangeEventRepo {
+    pub(crate) windows_from: Mutex<Vec<DateTime<Utc>>>,
+}
+
+#[async_trait]
+impl PoolChangeEventLookup for MockPoolChangeEventRepo {
+    async fn list_events(
+        &self,
+        _: EventScope,
+        from: DateTime<Utc>,
+        _: Option<EventCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<PoolChangeEvent>> {
         self.windows_from.lock().unwrap().push(from);
         Ok(Page::empty())
     }

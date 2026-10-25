@@ -72,6 +72,18 @@ export const zLiquidityMoveKindResponse = z.enum([
 
 export type LiquidityMoveKindResponse = z.infer<typeof zLiquidityMoveKindResponse>;
 
+export const zMeteoraDammV2PoolFeesResponse = z.object({
+    operator: z.string().min(1)
+});
+
+export type MeteoraDammV2PoolFeesResponse = z.infer<typeof zMeteoraDammV2PoolFeesResponse>;
+
+export const zMeteoraDammV2PoolStatusResponse = z.object({
+    status: z.int().gte(0).lte(255)
+});
+
+export type MeteoraDammV2PoolStatusResponse = z.infer<typeof zMeteoraDammV2PoolStatusResponse>;
+
 export const zMeteoraDammV2PositionNftResponse = z.object({
     owner: z.string().min(1),
     position: z.string().min(1),
@@ -79,6 +91,14 @@ export const zMeteoraDammV2PositionNftResponse = z.object({
 });
 
 export type MeteoraDammV2PositionNftResponse = z.infer<typeof zMeteoraDammV2PositionNftResponse>;
+
+export const zMeteoraDammV2RewardFunderChangeResponse = z.object({
+    newFunder: z.string().min(1),
+    oldFunder: z.string().min(1),
+    rewardIndex: z.int().gte(0).lte(255)
+});
+
+export type MeteoraDammV2RewardFunderChangeResponse = z.infer<typeof zMeteoraDammV2RewardFunderChangeResponse>;
 
 export const zMeteoraDammV2SplitNumeratorsResponse = z.object({
     feeA: z.int().gte(0).lte(4294967295),
@@ -91,6 +111,17 @@ export const zMeteoraDammV2SplitNumeratorsResponse = z.object({
 });
 
 export type MeteoraDammV2SplitNumeratorsResponse = z.infer<typeof zMeteoraDammV2SplitNumeratorsResponse>;
+
+export const zPoolChangeEventMeteoraDammV2Response = z.union([
+    zMeteoraDammV2PoolStatusResponse.and(z.object({
+        kind: z.enum(['status'])
+    })),
+    zMeteoraDammV2PoolFeesResponse.and(z.object({
+        kind: z.enum(['fees'])
+    }))
+]);
+
+export type PoolChangeEventMeteoraDammV2Response = z.infer<typeof zPoolChangeEventMeteoraDammV2Response>;
 
 export const zPoolLastEventKindResponse = z.enum([
     'swap',
@@ -120,6 +151,36 @@ export type ProblemDetailsResponse = z.infer<typeof zProblemDetailsResponse>;
 export const zProtocolResponse = z.enum(['meteora_damm_v2', 'meteora_dlmm']);
 
 export type ProtocolResponse = z.infer<typeof zProtocolResponse>;
+
+export const zPageResponsePoolChangeEventResponse = z.object({
+    isFirst: z.boolean(),
+    isLast: z.boolean(),
+    items: z.array(z.object({
+        at: z.iso.datetime({ offset: true }),
+        eventIndex: z.int().gte(0).lte(65535),
+        meteoraDammV2: zPoolChangeEventMeteoraDammV2Response.optional(),
+        poolAddress: z.string().min(1),
+        protocol: zProtocolResponse,
+        signature: z.string().min(1),
+        slot: zCount
+    })),
+    nextCursor: z.string().nullable(),
+    prevCursor: z.string().nullable()
+});
+
+export type PageResponsePoolChangeEventResponse = z.infer<typeof zPageResponsePoolChangeEventResponse>;
+
+export const zPoolChangeEventResponse = z.object({
+    at: z.iso.datetime({ offset: true }),
+    eventIndex: z.int().gte(0).lte(65535),
+    meteoraDammV2: zPoolChangeEventMeteoraDammV2Response.optional(),
+    poolAddress: z.string().min(1),
+    protocol: zProtocolResponse,
+    signature: z.string().min(1),
+    slot: zCount
+});
+
+export type PoolChangeEventResponse = z.infer<typeof zPoolChangeEventResponse>;
 
 export const zProtocolCatalogResponse = z.object({
     observed: z.boolean(),
@@ -200,6 +261,44 @@ export const zMeteoraDammV2PermanentLockResponse = z.object({
 });
 
 export type MeteoraDammV2PermanentLockResponse = z.infer<typeof zMeteoraDammV2PermanentLockResponse>;
+
+export const zMeteoraDammV2RewardDurationChangeResponse = z.object({
+    newRewardDuration: zU128String,
+    oldRewardDuration: zU128String,
+    rewardIndex: z.int().gte(0).lte(255)
+});
+
+export type MeteoraDammV2RewardDurationChangeResponse = z.infer<typeof zMeteoraDammV2RewardDurationChangeResponse>;
+
+export const zMeteoraDammV2RewardFundResponse = z.object({
+    amount: zU128String,
+    funder: z.string().min(1),
+    postRewardRate: zU128String,
+    preRewardRate: zU128String,
+    rewardDurationEnd: zU128String,
+    rewardIndex: z.int().gte(0).lte(255),
+    rewardMint: z.string().min(1),
+    transferFeeExcludedAmountIn: zU128String
+});
+
+export type MeteoraDammV2RewardFundResponse = z.infer<typeof zMeteoraDammV2RewardFundResponse>;
+
+export const zMeteoraDammV2RewardInitializeResponse = z.object({
+    creator: z.string().min(1),
+    funder: z.string().min(1),
+    rewardDuration: zU128String,
+    rewardIndex: z.int().gte(0).lte(255),
+    rewardMint: z.string().min(1)
+});
+
+export type MeteoraDammV2RewardInitializeResponse = z.infer<typeof zMeteoraDammV2RewardInitializeResponse>;
+
+export const zMeteoraDammV2RewardWithdrawalResponse = z.object({
+    amount: zU128String,
+    rewardMint: z.string().min(1)
+});
+
+export type MeteoraDammV2RewardWithdrawalResponse = z.infer<typeof zMeteoraDammV2RewardWithdrawalResponse>;
 
 export const zMeteoraDammV2SplitAmountsResponse = z.object({
     feeA: zU128String,
@@ -481,6 +580,59 @@ export const zProtocolFeeClaimEventResponse = z.object({
 });
 
 export type ProtocolFeeClaimEventResponse = z.infer<typeof zProtocolFeeClaimEventResponse>;
+
+export const zRewardChangeEventMeteoraDammV2Response = z.union([
+    zMeteoraDammV2RewardInitializeResponse.and(z.object({
+        kind: z.enum(['initialize'])
+    })),
+    zMeteoraDammV2RewardFundResponse.and(z.object({
+        kind: z.enum(['fund'])
+    })),
+    zMeteoraDammV2RewardDurationChangeResponse.and(z.object({
+        kind: z.enum(['duration_change'])
+    })),
+    zMeteoraDammV2RewardFunderChangeResponse.and(z.object({
+        kind: z.enum(['funder_change'])
+    })),
+    zMeteoraDammV2RewardWithdrawalResponse.and(z.object({
+        kind: z.enum(['ineligible_withdrawal'])
+    })),
+    zMeteoraDammV2RewardWithdrawalResponse.and(z.object({
+        kind: z.enum(['dead_liquidity_withdrawal'])
+    }))
+]);
+
+export type RewardChangeEventMeteoraDammV2Response = z.infer<typeof zRewardChangeEventMeteoraDammV2Response>;
+
+export const zPageResponseRewardChangeEventResponse = z.object({
+    isFirst: z.boolean(),
+    isLast: z.boolean(),
+    items: z.array(z.object({
+        at: z.iso.datetime({ offset: true }),
+        eventIndex: z.int().gte(0).lte(65535),
+        meteoraDammV2: zRewardChangeEventMeteoraDammV2Response.optional(),
+        poolAddress: z.string().min(1),
+        protocol: zProtocolResponse,
+        signature: z.string().min(1),
+        slot: zCount
+    })),
+    nextCursor: z.string().nullable(),
+    prevCursor: z.string().nullable()
+});
+
+export type PageResponseRewardChangeEventResponse = z.infer<typeof zPageResponseRewardChangeEventResponse>;
+
+export const zRewardChangeEventResponse = z.object({
+    at: z.iso.datetime({ offset: true }),
+    eventIndex: z.int().gte(0).lte(65535),
+    meteoraDammV2: zRewardChangeEventMeteoraDammV2Response.optional(),
+    poolAddress: z.string().min(1),
+    protocol: zProtocolResponse,
+    signature: z.string().min(1),
+    slot: zCount
+});
+
+export type RewardChangeEventResponse = z.infer<typeof zRewardChangeEventResponse>;
 
 export const zRewardClaimEventResponse = z.object({
     amount: zU128String,
@@ -1142,6 +1294,18 @@ export const zListLiquidityChangesResponse = zPageResponseLiquidityChangeEventRe
 
 export const zGetNetworkResponse = zNetworkResponse;
 
+export const zListPoolChangesQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListPoolChangesResponse = zPageResponsePoolChangeEventResponse;
+
 export const zListPoolCreationsQuery = z.object({
     window: z.enum([
         '24h',
@@ -1240,6 +1404,22 @@ export const zListPoolLiquidityMovesQuery = z.object({
 
 export const zListPoolLiquidityMovesResponse = zWindowedPageResponseLiquidityMoveResponse;
 
+export const zListPoolPoolChangesPath = z.object({
+    pool: z.string()
+});
+
+export const zListPoolPoolChangesQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListPoolPoolChangesResponse = zPageResponsePoolChangeEventResponse;
+
 export const zListPoolPositionChangesPath = z.object({
     pool: z.string()
 });
@@ -1287,6 +1467,22 @@ export const zListPoolProtocolFeeClaimsQuery = z.object({
 });
 
 export const zListPoolProtocolFeeClaimsResponse = zPageResponseProtocolFeeClaimEventResponse;
+
+export const zListPoolRewardChangesPath = z.object({
+    pool: z.string()
+});
+
+export const zListPoolRewardChangesQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListPoolRewardChangesResponse = zPageResponseRewardChangeEventResponse;
 
 export const zListPoolRewardClaimsPath = z.object({
     pool: z.string()
@@ -1547,6 +1743,22 @@ export const zGetProtocolLiquidityMoveTotalsQuery = z.object({
 
 export const zGetProtocolLiquidityMoveTotalsResponse = zWindowedResponseProtocolLiquidityFlowsResponse;
 
+export const zListProtocolPoolChangesPath = z.object({
+    protocol: z.string()
+});
+
+export const zListProtocolPoolChangesQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListProtocolPoolChangesResponse = zPageResponsePoolChangeEventResponse;
+
 export const zListProtocolPoolCreationsPath = z.object({
     protocol: z.string()
 });
@@ -1678,6 +1890,22 @@ export const zListProtocolProtocolFeeClaimsQuery = z.object({
 
 export const zListProtocolProtocolFeeClaimsResponse = zPageResponseProtocolFeeClaimEventResponse;
 
+export const zListProtocolRewardChangesPath = z.object({
+    protocol: z.string()
+});
+
+export const zListProtocolRewardChangesQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListProtocolRewardChangesResponse = zPageResponseRewardChangeEventResponse;
+
 export const zListProtocolRewardClaimsPath = z.object({
     protocol: z.string()
 });
@@ -1797,6 +2025,18 @@ export const zGetProtocolTvlReadingsHourlyQuery = z.object({
 });
 
 export const zGetProtocolTvlReadingsHourlyResponse = zWindowedResponseProtocolTvlResponse;
+
+export const zListRewardChangesQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListRewardChangesResponse = zPageResponseRewardChangeEventResponse;
 
 export const zListRewardClaimsQuery = z.object({
     window: z.enum([

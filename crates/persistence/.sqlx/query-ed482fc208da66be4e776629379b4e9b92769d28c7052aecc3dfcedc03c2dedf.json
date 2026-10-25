@@ -1,0 +1,162 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,\n                   reward_mint, funder, creator, reward_index, reward_duration\n              FROM meteora_damm_v2_initialize_reward_events\n             WHERE id = ANY($1) AND timestamp >= $2 AND timestamp <= $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_reward_events",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "pool_address",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_reward_events",
+            "name": "pool_address"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "signature",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_reward_events",
+            "name": "signature"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "timestamp",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_reward_events",
+            "name": "timestamp"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "slot",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_reward_events",
+            "name": "slot"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "transaction_index",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_reward_events",
+            "name": "transaction_index"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "event_index",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_reward_events",
+            "name": "event_index"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "reward_mint",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_reward_events",
+            "name": "reward_mint"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "funder",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_reward_events",
+            "name": "funder"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "creator",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_reward_events",
+            "name": "creator"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "reward_index",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_reward_events",
+            "name": "reward_index"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "reward_duration",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_reward_events",
+            "name": "reward_duration"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8Array",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ed482fc208da66be4e776629379b4e9b92769d28c7052aecc3dfcedc03c2dedf"
+}

@@ -135,6 +135,8 @@ async fn read_all(
             .await
             .unwrap();
         seen.extend(keys(&page));
+        // ⚠️ A cursor that rereads its own row would page forever: fail instead of hanging.
+        assert!(seen.len() <= 100, "paging does not end: {seen:?}");
         match page.next_cursor {
             Some(Cursor::PositionChangeEvent(next)) => cursor = Some(*next),
             Some(other) => panic!("{other:?}"),
@@ -166,10 +168,12 @@ async fn a_page_follows_through_shared_instants_across_the_tables(pool: PgPool) 
         PgPositionChangeEventRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
 
     let expected = read_all(&repository, EventScope::All, 50).await;
+    let by_one = read_all(&repository, EventScope::All, 1).await;
     let by_two = read_all(&repository, EventScope::All, 2).await;
     let pool_by_two = read_all(&repository, EventScope::Pool(pk(1)), 2).await;
 
     assert_eq!(expected.len(), 7);
+    assert_eq!(by_one, expected);
     assert_eq!(by_two, expected);
     assert_eq!(pool_by_two, expected);
     assert!(

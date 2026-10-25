@@ -643,10 +643,12 @@ neither `event_index` nor the protocol's columns — into the protocol's own eve
 is keyed on `(timestamp, signature, event_index)`, newest first. The swaps read it in two
 steps: the instant of the `limit+1`-th row by the index of `timestamp`, then only the rows
 from that instant on, sorted on the whole key; in one step the tie-break sorts every swap of
-the window. `position_change_event.rs` merges five tables into one list in two steps: a page of
-keys, each table cut to `limit + 1` by its index on the instant before the `UNION ALL` is
-sorted, then each table's rows by `id`, put back in the order of the keys — the database's
-order, its collation's, never a sort in Rust. `position_fee_claim_event.rs`,
+the window. `position_change_event.rs` (five tables), `reward_change_event.rs` (six) and
+`pool_change_event.rs` (two) merge their tables into one list in two steps: a page of keys,
+each table cut to `limit + 1` by its index on the instant before the `UNION ALL` is sorted,
+then each table's rows by `id`, put back in the order of the keys — the database's order, its
+collation's, never a sort in Rust. The key and the reordering are `helper/event_page.rs`'s;
+each repository keeps its SQL. `position_fee_claim_event.rs`,
 `protocol_fee_claim_event.rs` and `reward_claim_event.rs` read one table each. The tests of
 the same names, under `tests/`, hold the scopes, the window and the pages through shared
 instants.

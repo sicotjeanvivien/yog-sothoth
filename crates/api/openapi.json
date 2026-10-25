@@ -443,6 +443,34 @@
         ],
         "type": "object"
       },
+      "MeteoraDammV2PoolFeesResponse": {
+        "description": "The pool's fees updated, by its operator.\n⚠️ The new parameters are kept as raw bytes without a decoder: not served.",
+        "properties": {
+          "operator": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "operator"
+        ],
+        "type": "object"
+      },
+      "MeteoraDammV2PoolStatusResponse": {
+        "description": "The pool's status set, the raw byte as the program wrote it.",
+        "properties": {
+          "status": {
+            "format": "u-int8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
       "MeteoraDammV2PositionNftResponse": {
         "description": "The position opened or closed, its owner, and the mint of the NFT that holds it.",
         "properties": {
@@ -528,6 +556,150 @@
           "hasDynamicFee",
           "protocolFeePercent",
           "referralFeePercent"
+        ],
+        "type": "object"
+      },
+      "MeteoraDammV2RewardDurationChangeResponse": {
+        "description": "A reward's funding window changed, in seconds.",
+        "properties": {
+          "newRewardDuration": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "oldRewardDuration": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "rewardIndex": {
+            "format": "u-int8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rewardIndex",
+          "oldRewardDuration",
+          "newRewardDuration"
+        ],
+        "type": "object"
+      },
+      "MeteoraDammV2RewardFundResponse": {
+        "description": "A reward funded: what the funder sent and what reached the vault, the end of the funding\nwindow, and the emission rate before and after, Q64.64.",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "funder": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "postRewardRate": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "preRewardRate": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "rewardDurationEnd": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "rewardIndex": {
+            "format": "u-int8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "rewardMint": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "transferFeeExcludedAmountIn": {
+            "$ref": "#/components/schemas/U128String"
+          }
+        },
+        "required": [
+          "funder",
+          "rewardMint",
+          "rewardIndex",
+          "amount",
+          "transferFeeExcludedAmountIn",
+          "rewardDurationEnd",
+          "preRewardRate",
+          "postRewardRate"
+        ],
+        "type": "object"
+      },
+      "MeteoraDammV2RewardFunderChangeResponse": {
+        "description": "A reward's funder changed.",
+        "properties": {
+          "newFunder": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "oldFunder": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "rewardIndex": {
+            "format": "u-int8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rewardIndex",
+          "oldFunder",
+          "newFunder"
+        ],
+        "type": "object"
+      },
+      "MeteoraDammV2RewardInitializeResponse": {
+        "description": "A reward set up on its pool: its mint, who funds it, who created it, its rank and the length\nof a funding window, in seconds.",
+        "properties": {
+          "creator": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "funder": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "rewardDuration": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "rewardIndex": {
+            "format": "u-int8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "rewardMint": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "rewardMint",
+          "funder",
+          "creator",
+          "rewardIndex",
+          "rewardDuration"
+        ],
+        "type": "object"
+      },
+      "MeteoraDammV2RewardWithdrawalResponse": {
+        "description": "A reward amount withdrawn from the pool: the mint and what left.",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "rewardMint": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "rewardMint",
+          "amount"
         ],
         "type": "object"
       },
@@ -858,6 +1030,80 @@
                 "reserveBAfter",
                 "position",
                 "owner"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prevCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "isFirst",
+          "isLast",
+          "nextCursor",
+          "prevCursor"
+        ],
+        "type": "object"
+      },
+      "PageResponse_PoolChangeEventResponse": {
+        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
+        "properties": {
+          "isFirst": {
+            "type": "boolean"
+          },
+          "isLast": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "eventIndex": {
+                  "format": "u-int16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "meteoraDammV2": {
+                  "$ref": "#/components/schemas/PoolChangeEventMeteoraDammV2Response"
+                },
+                "poolAddress": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "signature": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "slot": {
+                  "$ref": "#/components/schemas/Count"
+                }
+              },
+              "required": [
+                "protocol",
+                "poolAddress",
+                "signature",
+                "eventIndex",
+                "slot",
+                "at"
               ],
               "type": "object"
             },
@@ -1281,6 +1527,80 @@
                 "at",
                 "amountA",
                 "amountB"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prevCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "isFirst",
+          "isLast",
+          "nextCursor",
+          "prevCursor"
+        ],
+        "type": "object"
+      },
+      "PageResponse_RewardChangeEventResponse": {
+        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
+        "properties": {
+          "isFirst": {
+            "type": "boolean"
+          },
+          "isLast": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "eventIndex": {
+                  "format": "u-int16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "meteoraDammV2": {
+                  "$ref": "#/components/schemas/RewardChangeEventMeteoraDammV2Response"
+                },
+                "poolAddress": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "signature": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "slot": {
+                  "$ref": "#/components/schemas/Count"
+                }
+              },
+              "required": [
+                "protocol",
+                "poolAddress",
+                "signature",
+                "eventIndex",
+                "slot",
+                "at"
               ],
               "type": "object"
             },
@@ -1759,6 +2079,93 @@
           "isLast",
           "nextCursor",
           "prevCursor"
+        ],
+        "type": "object"
+      },
+      "PoolChangeEventMeteoraDammV2Response": {
+        "description": "What a DAMM v2 pool change is, named by `kind`, and what that change says.",
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2PoolStatusResponse"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "status"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2PoolFeesResponse"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "fees"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        ]
+      },
+      "PoolChangeEventResponse": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "eventIndex": {
+            "format": "u-int16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "meteoraDammV2": {
+            "$ref": "#/components/schemas/PoolChangeEventMeteoraDammV2Response"
+          },
+          "poolAddress": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          },
+          "signature": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "slot": {
+            "$ref": "#/components/schemas/Count"
+          }
+        },
+        "required": [
+          "protocol",
+          "poolAddress",
+          "signature",
+          "eventIndex",
+          "slot",
+          "at"
         ],
         "type": "object"
       },
@@ -2815,6 +3222,177 @@
           "items",
           "asOf",
           "coveredSince"
+        ],
+        "type": "object"
+      },
+      "RewardChangeEventMeteoraDammV2Response": {
+        "description": "What a DAMM v2 reward change is, named by `kind`, and what that change says.",
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2RewardInitializeResponse"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "initialize"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2RewardFundResponse"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "fund"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2RewardDurationChangeResponse"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "duration_change"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2RewardFunderChangeResponse"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "funder_change"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2RewardWithdrawalResponse"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "ineligible_withdrawal"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2RewardWithdrawalResponse"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "dead_liquidity_withdrawal"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        ]
+      },
+      "RewardChangeEventResponse": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "eventIndex": {
+            "format": "u-int16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "meteoraDammV2": {
+            "$ref": "#/components/schemas/RewardChangeEventMeteoraDammV2Response"
+          },
+          "poolAddress": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          },
+          "signature": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "slot": {
+            "$ref": "#/components/schemas/Count"
+          }
+        },
+        "required": [
+          "protocol",
+          "poolAddress",
+          "signature",
+          "eventIndex",
+          "slot",
+          "at"
         ],
         "type": "object"
       },
@@ -4671,6 +5249,71 @@
         "summary": "Where the chain is: the latest slot and the probe's latency. The\n`network_status` row is seeded by the baseline migration: its absence is a\n500, not a 404."
       }
     },
+    "/api/pool-changes": {
+      "get": {
+        "operationId": "list_pool_changes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_PoolChangeEventResponse"
+                }
+              }
+            },
+            "description": "A page of every protocol's pool changes, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/pool-creations": {
       "get": {
         "operationId": "list_pool_creations",
@@ -5152,6 +5795,79 @@
         }
       }
     },
+    "/api/pools/{pool}/pool-changes": {
+      "get": {
+        "operationId": "list_pool_pool_changes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pool",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_PoolChangeEventResponse"
+                }
+              }
+            },
+            "description": "A page of the pool's pool changes, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/pools/{pool}/position-changes": {
       "get": {
         "operationId": "list_pool_position_changes",
@@ -5357,6 +6073,79 @@
               }
             },
             "description": "A page of the pool's protocol fee claims, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/pools/{pool}/reward-changes": {
+      "get": {
+        "operationId": "list_pool_reward_changes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pool",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_RewardChangeEventResponse"
+                }
+              }
+            },
+            "description": "A page of the pool's reward changes, the most recent first; the window ends at the first page."
           },
           "default": {
             "content": {
@@ -6539,6 +7328,79 @@
         }
       }
     },
+    "/api/protocols/{protocol}/pool-changes": {
+      "get": {
+        "operationId": "list_protocol_pool_changes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_PoolChangeEventResponse"
+                }
+              }
+            },
+            "description": "A page of the protocol's pool changes, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/protocols/{protocol}/pool-creations": {
       "get": {
         "operationId": "list_protocol_pool_creations",
@@ -7091,6 +7953,79 @@
         }
       }
     },
+    "/api/protocols/{protocol}/reward-changes": {
+      "get": {
+        "operationId": "list_protocol_reward_changes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_RewardChangeEventResponse"
+                }
+              }
+            },
+            "description": "A page of the protocol's reward changes, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/protocols/{protocol}/reward-claims": {
       "get": {
         "operationId": "list_protocol_reward_claims",
@@ -7591,6 +8526,71 @@
               }
             },
             "description": "The protocol's TVL reading of every hour measured, from the window's start."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/reward-changes": {
+      "get": {
+        "operationId": "list_reward_changes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_RewardChangeEventResponse"
+                }
+              }
+            },
+            "description": "A page of every protocol's reward changes, the most recent first; the window ends at the first page."
           },
           "default": {
             "content": {

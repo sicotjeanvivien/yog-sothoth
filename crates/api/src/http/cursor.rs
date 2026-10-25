@@ -88,6 +88,8 @@ pub(crate) enum EventCollection {
     PositionFeeClaims,
     ProtocolFeeClaims,
     RewardClaims,
+    RewardChanges,
+    PoolChanges,
 }
 
 impl EventCollection {
@@ -100,6 +102,8 @@ impl EventCollection {
             Self::PositionFeeClaims => "position-fee-claims",
             Self::ProtocolFeeClaims => "protocol-fee-claims",
             Self::RewardClaims => "reward-claims",
+            Self::RewardChanges => "reward-changes",
+            Self::PoolChanges => "pool-changes",
         }
     }
 }
@@ -190,6 +194,8 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
             encode_event_cursor(EventCollection::ProtocolFeeClaims, c)
         }
         Cursor::RewardClaimEvent(c) => encode_event_cursor(EventCollection::RewardClaims, c),
+        Cursor::RewardChangeEvent(c) => encode_event_cursor(EventCollection::RewardChanges, c),
+        Cursor::PoolChangeEvent(c) => encode_event_cursor(EventCollection::PoolChanges, c),
     }
 }
 

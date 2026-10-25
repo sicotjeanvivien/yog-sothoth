@@ -15,13 +15,6 @@ use crate::repositories::helper::{
     convert_optional, convert_string_to_pubkey, convert_string_to_signature,
 };
 
-/// The key of a change in the merged list, and the table and row it is read from.
-pub(super) struct PositionChangeKey {
-    pub(super) kind: String,
-    pub(super) id: i64,
-    pub(super) timestamp: DateTime<Utc>,
-}
-
 /// A row of `meteora_damm_v2_create_position_events`, as the list reads it.
 pub(super) struct MeteoraDammV2CreatePositionEventRow {
     pub(super) id: i64,

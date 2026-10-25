@@ -27,11 +27,11 @@ core/src/
 │   ├── swap_activity/     (SwapActivity, by protocol and by pool — SwapActivityLookup)
 │   ├── swap_event/, liquidity_change_event/, pool_creation_event/,
 │   │   position_change_event/, position_fee_claim_event/, protocol_fee_claim_event/,
-│   │   reward_claim_event/
+│   │   reward_claim_event/, reward_change_event/, pool_change_event/
 │   │                       (an enum per protocol over its own event type — the on-chain
-│   │                       lists, each with its *EventLookup; a DAMM v2 position change
-│   │                       is one of five events, MeteoraDammV2PositionChange; EventScope,
-│   │                       EventCursor and its window_start in event_cursor.rs)
+│   │                       lists, each with its *EventLookup; a DAMM v2 position, reward
+│   │                       or pool change is one of several events, MeteoraDammV2*Change;
+│   │                       EventScope, EventCursor and its window_start in event_cursor.rs)
 │   ├── pool_creations/    (PoolCreations, by protocol — PoolCreationsLookup)
 │   ├── liquidity_moves/   (LiquidityMove, LiquidityFlows — LiquidityMoveLookup)
 │   ├── protocol_tvl/      (ProtocolTvl, a reading at an instant — ProtocolTvlLookup)
