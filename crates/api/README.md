@@ -78,8 +78,9 @@ with no wildcard arm, so adding a variant breaks the build there.
   `every_schema_is_a_response_or_a_wire_form` fails on a schema of the
   contract named otherwise. On the request side, `*Request` is what a route
   takes once validated, `*Params` the raw query string it parses, `*Param` an
-  enum of that query, named like the domain type it translates
-  (`domain::Severity` → `SeverityParam`).
+  enum of one of its parameters, named like the parameter a client writes
+  (`severity` → `SeverityParam`, `sort` → `SortParam`): its module says which
+  route it belongs to.
 - **Place.** One type per file. At the top level, what a route returns — its
   body, or the item of a page — or takes, its `*Request`. A part lives in its
   owner's folder, one level deep; a response part's file drops the owner's

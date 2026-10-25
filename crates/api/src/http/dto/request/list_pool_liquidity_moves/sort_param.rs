@@ -5,17 +5,17 @@ use yog_core::domain::LiquidityMoveOrder;
 /// `amount`, the moves worth the most first, or `at`, the most recent first.
 #[derive(Debug, Default, Deserialize, Clone, Copy, ToSchema)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum LiquidityMoveOrderParam {
+pub(crate) enum SortParam {
     #[default]
     Amount,
     At,
 }
 
-impl From<LiquidityMoveOrderParam> for LiquidityMoveOrder {
-    fn from(value: LiquidityMoveOrderParam) -> Self {
+impl From<SortParam> for LiquidityMoveOrder {
+    fn from(value: SortParam) -> Self {
         match value {
-            LiquidityMoveOrderParam::Amount => LiquidityMoveOrder::Amount,
-            LiquidityMoveOrderParam::At => LiquidityMoveOrder::At,
+            SortParam::Amount => LiquidityMoveOrder::Amount,
+            SortParam::At => LiquidityMoveOrder::At,
         }
     }
 }

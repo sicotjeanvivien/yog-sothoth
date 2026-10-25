@@ -7,9 +7,9 @@ use yog_core::domain::{LiquidityMoveCursor, LiquidityMoveOrder, Window};
 use super::window_param::WindowParam;
 use crate::http::{cursor::decode_liquidity_move_cursor, error::ApiError};
 
-mod liquidity_move_order_param;
+mod sort_param;
 
-use liquidity_move_order_param::LiquidityMoveOrderParam;
+use sort_param::SortParam;
 
 /// A window, the order, and forward-only cursor pagination.
 #[derive(Debug, Deserialize, IntoParams)]
@@ -19,7 +19,7 @@ pub(crate) struct PoolLiquidityMovesParams {
     window: WindowParam,
     #[serde(default)]
     #[param(inline)]
-    sort: LiquidityMoveOrderParam,
+    sort: SortParam,
     #[param(min_length = 1)]
     cursor: Option<String>,
     #[serde(default = "super::default_limit")]
