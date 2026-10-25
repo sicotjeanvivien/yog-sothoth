@@ -16,25 +16,27 @@ use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
         Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity, DiscoveredTvl,
-        DiscoveredTvlLookup, EventFreshnessRepository, FrozenHours, FrozenPeriod,
-        LatestProtocolTvl, LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup,
+        DiscoveredTvlLookup, EventCursor, EventFreshnessRepository, EventScope, FrozenHours,
+        FrozenPeriod, LatestProtocolTvl, LiquidityChangeEvent, LiquidityChangeEventLookup,
+        LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup,
         LiquidityMoveOrder, MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesLookup,
-        NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog, PoolCreations, PoolCreationsLookup,
-        PoolCursor, PoolEntry, PoolScope, PoolSwapBucket, Protocol, ProtocolActivity,
-        ProtocolActivityBar, ProtocolActivityLookup, ProtocolBucket, ProtocolDiscoveredTvl,
-        ProtocolPoolCreations, ProtocolPools, ProtocolSwapActivity, ProtocolTvl, ProtocolTvlLookup,
-        Severity, Signal, SignalCursor, SignalFeed, SignalFilter, SignalRecord, SwapActivity,
-        SwapActivityLookup, TokenActivityCursor, TokenActivityFeed, TokenActivityPage, TokenCursor,
-        TokenEntry, TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceCursor,
+        NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog, PoolCreationEvent,
+        PoolCreationEventLookup, PoolCreations, PoolCreationsLookup, PoolCursor, PoolEntry,
+        PoolScope, PoolSwapBucket, Protocol, ProtocolActivity, ProtocolActivityBar,
+        ProtocolActivityLookup, ProtocolBucket, ProtocolDiscoveredTvl, ProtocolPoolCreations,
+        ProtocolPools, ProtocolSwapActivity, ProtocolTvl, ProtocolTvlLookup, Severity, Signal,
+        SignalCursor, SignalFeed, SignalFilter, SignalRecord, SwapActivity, SwapActivityLookup,
+        SwapEvent, SwapEventLookup, TokenActivityCursor, TokenActivityFeed, TokenActivityPage,
+        TokenCursor, TokenEntry, TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceCursor,
         TokenPriceLookup, Window,
     },
 };
 
 use crate::application::{
     ActivityService, AnnouncementService, DiscoveredTvlService, IngestionService,
-    LiquidityMoveService, NetworkService, PoolCreationsService, PoolService,
-    ProtocolCatalogService, ProtocolTvlService, SignalService, SwapActivityService, TokenService,
-    WorkSlots,
+    LiquidityChangeEventService, LiquidityMoveService, NetworkService, PoolCreationEventService,
+    PoolCreationsService, PoolService, ProtocolCatalogService, ProtocolTvlService, SignalService,
+    SwapActivityService, SwapEventService, TokenService, WorkSlots,
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
@@ -89,6 +91,15 @@ pub(crate) fn app_state() -> AppState {
             frozen_hours_repo(None),
             Arc::new(MockDiscoveredTvlRepo::default()),
         )),
+        swap_event_service: Arc::new(SwapEventService::new(
+            Arc::new(MockSwapEventRepo::default()),
+        )),
+        liquidity_change_event_service: Arc::new(LiquidityChangeEventService::new(Arc::new(
+            MockLiquidityChangeEventRepo::default(),
+        ))),
+        pool_creation_event_service: Arc::new(PoolCreationEventService::new(Arc::new(
+            MockPoolCreationEventRepo::default(),
+        ))),
         pool_service: Arc::new(PoolService::new(
             Arc::new(PoolRepoOnce::with_pools(vec![])),
             Arc::new(MockDammV2PropertiesRepo::default()),
@@ -974,5 +985,67 @@ impl DiscoveredTvlLookup for MockDiscoveredTvlRepo {
             .unwrap()
             .push(("discoveries", last, protocol));
         Ok(vec![])
+    }
+}
+
+/// A `SwapEventLookup` answering an empty page, which records the start of each window read.
+#[derive(Default)]
+pub(crate) struct MockSwapEventRepo {
+    pub(crate) windows_from: Mutex<Vec<DateTime<Utc>>>,
+}
+
+#[async_trait]
+impl SwapEventLookup for MockSwapEventRepo {
+    async fn list_events(
+        &self,
+        _: EventScope,
+        from: DateTime<Utc>,
+        _: Option<EventCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<SwapEvent>> {
+        self.windows_from.lock().unwrap().push(from);
+        Ok(Page::empty())
+    }
+}
+
+/// A `LiquidityChangeEventLookup` answering an empty page, which records the start of each
+/// window read.
+#[derive(Default)]
+pub(crate) struct MockLiquidityChangeEventRepo {
+    pub(crate) windows_from: Mutex<Vec<DateTime<Utc>>>,
+}
+
+#[async_trait]
+impl LiquidityChangeEventLookup for MockLiquidityChangeEventRepo {
+    async fn list_events(
+        &self,
+        _: EventScope,
+        from: DateTime<Utc>,
+        _: Option<EventCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<LiquidityChangeEvent>> {
+        self.windows_from.lock().unwrap().push(from);
+        Ok(Page::empty())
+    }
+}
+
+/// A `PoolCreationEventLookup` answering an empty page, which records the start of each
+/// window read.
+#[derive(Default)]
+pub(crate) struct MockPoolCreationEventRepo {
+    pub(crate) windows_from: Mutex<Vec<DateTime<Utc>>>,
+}
+
+#[async_trait]
+impl PoolCreationEventLookup for MockPoolCreationEventRepo {
+    async fn list_events(
+        &self,
+        _: Option<Protocol>,
+        from: DateTime<Utc>,
+        _: Option<EventCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<PoolCreationEvent>> {
+        self.windows_from.lock().unwrap().push(from);
+        Ok(Page::empty())
     }
 }

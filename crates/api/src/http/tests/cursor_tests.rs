@@ -6,11 +6,16 @@ use chrono::{DateTime, TimeZone, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 
-use super::{decode_liquidity_move_cursor, decode_signal_cursor, encode_cursor, encode_cursor_opt};
+use super::{
+    EventCollection, decode_event_cursor, decode_liquidity_move_cursor, decode_signal_cursor,
+    encode_cursor, encode_cursor_opt,
+};
 use crate::http::error::ApiError;
 use yog_core::{
     Cursor,
-    domain::{LiquidityMoveCursor, LiquidityMoveOrder, SignalCursor, Window},
+    domain::{
+        EventCursor, EventScope, LiquidityMoveCursor, LiquidityMoveOrder, SignalCursor, Window,
+    },
 };
 
 fn ts(secs: i64) -> DateTime<Utc> {
@@ -122,4 +127,22 @@ fn rejects_empty_string() {
 fn URL_SAFE_NO_PAD_ENCODE(s: &str) -> String {
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     URL_SAFE_NO_PAD.encode(s.as_bytes())
+}
+
+/// Mutation: a field of the event cursor dropped or renamed on one side of the wire — a page
+/// of swaps read back as another key, or refused.
+#[test]
+fn event_cursor_round_trip() {
+    let cursor = EventCursor {
+        scope: EventScope::Pool(Pubkey::new_from_array([3; 32])),
+        from: ts(1_700_000_000),
+        at: ts(1_700_000_123),
+        signature: solana_signature::Signature::from([9; 64]),
+        event_index: 7,
+    };
+
+    let encoded = encode_cursor(&Cursor::SwapEvent(Box::new(cursor.clone()))).unwrap();
+    let decoded = decode_event_cursor(&encoded, EventCollection::Swaps, cursor.scope).unwrap();
+
+    assert_eq!(decoded, cursor);
 }

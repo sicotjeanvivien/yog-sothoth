@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
+use solana_signature::Signature;
 use sqlx::Error as SqlxError;
 use sqlx::types::BigDecimal;
 use std::str::FromStr;
@@ -37,6 +38,22 @@ pub(crate) fn parse_window(raw: &str) -> RepositoryResult<Window> {
 pub(crate) fn convert_string_to_pubkey(key: String, field: &str) -> RepositoryResult<Pubkey> {
     Pubkey::from_str(&key)
         .map_err(|e| RepositoryError::Integrity(format!("invalid {field} pubkey: {e}")))
+}
+
+/// Parses a stored transaction signature; a malformed one is `RepositoryError::Integrity`.
+pub(crate) fn convert_string_to_signature(raw: String, field: &str) -> RepositoryResult<Signature> {
+    Signature::from_str(&raw)
+        .map_err(|e| RepositoryError::Integrity(format!("invalid {field} signature: {e}")))
+}
+
+/// Narrows an `INTEGER` into a `u16`; fails outside `0..=65535`.
+pub(crate) fn convert_i32_to_u16(v: i32, field: &str) -> RepositoryResult<u16> {
+    u16::try_from(v).map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {v}")))
+}
+
+/// Narrows a `BIGINT` into a `u32`; fails outside `0..=u32::MAX`.
+pub(crate) fn convert_i64_to_u32(v: i64, field: &str) -> RepositoryResult<u32> {
+    u32::try_from(v).map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {v}")))
 }
 
 /// Converts a `u64` for a `BIGINT` column; fails past `i64::MAX`.

@@ -22,6 +22,9 @@ pub enum Cursor {
     Pool(Box<crate::domain::PoolCursor>),
     Token(crate::domain::TokenCursor),
     TokenPrice(Box<crate::domain::TokenPriceCursor>),
+    SwapEvent(Box<crate::domain::EventCursor>),
+    LiquidityChangeEvent(Box<crate::domain::EventCursor>),
+    PoolCreationEvent(Box<crate::domain::EventCursor>),
 }
 
 impl<T> Page<T> {

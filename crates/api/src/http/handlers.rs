@@ -5,6 +5,7 @@ use crate::http::{AppState, dto::request::parse_pool, error::ApiError};
 pub(super) mod announcements;
 pub(super) mod health;
 pub(super) mod ingestion;
+pub(super) mod liquidity_changes;
 pub(super) mod liquidity_moves;
 pub(super) mod network;
 pub(super) mod pool_creations;

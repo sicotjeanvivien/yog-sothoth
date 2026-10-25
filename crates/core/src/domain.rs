@@ -2,10 +2,12 @@ mod analytic;
 mod announcements;
 mod discovered_tvl;
 mod domain_event;
+mod event_cursor;
 mod event_position;
 mod freshness_status;
 mod insert_outcome;
 mod kept_prices;
+mod liquidity_change_event;
 mod liquidity_flow;
 mod liquidity_moves;
 mod materialization_backlog;
@@ -13,6 +15,7 @@ mod meteora;
 mod network_status;
 mod pool;
 mod pool_account;
+mod pool_creation_event;
 mod pool_creations;
 mod pool_current_state;
 mod pool_price_snapshot;
@@ -21,6 +24,7 @@ mod protocol_activity;
 mod protocol_tvl;
 mod signals;
 mod swap_activity;
+mod swap_event;
 mod swap_flow;
 mod token_activity;
 mod token_metadata;
@@ -37,10 +41,12 @@ pub use analytic::{
 pub use announcements::{Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity};
 pub use discovered_tvl::{DiscoveredTvl, DiscoveredTvlLookup, ProtocolDiscoveredTvl};
 pub use domain_event::DomainEvent;
+pub use event_cursor::{EventCursor, EventScope};
 pub use event_position::{EventPosition, TransactionPosition};
 pub use freshness_status::{EventFreshnessRepository, FreshnessStatus};
 pub use insert_outcome::InsertOutcome;
 pub use kept_prices::{KeptPrices, PRICE_MAX_AGE_LATEST};
+pub use liquidity_change_event::{LiquidityChangeEvent, LiquidityChangeEventLookup};
 pub use liquidity_flow::{LiquidityFlowRepository, PoolLiquidityFlow};
 pub use liquidity_moves::{
     LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveKind, LiquidityMoveLookup,
@@ -79,6 +85,7 @@ pub use pool::{
 pub use pool_account::{
     DecodedPoolAccount, PoolAccountProperties, PoolAccountResolver, PoolRegistryProperties,
 };
+pub use pool_creation_event::{PoolCreationEvent, PoolCreationEventLookup};
 pub use pool_creations::{PoolCreations, PoolCreationsLookup, ProtocolPoolCreations};
 pub use pool_current_state::{
     LastEventKind, PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert,
@@ -95,6 +102,7 @@ pub use signals::{
     SignalFilter, SignalRecord, SignalRepository,
 };
 pub use swap_activity::{PoolSwapBucket, ProtocolSwapActivity, SwapActivity, SwapActivityLookup};
+pub use swap_event::{SwapEvent, SwapEventLookup};
 pub use swap_flow::{PoolSwapFlow, SwapFlowRepository};
 pub use token_activity::{
     TokenActivity, TokenActivityCursor, TokenActivityFeed, TokenActivityPage,

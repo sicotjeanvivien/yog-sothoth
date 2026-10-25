@@ -1,13 +1,18 @@
-//! The swaps' measures: their totals, their series, by token — for every protocol, one
-//! protocol, or one pool.
+//! The swaps, read live, and their measures: their totals, their series, by token — for every
+//! protocol, one protocol, or one pool.
 
 use crate::application::BucketPeriod;
+use crate::http::cursor::EventCollection;
 use crate::http::{
     AppState,
     dto::{
-        PoolSwapBucketResponse, ProtocolSwapActivityBucketResponse, ProtocolSwapActivityResponse,
-        SwapActivityResponse, TokenActivityPageResponse, WindowedResponse,
-        request::{ActivityParams, TokenActivityParams, WindowParams, parse_protocol},
+        PageResponse, PoolSwapBucketResponse, ProtocolSwapActivityBucketResponse,
+        ProtocolSwapActivityResponse, SwapActivityResponse, SwapEventResponse,
+        TokenActivityPageResponse, WindowedResponse,
+        request::{
+            ActivityParams, EventsParams, ListEventsRequest, TokenActivityParams, WindowParams,
+            parse_pool, parse_protocol,
+        },
     },
     error::ApiError,
 };
@@ -15,6 +20,7 @@ use axum::{
     Json,
     extract::{Path, Query, State},
 };
+use yog_core::domain::{EventScope, Window};
 
 #[utoipa::path(
     get,
@@ -241,6 +247,88 @@ pub(crate) async fn list_swaps_by_token(
     Query(params): Query<TokenActivityParams>,
 ) -> Result<Json<TokenActivityPageResponse>, ApiError> {
     super::token::token_ranking(&state, params).await
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/swaps",
+    params(EventsParams),
+    responses((
+        status = 200,
+        description = "A page of every protocol's swaps, the most recent first; the window ends at the first page.",
+        body = PageResponse<SwapEventResponse>
+    ))
+)]
+pub(crate) async fn list_swaps(
+    State(state): State<AppState>,
+    Query(params): Query<EventsParams>,
+) -> Result<Json<PageResponse<SwapEventResponse>>, ApiError> {
+    let request =
+        ListEventsRequest::parse(params, EventCollection::Swaps, EventScope::All, Window::Day)?;
+    list_event_page(&state, request).await
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/protocols/{protocol}/swaps",
+    params(EventsParams),
+    responses((
+        status = 200,
+        description = "A page of the protocol's swaps, the most recent first; the window ends at the first page.",
+        body = PageResponse<SwapEventResponse>
+    ))
+)]
+pub(crate) async fn list_protocol_swaps(
+    State(state): State<AppState>,
+    Path(protocol): Path<String>,
+    Query(params): Query<EventsParams>,
+) -> Result<Json<PageResponse<SwapEventResponse>>, ApiError> {
+    let protocol = parse_protocol(&protocol)?;
+    let request = ListEventsRequest::parse(
+        params,
+        EventCollection::Swaps,
+        EventScope::Protocol(protocol),
+        Window::Day,
+    )?;
+    list_event_page(&state, request).await
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/pools/{pool}/swaps",
+    params(EventsParams),
+    responses((
+        status = 200,
+        description = "A page of the pool's swaps, the most recent first; the window ends at the first page.",
+        body = PageResponse<SwapEventResponse>
+    ))
+)]
+pub(crate) async fn list_pool_swaps(
+    State(state): State<AppState>,
+    Path(pool): Path<String>,
+    Query(params): Query<EventsParams>,
+) -> Result<Json<PageResponse<SwapEventResponse>>, ApiError> {
+    let address = parse_pool(&pool)?;
+    let request = ListEventsRequest::parse(
+        params,
+        EventCollection::Swaps,
+        EventScope::Pool(address),
+        // ⚠️ Raw swaps are kept 7 days (migration 014): a longer window would read a week as more.
+        Window::Week,
+    )?;
+    super::known_pool(&state, &pool).await?;
+    list_event_page(&state, request).await
+}
+
+async fn list_event_page(
+    state: &AppState,
+    request: ListEventsRequest,
+) -> Result<Json<PageResponse<SwapEventResponse>>, ApiError> {
+    let page = state
+        .swap_event_service
+        .list_events(request.scope, request.window, request.cursor, request.limit)
+        .await?;
+    Ok(Json(PageResponse::from_page(page)?))
 }
 
 #[cfg(test)]

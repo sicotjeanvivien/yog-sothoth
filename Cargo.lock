@@ -6271,6 +6271,7 @@ dependencies = [
  "serde",
  "serde_json",
  "solana-pubkey 4.4.0",
+ "solana-signature",
  "tokio",
  "tokio-util",
  "tower",

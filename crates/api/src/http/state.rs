@@ -11,9 +11,9 @@ use yog_persistence::PgHealthChecker;
 
 use crate::application::{
     ActivityService, AnnouncementService, DiscoveredTvlService, EnrichedSignal, IngestionService,
-    LiquidityMoveService, NetworkService, PoolCreationsService, PoolService,
-    ProtocolCatalogService, ProtocolTvlService, SignalService, SwapActivityService, TokenService,
-    WorkSlots,
+    LiquidityChangeEventService, LiquidityMoveService, NetworkService, PoolCreationEventService,
+    PoolCreationsService, PoolService, ProtocolCatalogService, ProtocolTvlService, SignalService,
+    SwapActivityService, SwapEventService, TokenService, WorkSlots,
 };
 
 /// The services and the runtime handles the router and handlers read. Handlers never reach a
@@ -39,6 +39,9 @@ pub(crate) struct AppState {
     pub(crate) protocol_tvl_service: Arc<ProtocolTvlService>,
     pub(crate) discovered_tvl_service: Arc<DiscoveredTvlService>,
     pub(crate) pool_service: Arc<PoolService>,
+    pub(crate) swap_event_service: Arc<SwapEventService>,
+    pub(crate) liquidity_change_event_service: Arc<LiquidityChangeEventService>,
+    pub(crate) pool_creation_event_service: Arc<PoolCreationEventService>,
     pub(crate) token_service: Arc<TokenService>,
     pub(crate) announcement_service: Arc<AnnouncementService>,
     /// Infra probe, exposed directly: no application logic surrounds it.

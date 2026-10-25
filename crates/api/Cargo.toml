@@ -28,6 +28,7 @@ serde_json = { workspace = true }
 
 # Solana
 solana-pubkey = { workspace = true }
+solana-signature = { workspace = true }
 
 # Shared-result cache
 moka = { workspace = true }

@@ -1,0 +1,332 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,\n                   token_a_mint, token_b_mint, creator, payer, alpha_vault, sqrt_min_price,\n                   sqrt_max_price, sqrt_price, liquidity, activation_type, activation_point,\n                   collect_fee_mode, pool_type, token_a_flag, token_b_flag, token_a_amount,\n                   token_b_amount, total_amount_a, total_amount_b, pool_fees_raw\n              FROM meteora_damm_v2_initialize_pool_events\n             WHERE timestamp >= $1\n               AND timestamp <= COALESCE($2, 'infinity'::TIMESTAMPTZ)\n               AND (timestamp < COALESCE($2, 'infinity'::TIMESTAMPTZ)\n                    OR (signature, event_index) < ($3, $4))\n             ORDER BY timestamp DESC, signature DESC, event_index DESC\n             LIMIT $5\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "pool_address"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "signature",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "signature"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "timestamp",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "timestamp"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "slot",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "slot"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "transaction_index",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "transaction_index"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "event_index",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "event_index"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "token_a_mint",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "token_a_mint"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "token_b_mint",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "token_b_mint"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "creator",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "creator"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "payer",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "payer"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "alpha_vault",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "alpha_vault"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "sqrt_min_price",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "sqrt_min_price"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "sqrt_max_price",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "sqrt_max_price"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "sqrt_price",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "sqrt_price"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "liquidity",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "liquidity"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "activation_type",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "activation_type"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "activation_point",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "activation_point"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "collect_fee_mode",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "collect_fee_mode"
+          }
+        }
+      },
+      {
+        "ordinal": 18,
+        "name": "pool_type",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "pool_type"
+          }
+        }
+      },
+      {
+        "ordinal": 19,
+        "name": "token_a_flag",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "token_a_flag"
+          }
+        }
+      },
+      {
+        "ordinal": 20,
+        "name": "token_b_flag",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "token_b_flag"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
+        "name": "token_a_amount",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "token_a_amount"
+          }
+        }
+      },
+      {
+        "ordinal": 22,
+        "name": "token_b_amount",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "token_b_amount"
+          }
+        }
+      },
+      {
+        "ordinal": 23,
+        "name": "total_amount_a",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "total_amount_a"
+          }
+        }
+      },
+      {
+        "ordinal": 24,
+        "name": "total_amount_b",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "total_amount_b"
+          }
+        }
+      },
+      {
+        "ordinal": 25,
+        "name": "pool_fees_raw",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_initialize_pool_events",
+            "name": "pool_fees_raw"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6ef4617405d381bc2dc5a8b02228161db4182e7d886dbbf42d3052af69e7b0d5"
+}

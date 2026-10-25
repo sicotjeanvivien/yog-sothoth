@@ -245,6 +245,96 @@
         ],
         "type": "object"
       },
+      "LiquidityChangeEventKindResponse": {
+        "description": "Whether the change added liquidity to the pool or removed it.",
+        "enum": [
+          "add",
+          "remove"
+        ],
+        "type": "string"
+      },
+      "LiquidityChangeEventMeteoraDammV2Response": {
+        "description": "What a DAMM v2 liquidity change says beyond every protocol's: the liquidity it moved.",
+        "properties": {
+          "liquidityDelta": {
+            "$ref": "#/components/schemas/U128String"
+          }
+        },
+        "required": [
+          "liquidityDelta"
+        ],
+        "type": "object"
+      },
+      "LiquidityChangeEventResponse": {
+        "properties": {
+          "amountA": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "amountB": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "eventIndex": {
+            "format": "u-int16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/LiquidityChangeEventKindResponse"
+          },
+          "meteoraDammV2": {
+            "$ref": "#/components/schemas/LiquidityChangeEventMeteoraDammV2Response"
+          },
+          "owner": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "poolAddress": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "position": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          },
+          "reserveAAfter": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "reserveBAfter": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "signature": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "slot": {
+            "$ref": "#/components/schemas/Count"
+          }
+        },
+        "required": [
+          "protocol",
+          "poolAddress",
+          "signature",
+          "eventIndex",
+          "slot",
+          "at",
+          "kind",
+          "amountA",
+          "amountB",
+          "reserveAAfter",
+          "reserveBAfter",
+          "position",
+          "owner"
+        ],
+        "type": "object"
+      },
       "LiquidityFlowsResponse": {
         "description": "The liquidity deposited at the pools' creation, added and removed; the sums skip the\nmoves not valued.",
         "properties": {
@@ -421,6 +511,199 @@
           "slot",
           "rpcLatencyMs",
           "observedAt"
+        ],
+        "type": "object"
+      },
+      "PageResponse_LiquidityChangeEventResponse": {
+        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
+        "properties": {
+          "isFirst": {
+            "type": "boolean"
+          },
+          "isLast": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "amountA": {
+                  "$ref": "#/components/schemas/U128String"
+                },
+                "amountB": {
+                  "$ref": "#/components/schemas/U128String"
+                },
+                "at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "eventIndex": {
+                  "format": "u-int16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "kind": {
+                  "$ref": "#/components/schemas/LiquidityChangeEventKindResponse"
+                },
+                "meteoraDammV2": {
+                  "$ref": "#/components/schemas/LiquidityChangeEventMeteoraDammV2Response"
+                },
+                "owner": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "poolAddress": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "position": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "reserveAAfter": {
+                  "$ref": "#/components/schemas/U128String"
+                },
+                "reserveBAfter": {
+                  "$ref": "#/components/schemas/U128String"
+                },
+                "signature": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "slot": {
+                  "$ref": "#/components/schemas/Count"
+                }
+              },
+              "required": [
+                "protocol",
+                "poolAddress",
+                "signature",
+                "eventIndex",
+                "slot",
+                "at",
+                "kind",
+                "amountA",
+                "amountB",
+                "reserveAAfter",
+                "reserveBAfter",
+                "position",
+                "owner"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prevCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "isFirst",
+          "isLast",
+          "nextCursor",
+          "prevCursor"
+        ],
+        "type": "object"
+      },
+      "PageResponse_PoolCreationEventResponse": {
+        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
+        "properties": {
+          "isFirst": {
+            "type": "boolean"
+          },
+          "isLast": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "creator": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "eventIndex": {
+                  "format": "u-int16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "meteoraDammV2": {
+                  "$ref": "#/components/schemas/PoolCreationEventMeteoraDammV2Response"
+                },
+                "poolAddress": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "signature": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "slot": {
+                  "$ref": "#/components/schemas/Count"
+                },
+                "tokenAMint": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "tokenBMint": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "protocol",
+                "poolAddress",
+                "signature",
+                "eventIndex",
+                "slot",
+                "at",
+                "tokenAMint",
+                "tokenBMint",
+                "creator"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prevCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "isFirst",
+          "isLast",
+          "nextCursor",
+          "prevCursor"
         ],
         "type": "object"
       },
@@ -617,6 +900,100 @@
         ],
         "type": "object"
       },
+      "PageResponse_SwapEventResponse": {
+        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
+        "properties": {
+          "isFirst": {
+            "type": "boolean"
+          },
+          "isLast": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "amountA": {
+                  "$ref": "#/components/schemas/U128String"
+                },
+                "amountB": {
+                  "$ref": "#/components/schemas/U128String"
+                },
+                "at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "direction": {
+                  "$ref": "#/components/schemas/SwapEventDirectionResponse"
+                },
+                "eventIndex": {
+                  "format": "u-int16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "meteoraDammV2": {
+                  "$ref": "#/components/schemas/SwapEventMeteoraDammV2Response"
+                },
+                "poolAddress": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "reserveAAfter": {
+                  "$ref": "#/components/schemas/U128String"
+                },
+                "reserveBAfter": {
+                  "$ref": "#/components/schemas/U128String"
+                },
+                "signature": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "slot": {
+                  "$ref": "#/components/schemas/Count"
+                }
+              },
+              "required": [
+                "protocol",
+                "poolAddress",
+                "signature",
+                "eventIndex",
+                "slot",
+                "at",
+                "direction",
+                "amountA",
+                "amountB",
+                "reserveAAfter",
+                "reserveBAfter"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prevCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "isFirst",
+          "isLast",
+          "nextCursor",
+          "prevCursor"
+        ],
+        "type": "object"
+      },
       "PageResponse_TokenPriceResponse": {
         "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
         "properties": {
@@ -776,6 +1153,150 @@
           "isLast",
           "nextCursor",
           "prevCursor"
+        ],
+        "type": "object"
+      },
+      "PoolCreationEventMeteoraDammV2Response": {
+        "description": "What a DAMM v2 creation says beyond every protocol's: who paid, the price range and the\nfirst price (Q64.64), the liquidity, the activation, the fee and pool modes, the token\nflags, and the amounts deposited — in raw units, the totals including the fees taken.",
+        "properties": {
+          "activationPoint": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "activationType": {
+            "format": "u-int8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "alphaVault": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "collectFeeMode": {
+            "format": "u-int8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "liquidity": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "payer": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "poolType": {
+            "format": "u-int8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sqrtMaxPrice": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "sqrtMinPrice": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "sqrtPrice": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "tokenAAmount": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "tokenAFlag": {
+            "format": "u-int8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "tokenBAmount": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "tokenBFlag": {
+            "format": "u-int8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "totalAmountA": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "totalAmountB": {
+            "$ref": "#/components/schemas/U128String"
+          }
+        },
+        "required": [
+          "payer",
+          "alphaVault",
+          "sqrtMinPrice",
+          "sqrtMaxPrice",
+          "sqrtPrice",
+          "liquidity",
+          "activationType",
+          "activationPoint",
+          "collectFeeMode",
+          "poolType",
+          "tokenAFlag",
+          "tokenBFlag",
+          "tokenAAmount",
+          "tokenBAmount",
+          "totalAmountA",
+          "totalAmountB"
+        ],
+        "type": "object"
+      },
+      "PoolCreationEventResponse": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "creator": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "eventIndex": {
+            "format": "u-int16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "meteoraDammV2": {
+            "$ref": "#/components/schemas/PoolCreationEventMeteoraDammV2Response"
+          },
+          "poolAddress": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          },
+          "signature": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "slot": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "tokenAMint": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "tokenBMint": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "protocol",
+          "poolAddress",
+          "signature",
+          "eventIndex",
+          "slot",
+          "at",
+          "tokenAMint",
+          "tokenBMint",
+          "creator"
         ],
         "type": "object"
       },
@@ -1592,6 +2113,115 @@
           "protocolFeesUsd",
           "referralFeesUsd",
           "volumeUsd"
+        ],
+        "type": "object"
+      },
+      "SwapEventDirectionResponse": {
+        "description": "Which token went in: `a_to_b` sold token A for token B.",
+        "enum": [
+          "a_to_b",
+          "b_to_a"
+        ],
+        "type": "string"
+      },
+      "SwapEventFeeTokenResponse": {
+        "description": "The token a DAMM v2 swap paid its fee in.",
+        "enum": [
+          "a",
+          "b"
+        ],
+        "type": "string"
+      },
+      "SwapEventMeteoraDammV2Response": {
+        "description": "What a DAMM v2 swap says beyond every protocol's: the pool's price after it, and the fee it\npaid, split, in the token `feeToken` names.",
+        "properties": {
+          "claimingFee": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "compoundingFee": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "feeToken": {
+            "$ref": "#/components/schemas/SwapEventFeeTokenResponse"
+          },
+          "nextSqrtPrice": {
+            "$ref": "#/components/schemas/U128String",
+            "description": "Q64.64 fixed-point."
+          },
+          "protocolFee": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "referralFee": {
+            "$ref": "#/components/schemas/U128String"
+          }
+        },
+        "required": [
+          "nextSqrtPrice",
+          "claimingFee",
+          "protocolFee",
+          "compoundingFee",
+          "referralFee",
+          "feeToken"
+        ],
+        "type": "object"
+      },
+      "SwapEventResponse": {
+        "properties": {
+          "amountA": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "amountB": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/SwapEventDirectionResponse"
+          },
+          "eventIndex": {
+            "format": "u-int16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "meteoraDammV2": {
+            "$ref": "#/components/schemas/SwapEventMeteoraDammV2Response"
+          },
+          "poolAddress": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          },
+          "reserveAAfter": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "reserveBAfter": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "signature": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "slot": {
+            "$ref": "#/components/schemas/Count"
+          }
+        },
+        "required": [
+          "protocol",
+          "poolAddress",
+          "signature",
+          "eventIndex",
+          "slot",
+          "at",
+          "direction",
+          "amountA",
+          "amountB",
+          "reserveAAfter",
+          "reserveBAfter"
         ],
         "type": "object"
       },
@@ -3029,6 +3659,71 @@
         "summary": "How fresh our ingestion is, judged on the last indexed event. No event at\nall is `stale`, not an error."
       }
     },
+    "/api/liquidity-changes": {
+      "get": {
+        "operationId": "list_liquidity_changes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_LiquidityChangeEventResponse"
+                }
+              }
+            },
+            "description": "A page of every protocol's liquidity changes, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/network": {
       "get": {
         "operationId": "get_network",
@@ -3055,6 +3750,71 @@
           }
         },
         "summary": "Where the chain is: the latest slot and the probe's latency. The\n`network_status` row is seeded by the baseline migration: its absence is a\n500, not a 404."
+      }
+    },
+    "/api/pool-creations": {
+      "get": {
+        "operationId": "list_pool_creations",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_PoolCreationEventResponse"
+                }
+              }
+            },
+            "description": "A page of every protocol's pool creations, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
       }
     },
     "/api/pool-creations/daily": {
@@ -3314,6 +4074,79 @@
         }
       }
     },
+    "/api/pools/{pool}/liquidity-changes": {
+      "get": {
+        "operationId": "list_pool_liquidity_changes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pool",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_LiquidityChangeEventResponse"
+                }
+              }
+            },
+            "description": "A page of the pool's liquidity changes, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/pools/{pool}/liquidity-moves": {
       "get": {
         "operationId": "list_pool_liquidity_moves",
@@ -3497,6 +4330,79 @@
               }
             },
             "description": "A page of the pool's signals."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/pools/{pool}/swaps": {
+      "get": {
+        "operationId": "list_pool_swaps",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pool",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_SwapEventResponse"
+                }
+              }
+            },
+            "description": "A page of the pool's swaps, the most recent first; the window ends at the first page."
           },
           "default": {
             "content": {
@@ -3943,6 +4849,79 @@
         }
       }
     },
+    "/api/protocols/{protocol}/liquidity-changes": {
+      "get": {
+        "operationId": "list_protocol_liquidity_changes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_LiquidityChangeEventResponse"
+                }
+              }
+            },
+            "description": "A page of the protocol's liquidity changes, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/protocols/{protocol}/liquidity-moves": {
       "get": {
         "operationId": "list_liquidity_moves",
@@ -4140,6 +5119,79 @@
               }
             },
             "description": "The protocol's liquidity created, added and removed over the window; no row while its liquidity does not cover the window whole."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/protocols/{protocol}/pool-creations": {
+      "get": {
+        "operationId": "list_protocol_pool_creations",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_PoolCreationEventResponse"
+                }
+              }
+            },
+            "description": "A page of the protocol's pool creations, the most recent first; the window ends at the first page."
           },
           "default": {
             "content": {
@@ -4511,6 +5563,79 @@
               }
             },
             "description": "A page of the protocol's signals."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/protocols/{protocol}/swaps": {
+      "get": {
+        "operationId": "list_protocol_swaps",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_SwapEventResponse"
+                }
+              }
+            },
+            "description": "A page of the protocol's swaps, the most recent first; the window ends at the first page."
           },
           "default": {
             "content": {
@@ -4924,6 +6049,71 @@
           }
         },
         "summary": "Live tail of the signal feed as Server-Sent Events: new signals only, each a\n`SignalResponse` with its id as the event id. History comes from\n`GET /api/signals`, re-fetched on (re)connect."
+      }
+    },
+    "/api/swaps": {
+      "get": {
+        "operationId": "list_swaps",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_SwapEventResponse"
+                }
+              }
+            },
+            "description": "A page of every protocol's swaps, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
       }
     },
     "/api/swaps/by-token": {
