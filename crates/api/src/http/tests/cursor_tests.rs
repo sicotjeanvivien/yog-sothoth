@@ -160,6 +160,14 @@ fn event_cursor_round_trip() {
             Cursor::RewardClaimEvent(boxed()),
             EventCollection::RewardClaims,
         ),
+        (
+            Cursor::RewardChangeEvent(boxed()),
+            EventCollection::RewardChanges,
+        ),
+        (
+            Cursor::PoolChangeEvent(boxed()),
+            EventCollection::PoolChanges,
+        ),
     ] {
         let encoded = encode_cursor(&wrapped).unwrap();
         let decoded = decode_event_cursor(&encoded, collection, cursor.scope).unwrap();

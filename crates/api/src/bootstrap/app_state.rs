@@ -11,21 +11,22 @@ use yog_persistence::{
     Database, PgAnnouncementRepository, PgDiscoveredTvlRepository, PgEventFreshnessRepository,
     PgHealthChecker, PgLiquidityChangeEventRepository, PgLiquidityMoveRepository,
     PgMeteoraDammV2PoolPropertiesRepository, PgNetworkStatusRepository,
-    PgPoolCreationEventRepository, PgPoolCreationsRepository, PgPoolRepository,
-    PgPositionChangeEventRepository, PgPositionFeeClaimEventRepository,
+    PgPoolChangeEventRepository, PgPoolCreationEventRepository, PgPoolCreationsRepository,
+    PgPoolRepository, PgPositionChangeEventRepository, PgPositionFeeClaimEventRepository,
     PgProtocolActivityRepository, PgProtocolFeeClaimEventRepository, PgProtocolTvlRepository,
-    PgRewardClaimEventRepository, PgSignalRepository, PgSwapActivityRepository,
-    PgSwapEventRepository, PgTokenActivityRepository, PgTokenMetadataRepository,
-    PgTokenPriceRepository, PoolSettings,
+    PgRewardChangeEventRepository, PgRewardClaimEventRepository, PgSignalRepository,
+    PgSwapActivityRepository, PgSwapEventRepository, PgTokenActivityRepository,
+    PgTokenMetadataRepository, PgTokenPriceRepository, PoolSettings,
 };
 
 use crate::application::{
     ActivityService, AnnouncementService, DiscoveredTvlService, IngestionService,
-    LiquidityChangeEventService, LiquidityMoveService, NetworkService, PoolCreationEventService,
-    PoolCreationsService, PoolService, PositionChangeEventService, PositionFeeClaimEventService,
-    ProtocolCatalogService, ProtocolFeeClaimEventService, ProtocolTvlService,
-    RewardClaimEventService, STREAM_CHANNEL_CAPACITY, SignalService, SignalStreamPoller,
-    SwapActivityService, SwapEventService, TokenService, WorkSlots,
+    LiquidityChangeEventService, LiquidityMoveService, NetworkService, PoolChangeEventService,
+    PoolCreationEventService, PoolCreationsService, PoolService, PositionChangeEventService,
+    PositionFeeClaimEventService, ProtocolCatalogService, ProtocolFeeClaimEventService,
+    ProtocolTvlService, RewardChangeEventService, RewardClaimEventService, STREAM_CHANNEL_CAPACITY,
+    SignalService, SignalStreamPoller, SwapActivityService, SwapEventService, TokenService,
+    WorkSlots,
 };
 use crate::bootstrap::Config;
 use crate::http::{AppState, SSE_MAX_STREAMS, STATEMENT_TIMEOUT, WORK_SLOT_WAIT, WORK_SLOTS};
@@ -96,6 +97,12 @@ pub(crate) async fn build_app_state(
     let position_change_event_service = Arc::new(PositionChangeEventService::new(Arc::new(
         PgPositionChangeEventRepository::new(db_pool.clone()),
     )));
+    let reward_change_event_service = Arc::new(RewardChangeEventService::new(Arc::new(
+        PgRewardChangeEventRepository::new(db_pool.clone()),
+    )));
+    let pool_change_event_service = Arc::new(PoolChangeEventService::new(Arc::new(
+        PgPoolChangeEventRepository::new(db_pool.clone()),
+    )));
     let position_fee_claim_event_service = Arc::new(PositionFeeClaimEventService::new(Arc::new(
         PgPositionFeeClaimEventRepository::new(db_pool.clone()),
     )));
@@ -153,6 +160,8 @@ pub(crate) async fn build_app_state(
         liquidity_change_event_service,
         pool_creation_event_service,
         position_change_event_service,
+        reward_change_event_service,
+        pool_change_event_service,
         position_fee_claim_event_service,
         protocol_fee_claim_event_service,
         reward_claim_event_service,

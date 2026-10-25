@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT kind AS \"kind!\", id AS \"id!\", timestamp AS \"timestamp!\"\n              FROM (\n                (SELECT 'status' AS kind, id, timestamp, signature, event_index\n                      FROM meteora_damm_v2_set_pool_status_events\n                     WHERE pool_address = $1 AND timestamp >= $2\n                       AND timestamp <= COALESCE($3, 'infinity'::TIMESTAMPTZ)\n                       AND (timestamp < COALESCE($3, 'infinity'::TIMESTAMPTZ)\n                            OR (signature, event_index) < ($4, $5))\n                     ORDER BY timestamp DESC, signature DESC, event_index DESC\n                     LIMIT $6)\n                UNION ALL\n                (SELECT 'fees' AS kind, id, timestamp, signature, event_index\n                      FROM meteora_damm_v2_update_pool_fees_events\n                     WHERE pool_address = $1 AND timestamp >= $2\n                       AND timestamp <= COALESCE($3, 'infinity'::TIMESTAMPTZ)\n                       AND (timestamp < COALESCE($3, 'infinity'::TIMESTAMPTZ)\n                            OR (signature, event_index) < ($4, $5))\n                     ORDER BY timestamp DESC, signature DESC, event_index DESC\n                     LIMIT $6)\n              ) AS keys\n             ORDER BY timestamp DESC, signature DESC, event_index DESC\n             LIMIT $6\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "id!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "timestamp!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "b952e410a1b2c44672e16e6ce33de0aa7bf135d0ad8a308278407dcf68f5bf9b"
+}

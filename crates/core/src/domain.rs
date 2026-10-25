@@ -15,6 +15,7 @@ mod meteora;
 mod network_status;
 mod pool;
 mod pool_account;
+mod pool_change_event;
 mod pool_creation_event;
 mod pool_creations;
 mod pool_current_state;
@@ -25,6 +26,7 @@ mod protocol;
 mod protocol_activity;
 mod protocol_fee_claim_event;
 mod protocol_tvl;
+mod reward_change_event;
 mod reward_claim_event;
 mod signals;
 mod swap_activity;
@@ -89,6 +91,7 @@ pub use pool::{
 pub use pool_account::{
     DecodedPoolAccount, PoolAccountProperties, PoolAccountResolver, PoolRegistryProperties,
 };
+pub use pool_change_event::{MeteoraDammV2PoolChange, PoolChangeEvent, PoolChangeEventLookup};
 pub use pool_creation_event::{PoolCreationEvent, PoolCreationEventLookup};
 pub use pool_creations::{PoolCreations, PoolCreationsLookup, ProtocolPoolCreations};
 pub use pool_current_state::{
@@ -106,6 +109,9 @@ pub use protocol_activity::{
 };
 pub use protocol_fee_claim_event::{ProtocolFeeClaimEvent, ProtocolFeeClaimEventLookup};
 pub use protocol_tvl::{ProtocolTvl, ProtocolTvlLookup};
+pub use reward_change_event::{
+    MeteoraDammV2RewardChange, RewardChangeEvent, RewardChangeEventLookup,
+};
 pub use reward_claim_event::{RewardClaimEvent, RewardClaimEventLookup};
 pub use signals::{
     DetectorError, EvalContext, Severity, Signal, SignalCursor, SignalDetector, SignalFeed,

@@ -10,18 +10,20 @@ use chrono::{DateTime, Utc};
 use rows::{
     MeteoraDammV2ClosePositionEventRow, MeteoraDammV2CreatePositionEventRow,
     MeteoraDammV2LockPositionEventRow, MeteoraDammV2PermanentLockPositionEventRow,
-    MeteoraDammV2SplitPositionEventRow, PositionChangeKey,
+    MeteoraDammV2SplitPositionEventRow,
 };
 use sqlx::PgPool;
 use yog_core::{
-    Cursor, Page, RepositoryError, RepositoryResult,
+    Cursor, Page, RepositoryResult,
     domain::{
         EventCursor, EventScope, MeteoraDammV2PositionChange, PositionChangeEvent,
         PositionChangeEventLookup, Protocol,
     },
 };
 
-use crate::repositories::helper::{EventKey, finish_event_page, map_sqlx_error};
+use crate::repositories::helper::{
+    EventKey, MergedEventKey, finish_event_page, ids_of, in_key_order, instants_of, map_sqlx_error,
+};
 
 pub struct PgPositionChangeEventRepository {
     pool: PgPool,
@@ -88,9 +90,9 @@ impl PgPositionChangeEventRepository {
         from: DateTime<Utc>,
         key: &EventKey,
         limit: i64,
-    ) -> RepositoryResult<Vec<PositionChangeKey>> {
+    ) -> RepositoryResult<Vec<MergedEventKey>> {
         sqlx::query_as!(
-            PositionChangeKey,
+            MergedEventKey,
             r#"
             SELECT kind AS "kind!", id AS "id!", timestamp AS "timestamp!"
               FROM (
@@ -160,9 +162,9 @@ impl PgPositionChangeEventRepository {
         from: DateTime<Utc>,
         key: &EventKey,
         limit: i64,
-    ) -> RepositoryResult<Vec<PositionChangeKey>> {
+    ) -> RepositoryResult<Vec<MergedEventKey>> {
         sqlx::query_as!(
-            PositionChangeKey,
+            MergedEventKey,
             r#"
             SELECT kind AS "kind!", id AS "id!", timestamp AS "timestamp!"
               FROM (
@@ -229,23 +231,13 @@ impl PgPositionChangeEventRepository {
     /// The changes of `keys`, read table by table and put back in the order of `keys`.
     async fn fetch_meteora_damm_v2(
         &self,
-        keys: Vec<PositionChangeKey>,
+        keys: Vec<MergedEventKey>,
     ) -> RepositoryResult<Vec<MeteoraDammV2PositionChange>> {
-        let Some(span) = keys
-            .iter()
-            .map(|k| k.timestamp)
-            .min()
-            .zip(keys.iter().map(|k| k.timestamp).max())
-        else {
+        let Some(span) = instants_of(&keys) else {
             return Ok(Vec::new());
         };
-        let ids = |kind: &str| -> Vec<i64> {
-            keys.iter()
-                .filter(|k| k.kind == kind)
-                .map(|k| k.id)
-                .collect()
-        };
-        let mut changes: HashMap<(&str, i64), MeteoraDammV2PositionChange> = HashMap::new();
+        let ids = |kind| ids_of(&keys, kind);
+        let mut changes = HashMap::new();
         for row in self.fetch_open(&ids("open"), span).await? {
             changes.insert(
                 ("open", row.id),
@@ -282,16 +274,7 @@ impl PgPositionChangeEventRepository {
                 MeteoraDammV2PositionChange::Split(Box::new(row.try_into()?)),
             );
         }
-        keys.iter()
-            .map(|k| {
-                changes.remove(&(k.kind.as_str(), k.id)).ok_or_else(|| {
-                    RepositoryError::Integrity(format!(
-                        "position change {} {} without its row",
-                        k.kind, k.id
-                    ))
-                })
-            })
-            .collect()
+        in_key_order(&keys, changes)
     }
 
     async fn fetch_open(

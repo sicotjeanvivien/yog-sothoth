@@ -10,11 +10,12 @@ pub(crate) use enriched_token::EnrichedToken;
 pub(crate) use services::{
     ActivityService, AnnouncementService, BucketPeriod, DiscoveredTvlService, IngestionAggregate,
     IngestionService, LiquidityChangeEventService, LiquidityMoveService, Measured, NetworkService,
-    PoolCreationEventService, PoolCreationsService, PoolDetail, PoolMovesError, PoolProperties,
-    PoolService, PositionChangeEventService, PositionFeeClaimEventService, ProtocolCatalogService,
-    ProtocolEntry, ProtocolFeeClaimEventService, ProtocolTvlService, RewardClaimEventService,
-    SignalListParams, SignalService, SwapActivityService, SwapEventService, TokenActivityRead,
-    TokenAggregate, TokenService,
+    PoolChangeEventService, PoolCreationEventService, PoolCreationsService, PoolDetail,
+    PoolMovesError, PoolProperties, PoolService, PositionChangeEventService,
+    PositionFeeClaimEventService, ProtocolCatalogService, ProtocolEntry,
+    ProtocolFeeClaimEventService, ProtocolTvlService, RewardChangeEventService,
+    RewardClaimEventService, SignalListParams, SignalService, SwapActivityService,
+    SwapEventService, TokenActivityRead, TokenAggregate, TokenService,
 };
 pub(crate) use signal_stream::{STREAM_CHANNEL_CAPACITY, SignalStreamPoller};
 pub(crate) use work_slots::WorkSlots;

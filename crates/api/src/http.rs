@@ -152,6 +152,14 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         .routes(routes!(
             handlers::liquidity_changes::list_pool_liquidity_changes
         ))
+        .routes(routes!(handlers::reward_changes::list_reward_changes))
+        .routes(routes!(
+            handlers::reward_changes::list_protocol_reward_changes
+        ))
+        .routes(routes!(handlers::reward_changes::list_pool_reward_changes))
+        .routes(routes!(handlers::pool_changes::list_pool_changes))
+        .routes(routes!(handlers::pool_changes::list_protocol_pool_changes))
+        .routes(routes!(handlers::pool_changes::list_pool_pool_changes))
         .routes(routes!(handlers::position_changes::list_position_changes))
         .routes(routes!(
             handlers::position_changes::list_protocol_position_changes

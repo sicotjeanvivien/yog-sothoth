@@ -113,6 +113,10 @@ async fn the_event_routes_are_mounted() {
         "/api/protocols/meteora_damm_v2/protocol-fee-claims",
         "/api/reward-claims?window=30d",
         "/api/protocols/meteora_damm_v2/reward-claims",
+        "/api/reward-changes?window=30d",
+        "/api/protocols/meteora_damm_v2/reward-changes",
+        "/api/pool-changes?window=30d",
+        "/api/protocols/meteora_damm_v2/pool-changes",
     ] {
         let (status, _, body) = get(uri).await;
         assert_eq!(status, StatusCode::OK, "{uri}: {body}");
@@ -172,6 +176,10 @@ async fn a_window_past_a_lists_widest_or_a_cursor_of_another_list_is_refused() {
         format!("/api/reward-claims?cursor={fee_claims}"),
         format!("/api/protocol-fee-claims?cursor={fee_claims}"),
         format!("/api/position-fee-claims?cursor={liquidity}"),
+        "/api/protocols/meteora/reward-changes".to_owned(),
+        "/api/protocols/meteora/pool-changes".to_owned(),
+        format!("/api/reward-changes?cursor={fee_claims}"),
+        format!("/api/pool-changes?cursor={all_swaps}"),
     ] {
         let (status, content_type, detail) = get(&uri).await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}: {detail}");
@@ -190,6 +198,8 @@ async fn an_unknown_pool_has_no_events() {
         format!("/api/pools/{}/position-fee-claims?window=30d", pk(42)),
         format!("/api/pools/{}/protocol-fee-claims?window=30d", pk(42)),
         format!("/api/pools/{}/reward-claims?window=30d", pk(42)),
+        format!("/api/pools/{}/reward-changes?window=30d", pk(42)),
+        format!("/api/pools/{}/pool-changes?window=30d", pk(42)),
     ] {
         let (status, content_type, _) = get(&uri).await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{uri}");
