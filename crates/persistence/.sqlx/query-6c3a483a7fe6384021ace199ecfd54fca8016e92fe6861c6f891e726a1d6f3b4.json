@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT MAX(bucket) AS \"last?: DateTime<Utc>\"\n              FROM analytic_tranches\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "last?: DateTime<Utc>",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6c3a483a7fe6384021ace199ecfd54fca8016e92fe6861c6f891e726a1d6f3b4"
+}

@@ -14,8 +14,8 @@ use yog_persistence::{
     PgPoolChangeEventRepository, PgPoolCreationEventRepository, PgPoolCreationsRepository,
     PgPoolRepository, PgPositionChangeEventRepository, PgPositionFeeClaimEventRepository,
     PgProtocolActivityRepository, PgProtocolFeeClaimEventRepository, PgProtocolTvlRepository,
-    PgRewardChangeEventRepository, PgRewardClaimEventRepository, PgSignalRepository,
-    PgSwapActivityRepository, PgSwapEventRepository, PgTokenActivityRepository,
+    PgRewardChangeEventRepository, PgRewardClaimEventRepository, PgRotationRunRepository,
+    PgSignalRepository, PgSwapActivityRepository, PgSwapEventRepository, PgTokenActivityRepository,
     PgTokenMetadataRepository, PgTokenPriceRepository, PoolSettings,
 };
 
@@ -24,9 +24,9 @@ use crate::application::{
     LiquidityChangeEventService, LiquidityMoveService, NetworkService, PoolChangeEventService,
     PoolCreationEventService, PoolCreationsService, PoolService, PositionChangeEventService,
     PositionFeeClaimEventService, ProtocolCatalogService, ProtocolFeeClaimEventService,
-    ProtocolTvlService, RewardChangeEventService, RewardClaimEventService, STREAM_CHANNEL_CAPACITY,
-    SignalService, SignalStreamPoller, SwapActivityService, SwapEventService, TokenService,
-    WorkSlots,
+    ProtocolTvlService, RewardChangeEventService, RewardClaimEventService, RotationRunService,
+    STREAM_CHANNEL_CAPACITY, SignalService, SignalStreamPoller, SwapActivityService,
+    SwapEventService, TokenService, WorkSlots,
 };
 use crate::bootstrap::Config;
 use crate::http::{AppState, SSE_MAX_STREAMS, STATEMENT_TIMEOUT, WORK_SLOT_WAIT, WORK_SLOTS};
@@ -76,6 +76,10 @@ pub(crate) async fn build_app_state(
     let liquidity_move_service = Arc::new(LiquidityMoveService::new(
         protocol_activity_repo.clone(),
         Arc::new(PgLiquidityMoveRepository::new(db_pool.clone())),
+    ));
+    let rotation_run_service = Arc::new(RotationRunService::new(
+        protocol_activity_repo.clone(),
+        Arc::new(PgRotationRunRepository::new(db_pool.clone())),
     ));
     let protocol_tvl_service = Arc::new(ProtocolTvlService::new(
         protocol_activity_repo.clone(),
@@ -153,6 +157,7 @@ pub(crate) async fn build_app_state(
         swap_activity_service,
         pool_creations_service,
         liquidity_move_service,
+        rotation_run_service,
         protocol_tvl_service,
         discovered_tvl_service,
         pool_service,

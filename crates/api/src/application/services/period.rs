@@ -1,16 +1,49 @@
 //! What every read of a produced resource shares: the period it covers, closed at the last
 //! frozen hour, and the buckets a series is cut into.
 
+use chrono::{DateTime, Utc};
 use yog_core::{
     RepositoryResult,
-    domain::{FrozenPeriod, ProtocolActivityLookup, Window},
+    domain::{FrozenPeriod, ProtocolActivityLookup, TranchePeriod, Window},
 };
 
-/// What a read found over its period; `period` is `None` before the first freeze.
+/// What a read found over its period; `period` is `None` before the first freeze, or the first
+/// tranche written.
 #[derive(Debug, Clone)]
-pub(crate) struct Measured<T> {
-    pub(crate) period: Option<FrozenPeriod>,
+pub(crate) struct Measured<T, P = FrozenPeriod> {
+    pub(crate) period: Option<P>,
     pub(crate) items: T,
+}
+
+/// The bounds an envelope says of a period, frozen or through the last tranche.
+pub(crate) trait PeriodBounds: Copy {
+    fn from(&self) -> DateTime<Utc>;
+    fn as_of(&self) -> DateTime<Utc>;
+    fn covered_since(&self) -> DateTime<Utc>;
+}
+
+impl PeriodBounds for FrozenPeriod {
+    fn from(&self) -> DateTime<Utc> {
+        self.from
+    }
+    fn as_of(&self) -> DateTime<Utc> {
+        self.as_of
+    }
+    fn covered_since(&self) -> DateTime<Utc> {
+        self.covered_since
+    }
+}
+
+impl PeriodBounds for TranchePeriod {
+    fn from(&self) -> DateTime<Utc> {
+        self.from
+    }
+    fn as_of(&self) -> DateTime<Utc> {
+        self.as_of
+    }
+    fn covered_since(&self) -> DateTime<Utc> {
+        self.covered_since
+    }
 }
 
 /// The buckets of a series: one per hour, or one per 24 hours ending at `as_of`.

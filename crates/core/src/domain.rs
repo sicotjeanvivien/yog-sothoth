@@ -28,6 +28,7 @@ mod protocol_fee_claim_event;
 mod protocol_tvl;
 mod reward_change_event;
 mod reward_claim_event;
+mod rotation_runs;
 mod signals;
 mod swap_activity;
 mod swap_event;
@@ -42,7 +43,7 @@ mod watched_pool;
 pub use analytic::{
     AnalyticProgress, AnalyticRepository, CycleOutcome, CycleWrite, FREEZE_MARGIN, FrozenHours,
     FrozenPeriod, MAX_HOURS_PER_CYCLE, ProtocolBucket, QUOTED_MINTS, RUN_GAP, RUN_ROTATION,
-    TRANCHE, Window,
+    TRANCHE, TranchePeriod, Window,
 };
 pub use announcements::{
     Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementKind, AnnouncementLookup,
@@ -116,6 +117,10 @@ pub use reward_change_event::{
     MeteoraDammV2RewardChange, RewardChangeEvent, RewardChangeEventLookup,
 };
 pub use reward_claim_event::{RewardClaimEvent, RewardClaimEventLookup};
+pub use rotation_runs::{
+    RotationRun, RotationRunCursor, RotationRunLookup, RotationRunOrder, RotationRunScope,
+    RotationRunTotals,
+};
 pub use signals::{
     DetectorError, EvalContext, Severity, Signal, SignalCursor, SignalDetector, SignalFeed,
     SignalFilter, SignalRecord, SignalRepository,

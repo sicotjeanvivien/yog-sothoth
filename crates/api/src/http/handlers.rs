@@ -18,6 +18,7 @@ pub(super) mod protocol_fee_claims;
 pub(super) mod protocols;
 pub(super) mod reward_changes;
 pub(super) mod reward_claims;
+pub(super) mod rotation_runs;
 pub(super) mod signals;
 pub(super) mod swaps;
 pub(super) mod token;

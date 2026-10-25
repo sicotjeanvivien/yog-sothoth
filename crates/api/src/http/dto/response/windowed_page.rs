@@ -7,7 +7,7 @@ use utoipa::ToSchema;
 use yog_core::{Page, domain::Window};
 
 use super::window::WindowResponse;
-use crate::application::Measured;
+use crate::application::{Measured, PeriodBounds};
 use crate::http::cursor::encode_cursor_opt;
 use crate::http::error::ApiError;
 
@@ -26,7 +26,10 @@ pub(crate) struct WindowedPageResponse<T> {
 }
 
 impl<T> WindowedPageResponse<T> {
-    pub(crate) fn new<U>(window: Window, measured: Measured<Page<U>>) -> Result<Self, ApiError>
+    pub(crate) fn new<U, P: PeriodBounds>(
+        window: Window,
+        measured: Measured<Page<U>, P>,
+    ) -> Result<Self, ApiError>
     where
         T: From<U>,
     {
@@ -34,9 +37,9 @@ impl<T> WindowedPageResponse<T> {
         let page = measured.items;
         Ok(Self {
             window: window.into(),
-            from: period.map(|s| s.from),
-            as_of: period.map(|s| s.as_of),
-            covered_since: period.map(|s| s.covered_since),
+            from: period.map(|s| s.from()),
+            as_of: period.map(|s| s.as_of()),
+            covered_since: period.map(|s| s.covered_since()),
             next_cursor: encode_cursor_opt(page.next_cursor.as_ref())?,
             prev_cursor: encode_cursor_opt(page.prev_cursor.as_ref())?,
             is_first: page.is_first,
