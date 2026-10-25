@@ -1,7 +1,7 @@
--- The bursts of the pools marked since `$2` less the longer of the gap and an hour: no burst
--- settles later than that. An extinct one waits for its last hour, written whole, to settle.
--- ⚠️ Every read of the tranches goes pool by pool through the key: joined to the bursts,
--- whose count the planner cannot guess, they are read whole.
+-- The rotation runs of the pools marked since `$2` less the longer of the gap and an hour: no
+-- run settles later than that. An extinct one waits for its last hour, written whole, to settle.
+-- ⚠️ Every read of the tranches goes pool by pool through the key: joined to the runs, whose
+-- count the planner cannot guess, they are read whole.
 WITH recent AS (
     SELECT DISTINCT pool_address
       FROM analytic_pool_5min
@@ -27,19 +27,19 @@ drawn AS (
      GROUP BY pool_address, island
     HAVING MAX(bucket) >= $2::TIMESTAMPTZ - GREATEST($5::INTERVAL, INTERVAL '1 hour')
 ),
--- ⚠️ A settled burst is known by its end: the retention can drop its first tranches, and its
+-- ⚠️ A settled rotation run is known by its end: the retention can drop its first tranches, and its
 -- start read again would write it a second time.
 islands AS (
     SELECT i.*
       FROM drawn i
      WHERE NOT EXISTS (
-         SELECT 1 FROM analytic_bursts b
+         SELECT 1 FROM analytic_rotation_runs b
           WHERE b.pool_address = i.pool_address AND b.ended_at = i.last + $6::INTERVAL
             AND b.settled
      )
 ),
 -- ⚠️ As the hourly facts: a pool-hour counts only valued whole, or the part outside
--- the bursts could fall below zero.
+-- the rotation runs could fall below zero.
 pool_hours AS (
     SELECT i.pool_address, i.started_at, x.hour, x.whole
       FROM islands i
@@ -66,7 +66,7 @@ tranches AS (
        AND h.hour = time_bucket('1 hour', t.bucket)
 ),
 written AS (
-    INSERT INTO analytic_bursts (
+    INSERT INTO analytic_rotation_runs (
         pool_address, started_at, protocol, ended_at, volume_usd, first_hour_volume_usd,
         extinct, settled
     )
@@ -82,10 +82,10 @@ written AS (
                     AS hours_whole
      ) s
      GROUP BY i.pool_address, i.started_at, i.last, s.extinct, s.hours_whole
-    -- ⚠️ Skipped, not failed: a burst drawn twice must not stop the cycle that values the swaps.
+    -- ⚠️ Skipped, not failed: a run drawn twice must not stop the cycle that values the swaps.
     ON CONFLICT (pool_address, started_at) DO NOTHING
 )
-INSERT INTO analytic_burst_hours (pool_address, started_at, bucket, protocol, volume_usd)
+INSERT INTO analytic_rotation_run_hours (pool_address, started_at, bucket, protocol, volume_usd)
 SELECT pool_address, started_at, time_bucket('1 hour', bucket), $1, SUM(volume)
   FROM tranches
  GROUP BY pool_address, started_at, time_bucket('1 hour', bucket)

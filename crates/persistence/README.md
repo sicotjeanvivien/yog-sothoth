@@ -669,13 +669,13 @@ pools, a token's on either side, and the tokens newest first, and opens `token_l
 to `yog_api`, read only. `tests/pool_entries.rs`, `tests/token_entries.rs` and
 `tests/token_prices.rs` hold the scopes, the pages and the window.
 
-**The bursts (036).** The tranche statement also writes each tranche's `rotation`, from the
-raw swaps. A third statement (`meteora_damm_v2_bursts.sql`), after the tranches, draws the
-marked tranches of the pools marked lately into `analytic_bursts`: the rows not `settled` are
+**The rotation runs (036, renamed by 039).** The tranche statement also writes each tranche's `rotation`, from the
+raw swaps. A third statement (`meteora_damm_v2_rotation_runs.sql`), after the tranches, draws the
+marked tranches of the pools marked lately into `analytic_rotation_runs`: the rows not `settled` are
 deleted and written again every cycle, a settled one written once with its hours into
-`analytic_burst_hours` (`ON DELETE CASCADE` from its burst). Both are kept without limit;
-`analytic_tranches.rotations` says from which tranche the bursts are measured.
-`tests/analytic_bursts.rs` holds the rotation, the two thresholds and the settling.
+`analytic_rotation_run_hours` (`ON DELETE CASCADE` from its rotation run). Both are kept without limit;
+`analytic_tranches.rotations` says from which tranche the rotation runs are measured.
+`tests/analytic_rotation_runs.rs` holds the rotation, the two thresholds and the settling.
 
 Still reading market prices outside the table: the liquidity
 (`meteora_damm_v2_pool_hourly_liquidity_flow`,

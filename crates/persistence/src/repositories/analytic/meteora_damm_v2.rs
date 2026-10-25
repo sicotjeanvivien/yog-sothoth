@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use sqlx::{Postgres, Transaction, postgres::types::PgInterval};
 use yog_core::{
     RepositoryResult,
-    domain::{BURST_GAP, BURST_ROTATION, Protocol, QUOTED_MINTS},
+    domain::{Protocol, QUOTED_MINTS, RUN_GAP, RUN_ROTATION},
 };
 
 use super::{interval_of, windows};
@@ -30,28 +30,28 @@ pub(super) async fn value_tranche(
     Ok(())
 }
 
-/// The bursts as of the tranches written through `through`, `from` the first of this cycle:
+/// The rotation runs as of the tranches written through `through`, `from` the first of this cycle:
 /// those not yet settled rewritten, a settled one written once with its hours.
-pub(super) async fn write_bursts(
+pub(super) async fn write_rotation_runs(
     tx: &mut Transaction<'static, Postgres>,
     from: DateTime<Utc>,
     through: DateTime<Utc>,
     width: PgInterval,
 ) -> RepositoryResult<()> {
     sqlx::query!(
-        "DELETE FROM analytic_bursts WHERE protocol = $1 AND NOT settled",
+        "DELETE FROM analytic_rotation_runs WHERE protocol = $1 AND NOT settled",
         Protocol::MeteoraDammV2.as_str(),
     )
     .execute(&mut **tx)
     .await
     .map_err(map_sqlx_error)?;
     sqlx::query_file!(
-        "src/repositories/analytic/meteora_damm_v2_bursts.sql",
+        "src/repositories/analytic/meteora_damm_v2_rotation_runs.sql",
         Protocol::MeteoraDammV2.as_str(),
         from,
         through,
-        convert_decimal_to_bigdecimal(BURST_ROTATION, "burst rotation")?,
-        interval_of(BURST_GAP),
+        convert_decimal_to_bigdecimal(RUN_ROTATION, "RUN_ROTATION")?,
+        interval_of(RUN_GAP),
         width,
     )
     .execute(&mut **tx)

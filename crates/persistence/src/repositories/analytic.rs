@@ -1,5 +1,5 @@
-//! Postgres implementation of [`AnalyticRepository`]: one transaction per
-//! cycle, whose only per-protocol parts are each protocol's tranches, liquidity, bursts and births.
+//! Postgres implementation of [`AnalyticRepository`]: one transaction per cycle, whose only
+//! per-protocol parts are each protocol's tranches, liquidity, rotation runs and births.
 //!
 //! [`AnalyticRepository`]: yog_core::domain::AnalyticRepository
 
@@ -56,7 +56,7 @@ impl AnalyticRepository for PgAnalyticRepository {
         .await?;
         // ⚠️ Without a tranche written, `tranches_through` may lie before the last one written.
         if tranches_written > 0 {
-            meteora_damm_v2::write_bursts(
+            meteora_damm_v2::write_rotation_runs(
                 &mut tx,
                 cycle.tranches_from,
                 cycle.tranches_through,
