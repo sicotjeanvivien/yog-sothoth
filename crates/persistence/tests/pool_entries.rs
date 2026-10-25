@@ -186,3 +186,29 @@ async fn an_entry_carries_its_tokens_state_and_value(pool: PgPool) {
     assert!(bare.token_a.is_none() && bare.state.is_none() && bare.value.tvl_usd.is_none());
     assert!(repository.find_entry(&pk(3)).await.unwrap().is_none());
 }
+
+/// Mutation: a value past a `Decimal` returned as an error — the page fails, and without its
+/// cursor every page after it.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_value_past_a_decimal_is_served_unvalued_with_its_page(pool: PgPool) {
+    let (huge, mint_b) = (pk(10), pk(11));
+    insert_pool(&pool, pk(1), DAMM, (huge, mint_b), at(1)).await;
+    insert_pool(&pool, pk(2), DAMM, (pk(12), pk(13)), at(2)).await;
+    insert_metadata(&pool, huge, "HUGE", 0).await;
+    insert_metadata(&pool, mint_b, "BBB", 0).await;
+    insert_state(&pool, pk(1), (1_000_000_000_000_000_000, 1)).await;
+    price_at(&pool, &huge.to_string(), "10000000000000000000", Utc::now()).await;
+    price_at(&pool, &mint_b.to_string(), "1", Utc::now()).await;
+    let repository = repository(&pool).await;
+
+    let page = repository
+        .list_entries(PoolScope::All, None, 50)
+        .await
+        .unwrap();
+
+    assert_eq!(addresses(&page), [pk(2), pk(1)]);
+    let value = page.items[1].value;
+    assert_eq!(value.value_a_usd, None);
+    assert_eq!(value.value_b_usd, Some(Decimal::ONE));
+    assert_eq!(value.tvl_usd, None);
+}

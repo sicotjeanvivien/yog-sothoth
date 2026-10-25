@@ -1,3 +1,4 @@
+mod log;
 mod rows;
 
 use crate::repositories::helper::{

@@ -124,6 +124,16 @@ fn convert_side(side: SideColumns) -> RepositoryResult<Option<TokenMetadata>> {
     .map(Some)
 }
 
+/// ⚠️ Unvalued, not an error: one pool past a `Decimal` would fail its page and, without a
+/// cursor, every page after it.
+fn convert_value(value: Option<BigDecimal>, field: &str, pool_address: &str) -> Option<Decimal> {
+    let value = value?;
+    let shown = value.to_plain_string();
+    convert_bigdecimal_to_decimal(value, field)
+        .inspect_err(|_| super::log::value_out_of_range(pool_address, field, &shown))
+        .ok()
+}
+
 fn parse_last_event_kind(raw: &str) -> RepositoryResult<LastEventKind> {
     [
         LastEventKind::Swap,
@@ -176,6 +186,7 @@ impl TryFrom<PoolEntryRow> for PoolEntry {
             }
             _ => None,
         };
+        let address = row.pool_address.clone();
         let pool = Pool::try_from(PoolRow {
             pool_address: row.pool_address,
             protocol: row.protocol,
@@ -191,17 +202,9 @@ impl TryFrom<PoolEntryRow> for PoolEntry {
             token_b,
             state,
             value: PoolValue {
-                value_a_usd: convert_optional(
-                    row.value_a_usd,
-                    "value_a_usd",
-                    convert_bigdecimal_to_decimal,
-                )?,
-                value_b_usd: convert_optional(
-                    row.value_b_usd,
-                    "value_b_usd",
-                    convert_bigdecimal_to_decimal,
-                )?,
-                tvl_usd: convert_optional(row.tvl_usd, "tvl_usd", convert_bigdecimal_to_decimal)?,
+                value_a_usd: convert_value(row.value_a_usd, "value_a_usd", &address),
+                value_b_usd: convert_value(row.value_b_usd, "value_b_usd", &address),
+                tvl_usd: convert_value(row.tvl_usd, "tvl_usd", &address),
             },
         })
     }
