@@ -240,12 +240,12 @@ export const zMeteoraDammV2SplitResponse = z.object({
 export type MeteoraDammV2SplitResponse = z.infer<typeof zMeteoraDammV2SplitResponse>;
 
 export const zMeteoraDammV2VestingLockResponse = z.object({
-    cliffPoint: zCount,
+    cliffPoint: zU128String,
     cliffUnlockLiquidity: zU128String,
     liquidityPerPeriod: zU128String,
     numberOfPeriod: z.int().gte(0).lte(65535),
     owner: z.string().min(1),
-    periodFrequency: zCount,
+    periodFrequency: zU128String,
     position: z.string().min(1),
     vesting: z.string().min(1)
 });

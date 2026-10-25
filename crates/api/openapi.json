@@ -712,7 +712,7 @@
         "description": "The position's liquidity put under a vesting: released at the cliff, then by period.",
         "properties": {
           "cliffPoint": {
-            "$ref": "#/components/schemas/Count"
+            "$ref": "#/components/schemas/U128String"
           },
           "cliffUnlockLiquidity": {
             "$ref": "#/components/schemas/U128String"
@@ -731,7 +731,7 @@
             "type": "string"
           },
           "periodFrequency": {
-            "$ref": "#/components/schemas/Count"
+            "$ref": "#/components/schemas/U128String"
           },
           "position": {
             "minLength": 1,

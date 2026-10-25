@@ -6,7 +6,7 @@ use yog_core::domain::{
     MeteoraDammV2SplitPositionEvent, MeteoraDammV2SplitPositionState,
 };
 
-use crate::http::dto::schema::{Count, U128String};
+use crate::http::dto::schema::U128String;
 
 /// What a DAMM v2 position change is, named by `kind`, and what that change says.
 #[derive(Debug, Serialize, ToSchema)]
@@ -41,10 +41,10 @@ pub(super) struct MeteoraDammV2VestingLockResponse {
     owner: String,
     #[schema(min_length = 1)]
     vesting: String,
-    #[schema(value_type = Count)]
-    cliff_point: u64,
-    #[schema(value_type = Count)]
-    period_frequency: u64,
+    #[schema(value_type = U128String)]
+    cliff_point: String,
+    #[schema(value_type = U128String)]
+    period_frequency: String,
     #[schema(value_type = U128String)]
     cliff_unlock_liquidity: String,
     #[schema(value_type = U128String)]
@@ -166,8 +166,8 @@ impl From<MeteoraDammV2LockPositionEvent> for MeteoraDammV2VestingLockResponse {
             position: e.position.to_string(),
             owner: e.owner.to_string(),
             vesting: e.vesting.to_string(),
-            cliff_point: e.cliff_point,
-            period_frequency: e.period_frequency,
+            cliff_point: e.cliff_point.to_string(),
+            period_frequency: e.period_frequency.to_string(),
             cliff_unlock_liquidity: e.cliff_unlock_liquidity.to_string(),
             liquidity_per_period: e.liquidity_per_period.to_string(),
             number_of_period: e.number_of_period,

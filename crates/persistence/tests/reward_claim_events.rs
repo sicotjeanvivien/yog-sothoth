@@ -8,7 +8,10 @@ use solana_signature::Signature;
 use sqlx::PgPool;
 use yog_core::{
     Cursor, Page,
-    domain::{EventScope, Protocol, RewardClaimEvent, RewardClaimEventLookup},
+    domain::{
+        EventScope, MeteoraDammV2ClaimRewardEvent, Protocol, RewardClaimEvent,
+        RewardClaimEventLookup,
+    },
 };
 use yog_persistence::PgRewardClaimEventRepository;
 
@@ -133,4 +136,52 @@ async fn a_scope_and_its_window_read_only_their_claims(pool: PgPool) {
     assert_eq!(all.len(), 2);
     assert_eq!(damm, all);
     assert!(dlmm.is_empty());
+}
+
+/// Mutation: a column read into another field — two of its values swapped, or one read for
+/// another. Every column holds its own value.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_claim_comes_back_as_written(pool: PgPool) {
+    sqlx::query(
+        "INSERT INTO meteora_damm_v2_claim_reward_events
+               (pool_address, signature, timestamp, slot, event_index, transaction_index, position,
+                owner, mint_reward, reward_index, total_reward)
+             VALUES ($1, $2, $3, 9, 0, NULL, $4, $5, $6, 1, 13)",
+    )
+    .bind(pk(1).to_string())
+    .bind(sig(1).to_string())
+    .bind(at(10))
+    .bind(pk(61).to_string())
+    .bind(pk(62).to_string())
+    .bind(pk(63).to_string())
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repository =
+        PgRewardClaimEventRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+
+    let page = repository
+        .list_events(EventScope::All, at(-60), None, 50)
+        .await
+        .unwrap();
+
+    let expected = MeteoraDammV2ClaimRewardEvent {
+        pool_address: pk(1),
+        signature: sig(1),
+        timestamp: at(10),
+        slot: 9,
+        transaction_index: None,
+        event_index: 0,
+        position: pk(61),
+        owner: pk(62),
+        mint_reward: pk(63),
+        reward_index: 1,
+        total_reward: 13,
+    };
+    let read: Vec<_> = page
+        .items
+        .iter()
+        .map(|RewardClaimEvent::MeteoraDammV2(e)| format!("{e:?}"))
+        .collect();
+    assert_eq!(read, [format!("{expected:?}")]);
 }

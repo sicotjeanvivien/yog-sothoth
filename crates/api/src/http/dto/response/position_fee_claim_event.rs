@@ -50,3 +50,7 @@ impl From<PositionFeeClaimEvent> for PositionFeeClaimEventResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/position_fee_claim_event_tests.rs"]
+mod tests;

@@ -44,3 +44,7 @@ impl From<ProtocolFeeClaimEvent> for ProtocolFeeClaimEventResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/protocol_fee_claim_event_tests.rs"]
+mod tests;

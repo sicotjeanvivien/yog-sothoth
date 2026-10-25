@@ -52,3 +52,7 @@ impl From<RewardClaimEvent> for RewardClaimEventResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/reward_claim_event_tests.rs"]
+mod tests;

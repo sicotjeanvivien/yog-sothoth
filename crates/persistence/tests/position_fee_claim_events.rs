@@ -8,7 +8,10 @@ use solana_signature::Signature;
 use sqlx::PgPool;
 use yog_core::{
     Cursor, Page,
-    domain::{EventScope, PositionFeeClaimEvent, PositionFeeClaimEventLookup, Protocol},
+    domain::{
+        EventScope, MeteoraDammV2ClaimPositionFeeEvent, PositionFeeClaimEvent,
+        PositionFeeClaimEventLookup, Protocol,
+    },
 };
 use yog_persistence::PgPositionFeeClaimEventRepository;
 
@@ -133,4 +136,50 @@ async fn a_scope_and_its_window_read_only_their_claims(pool: PgPool) {
     assert_eq!(all.len(), 2);
     assert_eq!(damm, all);
     assert!(dlmm.is_empty());
+}
+
+/// Mutation: a column read into another field — two of its values swapped, or one read for
+/// another. Every column holds its own value.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_claim_comes_back_as_written(pool: PgPool) {
+    sqlx::query(
+        "INSERT INTO meteora_damm_v2_claim_position_fee_events
+               (pool_address, signature, timestamp, slot, event_index, transaction_index, position,
+                owner, fee_a_claimed, fee_b_claimed)
+             VALUES ($1, $2, $3, 9, 0, NULL, $4, $5, 11, 12)",
+    )
+    .bind(pk(1).to_string())
+    .bind(sig(1).to_string())
+    .bind(at(10))
+    .bind(pk(61).to_string())
+    .bind(pk(62).to_string())
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repository =
+        PgPositionFeeClaimEventRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+
+    let page = repository
+        .list_events(EventScope::All, at(-60), None, 50)
+        .await
+        .unwrap();
+
+    let expected = MeteoraDammV2ClaimPositionFeeEvent {
+        pool_address: pk(1),
+        signature: sig(1),
+        timestamp: at(10),
+        slot: 9,
+        transaction_index: None,
+        event_index: 0,
+        position: pk(61),
+        owner: pk(62),
+        fee_a_claimed: 11,
+        fee_b_claimed: 12,
+    };
+    let read: Vec<_> = page
+        .items
+        .iter()
+        .map(|PositionFeeClaimEvent::MeteoraDammV2(e)| format!("{e:?}"))
+        .collect();
+    assert_eq!(read, [format!("{expected:?}")]);
 }

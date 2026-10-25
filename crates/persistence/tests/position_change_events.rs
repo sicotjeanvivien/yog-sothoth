@@ -5,12 +5,15 @@
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
-use sqlx::PgPool;
+use sqlx::{AssertSqlSafe, PgPool};
 use yog_core::{
     Cursor, Page,
     domain::{
-        EventScope, MeteoraDammV2PositionChange, PositionChangeEvent, PositionChangeEventLookup,
-        Protocol,
+        EventScope, MeteoraDammV2ClosePositionEvent, MeteoraDammV2CreatePositionEvent,
+        MeteoraDammV2LockPositionEvent, MeteoraDammV2PermanentLockPositionEvent,
+        MeteoraDammV2PositionChange, MeteoraDammV2SplitAmounts, MeteoraDammV2SplitNumerators,
+        MeteoraDammV2SplitPositionEvent, MeteoraDammV2SplitPositionState, PositionChangeEvent,
+        PositionChangeEventLookup, Protocol,
     },
 };
 use yog_persistence::PgPositionChangeEventRepository;
@@ -226,12 +229,101 @@ async fn a_scope_and_its_window_read_only_their_changes(pool: PgPool) {
     assert!(dlmm.is_empty());
 }
 
-/// Mutation: a column of a table read into another field — the split's state after, or the
-/// vesting lock's liquidity, comes back other than written.
+/// Mutation: a column of a table read into another field, or a first and second side of a
+/// split swapped — a change that comes back other than written. Every column holds its own value.
 #[sqlx::test(migrations = "./migrations")]
 async fn each_kind_comes_back_as_written(pool: PgPool) {
-    insert_change(&pool, Kind::VestingLock, pk(1), sig(1), 0, 10).await;
-    insert_change(&pool, Kind::Split, pk(1), sig(2), 0, 9).await;
+    let base = |table: &str, columns: &str, values: &str| {
+        format!(
+            "INSERT INTO meteora_damm_v2_{table}_events
+               (pool_address, signature, timestamp, slot, event_index, transaction_index, {columns})
+             VALUES ($1, $2, $3, 9, 0, NULL, {values})"
+        )
+    };
+    let insert = |sql: String, seed: u8, seconds: i64| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query(AssertSqlSafe(sql))
+                .bind(pk(1).to_string())
+                .bind(sig(seed).to_string())
+                .bind(at(seconds))
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+    };
+    let k = |seed: u8| format!("'{}'", pk(seed));
+    insert(
+        base(
+            "create_position",
+            "owner, position, position_nft_mint",
+            &format!("{}, {}, {}", k(61), k(62), k(63)),
+        ),
+        1,
+        10,
+    )
+    .await;
+    insert(
+        base(
+            "close_position",
+            "owner, position, position_nft_mint",
+            &format!("{}, {}, {}", k(64), k(65), k(66)),
+        ),
+        2,
+        9,
+    )
+    .await;
+    insert(
+        base(
+            "lock_position",
+            "position, owner, vesting, cliff_point, period_frequency, cliff_unlock_liquidity, \
+         liquidity_per_period, number_of_period",
+            &format!(
+                "{}, {}, {}, 1, 2, 18446744073709551616, 4, 5",
+                k(67),
+                k(68),
+                k(69)
+            ),
+        ),
+        3,
+        8,
+    )
+    .await;
+    insert(
+        base(
+            "permanent_lock_position",
+            "position, lock_liquidity_amount, total_permanent_locked_liquidity",
+            &format!("{}, 6, 7", k(70)),
+        ),
+        4,
+        7,
+    )
+    .await;
+    insert(
+        base(
+            "split_position",
+            "first_owner, second_owner, first_position, second_position, current_sqrt_price, \
+         split_permanent_locked_liquidity, split_unlocked_liquidity, split_vested_liquidity, \
+         split_fee_a, split_fee_b, split_reward_0, split_reward_1, \
+         first_unlocked_liquidity, first_permanent_locked_liquidity, first_vested_liquidity, \
+         first_fee_a, first_fee_b, first_reward_0, first_reward_1, \
+         second_unlocked_liquidity, second_permanent_locked_liquidity, second_vested_liquidity, \
+         second_fee_a, second_fee_b, second_reward_0, second_reward_1, \
+         num_unlocked_liquidity, num_permanent_locked_liquidity, num_fee_a, num_fee_b, \
+         num_reward_0, num_reward_1, num_inner_vesting_liquidity",
+            &format!(
+                "{}, {}, {}, {}, 8, 1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, \
+             21, 22, 23, 24, 25, 26, 27, 31, 32, 33, 34, 35, 36, 37",
+                k(71),
+                k(72),
+                k(73),
+                k(74)
+            ),
+        ),
+        5,
+        6,
+    )
+    .await;
     let repository =
         PgPositionChangeEventRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
 
@@ -240,56 +332,71 @@ async fn each_kind_comes_back_as_written(pool: PgPool) {
         .await
         .unwrap();
 
-    let [
-        PositionChangeEvent::MeteoraDammV2(MeteoraDammV2PositionChange::VestingLock(lock)),
-        PositionChangeEvent::MeteoraDammV2(MeteoraDammV2PositionChange::Split(split)),
-    ] = page.items.as_slice()
-    else {
-        panic!("{:?}", page.items);
+    macro_rules! event {
+        ($ty:ident, $seed:expr, $seconds:expr, { $($field:ident: $value:expr),* $(,)? }) => {
+            $ty {
+                pool_address: pk(1),
+                signature: sig($seed),
+                timestamp: at($seconds),
+                slot: 9,
+                transaction_index: None,
+                event_index: 0,
+                $($field: $value),*
+            }
+        };
+    }
+    let state = |base: u64| MeteoraDammV2SplitPositionState {
+        unlocked_liquidity: u128::from(base + 1),
+        permanent_locked_liquidity: u128::from(base + 2),
+        vested_liquidity: u128::from(base + 3),
+        fee_a: base + 4,
+        fee_b: base + 5,
+        reward_0: base + 6,
+        reward_1: base + 7,
     };
-    assert_eq!(
-        (
-            lock.cliff_point,
-            lock.period_frequency,
-            lock.cliff_unlock_liquidity,
-            lock.liquidity_per_period,
-            lock.number_of_period
-        ),
-        (1, 2, 1 << 64, 4, 5)
-    );
-    assert_eq!(split.current_sqrt_price, 7);
-    let a = &split.amounts;
-    assert_eq!(
-        (
-            a.permanent_locked_liquidity,
-            a.unlocked_liquidity,
-            a.vested_liquidity,
-            a.fee_a,
-            a.fee_b,
-            a.reward_0,
-            a.reward_1
-        ),
-        (1, 2, 3, 4, 5, 6, 7)
-    );
-    let f = &split.first_position_after;
-    assert_eq!(
-        (
-            f.unlocked_liquidity,
-            f.permanent_locked_liquidity,
-            f.vested_liquidity,
-            f.fee_a,
-            f.reward_1
-        ),
-        (1, 2, 3, 4, 7)
-    );
-    let n = &split.numerators;
-    assert_eq!(
-        (
-            n.unlocked_liquidity,
-            n.permanent_locked_liquidity,
-            n.fee_a,
-            n.inner_vesting_liquidity
-        ),
-        (1, 2, 3, 7)
-    );
+    let expected = [
+        MeteoraDammV2PositionChange::Open(event!(MeteoraDammV2CreatePositionEvent, 1, 10, {
+            owner: pk(61), position: pk(62), position_nft_mint: pk(63),
+        })),
+        MeteoraDammV2PositionChange::Close(event!(MeteoraDammV2ClosePositionEvent, 2, 9, {
+            owner: pk(64), position: pk(65), position_nft_mint: pk(66),
+        })),
+        MeteoraDammV2PositionChange::VestingLock(event!(MeteoraDammV2LockPositionEvent, 3, 8, {
+            position: pk(67), owner: pk(68), vesting: pk(69), cliff_point: 1,
+            period_frequency: 2, cliff_unlock_liquidity: 1 << 64, liquidity_per_period: 4,
+            number_of_period: 5,
+        })),
+        MeteoraDammV2PositionChange::PermanentLock(event!(
+            MeteoraDammV2PermanentLockPositionEvent, 4, 7, {
+                position: pk(70), lock_liquidity_amount: 6, total_permanent_locked_liquidity: 7,
+            }
+        )),
+        MeteoraDammV2PositionChange::Split(Box::new(
+            event!(MeteoraDammV2SplitPositionEvent, 5, 6, {
+                first_owner: pk(71), second_owner: pk(72), first_position: pk(73),
+                second_position: pk(74), current_sqrt_price: 8,
+                amounts: MeteoraDammV2SplitAmounts {
+                    permanent_locked_liquidity: 1, unlocked_liquidity: 2, vested_liquidity: 3,
+                    fee_a: 4, fee_b: 5, reward_0: 6, reward_1: 7,
+                },
+                first_position_after: state(10),
+                second_position_after: state(20),
+                numerators: MeteoraDammV2SplitNumerators {
+                    unlocked_liquidity: 31, permanent_locked_liquidity: 32, fee_a: 33, fee_b: 34,
+                    reward_0: 35, reward_1: 36, inner_vesting_liquidity: 37,
+                },
+            }),
+        )),
+    ];
+
+    let read: Vec<_> = page
+        .items
+        .iter()
+        .map(|PositionChangeEvent::MeteoraDammV2(change)| format!("{change:?}"))
+        .collect();
+    let written: Vec<_> = expected
+        .iter()
+        .map(|change| format!("{change:?}"))
+        .collect();
+    assert_eq!(read, written);
 }

@@ -8,7 +8,10 @@ use solana_signature::Signature;
 use sqlx::PgPool;
 use yog_core::{
     Cursor, Page,
-    domain::{EventScope, Protocol, ProtocolFeeClaimEvent, ProtocolFeeClaimEventLookup},
+    domain::{
+        EventScope, MeteoraDammV2ClaimProtocolFeeEvent, Protocol, ProtocolFeeClaimEvent,
+        ProtocolFeeClaimEventLookup,
+    },
 };
 use yog_persistence::PgProtocolFeeClaimEventRepository;
 
@@ -132,4 +135,46 @@ async fn a_scope_and_its_window_read_only_their_claims(pool: PgPool) {
     assert_eq!(all.len(), 2);
     assert_eq!(damm, all);
     assert!(dlmm.is_empty());
+}
+
+/// Mutation: a column read into another field — two of its values swapped, or one read for
+/// another. Every column holds its own value.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_claim_comes_back_as_written(pool: PgPool) {
+    sqlx::query(
+        "INSERT INTO meteora_damm_v2_claim_protocol_fee_events
+               (pool_address, signature, timestamp, slot, event_index, transaction_index,
+                token_a_amount, token_b_amount)
+             VALUES ($1, $2, $3, 9, 0, NULL, 11, 12)",
+    )
+    .bind(pk(1).to_string())
+    .bind(sig(1).to_string())
+    .bind(at(10))
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repository =
+        PgProtocolFeeClaimEventRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+
+    let page = repository
+        .list_events(EventScope::All, at(-60), None, 50)
+        .await
+        .unwrap();
+
+    let expected = MeteoraDammV2ClaimProtocolFeeEvent {
+        pool_address: pk(1),
+        signature: sig(1),
+        timestamp: at(10),
+        slot: 9,
+        transaction_index: None,
+        event_index: 0,
+        token_a_amount: 11,
+        token_b_amount: 12,
+    };
+    let read: Vec<_> = page
+        .items
+        .iter()
+        .map(|ProtocolFeeClaimEvent::MeteoraDammV2(e)| format!("{e:?}"))
+        .collect();
+    assert_eq!(read, [format!("{expected:?}")]);
 }

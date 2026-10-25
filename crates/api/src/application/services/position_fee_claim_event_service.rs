@@ -17,8 +17,6 @@ impl PositionFeeClaimEventService {
         Self { events }
     }
 
-    /// `scope`'s events over `window`, ending now on the first page; a later page keeps the
-    /// start its cursor carries, so the window does not slide under the pages.
     pub(crate) async fn list_events(
         &self,
         scope: EventScope,
