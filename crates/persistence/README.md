@@ -36,7 +36,8 @@ persistence/
 │   │   ├── meteora/dlmm/    (the DLMM pool-properties satellite; no event
 │   │   │                     repositories yet)
 │   │   ├── pool/, pool_current_state/
-│   │   ├── measures/        (the produced resources the API reads by scope:
+│   │   ├── swaps/, pool_creations/, liquidity_moves/, pool_discoveries/, tvl.rs
+│   │   │                     (the produced resources the API reads by scope:
 │   │   │                     every protocol, one protocol, one pool)
 │   │   ├── protocol_activity/, token_activity/ (the measures of the routes
 │   │   │                     not yet following the route rules)
@@ -627,12 +628,12 @@ liquidity started being measured, which the reads take as its coverage. The move
 kept 31 days, a day past the longest window: a chunk is dropped whole; `tests/analytic_liquidity.rs` holds the price rule and
 the start.
 
-**Read by scope.** `repositories/measures.rs` reads the same tables for the routes under
+**Read by scope.** One repository per produced resource (`swaps.rs`, `pool_creations.rs`, `liquidity_moves.rs`, `tvl.rs`, `pool_discoveries.rs`) reads the same tables for the routes under
 the rules of `crates/api/README.md`: one static query per resource and cut, the protocol
 (`$n::TEXT IS NULL OR protocol = $n`) or the pool in the `WHERE`, so every one stays
 checked at compile time. The swaps by pool read `analytic_pool_hourly`, which 037 opens to
 `yog_api`, read only; 037 also indexes the liquidity moves by pool. A pool's liquidity moves page by a key of their order — amount or
-instant, then signature and `event_index` — forward only. `tests/measures.rs` holds the
+instant, then signature and `event_index` — forward only. The tests of the same names hold the
 scopes, the days, the TVL's last reading and the pages.
 
 **The bursts (036).** The tranche statement also writes each tranche's `rotation`, from the

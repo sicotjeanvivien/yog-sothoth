@@ -23,7 +23,10 @@ api/src/
 ├── application/
 │   ├── services/          ← cross-protocol services at the root (SignalService,
 │   │                        TokenService, NetworkService, IngestionService,
-│   │                        AnnouncementService, ActivityService, MeasureService)
+│   │                        AnnouncementService, ActivityService, PoolService), one
+│   │                        per produced resource (SwapService, PoolCreationService,
+│   │                        LiquidityMoveService, TvlService, PoolDiscoveryService),
+│   │                        and period.rs, the frozen period they all read over
 │   ├── signal_stream.rs   ← SignalStreamPoller (enriches once, feeds the SSE broadcast)
 │   ├── cache.rs           ← SharedCache (moka) and its named CachePolicy per use
 │   ├── enriched_token.rs  ← one token side of a pool, identity only
@@ -135,7 +138,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 **What yog-analytic computes** (`/api/protocols/…` but the catalogue and the signals,
 `/api/tokens/activity`, `/api/swaps/…`, `/api/pool-creations/…`, `/api/tvl…`,
 `/api/pool-discoveries/…`, `/api/pools/{pool}/…` but the signals) read yog-analytic's
-tables over one span, built in `ActivityService` and `MeasureService`: the window
+tables over one frozen period, built in `ActivityService` and `period.rs`: the window
 ends at the close of the last frozen hour, `asOf`, the same for every route (a window of
 future events starts there), and
 no read counts an open hour. Each response carries `asOf`, `coveredSince`, the first
