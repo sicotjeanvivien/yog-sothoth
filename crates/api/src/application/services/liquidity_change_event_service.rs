@@ -32,3 +32,7 @@ impl LiquidityChangeEventService {
         self.events.list_events(scope, from, cursor, limit).await
     }
 }
+
+#[cfg(test)]
+#[path = "tests/liquidity_change_event_service_tests.rs"]
+mod tests;

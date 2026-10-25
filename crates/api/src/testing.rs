@@ -95,10 +95,10 @@ pub(crate) fn app_state() -> AppState {
             Arc::new(MockSwapEventRepo::default()),
         )),
         liquidity_change_event_service: Arc::new(LiquidityChangeEventService::new(Arc::new(
-            MockLiquidityChangeEventRepo,
+            MockLiquidityChangeEventRepo::default(),
         ))),
         pool_creation_event_service: Arc::new(PoolCreationEventService::new(Arc::new(
-            MockPoolCreationEventRepo,
+            MockPoolCreationEventRepo::default(),
         ))),
         pool_service: Arc::new(PoolService::new(
             Arc::new(PoolRepoOnce::with_pools(vec![])),
@@ -1008,32 +1008,44 @@ impl SwapEventLookup for MockSwapEventRepo {
     }
 }
 
-pub(crate) struct MockLiquidityChangeEventRepo;
+/// A `LiquidityChangeEventLookup` answering an empty page, which records the start of each
+/// window read.
+#[derive(Default)]
+pub(crate) struct MockLiquidityChangeEventRepo {
+    pub(crate) windows_from: Mutex<Vec<DateTime<Utc>>>,
+}
 
 #[async_trait]
 impl LiquidityChangeEventLookup for MockLiquidityChangeEventRepo {
     async fn list_events(
         &self,
         _: EventScope,
-        _: DateTime<Utc>,
+        from: DateTime<Utc>,
         _: Option<EventCursor>,
         _: i64,
     ) -> RepositoryResult<Page<LiquidityChangeEvent>> {
+        self.windows_from.lock().unwrap().push(from);
         Ok(Page::empty())
     }
 }
 
-pub(crate) struct MockPoolCreationEventRepo;
+/// A `PoolCreationEventLookup` answering an empty page, which records the start of each
+/// window read.
+#[derive(Default)]
+pub(crate) struct MockPoolCreationEventRepo {
+    pub(crate) windows_from: Mutex<Vec<DateTime<Utc>>>,
+}
 
 #[async_trait]
 impl PoolCreationEventLookup for MockPoolCreationEventRepo {
     async fn list_events(
         &self,
         _: Option<Protocol>,
-        _: DateTime<Utc>,
+        from: DateTime<Utc>,
         _: Option<EventCursor>,
         _: i64,
     ) -> RepositoryResult<Page<PoolCreationEvent>> {
+        self.windows_from.lock().unwrap().push(from);
         Ok(Page::empty())
     }
 }

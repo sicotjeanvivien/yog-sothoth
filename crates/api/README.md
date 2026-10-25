@@ -255,7 +255,9 @@ period after `asOf`, and takes no `offset`. An on-chain collection read live end
 at its first page, whose start the cursor carries. The swaps of every pool, at the root and
 under a protocol, are served over `24h` only: past a day they are compressed by pool, and
 reading every pool in time order decompresses all of them; under a pool, `24h` and `7d`, the
-raw swaps' retention. A cursor whose window starts past the widest its list serves (an hour of
+raw swaps' retention. The liquidity changes and pool creations, compressed by pool after a
+week but hundreds of times fewer, are served over `30d` everywhere: a page past the week
+decompresses one chunk of them. A cursor whose window starts past the widest its list serves (an hour of
 margin) or after its own key is refused (400). A parameter never changes the shape of a response;
 `topics` (rule 5) chooses which messages come, not their shape. `asOf` is the field of the
 instant a response reflects. The protocol is written `meteora_damm_v2` everywhere (field,

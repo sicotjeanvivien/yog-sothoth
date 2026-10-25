@@ -197,3 +197,15 @@ async fn a_next_page_of_the_day_is_served() {
 
     assert_eq!(status, StatusCode::OK, "{detail}");
 }
+
+/// Mutation: the advice to read under a pool given under a pool, where no list serves wider.
+#[tokio::test]
+async fn a_window_refused_under_a_pool_points_nowhere_else() {
+    let (status, _, at_root) = get("/api/swaps?window=7d").await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, _, under_pool) = get(&format!("/api/pools/{}/swaps?window=30d", pk(1))).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    assert!(at_root.contains("read it under a pool"), "{at_root}");
+    assert!(!under_pool.contains("under a pool"), "{under_pool}");
+}

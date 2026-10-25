@@ -47,8 +47,12 @@ impl ListEventsRequest {
         super::validate_limit(params.limit)?;
         let window: Window = params.window.into();
         if window.hours() > longest.hours() {
+            let advice = match scope {
+                EventScope::Pool(_) => "",
+                EventScope::All | EventScope::Protocol(_) => ": read it under a pool",
+            };
             return Err(ApiError::BadRequest(format!(
-                "`window` beyond {} is not served for this list: read it under a pool",
+                "`window` beyond {} is not served for this list{advice}",
                 longest.as_str()
             )));
         }

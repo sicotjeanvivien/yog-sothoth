@@ -17,8 +17,9 @@ impl PoolCreationEventService {
         Self { events }
     }
 
-    /// `protocol`'s creations (every protocol's for `None`) over `window`, ending now on the first page; a later page keeps the
-    /// start its cursor carries, so the window does not slide under the pages.
+    /// `protocol`'s creations (every protocol's for `None`) over `window`, ending now on the
+    /// first page; a later page keeps the start its cursor carries, so the window does not slide
+    /// under the pages.
     pub(crate) async fn list_events(
         &self,
         protocol: Option<Protocol>,
@@ -32,3 +33,7 @@ impl PoolCreationEventService {
         self.events.list_events(protocol, from, cursor, limit).await
     }
 }
+
+#[cfg(test)]
+#[path = "tests/pool_creation_event_service_tests.rs"]
+mod tests;
