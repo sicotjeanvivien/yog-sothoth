@@ -30,7 +30,6 @@ pub(crate) struct ListAnnouncementsRequest {
 }
 
 impl ListAnnouncementsRequest {
-    /// ⚠️ A cursor taken under another status is refused: its key would page another list.
     pub(crate) fn parse(params: AnnouncementsParams) -> Result<Self, ApiError> {
         super::validate_limit(params.limit)?;
         let status = params.status.map(Into::into);

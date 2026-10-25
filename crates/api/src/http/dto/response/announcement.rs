@@ -1,4 +1,4 @@
-//! Response DTO for `GET /api/announcements/active`.
+//! Response DTOs of the announcements.
 
 mod entry_response;
 mod kind_response;
