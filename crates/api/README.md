@@ -194,7 +194,7 @@ at the end of this section.
    protocol.
 4. **A measure is a collection followed by a cut**, a reserved word that ends the path:
    - `totals`, the whole window: one row per protocol at the root, under an entity its own;
-   - `hourly`, `daily`: the same rows, one per bar, a day being the 24 hours ending at
+   - `hourly`, `daily`: the same rows, one per bucket, a day being the 24 hours ending at
      `asOf`, unpaginated, the window bounding them;
    - `by-token`, `by-pool`, `by-owner`: one row per token, pool or owner address, summed over
      the path's scope (every protocol at the root), a ranking paginated as a collection.
