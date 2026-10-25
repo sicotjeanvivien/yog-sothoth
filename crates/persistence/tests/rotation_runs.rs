@@ -1,0 +1,297 @@
+//! `PgRotationRunRepository` under `yog_api`: the runs started in a period through the last
+//! tranche written, listed in two orders and summed, and their volume by frozen hour.
+
+use chrono::{DateTime, Duration, TimeZone, Utc};
+use rust_decimal::Decimal;
+use sqlx::PgPool;
+use yog_core::{
+    Cursor,
+    domain::{
+        FrozenPeriod, Protocol, RotationRunLookup, RotationRunOrder, RotationRunScope,
+        TranchePeriod, Window,
+    },
+};
+use yog_persistence::PgRotationRunRepository;
+
+use super::helpers::{pk, setup_roles_and_connect_as};
+
+fn at(minutes: i64) -> DateTime<Utc> {
+    Utc.with_ymd_and_hms(2026, 10, 20, 12, 0, 0).unwrap() + Duration::minutes(minutes)
+}
+
+/// Inserts a run of `pool` starting `start` minutes from `at(0)`, and its hours.
+async fn insert_run(
+    pool: &PgPool,
+    protocol: &str,
+    address: u8,
+    start: i64,
+    volume: &str,
+    hours: &[(i64, &str)],
+) {
+    sqlx::query(
+        "INSERT INTO analytic_rotation_runs (pool_address, started_at, protocol, ended_at,
+           volume_usd, first_hour_volume_usd, extinct, settled)
+         VALUES ($1, $2, $3, $2 + INTERVAL '10 minutes', $4::NUMERIC, $4::NUMERIC / 2, false, false)",
+    )
+    .bind(pk(address).to_string())
+    .bind(at(start))
+    .bind(protocol)
+    .bind(volume)
+    .execute(pool)
+    .await
+    .unwrap();
+    for (hour, hour_volume) in hours {
+        sqlx::query(
+            "INSERT INTO analytic_rotation_run_hours (pool_address, started_at, bucket, protocol,
+               volume_usd)
+             VALUES ($1, $2, $3, $4, $5::NUMERIC)",
+        )
+        .bind(pk(address).to_string())
+        .bind(at(start))
+        .bind(at(hour * 60))
+        .bind(protocol)
+        .bind(*hour_volume)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+}
+
+async fn insert_tranche(pool: &PgPool, minutes: i64, rotations: bool) {
+    sqlx::query(
+        "INSERT INTO analytic_tranches (bucket, written_at, rotations) VALUES ($1, $1, $2)",
+    )
+    .bind(at(minutes))
+    .bind(rotations)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+fn period(from: i64, as_of: i64) -> TranchePeriod {
+    TranchePeriod {
+        from: at(from),
+        as_of: at(as_of),
+        covered_since: at(from),
+    }
+}
+
+fn damm() -> RotationRunScope {
+    RotationRunScope::Protocol(Protocol::MeteoraDammV2)
+}
+
+async fn read_all(
+    repository: &PgRotationRunRepository,
+    period: &TranchePeriod,
+    scope: RotationRunScope,
+    order: RotationRunOrder,
+    limit: i64,
+) -> Vec<(String, DateTime<Utc>, Decimal)> {
+    let mut seen = Vec::new();
+    let mut cursor = None;
+    loop {
+        let page = repository
+            .list_runs(period, Window::Day, scope, order, cursor.take(), limit)
+            .await
+            .unwrap();
+        seen.extend(
+            page.items
+                .iter()
+                .map(|r| (r.pool_address.to_string(), r.started_at, r.volume_usd)),
+        );
+        // ⚠️ A cursor that rereads its own row would page forever: fail instead of hanging.
+        assert!(seen.len() <= 100, "paging does not end: {seen:?}");
+        match page.next_cursor {
+            Some(Cursor::RotationRun(next)) => cursor = Some(*next),
+            Some(other) => panic!("{other:?}"),
+            None => break,
+        }
+    }
+    seen
+}
+
+/// Mutation: the period's start or end bound dropped or moved, the protocol or pool filter
+/// dropped — a run started before or at the end listed, or another scope's.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_list_and_its_totals_read_the_runs_started_in_their_period(pool: PgPool) {
+    insert_run(&pool, "meteora_damm_v2", 1, -61, "1", &[]).await;
+    insert_run(&pool, "meteora_damm_v2", 1, -60, "2", &[]).await;
+    insert_run(&pool, "meteora_damm_v2", 2, -30, "3", &[]).await;
+    insert_run(&pool, "meteora_damm_v2", 2, 0, "4", &[]).await;
+    insert_run(&pool, "meteora_dlmm", 3, -30, "5", &[]).await;
+    let repository =
+        PgRotationRunRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+    let last_hour = period(-60, 0);
+
+    let all = read_all(&repository, &last_hour, damm(), RotationRunOrder::At, 50).await;
+    let one_pool = read_all(
+        &repository,
+        &last_hour,
+        RotationRunScope::Pool(pk(2)),
+        RotationRunOrder::At,
+        50,
+    )
+    .await;
+    let totals = repository
+        .find_totals(&last_hour, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        all.iter().map(|r| r.1).collect::<Vec<_>>(),
+        [at(-30), at(-60)]
+    );
+    assert_eq!(one_pool.iter().map(|r| r.1).collect::<Vec<_>>(), [at(-30)]);
+    assert_eq!(
+        (totals.runs, totals.volume_usd, totals.first_hour_volume_usd),
+        (2, Decimal::from(5), Decimal::new(25, 1))
+    );
+}
+
+/// Mutation: a tie-break dropped or reversed, or the cursor compared with `<=` — a run skipped,
+/// repeated, or listed out of its order.
+#[sqlx::test(migrations = "./migrations")]
+async fn both_orders_page_without_repeat_nor_gap(pool: PgPool) {
+    for (address, start, volume) in [
+        (1, -50, "7"),
+        (2, -55, "7"),
+        (1, -40, "9"),
+        (3, -40, "7"),
+        (2, -10, "1.0000001"),
+        (3, -10, "1.0000004"),
+    ] {
+        insert_run(&pool, "meteora_damm_v2", address, start, volume, &[]).await;
+    }
+    let repository =
+        PgRotationRunRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+    let last_hour = period(-60, 0);
+
+    let by_volume = read_all(
+        &repository,
+        &last_hour,
+        damm(),
+        RotationRunOrder::Volume,
+        50,
+    )
+    .await;
+    let by_volume_one =
+        read_all(&repository, &last_hour, damm(), RotationRunOrder::Volume, 1).await;
+    let by_at = read_all(&repository, &last_hour, damm(), RotationRunOrder::At, 50).await;
+    let by_at_one = read_all(&repository, &last_hour, damm(), RotationRunOrder::At, 1).await;
+
+    let key = |r: &(String, DateTime<Utc>, Decimal)| (r.0.clone(), r.1);
+    let (p1, p2, p3) = (pk(1).to_string(), pk(2).to_string(), pk(3).to_string());
+    assert_eq!(by_volume_one, by_volume);
+    assert_eq!(by_at_one, by_at);
+    // The most volume first; ties by pool, then start. The two runs under 2 tie once rounded
+    // to the cursor's six places, and break by pool against their unrounded order.
+    let (lower, higher) = if p2 < p3 { (&p2, &p3) } else { (&p3, &p2) };
+    let mut sevens = vec![
+        (p1.clone(), at(-50)),
+        (p2.clone(), at(-55)),
+        (p3.clone(), at(-40)),
+    ];
+    sevens.sort();
+    let mut expected = vec![(p1.clone(), at(-40))];
+    expected.extend(sevens);
+    expected.push((lower.clone(), at(-10)));
+    expected.push((higher.clone(), at(-10)));
+    assert_eq!(by_volume.iter().map(key).collect::<Vec<_>>(), expected);
+    assert!(by_at.windows(2).all(|w| w[0].1 >= w[1].1), "{by_at:?}");
+    assert_eq!(by_at.len(), 6);
+}
+
+/// Mutation: an hour past the frozen period's end drawn, the coverage bound dropped, or a day
+/// cut from another origin — a run's open hour in the bars, or hours before the coverage.
+#[sqlx::test(migrations = "./migrations")]
+async fn the_bars_sum_the_frozen_hours_of_the_runs(pool: PgPool) {
+    // Two runs over the hours -2, -1 and 0; hour 0 is open: past the frozen `as_of`.
+    insert_run(
+        &pool,
+        "meteora_damm_v2",
+        1,
+        -150,
+        "6",
+        &[(-3, "1"), (-2, "2"), (-1, "3")],
+    )
+    .await;
+    insert_run(
+        &pool,
+        "meteora_damm_v2",
+        2,
+        -90,
+        "9",
+        &[(-2, "4"), (-1, "5"), (0, "6")],
+    )
+    .await;
+    let repository =
+        PgRotationRunRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+    let frozen = FrozenPeriod {
+        from: at(-24 * 60),
+        as_of: at(0),
+        covered_since: at(-120),
+    };
+
+    let hourly = repository
+        .list_hourly(&frozen, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+    let daily_partly_covered = repository
+        .list_daily(&frozen, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+    let daily = repository
+        .list_daily(
+            &FrozenPeriod {
+                covered_since: at(-24 * 60),
+                ..frozen
+            },
+            Protocol::MeteoraDammV2,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        hourly.iter().map(|b| (b.from, b.value)).collect::<Vec<_>>(),
+        [(at(-120), Decimal::from(6)), (at(-60), Decimal::from(8))]
+    );
+    // A day that starts before the coverage is not drawn; covered, it sums its frozen hours.
+    assert!(daily_partly_covered.is_empty(), "{daily_partly_covered:?}");
+    assert_eq!(
+        daily.iter().map(|b| (b.from, b.value)).collect::<Vec<_>>(),
+        [(at(-24 * 60), Decimal::from(15))]
+    );
+}
+
+/// Mutation: the coverage read from another column, or every tranche taken as measured — a
+/// protocol covered before its rotation was, or the end of the tranches misread.
+#[sqlx::test(migrations = "./migrations")]
+async fn the_coverage_is_the_first_tranche_measured_and_the_end_the_last_written(pool: PgPool) {
+    let repository =
+        PgRotationRunRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+    let before = (
+        repository
+            .find_measured_since(Protocol::MeteoraDammV2)
+            .await
+            .unwrap(),
+        repository.find_written_through().await.unwrap(),
+    );
+    insert_tranche(&pool, -20, false).await;
+    insert_tranche(&pool, -15, true).await;
+    insert_tranche(&pool, -10, true).await;
+
+    let since = repository
+        .find_measured_since(Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+    let through = repository.find_written_through().await.unwrap();
+    let dlmm = repository
+        .find_measured_since(Protocol::MeteoraDlmm)
+        .await
+        .unwrap();
+
+    assert_eq!(before, (None, None));
+    assert_eq!(since, Some(at(-15)));
+    assert_eq!(through, Some(at(-5)));
+    assert_eq!(dlmm, None);
+}

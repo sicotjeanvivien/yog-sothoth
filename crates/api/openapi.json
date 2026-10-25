@@ -3214,6 +3214,49 @@
         ],
         "type": "string"
       },
+      "ProtocolRotationRunBucketResponse": {
+        "properties": {
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          },
+          "volumeUsd": {
+            "$ref": "#/components/schemas/UnsignedDecimal"
+          }
+        },
+        "required": [
+          "protocol",
+          "from",
+          "volumeUsd"
+        ],
+        "type": "object"
+      },
+      "ProtocolRotationRunTotalsResponse": {
+        "properties": {
+          "firstHourVolumeUsd": {
+            "$ref": "#/components/schemas/UnsignedDecimal"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          },
+          "runs": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "volumeUsd": {
+            "$ref": "#/components/schemas/UnsignedDecimal"
+          }
+        },
+        "required": [
+          "protocol",
+          "runs",
+          "volumeUsd",
+          "firstHourVolumeUsd"
+        ],
+        "type": "object"
+      },
       "ProtocolSwapActivityBucketResponse": {
         "allOf": [
           {
@@ -3602,6 +3645,46 @@
           "rewardMint",
           "rewardIndex",
           "amount"
+        ],
+        "type": "object"
+      },
+      "RotationRunResponse": {
+        "properties": {
+          "endedAt": {
+            "description": "The end of its last marked tranche.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "extinct": {
+            "description": "No marked tranche followed within the gap: the run will not grow.",
+            "type": "boolean"
+          },
+          "firstHourVolumeUsd": {
+            "$ref": "#/components/schemas/UnsignedDecimal"
+          },
+          "poolAddress": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "volumeUsd": {
+            "$ref": "#/components/schemas/UnsignedDecimal"
+          }
+        },
+        "required": [
+          "protocol",
+          "poolAddress",
+          "startedAt",
+          "endedAt",
+          "volumeUsd",
+          "firstHourVolumeUsd",
+          "extinct"
         ],
         "type": "object"
       },
@@ -4056,6 +4139,70 @@
         ],
         "type": "object"
       },
+      "TrancheWindowedResponse_ProtocolRotationRunTotalsResponse": {
+        "description": "`from..asOf`, each `null` before the first tranche is written.",
+        "properties": {
+          "asOf": {
+            "description": "The end of the last tranche written: the instant the rows reflect.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "firstHourVolumeUsd": {
+                  "$ref": "#/components/schemas/UnsignedDecimal"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "runs": {
+                  "$ref": "#/components/schemas/Count"
+                },
+                "volumeUsd": {
+                  "$ref": "#/components/schemas/UnsignedDecimal"
+                }
+              },
+              "required": [
+                "protocol",
+                "runs",
+                "volumeUsd",
+                "firstHourVolumeUsd"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
       "U128String": {
         "pattern": "^\\d+$",
         "type": "string"
@@ -4150,6 +4297,107 @@
                 "amountUsd",
                 "tokenASymbol",
                 "tokenBSymbol"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prevCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "items",
+          "isFirst",
+          "isLast",
+          "asOf",
+          "coveredSince",
+          "from",
+          "nextCursor",
+          "prevCursor"
+        ],
+        "type": "object"
+      },
+      "WindowedPageResponse_RotationRunResponse": {
+        "properties": {
+          "asOf": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "isFirst": {
+            "type": "boolean"
+          },
+          "isLast": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "endedAt": {
+                  "description": "The end of its last marked tranche.",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "extinct": {
+                  "description": "No marked tranche followed within the gap: the run will not grow.",
+                  "type": "boolean"
+                },
+                "firstHourVolumeUsd": {
+                  "$ref": "#/components/schemas/UnsignedDecimal"
+                },
+                "poolAddress": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "startedAt": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "volumeUsd": {
+                  "$ref": "#/components/schemas/UnsignedDecimal"
+                }
+              },
+              "required": [
+                "protocol",
+                "poolAddress",
+                "startedAt",
+                "endedAt",
+                "volumeUsd",
+                "firstHourVolumeUsd",
+                "extinct"
               ],
               "type": "object"
             },
@@ -4884,6 +5132,68 @@
               "required": [
                 "protocol",
                 "pools"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
+      "WindowedResponse_ProtocolRotationRunBucketResponse": {
+        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "properties": {
+          "asOf": {
+            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "description": "The first hour the facts hold.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "from": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "volumeUsd": {
+                  "$ref": "#/components/schemas/UnsignedDecimal"
+                }
+              },
+              "required": [
+                "protocol",
+                "from",
+                "volumeUsd"
               ],
               "type": "object"
             },
@@ -6438,6 +6748,92 @@
               }
             },
             "description": "A page of the pool's reward claims, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/pools/{pool}/rotation-runs": {
+      "get": {
+        "operationId": "list_pool_rotation_runs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "description": "`volume`, the runs with the most volume first, or `at`, the latest start first.",
+              "enum": [
+                "volume",
+                "at"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pool",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowedPageResponse_RotationRunResponse"
+                }
+              }
+            },
+            "description": "A page of the pool's rotation runs started in the window, in the order asked, through the last tranche written; empty while not covered."
           },
           "default": {
             "content": {
@@ -8304,6 +8700,242 @@
               }
             },
             "description": "A page of the protocol's reward claims, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/protocols/{protocol}/rotation-runs": {
+      "get": {
+        "operationId": "list_protocol_rotation_runs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "description": "`volume`, the runs with the most volume first, or `at`, the latest start first.",
+              "enum": [
+                "volume",
+                "at"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowedPageResponse_RotationRunResponse"
+                }
+              }
+            },
+            "description": "A page of the protocol's rotation runs started in the window, in the order asked, through the last tranche written; empty while not covered."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/protocols/{protocol}/rotation-runs/daily": {
+      "get": {
+        "operationId": "get_protocol_rotation_runs_daily",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolRotationRunBucketResponse"
+                }
+              }
+            },
+            "description": "The protocol's volume in rotation runs, by 24 hours ending at `asOf`."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/protocols/{protocol}/rotation-runs/hourly": {
+      "get": {
+        "operationId": "get_protocol_rotation_runs_hourly",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolRotationRunBucketResponse"
+                }
+              }
+            },
+            "description": "The protocol's volume in rotation runs, hour by hour."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/protocols/{protocol}/rotation-runs/totals": {
+      "get": {
+        "operationId": "get_protocol_rotation_run_totals",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrancheWindowedResponse_ProtocolRotationRunTotalsResponse"
+                }
+              }
+            },
+            "description": "The protocol's rotation runs started in the window, through the last tranche written; no row while not covered."
           },
           "default": {
             "content": {

@@ -28,10 +28,12 @@ use yog_core::{
         ProtocolActivityLookup, ProtocolBucket, ProtocolDiscoveredTvl, ProtocolFeeClaimEvent,
         ProtocolFeeClaimEventLookup, ProtocolPoolCreations, ProtocolPools, ProtocolSwapActivity,
         ProtocolTvl, ProtocolTvlLookup, RewardChangeEvent, RewardChangeEventLookup,
-        RewardClaimEvent, RewardClaimEventLookup, Severity, Signal, SignalCursor, SignalFeed,
-        SignalFilter, SignalRecord, SwapActivity, SwapActivityLookup, SwapEvent, SwapEventLookup,
-        TokenActivityCursor, TokenActivityFeed, TokenActivityPage, TokenCursor, TokenEntry,
-        TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceCursor, TokenPriceLookup, Window,
+        RewardClaimEvent, RewardClaimEventLookup, RotationRun, RotationRunCursor,
+        RotationRunLookup, RotationRunOrder, RotationRunScope, RotationRunTotals, Severity, Signal,
+        SignalCursor, SignalFeed, SignalFilter, SignalRecord, SwapActivity, SwapActivityLookup,
+        SwapEvent, SwapEventLookup, TokenActivityCursor, TokenActivityFeed, TokenActivityPage,
+        TokenCursor, TokenEntry, TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceCursor,
+        TokenPriceLookup, TranchePeriod, Window,
     },
 };
 
@@ -40,8 +42,8 @@ use crate::application::{
     LiquidityChangeEventService, LiquidityMoveService, NetworkService, PoolChangeEventService,
     PoolCreationEventService, PoolCreationsService, PoolService, PositionChangeEventService,
     PositionFeeClaimEventService, ProtocolCatalogService, ProtocolFeeClaimEventService,
-    ProtocolTvlService, RewardChangeEventService, RewardClaimEventService, SignalService,
-    SwapActivityService, SwapEventService, TokenService, WorkSlots,
+    ProtocolTvlService, RewardChangeEventService, RewardClaimEventService, RotationRunService,
+    SignalService, SwapActivityService, SwapEventService, TokenService, WorkSlots,
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
@@ -87,6 +89,10 @@ pub(crate) fn app_state() -> AppState {
         liquidity_move_service: Arc::new(LiquidityMoveService::new(
             frozen_hours_repo(None),
             Arc::new(MockLiquidityMoveRepo::default()),
+        )),
+        rotation_run_service: Arc::new(RotationRunService::new(
+            frozen_hours_repo(None),
+            Arc::new(MockRotationRunRepo::default()),
         )),
         protocol_tvl_service: Arc::new(ProtocolTvlService::new(
             frozen_hours_repo(None),
@@ -1224,5 +1230,66 @@ impl PoolCreationEventLookup for MockPoolCreationEventRepo {
     ) -> RepositoryResult<Page<PoolCreationEvent>> {
         self.windows_from.lock().unwrap().push(from);
         Ok(Page::empty())
+    }
+}
+
+/// A `RotationRunLookup` set by each test: when the tranches were written through, when the
+/// rotation was measured since, and the scope and end each list was read with.
+#[derive(Default)]
+pub(crate) struct MockRotationRunRepo {
+    pub(crate) written_through: Option<DateTime<Utc>>,
+    pub(crate) measured_since: Option<DateTime<Utc>>,
+    pub(crate) lists: Mutex<Vec<(RotationRunScope, TranchePeriod)>>,
+}
+
+#[async_trait]
+impl RotationRunLookup for MockRotationRunRepo {
+    async fn find_measured_since(&self, _: Protocol) -> RepositoryResult<Option<DateTime<Utc>>> {
+        Ok(self.measured_since)
+    }
+
+    async fn find_written_through(&self) -> RepositoryResult<Option<DateTime<Utc>>> {
+        Ok(self.written_through)
+    }
+
+    async fn find_totals(
+        &self,
+        _: &TranchePeriod,
+        _: Protocol,
+    ) -> RepositoryResult<RotationRunTotals> {
+        Ok(RotationRunTotals {
+            runs: 0,
+            volume_usd: rust_decimal::Decimal::ZERO,
+            first_hour_volume_usd: rust_decimal::Decimal::ZERO,
+        })
+    }
+
+    async fn list_runs(
+        &self,
+        period: &TranchePeriod,
+        _: Window,
+        scope: RotationRunScope,
+        _: RotationRunOrder,
+        _: Option<RotationRunCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<RotationRun>> {
+        self.lists.lock().unwrap().push((scope, *period));
+        Ok(Page::empty())
+    }
+
+    async fn list_hourly(
+        &self,
+        _: &FrozenPeriod,
+        _: Protocol,
+    ) -> RepositoryResult<Vec<ProtocolBucket<rust_decimal::Decimal>>> {
+        Ok(Vec::new())
+    }
+
+    async fn list_daily(
+        &self,
+        _: &FrozenPeriod,
+        _: Protocol,
+    ) -> RepositoryResult<Vec<ProtocolBucket<rust_decimal::Decimal>>> {
+        Ok(Vec::new())
     }
 }

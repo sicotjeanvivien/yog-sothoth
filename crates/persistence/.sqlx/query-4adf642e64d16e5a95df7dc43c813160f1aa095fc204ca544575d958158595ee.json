@@ -1,0 +1,112 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT protocol, pool_address, started_at, ended_at, volume_usd,\n                       first_hour_volume_usd, extinct, ROUND(volume_usd, 6) AS \"volume_key!\"\n                  FROM analytic_rotation_runs\n                 WHERE pool_address = $3 AND started_at >= $1 AND started_at < $2\n                   AND ($4::TIMESTAMPTZ IS NULL\n                        OR started_at < $4\n                        OR (started_at = $4 AND pool_address > $5))\n                 ORDER BY started_at DESC, pool_address\n                 LIMIT $6\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_rotation_runs",
+            "name": "protocol"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "pool_address",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_rotation_runs",
+            "name": "pool_address"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "started_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "analytic_rotation_runs",
+            "name": "started_at"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "ended_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "analytic_rotation_runs",
+            "name": "ended_at"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "volume_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_rotation_runs",
+            "name": "volume_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "first_hour_volume_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_rotation_runs",
+            "name": "first_hour_volume_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "extinct",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "analytic_rotation_runs",
+            "name": "extinct"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "volume_key!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "4adf642e64d16e5a95df7dc43c813160f1aa095fc204ca544575d958158595ee"
+}

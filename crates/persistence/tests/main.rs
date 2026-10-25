@@ -55,6 +55,7 @@ mod protocol_tvl;
 mod reward_change_events;
 mod reward_claim_events;
 mod reward_valuation;
+mod rotation_runs;
 mod runtime_role_writes;
 mod set_pool_status;
 mod signal_dedup;

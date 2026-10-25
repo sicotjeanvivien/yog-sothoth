@@ -145,6 +145,9 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/swaps/by-token` | Tokens by volume over `?window=`, every protocol summed, forward-only cursor |
 | `GET` | `/api/pool-creations/totals`, `/hourly`, `/daily`, and under `/api/protocols/{protocol}/` | Per protocol, the pools created over the window, then per bucket |
 | `GET` | `/api/protocols/{protocol}/liquidity-moves/totals`, `/hourly`, `/daily` | The protocol's liquidity created, added and removed, valued, with its moves valued; its `coveredSince` is the liquidity's |
+| `GET` | `/api/protocols/{protocol}/rotation-runs`, `/api/pools/{pool}/rotation-runs` | A page of the rotation runs started in the window, through the last tranche written: pool, start, end, volume, first hour's volume, extinct; `?sort=volume` (default) or `at`, forward-only cursor that keeps its first page's end, refused (400) under another list; empty while the rotation does not cover the window |
+| `GET` | `/api/protocols/{protocol}/rotation-runs/totals` | The runs started in the window, their volume and first hour's volume, through the last tranche written; its `coveredSince` is the first tranche whose rotation was measured |
+| `GET` | `/api/protocols/{protocol}/rotation-runs/hourly`, `/daily` | The volume in runs by frozen hour, or by 24 hours ending at `asOf`, from the first whole hour measured |
 | `GET` | `/api/pools/{pool}/liquidity-moves` | A page of the pool's valued moves, `?sort=amount` (default) or `at`, forward-only cursor, refused (400) for another pool or window or after a freeze; empty while its protocol's liquidity does not cover the window |
 | `GET` | `/api/tvl`, `/api/protocols/{protocol}/tvl` | Per protocol, the last TVL reading at or before `asOf`, its `at` said |
 | `GET` | `/api/tvl/hourly`, `/api/protocols/{protocol}/tvl/hourly` | Per protocol, the reading of every hour measured from the window's start |
@@ -264,7 +267,9 @@ under a protocol, are served over `24h` only: past a day they are compressed by 
 reading every pool in time order decompresses all of them; under a pool, `24h` and `7d`, the
 raw swaps' retention. The other on-chain lists, compressed by pool after a week but
 hundreds of times fewer, are served over `30d` everywhere: a page past the week
-decompresses one chunk of them. A cursor whose window starts past the widest its list serves (an hour of
+decompresses one chunk of them. `rotation-runs` and its `totals` end at the last tranche
+written, its `hourly` and `daily` at `asOf`, on the swaps' hours: a run open in an hour not
+yet frozen is in the list and not in the bars. A cursor whose window starts past the widest its list serves (an hour of
 margin) or after its own key is refused (400). A parameter never changes the shape of a response;
 `topics` (rule 5) chooses which messages come, not their shape. `asOf` is the field of the
 instant a response reflects. The protocol is written `meteora_damm_v2` everywhere (field,

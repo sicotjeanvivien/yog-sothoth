@@ -111,6 +111,19 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         .route_layer(from_fn_with_state(work_slots, work_slot_limit));
 
     OpenApiRouter::new()
+        .routes(routes!(
+            handlers::rotation_runs::list_protocol_rotation_runs
+        ))
+        .routes(routes!(handlers::rotation_runs::list_pool_rotation_runs))
+        .routes(routes!(
+            handlers::rotation_runs::get_protocol_rotation_run_totals
+        ))
+        .routes(routes!(
+            handlers::rotation_runs::get_protocol_rotation_runs_hourly
+        ))
+        .routes(routes!(
+            handlers::rotation_runs::get_protocol_rotation_runs_daily
+        ))
         .routes(routes!(handlers::announcements::list_announcements))
         .routes(routes!(handlers::announcements::list_active_announcements))
         .routes(routes!(handlers::network::get_network))

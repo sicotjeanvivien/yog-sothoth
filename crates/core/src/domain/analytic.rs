@@ -8,4 +8,4 @@ pub use model::{
 };
 pub use repository::AnalyticRepository;
 pub use rotation_run::{QUOTED_MINTS, RUN_GAP, RUN_ROTATION};
-pub use window::{FrozenHours, FrozenPeriod, ProtocolBucket, Window};
+pub use window::{FrozenHours, FrozenPeriod, ProtocolBucket, TranchePeriod, Window};

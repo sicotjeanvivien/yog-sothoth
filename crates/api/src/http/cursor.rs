@@ -12,8 +12,8 @@ use yog_core::{
     Cursor,
     domain::{
         AnnouncementCursor, AnnouncementStatus, EventCursor, EventScope, LiquidityMoveCursor,
-        LiquidityMoveOrder, PoolCursor, PoolScope, SignalCursor, TokenActivityCursor, TokenCursor,
-        TokenPriceCursor, Window,
+        LiquidityMoveOrder, PoolCursor, PoolScope, RotationRunCursor, RotationRunOrder,
+        RotationRunScope, SignalCursor, TokenActivityCursor, TokenCursor, TokenPriceCursor, Window,
     },
 };
 
@@ -66,6 +66,18 @@ struct TokenPriceCursorWire {
     mint: String,
     from: String,
     fetched_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RotationRunCursorWire {
+    scope: String,
+    window: String,
+    as_of: String,
+    order: String,
+    volume_usd: String,
+    started_at: String,
+    pool: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -205,6 +217,15 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
         Cursor::RewardClaimEvent(c) => encode_event_cursor(EventCollection::RewardClaims, c),
         Cursor::RewardChangeEvent(c) => encode_event_cursor(EventCollection::RewardChanges, c),
         Cursor::PoolChangeEvent(c) => encode_event_cursor(EventCollection::PoolChanges, c),
+        Cursor::RotationRun(c) => encode_b64_json(&RotationRunCursorWire {
+            scope: rotation_run_scope_tag(c.scope),
+            window: c.window.as_str().to_owned(),
+            as_of: c.as_of.to_rfc3339(),
+            order: rotation_run_order_tag(c.order).to_owned(),
+            volume_usd: c.volume_usd.to_string(),
+            started_at: c.started_at.to_rfc3339(),
+            pool: c.pool_address.to_string(),
+        }),
         Cursor::Announcement(c) => encode_b64_json(&AnnouncementCursorWire {
             status: c.status.map(|s| s.as_str().to_owned()),
             starts_at: c.starts_at.to_rfc3339(),
@@ -302,6 +323,49 @@ pub(crate) fn decode_token_cursor(raw: &str) -> Result<TokenCursor, ApiError> {
         fetched_at: parse_rfc3339(&wire.fetched_at)?,
         mint: Pubkey::from_str(&wire.mint)
             .map_err(|_| ApiError::BadRequest("invalid cursor: malformed mint".to_string()))?,
+    })
+}
+
+fn rotation_run_scope_tag(scope: RotationRunScope) -> String {
+    match scope {
+        RotationRunScope::Protocol(protocol) => format!("protocol:{}", protocol.as_str()),
+        RotationRunScope::Pool(pool) => format!("pool:{pool}"),
+    }
+}
+
+fn rotation_run_order_tag(order: RotationRunOrder) -> &'static str {
+    match order {
+        RotationRunOrder::Volume => "volume",
+        RotationRunOrder::At => "at",
+    }
+}
+
+/// A cursor of `scope`'s runs over `window` in `order`; one of another list is refused.
+pub(crate) fn decode_rotation_run_cursor(
+    raw: &str,
+    scope: RotationRunScope,
+    window: Window,
+    order: RotationRunOrder,
+) -> Result<RotationRunCursor, ApiError> {
+    let wire: RotationRunCursorWire = decode_b64_json(raw)?;
+    if wire.scope != rotation_run_scope_tag(scope)
+        || wire.window != window.as_str()
+        || wire.order != rotation_run_order_tag(order)
+    {
+        return Err(ApiError::BadRequest(
+            "invalid cursor: taken in another list".to_string(),
+        ));
+    }
+    Ok(RotationRunCursor {
+        scope,
+        window,
+        as_of: parse_rfc3339(&wire.as_of)?,
+        order,
+        volume_usd: Decimal::from_str(&wire.volume_usd)
+            .map_err(|_| ApiError::BadRequest("invalid cursor: malformed volume".to_string()))?,
+        started_at: parse_rfc3339(&wire.started_at)?,
+        pool_address: Pubkey::from_str(&wire.pool)
+            .map_err(|_| ApiError::BadRequest("invalid cursor: malformed pool".to_string()))?,
     })
 }
 

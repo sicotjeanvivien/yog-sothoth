@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT MIN(bucket) AS \"since?: DateTime<Utc>\"\n                      FROM analytic_tranches\n                     WHERE rotations\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "since?: DateTime<Utc>",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "fb8f665e0097e817a67f652d6cebeeb8e60586e94bb7687b9292570362d867c2"
+}

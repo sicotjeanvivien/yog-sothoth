@@ -32,8 +32,8 @@ pub use repositories::{
     PgPoolCreationsRepository, PgPoolCurrentStateRepository, PgPoolPriceSnapshotRepository,
     PgPoolRepository, PgPositionChangeEventRepository, PgPositionFeeClaimEventRepository,
     PgProtocolActivityRepository, PgProtocolFeeClaimEventRepository, PgProtocolTvlRepository,
-    PgRewardChangeEventRepository, PgRewardClaimEventRepository, PgSignalRepository,
-    PgSwapActivityRepository, PgSwapEventRepository, PgSwapFlowRepository,
+    PgRewardChangeEventRepository, PgRewardClaimEventRepository, PgRotationRunRepository,
+    PgSignalRepository, PgSwapActivityRepository, PgSwapEventRepository, PgSwapFlowRepository,
     PgTokenActivityRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
     PgWatchedPoolRepository,
 };

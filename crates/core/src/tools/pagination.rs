@@ -32,6 +32,7 @@ pub enum Cursor {
     RewardChangeEvent(Box<crate::domain::EventCursor>),
     PoolChangeEvent(Box<crate::domain::EventCursor>),
     Announcement(Box<crate::domain::AnnouncementCursor>),
+    RotationRun(Box<crate::domain::RotationRunCursor>),
 }
 
 impl<T> Page<T> {
