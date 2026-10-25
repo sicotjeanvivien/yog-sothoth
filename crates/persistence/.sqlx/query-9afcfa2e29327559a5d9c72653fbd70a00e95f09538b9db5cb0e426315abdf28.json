@@ -1,0 +1,498 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,\n                   first_owner, second_owner, first_position, second_position, current_sqrt_price,\n                   split_permanent_locked_liquidity, split_unlocked_liquidity, split_vested_liquidity,\n                   split_fee_a, split_fee_b, split_reward_0, split_reward_1,\n                   first_unlocked_liquidity, first_permanent_locked_liquidity, first_vested_liquidity,\n                   first_fee_a, first_fee_b, first_reward_0, first_reward_1,\n                   second_unlocked_liquidity, second_permanent_locked_liquidity,\n                   second_vested_liquidity, second_fee_a, second_fee_b, second_reward_0,\n                   second_reward_1, num_unlocked_liquidity, num_permanent_locked_liquidity,\n                   num_fee_a, num_fee_b, num_reward_0, num_reward_1, num_inner_vesting_liquidity\n              FROM meteora_damm_v2_split_position_events\n             WHERE id = ANY($1) AND timestamp >= $2 AND timestamp <= $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "pool_address",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "pool_address"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "signature",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "signature"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "timestamp",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "timestamp"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "slot",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "slot"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "transaction_index",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "transaction_index"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "event_index",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "event_index"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "first_owner",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "first_owner"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "second_owner",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "second_owner"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "first_position",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "first_position"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "second_position",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "second_position"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "current_sqrt_price",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "current_sqrt_price"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "split_permanent_locked_liquidity",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "split_permanent_locked_liquidity"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "split_unlocked_liquidity",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "split_unlocked_liquidity"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "split_vested_liquidity",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "split_vested_liquidity"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "split_fee_a",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "split_fee_a"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "split_fee_b",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "split_fee_b"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "split_reward_0",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "split_reward_0"
+          }
+        }
+      },
+      {
+        "ordinal": 18,
+        "name": "split_reward_1",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "split_reward_1"
+          }
+        }
+      },
+      {
+        "ordinal": 19,
+        "name": "first_unlocked_liquidity",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "first_unlocked_liquidity"
+          }
+        }
+      },
+      {
+        "ordinal": 20,
+        "name": "first_permanent_locked_liquidity",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "first_permanent_locked_liquidity"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
+        "name": "first_vested_liquidity",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "first_vested_liquidity"
+          }
+        }
+      },
+      {
+        "ordinal": 22,
+        "name": "first_fee_a",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "first_fee_a"
+          }
+        }
+      },
+      {
+        "ordinal": 23,
+        "name": "first_fee_b",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "first_fee_b"
+          }
+        }
+      },
+      {
+        "ordinal": 24,
+        "name": "first_reward_0",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "first_reward_0"
+          }
+        }
+      },
+      {
+        "ordinal": 25,
+        "name": "first_reward_1",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "first_reward_1"
+          }
+        }
+      },
+      {
+        "ordinal": 26,
+        "name": "second_unlocked_liquidity",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "second_unlocked_liquidity"
+          }
+        }
+      },
+      {
+        "ordinal": 27,
+        "name": "second_permanent_locked_liquidity",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "second_permanent_locked_liquidity"
+          }
+        }
+      },
+      {
+        "ordinal": 28,
+        "name": "second_vested_liquidity",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "second_vested_liquidity"
+          }
+        }
+      },
+      {
+        "ordinal": 29,
+        "name": "second_fee_a",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "second_fee_a"
+          }
+        }
+      },
+      {
+        "ordinal": 30,
+        "name": "second_fee_b",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "second_fee_b"
+          }
+        }
+      },
+      {
+        "ordinal": 31,
+        "name": "second_reward_0",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "second_reward_0"
+          }
+        }
+      },
+      {
+        "ordinal": 32,
+        "name": "second_reward_1",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "second_reward_1"
+          }
+        }
+      },
+      {
+        "ordinal": 33,
+        "name": "num_unlocked_liquidity",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "num_unlocked_liquidity"
+          }
+        }
+      },
+      {
+        "ordinal": 34,
+        "name": "num_permanent_locked_liquidity",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "num_permanent_locked_liquidity"
+          }
+        }
+      },
+      {
+        "ordinal": 35,
+        "name": "num_fee_a",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "num_fee_a"
+          }
+        }
+      },
+      {
+        "ordinal": 36,
+        "name": "num_fee_b",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "num_fee_b"
+          }
+        }
+      },
+      {
+        "ordinal": 37,
+        "name": "num_reward_0",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "num_reward_0"
+          }
+        }
+      },
+      {
+        "ordinal": 38,
+        "name": "num_reward_1",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "num_reward_1"
+          }
+        }
+      },
+      {
+        "ordinal": 39,
+        "name": "num_inner_vesting_liquidity",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_split_position_events",
+            "name": "num_inner_vesting_liquidity"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8Array",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9afcfa2e29327559a5d9c72653fbd70a00e95f09538b9db5cb0e426315abdf28"
+}

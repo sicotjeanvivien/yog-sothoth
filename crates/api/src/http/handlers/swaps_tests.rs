@@ -105,6 +105,14 @@ async fn the_event_routes_are_mounted() {
         "/api/protocols/meteora_damm_v2/liquidity-changes",
         "/api/pool-creations?window=7d",
         "/api/protocols/meteora_damm_v2/pool-creations",
+        "/api/position-changes?window=30d",
+        "/api/protocols/meteora_damm_v2/position-changes",
+        "/api/position-fee-claims?window=30d",
+        "/api/protocols/meteora_damm_v2/position-fee-claims",
+        "/api/protocol-fee-claims?window=30d",
+        "/api/protocols/meteora_damm_v2/protocol-fee-claims",
+        "/api/reward-claims?window=30d",
+        "/api/protocols/meteora_damm_v2/reward-claims",
     ] {
         let (status, _, body) = get(uri).await;
         assert_eq!(status, StatusCode::OK, "{uri}: {body}");
@@ -137,6 +145,9 @@ async fn a_window_past_a_lists_widest_or_a_cursor_of_another_list_is_refused() {
         EventScope::All,
     ))));
     let all_swaps = encode(Cursor::SwapEvent(Box::new(recent(EventScope::All))));
+    let fee_claims = encode(Cursor::PositionFeeClaimEvent(Box::new(recent(
+        EventScope::All,
+    ))));
     let forged = encode(Cursor::SwapEvent(Box::new(EventCursor {
         from: chrono::Utc::now() - chrono::Duration::days(8),
         ..recent(EventScope::All)
@@ -155,6 +166,12 @@ async fn a_window_past_a_lists_widest_or_a_cursor_of_another_list_is_refused() {
         format!("/api/swaps?cursor={liquidity}"),
         format!("/api/protocols/meteora_damm_v2/swaps?cursor={all_swaps}"),
         format!("/api/pools/{}/swaps?cursor={all_swaps}", pk(1)),
+        "/api/protocols/meteora/position-changes".to_owned(),
+        "/api/protocols/meteora/reward-claims".to_owned(),
+        format!("/api/position-changes?cursor={all_swaps}"),
+        format!("/api/reward-claims?cursor={fee_claims}"),
+        format!("/api/protocol-fee-claims?cursor={fee_claims}"),
+        format!("/api/position-fee-claims?cursor={liquidity}"),
     ] {
         let (status, content_type, detail) = get(&uri).await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}: {detail}");
@@ -169,6 +186,10 @@ async fn an_unknown_pool_has_no_events() {
     for uri in [
         format!("/api/pools/{}/swaps?window=7d", pk(42)),
         format!("/api/pools/{}/liquidity-changes?window=30d", pk(42)),
+        format!("/api/pools/{}/position-changes?window=30d", pk(42)),
+        format!("/api/pools/{}/position-fee-claims?window=30d", pk(42)),
+        format!("/api/pools/{}/protocol-fee-claims?window=30d", pk(42)),
+        format!("/api/pools/{}/reward-claims?window=30d", pk(42)),
     ] {
         let (status, content_type, _) = get(&uri).await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{uri}");

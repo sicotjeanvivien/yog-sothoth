@@ -72,6 +72,26 @@ export const zLiquidityMoveKindResponse = z.enum([
 
 export type LiquidityMoveKindResponse = z.infer<typeof zLiquidityMoveKindResponse>;
 
+export const zMeteoraDammV2PositionNftResponse = z.object({
+    owner: z.string().min(1),
+    position: z.string().min(1),
+    positionNftMint: z.string().min(1)
+});
+
+export type MeteoraDammV2PositionNftResponse = z.infer<typeof zMeteoraDammV2PositionNftResponse>;
+
+export const zMeteoraDammV2SplitNumeratorsResponse = z.object({
+    feeA: z.int().gte(0).lte(4294967295),
+    feeB: z.int().gte(0).lte(4294967295),
+    innerVestingLiquidity: z.int().gte(0).lte(4294967295),
+    permanentLockedLiquidity: z.int().gte(0).lte(4294967295),
+    reward0: z.int().gte(0).lte(4294967295),
+    reward1: z.int().gte(0).lte(4294967295),
+    unlockedLiquidity: z.int().gte(0).lte(4294967295)
+});
+
+export type MeteoraDammV2SplitNumeratorsResponse = z.infer<typeof zMeteoraDammV2SplitNumeratorsResponse>;
+
 export const zPoolLastEventKindResponse = z.enum([
     'swap',
     'liquidity_add',
@@ -173,6 +193,65 @@ export const zLiquidityChangeEventResponse = z.object({
 
 export type LiquidityChangeEventResponse = z.infer<typeof zLiquidityChangeEventResponse>;
 
+export const zMeteoraDammV2PermanentLockResponse = z.object({
+    lockedLiquidity: zU128String,
+    position: z.string().min(1),
+    totalPermanentLockedLiquidity: zU128String
+});
+
+export type MeteoraDammV2PermanentLockResponse = z.infer<typeof zMeteoraDammV2PermanentLockResponse>;
+
+export const zMeteoraDammV2SplitAmountsResponse = z.object({
+    feeA: zU128String,
+    feeB: zU128String,
+    permanentLockedLiquidity: zU128String,
+    reward0: zU128String,
+    reward1: zU128String,
+    unlockedLiquidity: zU128String,
+    vestedLiquidity: zU128String
+});
+
+export type MeteoraDammV2SplitAmountsResponse = z.infer<typeof zMeteoraDammV2SplitAmountsResponse>;
+
+export const zMeteoraDammV2SplitStateResponse = z.object({
+    feeA: zU128String,
+    feeB: zU128String,
+    permanentLockedLiquidity: zU128String,
+    reward0: zU128String,
+    reward1: zU128String,
+    unlockedLiquidity: zU128String,
+    vestedLiquidity: zU128String
+});
+
+export type MeteoraDammV2SplitStateResponse = z.infer<typeof zMeteoraDammV2SplitStateResponse>;
+
+export const zMeteoraDammV2SplitResponse = z.object({
+    amounts: zMeteoraDammV2SplitAmountsResponse,
+    currentSqrtPrice: zU128String,
+    firstOwner: z.string().min(1),
+    firstPosition: z.string().min(1),
+    firstPositionAfter: zMeteoraDammV2SplitStateResponse,
+    numerators: zMeteoraDammV2SplitNumeratorsResponse,
+    secondOwner: z.string().min(1),
+    secondPosition: z.string().min(1),
+    secondPositionAfter: zMeteoraDammV2SplitStateResponse
+});
+
+export type MeteoraDammV2SplitResponse = z.infer<typeof zMeteoraDammV2SplitResponse>;
+
+export const zMeteoraDammV2VestingLockResponse = z.object({
+    cliffPoint: zCount,
+    cliffUnlockLiquidity: zU128String,
+    liquidityPerPeriod: zU128String,
+    numberOfPeriod: z.int().gte(0).lte(65535),
+    owner: z.string().min(1),
+    periodFrequency: zCount,
+    position: z.string().min(1),
+    vesting: z.string().min(1)
+});
+
+export type MeteoraDammV2VestingLockResponse = z.infer<typeof zMeteoraDammV2VestingLockResponse>;
+
 export const zNetworkResponse = z.object({
     observedAt: z.iso.datetime({ offset: true }),
     rpcLatencyMs: z.int().gte(0).lte(4294967295),
@@ -205,6 +284,68 @@ export const zPageResponseLiquidityChangeEventResponse = z.object({
 });
 
 export type PageResponseLiquidityChangeEventResponse = z.infer<typeof zPageResponseLiquidityChangeEventResponse>;
+
+export const zPageResponsePositionFeeClaimEventResponse = z.object({
+    isFirst: z.boolean(),
+    isLast: z.boolean(),
+    items: z.array(z.object({
+        at: z.iso.datetime({ offset: true }),
+        eventIndex: z.int().gte(0).lte(65535),
+        feeA: zU128String,
+        feeB: zU128String,
+        owner: z.string().min(1),
+        poolAddress: z.string().min(1),
+        position: z.string().min(1),
+        protocol: zProtocolResponse,
+        signature: z.string().min(1),
+        slot: zCount
+    })),
+    nextCursor: z.string().nullable(),
+    prevCursor: z.string().nullable()
+});
+
+export type PageResponsePositionFeeClaimEventResponse = z.infer<typeof zPageResponsePositionFeeClaimEventResponse>;
+
+export const zPageResponseProtocolFeeClaimEventResponse = z.object({
+    isFirst: z.boolean(),
+    isLast: z.boolean(),
+    items: z.array(z.object({
+        amountA: zU128String,
+        amountB: zU128String,
+        at: z.iso.datetime({ offset: true }),
+        eventIndex: z.int().gte(0).lte(65535),
+        poolAddress: z.string().min(1),
+        protocol: zProtocolResponse,
+        signature: z.string().min(1),
+        slot: zCount
+    })),
+    nextCursor: z.string().nullable(),
+    prevCursor: z.string().nullable()
+});
+
+export type PageResponseProtocolFeeClaimEventResponse = z.infer<typeof zPageResponseProtocolFeeClaimEventResponse>;
+
+export const zPageResponseRewardClaimEventResponse = z.object({
+    isFirst: z.boolean(),
+    isLast: z.boolean(),
+    items: z.array(z.object({
+        amount: zU128String,
+        at: z.iso.datetime({ offset: true }),
+        eventIndex: z.int().gte(0).lte(65535),
+        owner: z.string().min(1),
+        poolAddress: z.string().min(1),
+        position: z.string().min(1),
+        protocol: zProtocolResponse,
+        rewardIndex: z.int().gte(0).lte(255),
+        rewardMint: z.string().min(1),
+        signature: z.string().min(1),
+        slot: zCount
+    })),
+    nextCursor: z.string().nullable(),
+    prevCursor: z.string().nullable()
+});
+
+export type PageResponseRewardClaimEventResponse = z.infer<typeof zPageResponseRewardClaimEventResponse>;
 
 export const zPoolCreationEventMeteoraDammV2Response = z.object({
     activationPoint: zU128String,
@@ -262,6 +403,100 @@ export const zPoolCreationEventResponse = z.object({
 });
 
 export type PoolCreationEventResponse = z.infer<typeof zPoolCreationEventResponse>;
+
+export const zPositionChangeEventMeteoraDammV2Response = z.union([
+    zMeteoraDammV2PositionNftResponse.and(z.object({
+        kind: z.enum(['open'])
+    })),
+    zMeteoraDammV2PositionNftResponse.and(z.object({
+        kind: z.enum(['close'])
+    })),
+    zMeteoraDammV2VestingLockResponse.and(z.object({
+        kind: z.enum(['vesting_lock'])
+    })),
+    zMeteoraDammV2PermanentLockResponse.and(z.object({
+        kind: z.enum(['permanent_lock'])
+    })),
+    zMeteoraDammV2SplitResponse.and(z.object({
+        kind: z.enum(['split'])
+    }))
+]);
+
+export type PositionChangeEventMeteoraDammV2Response = z.infer<typeof zPositionChangeEventMeteoraDammV2Response>;
+
+export const zPageResponsePositionChangeEventResponse = z.object({
+    isFirst: z.boolean(),
+    isLast: z.boolean(),
+    items: z.array(z.object({
+        at: z.iso.datetime({ offset: true }),
+        eventIndex: z.int().gte(0).lte(65535),
+        meteoraDammV2: zPositionChangeEventMeteoraDammV2Response.optional(),
+        poolAddress: z.string().min(1),
+        protocol: zProtocolResponse,
+        signature: z.string().min(1),
+        slot: zCount
+    })),
+    nextCursor: z.string().nullable(),
+    prevCursor: z.string().nullable()
+});
+
+export type PageResponsePositionChangeEventResponse = z.infer<typeof zPageResponsePositionChangeEventResponse>;
+
+export const zPositionChangeEventResponse = z.object({
+    at: z.iso.datetime({ offset: true }),
+    eventIndex: z.int().gte(0).lte(65535),
+    meteoraDammV2: zPositionChangeEventMeteoraDammV2Response.optional(),
+    poolAddress: z.string().min(1),
+    protocol: zProtocolResponse,
+    signature: z.string().min(1),
+    slot: zCount
+});
+
+export type PositionChangeEventResponse = z.infer<typeof zPositionChangeEventResponse>;
+
+export const zPositionFeeClaimEventResponse = z.object({
+    at: z.iso.datetime({ offset: true }),
+    eventIndex: z.int().gte(0).lte(65535),
+    feeA: zU128String,
+    feeB: zU128String,
+    owner: z.string().min(1),
+    poolAddress: z.string().min(1),
+    position: z.string().min(1),
+    protocol: zProtocolResponse,
+    signature: z.string().min(1),
+    slot: zCount
+});
+
+export type PositionFeeClaimEventResponse = z.infer<typeof zPositionFeeClaimEventResponse>;
+
+export const zProtocolFeeClaimEventResponse = z.object({
+    amountA: zU128String,
+    amountB: zU128String,
+    at: z.iso.datetime({ offset: true }),
+    eventIndex: z.int().gte(0).lte(65535),
+    poolAddress: z.string().min(1),
+    protocol: zProtocolResponse,
+    signature: z.string().min(1),
+    slot: zCount
+});
+
+export type ProtocolFeeClaimEventResponse = z.infer<typeof zProtocolFeeClaimEventResponse>;
+
+export const zRewardClaimEventResponse = z.object({
+    amount: zU128String,
+    at: z.iso.datetime({ offset: true }),
+    eventIndex: z.int().gte(0).lte(65535),
+    owner: z.string().min(1),
+    poolAddress: z.string().min(1),
+    position: z.string().min(1),
+    protocol: zProtocolResponse,
+    rewardIndex: z.int().gte(0).lte(255),
+    rewardMint: z.string().min(1),
+    signature: z.string().min(1),
+    slot: zCount
+});
+
+export type RewardClaimEventResponse = z.infer<typeof zRewardClaimEventResponse>;
 
 export const zSwapEventMeteoraDammV2Response = z.object({
     claimingFee: zU128String,
@@ -1005,6 +1240,70 @@ export const zListPoolLiquidityMovesQuery = z.object({
 
 export const zListPoolLiquidityMovesResponse = zWindowedPageResponseLiquidityMoveResponse;
 
+export const zListPoolPositionChangesPath = z.object({
+    pool: z.string()
+});
+
+export const zListPoolPositionChangesQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListPoolPositionChangesResponse = zPageResponsePositionChangeEventResponse;
+
+export const zListPoolPositionFeeClaimsPath = z.object({
+    pool: z.string()
+});
+
+export const zListPoolPositionFeeClaimsQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListPoolPositionFeeClaimsResponse = zPageResponsePositionFeeClaimEventResponse;
+
+export const zListPoolProtocolFeeClaimsPath = z.object({
+    pool: z.string()
+});
+
+export const zListPoolProtocolFeeClaimsQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListPoolProtocolFeeClaimsResponse = zPageResponseProtocolFeeClaimEventResponse;
+
+export const zListPoolRewardClaimsPath = z.object({
+    pool: z.string()
+});
+
+export const zListPoolRewardClaimsQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListPoolRewardClaimsResponse = zPageResponseRewardClaimEventResponse;
+
 export const zListPoolSignalsPath = z.object({
     pool: z.string()
 });
@@ -1083,6 +1382,42 @@ export const zGetPoolSwapTotalsQuery = z.object({
 });
 
 export const zGetPoolSwapTotalsResponse = zWindowedResponseSwapActivityResponse;
+
+export const zListPositionChangesQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListPositionChangesResponse = zPageResponsePositionChangeEventResponse;
+
+export const zListPositionFeeClaimsQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListPositionFeeClaimsResponse = zPageResponsePositionFeeClaimEventResponse;
+
+export const zListProtocolFeeClaimsQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListProtocolFeeClaimsResponse = zPageResponseProtocolFeeClaimEventResponse;
 
 export const zListProtocolsResponse = z.array(zProtocolCatalogResponse);
 
@@ -1295,6 +1630,70 @@ export const zListProtocolPoolsQuery = z.object({
 
 export const zListProtocolPoolsResponse = zPageResponsePoolResponse;
 
+export const zListProtocolPositionChangesPath = z.object({
+    protocol: z.string()
+});
+
+export const zListProtocolPositionChangesQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListProtocolPositionChangesResponse = zPageResponsePositionChangeEventResponse;
+
+export const zListProtocolPositionFeeClaimsPath = z.object({
+    protocol: z.string()
+});
+
+export const zListProtocolPositionFeeClaimsQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListProtocolPositionFeeClaimsResponse = zPageResponsePositionFeeClaimEventResponse;
+
+export const zListProtocolProtocolFeeClaimsPath = z.object({
+    protocol: z.string()
+});
+
+export const zListProtocolProtocolFeeClaimsQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListProtocolProtocolFeeClaimsResponse = zPageResponseProtocolFeeClaimEventResponse;
+
+export const zListProtocolRewardClaimsPath = z.object({
+    protocol: z.string()
+});
+
+export const zListProtocolRewardClaimsQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListProtocolRewardClaimsResponse = zPageResponseRewardClaimEventResponse;
+
 export const zListProtocolSignalsPath = z.object({
     protocol: z.string()
 });
@@ -1398,6 +1797,18 @@ export const zGetProtocolTvlReadingsHourlyQuery = z.object({
 });
 
 export const zGetProtocolTvlReadingsHourlyResponse = zWindowedResponseProtocolTvlResponse;
+
+export const zListRewardClaimsQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListRewardClaimsResponse = zPageResponseRewardClaimEventResponse;
 
 export const zListSignalsQuery = z.object({
     cursor: z.string().min(1).nullish(),

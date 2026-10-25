@@ -1,0 +1,136 @@
+//! `PgPositionFeeClaimEventRepository` under `yog_api`: the position fee claims of a scope
+//! from the start of a window, the most recent first, paged without repeat nor gap through
+//! shared instants.
+
+use chrono::{DateTime, Duration, TimeZone, Utc};
+use solana_pubkey::Pubkey;
+use solana_signature::Signature;
+use sqlx::PgPool;
+use yog_core::{
+    Cursor, Page,
+    domain::{EventScope, PositionFeeClaimEvent, PositionFeeClaimEventLookup, Protocol},
+};
+use yog_persistence::PgPositionFeeClaimEventRepository;
+
+use super::helpers::{pk, setup_roles_and_connect_as};
+
+fn at(seconds: i64) -> DateTime<Utc> {
+    Utc.with_ymd_and_hms(2026, 10, 20, 12, 0, 0).unwrap() + Duration::seconds(seconds)
+}
+
+fn sig(seed: u8) -> Signature {
+    Signature::from([seed; 64])
+}
+
+async fn insert_claim(
+    pool: &PgPool,
+    address: Pubkey,
+    signature: Signature,
+    index: i32,
+    seconds: i64,
+) {
+    sqlx::query(
+        "INSERT INTO meteora_damm_v2_claim_position_fee_events
+           (pool_address, signature, position, owner, fee_a_claimed, fee_b_claimed, timestamp,
+            slot, event_index, transaction_index)
+         VALUES ($1, $2, $5, $5, 1, 2, $3, 9, $4, NULL)",
+    )
+    .bind(address.to_string())
+    .bind(signature.to_string())
+    .bind(at(seconds))
+    .bind(index)
+    .bind(pk(50).to_string())
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+fn keys(page: &Page<PositionFeeClaimEvent>) -> Vec<(DateTime<Utc>, String, u16)> {
+    page.items
+        .iter()
+        .map(|PositionFeeClaimEvent::MeteoraDammV2(e)| {
+            (e.timestamp, e.signature.to_string(), e.event_index)
+        })
+        .collect()
+}
+
+async fn read_all(
+    repository: &PgPositionFeeClaimEventRepository,
+    scope: EventScope,
+    limit: i64,
+) -> Vec<(DateTime<Utc>, String, u16)> {
+    let mut seen = Vec::new();
+    let mut cursor = None;
+    loop {
+        let page = repository
+            .list_events(scope, at(-60), cursor.take(), limit)
+            .await
+            .unwrap();
+        seen.extend(keys(&page));
+        match page.next_cursor {
+            Some(Cursor::PositionFeeClaimEvent(next)) => cursor = Some(*next),
+            Some(other) => panic!("{other:?}"),
+            None => break,
+        }
+    }
+    seen
+}
+
+/// Mutation: the tie-break dropped, or the cursor compared with `<=` — a claim sharing an
+/// instant skipped, or repeated. The order checked is the database's, never a Rust sort.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_page_follows_through_shared_instants_without_repeat_nor_gap(pool: PgPool) {
+    // Four claims at one instant, two of one transaction: only the signature, then the index,
+    // order them, and every page boundary of two falls among them.
+    for (seed, index, seconds) in [
+        (1, 0, 10),
+        (2, 0, 10),
+        (3, 0, 10),
+        (3, 1, 10),
+        (4, 0, 9),
+        (5, 0, 8),
+        (6, 0, 8),
+    ] {
+        insert_claim(&pool, pk(1), sig(seed), index, seconds).await;
+    }
+    let repository =
+        PgPositionFeeClaimEventRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+
+    let expected = read_all(&repository, EventScope::All, 50).await;
+    let by_two = read_all(&repository, EventScope::All, 2).await;
+    let pool_by_two = read_all(&repository, EventScope::Pool(pk(1)), 2).await;
+
+    assert_eq!(expected.len(), 7);
+    assert_eq!(by_two, expected);
+    assert_eq!(pool_by_two, expected);
+    assert!(
+        expected.windows(2).all(|w| w[0].0 >= w[1].0),
+        "{expected:?}"
+    );
+}
+
+/// Mutation: the pool filter, the protocol dispatch or the window's start dropped — another
+/// pool's claim, a DLMM page, or a claim before the window, listed.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_scope_and_its_window_read_only_their_claims(pool: PgPool) {
+    insert_claim(&pool, pk(1), sig(1), 0, 10).await;
+    insert_claim(&pool, pk(2), sig(2), 0, 20).await;
+    insert_claim(&pool, pk(1), sig(3), 0, -120).await;
+    let repository =
+        PgPositionFeeClaimEventRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+
+    let mine = read_all(&repository, EventScope::Pool(pk(1)), 50).await;
+    let all = read_all(&repository, EventScope::All, 50).await;
+    let damm = read_all(
+        &repository,
+        EventScope::Protocol(Protocol::MeteoraDammV2),
+        50,
+    )
+    .await;
+    let dlmm = read_all(&repository, EventScope::Protocol(Protocol::MeteoraDlmm), 50).await;
+
+    assert_eq!(mine, [(at(10), sig(1).to_string(), 0)]);
+    assert_eq!(all.len(), 2);
+    assert_eq!(damm, all);
+    assert!(dlmm.is_empty());
+}

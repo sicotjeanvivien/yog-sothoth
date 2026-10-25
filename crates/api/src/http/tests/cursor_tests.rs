@@ -129,8 +129,8 @@ fn URL_SAFE_NO_PAD_ENCODE(s: &str) -> String {
     URL_SAFE_NO_PAD.encode(s.as_bytes())
 }
 
-/// Mutation: a field of the event cursor dropped or renamed on one side of the wire — a page
-/// of swaps read back as another key, or refused.
+/// Mutation: a field of the event cursor dropped or renamed on one side of the wire, or a
+/// collection encoded under another's tag — a page read back as another key, or refused.
 #[test]
 fn event_cursor_round_trip() {
     let cursor = EventCursor {
@@ -141,8 +141,29 @@ fn event_cursor_round_trip() {
         event_index: 7,
     };
 
-    let encoded = encode_cursor(&Cursor::SwapEvent(Box::new(cursor.clone()))).unwrap();
-    let decoded = decode_event_cursor(&encoded, EventCollection::Swaps, cursor.scope).unwrap();
+    let boxed = || Box::new(cursor.clone());
+    for (wrapped, collection) in [
+        (Cursor::SwapEvent(boxed()), EventCollection::Swaps),
+        (
+            Cursor::PositionChangeEvent(boxed()),
+            EventCollection::PositionChanges,
+        ),
+        (
+            Cursor::PositionFeeClaimEvent(boxed()),
+            EventCollection::PositionFeeClaims,
+        ),
+        (
+            Cursor::ProtocolFeeClaimEvent(boxed()),
+            EventCollection::ProtocolFeeClaims,
+        ),
+        (
+            Cursor::RewardClaimEvent(boxed()),
+            EventCollection::RewardClaims,
+        ),
+    ] {
+        let encoded = encode_cursor(&wrapped).unwrap();
+        let decoded = decode_event_cursor(&encoded, collection, cursor.scope).unwrap();
 
-    assert_eq!(decoded, cursor);
+        assert_eq!(decoded, cursor, "{collection:?}");
+    }
 }

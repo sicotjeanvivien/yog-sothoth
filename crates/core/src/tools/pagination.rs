@@ -25,6 +25,10 @@ pub enum Cursor {
     SwapEvent(Box<crate::domain::EventCursor>),
     LiquidityChangeEvent(Box<crate::domain::EventCursor>),
     PoolCreationEvent(Box<crate::domain::EventCursor>),
+    PositionChangeEvent(Box<crate::domain::EventCursor>),
+    PositionFeeClaimEvent(Box<crate::domain::EventCursor>),
+    ProtocolFeeClaimEvent(Box<crate::domain::EventCursor>),
+    RewardClaimEvent(Box<crate::domain::EventCursor>),
 }
 
 impl<T> Page<T> {
