@@ -1127,7 +1127,7 @@ fn decodes_update_pool_fees_fixture() {
     assert_eq!(domain.params_raw, wire_params);
 }
 
-/// `event_index` numbers the self-CPI payloads, not the recognised events: implementing one more
+/// `event_index` numbers the inner instructions to cp-amm, not the recognised events: one more
 /// discriminator must not renumber stored events. The dropped `EvtSplitPosition2` leaves its hole.
 #[test]
 fn event_index_counts_dropped_payloads_too() {
@@ -1143,7 +1143,7 @@ fn event_index_counts_dropped_payloads_too() {
         let indices: Vec<u16> = extracted.events.iter().map(|e| e.event_index).collect();
         assert_eq!(
             indices, expected,
-            "{fixture}: event_index must number the payloads cp-amm emitted, \
+            "{fixture}: event_index must number the inner instructions to cp-amm, \
              including the deprecated EvtSplitPosition2 the extractor drops — \
              got {indices:?}, expected {expected:?}"
         );

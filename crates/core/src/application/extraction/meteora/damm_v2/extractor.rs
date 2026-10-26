@@ -1,4 +1,4 @@
-//! Extract DAMM v2 wire events from a confirmed transaction's self-CPI payloads.
+//! Extract DAMM v2 wire events from a confirmed transaction's inner instructions to cp-amm.
 //! Never logs, never aborts the transaction: each payload ends up decoded,
 //! unknown or failed, for the caller to log and count.
 
@@ -46,8 +46,8 @@ pub struct ExtractedEvents {
 }
 
 /// A recognized wire event and its position in the transaction.
-/// ⚠️ `event_index` counts **every** self-CPI payload, skipped ones included: that
-/// keeps it stable across releases ([`crate::domain::EventPosition`]).
+/// ⚠️ `event_index` counts every inner instruction to cp-amm, `event_cpi` or not: that keeps
+/// it stable across releases ([`crate::domain::EventPosition`]).
 #[derive(Debug)]
 pub struct IndexedWireEvent {
     pub event_index: u16,
@@ -79,7 +79,7 @@ pub enum ExtractFailure {
         reason: String,
     },
 
-    /// More self-CPI payloads than an `event_index` can number.
+    /// More inner instructions addressed to cp-amm than an `event_index` can number.
     /// ⚠️ Dropped, never truncated: a wrong index is a duplicate or a lost row.
     #[error("event index {index} exceeds u16")]
     EventIndexOverflow { index: usize },

@@ -32,6 +32,52 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.3.0",
+    date: "2026-10-27",
+    summary:
+      "The API serves the fee parameters of DAMM v2 pools, refuses a query key a route does not take, and no longer fails on very large amounts.",
+    sections: [
+      {
+        kind: "features",
+        items: [
+          {
+            text: "The fee parameters of a DAMM v2 pool's creation and of an operator's fee update, on pool-creations and pool-changes: the base fee by its schedule (time, market cap or rate limiter, linear or exponential), the compounding share and the dynamic fee. Each state is named, an unchanged field included; fees is null only where the stored bytes do not decode, and the indexer counts those it receives (yog_indexer_fee_parameters_undecodable_total).",
+            technical: true,
+          },
+          {
+            text: "A page of signals filtered by protocol or by severity reads only what can fill it, compressed chunks included, through two new indexes (migration 040).",
+            technical: true,
+          },
+          {
+            text: "TimescaleDB 2.31.0.",
+            technical: true,
+          },
+        ],
+      },
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "The Meteora and Raydium logos of the menu fit their box again.",
+            technical: false,
+          },
+          {
+            text: "Changed: a query key a route does not take is refused (400, naming the key) on every API route, instead of being ignored — /api/swaps/totals?protocol=… used to answer with every protocol.",
+            technical: true,
+          },
+          {
+            text: "A page of pool creations, liquidity changes or position changes no longer fails (500) when one of its amounts ends in sixteen zeros or more.",
+            technical: true,
+          },
+          {
+            text: "yog-signals stops within the grace every daemon has, and names a detector that outlives it.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.2.0",
     date: "2026-10-26",
     summary:

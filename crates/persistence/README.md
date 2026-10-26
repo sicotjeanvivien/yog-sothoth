@@ -185,7 +185,8 @@ Two things to know before touching this query:
   re-evaluated against the latest committed row while the CTE is not. The
   method's doc-comment carries the detail.
 - **Within one slot the order is partial and biased**, not a coin flip:
-  `event_index` numbers the emissions of one transaction, so comparing it
+  `event_index` numbers the inner instructions of one transaction to the
+  program, so comparing it
   across two ranks unlike things, and the largest index wins. It is kept
   because it is order-independent — a replay reproduces the same final state —
   where last-writer-wins would be unbiased and non-deterministic. gRPC closes
