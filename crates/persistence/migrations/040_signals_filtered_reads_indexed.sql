@@ -14,7 +14,7 @@ BEGIN
     FOR c IN
         SELECT format('%I.%I', chunk_schema, chunk_name)::REGCLASS
           FROM timescaledb_information.chunks
-         WHERE hypertable_name = 'signals' AND is_compressed
+         WHERE hypertable_schema = 'public' AND hypertable_name = 'signals' AND is_compressed
     LOOP
         -- ⚠️ Not `compress_chunk(c, recompress => true)`: on a chunk already compressed,
         -- it draws neither filter.

@@ -14,24 +14,11 @@ use yog_core::{
 };
 use yog_persistence::PgSignalRepository;
 
-/// The Bloom filters of a compressed chunk of `signals`, before 040 and after: one per index
-/// and one per column it leads with, the primary key's `(id, triggered_at)` included.
-const BEFORE_040: &[&str] = &[
-    "id",
-    "id+triggered_at",
-    "pool_address",
-    "pool_address+triggered_at",
-];
-const AFTER_040: &[&str] = &[
-    "id",
-    "id+triggered_at",
-    "pool_address",
-    "pool_address+triggered_at",
-    "protocol",
-    "protocol+triggered_at",
-    "severity",
-    "severity+triggered_at",
-];
+/// The filtered columns of `list`, and those a compressed chunk carries a single-column Bloom
+/// filter on, before 040 and after; the filters TimescaleDB draws besides are not 040's.
+const FILTERED: &[&str] = &["pool_address", "protocol", "severity"];
+const BEFORE_040: &[&str] = &["pool_address"];
+const AFTER_040: &[&str] = &["pool_address", "protocol", "severity"];
 
 fn signal(protocol: Protocol, severity: Severity, pool: u8, days_ago: i64) -> Signal {
     Signal {
@@ -118,9 +105,14 @@ async fn bloom_columns(pool: &PgPool) -> Vec<(bool, Vec<String>)> {
 
 fn every_chunk_compressed_with(chunks: &[(bool, Vec<String>)], expected: &[&str]) -> bool {
     !chunks.is_empty()
-        && chunks
-            .iter()
-            .all(|(compressed, columns)| *compressed && columns == expected)
+        && chunks.iter().all(|(compressed, columns)| {
+            let filtered: Vec<&str> = FILTERED
+                .iter()
+                .copied()
+                .filter(|column| columns.iter().any(|c| c == column))
+                .collect();
+            *compressed && filtered == expected
+        })
 }
 
 /// The five filtered pages, as ids, newest first.
@@ -185,8 +177,8 @@ async fn a_chunk_compressed_before_040_gains_both_filters(pool: PgPool) {
     let before = bloom_columns(&pool).await;
     assert!(
         every_chunk_compressed_with(&before, BEFORE_040),
-        "before 040 every chunk must be compressed with the filters of the primary key and of \
-         pool_address alone, or what follows does not show 040 adding the two: {before:?}"
+        "before 040 every chunk must be compressed with a Bloom filter on pool_address alone \
+         of the filtered columns, or what follows does not show 040 adding the two: {before:?}"
     );
 
     migrator.run_to(40, &pool).await.unwrap();
@@ -208,11 +200,12 @@ async fn a_chunk_compressed_after_040_carries_both_filters(pool: PgPool) {
     let chunks = bloom_columns(&pool).await;
     assert!(
         every_chunk_compressed_with(&chunks, AFTER_040),
-        "a chunk the policy compresses must carry a Bloom filter on each indexed column: \
+        "a chunk compressed after 040 must carry a Bloom filter on each filtered column: \
          {chunks:?}"
     );
 }
 
+/// Against a compressed chunk that loses a match: TimescaleDB's behaviour, not 040's.
 #[sqlx::test]
 async fn a_compressed_chunk_serves_the_same_filtered_pages(pool: PgPool) {
     seed(&pool).await;
