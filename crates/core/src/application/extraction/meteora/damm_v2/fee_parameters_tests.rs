@@ -170,8 +170,8 @@ fn every_creation_layout_seen_decodes_to_its_values() {
     }
 }
 
-/// Mode 2 has no pool in the snapshot: this blob is built from cp-amm's `BorshFeeRateLimiter`,
-/// each field a distinct value so that two swapped offsets cannot agree.
+/// Against a rate-limiter offset moved: a blob built from cp-amm's `BorshFeeRateLimiter`, each
+/// field a distinct value so that two swapped offsets cannot agree.
 #[test]
 fn a_rate_limiter_built_from_the_source_layout_decodes() {
     let mut raw = Vec::new();
@@ -215,8 +215,8 @@ fn the_fee_updates_of_the_snapshot_decode() {
     }
 }
 
-/// Against the two-field layout refused. The `params_raw` of the fixture
-/// `tests/fixtures/damm_v2/update_pool_fees.json`, captured before the compounding fee existed.
+/// Against the two-field layout refused: the `params_raw` of the fixture
+/// `tests/fixtures/damm_v2/update_pool_fees.json`.
 #[test]
 fn an_update_of_the_earlier_two_field_layout_decodes() {
     let raw = bytes(

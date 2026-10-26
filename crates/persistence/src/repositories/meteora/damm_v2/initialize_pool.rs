@@ -1,5 +1,5 @@
 //! Initialize-pool (genesis) events repository.
-//! The fee parameters are persisted as a raw borsh blob (`pool_fees_raw`), undecoded.
+//! The fee parameters are persisted as a raw borsh blob (`pool_fees_raw`).
 
 use async_trait::async_trait;
 use sqlx::PgPool;
