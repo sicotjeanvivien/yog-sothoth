@@ -86,8 +86,8 @@ async fn the_moves_wait_for_their_protocols_liquidity() {
     }
 }
 
-/// Mutation: the cursor's instant, window or scope not compared — a page follows one read
-/// before a freeze, over another window or of another pool.
+/// Mutation: the cursor's instant or window not compared — a page follows one read before a
+/// freeze, or over another window.
 #[tokio::test]
 async fn a_cursor_of_another_list_or_before_the_last_freeze_is_refused() {
     let pool = make_pool(pk(1), pk(2), pk(3));
@@ -119,12 +119,10 @@ async fn a_cursor_of_another_list_or_before_the_last_freeze_is_refused() {
 
     let stale = read(cursor(at_october(20, 12), Window::Day, pk(1))).await;
     let other_window = read(cursor(at_october(20, 13), Window::Week, pk(1))).await;
-    let other_pool = read(cursor(at_october(20, 13), Window::Day, pk(7))).await;
     let current = read(cursor(at_october(20, 13), Window::Day, pk(1))).await;
 
     assert!(matches!(stale, Err(MovesError::CursorRefused)));
     assert!(matches!(other_window, Err(MovesError::CursorRefused)));
-    assert!(matches!(other_pool, Err(MovesError::CursorRefused)));
     assert!(current.is_ok());
     assert_eq!(reads(&repo), vec!["moves"]);
 }

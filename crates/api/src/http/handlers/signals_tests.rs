@@ -64,3 +64,19 @@ async fn streams_past_the_cap_are_refused_until_one_closes() {
     drop(first);
     assert_eq!(open().status(), StatusCode::OK);
 }
+
+/// Mutation: the unknown keys let through — `?pool=` answered with every protocol's signals.
+#[tokio::test]
+async fn a_key_the_signals_do_not_take_is_refused() {
+    let pool = crate::testing::pk(1);
+    for uri in [
+        format!("/api/signals?pool={pool}"),
+        format!("/api/protocols/meteora_damm_v2/signals?pool={pool}"),
+    ] {
+        let (status, content_type, body) = get(&uri).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}: {body}");
+        assert_eq!(content_type, "application/problem+json", "{uri}");
+    }
+    let (status, _, body) = get("/api/signals?severity=critical&limit=5").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+}

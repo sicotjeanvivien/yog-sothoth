@@ -114,7 +114,7 @@ impl LiquidityMoveService {
     ) -> Result<Measured<Page<LiquidityMove>>, MovesError> {
         let period = self.build_liquidity_period(window, protocol).await?;
         if let (Some(period), Some(cursor)) = (&period, &cursor)
-            && (cursor.as_of != period.as_of || cursor.window != window || cursor.scope != scope)
+            && (cursor.as_of != period.as_of || cursor.window != window)
         {
             return Err(MovesError::CursorRefused);
         }

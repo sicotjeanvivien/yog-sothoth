@@ -435,7 +435,7 @@ served as `application/problem+json`:
 | 503 | `Service Unavailable` | Over capacity: no work slot within 2 s, too many open signal streams, the request past its deadline, or the database out of connections or past `statement_timeout`. Carries `Retry-After`; see [Capacity bounds](#capacity-bounds) |
 | 500 | `Internal Server Error` | DB failure, encoding bug. `detail` is always the generic message; the real cause is logged server-side under a `request_id` correlatable via the `x-request-id` response header |
 
-A parameter absent is not provided; present and empty (`?pool=`), it is an
+A parameter absent is not provided; present and empty (`?cursor=`), it is an
 invalid value — `400`, like any value that does not parse.
 
 Every `/api` route answers its errors through one layer

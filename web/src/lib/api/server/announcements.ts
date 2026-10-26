@@ -10,6 +10,11 @@ import {
 } from "../schema/zod.gen";
 
 export async function fetchOpenAnnouncements(): Promise<AnnouncementEntryResponse[]> {
-  const page = await apiGet("/api/announcements", { status: "open" }, zListAnnouncementsResponse);
+  // ⚠️ The widest page: it is ordered by start, the banner by severity.
+  const page = await apiGet(
+    "/api/announcements",
+    { status: "open", limit: 200 },
+    zListAnnouncementsResponse,
+  );
   return page.items;
 }
