@@ -1,6 +1,6 @@
 //! The fee parameters of a DAMM v2 pool creation and of a fee update, as cp-amm writes them: a
-//! fee is a numerator over 1e9, a period a slot or a second as the creation's `activationType`
-//! says. Each state a field can be in is named, never `null`, which says the blob is unread.
+//! fee is a numerator over 1e9, a scheduler's period a slot or a second as the creation's
+//! `activationType` says. Each state is named, never `null`, which says the blob is unread.
 
 use serde::Serialize;
 use utoipa::ToSchema;

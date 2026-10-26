@@ -55,24 +55,34 @@ insert_only_mock!(
     MeteoraDammV2PermanentLockPositionEvent,
     "insert:permanent_lock_position"
 );
-insert_only_mock!(
-    MockInit,
-    MeteoraDammV2InitializePoolEventRepository,
-    MeteoraDammV2InitializePoolEvent,
-    "insert:initialize_pool"
-);
+struct MockInit(Calls, InsertOutcome);
+#[async_trait]
+impl MeteoraDammV2InitializePoolEventRepository for MockInit {
+    async fn insert(
+        &self,
+        _e: &MeteoraDammV2InitializePoolEvent,
+    ) -> RepositoryResult<InsertOutcome> {
+        rec(&self.0, "insert:initialize_pool");
+        Ok(self.1)
+    }
+}
 insert_only_mock!(
     MockSetStatus,
     MeteoraDammV2SetPoolStatusEventRepository,
     MeteoraDammV2SetPoolStatusEvent,
     "insert:set_pool_status"
 );
-insert_only_mock!(
-    MockUpdateFees,
-    MeteoraDammV2UpdatePoolFeesEventRepository,
-    MeteoraDammV2UpdatePoolFeesEvent,
-    "insert:update_pool_fees"
-);
+struct MockUpdateFees(Calls, InsertOutcome);
+#[async_trait]
+impl MeteoraDammV2UpdatePoolFeesEventRepository for MockUpdateFees {
+    async fn insert(
+        &self,
+        _e: &MeteoraDammV2UpdatePoolFeesEvent,
+    ) -> RepositoryResult<InsertOutcome> {
+        rec(&self.0, "insert:update_pool_fees");
+        Ok(self.1)
+    }
+}
 insert_only_mock!(
     MockClaimProtocolFee,
     MeteoraDammV2ClaimProtocolFeeEventRepository,
@@ -236,7 +246,13 @@ fn build_with(
     swap_outcome: InsertOutcome,
     pcs_outcome: PoolCurrentStateUpsertOutcome,
 ) -> MeteoraDammV2EventPersistor {
-    build_all(calls, swap_outcome, pcs_outcome, false)
+    build_all(
+        calls,
+        swap_outcome,
+        pcs_outcome,
+        false,
+        InsertOutcome::Inserted,
+    )
 }
 
 fn build_with_failing_pool_upsert(calls: Calls) -> MeteoraDammV2EventPersistor {
@@ -245,6 +261,20 @@ fn build_with_failing_pool_upsert(calls: Calls) -> MeteoraDammV2EventPersistor {
         InsertOutcome::Inserted,
         applied_without_ambiguity(),
         true,
+        InsertOutcome::Inserted,
+    )
+}
+
+fn build_with_fee_insert_outcome(
+    calls: Calls,
+    outcome: InsertOutcome,
+) -> MeteoraDammV2EventPersistor {
+    build_all(
+        calls,
+        InsertOutcome::Inserted,
+        applied_without_ambiguity(),
+        false,
+        outcome,
     )
 }
 
@@ -253,6 +283,7 @@ fn build_all(
     swap_outcome: InsertOutcome,
     pcs_outcome: PoolCurrentStateUpsertOutcome,
     pool_upsert_fails: bool,
+    fee_insert_outcome: InsertOutcome,
 ) -> MeteoraDammV2EventPersistor {
     let repos = DammV2Repos {
         swap_event: Arc::new(MockSwap(calls.clone(), swap_outcome)),
@@ -270,10 +301,10 @@ fn build_all(
         close_position: Arc::new(MockClose(calls.clone())),
         lock_position: Arc::new(MockLock(calls.clone())),
         permanent_lock_position: Arc::new(MockPermLock(calls.clone())),
-        initialize_pool: Arc::new(MockInit(calls.clone())),
+        initialize_pool: Arc::new(MockInit(calls.clone(), fee_insert_outcome)),
         set_pool_status: Arc::new(MockSetStatus(calls.clone())),
         split_position: Arc::new(MockSplitPosition(calls.clone())),
-        update_pool_fees: Arc::new(MockUpdateFees(calls.clone())),
+        update_pool_fees: Arc::new(MockUpdateFees(calls.clone(), fee_insert_outcome)),
     };
     let pm = Arc::new(PoolMaintenance::new(
         Arc::new(MockPoolRepo(calls.clone(), pool_upsert_fails)),
@@ -707,7 +738,7 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
         ["pool:touch", "insert:permanent_lock_position"]
     );
 
-    // initialize_pool: upsert + insert, no projection and no fee decoding; the blob is stored verbatim.
+    // initialize_pool: upsert + insert, no projection; the blob is stored verbatim.
     // All-zero tail → mode 0, no periods, no dynamic fee → constant fee shape.
     let mut fee_blob = vec![0u8; 31];
     fee_blob[0..8].copy_from_slice(&2_500_000u64.to_le_bytes());
@@ -926,8 +957,9 @@ fn a_failed_pool_upsert_is_counted_per_event_kind_and_the_event_still_persists()
 
 // ── fee parameters the decoder cannot read are counted, the event stored all the same ──────
 
-/// Mutations this is written against: the insert skipped on a refusal, the counter dropped, or
-/// a readable blob counted. Not `#[tokio::test]`: `with_local_recorder` binds the thread.
+/// Mutations this is written against: the insert skipped on a refusal, the counter dropped, a
+/// readable blob counted, or a duplicate counted again. Not `#[tokio::test]`: `with_local_recorder`
+/// binds the thread.
 #[test]
 fn undecodable_fee_parameters_are_counted_and_the_event_stored() {
     use metrics_util::debugging::{DebugValue, DebuggingRecorder};
@@ -987,6 +1019,16 @@ fn undecodable_fee_parameters_are_counted_and_the_event_stored() {
                     ],
                     "an event whose fees do not decode is stored raw like any other"
                 );
+
+                // A replay: the same unreadable blobs, their rows already there.
+                let replay = build_with_fee_insert_outcome(calls.clone(), InsertOutcome::Skipped);
+                replay
+                    .persist(&MeteoraDammV2Event::InitializePool(initialize_pool(vec![
+                        0;
+                        30
+                    ])))
+                    .await;
+                replay.persist(&update(vec![1, 160, 37])).await;
             });
     });
 
@@ -1017,6 +1059,6 @@ fn undecodable_fee_parameters_are_counted_and_the_event_stored() {
             ("initialize_pool".to_string(), "truncated".to_string(), 1),
             ("update_pool_fees".to_string(), "truncated".to_string(), 1),
         ],
-        "each unreadable blob counted once, by event and reason, and no readable one"
+        "each unreadable blob counted once, by event and reason: no readable one, no replay"
     );
 }

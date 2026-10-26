@@ -254,7 +254,12 @@ fn a_blob_that_breaks_its_layout_is_refused_with_its_reason() {
     let constant = "40420f00000000000000000000000000000000000000000000000000000000";
     let unknown_mode = format!("{}05{}", &constant[..52], &constant[54..]);
     let bad_dynamic_tag = format!("{}02", &constant[..60]);
-    let cases: [(&str, Vec<u8>, Rejection); 4] = [
+    let cases: [(&str, Vec<u8>, Rejection); 5] = [
+        (
+            "creation, padding 1",
+            bytes(&format!("{}01{}", &constant[..58], &constant[60..])),
+            Rejection::NonZeroPadding { value: 1 },
+        ),
         (
             "creation, mode 5",
             bytes(&unknown_mode),

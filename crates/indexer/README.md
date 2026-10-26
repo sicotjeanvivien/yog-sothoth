@@ -427,9 +427,9 @@ the two dispatch points a new protocol touches in this crate, the other being
   have shown it.
 - **Fee parameters the decoder cannot read are counted, the event stored all the same** — a
   DAMM v2 creation or fee update keeps its fee blob raw, and the API decodes it on read
-  (`null` when it cannot). The persistor tries the same decoder on arrival, so a layout the
-  decoder does not know shows up as `yog_indexer_fee_parameters_undecodable_total{event_kind,
-  reason}` rather than as `null`s nobody counts.
+  (`null` when it cannot). The persistor tries the same decoder on each row it writes, so a
+  layout the decoder does not know shows up as `yog_indexer_fee_parameters_undecodable_total{event_kind,
+  reason}`. It counts what arrives once it runs: rows stored before were decoded once, offline.
 - **An order the key cannot decide is counted, not assumed away** — the
   `pool_current_state` projection orders on `(slot, transaction_index,
   event_index)`, but `transaction_index` is empty on the `getTransaction`

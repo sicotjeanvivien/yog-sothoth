@@ -30,6 +30,9 @@ pub enum MeteoraDammV2FeeParametersRejection {
     },
     #[error("{len} bytes past the last field")]
     TrailingBytes { len: usize },
+    /// A layout that moved past the base fee would land other bytes here.
+    #[error("padding byte {value}, not 0")]
+    NonZeroPadding { value: u8 },
 }
 
 impl MeteoraDammV2FeeParametersRejection {
@@ -40,6 +43,7 @@ impl MeteoraDammV2FeeParametersRejection {
             Self::InvalidOptionTag { .. } => "invalid_option_tag",
             Self::Truncated { .. } => "truncated",
             Self::TrailingBytes { .. } => "trailing_bytes",
+            Self::NonZeroPadding { .. } => "non_zero_padding",
         }
     }
 }
@@ -51,7 +55,10 @@ pub fn decode_meteora_damm_v2_pool_fees(raw: &[u8]) -> Result<MeteoraDammV2PoolF
     let mut reader = Reader::new(raw);
     let base_fee = decode_base_fee(reader.take::<BASE_FEE_LEN>("base_fee")?)?;
     let compounding_fee_bps = u16::from_le_bytes(reader.take("compounding_fee_bps")?);
-    reader.take::<1>("padding")?;
+    let [padding] = reader.take::<1>("padding")?;
+    if padding != 0 {
+        return Err(Rejection::NonZeroPadding { value: padding });
+    }
     let dynamic_fee = if reader.option_tag("dynamic_fee")? {
         Some(decode_dynamic_fee(reader.take("dynamic_fee")?))
     } else {

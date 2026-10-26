@@ -390,14 +390,18 @@ impl MeteoraDammV2EventPersistor {
             .await;
         // Fee columns are yog-context's, read from the account; `discover_pool` leaves them NULL,
         // which queues the pool for enrichment. The blob is stored verbatim by the insert.
-        if let Err(reason) = decode_meteora_damm_v2_pool_fees(&event.pool_fees_raw) {
-            Self::fees_undecodable(kind, &event.pool_address, &reason);
-        }
-        self.repos
+        let outcome = self
+            .repos
             .initialize_pool
             .insert(event)
             .await
-            .map_err(anyhow::Error::new)
+            .map_err(anyhow::Error::new)?;
+        if outcome == InsertOutcome::Inserted
+            && let Err(reason) = decode_meteora_damm_v2_pool_fees(&event.pool_fees_raw)
+        {
+            Self::fees_undecodable(kind, &event.pool_address, &reason);
+        }
+        Ok(outcome)
     }
 
     /// A split moves contents between two positions, nothing in or out of the pool: touch + insert.
@@ -429,7 +433,7 @@ impl MeteoraDammV2EventPersistor {
             .map_err(anyhow::Error::new)
     }
 
-    /// Fee parameters the decoder cannot read: logged and counted, the event stored raw anyway.
+    /// Fee parameters of a stored event the decoder cannot read: logged and counted, once per row.
     fn fees_undecodable(
         kind: &'static str,
         pool: &Pubkey,
@@ -460,14 +464,18 @@ impl MeteoraDammV2EventPersistor {
         {
             warn!(error = %err, kind, "mark_needs_refresh failed");
         }
-        if let Err(reason) = decode_meteora_damm_v2_pool_fees_update(&event.params_raw) {
-            Self::fees_undecodable(kind, &event.pool_address, &reason);
-        }
-        self.repos
+        let outcome = self
+            .repos
             .update_pool_fees
             .insert(event)
             .await
-            .map_err(anyhow::Error::new)
+            .map_err(anyhow::Error::new)?;
+        if outcome == InsertOutcome::Inserted
+            && let Err(reason) = decode_meteora_damm_v2_pool_fees_update(&event.params_raw)
+        {
+            Self::fees_undecodable(kind, &event.pool_address, &reason);
+        }
+        Ok(outcome)
     }
 }
 
