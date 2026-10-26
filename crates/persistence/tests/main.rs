@@ -58,6 +58,7 @@ mod reward_valuation;
 mod rotation_runs;
 mod runtime_role_writes;
 mod set_pool_status;
+mod signal_compression;
 mod signal_dedup;
 mod signal_list;
 mod split_position;
