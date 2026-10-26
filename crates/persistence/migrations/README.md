@@ -803,6 +803,18 @@ Three false greens have already come out of this project by trusting a check
 that could not fail: an empty table, an unquantified loss, and this one. **A
 verification that cannot come out red is not a verification.**
 
+### An index serves a compressed chunk only through the Bloom filters drawn from it
+
+At compression, TimescaleDB draws Bloom filters from the columns of each index of the
+table (`timescaledb.auto_sparse_indexes`, on by default): a filtered read skips every
+compressed batch whose filter rules the value out. On a column that neither segments nor
+carries a filter, a compressed chunk is decompressed whole to be filtered.
+
+An index added later serves a chunk already compressed only once that chunk is decompressed
+and compressed again — `compress_chunk(…, recompress => true)` draws nothing. That is what
+`040_signals_filtered_reads_indexed.sql` does; `tests/signal_compression.rs` reads the
+filters each chunk carries from the catalog, before and after it.
+
 ## Local development workflow
 
 When you add a new migration:
