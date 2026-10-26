@@ -13,8 +13,8 @@ pub struct EventPosition {
     /// Position of the transaction within its slot; `None` from our `getTransaction`
     /// provider, so two transactions of one slot cannot be ordered.
     pub transaction_index: Option<u32>,
-    /// Position among the program's self-CPI payloads, from 0.
-    /// ⚠️ Counts undecoded payloads too: a new decoder must not renumber stored rows.
+    /// Position among the transaction's inner instructions addressed to the program, from 0.
+    /// ⚠️ Counts every one, `event_cpi` or not: a new decoder must not renumber stored rows.
     pub event_index: u16,
 }
 
