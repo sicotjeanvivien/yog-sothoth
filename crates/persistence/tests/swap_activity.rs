@@ -4,7 +4,7 @@
 use chrono::Duration;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
-use yog_core::domain::{FrozenPeriod, Protocol, SwapActivityLookup, Window};
+use yog_core::domain::{FrozenHours, FrozenPeriod, Protocol, SwapActivityLookup, Window};
 use yog_persistence::PgSwapActivityRepository;
 
 use super::helpers::{DAMM, DLMM, as_of, period, pk, setup_roles_and_connect_as};
@@ -137,4 +137,63 @@ async fn a_pools_day_is_24_hours_ending_at_as_of_and_held_whole(pool: PgPool) {
     assert_eq!(daily.len(), 2);
     assert_eq!(daily[0].from, as_of() - Duration::hours(48));
     assert_eq!(daily[1].activity.pool_hours, 24);
+}
+
+/// Mutation: a protocol's days cut at midnight, or the `covered_since` bound dropped — a first
+/// day the facts do not hold whole is drawn.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_protocols_day_is_24_hours_ending_at_as_of_and_held_whole(pool: PgPool) {
+    seed_protocol_hours(&pool, DAMM, 24 * 6 + 12, 1).await;
+    let repository = repository(&pool).await;
+    let week = FrozenPeriod {
+        covered_since: as_of() - Duration::hours(24 * 6 + 12),
+        ..period(24 * 7)
+    };
+
+    let daily = repository.list_protocol_daily(&week, None).await.unwrap();
+
+    assert_eq!(daily.len(), 6);
+    assert_eq!(daily[0].from, week.from + Duration::days(1));
+    assert!(
+        daily
+            .iter()
+            .all(|d| d.value.volume_usd == Some(Decimal::from(24)))
+    );
+}
+
+/// Mutation: the distinct pools joined without the period's last hour — the window before
+/// reads the pools written for the window now.
+#[sqlx::test(migrations = "./migrations")]
+async fn the_previous_window_reads_the_pools_written_a_window_earlier(pool: PgPool) {
+    seed_protocol_hours(&pool, DAMM, 24 * 3, 1).await;
+    for (hours_back, pools) in [(1, 10), (25, 7)] {
+        sqlx::query(
+            "INSERT INTO analytic_protocol_periods (protocol, period, bucket, active_pools)
+             VALUES ('meteora_damm_v2', '24h', $1, $2)",
+        )
+        .bind(as_of() - Duration::hours(hours_back))
+        .bind(pools)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let repository = repository(&pool).await;
+    let hours = FrozenHours {
+        first: as_of() - Duration::hours(24 * 3),
+        last_frozen: as_of() - Duration::hours(1),
+    };
+    let read = |offset| {
+        let repository = &repository;
+        async move {
+            let period = FrozenPeriod::of(hours, Window::Day, offset);
+            let rows = repository
+                .find_protocol_totals(&period, Window::Day, None)
+                .await
+                .unwrap();
+            rows.iter().map(|row| row.pools).collect::<Vec<_>>()
+        }
+    };
+
+    assert_eq!(read(None).await, [Some(10)]);
+    assert_eq!(read(Some(Window::Day)).await, [Some(7)]);
 }

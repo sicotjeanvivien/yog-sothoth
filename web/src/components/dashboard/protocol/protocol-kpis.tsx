@@ -1,7 +1,7 @@
 /**
  * The KPI cells a protocol's page has and the Overview has not: its fees with their effective
  * rate, and in the advanced mode the protocol's fees with their share. The others are the
- * Overview's, in the protocol's scope.
+ * Overview's, on the protocol's routes.
  */
 
 import { getLocale, getTranslations } from "next-intl/server";
@@ -10,10 +10,9 @@ import { closedReason, KpiCell, Unavailable } from "@/components/dashboard/overv
 import { kpiError, usd, valued } from "@/components/dashboard/overview/overview-kpis";
 import { lateStamp } from "@/components/dashboard/overview/overview-states";
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
-import { fetchProtocolActivity } from "@/lib/api/server/protocols";
+import { fetchSwapTotals } from "@/lib/api/server/protocols";
 import { formatFeeRate, formatPercent } from "@/lib/format/format-percent";
 import type { Period } from "@/lib/overview/period";
-import { inScope } from "@/lib/overview/scope";
 import { shareOf, sumUsd } from "@/lib/overview/totals";
 
 type KpiProps = { period: Period; protocol: ProtocolResponse };
@@ -27,7 +26,7 @@ export async function FeesRateKpi({ period, protocol }: KpiProps) {
 
   let now;
   try {
-    now = await fetchProtocolActivity(period);
+    now = await fetchSwapTotals(protocol, period);
   } catch (err) {
     return kpiError(err, label, info);
   }
@@ -36,7 +35,7 @@ export async function FeesRateKpi({ period, protocol }: KpiProps) {
     return <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} />;
   }
 
-  const items = inScope(now.items, protocol);
+  const items = now.items;
   const fees = sumUsd(items.map((i) => i.feesUsd));
   const rate = shareOf(fees, sumUsd(items.map((i) => i.volumeUsd)));
 
@@ -60,7 +59,7 @@ export async function ProtocolFeesKpi({ period, protocol }: KpiProps) {
 
   let now;
   try {
-    now = await fetchProtocolActivity(period);
+    now = await fetchSwapTotals(protocol, period);
   } catch (err) {
     return kpiError(err, label, info, true);
   }
@@ -71,7 +70,7 @@ export async function ProtocolFeesKpi({ period, protocol }: KpiProps) {
     );
   }
 
-  const items = inScope(now.items, protocol);
+  const items = now.items;
   const protocolFees = sumUsd(items.map((i) => i.protocolFeesUsd));
   const share = shareOf(protocolFees, sumUsd(items.map((i) => i.feesUsd)));
 

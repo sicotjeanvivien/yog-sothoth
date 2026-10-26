@@ -1,7 +1,7 @@
 //! The swaps, read live, and their measures: their totals, their series, by token — for every
 //! protocol, one protocol, or one pool.
 
-use crate::application::BucketPeriod;
+use crate::application::{BucketPeriod, TokenActivityRead};
 use crate::http::cursor::EventCollection;
 use crate::http::{
     AppState,
@@ -10,8 +10,8 @@ use crate::http::{
         ProtocolSwapActivityResponse, SwapActivityResponse, SwapEventResponse,
         TokenActivityPageResponse, WindowedResponse,
         request::{
-            ActivityParams, EventsParams, ListEventsRequest, TokenActivityParams, WindowParams,
-            parse_pool, parse_protocol,
+            ActivityParams, EventsParams, ListEventsRequest, ListTokenActivityRequest,
+            TokenActivityParams, WindowParams, parse_pool, parse_protocol,
         },
     },
     error::ApiError,
@@ -246,7 +246,20 @@ pub(crate) async fn list_swaps_by_token(
     State(state): State<AppState>,
     Query(params): Query<TokenActivityParams>,
 ) -> Result<Json<TokenActivityPageResponse>, ApiError> {
-    super::token::token_ranking(&state, params).await
+    let request = ListTokenActivityRequest::parse(params)?;
+    match state
+        .swap_activity_service
+        .list_token_activity(request.window, request.cursor, request.limit)
+        .await?
+    {
+        TokenActivityRead::Page(measured) => Ok(Json(TokenActivityPageResponse::new(
+            request.window,
+            measured,
+        )?)),
+        TokenActivityRead::CursorExpired => Err(ApiError::BadRequest(
+            "`cursor` belongs to a ranking rewritten since: start again without it".to_string(),
+        )),
+    }
 }
 
 #[utoipa::path(

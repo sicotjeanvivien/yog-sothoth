@@ -1,5 +1,7 @@
 //! PostgreSQL implementation of [`ProtocolTvlLookup`]: yog-analytic's hourly TVL readings.
 
+mod rows;
+
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
@@ -8,8 +10,8 @@ use yog_core::{
     domain::{Protocol, ProtocolTvl, ProtocolTvlLookup},
 };
 
-use super::protocol_activity::rows::ProtocolTvlRow;
 use crate::repositories::helper::{bind_protocol_filter, map_sqlx_error};
+use rows::ProtocolTvlRow;
 
 pub struct PgProtocolTvlRepository {
     pool: PgPool,

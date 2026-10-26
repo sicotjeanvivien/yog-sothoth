@@ -14,8 +14,8 @@ mod get_token;
 mod list_announcements;
 mod list_events;
 mod list_liquidity_moves;
-mod list_pool_liquidity_moves;
 mod list_pools;
+mod list_protocols;
 mod list_rotation_runs;
 mod list_signals;
 mod list_token_activity;
@@ -27,12 +27,10 @@ pub(crate) use get_token::GetTokenRequest;
 pub(crate) use list_announcements::{AnnouncementsParams, ListAnnouncementsRequest};
 pub(crate) use list_events::{EventsParams, ListEventsRequest};
 pub(crate) use list_liquidity_moves::{LiquidityMovesParams, ListLiquidityMovesRequest};
-pub(crate) use list_pool_liquidity_moves::{
-    ListPoolLiquidityMovesRequest, PoolLiquidityMovesParams,
-};
 pub(crate) use list_pools::{ListPoolsRequest, PoolsParams};
+pub(crate) use list_protocols::{ListProtocolsRequest, ProtocolsParams};
 pub(crate) use list_rotation_runs::{ListRotationRunsRequest, RotationRunsParams};
-pub(crate) use list_signals::{EntitySignalsParams, ListSignalsRequest, SignalsParams};
+pub(crate) use list_signals::{ListSignalsRequest, SignalsParams};
 pub(crate) use list_token_activity::{ListTokenActivityRequest, TokenActivityParams};
 pub(crate) use list_token_prices::{ListTokenPricesRequest, TokenPricesParams};
 pub(crate) use list_tokens::{ListTokensRequest, TokensParams};

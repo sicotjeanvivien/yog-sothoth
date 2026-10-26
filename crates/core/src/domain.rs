@@ -49,7 +49,7 @@ pub use announcements::{
     Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementKind, AnnouncementLookup,
     AnnouncementSeverity, AnnouncementStatus,
 };
-pub use discovered_tvl::{DiscoveredTvl, DiscoveredTvlLookup, ProtocolDiscoveredTvl};
+pub use discovered_tvl::{DiscoveredTvlLookup, ProtocolDiscoveredTvl};
 pub use domain_event::DomainEvent;
 pub use event_cursor::{EventCursor, EventScope};
 pub use event_position::{EventPosition, TransactionPosition};
@@ -60,7 +60,7 @@ pub use liquidity_change_event::{LiquidityChangeEvent, LiquidityChangeEventLooku
 pub use liquidity_flow::{LiquidityFlowRepository, PoolLiquidityFlow};
 pub use liquidity_moves::{
     LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveKind, LiquidityMoveLookup,
-    LiquidityMoveOrder,
+    LiquidityMoveOrder, LiquidityMoveScope,
 };
 pub use materialization_backlog::{MaterializationBacklog, MaterializationBacklogRepository};
 pub use meteora::{
@@ -108,9 +108,7 @@ pub use position_change_event::{
 };
 pub use position_fee_claim_event::{PositionFeeClaimEvent, PositionFeeClaimEventLookup};
 pub use protocol::Protocol;
-pub use protocol_activity::{
-    LatestProtocolTvl, ProtocolActivity, ProtocolActivityBar, ProtocolActivityLookup,
-};
+pub use protocol_activity::ProtocolActivityLookup;
 pub use protocol_fee_claim_event::{ProtocolFeeClaimEvent, ProtocolFeeClaimEventLookup};
 pub use protocol_tvl::{ProtocolTvl, ProtocolTvlLookup};
 pub use reward_change_event::{

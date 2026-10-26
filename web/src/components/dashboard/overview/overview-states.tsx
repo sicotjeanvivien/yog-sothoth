@@ -9,7 +9,8 @@ import { AlertTriangleIcon } from "@/components/shared/icon";
 import { RetryButton } from "@/components/shared/retry-button";
 import type { ApiClientErrorKind } from "@/lib/api/errors";
 import { ApiClientError } from "@/lib/api/errors";
-import { fetchProtocolActivity } from "@/lib/api/server/protocols";
+import { fetchSwapTotals } from "@/lib/api/server/protocols";
+import type { Scope } from "@/lib/api/server/scope";
 import { formatRelative, type FormatLocale } from "@/lib/format/date";
 import type { Period } from "@/lib/overview/period";
 import { isStale } from "@/lib/overview/staleness";
@@ -57,13 +58,13 @@ export async function lateStamp(asOf: string | null): Promise<string | undefined
  * The band over the page when its figures stop over two hours back. ⚠️ Read on `asOf`, not
  * on the indexer: "Live" speaks of ingestion, which can be fine while the figures stall.
  */
-export async function StaleBanner({ period }: { period: Period }) {
+export async function StaleBanner({ period, scope }: { period: Period; scope: Scope }) {
   const t = await getTranslations("Dashboard.Overview.stale");
   const locale = (await getLocale()) as FormatLocale;
 
   let asOf;
   try {
-    asOf = (await fetchProtocolActivity(period)).asOf;
+    asOf = (await fetchSwapTotals(scope, period)).asOf;
   } catch (err) {
     if (err instanceof ApiClientError) {
       return null;

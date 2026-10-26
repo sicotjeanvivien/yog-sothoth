@@ -16,34 +16,33 @@ use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
         Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementKind, AnnouncementLookup,
-        AnnouncementSeverity, AnnouncementStatus, DiscoveredTvl, DiscoveredTvlLookup, EventCursor,
-        EventFreshnessRepository, EventScope, FrozenHours, FrozenPeriod, LatestProtocolTvl,
-        LiquidityChangeEvent, LiquidityChangeEventLookup, LiquidityFlows, LiquidityMove,
-        LiquidityMoveCursor, LiquidityMoveLookup, LiquidityMoveOrder, MeteoraDammV2PoolProperties,
+        AnnouncementSeverity, AnnouncementStatus, DiscoveredTvlLookup, EventCursor,
+        EventFreshnessRepository, EventScope, FrozenHours, FrozenPeriod, LiquidityChangeEvent,
+        LiquidityChangeEventLookup, LiquidityFlows, LiquidityMove, LiquidityMoveCursor,
+        LiquidityMoveLookup, LiquidityMoveOrder, LiquidityMoveScope, MeteoraDammV2PoolProperties,
         MeteoraDammV2PoolPropertiesLookup, NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog,
         PoolChangeEvent, PoolChangeEventLookup, PoolCreationEvent, PoolCreationEventLookup,
         PoolCreations, PoolCreationsLookup, PoolCursor, PoolEntry, PoolScope, PoolSwapBucket,
         PositionChangeEvent, PositionChangeEventLookup, PositionFeeClaimEvent,
-        PositionFeeClaimEventLookup, Protocol, ProtocolActivity, ProtocolActivityBar,
-        ProtocolActivityLookup, ProtocolBucket, ProtocolDiscoveredTvl, ProtocolFeeClaimEvent,
-        ProtocolFeeClaimEventLookup, ProtocolPoolCreations, ProtocolPools, ProtocolSwapActivity,
-        ProtocolTvl, ProtocolTvlLookup, RewardChangeEvent, RewardChangeEventLookup,
-        RewardClaimEvent, RewardClaimEventLookup, RotationRun, RotationRunCursor,
-        RotationRunLookup, RotationRunOrder, RotationRunScope, RotationRunTotals, Severity, Signal,
-        SignalCursor, SignalFeed, SignalFilter, SignalRecord, SwapActivity, SwapActivityLookup,
-        SwapEvent, SwapEventLookup, TokenActivityCursor, TokenActivityFeed, TokenActivityPage,
-        TokenCursor, TokenEntry, TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceCursor,
-        TokenPriceLookup, TranchePeriod, Window,
+        PositionFeeClaimEventLookup, Protocol, ProtocolActivityLookup, ProtocolBucket,
+        ProtocolDiscoveredTvl, ProtocolFeeClaimEvent, ProtocolFeeClaimEventLookup,
+        ProtocolPoolCreations, ProtocolPools, ProtocolSwapActivity, ProtocolTvl, ProtocolTvlLookup,
+        RewardChangeEvent, RewardChangeEventLookup, RewardClaimEvent, RewardClaimEventLookup,
+        RotationRun, RotationRunCursor, RotationRunLookup, RotationRunOrder, RotationRunScope,
+        RotationRunTotals, Severity, Signal, SignalCursor, SignalFeed, SignalFilter, SignalRecord,
+        SwapActivity, SwapActivityLookup, SwapEvent, SwapEventLookup, TokenActivityCursor,
+        TokenActivityFeed, TokenActivityPage, TokenCursor, TokenEntry, TokenMetadata,
+        TokenMetadataLookup, TokenPrice, TokenPriceCursor, TokenPriceLookup, TranchePeriod, Window,
     },
 };
 
 use crate::application::{
-    ActivityService, AnnouncementService, DiscoveredTvlService, IngestionService,
-    LiquidityChangeEventService, LiquidityMoveService, NetworkService, PoolChangeEventService,
-    PoolCreationEventService, PoolCreationsService, PoolService, PositionChangeEventService,
-    PositionFeeClaimEventService, ProtocolCatalogService, ProtocolFeeClaimEventService,
-    ProtocolTvlService, RewardChangeEventService, RewardClaimEventService, RotationRunService,
-    SignalService, SwapActivityService, SwapEventService, TokenService, WorkSlots,
+    AnnouncementService, DiscoveredTvlService, IngestionService, LiquidityChangeEventService,
+    LiquidityMoveService, NetworkService, PoolChangeEventService, PoolCreationEventService,
+    PoolCreationsService, PoolService, PositionChangeEventService, PositionFeeClaimEventService,
+    ProtocolCatalogService, ProtocolFeeClaimEventService, ProtocolTvlService,
+    RewardChangeEventService, RewardClaimEventService, RotationRunService, SignalService,
+    SwapActivityService, SwapEventService, TokenService, WorkSlots,
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
@@ -74,13 +73,10 @@ pub(crate) fn app_state() -> AppState {
             vec![],
             work_slots.clone(),
         )),
-        activity_service: Arc::new(ActivityService::new(
-            Arc::new(MockProtocolActivityRepo::new(None)),
-            Arc::new(MockTokenActivityRepo::default()),
-        )),
         swap_activity_service: Arc::new(SwapActivityService::new(
             frozen_hours_repo(None),
             Arc::new(MockSwapActivityRepo::default()),
+            Arc::new(MockTokenActivityRepo::default()),
         )),
         pool_creations_service: Arc::new(PoolCreationsService::new(
             frozen_hours_repo(None),
@@ -138,9 +134,7 @@ pub(crate) fn app_state() -> AppState {
             Arc::new(MockMetadataRepo::empty()),
             Arc::new(MockPriceRepo::empty()),
         )),
-        announcement_service: Arc::new(AnnouncementService::new(Arc::new(
-            MockAnnouncementRepo::failing(),
-        ))),
+        announcement_service: Arc::new(AnnouncementService::new(Arc::new(MockAnnouncementRepo))),
         health_checker: Arc::new(PgHealthChecker::new(
             PgPool::connect_lazy("postgres://unused@127.0.0.1:1/unused")
                 .expect("a well-formed URL"),
@@ -369,40 +363,14 @@ impl PoolCatalog for PoolCountsRepo {
     }
 }
 
-/// A `ProtocolActivityLookup` that answers `frozen` and the seeded rows every time, and
-/// records the period of each read.
+/// A `ProtocolActivityLookup` that answers `frozen` every time.
 pub(crate) struct MockProtocolActivityRepo {
     frozen: Option<FrozenHours>,
-    pub(crate) activity: Vec<ProtocolActivity>,
-    pub(crate) bars: Vec<ProtocolActivityBar>,
-    pub(crate) tvl: Vec<ProtocolTvl>,
-    /// The discovered parts `tvl_latest` hands with each of [`Self::tvl`].
-    pub(crate) discovered: Vec<DiscoveredTvl>,
-    pub(crate) moves: Vec<LiquidityMove>,
-    pub(crate) periods: Mutex<Vec<FrozenPeriod>>,
-    pub(crate) tvl_ranges: Mutex<Vec<(DateTime<Utc>, DateTime<Utc>)>>,
-}
-
-impl MockProtocolActivityRepo {
-    /// The hours `tvl_latest` was asked about, as `(hour, hour)` in [`Self::tvl_ranges`].
-    fn record_tvl(&self, first: DateTime<Utc>, last: DateTime<Utc>) -> Vec<ProtocolTvl> {
-        self.tvl_ranges.lock().unwrap().push((first, last));
-        self.tvl.clone()
-    }
 }
 
 impl MockProtocolActivityRepo {
     pub(crate) fn new(frozen: Option<FrozenHours>) -> Self {
-        Self {
-            frozen,
-            activity: vec![],
-            bars: vec![],
-            tvl: vec![],
-            discovered: vec![],
-            moves: vec![],
-            periods: Mutex::new(vec![]),
-            tvl_ranges: Mutex::new(vec![]),
-        }
+        Self { frozen }
     }
 }
 
@@ -410,54 +378,6 @@ impl MockProtocolActivityRepo {
 impl ProtocolActivityLookup for MockProtocolActivityRepo {
     async fn frozen_hours(&self) -> RepositoryResult<Option<FrozenHours>> {
         Ok(self.frozen)
-    }
-    async fn activity(
-        &self,
-        period: &FrozenPeriod,
-        _: Window,
-    ) -> RepositoryResult<Vec<ProtocolActivity>> {
-        self.periods.lock().unwrap().push(*period);
-        Ok(self.activity.clone())
-    }
-    async fn activity_hourly(
-        &self,
-        period: &FrozenPeriod,
-    ) -> RepositoryResult<Vec<ProtocolActivityBar>> {
-        self.periods.lock().unwrap().push(*period);
-        Ok(self.bars.clone())
-    }
-    async fn activity_daily(
-        &self,
-        period: &FrozenPeriod,
-    ) -> RepositoryResult<Vec<ProtocolActivityBar>> {
-        self.periods.lock().unwrap().push(*period);
-        Ok(self.bars.clone())
-    }
-    async fn tvl_latest(&self, last: DateTime<Utc>) -> RepositoryResult<Vec<LatestProtocolTvl>> {
-        Ok(self
-            .record_tvl(last, last)
-            .into_iter()
-            .map(|tvl| LatestProtocolTvl {
-                tvl,
-                discovered: self.discovered.clone(),
-            })
-            .collect())
-    }
-    async fn tvl_hourly(
-        &self,
-        first: DateTime<Utc>,
-        last: DateTime<Utc>,
-    ) -> RepositoryResult<Vec<ProtocolTvl>> {
-        Ok(self.record_tvl(first, last))
-    }
-    async fn liquidity_moves(
-        &self,
-        period: &FrozenPeriod,
-        _: Protocol,
-        _: i64,
-    ) -> RepositoryResult<Vec<LiquidityMove>> {
-        self.periods.lock().unwrap().push(*period);
-        Ok(self.moves.clone())
     }
 }
 
@@ -579,31 +499,11 @@ impl TokenPriceLookup for MockPriceRepo {
     }
 }
 
-pub(crate) struct MockAnnouncementRepo {
-    list_active: Mutex<Option<RepositoryResult<Vec<Announcement>>>>,
-}
-
-impl MockAnnouncementRepo {
-    pub(crate) fn active(announcements: Vec<Announcement>) -> Self {
-        Self {
-            list_active: Mutex::new(Some(Ok(announcements))),
-        }
-    }
-    pub(crate) fn failing() -> Self {
-        Self {
-            list_active: Mutex::new(Some(Err(RepositoryError::Integrity(
-                "announcement boom".into(),
-            )))),
-        }
-    }
-}
+/// An `AnnouncementLookup` that holds no announcement of its own.
+pub(crate) struct MockAnnouncementRepo;
 
 #[async_trait]
 impl AnnouncementLookup for MockAnnouncementRepo {
-    async fn list_active(&self, _now: DateTime<Utc>) -> RepositoryResult<Vec<Announcement>> {
-        take(&self.list_active)
-    }
-
     /// One announcement of the status asked for, none without one: the status echoed back.
     async fn list_entries(
         &self,
@@ -696,18 +596,6 @@ pub(crate) fn make_network_status() -> NetworkStatus {
         slot: 300_000_000,
         rpc_latency_ms: 42,
         observed_at: ts(2_000),
-    }
-}
-
-pub(crate) fn make_announcement(id: i64) -> Announcement {
-    Announcement {
-        id,
-        kind: AnnouncementKind::Release,
-        severity: AnnouncementSeverity::Info,
-        message: format!("announcement {id}"),
-        link_url: None,
-        starts_at: ts(1_000),
-        ends_at: None,
     }
 }
 
@@ -978,16 +866,16 @@ impl LiquidityMoveLookup for MockLiquidityMoveRepo {
         self.record("liquidity_daily", period, Some(protocol));
         Ok(vec![])
     }
-    async fn list_pool_moves(
+    async fn list_moves(
         &self,
         period: &FrozenPeriod,
         _: Window,
-        _: Pubkey,
+        _: LiquidityMoveScope,
         _: LiquidityMoveOrder,
         _: Option<LiquidityMoveCursor>,
         _: i64,
     ) -> RepositoryResult<Page<LiquidityMove>> {
-        self.record("pool_moves", period, None);
+        self.record("moves", period, None);
         Ok(Page::empty())
     }
 }

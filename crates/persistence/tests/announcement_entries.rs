@@ -2,8 +2,6 @@
 //! window stands at an instant, the latest start first, filtered by that status, paged without
 //! repeat nor gap through shared starts.
 
-use std::collections::HashSet;
-
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use sqlx::PgPool;
 use yog_core::{
@@ -114,31 +112,4 @@ async fn a_status_and_its_pages_read_only_their_announcements(pool: PgPool) {
     assert_eq!(closed, only(AnnouncementStatus::Closed));
     assert_eq!(upcoming, only(AnnouncementStatus::Upcoming));
     assert_eq!((open.len(), closed.len(), upcoming.len()), (3, 2, 1));
-}
-
-/// Mutation: one of the two definitions of an open window moved — the banner's route and the
-/// collection's `open` disagreeing on an announcement that starts or ends at the instant.
-#[sqlx::test(migrations = "./migrations")]
-async fn the_open_ones_are_the_active_ones(pool: PgPool) {
-    for (starts, ends) in [(-100, None), (-100, Some(0)), (100, None), (0, Some(1))] {
-        insert(&pool, starts, ends).await;
-    }
-    let repository =
-        PgAnnouncementRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
-
-    let open: HashSet<_> = read_all(&repository, Some(AnnouncementStatus::Open), 50)
-        .await
-        .into_iter()
-        .map(|e| e.0)
-        .collect();
-    let active: HashSet<_> = repository
-        .list_active(at(0))
-        .await
-        .unwrap()
-        .into_iter()
-        .map(|a| a.id)
-        .collect();
-
-    assert_eq!(open.len(), 2);
-    assert_eq!(open, active);
 }

@@ -7,7 +7,7 @@ use crate::application::WorkSlots;
 use crate::application::cache::{PROTOCOLS, SharedCache};
 use crate::application::work_slots::no_work_slot;
 use yog_core::{
-    RepositoryResult,
+    Cursor, Page, RepositoryResult,
     domain::{PoolCatalog, Protocol},
 };
 
@@ -49,6 +49,36 @@ impl ProtocolCatalogService {
                 self.compute().await
             })
             .await
+    }
+
+    /// The entries of [`Self::list`] after `after`, `limit` of them; forward only.
+    pub(crate) async fn list_page(
+        &self,
+        after: Option<Protocol>,
+        limit: i64,
+    ) -> RepositoryResult<Page<ProtocolEntry>> {
+        let entries = self.list().await?;
+        let start = after.map_or(0, |after| {
+            entries
+                .iter()
+                .position(|entry| entry.protocol == after)
+                .map_or(entries.len(), |i| i + 1)
+        });
+        let rest = &entries[start..];
+        let taken = usize::try_from(limit).unwrap_or(usize::MAX).min(rest.len());
+        let items = rest[..taken].to_vec();
+        let is_last = taken == rest.len();
+        Ok(Page {
+            next_cursor: if is_last {
+                None
+            } else {
+                items.last().map(|entry| Cursor::Protocol(entry.protocol))
+            },
+            prev_cursor: None,
+            is_first: after.is_none(),
+            is_last,
+            items,
+        })
     }
 
     /// `protocol`'s entry of [`Self::list`].

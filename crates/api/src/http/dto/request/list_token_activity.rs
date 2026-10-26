@@ -1,4 +1,4 @@
-//! Request DTO for `GET /api/tokens/activity`.
+//! Request DTO for `GET /api/swaps/by-token`.
 
 use serde::Deserialize;
 use utoipa::{IntoParams, ToSchema};
@@ -15,7 +15,7 @@ pub(crate) enum SortParam {
     Volume,
 }
 
-/// Query params for `GET /api/tokens/activity`: a window, the order, and
+/// Query params for `GET /api/swaps/by-token`: a window, the order, and
 /// forward-only cursor pagination.
 #[derive(Debug, Deserialize, IntoParams)]
 pub(crate) struct TokenActivityParams {

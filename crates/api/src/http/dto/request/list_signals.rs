@@ -7,13 +7,11 @@ use yog_core::{PageDirection, PagePosition};
 use crate::application::SignalListParams;
 use crate::http::{cursor::decode_signal_cursor, error::ApiError};
 
-mod entity_signals_params;
 mod page_direction_param;
 mod page_position_param;
 mod severity_param;
 mod signals_params;
 
-pub(crate) use entity_signals_params::EntitySignalsParams;
 use page_direction_param::PageDirectionParam;
 use page_position_param::PagePositionParam;
 use severity_param::SeverityParam;
@@ -31,33 +29,14 @@ pub(crate) struct ListSignalsRequest {
 }
 
 impl ListSignalsRequest {
+    /// Every protocol's signals.
     pub(crate) fn parse(params: SignalsParams) -> Result<Self, ApiError> {
-        super::validate_limit(params.limit)?;
-
-        let pool = params
-            .pool
-            .as_deref()
-            .map(|raw| {
-                super::non_empty("pool", raw).and_then(|raw| super::parse_address(raw, "pool"))
-            })
-            .transpose()?;
-
-        let cursor = parse_cursor(params.cursor.as_deref(), params.position.is_some())?;
-
-        Ok(Self {
-            severity: params.severity.map(Into::into),
-            protocol: None,
-            pool,
-            cursor,
-            direction: params.dir.into(),
-            position: params.position.map(Into::into),
-            limit: params.limit,
-        })
+        Self::parse_for_entity(params, None, None)
     }
 
     /// The signals of one protocol, or of one pool, the entity of the path.
     pub(crate) fn parse_for_entity(
-        params: EntitySignalsParams,
+        params: SignalsParams,
         protocol: Option<Protocol>,
         pool: Option<Pubkey>,
     ) -> Result<Self, ApiError> {

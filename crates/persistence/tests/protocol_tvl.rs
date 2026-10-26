@@ -55,3 +55,40 @@ async fn the_tvl_is_the_last_reading_at_or_before_the_hour_with_its_instant(pool
     assert_eq!(latest[0].at, last);
     assert_eq!(hourly.len(), 2);
 }
+
+/// Mutations: either end excluded (the variation loses its start, or the series stops an hour
+/// short), the hours out of order, or DLMM left out of the series of every protocol.
+#[sqlx::test(migrations = "./migrations")]
+async fn the_tvl_series_holds_both_ends_and_every_protocol(pool: PgPool) {
+    let last = as_of() - Duration::hours(1);
+    for (protocol, base) in [(DAMM, 0), (DLMM, 100)] {
+        for offset in -3..=1 {
+            insert_tvl(
+                &pool,
+                protocol,
+                last + Duration::hours(offset),
+                base + offset,
+            )
+            .await;
+        }
+    }
+    let repository = repository(&pool).await;
+
+    let series = ProtocolTvlLookup::list_hourly(&repository, last - Duration::hours(2), last, None)
+        .await
+        .unwrap();
+
+    let read: Vec<_> = series
+        .iter()
+        .map(|t| (t.protocol.as_str(), t.at, t.tvl_usd))
+        .collect();
+    let expected: Vec<_> = (-2..=0)
+        .flat_map(|offset| {
+            [(DAMM, 0), (DLMM, 100)].map(|(protocol, base)| {
+                let at = last + Duration::hours(offset + 1);
+                (protocol, at, Some(Decimal::from(base + offset)))
+            })
+        })
+        .collect();
+    assert_eq!(read, expected);
+}

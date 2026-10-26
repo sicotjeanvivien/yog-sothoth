@@ -5,10 +5,10 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  zAnnouncementResponse,
+  zAnnouncementEntryResponse,
   zPageResponseSignalResponse,
   zProblemDetailsResponse,
-  zProtocolActivityResponse,
+  zProtocolSwapActivityResponse,
   zSignalResponse,
 } from "../schema/zod.gen";
 
@@ -22,34 +22,35 @@ function validAnnouncement() {
     linkUrl: "/changelog#v0.1.0",
     startsAt: "2026-10-06T10:00:00.000000Z",
     endsAt: null,
+    status: "open",
   };
 }
 
-describe("zAnnouncementResponse", () => {
+describe("zAnnouncementEntryResponse", () => {
   it("accepts a complete valid announcement", () => {
-    const parsed = zAnnouncementResponse.parse(validAnnouncement());
+    const parsed = zAnnouncementEntryResponse.parse(validAnnouncement());
     expect(parsed.id).toBe(1);
     expect(parsed.kind).toBe("release");
   });
 
   it("accepts a null linkUrl and a relative one", () => {
     expect(
-      zAnnouncementResponse.parse({ ...validAnnouncement(), linkUrl: null })
+      zAnnouncementEntryResponse.parse({ ...validAnnouncement(), linkUrl: null })
         .linkUrl,
     ).toBeNull();
     // Mutation: a link required to be absolute — in-app paths are the main use.
     expect(
-      zAnnouncementResponse.parse({ ...validAnnouncement(), linkUrl: "/changelog" })
+      zAnnouncementEntryResponse.parse({ ...validAnnouncement(), linkUrl: "/changelog" })
         .linkUrl,
     ).toBe("/changelog");
   });
 
   it("rejects an unknown kind or severity", () => {
     expect(() =>
-      zAnnouncementResponse.parse({ ...validAnnouncement(), kind: "party" }),
+      zAnnouncementEntryResponse.parse({ ...validAnnouncement(), kind: "party" }),
     ).toThrow();
     expect(() =>
-      zAnnouncementResponse.parse({ ...validAnnouncement(), severity: "loud" }),
+      zAnnouncementEntryResponse.parse({ ...validAnnouncement(), severity: "loud" }),
     ).toThrow();
   });
 });
@@ -92,59 +93,41 @@ describe("zProblemDetailsResponse", () => {
   });
 });
 
-describe("zProtocolActivityResponse", () => {
-  const validActivity = () => ({
+describe("zProtocolSwapActivityResponse", () => {
+  const validTotals = () => ({
     protocol: "meteora_damm_v2",
     volumeUsd: "508193.05",
     feesUsd: "391.03",
     lpFeesUsd: "312.82",
     protocolFeesUsd: "78.21",
     referralFeesUsd: "0",
-    swapCount: 1246,
-    activePools: 359,
-    births: 52,
+    swaps: 1246,
+    pools: 359,
     poolHours: 1246,
     poolHoursValued: 767,
-    liquidity: {
-      createdUsd: "300",
-      addedUsd: "1200.5",
-      removedUsd: "800",
-      moves: 12,
-      movesValued: 11,
-    },
   });
 
   it("accepts a complete valid payload", () => {
-    const parsed = zProtocolActivityResponse.parse(validActivity());
+    const parsed = zProtocolSwapActivityResponse.parse(validTotals());
     expect(parsed.volumeUsd).toBe("508193.05");
     expect(parsed.poolHoursValued).toBe(767);
   });
 
-  it("accepts a null liquidity, for a window that starts before it was measured", () => {
-    const parsed = zProtocolActivityResponse.parse({ ...validActivity(), liquidity: null });
-    expect(parsed.liquidity).toBeNull();
-  });
-
-  it("accepts the null active pools of a previous window not yet written", () => {
-    const parsed = zProtocolActivityResponse.parse({
-      ...validActivity(),
-      activePools: null,
-    });
-    expect(parsed.activePools).toBeNull();
+  it("accepts the null distinct pools of a previous window not yet written", () => {
+    const parsed = zProtocolSwapActivityResponse.parse({ ...validTotals(), pools: null });
+    expect(parsed.pools).toBeNull();
   });
 
   it("rejects a USD amount sent as a JS number (precision contract)", () => {
     expect(() =>
-      zProtocolActivityResponse.parse({ ...validActivity(), volumeUsd: 508193.05 }),
+      zProtocolSwapActivityResponse.parse({ ...validTotals(), volumeUsd: 508193.05 }),
     ).toThrow();
   });
 
   it("rejects a negative or fractional count", () => {
+    expect(() => zProtocolSwapActivityResponse.parse({ ...validTotals(), swaps: -1 })).toThrow();
     expect(() =>
-      zProtocolActivityResponse.parse({ ...validActivity(), births: -1 }),
-    ).toThrow();
-    expect(() =>
-      zProtocolActivityResponse.parse({ ...validActivity(), poolHours: 1.5 }),
+      zProtocolSwapActivityResponse.parse({ ...validTotals(), poolHours: 1.5 }),
     ).toThrow();
   });
 });

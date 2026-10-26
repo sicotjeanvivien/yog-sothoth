@@ -1,6 +1,5 @@
 /** The liquidity tab's two charts, as data: the TVL curve on a tight axis, and its flows per bar. */
 
-import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
 import { slotsOf, type Slot } from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
 
@@ -22,16 +21,11 @@ export type Curve = {
   high: number;
 };
 
-/** The protocol's TVL points, a point without a value left out; `null` under two points. */
-export function curveOf(
-  items: readonly { protocol: ProtocolResponse; at: string; tvlUsd: string | null }[],
-  protocol: ProtocolResponse,
-): Curve | null {
+/** The TVL points, a point without a value left out; `null` under two points. */
+export function curveOf(items: readonly { at: string; tvlUsd: string | null }[]): Curve | null {
   const points = items.flatMap((item) => {
     const value = item.tvlUsd === null ? NaN : Number.parseFloat(item.tvlUsd);
-    return item.protocol === protocol && Number.isFinite(value)
-      ? [{ at: new Date(item.at), value }]
-      : [];
+    return Number.isFinite(value) ? [{ at: new Date(item.at), value }] : [];
   });
   if (points.length < 2) {
     return null;
@@ -63,29 +57,26 @@ export type FlowSlot = {
   removed: number | null;
 };
 
-type LiquidityBar = {
-  protocol: ProtocolResponse;
-  from: string;
-  liquidity: { createdUsd: string; addedUsd: string; removedUsd: string } | null;
-};
+type LiquidityBar = { from: string; createdUsd: string; addedUsd: string; removedUsd: string };
 
-/** The protocol's flows in the period's slots: hours over 24 h, 24-hour slices beyond. */
+/**
+ * The flows in the period's slots: hours over 24 h, 24-hour slices beyond. A slot without a
+ * bar was not measured.
+ */
 export function flowSlotsOf(
   period: Period,
   asOf: string,
   bars: readonly LiquidityBar[],
-  protocol: ProtocolResponse,
 ): FlowSlot[] {
-  const mine = bars.filter((bar) => bar.protocol === protocol);
-  const slots = (pick: (bar: LiquidityBar) => string | null): Slot[] =>
+  const slots = (pick: (bar: LiquidityBar) => string): Slot[] =>
     slotsOf(
       period,
       asOf,
-      mine.map((bar) => ({ from: bar.from, value: pick(bar) })),
+      bars.map((bar) => ({ from: bar.from, value: pick(bar) })),
     );
-  const created = slots((bar) => bar.liquidity?.createdUsd ?? null);
-  const added = slots((bar) => bar.liquidity?.addedUsd ?? null);
-  const removed = slots((bar) => bar.liquidity?.removedUsd ?? null);
+  const created = slots((bar) => bar.createdUsd);
+  const added = slots((bar) => bar.addedUsd);
+  const removed = slots((bar) => bar.removedUsd);
   return added.map((slot, i) => ({
     from: slot.from,
     to: slot.to,

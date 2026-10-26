@@ -40,8 +40,8 @@ persistence/
 │   │   ├── swap_activity/, pool_creations/, liquidity_moves/, discovered_tvl/, protocol_tvl.rs
 │   │   │                     (the produced resources the API reads by scope:
 │   │   │                     every protocol, one protocol, one pool)
-│   │   ├── protocol_activity/, token_activity/ (the measures of the routes
-│   │   │                     not yet following the route rules)
+│   │   ├── protocol_activity.rs, token_activity/ (the frozen hours every
+│   │   │                     measure is read over; the tokens by volume)
 │   │   ├── signal/, swap_flow/, liquidity_flow/, pool_price_snapshot/
 │   │   ├── token_metadata/, token_price/, network_status/, watched_pool/
 │   │   ├── announcement/
@@ -583,9 +583,9 @@ so a missing row means a window never counted) and the tokens
 pool before counting: a `COUNT(DISTINCT)` sorts every pool-hour, and spills. The
 tokens are read with the hour of their ranking in one statement, which a freeze
 cannot split.
-`repositories/protocol_activity.rs` and `token_activity.rs` read them, with the
-protocol aggregate and the TVL, over the span the API hands them;
-`tests/overview_periods.rs` and `tests/protocol_activity.rs` hold the rules. 030
+`repositories/protocol_activity.rs` reads the frozen hours every measure is read over, and
+`token_activity.rs` the tokens; `tests/overview_periods.rs` and `tests/protocol_activity.rs`
+hold the rules. 030
 deletes the protocol TVL of the hours before the first complete one, so its first
 row is the floor a TVL variation starts from; 034 deletes the whole series measured
 before a side without a price counted 0, which the past reserves it lacks could not
@@ -633,8 +633,9 @@ the start.
 the rules of `crates/api/README.md`: one static query per resource and cut, the protocol
 (`$n::TEXT IS NULL OR protocol = $n`) or the pool in the `WHERE`, so every one stays
 checked at compile time. The swaps by pool read `analytic_pool_hourly`, which 037 opens to
-`yog_api`, read only; 037 also indexes the liquidity moves by pool. A pool's liquidity moves page by a key of their order — amount or
-instant, then signature and `event_index` — forward only. The tests of the same names hold the
+`yog_api`, read only; 037 also indexes the liquidity moves by pool. The liquidity moves of a
+protocol or a pool page by a key of their order — amount or instant, then signature and
+`event_index` — forward only. The tests of the same names hold the
 scopes, the days, the TVL's last reading and the pages.
 
 **The on-chain events.** `swap_event.rs`, `liquidity_change_event.rs` and
@@ -653,12 +654,12 @@ each repository keeps its SQL. `position_fee_claim_event.rs`,
 the same names, under `tests/`, hold the scopes, the window and the pages through shared
 instants.
 
-**The announcements.** `announcement.rs` reads the banner's open set (`list_active`), and the
-list of every announcement (`list_entries`), whose status — upcoming, open or closed at the
+**The announcements.** `announcement.rs` reads the list of every announcement
+(`list_entries`), whose status — upcoming, open or closed at the
 request's instant — is computed once, in a subquery, that both the `?status=` filter and the
 item read. The table is the operator's handful of rows, ordered by `(starts_at, id)`, with no index
 beyond its primary key. `tests/announcement_entries.rs` holds the bounds of each status, the
-filter, the pages, and that the open ones are the active ones.
+filter and the pages.
 
 **The catalog (038).** The business routes page the registry live: `pool.rs` reads a page of
 addresses per scope, then their entries whole — the tokens' metadata, `pool_current_state`

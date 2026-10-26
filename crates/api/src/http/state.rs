@@ -10,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 use yog_persistence::PgHealthChecker;
 
 use crate::application::{
-    ActivityService, AnnouncementService, DiscoveredTvlService, EnrichedSignal, IngestionService,
+    AnnouncementService, DiscoveredTvlService, EnrichedSignal, IngestionService,
     LiquidityChangeEventService, LiquidityMoveService, NetworkService, PoolChangeEventService,
     PoolCreationEventService, PoolCreationsService, PoolService, PositionChangeEventService,
     PositionFeeClaimEventService, ProtocolCatalogService, ProtocolFeeClaimEventService,
@@ -34,7 +34,6 @@ pub(crate) struct AppState {
     /// The slots of every expensive read: the slow routes and the cached computations.
     pub(crate) work_slots: WorkSlots,
     pub(crate) protocol_catalog_service: Arc<ProtocolCatalogService>,
-    pub(crate) activity_service: Arc<ActivityService>,
     pub(crate) swap_activity_service: Arc<SwapActivityService>,
     pub(crate) pool_creations_service: Arc<PoolCreationsService>,
     pub(crate) liquidity_move_service: Arc<LiquidityMoveService>,

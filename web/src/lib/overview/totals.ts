@@ -1,5 +1,7 @@
 /** Sums and changes over the API's decimal strings, for display only. */
 
+import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
+
 import { periodMs, type Period } from "./period";
 
 /** `null` when there is nothing to sum, or one term is unknown: a sum without it would lie. */
@@ -34,12 +36,22 @@ export function shareOf(part: number | null, whole: number | null): number | nul
   return part / whole;
 }
 
-/** The protocols' TVL held by pools discovered in `period`; `null` when one has no measure of it. */
+type Reading = { protocol: ProtocolResponse; at: string };
+
+/**
+ * The protocols' TVL held by the pools discovered in the period, each part read with its
+ * protocol's TVL; `null` when one has no part measured at its reading.
+ */
 export function discoveredTvl(
-  items: readonly { discovered: readonly { period: Period; tvlUsd: string }[] }[],
-  period: Period,
+  tvl: readonly Reading[],
+  discovered: readonly (Reading & { tvlUsd: string })[],
 ): number | null {
-  const parts = items.map((i) => i.discovered.find((d) => d.period === period)?.tvlUsd ?? null);
+  const parts = tvl.map(
+    (reading) =>
+      discovered.find(
+        (d) => d.protocol === reading.protocol && Date.parse(d.at) === Date.parse(reading.at),
+      )?.tvlUsd ?? null,
+  );
   return sumUsd(parts);
 }
 

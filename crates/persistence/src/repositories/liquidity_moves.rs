@@ -1,18 +1,17 @@
 //! PostgreSQL implementation of [`LiquidityMoveLookup`]: the valued moves yog-analytic wrote,
-//! summed by protocol and hour, and listed by pool.
+//! summed by protocol and hour, and listed by protocol or by pool.
 
 mod rows;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use rows::{LiquidityFlowsRow, PoolLiquidityMoveRow};
-use solana_pubkey::Pubkey;
+use rows::{LiquidityFlowsRow, LiquidityMoveRow};
 use sqlx::PgPool;
 use yog_core::{
     Cursor, Page, RepositoryResult,
     domain::{
         FrozenPeriod, LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup,
-        LiquidityMoveOrder, Protocol, ProtocolBucket, Window,
+        LiquidityMoveOrder, LiquidityMoveScope, Protocol, ProtocolBucket, Window,
     },
 };
 
@@ -140,11 +139,11 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
         rows.into_iter().map(ProtocolBucket::try_from).collect()
     }
 
-    async fn list_pool_moves(
+    async fn list_moves(
         &self,
         period: &FrozenPeriod,
         window: Window,
-        pool: Pubkey,
+        scope: LiquidityMoveScope,
         order: LiquidityMoveOrder,
         cursor: Option<LiquidityMoveCursor>,
         limit: i64,
@@ -162,9 +161,77 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
             ),
             None => (None, None, None, None),
         };
-        let rows = match order {
-            LiquidityMoveOrder::Amount => sqlx::query_as!(
-                PoolLiquidityMoveRow,
+        let rows = match (scope, order) {
+            (LiquidityMoveScope::Protocol(protocol), LiquidityMoveOrder::Amount) => sqlx::query_as!(
+                LiquidityMoveRow,
+                r#"
+                SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index,
+                       m.pool_address, ta.symbol AS "token_a_symbol?",
+                       tb.symbol AS "token_b_symbol?", m.owner, m.kind,
+                       m.amount_usd AS "amount_usd!",
+                       ROUND(m.amount_usd, 6) AS "amount_key!"
+                  FROM analytic_liquidity_moves m
+                  LEFT JOIN pools p ON p.pool_address = m.pool_address
+                  LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
+                  LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT
+                 WHERE m.protocol = $3
+                   AND m.timestamp >= $1 AND m.timestamp < $2
+                   AND m.amount_usd IS NOT NULL
+                   -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits, the column more.
+                   AND ($4::NUMERIC IS NULL
+                        OR ROUND(m.amount_usd, 6) < $4
+                        OR (ROUND(m.amount_usd, 6) = $4 AND (m.timestamp < $5
+                            OR (m.timestamp = $5 AND (m.signature, m.event_index) > ($6, $7)))))
+                 ORDER BY ROUND(m.amount_usd, 6) DESC, m.timestamp DESC, m.signature,
+                          m.event_index
+                 LIMIT $8
+                "#,
+                period.from,
+                period.as_of,
+                protocol.as_str(),
+                after_amount,
+                after_at,
+                after_signature,
+                after_index,
+                limit + 1,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(map_sqlx_error)?,
+            (LiquidityMoveScope::Protocol(protocol), LiquidityMoveOrder::At) => sqlx::query_as!(
+                LiquidityMoveRow,
+                r#"
+                SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index,
+                       m.pool_address, ta.symbol AS "token_a_symbol?",
+                       tb.symbol AS "token_b_symbol?", m.owner, m.kind,
+                       m.amount_usd AS "amount_usd!",
+                       ROUND(m.amount_usd, 6) AS "amount_key!"
+                  FROM analytic_liquidity_moves m
+                  LEFT JOIN pools p ON p.pool_address = m.pool_address
+                  LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
+                  LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT
+                 WHERE m.protocol = $3
+                   AND m.timestamp >= $1 AND m.timestamp < $2
+                   AND m.amount_usd IS NOT NULL
+                   AND ($4::TIMESTAMPTZ IS NULL
+                        OR m.timestamp < $4
+                        OR (m.timestamp = $4 AND (m.signature, m.event_index) > ($5, $6)))
+                 ORDER BY m.timestamp DESC, m.signature, m.event_index
+                 LIMIT $7
+                "#,
+                period.from,
+                period.as_of,
+                protocol.as_str(),
+                after_at,
+                after_signature,
+                after_index,
+                limit + 1,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(map_sqlx_error)?,
+            (LiquidityMoveScope::Pool(pool), LiquidityMoveOrder::Amount) => sqlx::query_as!(
+                LiquidityMoveRow,
                 r#"
                 SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index,
                        m.pool_address, ta.symbol AS "token_a_symbol?",
@@ -199,8 +266,8 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
             .fetch_all(&self.pool)
             .await
             .map_err(map_sqlx_error)?,
-            LiquidityMoveOrder::At => sqlx::query_as!(
-                PoolLiquidityMoveRow,
+            (LiquidityMoveScope::Pool(pool), LiquidityMoveOrder::At) => sqlx::query_as!(
+                LiquidityMoveRow,
                 r#"
                 SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index,
                        m.pool_address, ta.symbol AS "token_a_symbol?",
@@ -234,12 +301,12 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
         };
         let moves = rows
             .into_iter()
-            .map(PoolLiquidityMoveRow::into_keyed)
+            .map(LiquidityMoveRow::into_keyed)
             .collect::<RepositoryResult<Vec<_>>>()?;
         let page =
             PageBuilder::new(moves, limit, QueryMode::Forward, had_cursor).finalize(|(m, key)| {
                 Cursor::LiquidityMove(Box::new(LiquidityMoveCursor {
-                    pool,
+                    scope,
                     window,
                     as_of: period.as_of,
                     order,

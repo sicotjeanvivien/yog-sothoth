@@ -4,7 +4,7 @@ use axum::{
 };
 use tracing::{error, warn};
 
-use crate::application::{PoolMovesError, RotationRunsError};
+use crate::application::{MovesError, RotationRunsError};
 use crate::http::dto::response::{PROBLEM_CONTENT_TYPE, ProblemDetailsResponse};
 
 /// API-level errors, served as RFC 9457 Problem Details. `Unavailable` is capacity or time
@@ -110,11 +110,11 @@ impl From<RotationRunsError> for ApiError {
     }
 }
 
-impl From<PoolMovesError> for ApiError {
-    fn from(err: PoolMovesError) -> Self {
+impl From<MovesError> for ApiError {
+    fn from(err: MovesError) -> Self {
         match err {
-            PoolMovesError::Repository(err) => err.into(),
-            PoolMovesError::CursorRefused => ApiError::BadRequest(
+            MovesError::Repository(err) => err.into(),
+            MovesError::CursorRefused => ApiError::BadRequest(
                 "`cursor` belongs to another list, or to one read before the last freeze: start \
                  again without it"
                     .to_string(),

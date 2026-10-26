@@ -125,13 +125,11 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
             handlers::rotation_runs::get_protocol_rotation_runs_daily
         ))
         .routes(routes!(handlers::announcements::list_announcements))
-        .routes(routes!(handlers::announcements::list_active_announcements))
         .routes(routes!(handlers::network::get_network))
         .routes(routes!(handlers::ingestion::get_ingestion))
         // The live feed is capped by its own slots, in the handler.
         .routes(routes!(handlers::signals::stream_signals))
         .routes(routes!(handlers::token::get_token))
-        .routes(routes!(handlers::token::list_token_activity))
         .routes(routes!(handlers::token::list_tokens))
         .routes(routes!(handlers::token::list_token_prices))
         .routes(routes!(handlers::protocols::list_protocols))
@@ -140,12 +138,9 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         .routes(routes!(handlers::pools::list_protocol_pools))
         .routes(routes!(handlers::pools::list_token_pools))
         .routes(routes!(handlers::pools::get_pool))
-        .routes(routes!(handlers::protocols::get_protocol_activity))
-        .routes(routes!(handlers::protocols::get_protocol_activity_hourly))
-        .routes(routes!(handlers::protocols::get_protocol_activity_daily))
-        .routes(routes!(handlers::protocols::get_protocol_tvl))
-        .routes(routes!(handlers::protocols::get_protocol_tvl_hourly))
-        .routes(routes!(handlers::protocols::list_liquidity_moves))
+        .routes(routes!(
+            handlers::liquidity_moves::list_protocol_liquidity_moves
+        ))
         .routes(routes!(handlers::swaps::get_swap_totals))
         .routes(routes!(handlers::swaps::get_protocol_swap_totals))
         .routes(routes!(handlers::swaps::get_swaps_hourly))

@@ -4,9 +4,9 @@ use utoipa::IntoParams;
 use super::{PageDirectionParam, PagePositionParam, SeverityParam};
 use crate::http::dto::request::default_limit;
 
-/// Query params for `GET /api/signals`: standard cursor pagination plus
-/// optional exact severity and pool filters. No sort (the feed ordering
-/// is fixed by contract) and no free-text search.
+/// Query params for the signals, of every protocol or of the entity in the path: standard
+/// cursor pagination plus an optional exact severity. No sort (the feed ordering is fixed by
+/// contract) and no free-text search.
 #[derive(Debug, Deserialize, IntoParams)]
 pub(crate) struct SignalsParams {
     #[param(min_length = 1)]
@@ -18,8 +18,6 @@ pub(crate) struct SignalsParams {
     pub(super) position: Option<PagePositionParam>,
     #[param(inline)]
     pub(super) severity: Option<SeverityParam>,
-    #[param(min_length = 1)]
-    pub(super) pool: Option<String>,
     #[serde(default = "default_limit")]
     #[param(value_type = u8, minimum = 1, maximum = 200)]
     pub(super) limit: i64,

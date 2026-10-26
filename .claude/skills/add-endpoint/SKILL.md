@@ -15,8 +15,7 @@ Scope: a route **reads data that exists**. A route that needs a new table starts
 Templates to copy, for the mechanics only (service, DTOs, handler): the token read path —
 `crates/api/src/application/services/token_service.rs`,
 `crates/api/src/http/handlers/token.rs`, and the matching DTOs under
-`crates/api/src/http/dto/`. The path and names of its `/api/tokens/activity` do not follow
-the rules: never copy them.
+`crates/api/src/http/dto/`.
 
 ## Step 0 — name the route, before any code
 
@@ -133,8 +132,8 @@ curl http://127.0.0.1:5000/api/<your-endpoint> | jq
 Every place that names the old path changes in the same change: `git grep -F` its last
 fixed segment (`/liquidity-moves`, not the whole path: the web builds paths in template
 literals) over the whole repository, web and docs included. Every hit that names the old
-route changes — not another route sharing the segment (`/activity` also hits
-`/api/tokens/activity`), nor the dated entries of
+route changes — not another route sharing the segment (`/totals` also hits every other
+measure's totals), nor the dated entries of
 `web/src/components/marketing/changelog/releases.ts`, which are history. Then
 regenerate the contract (`crates/api/openapi.json`, `web/src/lib/api/schema/`), and take the
 route out of *Not yet following these rules* when it leaves it. The old path is removed when

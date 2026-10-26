@@ -1,6 +1,7 @@
 mod announcement;
 mod ingestion;
 mod liquidity_change_event;
+mod liquidity_move;
 mod network;
 mod page;
 mod pool;
@@ -13,7 +14,6 @@ mod position_fee_claim_event;
 // Visible: target of a doc link (http/error.rs).
 pub(crate) mod problem;
 mod protocol;
-mod protocol_activity;
 mod protocol_catalog;
 mod protocol_discovered_tvl;
 mod protocol_fee_claim_event;
@@ -25,6 +25,7 @@ mod protocol_rotation_run_bucket;
 mod protocol_rotation_run_totals;
 mod protocol_swap_activity;
 mod protocol_swap_activity_bucket;
+mod protocol_tvl;
 mod readiness;
 mod reading;
 mod reward_change_event;
@@ -39,9 +40,10 @@ mod tranche_window;
 mod window;
 mod windowed_page;
 
-pub(crate) use announcement::{AnnouncementEntryResponse, AnnouncementResponse};
+pub(crate) use announcement::AnnouncementEntryResponse;
 pub(crate) use ingestion::IngestionResponse;
 pub(crate) use liquidity_change_event::LiquidityChangeEventResponse;
+pub(crate) use liquidity_move::LiquidityMoveResponse;
 pub(crate) use network::NetworkResponse;
 pub(crate) use page::PageResponse;
 pub(crate) use pool::PoolResponse;
@@ -52,10 +54,6 @@ pub(crate) use pool_swap_bucket::PoolSwapBucketResponse;
 pub(crate) use position_change_event::PositionChangeEventResponse;
 pub(crate) use position_fee_claim_event::PositionFeeClaimEventResponse;
 pub(crate) use problem::{PROBLEM_CONTENT_TYPE, ProblemDetailsResponse};
-pub(crate) use protocol_activity::{
-    LatestTvlResponse, LiquidityMoveResponse, ProtocolActivityBarResponse,
-    ProtocolActivityResponse, ProtocolTvlResponse,
-};
 pub(crate) use protocol_catalog::ProtocolCatalogResponse;
 pub(crate) use protocol_discovered_tvl::ProtocolDiscoveredTvlResponse;
 pub(crate) use protocol_fee_claim_event::ProtocolFeeClaimEventResponse;
@@ -67,6 +65,7 @@ pub(crate) use protocol_rotation_run_bucket::ProtocolRotationRunBucketResponse;
 pub(crate) use protocol_rotation_run_totals::ProtocolRotationRunTotalsResponse;
 pub(crate) use protocol_swap_activity::ProtocolSwapActivityResponse;
 pub(crate) use protocol_swap_activity_bucket::ProtocolSwapActivityBucketResponse;
+pub(crate) use protocol_tvl::ProtocolTvlResponse;
 pub(crate) use readiness::{
     ChecksReportResponse, ComponentStatusResponse, ReadinessResponse, ReadinessStatusResponse,
 };

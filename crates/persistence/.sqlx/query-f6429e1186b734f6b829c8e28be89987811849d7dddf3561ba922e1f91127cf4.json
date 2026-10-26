@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index, m.pool_address,\n                   ta.symbol AS \"token_a_symbol?\", tb.symbol AS \"token_b_symbol?\",\n                   m.owner, m.kind, m.amount_usd AS \"amount_usd!\"\n              FROM analytic_liquidity_moves m\n              LEFT JOIN pools p ON p.pool_address = m.pool_address\n              LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT\n              LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT\n             WHERE m.protocol = $3\n               AND m.timestamp >= $1 AND m.timestamp < $2\n               AND m.amount_usd IS NOT NULL\n               -- ⚠️ Only a span its liquidity covers whole, as the totals: else a ranking of part of it.\n               AND (SELECT MIN(bucket) FROM analytic_protocol_liquidity_hourly\n                     WHERE protocol = $3) <= $1\n             ORDER BY m.amount_usd DESC, m.timestamp DESC, m.signature, m.event_index\n             LIMIT $4\n            ",
+  "query": "\n                SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index,\n                       m.pool_address, ta.symbol AS \"token_a_symbol?\",\n                       tb.symbol AS \"token_b_symbol?\", m.owner, m.kind,\n                       m.amount_usd AS \"amount_usd!\",\n                       ROUND(m.amount_usd, 6) AS \"amount_key!\"\n                  FROM analytic_liquidity_moves m\n                  LEFT JOIN pools p ON p.pool_address = m.pool_address\n                  LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT\n                  LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT\n                 WHERE m.protocol = $3\n                   AND m.timestamp >= $1 AND m.timestamp < $2\n                   AND m.amount_usd IS NOT NULL\n                   AND ($4::TIMESTAMPTZ IS NULL\n                        OR m.timestamp < $4\n                        OR (m.timestamp = $4 AND (m.signature, m.event_index) > ($5, $6)))\n                 ORDER BY m.timestamp DESC, m.signature, m.event_index\n                 LIMIT $7\n                ",
   "describe": {
     "columns": [
       {
@@ -112,6 +112,12 @@
             "name": "amount_usd"
           }
         }
+      },
+      {
+        "ordinal": 10,
+        "name": "amount_key!",
+        "type_info": "Numeric",
+        "origin": "Expression"
       }
     ],
     "parameters": {
@@ -119,6 +125,9 @@
         "Timestamptz",
         "Timestamptz",
         "Text",
+        "Timestamptz",
+        "Text",
+        "Int4",
         "Int8"
       ]
     },
@@ -132,8 +141,9 @@
       true,
       false,
       false,
-      true
+      true,
+      null
     ]
   },
-  "hash": "eba35233ea1f9b6dfcb5b6d6b278daecf648e4c6bd3a7b3eb179383760c8b055"
+  "hash": "f6429e1186b734f6b829c8e28be89987811849d7dddf3561ba922e1f91127cf4"
 }

@@ -26,7 +26,7 @@ import { ApiClientError } from "@/lib/api/errors";
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
 import {
   fetchLargestRotationRuns,
-  fetchProtocolSwapsSeries,
+  fetchSwapsSeries,
   fetchRotationRunsSeries,
   fetchRotationRunTotals,
 } from "@/lib/api/server/protocols";
@@ -125,7 +125,7 @@ async function VolumeSources({ period, protocol }: TabProps) {
   let swaps, runs;
   try {
     [swaps, runs] = await Promise.all([
-      fetchProtocolSwapsSeries(protocol, period),
+      fetchSwapsSeries(protocol, period),
       fetchRotationRunsSeries(protocol, period),
     ]);
   } catch (err) {
@@ -146,7 +146,7 @@ async function VolumeSources({ period, protocol }: TabProps) {
     whole > 0 ? formatPercent(String(part / whole), locale) : "—";
 
   const daily = period !== "24h";
-  const slots = swaps.asOf === null ? [] : splitSlotsOf(period, swaps.asOf, swaps.items, runs, protocol);
+  const slots = swaps.asOf === null ? [] : splitSlotsOf(period, swaps.asOf, swaps.items, runs);
   const totals = splitTotalsOf(slots);
   const max = Math.max(0, ...slots.map((s) => s.total ?? 0));
   const scale = (v: number) => (max > 0 ? (v / max) * CHART_PX.top : 0);

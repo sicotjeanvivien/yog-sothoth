@@ -44,18 +44,6 @@ export const zAnnouncementEntryResponse = z.object({
 
 export type AnnouncementEntryResponse = z.infer<typeof zAnnouncementEntryResponse>;
 
-export const zAnnouncementResponse = z.object({
-    endsAt: z.iso.datetime({ offset: true }).nullable(),
-    id: zCount,
-    kind: zAnnouncementKindResponse,
-    linkUrl: z.string().nullable(),
-    message: z.string(),
-    severity: zAnnouncementSeverityResponse,
-    startsAt: z.iso.datetime({ offset: true })
-});
-
-export type AnnouncementResponse = z.infer<typeof zAnnouncementResponse>;
-
 export const zEmbeddedTokenResponse = z.object({
     decimals: z.int().gte(0).lte(255),
     logoUri: z.url().nullable(),
@@ -209,6 +197,20 @@ export const zPageResponsePoolChangeEventResponse = z.object({
 });
 
 export type PageResponsePoolChangeEventResponse = z.infer<typeof zPageResponsePoolChangeEventResponse>;
+
+export const zPageResponseProtocolCatalogResponse = z.object({
+    isFirst: z.boolean(),
+    isLast: z.boolean(),
+    items: z.array(z.object({
+        observed: z.boolean(),
+        poolsSeen: zCount,
+        protocol: zProtocolResponse
+    })),
+    nextCursor: z.string().nullable(),
+    prevCursor: z.string().nullable()
+});
+
+export type PageResponseProtocolCatalogResponse = z.infer<typeof zPageResponseProtocolCatalogResponse>;
 
 export const zPoolChangeEventResponse = z.object({
     at: z.iso.datetime({ offset: true }),
@@ -867,36 +869,6 @@ export const zPoolDetailResponse = zPoolResponse.and(z.object({
 
 export type PoolDetailResponse = z.infer<typeof zPoolDetailResponse>;
 
-export const zProtocolActivityBarResponse = z.object({
-    feesUsd: zUnsignedDecimal.nullable(),
-    from: z.iso.datetime({ offset: true }),
-    liquidity: zLiquidityFlowsResponse.nullable(),
-    poolHours: zCount,
-    poolHoursValued: zCount,
-    protocol: zProtocolResponse,
-    swapCount: zCount,
-    volumeUsd: zUnsignedDecimal.nullable()
-});
-
-export type ProtocolActivityBarResponse = z.infer<typeof zProtocolActivityBarResponse>;
-
-export const zProtocolActivityResponse = z.object({
-    activePools: zCount.nullable(),
-    births: zCount,
-    feesUsd: zUnsignedDecimal.nullable(),
-    liquidity: zLiquidityFlowsResponse.nullable(),
-    lpFeesUsd: zUnsignedDecimal.nullable(),
-    poolHours: zCount,
-    poolHoursValued: zCount,
-    protocol: zProtocolResponse,
-    protocolFeesUsd: zUnsignedDecimal.nullable(),
-    referralFeesUsd: zUnsignedDecimal.nullable(),
-    swapCount: zCount,
-    volumeUsd: zUnsignedDecimal.nullable()
-});
-
-export type ProtocolActivityResponse = z.infer<typeof zProtocolActivityResponse>;
-
 export const zProtocolDiscoveredTvlResponse = z.object({
     at: z.iso.datetime({ offset: true }),
     pools: zCount,
@@ -1085,32 +1057,6 @@ export const zWindowResponse = z.enum([
 
 export type WindowResponse = z.infer<typeof zWindowResponse>;
 
-export const zDiscoveredTvlResponse = z.object({
-    period: zWindowResponse,
-    pools: zCount,
-    tvlUsd: zUnsignedDecimal
-});
-
-export type DiscoveredTvlResponse = z.infer<typeof zDiscoveredTvlResponse>;
-
-export const zLatestProtocolTvlResponse = z.object({
-    at: z.iso.datetime({ offset: true }),
-    discovered: z.array(zDiscoveredTvlResponse),
-    poolsPriced: zCount,
-    poolsUnvalued: zCount,
-    protocol: zProtocolResponse,
-    tvlUsd: zUnsignedDecimal.nullable()
-});
-
-export type LatestProtocolTvlResponse = z.infer<typeof zLatestProtocolTvlResponse>;
-
-export const zLatestTvlResponse = z.object({
-    asOf: z.iso.datetime({ offset: true }).nullable(),
-    items: z.array(zLatestProtocolTvlResponse)
-});
-
-export type LatestTvlResponse = z.infer<typeof zLatestTvlResponse>;
-
 export const zTokenActivityPageResponse = z.object({
     asOf: z.iso.datetime({ offset: true }).nullable(),
     coveredSince: z.iso.datetime({ offset: true }).nullable(),
@@ -1192,26 +1138,6 @@ export const zWindowedPageResponseRotationRunResponse = z.object({
 
 export type WindowedPageResponseRotationRunResponse = z.infer<typeof zWindowedPageResponseRotationRunResponse>;
 
-export const zWindowedResponseLiquidityMoveResponse = z.object({
-    asOf: z.iso.datetime({ offset: true }).nullable(),
-    coveredSince: z.iso.datetime({ offset: true }).nullable(),
-    from: z.iso.datetime({ offset: true }).nullable(),
-    items: z.array(z.object({
-        amountUsd: zUnsignedDecimal,
-        at: z.iso.datetime({ offset: true }),
-        kind: zLiquidityMoveKindResponse,
-        owner: z.string(),
-        poolAddress: z.string(),
-        protocol: zProtocolResponse,
-        signature: z.string(),
-        tokenASymbol: z.string().nullable(),
-        tokenBSymbol: z.string().nullable()
-    })),
-    window: zWindowResponse
-});
-
-export type WindowedResponseLiquidityMoveResponse = z.infer<typeof zWindowedResponseLiquidityMoveResponse>;
-
 export const zWindowedResponsePoolSwapBucketResponse = z.object({
     asOf: z.iso.datetime({ offset: true }).nullable(),
     coveredSince: z.iso.datetime({ offset: true }).nullable(),
@@ -1223,48 +1149,6 @@ export const zWindowedResponsePoolSwapBucketResponse = z.object({
 });
 
 export type WindowedResponsePoolSwapBucketResponse = z.infer<typeof zWindowedResponsePoolSwapBucketResponse>;
-
-export const zWindowedResponseProtocolActivityBarResponse = z.object({
-    asOf: z.iso.datetime({ offset: true }).nullable(),
-    coveredSince: z.iso.datetime({ offset: true }).nullable(),
-    from: z.iso.datetime({ offset: true }).nullable(),
-    items: z.array(z.object({
-        feesUsd: zUnsignedDecimal.nullable(),
-        from: z.iso.datetime({ offset: true }),
-        liquidity: zLiquidityFlowsResponse.nullable(),
-        poolHours: zCount,
-        poolHoursValued: zCount,
-        protocol: zProtocolResponse,
-        swapCount: zCount,
-        volumeUsd: zUnsignedDecimal.nullable()
-    })),
-    window: zWindowResponse
-});
-
-export type WindowedResponseProtocolActivityBarResponse = z.infer<typeof zWindowedResponseProtocolActivityBarResponse>;
-
-export const zWindowedResponseProtocolActivityResponse = z.object({
-    asOf: z.iso.datetime({ offset: true }).nullable(),
-    coveredSince: z.iso.datetime({ offset: true }).nullable(),
-    from: z.iso.datetime({ offset: true }).nullable(),
-    items: z.array(z.object({
-        activePools: zCount.nullable(),
-        births: zCount,
-        feesUsd: zUnsignedDecimal.nullable(),
-        liquidity: zLiquidityFlowsResponse.nullable(),
-        lpFeesUsd: zUnsignedDecimal.nullable(),
-        poolHours: zCount,
-        poolHoursValued: zCount,
-        protocol: zProtocolResponse,
-        protocolFeesUsd: zUnsignedDecimal.nullable(),
-        referralFeesUsd: zUnsignedDecimal.nullable(),
-        swapCount: zCount,
-        volumeUsd: zUnsignedDecimal.nullable()
-    })),
-    window: zWindowResponse
-});
-
-export type WindowedResponseProtocolActivityResponse = z.infer<typeof zWindowedResponseProtocolActivityResponse>;
 
 export const zWindowedResponseProtocolDiscoveredTvlResponse = z.object({
     asOf: z.iso.datetime({ offset: true }).nullable(),
@@ -1419,8 +1303,6 @@ export const zListAnnouncementsQuery = z.object({
 });
 
 export const zListAnnouncementsResponse = zPageResponseAnnouncementEntryResponse;
-
-export const zListActiveAnnouncementsResponse = z.array(zAnnouncementResponse);
 
 export const zGetIngestionResponse = zIngestionResponse;
 
@@ -1776,54 +1658,12 @@ export const zListProtocolFeeClaimsQuery = z.object({
 
 export const zListProtocolFeeClaimsResponse = zPageResponseProtocolFeeClaimEventResponse;
 
-export const zListProtocolsResponse = z.array(zProtocolCatalogResponse);
-
-export const zGetProtocolActivityQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional(),
-    offset: z.union([
-        z.literal('24h'),
-        z.literal('7d'),
-        z.literal('30d')
-    ]).nullish()
+export const zListProtocolsQuery = z.object({
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
 });
 
-export const zGetProtocolActivityResponse = zWindowedResponseProtocolActivityResponse;
-
-export const zGetProtocolActivityDailyQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional()
-});
-
-export const zGetProtocolActivityDailyResponse = zWindowedResponseProtocolActivityBarResponse;
-
-export const zGetProtocolActivityHourlyQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional()
-});
-
-export const zGetProtocolActivityHourlyResponse = zWindowedResponseProtocolActivityBarResponse;
-
-export const zGetProtocolTvlResponse = zLatestTvlResponse;
-
-export const zGetProtocolTvlHourlyQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional()
-});
-
-export const zGetProtocolTvlHourlyResponse = zWindowedResponseProtocolTvlResponse;
+export const zListProtocolsResponse = zPageResponseProtocolCatalogResponse;
 
 export const zGetProtocolPath = z.object({
     protocol: z.string()
@@ -1847,20 +1687,22 @@ export const zListProtocolLiquidityChangesQuery = z.object({
 
 export const zListProtocolLiquidityChangesResponse = zPageResponseLiquidityChangeEventResponse;
 
-export const zListLiquidityMovesPath = z.object({
+export const zListProtocolLiquidityMovesPath = z.object({
     protocol: z.string()
 });
 
-export const zListLiquidityMovesQuery = z.object({
+export const zListProtocolLiquidityMovesQuery = z.object({
     window: z.enum([
         '24h',
         '7d',
         '30d'
     ]).optional(),
+    sort: z.enum(['amount', 'at']).optional(),
+    cursor: z.string().min(1).nullish(),
     limit: z.int().gte(1).lte(200).optional()
 });
 
-export const zListLiquidityMovesResponse = zWindowedResponseLiquidityMoveResponse;
+export const zListProtocolLiquidityMovesResponse = zWindowedPageResponseLiquidityMoveResponse;
 
 export const zGetProtocolLiquidityMovesDailyPath = z.object({
     protocol: z.string()
@@ -2282,7 +2124,6 @@ export const zListSignalsQuery = z.object({
         z.literal('warning'),
         z.literal('critical')
     ]).nullish(),
-    pool: z.string().min(1).nullish(),
     limit: z.int().gte(1).lte(200).optional()
 });
 
@@ -2356,19 +2197,6 @@ export const zListTokensQuery = z.object({
 });
 
 export const zListTokensResponse = zPageResponseTokenResponse;
-
-export const zListTokenActivityQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional(),
-    sort: z.enum(['volume']).optional(),
-    cursor: z.string().min(1).nullish(),
-    limit: z.int().gte(1).lte(200).optional()
-});
-
-export const zListTokenActivityResponse = zTokenActivityPageResponse;
 
 export const zGetTokenPath = z.object({
     mint: z.string()

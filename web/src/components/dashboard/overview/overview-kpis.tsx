@@ -1,7 +1,7 @@
 /**
  * The KPI cells, each fetching on its own so a slow route holds only its cell, and adding up
- * the protocols of its `scope`; swaps and rotation are the advanced mode's. A failed secondary
- * read costs only its line.
+ * the protocols its `scope`'s routes return; swaps and rotation are the advanced mode's. A
+ * failed secondary read costs only its line.
  */
 
 import type { ReactNode } from "react";
@@ -9,19 +9,22 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { ApiClientError } from "@/lib/api/errors";
 import {
-  fetchPreviousProtocolActivity,
-  fetchProtocolActivity,
+  fetchPoolCreationTotals,
+  fetchPoolDiscoveryTotals,
+  fetchPreviousSwapTotals,
+  fetchProtocol,
   fetchProtocols,
-  fetchProtocolTvl,
-  fetchProtocolTvlHourly,
+  fetchSwapTotals,
+  fetchTvl,
+  fetchTvlHourly,
 } from "@/lib/api/server/protocols";
+import type { Scope } from "@/lib/api/server/scope";
 import { volumeCoverage } from "@/lib/coverage/volume-coverage";
 import { formatCount, formatCountCompact, formatRate } from "@/lib/format/format-count";
 import { formatTimes } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { previousWindowCovered, tvlStart } from "@/lib/overview/availability";
 import type { Period } from "@/lib/overview/period";
-import { inScope, type Scope } from "@/lib/overview/scope";
 import {
   changeRatio,
   discoveredTvl,
@@ -44,25 +47,28 @@ export async function TvlKpi({ period, scope }: { period: Period; scope: Scope }
   const info = t("kpis.info.tvl");
   const suffix = t("kpis.tvlChange", { period: t(`period.short.${period}`) });
 
-  const [latest, hourly] = await Promise.allSettled([
-    fetchProtocolTvl(),
-    fetchProtocolTvlHourly(period),
+  const [latest, hourly, discoveries] = await Promise.allSettled([
+    fetchTvl(scope),
+    fetchTvlHourly(scope, period),
+    fetchPoolDiscoveryTotals(scope, period),
   ]);
   if (latest.status === "rejected") {
     return kpiError(latest.reason, label, info);
   }
 
-  const items = inScope(latest.value.items, scope);
+  const items = latest.value.items;
   const current = sumUsd(items.map((i) => i.tvlUsd));
   let sub: ReactNode;
   if (hourly.status === "rejected") {
     sub = <Withheld reason={await failure(hourly.reason)} suffix={suffix} />;
+  } else if (discoveries.status === "rejected") {
+    sub = <Withheld reason={await failure(discoveries.reason)} suffix={suffix} />;
   } else if (current !== null) {
     const starts = items.map((i) => tvlStart(hourly.value.items, i, period));
     const start = starts.some((s) => s === null)
       ? null
       : sumUsd(starts.map((s) => s?.tvlUsd ?? null));
-    const discovered = discoveredTvl(items, period);
+    const discovered = discoveredTvl(items, discoveries.value.items);
     const ratio = tvlChange(current, start, discovered);
     sub =
       ratio !== null ? (
@@ -97,8 +103,8 @@ export async function VolumeKpi({ period, scope }: { period: Period; scope: Scop
   const suffix = t("kpis.volumeChange", { period: short });
 
   const [now, before] = await Promise.allSettled([
-    fetchProtocolActivity(period),
-    fetchPreviousProtocolActivity(period),
+    fetchSwapTotals(scope, period),
+    fetchPreviousSwapTotals(scope, period),
   ]);
   if (now.status === "rejected") {
     return kpiError(now.reason, label, info);
@@ -108,7 +114,7 @@ export async function VolumeKpi({ period, scope }: { period: Period; scope: Scop
     return <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} />;
   }
 
-  const items = inScope(now.value.items, scope);
+  const items = now.value.items;
   const current = sumUsd(items.map((i) => i.volumeUsd));
   let sub: ReactNode;
   if (before.status === "rejected") {
@@ -120,10 +126,7 @@ export async function VolumeKpi({ period, scope }: { period: Period; scope: Scop
     });
     sub = <Withheld reason={reason} suffix={suffix} />;
   } else {
-    const ratio = changeRatio(
-      current,
-      sumUsd(inScope(before.value.items, scope).map((i) => i.volumeUsd)),
-    );
+    const ratio = changeRatio(current, sumUsd(before.value.items.map((i) => i.volumeUsd)));
     sub = ratio === null ? undefined : <Change ratio={ratio} suffix={suffix} />;
   }
 
@@ -145,7 +148,7 @@ export async function FeesKpi({ period, scope }: { period: Period; scope: Scope 
 
   let now;
   try {
-    now = await fetchProtocolActivity(period);
+    now = await fetchSwapTotals(scope, period);
   } catch (err) {
     return kpiError(err, label, info);
   }
@@ -154,7 +157,7 @@ export async function FeesKpi({ period, scope }: { period: Period; scope: Scope 
     return <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} />;
   }
 
-  const items = inScope(now.items, scope);
+  const items = now.items;
   const fees = sumUsd(items.map((i) => i.feesUsd));
   const protocolFees = sumUsd(items.map((i) => i.protocolFeesUsd));
 
@@ -179,9 +182,10 @@ export async function PoolsKpi({ period, scope }: { period: Period; scope: Scope
   const label = t("kpis.pools");
   const info = t("kpis.info.pools");
 
-  const [now, catalogue] = await Promise.allSettled([
-    fetchProtocolActivity(period),
-    fetchProtocols(),
+  const [now, creations, seen] = await Promise.allSettled([
+    fetchSwapTotals(scope, period),
+    fetchPoolCreationTotals(scope, period),
+    poolsSeen(scope),
   ]);
   if (now.status === "rejected") {
     return kpiError(now.reason, label, info);
@@ -191,24 +195,28 @@ export async function PoolsKpi({ period, scope }: { period: Period; scope: Scope
     return <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} />;
   }
 
-  const items = inScope(now.value.items, scope);
+  const items = now.value.items;
   const active =
-    items.length > 0 && items.every((i) => i.activePools !== null)
-      ? items.reduce((sum, i) => sum + (i.activePools ?? 0), 0)
+    items.length > 0 && items.every((i) => i.pools !== null)
+      ? items.reduce((sum, i) => sum + (i.pools ?? 0), 0)
       : null;
-  const births = items.reduce((sum, i) => sum + i.births, 0);
   const observed =
-    catalogue.status === "fulfilled" ? (
-      t("kpis.poolsObserved", {
-        observed: formatCount(
-          inScope(catalogue.value, scope).reduce((sum, p) => sum + p.poolsSeen, 0),
-        ),
-      })
+    seen.status === "fulfilled" ? (
+      t("kpis.poolsObserved", { observed: formatCount(seen.value) })
     ) : (
       <>
-        {t("kpis.poolsObservedBefore")} <Unavailable reason={await failure(catalogue.reason)} />{" "}
+        {t("kpis.poolsObservedBefore")} <Unavailable reason={await failure(seen.reason)} />{" "}
         {t("kpis.poolsObservedAfter")}
       </>
+    );
+  const born =
+    creations.status === "fulfilled" ? (
+      t("kpis.poolsBorn", {
+        births: formatCount(creations.value.items.reduce((sum, i) => sum + i.pools, 0)),
+        period: short,
+      })
+    ) : (
+      <Unavailable reason={await failure(creations.reason)} />
     );
 
   return (
@@ -220,7 +228,7 @@ export async function PoolsKpi({ period, scope }: { period: Period; scope: Scope
         <>
           {observed}
           {" · "}
-          {t("kpis.poolsBorn", { births: formatCount(births), period: short })}
+          {born}
         </>
       }
       stamp={await lateStamp(now.value.asOf)}
@@ -235,7 +243,7 @@ export async function SwapsKpi({ period, scope }: { period: Period; scope: Scope
 
   let now;
   try {
-    now = await fetchProtocolActivity(period);
+    now = await fetchSwapTotals(scope, period);
   } catch (err) {
     return kpiError(err, label, info, true);
   }
@@ -246,8 +254,7 @@ export async function SwapsKpi({ period, scope }: { period: Period; scope: Scope
     );
   }
 
-  const items = inScope(now.items, scope);
-  const swaps = items.length === 0 ? null : items.reduce((sum, i) => sum + i.swapCount, 0);
+  const swaps = now.items.length === 0 ? null : now.items.reduce((sum, i) => sum + i.swaps, 0);
 
   return (
     <KpiCell
@@ -273,7 +280,7 @@ export async function RotationKpi({ period, scope }: { period: Period; scope: Sc
 
   let now, tvl;
   try {
-    [now, tvl] = await Promise.all([fetchProtocolActivity(period), fetchProtocolTvl()]);
+    [now, tvl] = await Promise.all([fetchSwapTotals(scope, period), fetchTvl(scope)]);
   } catch (err) {
     return kpiError(err, label, info, true);
   }
@@ -284,10 +291,10 @@ export async function RotationKpi({ period, scope }: { period: Period; scope: Sc
     );
   }
 
-  const items = inScope(now.items, scope);
+  const items = now.items;
   const ratio = rotation(
     sumUsd(items.map((i) => i.volumeUsd)),
-    sumUsd(inScope(tvl.items, scope).map((i) => i.tvlUsd)),
+    sumUsd(tvl.items.map((i) => i.tvlUsd)),
   );
 
   return (
@@ -327,6 +334,14 @@ export async function valued(
       />
     </>
   );
+}
+
+/** The pools seen by `scope`'s protocols, from the catalogue. */
+async function poolsSeen(scope: Scope): Promise<number> {
+  if (scope !== "all") {
+    return (await fetchProtocol(scope)).poolsSeen;
+  }
+  return (await fetchProtocols()).items.reduce((sum, p) => sum + p.poolsSeen, 0);
 }
 
 /** "— ⓘ over 7d": a secondary figure withheld, its reason one click away. */

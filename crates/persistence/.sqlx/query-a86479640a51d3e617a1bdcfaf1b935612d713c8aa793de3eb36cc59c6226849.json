@@ -1,0 +1,150 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index,\n                       m.pool_address, ta.symbol AS \"token_a_symbol?\",\n                       tb.symbol AS \"token_b_symbol?\", m.owner, m.kind,\n                       m.amount_usd AS \"amount_usd!\",\n                       ROUND(m.amount_usd, 6) AS \"amount_key!\"\n                  FROM analytic_liquidity_moves m\n                  LEFT JOIN pools p ON p.pool_address = m.pool_address\n                  LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT\n                  LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT\n                 WHERE m.protocol = $3\n                   AND m.timestamp >= $1 AND m.timestamp < $2\n                   AND m.amount_usd IS NOT NULL\n                   -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits, the column more.\n                   AND ($4::NUMERIC IS NULL\n                        OR ROUND(m.amount_usd, 6) < $4\n                        OR (ROUND(m.amount_usd, 6) = $4 AND (m.timestamp < $5\n                            OR (m.timestamp = $5 AND (m.signature, m.event_index) > ($6, $7)))))\n                 ORDER BY ROUND(m.amount_usd, 6) DESC, m.timestamp DESC, m.signature,\n                          m.event_index\n                 LIMIT $8\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_liquidity_moves",
+            "name": "protocol"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "analytic_liquidity_moves",
+            "name": "timestamp"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "signature",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_liquidity_moves",
+            "name": "signature"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "event_index",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "analytic_liquidity_moves",
+            "name": "event_index"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "pool_address",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_liquidity_moves",
+            "name": "pool_address"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "token_a_symbol?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "symbol"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "token_b_symbol?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "symbol"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "owner",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_liquidity_moves",
+            "name": "owner"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "kind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_liquidity_moves",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "amount_usd!",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_liquidity_moves",
+            "name": "amount_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "amount_key!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "Numeric",
+        "Timestamptz",
+        "Text",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "a86479640a51d3e617a1bdcfaf1b935612d713c8aa793de3eb36cc59c6226849"
+}

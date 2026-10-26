@@ -7,8 +7,8 @@
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { ApiClientError } from "@/lib/api/errors";
-import type { ProtocolActivityBarResponse } from "@/lib/api/schema/zod.gen";
-import { fetchProtocolActivitySeries } from "@/lib/api/server/protocols";
+import type { ProtocolSwapActivityBucketResponse } from "@/lib/api/schema/zod.gen";
+import { fetchSwapsSeries } from "@/lib/api/server/protocols";
 import { formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatUsdCompact } from "@/lib/format/format-usd";
@@ -34,7 +34,7 @@ export async function VolumeChart({ period }: { period: Period }) {
 
   let series;
   try {
-    series = await fetchProtocolActivitySeries(period);
+    series = await fetchSwapsSeries("all", period);
   } catch (err) {
     if (err instanceof ApiClientError) {
       return (
@@ -48,7 +48,7 @@ export async function VolumeChart({ period }: { period: Period }) {
   }
 
   const closed = await closedReason(period, series);
-  const slotsFor = (pick: (bar: ProtocolActivityBarResponse) => string | null) =>
+  const slotsFor = (pick: (bar: ProtocolSwapActivityBucketResponse) => string | null) =>
     series.asOf === null
       ? []
       : slotsOf(

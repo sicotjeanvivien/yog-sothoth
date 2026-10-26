@@ -2,7 +2,10 @@
 
 use std::sync::Arc;
 
-use yog_core::domain::{Protocol, ProtocolPools};
+use yog_core::{
+    Cursor,
+    domain::{Protocol, ProtocolPools},
+};
 
 use super::super::ProtocolCatalogService;
 use crate::testing::{PoolCountsRepo, work_slots};
@@ -34,4 +37,34 @@ async fn every_protocol_is_listed_observed_or_not() {
         .unwrap();
     assert!(damm.observed);
     assert_eq!(damm.pools_seen, 112_581);
+}
+
+/// Mutations: the page after the cursor starting at it, or its last entry given no cursor — a
+/// protocol served twice, or the next page never asked.
+#[tokio::test]
+async fn the_catalogue_pages_without_repeat_nor_gap() {
+    let svc = ProtocolCatalogService::new(
+        Arc::new(PoolCountsRepo::by_protocol(vec![])),
+        vec![],
+        work_slots(),
+    );
+
+    let mut seen = Vec::new();
+    let mut after = None;
+    loop {
+        let page = svc.list_page(after, 1).await.unwrap();
+        assert_eq!(page.is_first, after.is_none());
+        seen.extend(page.items.iter().map(|entry| entry.protocol));
+        match page.next_cursor {
+            Some(Cursor::Protocol(last)) => after = Some(last),
+            Some(other) => panic!("{other:?}"),
+            None => {
+                assert!(page.is_last);
+                break;
+            }
+        }
+        assert!(seen.len() <= Protocol::all().len(), "{seen:?}");
+    }
+
+    assert_eq!(seen, Protocol::all());
 }

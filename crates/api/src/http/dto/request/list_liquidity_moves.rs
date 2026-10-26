@@ -1,18 +1,27 @@
-//! Request DTO for `GET /api/protocols/{protocol}/liquidity-moves`.
+//! Request DTO for the lists of liquidity moves, under a protocol and under a pool.
 
 use serde::Deserialize;
 use utoipa::IntoParams;
-use yog_core::domain::{Protocol, Window};
+use yog_core::domain::{LiquidityMoveCursor, LiquidityMoveOrder, LiquidityMoveScope, Window};
 
 use super::window_param::WindowParam;
-use crate::http::error::ApiError;
+use crate::http::{cursor::decode_liquidity_move_cursor, error::ApiError};
 
-/// The largest moves of a window: no cursor, a ranking read from its top.
+mod sort_param;
+
+use sort_param::SortParam;
+
+/// A window, the order, and forward-only cursor pagination.
 #[derive(Debug, Deserialize, IntoParams)]
 pub(crate) struct LiquidityMovesParams {
     #[serde(default)]
     #[param(inline)]
     window: WindowParam,
+    #[serde(default)]
+    #[param(inline)]
+    sort: SortParam,
+    #[param(min_length = 1)]
+    cursor: Option<String>,
     #[serde(default = "super::default_limit")]
     #[param(value_type = u8, minimum = 1, maximum = 200)]
     limit: i64,
@@ -20,18 +29,31 @@ pub(crate) struct LiquidityMovesParams {
 
 #[derive(Debug)]
 pub(crate) struct ListLiquidityMovesRequest {
-    pub(crate) protocol: Protocol,
     pub(crate) window: Window,
+    pub(crate) order: LiquidityMoveOrder,
+    pub(crate) cursor: Option<LiquidityMoveCursor>,
     pub(crate) limit: i64,
 }
 
 impl ListLiquidityMovesRequest {
-    pub(crate) fn parse(protocol: &str, params: LiquidityMovesParams) -> Result<Self, ApiError> {
-        let protocol = super::parse_protocol(protocol)?;
+    pub(crate) fn parse(
+        params: LiquidityMovesParams,
+        scope: LiquidityMoveScope,
+    ) -> Result<Self, ApiError> {
         super::validate_limit(params.limit)?;
+        let order = params.sort.into();
+        let cursor = params
+            .cursor
+            .as_deref()
+            .map(|raw| {
+                super::non_empty("cursor", raw)
+                    .and_then(|raw| decode_liquidity_move_cursor(raw, scope, order))
+            })
+            .transpose()?;
         Ok(Self {
-            protocol,
             window: params.window.into(),
+            order,
+            cursor,
             limit: params.limit,
         })
     }

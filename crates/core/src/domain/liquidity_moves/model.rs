@@ -41,6 +41,13 @@ pub struct LiquidityMove {
     pub amount_usd: Decimal,
 }
 
+/// Which moves a list reads: one protocol's, or one pool's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LiquidityMoveScope {
+    Protocol(Protocol),
+    Pool(Pubkey),
+}
+
 /// The order of a list of liquidity moves; each breaks its ties the same way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LiquidityMoveOrder {
@@ -51,11 +58,11 @@ pub enum LiquidityMoveOrder {
     At,
 }
 
-/// The key of the last move of a page, and the list it was read from — its pool, window,
+/// The key of the last move of a page, and the list it was read from — its scope, window,
 /// order and instant: a page of another list, or read after a freeze, would not follow.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiquidityMoveCursor {
-    pub pool: Pubkey,
+    pub scope: LiquidityMoveScope,
     pub window: Window,
     pub as_of: DateTime<Utc>,
     pub order: LiquidityMoveOrder,

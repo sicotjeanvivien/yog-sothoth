@@ -60,57 +60,6 @@
         ],
         "type": "string"
       },
-      "AnnouncementResponse": {
-        "description": "One active operator announcement, as displayed by the web banner.",
-        "properties": {
-          "endsAt": {
-            "description": "End of the display window; `null` = open-ended.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "id": {
-            "$ref": "#/components/schemas/Count",
-            "description": "Storage identity — the client's dismiss-cookie key."
-          },
-          "kind": {
-            "$ref": "#/components/schemas/AnnouncementKindResponse",
-            "description": "What it is about: \"maintenance\" | \"incident\" | \"release\" | \"beta\"."
-          },
-          "linkUrl": {
-            "description": "Optional target, e.g. `/changelog#v0.1.0`. `null` when absent.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "message": {
-            "description": "Free operator text (English, v1 decision).",
-            "type": "string"
-          },
-          "severity": {
-            "$ref": "#/components/schemas/AnnouncementSeverityResponse",
-            "description": "Display prominence: \"info\" | \"warning\" | \"critical\"."
-          },
-          "startsAt": {
-            "description": "Start of the display window.",
-            "format": "date-time",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "kind",
-          "severity",
-          "message",
-          "startsAt",
-          "endsAt",
-          "linkUrl"
-        ],
-        "type": "object"
-      },
       "AnnouncementSeverityResponse": {
         "description": "How prominently an announcement is shown.",
         "enum": [
@@ -132,26 +81,6 @@
       "Count": {
         "minimum": 0,
         "type": "integer"
-      },
-      "DiscoveredTvlResponse": {
-        "description": "The part of `tvlUsd` held by the pools first seen in `period`, their birth unobserved.",
-        "properties": {
-          "period": {
-            "$ref": "#/components/schemas/WindowResponse"
-          },
-          "pools": {
-            "$ref": "#/components/schemas/Count"
-          },
-          "tvlUsd": {
-            "$ref": "#/components/schemas/UnsignedDecimal"
-          }
-        },
-        "required": [
-          "period",
-          "tvlUsd",
-          "pools"
-        ],
-        "type": "object"
       },
       "EmbeddedTokenResponse": {
         "description": "A token, embedded in another resource's response.",
@@ -230,76 +159,6 @@
         "required": [
           "freshness",
           "lastEventAt"
-        ],
-        "type": "object"
-      },
-      "LatestProtocolTvlResponse": {
-        "description": "A protocol's last TVL, with its discovered part for each period measured.",
-        "properties": {
-          "at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "discovered": {
-            "description": "One per period measured with this TVL; a period missing was not measured.",
-            "items": {
-              "$ref": "#/components/schemas/DiscoveredTvlResponse"
-            },
-            "type": "array"
-          },
-          "poolsPriced": {
-            "$ref": "#/components/schemas/Count",
-            "description": "Pools with at least one side valued, a side without a price counting 0."
-          },
-          "poolsUnvalued": {
-            "$ref": "#/components/schemas/Count",
-            "description": "Pools with no side valued, out of `tvlUsd`."
-          },
-          "protocol": {
-            "$ref": "#/components/schemas/ProtocolResponse"
-          },
-          "tvlUsd": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/UnsignedDecimal"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "protocol",
-          "at",
-          "poolsPriced",
-          "poolsUnvalued",
-          "discovered",
-          "tvlUsd"
-        ],
-        "type": "object"
-      },
-      "LatestTvlResponse": {
-        "description": "The TVL of every protocol at the close of the last frozen hour.",
-        "properties": {
-          "asOf": {
-            "description": "`null` before the first hour is frozen.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/LatestProtocolTvlResponse"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "items",
-          "asOf"
         ],
         "type": "object"
       },
@@ -1621,6 +1480,60 @@
         ],
         "type": "object"
       },
+      "PageResponse_ProtocolCatalogResponse": {
+        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
+        "properties": {
+          "isFirst": {
+            "type": "boolean"
+          },
+          "isLast": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "observed": {
+                  "description": "Whether this build ingests the protocol.",
+                  "type": "boolean"
+                },
+                "poolsSeen": {
+                  "$ref": "#/components/schemas/Count"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                }
+              },
+              "required": [
+                "protocol",
+                "observed",
+                "poolsSeen"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prevCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "isFirst",
+          "isLast",
+          "nextCursor",
+          "prevCursor"
+        ],
+        "type": "object"
+      },
       "PageResponse_ProtocolFeeClaimEventResponse": {
         "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
         "properties": {
@@ -2868,176 +2781,6 @@
           "title",
           "status",
           "detail"
-        ],
-        "type": "object"
-      },
-      "ProtocolActivityBarResponse": {
-        "description": "One bar, an hour or 24 hours from `from`. A bar with no row had no swap.",
-        "properties": {
-          "feesUsd": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/UnsignedDecimal"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "liquidity": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/LiquidityFlowsResponse",
-                "description": "`null` for a bar that starts before the protocol's liquidity was first measured."
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "poolHours": {
-            "$ref": "#/components/schemas/Count"
-          },
-          "poolHoursValued": {
-            "$ref": "#/components/schemas/Count"
-          },
-          "protocol": {
-            "$ref": "#/components/schemas/ProtocolResponse"
-          },
-          "swapCount": {
-            "$ref": "#/components/schemas/Count"
-          },
-          "volumeUsd": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/UnsignedDecimal"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "protocol",
-          "from",
-          "swapCount",
-          "poolHours",
-          "poolHoursValued",
-          "feesUsd",
-          "liquidity",
-          "volumeUsd"
-        ],
-        "type": "object"
-      },
-      "ProtocolActivityResponse": {
-        "properties": {
-          "activePools": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/Count",
-                "description": "Distinct over the window; `null` when no cycle counted them at its last hour."
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "births": {
-            "$ref": "#/components/schemas/Count",
-            "description": "Pools initialized during the window."
-          },
-          "feesUsd": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/UnsignedDecimal"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "liquidity": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/LiquidityFlowsResponse",
-                "description": "`null` when the window starts before the protocol's liquidity was first measured."
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "lpFeesUsd": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/UnsignedDecimal"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "poolHours": {
-            "$ref": "#/components/schemas/Count"
-          },
-          "poolHoursValued": {
-            "$ref": "#/components/schemas/Count"
-          },
-          "protocol": {
-            "$ref": "#/components/schemas/ProtocolResponse"
-          },
-          "protocolFeesUsd": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/UnsignedDecimal"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "referralFeesUsd": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/UnsignedDecimal"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "swapCount": {
-            "$ref": "#/components/schemas/Count"
-          },
-          "volumeUsd": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/UnsignedDecimal"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "protocol",
-          "swapCount",
-          "births",
-          "poolHours",
-          "poolHoursValued",
-          "activePools",
-          "feesUsd",
-          "liquidity",
-          "lpFeesUsd",
-          "protocolFeesUsd",
-          "referralFeesUsd",
-          "volumeUsd"
         ],
         "type": "object"
       },
@@ -4528,99 +4271,6 @@
         ],
         "type": "object"
       },
-      "WindowedResponse_LiquidityMoveResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
-        "properties": {
-          "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "The first hour the facts hold.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "description": "One valued liquidity move, with its pool's token symbols.",
-              "properties": {
-                "amountUsd": {
-                  "$ref": "#/components/schemas/UnsignedDecimal"
-                },
-                "at": {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "kind": {
-                  "$ref": "#/components/schemas/LiquidityMoveKindResponse"
-                },
-                "owner": {
-                  "type": "string"
-                },
-                "poolAddress": {
-                  "type": "string"
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                },
-                "signature": {
-                  "type": "string"
-                },
-                "tokenASymbol": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "tokenBSymbol": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                }
-              },
-              "required": [
-                "protocol",
-                "at",
-                "signature",
-                "poolAddress",
-                "owner",
-                "kind",
-                "amountUsd",
-                "tokenASymbol",
-                "tokenBSymbol"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
       "WindowedResponse_PoolSwapBucketResponse": {
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
@@ -4666,260 +4316,6 @@
                   "type": "object"
                 }
               ]
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
-      "WindowedResponse_ProtocolActivityBarResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
-        "properties": {
-          "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "The first hour the facts hold.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "description": "One bar, an hour or 24 hours from `from`. A bar with no row had no swap.",
-              "properties": {
-                "feesUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "from": {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "liquidity": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/LiquidityFlowsResponse",
-                      "description": "`null` for a bar that starts before the protocol's liquidity was first measured."
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "poolHours": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "poolHoursValued": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                },
-                "swapCount": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "volumeUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              },
-              "required": [
-                "protocol",
-                "from",
-                "swapCount",
-                "poolHours",
-                "poolHoursValued",
-                "feesUsd",
-                "liquidity",
-                "volumeUsd"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
-      "WindowedResponse_ProtocolActivityResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
-        "properties": {
-          "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "The first hour the facts hold.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "properties": {
-                "activePools": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/Count",
-                      "description": "Distinct over the window; `null` when no cycle counted them at its last hour."
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "births": {
-                  "$ref": "#/components/schemas/Count",
-                  "description": "Pools initialized during the window."
-                },
-                "feesUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "liquidity": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/LiquidityFlowsResponse",
-                      "description": "`null` when the window starts before the protocol's liquidity was first measured."
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "lpFeesUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "poolHours": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "poolHoursValued": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                },
-                "protocolFeesUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "referralFeesUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "swapCount": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "volumeUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              },
-              "required": [
-                "protocol",
-                "swapCount",
-                "births",
-                "poolHours",
-                "poolHoursValued",
-                "activePools",
-                "feesUsd",
-                "liquidity",
-                "lpFeesUsd",
-                "protocolFeesUsd",
-                "referralFeesUsd",
-                "volumeUsd"
-              ],
-              "type": "object"
             },
             "type": "array"
           },
@@ -5720,37 +5116,6 @@
             "description": "A failure: RFC 9457 Problem Details."
           }
         }
-      }
-    },
-    "/api/announcements/active": {
-      "get": {
-        "operationId": "list_active_announcements",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/AnnouncementResponse"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "The announcements active now."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        },
-        "summary": "The announcements whose display window contains the request instant, most\nsevere first then most recent. An empty array is the normal case."
       }
     },
     "/api/ingestion": {
@@ -7476,110 +6841,28 @@
     "/api/protocols": {
       "get": {
         "operationId": "list_protocols",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ProtocolCatalogResponse"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Every protocol of the domain, observed or not."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        }
-      }
-    },
-    "/api/protocols/activity": {
-      "get": {
-        "operationId": "get_protocol_activity",
         "parameters": [
           {
             "in": "query",
-            "name": "window",
+            "name": "cursor",
             "required": false,
             "schema": {
-              "enum": [
-                "24h",
-                "7d",
-                "30d"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "offset",
-            "required": false,
-            "schema": {
-              "oneOf": [
-                {
-                  "enum": [
-                    "24h",
-                    "7d",
-                    "30d"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
               ]
             }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolActivityResponse"
-                }
-              }
-            },
-            "description": "Each protocol's activity over the window."
           },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        }
-      }
-    },
-    "/api/protocols/activity/daily": {
-      "get": {
-        "operationId": "get_protocol_activity_daily",
-        "parameters": [
           {
             "in": "query",
-            "name": "window",
+            "name": "limit",
             "required": false,
             "schema": {
-              "enum": [
-                "24h",
-                "7d",
-                "30d"
-              ],
-              "type": "string"
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
             }
           }
         ],
@@ -7588,122 +6871,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolActivityBarResponse"
+                  "$ref": "#/components/schemas/PageResponse_ProtocolCatalogResponse"
                 }
               }
             },
-            "description": "Each protocol's activity, by 24 hours ending at `asOf`."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        }
-      }
-    },
-    "/api/protocols/activity/hourly": {
-      "get": {
-        "operationId": "get_protocol_activity_hourly",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "window",
-            "required": false,
-            "schema": {
-              "enum": [
-                "24h",
-                "7d",
-                "30d"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolActivityBarResponse"
-                }
-              }
-            },
-            "description": "Each protocol's activity, hour by hour."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        }
-      }
-    },
-    "/api/protocols/tvl": {
-      "get": {
-        "operationId": "get_protocol_tvl",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LatestTvlResponse"
-                }
-              }
-            },
-            "description": "Each protocol's TVL at the close of the last frozen hour."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        }
-      }
-    },
-    "/api/protocols/tvl/hourly": {
-      "get": {
-        "operationId": "get_protocol_tvl_hourly",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "window",
-            "required": false,
-            "schema": {
-              "enum": [
-                "24h",
-                "7d",
-                "30d"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolTvlResponse"
-                }
-              }
-            },
-            "description": "Each protocol's TVL at the close of every hour, from the window's start."
+            "description": "A page of every protocol of the domain, observed or not."
           },
           "default": {
             "content": {
@@ -7830,7 +7002,7 @@
     },
     "/api/protocols/{protocol}/liquidity-moves": {
       "get": {
-        "operationId": "list_liquidity_moves",
+        "operationId": "list_protocol_liquidity_moves",
         "parameters": [
           {
             "in": "query",
@@ -7843,6 +7015,31 @@
                 "30d"
               ],
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "description": "`amount`, the moves worth the most first, or `at`, the most recent first.",
+              "enum": [
+                "amount",
+                "at"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           {
@@ -7870,11 +7067,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_LiquidityMoveResponse"
+                  "$ref": "#/components/schemas/WindowedPageResponse_LiquidityMoveResponse"
                 }
               }
             },
-            "description": "The protocol's valued liquidity moves over the window, largest first; none while its liquidity does not cover the window whole."
+            "description": "A page of the protocol's valued liquidity moves, in the order asked; empty while its liquidity does not cover the window whole."
           },
           "default": {
             "content": {
@@ -9686,18 +8883,6 @@
           },
           {
             "in": "query",
-            "name": "pool",
-            "required": false,
-            "schema": {
-              "minLength": 1,
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          {
-            "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
@@ -10087,83 +9272,6 @@
               }
             },
             "description": "A page of tokens, the most recently first fetched first, each with its latest price."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        }
-      }
-    },
-    "/api/tokens/activity": {
-      "get": {
-        "operationId": "list_token_activity",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "window",
-            "required": false,
-            "schema": {
-              "enum": [
-                "24h",
-                "7d",
-                "30d"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "sort",
-            "required": false,
-            "schema": {
-              "description": "The only order: the tokens most traded first.",
-              "enum": [
-                "volume"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "cursor",
-            "required": false,
-            "schema": {
-              "minLength": 1,
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "format": "u-int8",
-              "maximum": 200,
-              "minimum": 1,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TokenActivityPageResponse"
-                }
-              }
-            },
-            "description": "A page of tokens, the most traded first."
           },
           "default": {
             "content": {

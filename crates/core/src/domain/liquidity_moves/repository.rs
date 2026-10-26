@@ -1,8 +1,9 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use solana_pubkey::Pubkey;
 
-use super::{LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveOrder};
+use super::{
+    LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveOrder, LiquidityMoveScope,
+};
 use crate::domain::{FrozenPeriod, Protocol, ProtocolBucket, Window};
 use crate::{Page, RepositoryResult};
 
@@ -34,13 +35,13 @@ pub trait LiquidityMoveLookup: Send + Sync {
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<LiquidityFlows>>>;
 
-    /// A pool's valued moves in `period`, the period of `window`, in `order`, after `cursor`'s key;
-    /// forward only.
-    async fn list_pool_moves(
+    /// `scope`'s valued moves in `period`, the period of `window`, in `order`, after `cursor`'s
+    /// key; forward only.
+    async fn list_moves(
         &self,
         period: &FrozenPeriod,
         window: Window,
-        pool: Pubkey,
+        scope: LiquidityMoveScope,
         order: LiquidityMoveOrder,
         cursor: Option<LiquidityMoveCursor>,
         limit: i64,

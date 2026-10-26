@@ -1,6 +1,5 @@
 /** The volume tab's chart, as data: each bar's volume split between the rotation runs and the rest. */
 
-import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
 import { slotsOf } from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
 
@@ -15,7 +14,7 @@ export type SplitSlot = {
   inRuns: number | null;
 };
 
-type VolumeBar = { protocol: ProtocolResponse; from: string; volumeUsd: string | null };
+type VolumeBar = { from: string; volumeUsd: string | null };
 
 /** The protocol's volume in the period's slots, ending at the swaps' `asOf`, split by its runs. */
 export function splitSlotsOf(
@@ -23,15 +22,12 @@ export function splitSlotsOf(
   asOf: string,
   swaps: readonly VolumeBar[],
   runs: { asOf: string | null; coveredSince: string | null; items: readonly VolumeBar[] },
-  protocol: ProtocolResponse,
 ): SplitSlot[] {
   const pick = (bars: readonly VolumeBar[]) =>
     slotsOf(
       period,
       asOf,
-      bars
-        .filter((bar) => bar.protocol === protocol)
-        .map((bar) => ({ from: bar.from, value: bar.volumeUsd })),
+      bars.map((bar) => ({ from: bar.from, value: bar.volumeUsd })),
     );
   const totals = pick(swaps);
   const inRuns = pick(runs.items);

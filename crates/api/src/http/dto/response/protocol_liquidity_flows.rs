@@ -4,8 +4,8 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::{LiquidityFlows, Protocol};
 
+use super::liquidity_move::LiquidityFlowsResponse;
 use super::protocol::ProtocolResponse;
-use super::protocol_activity::LiquidityFlowsResponse;
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

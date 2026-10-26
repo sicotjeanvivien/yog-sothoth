@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { AnnouncementResponse } from "@/lib/api/schema/zod.gen";
+import type { AnnouncementEntryResponse } from "@/lib/api/schema/zod.gen";
 import {
   DISMISSED_IDS_MAX,
   parseDismissedIds,
@@ -8,15 +8,19 @@ import {
   serializeDismissedIds,
 } from "../announcement-state";
 
-function announcement(id: number): AnnouncementResponse {
+function announcement(
+  id: number,
+  severity: AnnouncementEntryResponse["severity"] = "info",
+): AnnouncementEntryResponse {
   return {
     id,
     kind: "release",
-    severity: "info",
+    severity,
     message: `announcement ${id}`,
     linkUrl: null,
     startsAt: "2026-07-20T10:00:00Z",
     endsAt: null,
+    status: "open",
   };
 }
 
@@ -73,5 +77,19 @@ describe("pickAnnouncement", () => {
 
   it("returns null on an empty active set", () => {
     expect(pickAnnouncement([], [])).toBeNull();
+  });
+
+  // Mutation: the API's order kept, or the sort unstable — a later info shown over an earlier
+  // warning, or two warnings swapped.
+  it("shows the most severe first, the API's order between equals", () => {
+    const open = [
+      announcement(1, "info"),
+      announcement(2, "warning"),
+      announcement(3, "critical"),
+      announcement(4, "warning"),
+    ];
+    expect(pickAnnouncement(open, [])?.id).toBe(3);
+    expect(pickAnnouncement(open, [3])?.id).toBe(2);
+    expect(pickAnnouncement(open, [3, 2])?.id).toBe(4);
   });
 });

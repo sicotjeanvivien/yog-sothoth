@@ -65,9 +65,10 @@ lib/api/
 ├── schema/zod.gen.ts    # generated: one zod schema and one type per wire
 │                        # shape, from crates/api/openapi.json — never edited
 ├── server/              # one fetcher per resource for Server Components:
-│                        # fetchSignals, fetchProtocolActivity, fetchTopTokens,
-│                        # fetchActiveAnnouncements, … — those a page's
-│                        # blocks share go through React's `cache`
+│                        # fetchSignals, fetchSwapTotals, fetchTopTokens,
+│                        # fetchOpenAnnouncements, … — those a page's
+│                        # blocks share go through React's `cache`; a
+│                        # `Scope` picks the root or the protocol's route
 ├── browser/             # browser-side fetchers for Client Component flows
 │                        # (signals refill on reconnect, network status)
 └── errors.ts            # ApiClientError — discriminated union
@@ -257,8 +258,9 @@ moved, while the ⓘ (`InfoPopover`) and `BlockError` they share keep it.
 fees, active pools), activity by protocol, the latest signals, volume by hour
 or by day, the most traded tokens. The header is the title alone, then "Live",
 the period and the advanced mode at its right. Every figure comes from yog-analytic's
-measures (`/api/protocols/…`, `/api/tokens/activity`), which all end at the
-same `asOf`, the close of the last frozen hour.
+measures (`/api/swaps/…`, `/api/tvl…`, `/api/pool-creations/…`,
+`/api/pool-discoveries/…`), which all end at the same `asOf`, the close of the last frozen
+hour.
 
 **The period** — `?period=24h|7d|30d` (`lib/overview/period.ts`; missing or
 unknown is 24h) drives every label, section title, chart and ⓘ, which speak of
@@ -323,11 +325,12 @@ chosen.
 giving the program and since when the figures are measured (`coveredSince`,
 the first frozen hour), and at its right "Live", the period and the advanced
 mode: `overview/header-controls.tsx`, shared with the Overview, takes the
-page's path, the query it keeps and the scope of its "Live" rows.
+page's path, the query it keeps and the scope its "Live" rows and its periods are read in.
 
-**KPIs** — the Overview's cells take a `scope` (`lib/overview/scope.ts`): `"all"`
-on the Overview, the protocol here, so both pages compute each figure once and
-show the same number for the same protocol. The page adds its fees with their
+**KPIs** — the Overview's cells take a `scope` (`lib/api/server/scope.ts`): `"all"`
+on the Overview, which reads the root routes and adds up their protocols, the protocol
+here, which reads its own routes (`/api/protocols/{protocol}/…`) — never a root route
+filtered in the page. The page adds its fees with their
 effective rate and, in the advanced mode, the protocol's fees with their share
 (`protocol/protocol-kpis.tsx`). The advanced mode is one choice for the whole
 dashboard: same `OverviewMode`, same cookie.
@@ -342,7 +345,7 @@ it (`dash-flow-out`, darker than the text red), per hour
 or per day, with symmetric marks; and, in the advanced mode, the largest moves
 beside the chart, so the page is no longer. The liquidity is measured from a
 later hour than the swaps: until a window is covered, its totals, bars and
-moves say so instead of a partial sum. Opening this tab opened the menu entry,
+moves say so instead of a partial sum, while the period stays open on the swaps' span. Opening this tab opened the menu entry,
 with a green dot beside it while the ingestion is live
 (`sidebar/product-live-dot.tsx`), and put the page in the sitemap.
 
@@ -429,10 +432,10 @@ A new page goes in one of the two lists and calls `pageMetadata`, or
 ## Operator announcements
 
 The dashboard layout (Server Component) fetches `GET
-/api/announcements/active` on every dashboard render, reads the dismiss
+/api/announcements?status=open` on every dashboard render, reads the dismiss
 cookie, and picks the one announcement to show (`pickAnnouncement`,
-`lib/announcements/` — first non-dismissed entry of the API-ordered
-set: most severe first, then most recent). The pick happens server-side
+`lib/announcements/` — the most severe non-dismissed one, then the most
+recent, the API's order). The pick happens server-side
 so the first paint is already correct — the `sidebar-state` cookie
 pattern. The client island (`AnnouncementBanner`) only owns the dismiss
 click: it appends the id to the single CSV cookie

@@ -14,8 +14,8 @@ import { AnnouncementBanner } from "@/components/dashboard/announcements/announc
 import { PREFERENCES_OPEN_COOKIE } from "@/components/dashboard/sidebar/preferences-state";
 import { SIDEBAR_COLLAPSED_COOKIE } from "@/components/dashboard/sidebar/sidebar-state";
 import { DashboardShell } from "@/components/dashboard/shell/dashboard-shell";
-import type { AnnouncementResponse } from "@/lib/api/schema/zod.gen";
-import { fetchActiveAnnouncements } from "@/lib/api/server/announcements";
+import type { AnnouncementEntryResponse } from "@/lib/api/schema/zod.gen";
+import { fetchOpenAnnouncements } from "@/lib/api/server/announcements";
 import {
   ANNOUNCEMENTS_DISMISSED_COOKIE,
   parseDismissedIds,
@@ -23,9 +23,9 @@ import {
 } from "@/lib/announcements/announcement-state";
 
 /** Any failure is no banner: announcements must never take the dashboard down. */
-async function safeActiveAnnouncements(): Promise<AnnouncementResponse[]> {
+async function safeOpenAnnouncements(): Promise<AnnouncementEntryResponse[]> {
   try {
-    return await fetchActiveAnnouncements();
+    return await fetchOpenAnnouncements();
   } catch {
     return [];
   }
@@ -37,7 +37,7 @@ async function AnnouncementSlot() {
     cookieStore.get(ANNOUNCEMENTS_DISMISSED_COOKIE)?.value,
   );
   const announcement = pickAnnouncement(
-    await safeActiveAnnouncements(),
+    await safeOpenAnnouncements(),
     dismissedIds,
   );
   if (!announcement) return null;

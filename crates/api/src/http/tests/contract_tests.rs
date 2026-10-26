@@ -95,7 +95,7 @@ fn file_name(path: &Path) -> String {
 fn every_api_route_is_in_the_document() {
     let doc = document();
     let paths = doc["paths"].as_object().expect("paths");
-    assert_eq!(paths.len(), 81, "{:?}", paths.keys().collect::<Vec<_>>());
+    assert_eq!(paths.len(), 74, "{:?}", paths.keys().collect::<Vec<_>>());
 }
 
 /// A document of one schema, as `finish` receives it.
@@ -329,7 +329,7 @@ fn every_handler_declares_the_body_and_query_it_has() {
             checked += 1;
         }
     }
-    assert_eq!(checked, 81, "one #[utoipa::path] per /api route");
+    assert_eq!(checked, 74, "one #[utoipa::path] per /api route");
     assert!(drift.is_empty(), "{drift:?}");
 }
 
