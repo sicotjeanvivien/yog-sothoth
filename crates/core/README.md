@@ -33,13 +33,14 @@ core/src/
 │   │                       or pool change is one of several events, MeteoraDammV2*Change;
 │   │                       EventScope, EventCursor and its window_start in event_cursor.rs)
 │   ├── pool_creations/    (PoolCreations, by protocol — PoolCreationsLookup)
-│   ├── liquidity_moves/   (LiquidityMove, LiquidityFlows — LiquidityMoveLookup)
+│   ├── liquidity_moves/   (LiquidityMove, LiquidityFlows, its order, scope and cursor —
+│   │                       LiquidityMoveLookup)
 │   ├── rotation_runs/     (RotationRun, its totals, order, scope and cursor —
 │   │                       RotationRunLookup; TranchePeriod, through the last tranche
 │   │                       written, in analytic/window.rs)
 │   ├── protocol_tvl/      (ProtocolTvl, a reading at an instant — ProtocolTvlLookup)
-│   ├── discovered_tvl/    (DiscoveredTvl — DiscoveredTvlLookup)
-│   ├── protocol_activity/ (ProtocolActivity, its bars and TVL — ProtocolActivityLookup)
+│   ├── discovered_tvl/    (ProtocolDiscoveredTvl — DiscoveredTvlLookup)
+│   ├── protocol_activity/ (ProtocolActivityLookup: the frozen hours every measure is read over)
 │   ├── token_activity/    (TokenActivity — TokenActivityFeed, by volume)
 │   ├── signals/           (Signal, Severity, SignalDetector, EvalContext,
 │   │                       SignalRepository + SignalFeed and its SignalFilter,

@@ -8,11 +8,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { PROTOCOL_SCOPE, type ScopeLine } from "@/components/dashboard/sidebar/sidebar-nav";
 import { ApiClientError } from "@/lib/api/errors";
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
-import {
-  fetchProtocolActivity,
-  fetchProtocols,
-  fetchProtocolTvl,
-} from "@/lib/api/server/protocols";
+import { fetchProtocols, fetchSwapTotals, fetchTvl } from "@/lib/api/server/protocols";
 import { volumeCoverage } from "@/lib/coverage/volume-coverage";
 import { formatCount } from "@/lib/format/format-count";
 import { formatPercent } from "@/lib/format/format-percent";
@@ -60,8 +56,8 @@ export async function ProtocolActivity({ period }: { period: Period }) {
   try {
     [catalogue, tvl, activity] = await Promise.all([
       fetchProtocols(),
-      fetchProtocolTvl(),
-      fetchProtocolActivity(period),
+      fetchTvl("all"),
+      fetchSwapTotals("all", period),
     ]);
   } catch (err) {
     if (err instanceof ApiClientError) {
@@ -77,7 +73,7 @@ export async function ProtocolActivity({ period }: { period: Period }) {
 
   const closed = await closedReason(period, activity);
   const total = sumUsd(activity.items.map((i) => i.volumeUsd));
-  const observed = new Set(catalogue.filter((p) => p.observed).map((p) => p.protocol));
+  const observed = new Set(catalogue.items.filter((p) => p.observed).map((p) => p.protocol));
 
   return (
     <section aria-label={title} className={SECTION_CLASS}>
@@ -153,7 +149,7 @@ export async function ProtocolActivity({ period }: { period: Period }) {
                   />
                 </div>
                 <div role="cell" className={`${ADVANCED_ONLY.block} ${NUM_CLASS}`}>
-                  {formatCount(row?.activePools ?? null)}
+                  {formatCount(row?.pools ?? null)}
                 </div>
                 <div role="cell" className="flex items-center justify-end gap-2">
                   <div className="h-1.5 max-w-[120px] flex-auto bg-dash-surface-2">

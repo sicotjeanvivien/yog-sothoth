@@ -1,6 +1,7 @@
 /**
- * `/api/protocols` and its measures, on the server. ⚠️ Each is wrapped in React's `cache`:
- * several blocks of one page read the same response, fetched once per render.
+ * The catalogue and the measures of the protocols, on the server, at the root or under one
+ * protocol by `Scope`. ⚠️ Each is wrapped in React's `cache`: several blocks of one page read
+ * the same response, fetched once per render.
  * @throws ApiClientError on any transport, HTTP, or schema failure.
  */
 
@@ -8,73 +9,115 @@ import { cache } from "react";
 
 import { apiGet } from "../client/server";
 import {
-  zGetProtocolActivityDailyResponse,
-  zGetProtocolActivityHourlyResponse,
-  zGetProtocolActivityResponse,
+  zGetPoolCreationTotalsResponse,
+  zGetPoolDiscoveryTotalsResponse,
+  zGetProtocolLiquidityMovesDailyResponse,
+  zGetProtocolLiquidityMovesHourlyResponse,
+  zGetProtocolLiquidityMoveTotalsResponse,
+  zGetProtocolResponse,
   zGetProtocolRotationRunsDailyResponse,
   zGetProtocolRotationRunsHourlyResponse,
   zGetProtocolRotationRunTotalsResponse,
-  zGetProtocolSwapsDailyResponse,
-  zGetProtocolSwapsHourlyResponse,
-  zGetProtocolTvlHourlyResponse,
-  zGetProtocolTvlResponse,
-  zListLiquidityMovesResponse,
+  zGetSwapsDailyResponse,
+  zGetSwapsHourlyResponse,
+  zGetSwapTotalsResponse,
+  zGetTvlHourlyResponse,
+  zGetTvlResponse,
+  zListProtocolLiquidityMovesResponse,
   zListProtocolRotationRunsResponse,
   zListProtocolsResponse,
   type ProtocolResponse,
   type WindowResponse,
 } from "../schema/zod.gen";
+import { scopedPath, type Scope } from "./scope";
 
+/** The catalogue's widest page: every protocol of the domain. */
 export const fetchProtocols = cache(() =>
-  apiGet("/api/protocols", {}, zListProtocolsResponse),
+  apiGet("/api/protocols", { limit: 200 }, zListProtocolsResponse),
 );
 
-export const fetchProtocolTvl = cache(() =>
-  apiGet("/api/protocols/tvl", {}, zGetProtocolTvlResponse),
+export const fetchProtocol = cache((protocol: ProtocolResponse) =>
+  apiGet(`/api/protocols/${protocol}`, {}, zGetProtocolResponse),
 );
 
-export const fetchProtocolTvlHourly = cache((window: WindowResponse) =>
-  apiGet("/api/protocols/tvl/hourly", { window }, zGetProtocolTvlHourlyResponse),
-);
-
-export const fetchProtocolActivity = cache((window: WindowResponse) =>
-  apiGet("/api/protocols/activity", { window }, zGetProtocolActivityResponse),
+export const fetchSwapTotals = cache((scope: Scope, window: WindowResponse) =>
+  apiGet(scopedPath(scope, "swaps/totals"), { window }, zGetSwapTotalsResponse),
 );
 
 /** The window that ends where `window` starts. */
-export const fetchPreviousProtocolActivity = cache((window: WindowResponse) =>
+export const fetchPreviousSwapTotals = cache((scope: Scope, window: WindowResponse) =>
   apiGet(
-    "/api/protocols/activity",
+    scopedPath(scope, "swaps/totals"),
     { window, offset: window },
-    zGetProtocolActivityResponse,
+    zGetSwapTotalsResponse,
   ),
 );
 
 /** Hour by hour over 24 h, by 24-hour slices ending at `asOf` beyond. */
-export const fetchProtocolActivitySeries = cache((window: WindowResponse) =>
+export const fetchSwapsSeries = cache((scope: Scope, window: WindowResponse) =>
   window === "24h"
-    ? apiGet("/api/protocols/activity/hourly", { window }, zGetProtocolActivityHourlyResponse)
-    : apiGet("/api/protocols/activity/daily", { window }, zGetProtocolActivityDailyResponse),
+    ? apiGet(scopedPath(scope, "swaps/hourly"), { window }, zGetSwapsHourlyResponse)
+    : apiGet(scopedPath(scope, "swaps/daily"), { window }, zGetSwapsDailyResponse),
 );
 
-/** The protocol's largest valued liquidity moves over the window. */
-export const fetchLiquidityMoves = cache(
-  (protocol: ProtocolResponse, window: WindowResponse, limit: number) =>
+export const fetchPoolCreationTotals = cache((scope: Scope, window: WindowResponse) =>
+  apiGet(scopedPath(scope, "pool-creations/totals"), { window }, zGetPoolCreationTotalsResponse),
+);
+
+/** The last TVL reading of each protocol. */
+export const fetchTvl = cache((scope: Scope) =>
+  apiGet(scopedPath(scope, "tvl"), {}, zGetTvlResponse),
+);
+
+export const fetchTvlHourly = cache((scope: Scope, window: WindowResponse) =>
+  apiGet(scopedPath(scope, "tvl/hourly"), { window }, zGetTvlHourlyResponse),
+);
+
+/** What the pools first seen in the window hold, at the last reading of their part. */
+export const fetchPoolDiscoveryTotals = cache((scope: Scope, window: WindowResponse) =>
+  apiGet(
+    scopedPath(scope, "pool-discoveries/totals"),
+    { window },
+    zGetPoolDiscoveryTotalsResponse,
+  ),
+);
+
+/** No row while the protocol's liquidity does not cover the window whole. */
+export const fetchLiquidityMoveTotals = cache(
+  (protocol: ProtocolResponse, window: WindowResponse) =>
     apiGet(
-      `/api/protocols/${protocol}/liquidity-moves`,
-      { window, limit: String(limit) },
-      zListLiquidityMovesResponse,
+      `/api/protocols/${protocol}/liquidity-moves/totals`,
+      { window },
+      zGetProtocolLiquidityMoveTotalsResponse,
     ),
 );
 
-/** The protocol's volume, hour by hour over 24 h, by 24-hour slices ending at `asOf` beyond. */
-export const fetchProtocolSwapsSeries = cache((protocol: ProtocolResponse, window: WindowResponse) =>
+/** The protocol's liquidity flows, on the bars of `fetchSwapsSeries`. */
+export const fetchLiquiditySeries = cache((protocol: ProtocolResponse, window: WindowResponse) =>
   window === "24h"
-    ? apiGet(`/api/protocols/${protocol}/swaps/hourly`, { window }, zGetProtocolSwapsHourlyResponse)
-    : apiGet(`/api/protocols/${protocol}/swaps/daily`, { window }, zGetProtocolSwapsDailyResponse),
+    ? apiGet(
+        `/api/protocols/${protocol}/liquidity-moves/hourly`,
+        { window },
+        zGetProtocolLiquidityMovesHourlyResponse,
+      )
+    : apiGet(
+        `/api/protocols/${protocol}/liquidity-moves/daily`,
+        { window },
+        zGetProtocolLiquidityMovesDailyResponse,
+      ),
 );
 
-/** The protocol's volume in rotation runs, on the bars of `fetchProtocolSwapsSeries`. */
+/** The protocol's largest valued liquidity moves over the window. */
+export const fetchLargestLiquidityMoves = cache(
+  (protocol: ProtocolResponse, window: WindowResponse, limit: number) =>
+    apiGet(
+      `/api/protocols/${protocol}/liquidity-moves`,
+      { window, sort: "amount", limit: String(limit) },
+      zListProtocolLiquidityMovesResponse,
+    ),
+);
+
+/** The protocol's volume in rotation runs, on the bars of `fetchSwapsSeries`. */
 export const fetchRotationRunsSeries = cache((protocol: ProtocolResponse, window: WindowResponse) =>
   window === "24h"
     ? apiGet(

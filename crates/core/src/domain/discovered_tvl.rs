@@ -1,5 +1,5 @@
 mod model;
 mod repository;
 
-pub use model::{DiscoveredTvl, ProtocolDiscoveredTvl};
+pub use model::ProtocolDiscoveredTvl;
 pub use repository::DiscoveredTvlLookup;

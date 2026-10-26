@@ -76,7 +76,7 @@ export default async function OverviewPage({
     <OverviewMode initialAdvanced={initialAdvanced}>
       <OverviewHeader period={period} />
       <Suspense fallback={null}>
-        <StaleBanner period={period} />
+        <StaleBanner period={period} scope="all" />
       </Suspense>
 
       <div className={GRID_CLASS}>

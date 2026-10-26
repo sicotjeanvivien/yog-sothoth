@@ -8,13 +8,14 @@ use solana_pubkey::Pubkey;
 
 use super::{
     EventCollection, decode_announcement_cursor, decode_event_cursor, decode_liquidity_move_cursor,
-    decode_signal_cursor, encode_cursor, encode_cursor_opt,
+    decode_protocol_cursor, decode_signal_cursor, encode_cursor, encode_cursor_opt,
 };
 use crate::http::error::ApiError;
 use yog_core::{
     Cursor,
     domain::{
-        EventCursor, EventScope, LiquidityMoveCursor, LiquidityMoveOrder, SignalCursor, Window,
+        EventCursor, EventScope, LiquidityMoveCursor, LiquidityMoveOrder, LiquidityMoveScope,
+        Protocol, SignalCursor, Window,
     },
 };
 
@@ -44,12 +45,13 @@ fn signal_cursor_round_trip() {
     assert_eq!(decoded, original);
 }
 
-/// Mutation: the pool or the window not written to, or not read from, the wire — the
-/// service would compare a cursor to its list on a default.
+/// Mutation: the scope or the window not written to, or not read from, the wire — a page of a
+/// pool followed under its protocol, or the service comparing a cursor to its list on a default.
 #[test]
 fn liquidity_move_cursor_round_trip() {
+    let scope = LiquidityMoveScope::Pool(Pubkey::new_unique());
     let original = LiquidityMoveCursor {
-        pool: Pubkey::new_unique(),
+        scope,
         window: Window::Week,
         as_of: ts(1_700_000_400),
         order: LiquidityMoveOrder::At,
@@ -59,8 +61,20 @@ fn liquidity_move_cursor_round_trip() {
         event_index: 3,
     };
     let encoded = encode_cursor(&Cursor::LiquidityMove(Box::new(original.clone()))).unwrap();
-    let decoded = decode_liquidity_move_cursor(&encoded, LiquidityMoveOrder::At).unwrap();
+    let decoded = decode_liquidity_move_cursor(&encoded, scope, LiquidityMoveOrder::At).unwrap();
+    let elsewhere = LiquidityMoveScope::Protocol(Protocol::MeteoraDammV2);
     assert_eq!(decoded, original);
+    assert!(decode_liquidity_move_cursor(&encoded, elsewhere, LiquidityMoveOrder::At).is_err());
+}
+
+/// Mutation: the protocol not written to, or not read from, the wire — every page after the
+/// first starting over.
+#[test]
+fn protocol_cursor_round_trip() {
+    for &protocol in Protocol::all() {
+        let encoded = encode_cursor(&Cursor::Protocol(protocol)).unwrap();
+        assert_eq!(decode_protocol_cursor(&encoded).unwrap(), protocol);
+    }
 }
 
 #[test]

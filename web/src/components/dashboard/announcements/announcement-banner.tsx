@@ -11,7 +11,7 @@ import { useTranslations } from "next-intl";
 
 import { Link } from "@/i18n/navigation";
 import type {
-  AnnouncementResponse,
+  AnnouncementEntryResponse,
   AnnouncementSeverityResponse,
 } from "@/lib/api/schema/zod.gen";
 import {
@@ -50,7 +50,7 @@ export function AnnouncementBanner({
   announcement,
   dismissedIds,
 }: {
-  announcement: AnnouncementResponse;
+  announcement: AnnouncementEntryResponse;
   dismissedIds: number[];
 }) {
   const t = useTranslations("Dashboard.Announcements");

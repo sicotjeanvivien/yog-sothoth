@@ -3,7 +3,10 @@
  * reads it so the first paint skips them, and the client banner rewrites it.
  */
 
-import type { AnnouncementResponse } from "@/lib/api/schema/zod.gen";
+import type {
+  AnnouncementEntryResponse,
+  AnnouncementSeverityResponse,
+} from "@/lib/api/schema/zod.gen";
 
 export const ANNOUNCEMENTS_DISMISSED_COOKIE = "yog_announcements_dismissed";
 
@@ -27,11 +30,20 @@ export function serializeDismissedIds(ids: number[]): string {
   return [...new Set(ids)].slice(-DISMISSED_IDS_MAX).join(",");
 }
 
-/** The first non-dismissed one, in the API's order. */
+const SEVERITY_RANK: Record<AnnouncementSeverityResponse, number> = {
+  critical: 0,
+  warning: 1,
+  info: 2,
+};
+
+/** The most severe non-dismissed one; at equal severity, the first in the API's order. */
 export function pickAnnouncement(
-  announcements: AnnouncementResponse[],
+  announcements: readonly AnnouncementEntryResponse[],
   dismissedIds: number[],
-): AnnouncementResponse | null {
+): AnnouncementEntryResponse | null {
   const dismissed = new Set(dismissedIds);
-  return announcements.find((a) => !dismissed.has(a.id)) ?? null;
+  const shown = announcements.filter((a) => !dismissed.has(a.id));
+  // ⚠️ A stable sort: the API's latest-start order breaks the ties.
+  shown.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
+  return shown[0] ?? null;
 }

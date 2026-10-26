@@ -1,10 +1,12 @@
-//! The valued liquidity moves: a protocol's totals and series, and a pool's moves. Their
-//! coverage is the liquidity's, measured from a later hour than the swaps.
+//! The valued liquidity moves: a protocol's totals and series, and the moves of a protocol or a
+//! pool. Their coverage is the liquidity's, measured from a later hour than the swaps.
 
 use axum::{
     Json,
     extract::{Path, Query, State},
 };
+
+use yog_core::domain::{LiquidityMoveScope, Protocol};
 
 use crate::application::BucketPeriod;
 use crate::http::{
@@ -13,7 +15,8 @@ use crate::http::{
         LiquidityMoveResponse, ProtocolLiquidityFlowsBucketResponse,
         ProtocolLiquidityFlowsResponse, WindowedPageResponse, WindowedResponse,
         request::{
-            ListPoolLiquidityMovesRequest, PoolLiquidityMovesParams, WindowParams, parse_protocol,
+            LiquidityMovesParams, ListLiquidityMovesRequest, WindowParams, parse_pool,
+            parse_protocol,
         },
     },
     error::ApiError,
@@ -106,8 +109,30 @@ async fn list_buckets(
 
 #[utoipa::path(
     get,
+    path = "/api/protocols/{protocol}/liquidity-moves",
+    params(LiquidityMovesParams),
+    responses((
+        status = 200,
+        description = "A page of the protocol's valued liquidity moves, in the order asked; \
+                       empty while its liquidity does not cover the window whole.",
+        body = WindowedPageResponse<LiquidityMoveResponse>
+    ))
+)]
+pub(crate) async fn list_protocol_liquidity_moves(
+    State(state): State<AppState>,
+    Path(protocol): Path<String>,
+    Query(params): Query<LiquidityMovesParams>,
+) -> Result<Json<WindowedPageResponse<LiquidityMoveResponse>>, ApiError> {
+    let protocol = parse_protocol(&protocol)?;
+    let scope = LiquidityMoveScope::Protocol(protocol);
+    let request = ListLiquidityMovesRequest::parse(params, scope)?;
+    read_moves(&state, request, scope, protocol).await
+}
+
+#[utoipa::path(
+    get,
     path = "/api/pools/{pool}/liquidity-moves",
-    params(PoolLiquidityMovesParams),
+    params(LiquidityMovesParams),
     responses((
         status = 200,
         description = "A page of the pool's valued liquidity moves, in the order asked; \
@@ -118,15 +143,26 @@ async fn list_buckets(
 pub(crate) async fn list_pool_liquidity_moves(
     State(state): State<AppState>,
     Path(pool): Path<String>,
-    Query(params): Query<PoolLiquidityMovesParams>,
+    Query(params): Query<LiquidityMovesParams>,
 ) -> Result<Json<WindowedPageResponse<LiquidityMoveResponse>>, ApiError> {
-    let request = ListPoolLiquidityMovesRequest::parse(params)?;
+    let scope = LiquidityMoveScope::Pool(parse_pool(&pool)?);
+    let request = ListLiquidityMovesRequest::parse(params, scope)?;
     let pool = super::known_pool(&state, &pool).await?;
+    read_moves(&state, request, scope, pool.protocol).await
+}
+
+async fn read_moves(
+    state: &AppState,
+    request: ListLiquidityMovesRequest,
+    scope: LiquidityMoveScope,
+    protocol: Protocol,
+) -> Result<Json<WindowedPageResponse<LiquidityMoveResponse>>, ApiError> {
     let measured = state
         .liquidity_move_service
-        .list_pool_liquidity_moves(
+        .list_liquidity_moves(
             request.window,
-            &pool,
+            scope,
+            protocol,
             request.order,
             request.cursor,
             request.limit,
@@ -134,3 +170,7 @@ pub(crate) async fn list_pool_liquidity_moves(
         .await?;
     Ok(Json(WindowedPageResponse::new(request.window, measured)?))
 }
+
+#[cfg(test)]
+#[path = "liquidity_moves_tests.rs"]
+mod tests;

@@ -1,5 +1,6 @@
-//! The valued liquidity moves over a frozen period: a protocol's totals and series, and a
-//! pool's moves. Their coverage is the liquidity's, measured from a later hour than the swaps.
+//! The valued liquidity moves over a frozen period: a protocol's totals and series, and the
+//! moves of a protocol or a pool. Their coverage is the liquidity's, measured from a later hour
+//! than the swaps.
 
 use std::sync::Arc;
 
@@ -7,21 +8,22 @@ use yog_core::{
     Page, RepositoryError, RepositoryResult,
     domain::{
         FrozenPeriod, LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup,
-        LiquidityMoveOrder, Pool, Protocol, ProtocolActivityLookup, ProtocolBucket, Window,
+        LiquidityMoveOrder, LiquidityMoveScope, Protocol, ProtocolActivityLookup, ProtocolBucket,
+        Window,
     },
 };
 
 use super::period::{BucketPeriod, Measured, build_frozen_period};
 
-/// Why a page of a pool's moves is not read.
+/// Why a page of moves is not read.
 #[derive(Debug)]
-pub(crate) enum PoolMovesError {
+pub(crate) enum MovesError {
     Repository(RepositoryError),
     /// The cursor was taken from another list, or before the last freeze.
     CursorRefused,
 }
 
-impl From<RepositoryError> for PoolMovesError {
+impl From<RepositoryError> for MovesError {
     fn from(err: RepositoryError) -> Self {
         Self::Repository(err)
     }
@@ -99,28 +101,27 @@ impl LiquidityMoveService {
         Ok(Measured { period, items })
     }
 
-    /// A pool's valued moves; an empty page over a period its protocol's liquidity does not
-    /// cover whole.
-    pub(crate) async fn list_pool_liquidity_moves(
+    /// `scope`'s valued moves; an empty page over a period `protocol`'s liquidity does not cover
+    /// whole.
+    pub(crate) async fn list_liquidity_moves(
         &self,
         window: Window,
-        pool: &Pool,
+        scope: LiquidityMoveScope,
+        protocol: Protocol,
         order: LiquidityMoveOrder,
         cursor: Option<LiquidityMoveCursor>,
         limit: i64,
-    ) -> Result<Measured<Page<LiquidityMove>>, PoolMovesError> {
-        let period = self.build_liquidity_period(window, pool.protocol).await?;
+    ) -> Result<Measured<Page<LiquidityMove>>, MovesError> {
+        let period = self.build_liquidity_period(window, protocol).await?;
         if let (Some(period), Some(cursor)) = (&period, &cursor)
-            && (cursor.as_of != period.as_of
-                || cursor.window != window
-                || cursor.pool != pool.pool_address)
+            && (cursor.as_of != period.as_of || cursor.window != window)
         {
-            return Err(PoolMovesError::CursorRefused);
+            return Err(MovesError::CursorRefused);
         }
         let items = match &period {
             Some(period) if period.is_covered() => {
                 self.liquidity_moves
-                    .list_pool_moves(period, window, pool.pool_address, order, cursor, limit)
+                    .list_moves(period, window, scope, order, cursor, limit)
                     .await?
             }
             _ => Page::empty(),

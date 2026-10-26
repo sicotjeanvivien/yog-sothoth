@@ -12,8 +12,9 @@ use yog_core::{
     Cursor,
     domain::{
         AnnouncementCursor, AnnouncementStatus, EventCursor, EventScope, LiquidityMoveCursor,
-        LiquidityMoveOrder, PoolCursor, PoolScope, RotationRunCursor, RotationRunOrder,
-        RotationRunScope, SignalCursor, TokenActivityCursor, TokenCursor, TokenPriceCursor, Window,
+        LiquidityMoveOrder, LiquidityMoveScope, PoolCursor, PoolScope, Protocol, RotationRunCursor,
+        RotationRunOrder, RotationRunScope, SignalCursor, TokenActivityCursor, TokenCursor,
+        TokenPriceCursor, Window,
     },
 };
 
@@ -35,7 +36,7 @@ struct TokenActivityCursorWire {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct LiquidityMoveCursorWire {
-    pool: String,
+    scope: String,
     window: String,
     as_of: String,
     order: String,
@@ -43,6 +44,12 @@ struct LiquidityMoveCursorWire {
     at: String,
     signature: String,
     event_index: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProtocolCursorWire {
+    protocol: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -156,6 +163,13 @@ fn scope_tag(scope: PoolScope) -> String {
     }
 }
 
+fn liquidity_move_scope_tag(scope: LiquidityMoveScope) -> String {
+    match scope {
+        LiquidityMoveScope::Protocol(protocol) => format!("protocol:{}", protocol.as_str()),
+        LiquidityMoveScope::Pool(pool) => format!("pool:{pool}"),
+    }
+}
+
 fn order_tag(order: LiquidityMoveOrder) -> &'static str {
     match order {
         LiquidityMoveOrder::Amount => "amount",
@@ -179,7 +193,7 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
             mint: c.mint.to_string(),
         }),
         Cursor::LiquidityMove(c) => encode_b64_json(&LiquidityMoveCursorWire {
-            pool: c.pool.to_string(),
+            scope: liquidity_move_scope_tag(c.scope),
             window: c.window.as_str().to_owned(),
             as_of: c.as_of.to_rfc3339(),
             order: order_tag(c.order).to_owned(),
@@ -231,6 +245,9 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
             starts_at: c.starts_at.to_rfc3339(),
             id: c.id,
         }),
+        Cursor::Protocol(protocol) => encode_b64_json(&ProtocolCursorWire {
+            protocol: protocol.as_str().to_owned(),
+        }),
     }
 }
 
@@ -273,20 +290,26 @@ pub(crate) fn decode_token_activity_cursor(raw: &str) -> Result<TokenActivityCur
     })
 }
 
-/// A cursor of a list in `order`; one taken in another order is refused, its key meaningless here.
+/// A cursor of `scope`'s moves in `order`; one of another scope or order is refused, its key
+/// meaningless here.
 pub(crate) fn decode_liquidity_move_cursor(
     raw: &str,
+    scope: LiquidityMoveScope,
     order: LiquidityMoveOrder,
 ) -> Result<LiquidityMoveCursor, ApiError> {
     let wire: LiquidityMoveCursorWire = decode_b64_json(raw)?;
+    if wire.scope != liquidity_move_scope_tag(scope) {
+        return Err(ApiError::BadRequest(
+            "invalid cursor: taken in another list".to_string(),
+        ));
+    }
     if wire.order != order_tag(order) {
         return Err(ApiError::BadRequest(
             "invalid cursor: taken in another order".to_string(),
         ));
     }
     Ok(LiquidityMoveCursor {
-        pool: Pubkey::from_str(&wire.pool)
-            .map_err(|_| ApiError::BadRequest("invalid cursor: malformed pool".to_string()))?,
+        scope,
         window: Window::ALL
             .into_iter()
             .find(|w| w.as_str() == wire.window)
@@ -367,6 +390,16 @@ pub(crate) fn decode_rotation_run_cursor(
         pool_address: Pubkey::from_str(&wire.pool)
             .map_err(|_| ApiError::BadRequest("invalid cursor: malformed pool".to_string()))?,
     })
+}
+
+/// A cursor of the protocol catalogue; a protocol this build does not know is refused.
+pub(crate) fn decode_protocol_cursor(raw: &str) -> Result<Protocol, ApiError> {
+    let wire: ProtocolCursorWire = decode_b64_json(raw)?;
+    Protocol::all()
+        .iter()
+        .copied()
+        .find(|protocol| protocol.as_str() == wire.protocol)
+        .ok_or_else(|| ApiError::BadRequest("invalid cursor: unknown protocol".to_string()))
 }
 
 /// A cursor of the announcements of `status`; one taken under another status is refused.

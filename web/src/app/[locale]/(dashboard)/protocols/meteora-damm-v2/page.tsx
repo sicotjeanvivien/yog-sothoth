@@ -68,7 +68,7 @@ export default async function DammV2Page({ params, searchParams }: ProtocolPageP
         programId={PROGRAM_ID}
       />
       <Suspense fallback={null}>
-        <StaleBanner period={period} />
+        <StaleBanner period={period} scope={PROTOCOL} />
       </Suspense>
 
       <div className={GRID_CLASS}>

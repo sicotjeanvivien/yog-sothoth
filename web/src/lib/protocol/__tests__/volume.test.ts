@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
-
 import {
   durationOf,
   outsideRuns,
@@ -11,11 +9,7 @@ import {
   type SplitSlot,
 } from "../volume";
 
-const bar = (from: string, volumeUsd: string | null, protocol: ProtocolResponse = "meteora_damm_v2") => ({
-  protocol,
-  from,
-  volumeUsd,
-});
+const bar = (from: string, volumeUsd: string | null) => ({ from, volumeUsd });
 
 const AS_OF = "2026-10-25T03:00:00Z";
 
@@ -35,7 +29,6 @@ describe("splitSlotsOf", () => {
       AS_OF,
       [bar(hour(22), "100"), bar(hour(23), "50")],
       runsOf([bar(hour(22), "80")]),
-      "meteora_damm_v2",
     );
 
     expect(slots.slice(22).map((s) => [s.total, s.inRuns])).toEqual([
@@ -52,7 +45,6 @@ describe("splitSlotsOf", () => {
       AS_OF,
       [bar("2026-10-18T03:00:00Z", "700"), bar("2026-10-19T03:00:00Z", "300")],
       runsOf([bar("2026-10-19T03:00:00Z", "200")], "2026-10-18T04:00:00Z"),
-      "meteora_damm_v2",
     );
 
     expect(days.slice(0, 2).map((s) => [s.total, s.inRuns])).toEqual([
@@ -70,26 +62,9 @@ describe("splitSlotsOf", () => {
       AS_OF,
       [bar("2026-10-24T03:00:00Z", "300")],
       runsOf([bar("2026-10-24T04:00:00Z", "200")], "2026-10-01T00:00:00Z", later),
-      "meteora_damm_v2",
     );
 
     expect(days.map((s) => s.inRuns)).toEqual(Array(7).fill(null));
-  });
-
-  // Mutation: another protocol's bars kept, its volume split into this one's.
-  it("keeps the protocol's bars only, and a bar without volume empty", () => {
-    const slots = splitSlotsOf(
-      "24h",
-      AS_OF,
-      [bar(hour(22), "999", "meteora_dlmm"), bar(hour(23), null)],
-      runsOf([bar(hour(22), "5", "meteora_dlmm")]),
-      "meteora_damm_v2",
-    );
-
-    expect(slots.slice(22).map((s) => [s.total, s.inRuns])).toEqual([
-      [null, null],
-      [null, null],
-    ]);
   });
 });
 

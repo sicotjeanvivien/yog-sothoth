@@ -1,61 +1,22 @@
-//! `GET /api/tokens/{mint}` — token identity and latest price; and
-//! `GET /api/tokens/activity`, what each token was traded for over a window.
+//! `GET /api/tokens/{mint}` — token identity and latest price — and the lists of tokens and of a
+//! token's prices.
 
 use axum::{
     Json,
     extract::{Path, Query, State},
 };
 
-use crate::application::TokenActivityRead;
 use crate::http::{
     AppState,
     dto::{
-        PageResponse, TokenActivityPageResponse, TokenPriceResponse, TokenResponse,
+        PageResponse, TokenPriceResponse, TokenResponse,
         request::{
-            GetTokenRequest, ListTokenActivityRequest, ListTokenPricesRequest, ListTokensRequest,
-            TokenActivityParams, TokenPricesParams, TokensParams,
+            GetTokenRequest, ListTokenPricesRequest, ListTokensRequest, TokenPricesParams,
+            TokensParams,
         },
     },
     error::ApiError,
 };
-
-#[utoipa::path(
-    get,
-    path = "/api/tokens/activity",
-    params(TokenActivityParams),
-    responses((
-        status = 200,
-        description = "A page of tokens, the most traded first.",
-        body = TokenActivityPageResponse
-    ))
-)]
-pub(crate) async fn list_token_activity(
-    State(state): State<AppState>,
-    Query(params): Query<TokenActivityParams>,
-) -> Result<Json<TokenActivityPageResponse>, ApiError> {
-    token_ranking(&state, params).await
-}
-
-/// The ranking of the tokens by volume, every protocol summed.
-pub(super) async fn token_ranking(
-    state: &AppState,
-    params: TokenActivityParams,
-) -> Result<Json<TokenActivityPageResponse>, ApiError> {
-    let request = ListTokenActivityRequest::parse(params)?;
-    match state
-        .activity_service
-        .token_activity(request.window, request.cursor, request.limit)
-        .await?
-    {
-        TokenActivityRead::Page(measured) => Ok(Json(TokenActivityPageResponse::new(
-            request.window,
-            measured,
-        )?)),
-        TokenActivityRead::CursorExpired => Err(ApiError::BadRequest(
-            "`cursor` belongs to a ranking rewritten since: start again without it".to_string(),
-        )),
-    }
-}
 
 #[utoipa::path(
     get,

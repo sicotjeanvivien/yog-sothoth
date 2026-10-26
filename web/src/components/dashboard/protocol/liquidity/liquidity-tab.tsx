@@ -25,10 +25,11 @@ import { BlockFailed, BlockSkeleton } from "@/components/dashboard/overview/over
 import { ApiClientError } from "@/lib/api/errors";
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
 import {
-  fetchLiquidityMoves,
-  fetchProtocolActivity,
-  fetchProtocolActivitySeries,
-  fetchProtocolTvlHourly,
+  fetchLargestLiquidityMoves,
+  fetchLiquidityMoveTotals,
+  fetchLiquiditySeries,
+  fetchSwapTotals,
+  fetchTvlHourly,
 } from "@/lib/api/server/protocols";
 import { formatRelative, formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatUsdCompact } from "@/lib/format/format-usd";
@@ -108,12 +109,19 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
   const locale = (await getLocale()) as FormatLocale;
   const title = t("title");
 
-  let tvl, series, totals;
+  const swapsRead = fetchSwapTotals(protocol, period).catch((err: unknown) => {
+    if (err instanceof ApiClientError) {
+      return null;
+    }
+    throw err;
+  });
+  let tvl, series, totals, swaps;
   try {
-    [tvl, series, totals] = await Promise.all([
-      fetchProtocolTvlHourly(period),
-      fetchProtocolActivitySeries(period),
-      fetchProtocolActivity(period),
+    [tvl, series, totals, swaps] = await Promise.all([
+      fetchTvlHourly(protocol, period),
+      fetchLiquiditySeries(protocol, period),
+      fetchLiquidityMoveTotals(protocol, period),
+      swapsRead,
     ]);
   } catch (err) {
     if (err instanceof ApiClientError) {
@@ -127,11 +135,13 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
     throw err;
   }
 
-  const closed = await closedReason(period, series);
+  // ⚠️ The swaps' span, not the liquidity's: a period its liquidity covers in part still draws.
+  // Without the swaps, the liquidity's own: the block does not fall with a read it can spare.
+  const closed = await closedReason(period, swaps ?? series);
   const usd = (value: number | null) => formatUsdCompact(value === null ? null : String(value));
   const signed = (value: number) => `${value < 0 ? "−" : "+"}${usd(Math.abs(value))}`;
 
-  const liquidity = totals.items.find((i) => i.protocol === protocol)?.liquidity ?? null;
+  const liquidity = totals.items[0] ?? null;
   const notMeasured = <Unavailable reason={t("notMeasured")} />;
   const legend = (
     <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] text-dash-ink-2">
@@ -171,7 +181,7 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
     </div>
   );
 
-  const curve = curveOf(tvl.items, protocol);
+  const curve = curveOf(tvl.items);
   const moment = (date: Date) => formatUtcMoment(date, locale) ?? "—";
   const curveBlock =
     curve === null ? (
@@ -204,7 +214,7 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
     );
 
   const daily = period !== "24h";
-  const slots = series.asOf === null ? [] : flowSlotsOf(period, series.asOf, series.items, protocol);
+  const slots = series.asOf === null ? [] : flowSlotsOf(period, series.asOf, series.items);
   const max = Math.max(
     0,
     ...slots.flatMap((s) => [(s.created ?? 0) + (s.added ?? 0), s.removed ?? 0]),
@@ -277,8 +287,8 @@ async function LargestMoves({ period, protocol }: TabProps) {
   let moves, totals;
   try {
     [moves, totals] = await Promise.all([
-      fetchLiquidityMoves(protocol, period, MOVES_SHOWN),
-      fetchProtocolActivity(period),
+      fetchLargestLiquidityMoves(protocol, period, MOVES_SHOWN),
+      fetchLiquidityMoveTotals(protocol, period),
     ]);
   } catch (err) {
     if (err instanceof ApiClientError) {
@@ -292,7 +302,7 @@ async function LargestMoves({ period, protocol }: TabProps) {
     throw err;
   }
 
-  const measured = totals.items.some((i) => i.protocol === protocol && i.liquidity !== null);
+  const measured = totals.items.length > 0;
   const now = new Date();
 
   return (

@@ -7,7 +7,8 @@ import { getTranslations } from "next-intl/server";
 
 import type { PagePath } from "@/config/site";
 import { ApiClientError } from "@/lib/api/errors";
-import { fetchProtocolActivity } from "@/lib/api/server/protocols";
+import { fetchSwapTotals } from "@/lib/api/server/protocols";
+import type { Scope } from "@/lib/api/server/scope";
 import { CLOSED_PERIODS, PERIODS, type Period } from "@/lib/overview/period";
 
 import { closedReason } from "./overview-parts";
@@ -20,12 +21,17 @@ type ControlProps = {
   keep: Record<string, string>;
 };
 
-export async function PeriodControl({ period, pathname, keep }: ControlProps) {
+export async function PeriodControl({
+  period,
+  scope,
+  pathname,
+  keep,
+}: ControlProps & { scope: Scope }) {
   const t = await getTranslations("Dashboard.Overview.period");
 
   let span;
   try {
-    span = await fetchProtocolActivity(period);
+    span = await fetchSwapTotals(scope, period);
   } catch (err) {
     if (!(err instanceof ApiClientError)) {
       throw err;

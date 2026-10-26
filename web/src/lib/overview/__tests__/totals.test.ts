@@ -62,18 +62,34 @@ describe("tvlChange", () => {
 });
 
 describe("discoveredTvl", () => {
-  const items = [
-    { discovered: [{ period: "24h" as const, tvlUsd: "3" }, { period: "7d" as const, tvlUsd: "5" }] },
-    { discovered: [{ period: "7d" as const, tvlUsd: "2" }] },
+  const AT = "2026-10-25T03:00:00Z";
+  const tvl = [
+    { protocol: "meteora_damm_v2" as const, at: AT },
+    { protocol: "meteora_dlmm" as const, at: AT },
   ];
-
-  it("adds the protocols' part for the period", () => {
-    expect(discoveredTvl(items, "7d")).toBe(7);
+  const part = (protocol: (typeof tvl)[number]["protocol"], at: string, tvlUsd: string) => ({
+    protocol,
+    at,
+    tvlUsd,
   });
 
-  // Mutation: a protocol without the period skipped publishes a part that misses it.
-  it("is unknown when a protocol has no measure of the period", () => {
-    expect(discoveredTvl(items, "24h")).toBeNull();
+  it("adds the protocols' parts", () => {
+    const parts = [part("meteora_damm_v2", AT, "5"), part("meteora_dlmm", AT, "2")];
+    expect(discoveredTvl(tvl, parts)).toBe(7);
+  });
+
+  // Mutation: a protocol without a part skipped publishes a part that misses it.
+  it("is unknown when a protocol has no part", () => {
+    expect(discoveredTvl(tvl, [part("meteora_damm_v2", AT, "5")])).toBeNull();
+  });
+
+  // Mutation: the reading's instant not compared — a part measured an hour before the TVL
+  // splits a TVL it was not measured with.
+  it("is unknown when a part was measured at another reading than the TVL's", () => {
+    const before = "2026-10-25T02:00:00Z";
+    expect(
+      discoveredTvl(tvl, [part("meteora_damm_v2", before, "5"), part("meteora_dlmm", AT, "2")]),
+    ).toBeNull();
   });
 });
 

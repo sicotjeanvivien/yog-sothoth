@@ -10,7 +10,7 @@ import { getTranslations } from "next-intl/server";
 import { LiveIndicator } from "@/components/dashboard/live-status/live-indicator";
 import type { PagePath } from "@/config/site";
 import type { Period } from "@/lib/overview/period";
-import type { Scope } from "@/lib/overview/scope";
+import type { Scope } from "@/lib/api/server/scope";
 
 import { AdvancedSwitch } from "./advanced-switch";
 import { OverviewLiveRows, OverviewLiveRowsFallback } from "./overview-live-rows";
@@ -44,7 +44,7 @@ export async function HeaderControls({
       </span>
       <div className="flex flex-wrap items-center gap-3 rail:justify-end">
         <Suspense fallback={<PeriodSelect period={period} {...page} availability={null} />}>
-          <PeriodControl period={period} {...page} />
+          <PeriodControl period={period} scope={scope} {...page} />
         </Suspense>
         <AdvancedSwitch label={t("advanced")} />
       </div>

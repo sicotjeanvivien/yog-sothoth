@@ -23,8 +23,8 @@ api/src/
 ├── application/
 │   ├── services/          ← cross-protocol services at the root (SignalService,
 │   │                        TokenService, NetworkService, IngestionService,
-│   │                        AnnouncementService, ActivityService, PoolService), one
-│   │                        per produced resource (SwapActivityService,
+│   │                        AnnouncementService, PoolService), one
+│   │                        per produced resource (SwapActivityService, the tokens' too,
 │   │                        PoolCreationsService, LiquidityMoveService,
 │   │                        ProtocolTvlService, DiscoveredTvlService), and period.rs,
 │   │                        the frozen period they all read over
@@ -113,9 +113,9 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/readyz` | Readiness — pings the DB; 503 with per-check detail when it fails |
 | `GET` | `/api/network` | The chain's latest slot as the probe saw it, the probe's `getSlot` latency, when it was observed |
 | `GET` | `/api/ingestion` | Our ingestion's freshness (`live` / `delayed` / `stale`) and its last indexed event |
-| `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` and `?pool=` filters); each item embeds its pool's token pair (`tokenA`/`tokenB`, `EmbeddedTokenResponse`) |
+| `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` filter); each item embeds its pool's token pair (`tokenA`/`tokenB`, `EmbeddedTokenResponse`) |
 | `GET` | `/api/signals/stream` | SSE stream of new signals (see below) |
-| `GET` | `/api/protocols` | Every protocol of the domain: observed by this build or not, pools seen — the catalogue, live |
+| `GET` | `/api/protocols` | A page of every protocol of the domain, in the domain's order: observed by this build or not, pools seen — the catalogue, live; forward-only cursor |
 | `GET` | `/api/protocols/{protocol}` | The protocol's entry of the catalogue |
 | `GET` | `/api/pools`, `/api/protocols/{protocol}/pools`, `/api/tokens/{mint}/pools` | A page of pools, the most recently first seen first, forward-only cursor refused (400) under another list: identity, the token pair embedded, and the state now — last event, reserves, the value of each side and their TVL (`pool_current_tvl`); 404 for a mint without metadata |
 | `GET` | `/api/pools/{pool}` | The pool of the lists, and the properties of its protocol under the protocol's name (`meteoraDammV2`: fee shares, base-fee kind, the fee its curve charges now); 404 for a pool unknown |
@@ -130,34 +130,27 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/reward-changes`, `/api/protocols/{protocol}/reward-changes`, `/api/pools/{pool}/reward-changes` | A page of rewards set up, funded, changed and withdrawn, as the position changes (`meteoraDammV2`: `initialize`, `fund`, `duration_change`, `funder_change`, `ineligible_withdrawal`, `dead_liquidity_withdrawal`) |
 | `GET` | `/api/pool-changes`, `/api/protocols/{protocol}/pool-changes`, `/api/pools/{pool}/pool-changes` | A page of pool status and fee changes, as the position changes (`meteoraDammV2`: `status`, the raw byte; `fees`, the operator — the new parameters are raw bytes without a decoder, not served) |
 | `GET` | `/api/tokens/{mint}/prices` | A page of the token's prices over `?window=`, the most recent first; the window ends at the first page, whose start the cursor carries, refused (400) for another mint; 404 for a mint without metadata |
-| `GET` | `/api/protocols/activity` | Per protocol over `?window=24h\|7d\|30d` (`?offset=` for the previous one): volume, fees and their shares, swaps, distinct active pools, births, pool-hours and the valued ones, and the liquidity brought by creations, added and removed, with its moves valued |
-| `GET` | `/api/protocols/activity/hourly`, `/daily` | The same flows per protocol and bar: an hour, or 24 hours ending at `asOf` |
-| `GET` | `/api/protocols/{protocol}/liquidity-moves` | The protocol's valued liquidity moves (creations, additions, removals) over `?window=`, largest first, `?limit=` of them; its pool's token symbols embedded |
-| `GET` | `/api/protocols/tvl` | Per protocol, the TVL of the last frozen hour and, for each window, the part its discovered pools hold |
-| `GET` | `/api/protocols/tvl/hourly` | Per protocol, the TVL at the close of every hour from the window's start |
-| `GET` | `/api/tokens/activity` | Tokens by volume over `?window=`, identity embedded, forward-only cursor; a swap counts for both its tokens |
 | `GET` | `/api/tokens/{mint}` | Token metadata + latest price (200 with `price: null` if no price yet) |
 | `GET` | `/api/announcements` | A page of every announcement, the latest start first, ties by id: kind, severity, message, link, window, and `status` — `upcoming`, `open` or `closed` at the request; `?status=` keeps one; forward-only cursor, refused (400) under another status |
-| `GET` | `/api/announcements/active` | Operator announcements whose window is open — most severe first, non-paginated (hard cap); empty array is the nominal case |
 | `GET` | `/api/swaps/totals` (`?offset=`), `/hourly`, `/daily` | Per protocol, the swaps over `?window=`, then per bucket: swaps, volume, fees and their shares, pool-hours and the valued ones; the totals with the distinct pools that swapped |
 | `GET` | `/api/protocols/{protocol}/swaps/totals`, `/hourly`, `/daily` | The same, the protocol's own |
 | `GET` | `/api/pools/{pool}/swaps/totals`, `/hourly`, `/daily` | The same for one pool, without the protocol nor the distinct pools; 404 for a pool unknown |
-| `GET` | `/api/swaps/by-token` | Tokens by volume over `?window=`, every protocol summed, forward-only cursor |
+| `GET` | `/api/swaps/by-token` | Tokens by volume over `?window=`, every protocol summed, identity embedded, forward-only cursor; a swap counts for both its tokens |
 | `GET` | `/api/pool-creations/totals`, `/hourly`, `/daily`, and under `/api/protocols/{protocol}/` | Per protocol, the pools created over the window, then per bucket |
 | `GET` | `/api/protocols/{protocol}/liquidity-moves/totals`, `/hourly`, `/daily` | The protocol's liquidity created, added and removed, valued, with its moves valued; its `coveredSince` is the liquidity's |
 | `GET` | `/api/protocols/{protocol}/rotation-runs`, `/api/pools/{pool}/rotation-runs` | A page of the rotation runs started in the window, through the last tranche written: pool and its tokens' symbols, start, end, volume, first hour's volume, extinct; `?sort=volume` (default) or `at`, forward-only cursor that keeps its first page's end, refused (400) under another list; empty while the rotation does not cover the window |
 | `GET` | `/api/protocols/{protocol}/rotation-runs/totals` | The runs started in the window, their distinct pools, those still in progress, their median and p90 duration, their volume and first hour's volume, through the last tranche written; its `coveredSince` is the first tranche whose rotation was measured |
 | `GET` | `/api/protocols/{protocol}/rotation-runs/hourly`, `/daily` | The volume in runs by frozen hour, or by 24 hours ending at `asOf`, from the first whole hour measured |
-| `GET` | `/api/pools/{pool}/liquidity-moves` | A page of the pool's valued moves, `?sort=amount` (default) or `at`, forward-only cursor, refused (400) for another pool or window or after a freeze; empty while its protocol's liquidity does not cover the window |
+| `GET` | `/api/protocols/{protocol}/liquidity-moves`, `/api/pools/{pool}/liquidity-moves` | A page of the valued moves (creations, additions, removals), their pool's token symbols embedded, `?sort=amount` (default) or `at`, forward-only cursor, refused (400) under another list or window or after a freeze; empty while the protocol's liquidity does not cover the window |
 | `GET` | `/api/tvl`, `/api/protocols/{protocol}/tvl` | Per protocol, the last TVL reading at or before `asOf`, its `at` said |
 | `GET` | `/api/tvl/hourly`, `/api/protocols/{protocol}/tvl/hourly` | Per protocol, the reading of every hour measured from the window's start |
 | `GET` | `/api/pool-discoveries/totals`, and under `/api/protocols/{protocol}/` | Per protocol, the pools first seen in the window without their birth observed, and what they hold at the last reading |
 | `GET` | `/api/protocols/{protocol}/signals`, `/api/pools/{pool}/signals` | The signals of one protocol or one pool, paginated as `/api/signals`, `?severity=` |
 
 **What yog-analytic computes** (`/api/protocols/…` but the catalogue and the signals,
-`/api/tokens/activity`, `/api/swaps/…`, `/api/pool-creations/…`, `/api/tvl…`,
-`/api/pool-discoveries/…`, `/api/pools/{pool}/…` but the signals) read yog-analytic's
-tables over one frozen period, built in `ActivityService` and `period.rs`: the window
+`/api/swaps/…`, `/api/pool-creations/…`, `/api/tvl…`, `/api/pool-discoveries/…`,
+`/api/pools/{pool}/…` but the signals) read yog-analytic's tables over one frozen period,
+built in `period.rs`: the window
 ends at the close of the last frozen hour, `asOf`, the same for every route (a window of
 future events starts there), and
 no read counts an open hour. Each response carries `asOf`, `coveredSince`, the first
@@ -275,11 +268,8 @@ margin) or after its own key is refused (400). A parameter never changes the sha
 instant a response reflects. The protocol is written `meteora_damm_v2` everywhere (field,
 path); fields in camelCase.
 
-**Not yet following these rules**: `/api/protocols/activity` and its `/hourly` and `/daily`,
-`/api/protocols/tvl` and its `/hourly`, `/api/tokens/activity`, `/api/announcements/active`,
-`/api/signals/stream`, the `pool` filter of `/api/signals`, `/api/protocols` (no cursor),
-and `/api/protocols/{protocol}/liquidity-moves` (no cursor, and a `coveredSince` that is the
-swaps', not the liquidity's).
+**Not yet following these rules**: `/api/signals/stream`, the live stream, until `/api/live`
+serves it.
 
 **Delay.** Every route but the probes and the live stream answers in under
 **2 s** in production, network included, at the heaviest its parameters allow,
@@ -445,7 +435,7 @@ served as `application/problem+json`:
 | 503 | `Service Unavailable` | Over capacity: no work slot within 2 s, too many open signal streams, the request past its deadline, or the database out of connections or past `statement_timeout`. Carries `Retry-After`; see [Capacity bounds](#capacity-bounds) |
 | 500 | `Internal Server Error` | DB failure, encoding bug. `detail` is always the generic message; the real cause is logged server-side under a `request_id` correlatable via the `x-request-id` response header |
 
-A parameter absent is not provided; present and empty (`?pool=`), it is an
+A parameter absent is not provided; present and empty (`?cursor=`), it is an
 invalid value — `400`, like any value that does not parse.
 
 Every `/api` route answers its errors through one layer

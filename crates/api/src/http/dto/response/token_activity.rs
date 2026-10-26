@@ -1,4 +1,4 @@
-//! `/api/tokens/activity`: a page of tokens by volume, over a window.
+//! `/api/swaps/by-token`: a page of tokens by volume, over a window.
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;

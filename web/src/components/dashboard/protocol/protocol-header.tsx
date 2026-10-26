@@ -14,7 +14,7 @@ import { InfoPopover } from "@/components/shared/info-popover";
 import type { PagePath } from "@/config/site";
 import { ApiClientError } from "@/lib/api/errors";
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
-import { fetchProtocolActivity } from "@/lib/api/server/protocols";
+import { fetchSwapTotals } from "@/lib/api/server/protocols";
 import { shortenPubkey } from "@/lib/format/pubkey";
 import type { Period } from "@/lib/overview/period";
 import { tabQuery, type ProtocolTab } from "@/lib/protocol/tabs";
@@ -46,7 +46,7 @@ export async function ProtocolHeader({ pathname, period, tab, protocol, programI
               {t("program", { id: shortenPubkey(programId, 6) })}
             </span>
             <Suspense fallback={null}>
-              <MeasuredSince period={period} />
+              <MeasuredSince period={period} protocol={protocol} />
             </Suspense>
           </InfoPopover>
         </span>
@@ -57,11 +57,17 @@ export async function ProtocolHeader({ pathname, period, tab, protocol, programI
 }
 
 /** The first frozen hour, from which every figure of the page exists. */
-async function MeasuredSince({ period }: { period: Period }) {
+async function MeasuredSince({
+  period,
+  protocol,
+}: {
+  period: Period;
+  protocol: ProtocolResponse;
+}) {
   const t = await getTranslations("Dashboard.Protocol.page");
   let since;
   try {
-    since = (await fetchProtocolActivity(period)).coveredSince;
+    since = (await fetchSwapTotals(protocol, period)).coveredSince;
   } catch (err) {
     if (err instanceof ApiClientError) {
       return null;

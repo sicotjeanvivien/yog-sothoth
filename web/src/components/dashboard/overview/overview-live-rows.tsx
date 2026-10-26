@@ -7,9 +7,9 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { LiveRow } from "@/components/dashboard/live-status/live-indicator";
 import { ApiClientError } from "@/lib/api/errors";
-import { fetchProtocolActivity } from "@/lib/api/server/protocols";
+import { fetchSwapTotals } from "@/lib/api/server/protocols";
 import type { Period } from "@/lib/overview/period";
-import { inScope, type Scope } from "@/lib/overview/scope";
+import type { Scope } from "@/lib/api/server/scope";
 import { isStale } from "@/lib/overview/staleness";
 
 import { utcMoment } from "./overview-parts";
@@ -20,7 +20,7 @@ export async function OverviewLiveRows({ period, scope }: { period: Period; scop
 
   let activity;
   try {
-    activity = await fetchProtocolActivity(period);
+    activity = await fetchSwapTotals(scope, period);
   } catch (err) {
     if (!(err instanceof ApiClientError)) {
       throw err;
@@ -28,9 +28,8 @@ export async function OverviewLiveRows({ period, scope }: { period: Period; scop
     return <OverviewLiveRowsFallback />;
   }
 
-  const items = inScope(activity.items, scope);
-  const total = items.reduce((sum, i) => sum + i.poolHours, 0);
-  const valued = items.reduce((sum, i) => sum + i.poolHoursValued, 0);
+  const total = activity.items.reduce((sum, i) => sum + i.poolHours, 0);
+  const valued = activity.items.reduce((sum, i) => sum + i.poolHoursValued, 0);
   const percent = new Intl.NumberFormat(locale, {
     style: "percent",
     maximumFractionDigits: 0,

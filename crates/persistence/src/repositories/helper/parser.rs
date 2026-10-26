@@ -5,10 +5,7 @@ use solana_signature::Signature;
 use sqlx::Error as SqlxError;
 use sqlx::types::BigDecimal;
 use std::str::FromStr;
-use yog_core::{
-    RepositoryError, RepositoryResult,
-    domain::{Protocol, Window},
-};
+use yog_core::{RepositoryError, RepositoryResult, domain::Protocol};
 
 /// Parses a stored protocol; an unknown one is `RepositoryError::Integrity`.
 pub(crate) fn parse_protocol(raw: &str) -> RepositoryResult<Protocol> {
@@ -24,14 +21,6 @@ pub(crate) fn bind_protocol_filter(protocol: Option<Protocol>) -> Option<&'stati
 /// The start of a bucket a read selected; `None` is `RepositoryError::Integrity`.
 pub(crate) fn parse_bucket_from(from: Option<DateTime<Utc>>) -> RepositoryResult<DateTime<Utc>> {
     from.ok_or_else(|| RepositoryError::Integrity("a bucket read without its start".to_owned()))
-}
-
-/// Parses a stored window label (`Window::as_str`); an unknown one is `RepositoryError::Integrity`.
-pub(crate) fn parse_window(raw: &str) -> RepositoryResult<Window> {
-    Window::ALL
-        .into_iter()
-        .find(|window| window.as_str() == raw)
-        .ok_or_else(|| RepositoryError::Integrity(format!("invalid window: {raw}")))
 }
 
 /// Parses a stored pubkey; a malformed one is `RepositoryError::Integrity`.

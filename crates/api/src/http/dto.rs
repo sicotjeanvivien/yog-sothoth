@@ -4,11 +4,10 @@ pub(crate) mod schema;
 pub(crate) mod response;
 
 pub(crate) use response::{
-    AnnouncementEntryResponse, AnnouncementResponse, IngestionResponse, LatestTvlResponse,
-    LiquidityChangeEventResponse, LiquidityMoveResponse, NetworkResponse, PageResponse,
-    PoolChangeEventResponse, PoolCreationEventResponse, PoolDetailResponse, PoolResponse,
-    PoolSwapBucketResponse, PositionChangeEventResponse, PositionFeeClaimEventResponse,
-    ProtocolActivityBarResponse, ProtocolActivityResponse, ProtocolCatalogResponse,
+    AnnouncementEntryResponse, IngestionResponse, LiquidityChangeEventResponse,
+    LiquidityMoveResponse, NetworkResponse, PageResponse, PoolChangeEventResponse,
+    PoolCreationEventResponse, PoolDetailResponse, PoolResponse, PoolSwapBucketResponse,
+    PositionChangeEventResponse, PositionFeeClaimEventResponse, ProtocolCatalogResponse,
     ProtocolDiscoveredTvlResponse, ProtocolFeeClaimEventResponse,
     ProtocolLiquidityFlowsBucketResponse, ProtocolLiquidityFlowsResponse,
     ProtocolPoolCreationsBucketResponse, ProtocolPoolCreationsResponse,

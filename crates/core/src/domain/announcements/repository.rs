@@ -5,16 +5,12 @@ use chrono::{DateTime, Utc};
 
 use crate::{
     Page, RepositoryResult,
-    domain::{Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementStatus},
+    domain::{AnnouncementCursor, AnnouncementEntry, AnnouncementStatus},
 };
 
-/// The currently active announcements, the api's lens.
+/// The announcements, the api's lens.
 #[async_trait]
 pub trait AnnouncementLookup: Send + Sync {
-    /// The announcements whose window contains `now`, most severe then most
-    /// recent first, bounded by a hard limit.
-    async fn list_active(&self, now: DateTime<Utc>) -> RepositoryResult<Vec<Announcement>>;
-
     /// A page of every announcement, or of those whose window stands at `status` at `now`,
     /// the latest start first, ties by id descending, after `cursor`'s key; forward only.
     async fn list_entries(
