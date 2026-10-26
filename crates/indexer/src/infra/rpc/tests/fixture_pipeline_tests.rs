@@ -1143,7 +1143,7 @@ fn event_index_counts_dropped_payloads_too() {
         let indices: Vec<u16> = extracted.events.iter().map(|e| e.event_index).collect();
         assert_eq!(
             indices, expected,
-            "{fixture}: event_index must number the payloads cp-amm emitted, \
+            "{fixture}: event_index must number the inner instructions to cp-amm, \
              including the deprecated EvtSplitPosition2 the extractor drops — \
              got {indices:?}, expected {expected:?}"
         );
