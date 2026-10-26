@@ -10,6 +10,7 @@ use crate::http::{cursor::decode_token_price_cursor, error::ApiError};
 
 /// A window, ending at the first page, and forward-only cursor pagination.
 #[derive(Debug, Deserialize, IntoParams)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct TokenPricesParams {
     #[serde(default)]
     #[param(inline)]

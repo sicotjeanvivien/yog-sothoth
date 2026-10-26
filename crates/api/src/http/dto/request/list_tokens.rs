@@ -8,6 +8,7 @@ use crate::http::{cursor::decode_token_cursor, error::ApiError};
 
 /// Forward-only cursor pagination.
 #[derive(Debug, Deserialize, IntoParams)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct TokensParams {
     #[param(min_length = 1)]
     cursor: Option<String>,

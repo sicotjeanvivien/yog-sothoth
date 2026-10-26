@@ -12,6 +12,7 @@ use status_param::AnnouncementStatusParam;
 
 /// Every announcement, or those of one status, forward-only cursor pagination.
 #[derive(Debug, Deserialize, IntoParams)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct AnnouncementsParams {
     #[param(inline)]
     status: Option<AnnouncementStatusParam>,

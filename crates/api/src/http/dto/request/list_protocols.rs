@@ -8,6 +8,7 @@ use crate::http::{cursor::decode_protocol_cursor, error::ApiError};
 
 /// Forward-only cursor pagination over the catalogue.
 #[derive(Debug, Deserialize, IntoParams)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ProtocolsParams {
     #[param(min_length = 1)]
     cursor: Option<String>,

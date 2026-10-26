@@ -18,6 +18,7 @@ pub(crate) enum SortParam {
 /// Query params for `GET /api/swaps/by-token`: a window, the order, and
 /// forward-only cursor pagination.
 #[derive(Debug, Deserialize, IntoParams)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct TokenActivityParams {
     #[serde(default)]
     #[param(inline)]

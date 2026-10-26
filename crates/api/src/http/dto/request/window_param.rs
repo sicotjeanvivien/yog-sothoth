@@ -27,6 +27,7 @@ impl From<WindowParam> for Window {
 
 /// A measure over a window ending at the last frozen hour; 24 hours by default.
 #[derive(Debug, Deserialize, IntoParams)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct WindowParams {
     #[serde(default)]
     #[param(inline)]
@@ -35,6 +36,7 @@ pub(crate) struct WindowParams {
 
 /// [`WindowParams`], moved `offset` back: the previous window is `offset=` its length.
 #[derive(Debug, Deserialize, IntoParams)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ActivityParams {
     #[serde(default)]
     #[param(inline)]
