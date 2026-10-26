@@ -1127,7 +1127,7 @@ fn decodes_update_pool_fees_fixture() {
     assert_eq!(domain.params_raw, wire_params);
 }
 
-/// `event_index` numbers the self-CPI payloads, not the recognised events: implementing one more
+/// `event_index` numbers the inner instructions to cp-amm, not the recognised events: one more
 /// discriminator must not renumber stored events. The dropped `EvtSplitPosition2` leaves its hole.
 #[test]
 fn event_index_counts_dropped_payloads_too() {

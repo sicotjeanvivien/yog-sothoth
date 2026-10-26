@@ -1,4 +1,4 @@
-//! Extract DAMM v2 wire events from the inner instructions a confirmed transaction addresses to cp-amm.
+//! Extract DAMM v2 wire events from a confirmed transaction's inner instructions to cp-amm.
 //! Never logs, never aborts the transaction: each payload ends up decoded,
 //! unknown or failed, for the caller to log and count.
 
@@ -46,8 +46,8 @@ pub struct ExtractedEvents {
 }
 
 /// A recognized wire event and its position in the transaction.
-/// ⚠️ `event_index` counts **every** inner instruction addressed to cp-amm, `event_cpi` or not:
-/// that keeps it stable across releases ([`crate::domain::EventPosition`]).
+/// ⚠️ `event_index` counts every inner instruction to cp-amm, `event_cpi` or not: that keeps
+/// it stable across releases ([`crate::domain::EventPosition`]).
 #[derive(Debug)]
 pub struct IndexedWireEvent {
     pub event_index: u16,
