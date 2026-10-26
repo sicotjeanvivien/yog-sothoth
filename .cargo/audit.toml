@@ -22,4 +22,24 @@ ignore = [
   # vulnerability. Solana itself will migrate the day the ecosystem
   # picks a successor; we follow.
   "RUSTSEC-2025-0141",
+
+  # ─────────────────────────────────────────────────────────────────
+  # RUSTSEC-2026-0391 (`zstd 0.13.3`), RUSTSEC-2026-0398 and
+  # RUSTSEC-2026-0403 (`zstd-safe 7.3.0`) — decompression flaws
+  #
+  # Status: ACCEPTED until a stable Agave release moves to `zstd 0.14`.
+  #
+  # `solana-rpc-client` 4.3 requires `solana-account-decoder`, which
+  # requires `zstd ^0.13.3` with no feature to drop it; only the 4.4
+  # betas move to `^0.14`. Its one decompression is
+  # `UiAccountData::decode` on `base64+zstd` account data, and nothing
+  # here reaches it: the indexer reads transactions as `jsonParsed`
+  # and never decodes an account, and yog-context fetches accounts in
+  # plain `base64` through its own JSON-RPC client.
+  #
+  # Remove these three the day Dependabot brings a stable Agave whose
+  # `solana-account-decoder` takes `zstd >= 0.14.3`.
+  "RUSTSEC-2026-0391",
+  "RUSTSEC-2026-0398",
+  "RUSTSEC-2026-0403",
 ]
