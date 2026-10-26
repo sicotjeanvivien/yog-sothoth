@@ -1052,14 +1052,15 @@ done by hand, in this order:
    `PGOPTIONS='-c lock_timeout=30s' psql -X <admin-url> -c "ALTER EXTENSION timescaledb UPDATE"`.
    Any statement before it in the session — a `SET lock_timeout` included —
    loads the old library, and the update is refused.
-3. **Re-run `yog-migrate bootstrap`** (it applies `setup_roles.sql`), and check
-   that `PUBLIC` took nothing back ([above](#what-public-holds-taken-back--and-re-taken-after-an-extension-update)).
-4. **Restart every daemon**, yog-archive included, whose startup dump is then
-   the first of the new version. A connection opened before the update keeps
-   the old library loaded, and every TimescaleDB query on it fails with
-   `"timescaledb" already loaded with a different version`. Measured on
+3. **Restart every daemon but yog-archive**, at once. A connection opened before
+   the update keeps the old library loaded, and every TimescaleDB query on it
+   fails with `"timescaledb" already loaded with a different version`. Measured on
    21 October 2026 (2.30.1 → 2.30.2): yog-indexer, yog-signals and
    yog-analytic failed their heartbeats until restarted.
+4. **Re-run `yog-migrate bootstrap`** (it applies `setup_roles.sql`), and check
+   that `PUBLIC` took nothing back ([above](#what-public-holds-taken-back--and-re-taken-after-an-extension-update)).
+5. **Restart yog-archive** last: its startup dump, the first of the new version,
+   starts once nothing is left to change.
 
 There is no way back afterwards: the previous image lacks the new library, so
 the previous version of the stack can no longer load the extension.
