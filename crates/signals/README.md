@@ -91,17 +91,16 @@ with SIGKILL.
 - **A cancelled task is not a panic.** A `JoinError` goes through
   `yog_bootstrap::TaskEnd`: only a panic cancels the other detectors and ends
   the engine in `EngineError::DetectorPanicked`.
+- **The wait is bounded.** Once the stop is asked for, `SignalEngine::run` waits for its detectors
+  within `yog_bootstrap::SHUTDOWN_GRACE`, the grace of every daemon, and returns the names of those
+  still running, named by `yog_bootstrap::report_overrun`, the line `Stop` writes for the other
+  daemons. Each task is named at spawn: a detector stuck in a slow query never returns its name. A
+  panic during the stop does not cut the wait short, so the stuck one is named all the same.
 
 ⚠️ Until 14 September 2026 the daemon waited on `ctrl_c()` alone. `docker
 compose stop` sends SIGTERM, and as PID 1 the process does not die on it
 either, so the stop never started and Docker's SIGKILL arrived ten seconds
 later, mid-tick.
-
-⚠️ **The other half is still missing.** Unlike `yog-indexer` and
-`yog-context`, the engine joins its detectors **with no deadline** — no
-`yog_bootstrap::Stop`, no `SHUTDOWN_GRACE`. A detector stuck in a slow query
-holds the stop open until Docker's SIGKILL, and nothing in the logs names it.
-Not fixed yet.
 
 ## The materialisation alarm
 

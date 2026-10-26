@@ -8,10 +8,11 @@ use std::sync::Arc;
 use chrono::{Duration as ChronoDuration, Utc};
 use solana_pubkey::Pubkey;
 use thiserror::Error;
-use tokio::task::JoinSet;
+use tokio::task::{Id, JoinError, JoinSet};
+use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
-use yog_bootstrap::TaskEnd;
+use yog_bootstrap::{SHUTDOWN_GRACE, TaskEnd, report_overrun};
 
 use yog_core::domain::{EvalContext, Severity, Signal, SignalDetector, SignalRepository};
 
@@ -45,44 +46,87 @@ impl SignalEngine {
         }
     }
 
-    /// Spawn one poll loop per detector and run until `shutdown`: `Ok(())` once every loop stopped,
-    /// or the first panic, after cancelling the rest.
-    pub async fn run(self, shutdown: CancellationToken) -> Result<(), EngineError> {
+    /// Spawn one poll loop per detector and run until `shutdown`, then wait for them within
+    /// [`SHUTDOWN_GRACE`], naming those still running (`report_overrun`) and returning them. The
+    /// first panic stops every loop, and is returned once they are drained.
+    pub async fn run(self, shutdown: CancellationToken) -> Result<Vec<&'static str>, EngineError> {
         if self.detectors.is_empty() {
             warn!("signal engine started with no detectors — nothing to do");
         }
 
         let mut set = JoinSet::new();
+        // ⚠️ Named at spawn: a task stuck in its tick never returns its name.
+        let mut running: HashMap<Id, &'static str> = HashMap::new();
         for detector in self.detectors {
             let repository = Arc::clone(&self.signal_repository);
             let shutdown = shutdown.clone();
-            set.spawn(async move {
-                let name = detector.name();
-                run_detector_loop(detector, repository, shutdown).await;
-                name
-            });
+            let name = detector.name();
+            let task = set.spawn(run_detector_loop(detector, repository, shutdown));
+            running.insert(task.id(), name);
         }
 
-        while let Some(joined) = set.join_next().await {
-            match joined {
-                Ok(name) => info!(detector = name, "detector loop stopped"),
-                // ⚠️ A `JoinError` is a panic or a cancellation ([`TaskEnd`]), and only the first is a
-                // failure, and the reading must not default to panic.
-                Err(e) => match TaskEnd::from(&e) {
-                    TaskEnd::Panicked => {
-                        error!(error = %e, "detector task panicked — stopping engine");
+        let mut first_panic = None;
+        loop {
+            tokio::select! {
+                biased;
+                _ = shutdown.cancelled() => break,
+                joined = set.join_next_with_id() => match joined {
+                    None => return Ok(Vec::new()),
+                    // ⚠️ Not `set.shutdown()`: it aborts the others mid-tick.
+                    Some(joined) => if let Some(panic) = settle(joined, &mut running) {
+                        first_panic = Some(panic);
                         shutdown.cancel();
-                        set.shutdown().await;
-                        return Err(EngineError::DetectorPanicked(e.to_string()));
-                    }
-                    TaskEnd::Cancelled => {
-                        debug!(error = %e, "detector task was cancelled before it could stop");
-                    }
+                        break;
+                    },
                 },
             }
         }
 
-        Ok(())
+        // A panic does not end the drain either: the detector still stuck is named all the same.
+        let deadline = Instant::now() + SHUTDOWN_GRACE;
+        while let Ok(Some(joined)) =
+            tokio::time::timeout_at(deadline, set.join_next_with_id()).await
+        {
+            if let Some(panic) = settle(joined, &mut running) {
+                first_panic.get_or_insert(panic);
+            }
+        }
+        let mut overran: Vec<&'static str> = running.into_values().collect();
+        overran.sort_unstable();
+        report_overrun(&overran);
+        match first_panic {
+            Some(panic) => Err(panic),
+            None => Ok(overran),
+        }
+    }
+}
+
+/// One detector loop's end, logged and struck off `running`; a panic is returned.
+fn settle(
+    joined: Result<(Id, ()), JoinError>,
+    running: &mut HashMap<Id, &'static str>,
+) -> Option<EngineError> {
+    match joined {
+        Ok((id, ())) => {
+            let name = running.remove(&id).unwrap_or("unknown");
+            info!(detector = name, "detector loop stopped");
+            None
+        }
+        // ⚠️ A `JoinError` is a panic or a cancellation ([`TaskEnd`]), and only the first is a
+        // failure, and the reading must not default to panic.
+        Err(e) => {
+            let name = running.remove(&e.id()).unwrap_or("unknown");
+            match TaskEnd::from(&e) {
+                TaskEnd::Panicked => {
+                    error!(detector = name, error = %e, "detector task panicked — stopping engine");
+                    Some(EngineError::DetectorPanicked(e.to_string()))
+                }
+                TaskEnd::Cancelled => {
+                    debug!(detector = name, error = %e, "detector task was cancelled before it could stop");
+                    None
+                }
+            }
+        }
     }
 }
 
@@ -99,7 +143,7 @@ async fn run_detector_loop(
     loop {
         tokio::select! {
             // ⚠️ `biased`: with the default `Burst`, a slow tick leaves `tick()` ready, and an
-            // unbiased pick would run a new tick after the stop, which `run` waits for without deadline.
+            // unbiased pick would run a new tick after the stop.
             biased;
 
             _ = shutdown.cancelled() => {
