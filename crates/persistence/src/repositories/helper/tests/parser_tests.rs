@@ -94,7 +94,6 @@ fn convert_bigdecimal_to_u128_should_convert() {
 #[test]
 fn convert_bigdecimal_to_u128_reads_an_integer_with_many_trailing_zeros() {
     use bigdecimal::num_bigint::BigInt;
-    // sqlx reads a NUMERIC by groups of four digits: these are the shapes it builds.
     for (digits, scale, expected) in [
         (
             18_446_744_073_709_500i64,
