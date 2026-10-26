@@ -227,6 +227,47 @@
           "empty": "No valued move over the period.",
           "create": "creation"
         }
+      },
+      "volume": {
+        "title": "Where the volume comes from",
+        "info": "A rotation run: a pool whose SOL, USDC or USDT side changes hands at least once every 5 minutes, with no pause longer than 30 minutes. The volume shown stays the real volume; the run says where it comes from.",
+        "inRuns": "In runs",
+        "outside": "Outside runs",
+        "unsplit": "Before runs were measured",
+        "share": "Share in runs",
+        "perHour": "Volume per hour",
+        "perDay": "Volume per day",
+        "measuredSince": "Runs measured since {since}",
+        "notMeasured": "Rotation runs are not measured yet.",
+        "periodTotal": "Total over {period}",
+        "chartLabelHourly": "Volume per hour, in runs and outside them",
+        "chartLabelDaily": "Volume per day, in runs and outside them",
+        "stats": {
+          "title": "Rotation runs · {period}",
+          "info": "The runs that started in the period: how many, on how many pools, how many still go on, how long they last from start to end (so far for those in progress), and the share of their volume traded in their first hour.",
+          "runs": "Runs",
+          "onPools": "on {pools} {count, plural, one {pool} other {pools}}",
+          "inProgress": "{count} in progress",
+          "duration": "Length of a run",
+          "median": "median",
+          "medianAndP90": "median · 9 in 10 last under {p90}",
+          "firstHour": "Seen in the first hour",
+          "firstHourSub": "of a run's volume",
+          "none": "No run in the period."
+        },
+        "runs": {
+          "title": "Largest runs · {period}",
+          "info": "The runs of largest volume that started in the period, with their start in UTC and their length. A run in progress may still grow; an ended one has had no tranche in a run for 30 minutes.",
+          "tableLabel": "Largest rotation runs in the chosen period",
+          "pool": "Pool",
+          "start": "Start",
+          "duration": "Length",
+          "volume": "Volume",
+          "state": "State",
+          "live": "in progress",
+          "done": "ended",
+          "empty": "No run in the period."
+        }
       }
     },
     "BlockError": {

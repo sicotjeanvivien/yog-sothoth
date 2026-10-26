@@ -17,6 +17,8 @@ fn a_run_says_every_field() {
         volume_usd: Decimal::new(12_345, 1),
         first_hour_volume_usd: Decimal::new(10_000, 1),
         extinct: true,
+        token_a_symbol: Some("SOL".to_owned()),
+        token_b_symbol: None,
     };
 
     let wire = serde_json::to_value(RotationRunResponse::from(run)).unwrap();
@@ -26,6 +28,7 @@ fn a_run_says_every_field() {
         json!({
             "protocol": "meteora_damm_v2",
             "poolAddress": Pubkey::new_from_array([1; 32]).to_string(),
+            "tokenASymbol": "SOL", "tokenBSymbol": null,
             "startedAt": "2026-10-25T12:00:00Z", "endedAt": "2026-10-25T12:45:00Z",
             "volumeUsd": "1234.5", "firstHourVolumeUsd": "1000.0", "extinct": true
         })

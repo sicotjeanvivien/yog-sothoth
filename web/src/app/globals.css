@@ -43,6 +43,9 @@
   /* Liquidity bars: what leaves; what a pool's creation brings. */
   --color-dash-flow-out: #bf3a43;
   --color-dash-flow-create: #1798ad;
+  /* Volume bars: in rotation runs; outside them. */
+  --color-dash-run: #987aee;
+  --color-dash-run-out: #1798ad;
 
   /* 721 px: up to 720 px is the phone — the dashboard menu a drawer, the
      site menu folded behind "Menu". */

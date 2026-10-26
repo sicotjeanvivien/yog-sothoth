@@ -76,9 +76,16 @@ impl RotationRunLookup for PgRotationRunRepository {
         let row = sqlx::query_as!(
             RotationRunTotalsRow,
             r#"
-            SELECT COUNT(*) AS "runs!",
+            SELECT COUNT(*) AS "runs!", COUNT(DISTINCT pool_address) AS "pools!",
+                   COUNT(*) FILTER (WHERE NOT extinct) AS "in_progress!",
                    COALESCE(SUM(volume_usd), 0) AS "volume_usd!",
-                   COALESCE(SUM(first_hour_volume_usd), 0) AS "first_hour_volume_usd!"
+                   COALESCE(SUM(first_hour_volume_usd), 0) AS "first_hour_volume_usd!",
+                   ROUND(percentile_cont(0.5) WITHIN GROUP (
+                       ORDER BY EXTRACT(EPOCH FROM ended_at - started_at)))::BIGINT
+                       AS "median_duration_seconds?",
+                   ROUND(percentile_cont(0.9) WITHIN GROUP (
+                       ORDER BY EXTRACT(EPOCH FROM ended_at - started_at)))::BIGINT
+                       AS "p90_duration_seconds?"
               FROM analytic_rotation_runs
              WHERE protocol = $3 AND started_at >= $1 AND started_at < $2
             "#,
@@ -120,16 +127,20 @@ impl RotationRunLookup for PgRotationRunRepository {
                 sqlx::query_as!(
                     RotationRunRow,
                     r#"
-                SELECT protocol, pool_address, started_at, ended_at, volume_usd,
-                       first_hour_volume_usd, extinct, ROUND(volume_usd, 6) AS "volume_key!"
-                  FROM analytic_rotation_runs
-                 WHERE protocol = $3 AND started_at >= $1 AND started_at < $2
+                SELECT r.protocol, r.pool_address, r.started_at, r.ended_at, r.volume_usd,
+                       r.first_hour_volume_usd, r.extinct, ROUND(r.volume_usd, 6) AS "volume_key!",
+                       ta.symbol AS "token_a_symbol?", tb.symbol AS "token_b_symbol?"
+                  FROM analytic_rotation_runs r
+                  LEFT JOIN pools p ON p.pool_address = r.pool_address
+                  LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
+                  LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT
+                 WHERE r.protocol = $3 AND r.started_at >= $1 AND r.started_at < $2
                    -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits.
                    AND ($4::NUMERIC IS NULL
-                        OR ROUND(volume_usd, 6) < $4
-                        OR (ROUND(volume_usd, 6) = $4 AND (pool_address > $6
-                            OR (pool_address = $6 AND started_at > $5))))
-                 ORDER BY ROUND(volume_usd, 6) DESC, pool_address, started_at
+                        OR ROUND(r.volume_usd, 6) < $4
+                        OR (ROUND(r.volume_usd, 6) = $4 AND (r.pool_address > $6
+                            OR (r.pool_address = $6 AND r.started_at > $5))))
+                 ORDER BY ROUND(r.volume_usd, 6) DESC, r.pool_address, r.started_at
                  LIMIT $7
                 "#,
                     period.from,
@@ -149,14 +160,18 @@ impl RotationRunLookup for PgRotationRunRepository {
                 sqlx::query_as!(
                     RotationRunRow,
                     r#"
-                SELECT protocol, pool_address, started_at, ended_at, volume_usd,
-                       first_hour_volume_usd, extinct, ROUND(volume_usd, 6) AS "volume_key!"
-                  FROM analytic_rotation_runs
-                 WHERE protocol = $3 AND started_at >= $1 AND started_at < $2
+                SELECT r.protocol, r.pool_address, r.started_at, r.ended_at, r.volume_usd,
+                       r.first_hour_volume_usd, r.extinct, ROUND(r.volume_usd, 6) AS "volume_key!",
+                       ta.symbol AS "token_a_symbol?", tb.symbol AS "token_b_symbol?"
+                  FROM analytic_rotation_runs r
+                  LEFT JOIN pools p ON p.pool_address = r.pool_address
+                  LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
+                  LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT
+                 WHERE r.protocol = $3 AND r.started_at >= $1 AND r.started_at < $2
                    AND ($4::TIMESTAMPTZ IS NULL
-                        OR started_at < $4
-                        OR (started_at = $4 AND pool_address > $5))
-                 ORDER BY started_at DESC, pool_address
+                        OR r.started_at < $4
+                        OR (r.started_at = $4 AND r.pool_address > $5))
+                 ORDER BY r.started_at DESC, r.pool_address
                  LIMIT $6
                 "#,
                     period.from,
@@ -175,16 +190,20 @@ impl RotationRunLookup for PgRotationRunRepository {
                 sqlx::query_as!(
                     RotationRunRow,
                     r#"
-                SELECT protocol, pool_address, started_at, ended_at, volume_usd,
-                       first_hour_volume_usd, extinct, ROUND(volume_usd, 6) AS "volume_key!"
-                  FROM analytic_rotation_runs
-                 WHERE pool_address = $3 AND started_at >= $1 AND started_at < $2
+                SELECT r.protocol, r.pool_address, r.started_at, r.ended_at, r.volume_usd,
+                       r.first_hour_volume_usd, r.extinct, ROUND(r.volume_usd, 6) AS "volume_key!",
+                       ta.symbol AS "token_a_symbol?", tb.symbol AS "token_b_symbol?"
+                  FROM analytic_rotation_runs r
+                  LEFT JOIN pools p ON p.pool_address = r.pool_address
+                  LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
+                  LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT
+                 WHERE r.pool_address = $3 AND r.started_at >= $1 AND r.started_at < $2
                    -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits.
                    AND ($4::NUMERIC IS NULL
-                        OR ROUND(volume_usd, 6) < $4
-                        OR (ROUND(volume_usd, 6) = $4 AND (pool_address > $6
-                            OR (pool_address = $6 AND started_at > $5))))
-                 ORDER BY ROUND(volume_usd, 6) DESC, pool_address, started_at
+                        OR ROUND(r.volume_usd, 6) < $4
+                        OR (ROUND(r.volume_usd, 6) = $4 AND (r.pool_address > $6
+                            OR (r.pool_address = $6 AND r.started_at > $5))))
+                 ORDER BY ROUND(r.volume_usd, 6) DESC, r.pool_address, r.started_at
                  LIMIT $7
                 "#,
                     period.from,
@@ -204,14 +223,18 @@ impl RotationRunLookup for PgRotationRunRepository {
                 sqlx::query_as!(
                     RotationRunRow,
                     r#"
-                SELECT protocol, pool_address, started_at, ended_at, volume_usd,
-                       first_hour_volume_usd, extinct, ROUND(volume_usd, 6) AS "volume_key!"
-                  FROM analytic_rotation_runs
-                 WHERE pool_address = $3 AND started_at >= $1 AND started_at < $2
+                SELECT r.protocol, r.pool_address, r.started_at, r.ended_at, r.volume_usd,
+                       r.first_hour_volume_usd, r.extinct, ROUND(r.volume_usd, 6) AS "volume_key!",
+                       ta.symbol AS "token_a_symbol?", tb.symbol AS "token_b_symbol?"
+                  FROM analytic_rotation_runs r
+                  LEFT JOIN pools p ON p.pool_address = r.pool_address
+                  LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
+                  LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT
+                 WHERE r.pool_address = $3 AND r.started_at >= $1 AND r.started_at < $2
                    AND ($4::TIMESTAMPTZ IS NULL
-                        OR started_at < $4
-                        OR (started_at = $4 AND pool_address > $5))
-                 ORDER BY started_at DESC, pool_address
+                        OR r.started_at < $4
+                        OR (r.started_at = $4 AND r.pool_address > $5))
+                 ORDER BY r.started_at DESC, r.pool_address
                  LIMIT $6
                 "#,
                     period.from,

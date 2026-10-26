@@ -22,6 +22,7 @@ import { LiquidityTab } from "@/components/dashboard/protocol/liquidity/liquidit
 import { ProtocolHeader } from "@/components/dashboard/protocol/protocol-header";
 import { FeesRateKpi, ProtocolFeesKpi } from "@/components/dashboard/protocol/protocol-kpis";
 import { ProtocolTabs } from "@/components/dashboard/protocol/protocol-tabs";
+import { VolumeTab } from "@/components/dashboard/protocol/volume/volume-tab";
 import { parsePeriod } from "@/lib/overview/period";
 import { parseTab, readyTabs } from "@/lib/protocol/tabs";
 import { pageMetadata } from "@/lib/seo/page-metadata";
@@ -98,6 +99,7 @@ export default async function DammV2Page({ params, searchParams }: ProtocolPageP
         />
       )}
       {tab === "liquidity" && <LiquidityTab period={period} protocol={PROTOCOL} />}
+      {tab === "volume" && <VolumeTab period={period} protocol={PROTOCOL} />}
     </OverviewMode>
   );
 }

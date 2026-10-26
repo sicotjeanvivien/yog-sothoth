@@ -295,3 +295,129 @@ async fn the_coverage_is_the_first_tranche_measured_and_the_end_the_last_written
     assert_eq!(through, Some(at(-5)));
     assert_eq!(dlmm, None);
 }
+
+/// Inserts a run of `address` lasting `minutes`, extinct or not.
+async fn insert_lasting(pool: &PgPool, address: u8, start: i64, minutes: i64, extinct: bool) {
+    sqlx::query(
+        "INSERT INTO analytic_rotation_runs (pool_address, started_at, protocol, ended_at,
+           volume_usd, first_hour_volume_usd, extinct, settled)
+         VALUES ($1, $2, 'meteora_damm_v2', $2 + make_interval(mins => $3::INT), 1, 1, $4, false)",
+    )
+    .bind(pk(address).to_string())
+    .bind(at(start))
+    .bind(minutes)
+    .bind(extinct)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// Mutation: the distinct count dropped, the extinct filter reversed, or a percentile taken at
+/// another rank — the pools counted per run, the extinct runs counted in progress, or another
+/// duration said.
+#[sqlx::test(migrations = "./migrations")]
+async fn the_totals_say_their_pools_runs_in_progress_and_durations(pool: PgPool) {
+    insert_lasting(&pool, 1, -50, 5, true).await;
+    insert_lasting(&pool, 1, -40, 10, true).await;
+    insert_lasting(&pool, 2, -30, 20, true).await;
+    insert_lasting(&pool, 3, -20, 40, false).await;
+    let repository =
+        PgRotationRunRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+
+    let totals = repository
+        .find_totals(&period(-60, 0), Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+    let none = repository
+        .find_totals(&period(-120, -60), Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        (
+            totals.runs,
+            totals.pools,
+            totals.in_progress,
+            totals.median_duration_seconds,
+            totals.p90_duration_seconds
+        ),
+        (4, 3, 1, Some(900), Some(2040))
+    );
+    assert_eq!(
+        (
+            none.runs,
+            none.median_duration_seconds,
+            none.p90_duration_seconds
+        ),
+        (0, None, None)
+    );
+}
+
+/// Mutation: a token joined by the other mint, or a pool without metadata dropped by an inner
+/// join — a run named after the wrong side, or missing from the list.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_listed_run_carries_its_tokens_symbols(pool: PgPool) {
+    sqlx::query(
+        "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint, fee_bps,
+                            first_seen_at, last_seen_at)
+         VALUES ($1, 'meteora_damm_v2', $2, $3, 25, $4, $4)",
+    )
+    .bind(pk(1).to_string())
+    .bind(pk(61).to_string())
+    .bind(pk(62).to_string())
+    .bind(at(-300))
+    .execute(&pool)
+    .await
+    .unwrap();
+    for (mint, symbol) in [(61, "SOL"), (62, "ABC")] {
+        sqlx::query(
+            "INSERT INTO token_metadata (mint, symbol, decimals, fetched_at, last_refresh_at)
+             VALUES ($1, $2, 9, $3, $3)",
+        )
+        .bind(pk(mint).to_string())
+        .bind(symbol)
+        .bind(at(-300))
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    insert_lasting(&pool, 1, -30, 5, true).await;
+    insert_lasting(&pool, 2, -20, 5, true).await;
+    let repository =
+        PgRotationRunRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+
+    let repository = &repository;
+    let named = |scope| async move {
+        let mut names = Vec::new();
+        for order in [RotationRunOrder::Volume, RotationRunOrder::At] {
+            let page = repository
+                .list_runs(&period(-60, 0), Window::Day, scope, order, None, 50)
+                .await
+                .unwrap();
+            names.push(
+                page.items
+                    .iter()
+                    .map(|r| (r.token_a_symbol.clone(), r.token_b_symbol.clone()))
+                    .collect::<Vec<_>>(),
+            );
+        }
+        names
+    };
+    let sol_abc = (Some("SOL".to_owned()), Some("ABC".to_owned()));
+
+    assert_eq!(
+        named(damm()).await,
+        [
+            [sol_abc.clone(), (None, None)],
+            [(None, None), sol_abc.clone()]
+        ]
+    );
+    assert_eq!(
+        named(RotationRunScope::Pool(pk(1))).await,
+        [[sol_abc.clone()], [sol_abc]]
+    );
+    assert_eq!(
+        named(RotationRunScope::Pool(pk(2))).await,
+        [[(None, None)], [(None, None)]]
+    );
+}

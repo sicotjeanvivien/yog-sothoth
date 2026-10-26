@@ -678,8 +678,11 @@ deleted and written again every cycle, a settled one written once with its hours
 `tests/analytic_rotation_runs.rs` holds the rotation, the two thresholds and the settling.
 `rotation_runs.rs` reads them for the routes: the runs started in a period through the last
 tranche written (`analytic_tranches`), listed by volume — rounded as the cursor holds it — or
-by start, and summed; their volume by frozen hour from `analytic_rotation_run_hours`.
-`tests/rotation_runs.rs` holds the period, both orders, the bars and the coverage.
+by start, each named by its pool's token symbols (`LEFT JOIN`: a pool without metadata stays
+listed), and summed with their distinct pools, those in progress and their median and p90
+duration (`percentile_cont`); their volume by frozen hour from `analytic_rotation_run_hours`.
+`tests/rotation_runs.rs` holds the period, both orders, the symbols, the totals, the bars and
+the coverage.
 
 Still reading market prices outside the table: the liquidity
 (`meteora_damm_v2_pool_hourly_liquidity_flow`,
