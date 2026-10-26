@@ -31,9 +31,9 @@ import {
 } from "../schema/zod.gen";
 import { scopedPath, type Scope } from "./scope";
 
-/** The catalogue's first page: every protocol of the domain. */
+/** The catalogue's widest page: every protocol of the domain. */
 export const fetchProtocols = cache(() =>
-  apiGet("/api/protocols", {}, zListProtocolsResponse),
+  apiGet("/api/protocols", { limit: 200 }, zListProtocolsResponse),
 );
 
 export const fetchProtocol = cache((protocol: ProtocolResponse) =>
