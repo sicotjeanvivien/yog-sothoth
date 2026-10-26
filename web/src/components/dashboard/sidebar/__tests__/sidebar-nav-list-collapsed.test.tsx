@@ -125,7 +125,7 @@ describe("SidebarNavList on the collapsed rail", () => {
     const logos = [...collapsedMarkup().matchAll(/<img[^>]*logo_[a-z]+\.svg[^>]*>/g)].map(([tag]) => tag);
 
     expect(logos).toHaveLength(3);
-    for (const tag of logos) expect(tag).toMatch(/class="[^"]*\bsize-5\b/);
+    for (const tag of logos) expect(tag).toMatch(/class="(?:[^"]* )?size-5[ "]/);
   });
 
   // Mutation: `rail:hidden` instead of `rail:sr-only` on the tag — a screen reader no longer hears « Bientôt ».
