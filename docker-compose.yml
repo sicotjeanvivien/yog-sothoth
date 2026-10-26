@@ -52,7 +52,7 @@ services:
     # The same versioned tag as docker-compose.prod.yml, not `latest-pg18`: a
     # floating tag pins only the Postgres major, so a `pull` could move dev to
     # a TimescaleDB that production does not run.
-    image: timescale/timescaledb:2.30.2-pg18
+    image: timescale/timescaledb:2.31.0-pg18
     # max_background_workers = 0 disables the TimescaleDB job scheduler. It is
     # required by the DB-backed integration tests: sqlx::test creates a fresh
     # database per test, each adding continuous-aggregate refresh policies
