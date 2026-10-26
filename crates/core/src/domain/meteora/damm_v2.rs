@@ -9,6 +9,7 @@ mod initialize_reward_event;
 mod liquidity_event;
 mod lock_position_event;
 mod permanent_lock_position_event;
+mod pool_fees;
 mod pool_properties;
 mod set_pool_status_event;
 mod split_position_event;
@@ -54,6 +55,10 @@ pub use lock_position_event::{
 };
 pub use permanent_lock_position_event::{
     MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2PermanentLockPositionEventRepository,
+};
+pub use pool_fees::{
+    MeteoraDammV2BaseFee, MeteoraDammV2DynamicFee, MeteoraDammV2DynamicFeeUpdate,
+    MeteoraDammV2FeeDecay, MeteoraDammV2PoolFees, MeteoraDammV2PoolFeesUpdate,
 };
 pub use pool_properties::{
     MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolProperties,

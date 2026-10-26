@@ -339,6 +339,419 @@
         ],
         "type": "object"
       },
+      "MeteoraDammV2BaseFeeResponse": {
+        "description": "The base fee, named by the `mode` cp-amm writes; a scheduler of 0 periods never moves.",
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2TimeSchedulerResponse"
+              },
+              {
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "time_scheduler_linear"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2TimeSchedulerResponse"
+              },
+              {
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "time_scheduler_exponential"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2RateLimiterResponse"
+              },
+              {
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "rate_limiter"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2MarketCapSchedulerResponse"
+              },
+              {
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "market_cap_scheduler_linear"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2MarketCapSchedulerResponse"
+              },
+              {
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "market_cap_scheduler_exponential"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        ]
+      },
+      "MeteoraDammV2BpsChangeResponse": {
+        "oneOf": [
+          {
+            "properties": {
+              "change": {
+                "enum": [
+                  "unchanged"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "change"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "change": {
+                "enum": [
+                  "set"
+                ],
+                "type": "string"
+              },
+              "value": {
+                "format": "u-int16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "value",
+              "change"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "MeteoraDammV2DynamicFeeChangeResponse": {
+        "description": "`disabled`: cp-amm reads parameters all at zero as \"turn the dynamic fee off\".",
+        "oneOf": [
+          {
+            "properties": {
+              "change": {
+                "enum": [
+                  "unchanged"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "change"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "change": {
+                "enum": [
+                  "disabled"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "change"
+            ],
+            "type": "object"
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2DynamicFeeResponse"
+              },
+              {
+                "properties": {
+                  "change": {
+                    "enum": [
+                      "set"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "change"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        ]
+      },
+      "MeteoraDammV2DynamicFeeResponse": {
+        "description": "The volatility fee added on top of the base fee.",
+        "properties": {
+          "binStep": {
+            "format": "u-int16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "binStepU128": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "decayPeriod": {
+            "format": "u-int16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "filterPeriod": {
+            "format": "u-int16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxVolatilityAccumulator": {
+            "format": "u-int32",
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "reductionFactor": {
+            "format": "u-int16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "variableFeeControl": {
+            "format": "u-int32",
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "binStep",
+          "binStepU128",
+          "filterPeriod",
+          "decayPeriod",
+          "reductionFactor",
+          "maxVolatilityAccumulator",
+          "variableFeeControl"
+        ],
+        "type": "object"
+      },
+      "MeteoraDammV2DynamicFeeStateResponse": {
+        "description": "Whether the pool is created with a dynamic fee.",
+        "oneOf": [
+          {
+            "properties": {
+              "state": {
+                "enum": [
+                  "off"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "state"
+            ],
+            "type": "object"
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2DynamicFeeResponse"
+              },
+              {
+                "properties": {
+                  "state": {
+                    "enum": [
+                      "on"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        ]
+      },
+      "MeteoraDammV2FeeChangesResponse": {
+        "description": "What a fee update changes, field by field.",
+        "properties": {
+          "cliffFeeNumerator": {
+            "$ref": "#/components/schemas/MeteoraDammV2NumeratorChangeResponse"
+          },
+          "compoundingFeeBps": {
+            "$ref": "#/components/schemas/MeteoraDammV2BpsChangeResponse"
+          },
+          "dynamicFee": {
+            "$ref": "#/components/schemas/MeteoraDammV2DynamicFeeChangeResponse"
+          }
+        },
+        "required": [
+          "cliffFeeNumerator",
+          "dynamicFee",
+          "compoundingFeeBps"
+        ],
+        "type": "object"
+      },
+      "MeteoraDammV2FeeParametersResponse": {
+        "description": "The fees a pool is created with.",
+        "properties": {
+          "baseFee": {
+            "$ref": "#/components/schemas/MeteoraDammV2BaseFeeResponse"
+          },
+          "compoundingFeeBps": {
+            "format": "u-int16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "dynamicFee": {
+            "$ref": "#/components/schemas/MeteoraDammV2DynamicFeeStateResponse"
+          }
+        },
+        "required": [
+          "baseFee",
+          "compoundingFeeBps",
+          "dynamicFee"
+        ],
+        "type": "object"
+      },
+      "MeteoraDammV2MarketCapSchedulerResponse": {
+        "description": "A fee that falls as the price rises from its first value.",
+        "properties": {
+          "cliffFeeNumerator": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "numberOfPeriod": {
+            "format": "u-int16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "reductionFactor": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "schedulerExpirationDuration": {
+            "format": "u-int32",
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sqrtPriceStepBps": {
+            "format": "u-int32",
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cliffFeeNumerator",
+          "numberOfPeriod",
+          "sqrtPriceStepBps",
+          "schedulerExpirationDuration",
+          "reductionFactor"
+        ],
+        "type": "object"
+      },
+      "MeteoraDammV2NumeratorChangeResponse": {
+        "oneOf": [
+          {
+            "properties": {
+              "change": {
+                "enum": [
+                  "unchanged"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "change"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "change": {
+                "enum": [
+                  "set"
+                ],
+                "type": "string"
+              },
+              "value": {
+                "$ref": "#/components/schemas/U128String"
+              }
+            },
+            "required": [
+              "value",
+              "change"
+            ],
+            "type": "object"
+          }
+        ]
+      },
       "MeteoraDammV2PermanentLockResponse": {
         "description": "The position's liquidity locked for good, and the position's total so locked after it.",
         "properties": {
@@ -361,15 +774,26 @@
         "type": "object"
       },
       "MeteoraDammV2PoolFeesResponse": {
-        "description": "The pool's fees updated, by its operator.\n⚠️ The new parameters are kept as raw bytes without a decoder: not served.",
+        "description": "The pool's fees updated by its operator, and what changed: `null` when the bytes do not decode.",
         "properties": {
+          "fees": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2FeeChangesResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "operator": {
             "minLength": 1,
             "type": "string"
           }
         },
         "required": [
-          "operator"
+          "operator",
+          "fees"
         ],
         "type": "object"
       },
@@ -473,6 +897,43 @@
           "hasDynamicFee",
           "protocolFeePercent",
           "referralFeePercent"
+        ],
+        "type": "object"
+      },
+      "MeteoraDammV2RateLimiterResponse": {
+        "description": "A fee that rises with the size of a swap.",
+        "properties": {
+          "cliffFeeNumerator": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "feeIncrementBps": {
+            "format": "u-int16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxFeeBps": {
+            "format": "u-int32",
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxLimiterDuration": {
+            "format": "u-int32",
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "referenceAmount": {
+            "$ref": "#/components/schemas/U128String"
+          }
+        },
+        "required": [
+          "cliffFeeNumerator",
+          "feeIncrementBps",
+          "maxLimiterDuration",
+          "maxFeeBps",
+          "referenceAmount"
         ],
         "type": "object"
       },
@@ -799,6 +1260,33 @@
           "feeB",
           "reward0",
           "reward1"
+        ],
+        "type": "object"
+      },
+      "MeteoraDammV2TimeSchedulerResponse": {
+        "description": "A fee that falls with the time since activation.",
+        "properties": {
+          "cliffFeeNumerator": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "numberOfPeriod": {
+            "format": "u-int16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "periodFrequency": {
+            "$ref": "#/components/schemas/U128String"
+          },
+          "reductionFactor": {
+            "$ref": "#/components/schemas/U128String"
+          }
+        },
+        "required": [
+          "cliffFeeNumerator",
+          "numberOfPeriod",
+          "periodFrequency",
+          "reductionFactor"
         ],
         "type": "object"
       },
@@ -2229,7 +2717,7 @@
         "type": "object"
       },
       "PoolCreationEventMeteoraDammV2Response": {
-        "description": "What a DAMM v2 creation says beyond every protocol's: who paid, the price range and the\nfirst price (Q64.64), the liquidity, the activation, the fee and pool modes, the token\nflags, and the amounts deposited — in raw units, the totals including the fees taken.",
+        "description": "What a DAMM v2 creation says beyond every protocol's: who paid, the price range and the\nfirst price (Q64.64), the liquidity, the activation, the fee and pool modes, the token\nflags, the amounts deposited — in raw units, the totals including the fees taken — and its\nfees, `null` when their bytes do not decode.",
         "properties": {
           "activationPoint": {
             "$ref": "#/components/schemas/U128String"
@@ -2249,6 +2737,16 @@
             "maximum": 255,
             "minimum": 0,
             "type": "integer"
+          },
+          "fees": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MeteoraDammV2FeeParametersResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "liquidity": {
             "$ref": "#/components/schemas/U128String"
@@ -2313,7 +2811,8 @@
           "tokenAAmount",
           "tokenBAmount",
           "totalAmountA",
-          "totalAmountB"
+          "totalAmountB",
+          "fees"
         ],
         "type": "object"
       },

@@ -425,6 +425,11 @@ the two dispatch points a new protocol touches in this crate, the other being
   events — the failure that went unseen until the August 2026 audit, when the
   key was `(signature, timestamp)` and discarded the `rows_affected` that would
   have shown it.
+- **Fee parameters the decoder cannot read are counted, the event stored all the same** — a
+  DAMM v2 creation or fee update keeps its fee blob raw, and the API decodes it on read
+  (`null` when it cannot). The persistor tries the same decoder on arrival, so a layout the
+  decoder does not know shows up as `yog_indexer_fee_parameters_undecodable_total{event_kind,
+  reason}` rather than as `null`s nobody counts.
 - **An order the key cannot decide is counted, not assumed away** — the
   `pool_current_state` projection orders on `(slot, transaction_index,
   event_index)`, but `transaction_index` is empty on the `getTransaction`
@@ -606,7 +611,8 @@ histograms.
   `yog_indexer_persist_failure_total{event_kind}`,
   `yog_indexer_pool_upsert_failure_total{event_kind}`,
   `yog_indexer_event_insert_skipped_total{event_kind}`,
-  `yog_indexer_pool_current_state_same_slot_total`
+  `yog_indexer_pool_current_state_same_slot_total`,
+  `yog_indexer_fee_parameters_undecodable_total{event_kind, reason}`
 - **Reporter counter** — `yog_indexer_network_status_tick_failures_total{reason}`
   (`rpc` or `persistence`, and **no** `protocol` label — the probe observes the
   link, not a protocol): ticks of `NetworkStatusReporter` that recorded nothing.

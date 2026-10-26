@@ -1,5 +1,6 @@
 pub mod events;
 pub mod extractor;
+mod fee_parameters;
 pub(super) mod translator;
 
 use solana_pubkey::Pubkey;
@@ -8,6 +9,11 @@ use crate::CoreResult;
 use crate::application::extraction::outcome::{ExtractionFailure, UnknownEventInfo};
 use crate::application::extraction::{EventExtractor, ExtractionOutcome, OnChainTransaction};
 use crate::domain::{Protocol, TransactionPosition};
+
+pub use self::fee_parameters::{
+    MeteoraDammV2FeeParametersRejection, decode_meteora_damm_v2_pool_fees,
+    decode_meteora_damm_v2_pool_fees_update,
+};
 
 use self::extractor::extract_wire_events;
 use self::translator::translate_wire_event;

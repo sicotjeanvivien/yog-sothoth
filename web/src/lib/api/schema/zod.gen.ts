@@ -81,11 +81,17 @@ export const zLiquidityMoveKindResponse = z.enum([
 
 export type LiquidityMoveKindResponse = z.infer<typeof zLiquidityMoveKindResponse>;
 
-export const zMeteoraDammV2PoolFeesResponse = z.object({
-    operator: z.string().min(1)
-});
+export const zMeteoraDammV2BpsChangeResponse = z.union([
+    z.object({
+        change: z.enum(['unchanged'])
+    }),
+    z.object({
+        change: z.enum(['set']),
+        value: z.int().gte(0).lte(65535)
+    })
+]);
 
-export type MeteoraDammV2PoolFeesResponse = z.infer<typeof zMeteoraDammV2PoolFeesResponse>;
+export type MeteoraDammV2BpsChangeResponse = z.infer<typeof zMeteoraDammV2BpsChangeResponse>;
 
 export const zMeteoraDammV2PoolStatusResponse = z.object({
     status: z.int().gte(0).lte(255)
@@ -140,17 +146,6 @@ export const zPageResponseAnnouncementEntryResponse = z.object({
 
 export type PageResponseAnnouncementEntryResponse = z.infer<typeof zPageResponseAnnouncementEntryResponse>;
 
-export const zPoolChangeEventMeteoraDammV2Response = z.union([
-    zMeteoraDammV2PoolStatusResponse.and(z.object({
-        kind: z.enum(['status'])
-    })),
-    zMeteoraDammV2PoolFeesResponse.and(z.object({
-        kind: z.enum(['fees'])
-    }))
-]);
-
-export type PoolChangeEventMeteoraDammV2Response = z.infer<typeof zPoolChangeEventMeteoraDammV2Response>;
-
 export const zPoolLastEventKindResponse = z.enum([
     'swap',
     'liquidity_add',
@@ -180,24 +175,6 @@ export const zProtocolResponse = z.enum(['meteora_damm_v2', 'meteora_dlmm']);
 
 export type ProtocolResponse = z.infer<typeof zProtocolResponse>;
 
-export const zPageResponsePoolChangeEventResponse = z.object({
-    isFirst: z.boolean(),
-    isLast: z.boolean(),
-    items: z.array(z.object({
-        at: z.iso.datetime({ offset: true }),
-        eventIndex: z.int().gte(0).lte(65535),
-        meteoraDammV2: zPoolChangeEventMeteoraDammV2Response.optional(),
-        poolAddress: z.string().min(1),
-        protocol: zProtocolResponse,
-        signature: z.string().min(1),
-        slot: zCount
-    })),
-    nextCursor: z.string().nullable(),
-    prevCursor: z.string().nullable()
-});
-
-export type PageResponsePoolChangeEventResponse = z.infer<typeof zPageResponsePoolChangeEventResponse>;
-
 export const zPageResponseProtocolCatalogResponse = z.object({
     isFirst: z.boolean(),
     isLast: z.boolean(),
@@ -211,18 +188,6 @@ export const zPageResponseProtocolCatalogResponse = z.object({
 });
 
 export type PageResponseProtocolCatalogResponse = z.infer<typeof zPageResponseProtocolCatalogResponse>;
-
-export const zPoolChangeEventResponse = z.object({
-    at: z.iso.datetime({ offset: true }),
-    eventIndex: z.int().gte(0).lte(65535),
-    meteoraDammV2: zPoolChangeEventMeteoraDammV2Response.optional(),
-    poolAddress: z.string().min(1),
-    protocol: zProtocolResponse,
-    signature: z.string().min(1),
-    slot: zCount
-});
-
-export type PoolChangeEventResponse = z.infer<typeof zPoolChangeEventResponse>;
 
 export const zProtocolCatalogResponse = z.object({
     observed: z.boolean(),
@@ -296,6 +261,73 @@ export const zLiquidityChangeEventResponse = z.object({
 
 export type LiquidityChangeEventResponse = z.infer<typeof zLiquidityChangeEventResponse>;
 
+export const zMeteoraDammV2DynamicFeeResponse = z.object({
+    binStep: z.int().gte(0).lte(65535),
+    binStepU128: zU128String,
+    decayPeriod: z.int().gte(0).lte(65535),
+    filterPeriod: z.int().gte(0).lte(65535),
+    maxVolatilityAccumulator: z.int().gte(0).lte(4294967295),
+    reductionFactor: z.int().gte(0).lte(65535),
+    variableFeeControl: z.int().gte(0).lte(4294967295)
+});
+
+export type MeteoraDammV2DynamicFeeResponse = z.infer<typeof zMeteoraDammV2DynamicFeeResponse>;
+
+export const zMeteoraDammV2DynamicFeeChangeResponse = z.union([
+    z.object({
+        change: z.enum(['unchanged'])
+    }),
+    z.object({
+        change: z.enum(['disabled'])
+    }),
+    zMeteoraDammV2DynamicFeeResponse.and(z.object({
+        change: z.enum(['set'])
+    }))
+]);
+
+export type MeteoraDammV2DynamicFeeChangeResponse = z.infer<typeof zMeteoraDammV2DynamicFeeChangeResponse>;
+
+export const zMeteoraDammV2DynamicFeeStateResponse = z.union([
+    z.object({
+        state: z.enum(['off'])
+    }),
+    zMeteoraDammV2DynamicFeeResponse.and(z.object({
+        state: z.enum(['on'])
+    }))
+]);
+
+export type MeteoraDammV2DynamicFeeStateResponse = z.infer<typeof zMeteoraDammV2DynamicFeeStateResponse>;
+
+export const zMeteoraDammV2MarketCapSchedulerResponse = z.object({
+    cliffFeeNumerator: zU128String,
+    numberOfPeriod: z.int().gte(0).lte(65535),
+    reductionFactor: zU128String,
+    schedulerExpirationDuration: z.int().gte(0).lte(4294967295),
+    sqrtPriceStepBps: z.int().gte(0).lte(4294967295)
+});
+
+export type MeteoraDammV2MarketCapSchedulerResponse = z.infer<typeof zMeteoraDammV2MarketCapSchedulerResponse>;
+
+export const zMeteoraDammV2NumeratorChangeResponse = z.union([
+    z.object({
+        change: z.enum(['unchanged'])
+    }),
+    z.object({
+        change: z.enum(['set']),
+        value: zU128String
+    })
+]);
+
+export type MeteoraDammV2NumeratorChangeResponse = z.infer<typeof zMeteoraDammV2NumeratorChangeResponse>;
+
+export const zMeteoraDammV2FeeChangesResponse = z.object({
+    cliffFeeNumerator: zMeteoraDammV2NumeratorChangeResponse,
+    compoundingFeeBps: zMeteoraDammV2BpsChangeResponse,
+    dynamicFee: zMeteoraDammV2DynamicFeeChangeResponse
+});
+
+export type MeteoraDammV2FeeChangesResponse = z.infer<typeof zMeteoraDammV2FeeChangesResponse>;
+
 export const zMeteoraDammV2PermanentLockResponse = z.object({
     lockedLiquidity: zU128String,
     position: z.string().min(1),
@@ -303,6 +335,23 @@ export const zMeteoraDammV2PermanentLockResponse = z.object({
 });
 
 export type MeteoraDammV2PermanentLockResponse = z.infer<typeof zMeteoraDammV2PermanentLockResponse>;
+
+export const zMeteoraDammV2PoolFeesResponse = z.object({
+    fees: zMeteoraDammV2FeeChangesResponse.nullable(),
+    operator: z.string().min(1)
+});
+
+export type MeteoraDammV2PoolFeesResponse = z.infer<typeof zMeteoraDammV2PoolFeesResponse>;
+
+export const zMeteoraDammV2RateLimiterResponse = z.object({
+    cliffFeeNumerator: zU128String,
+    feeIncrementBps: z.int().gte(0).lte(65535),
+    maxFeeBps: z.int().gte(0).lte(4294967295),
+    maxLimiterDuration: z.int().gte(0).lte(4294967295),
+    referenceAmount: zU128String
+});
+
+export type MeteoraDammV2RateLimiterResponse = z.infer<typeof zMeteoraDammV2RateLimiterResponse>;
 
 export const zMeteoraDammV2RewardDurationChangeResponse = z.object({
     newRewardDuration: zU128String,
@@ -379,6 +428,43 @@ export const zMeteoraDammV2SplitResponse = z.object({
 });
 
 export type MeteoraDammV2SplitResponse = z.infer<typeof zMeteoraDammV2SplitResponse>;
+
+export const zMeteoraDammV2TimeSchedulerResponse = z.object({
+    cliffFeeNumerator: zU128String,
+    numberOfPeriod: z.int().gte(0).lte(65535),
+    periodFrequency: zU128String,
+    reductionFactor: zU128String
+});
+
+export type MeteoraDammV2TimeSchedulerResponse = z.infer<typeof zMeteoraDammV2TimeSchedulerResponse>;
+
+export const zMeteoraDammV2BaseFeeResponse = z.union([
+    zMeteoraDammV2TimeSchedulerResponse.and(z.object({
+        mode: z.enum(['time_scheduler_linear'])
+    })),
+    zMeteoraDammV2TimeSchedulerResponse.and(z.object({
+        mode: z.enum(['time_scheduler_exponential'])
+    })),
+    zMeteoraDammV2RateLimiterResponse.and(z.object({
+        mode: z.enum(['rate_limiter'])
+    })),
+    zMeteoraDammV2MarketCapSchedulerResponse.and(z.object({
+        mode: z.enum(['market_cap_scheduler_linear'])
+    })),
+    zMeteoraDammV2MarketCapSchedulerResponse.and(z.object({
+        mode: z.enum(['market_cap_scheduler_exponential'])
+    }))
+]);
+
+export type MeteoraDammV2BaseFeeResponse = z.infer<typeof zMeteoraDammV2BaseFeeResponse>;
+
+export const zMeteoraDammV2FeeParametersResponse = z.object({
+    baseFee: zMeteoraDammV2BaseFeeResponse,
+    compoundingFeeBps: z.int().gte(0).lte(65535),
+    dynamicFee: zMeteoraDammV2DynamicFeeStateResponse
+});
+
+export type MeteoraDammV2FeeParametersResponse = z.infer<typeof zMeteoraDammV2FeeParametersResponse>;
 
 export const zMeteoraDammV2VestingLockResponse = z.object({
     cliffPoint: zU128String,
@@ -488,11 +574,53 @@ export const zPageResponseRewardClaimEventResponse = z.object({
 
 export type PageResponseRewardClaimEventResponse = z.infer<typeof zPageResponseRewardClaimEventResponse>;
 
+export const zPoolChangeEventMeteoraDammV2Response = z.union([
+    zMeteoraDammV2PoolStatusResponse.and(z.object({
+        kind: z.enum(['status'])
+    })),
+    zMeteoraDammV2PoolFeesResponse.and(z.object({
+        kind: z.enum(['fees'])
+    }))
+]);
+
+export type PoolChangeEventMeteoraDammV2Response = z.infer<typeof zPoolChangeEventMeteoraDammV2Response>;
+
+export const zPageResponsePoolChangeEventResponse = z.object({
+    isFirst: z.boolean(),
+    isLast: z.boolean(),
+    items: z.array(z.object({
+        at: z.iso.datetime({ offset: true }),
+        eventIndex: z.int().gte(0).lte(65535),
+        meteoraDammV2: zPoolChangeEventMeteoraDammV2Response.optional(),
+        poolAddress: z.string().min(1),
+        protocol: zProtocolResponse,
+        signature: z.string().min(1),
+        slot: zCount
+    })),
+    nextCursor: z.string().nullable(),
+    prevCursor: z.string().nullable()
+});
+
+export type PageResponsePoolChangeEventResponse = z.infer<typeof zPageResponsePoolChangeEventResponse>;
+
+export const zPoolChangeEventResponse = z.object({
+    at: z.iso.datetime({ offset: true }),
+    eventIndex: z.int().gte(0).lte(65535),
+    meteoraDammV2: zPoolChangeEventMeteoraDammV2Response.optional(),
+    poolAddress: z.string().min(1),
+    protocol: zProtocolResponse,
+    signature: z.string().min(1),
+    slot: zCount
+});
+
+export type PoolChangeEventResponse = z.infer<typeof zPoolChangeEventResponse>;
+
 export const zPoolCreationEventMeteoraDammV2Response = z.object({
     activationPoint: zU128String,
     activationType: z.int().gte(0).lte(255),
     alphaVault: z.string().min(1),
     collectFeeMode: z.int().gte(0).lte(255),
+    fees: zMeteoraDammV2FeeParametersResponse.nullable(),
     liquidity: zU128String,
     payer: z.string().min(1),
     poolType: z.int().gte(0).lte(255),

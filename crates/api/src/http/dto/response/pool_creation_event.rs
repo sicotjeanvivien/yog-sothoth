@@ -55,3 +55,7 @@ impl From<PoolCreationEvent> for PoolCreationEventResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/pool_creation_event_tests.rs"]
+mod tests;

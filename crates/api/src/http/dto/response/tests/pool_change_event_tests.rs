@@ -42,40 +42,74 @@ fn block(change: MeteoraDammV2PoolChange) -> serde_json::Value {
     wire["meteoraDammV2"].clone()
 }
 
-/// Mutation: the two variants swapped in the conversion, the tag renamed, or the raw fee
-/// parameters served — a change read as the other, or bytes no client can read.
+fn fee_update(params_raw: Vec<u8>) -> MeteoraDammV2PoolChange {
+    MeteoraDammV2PoolChange::Fees(MeteoraDammV2UpdatePoolFeesEvent {
+        pool_address: key(1),
+        signature: Signature::from([2; 64]),
+        timestamp: Utc.with_ymd_and_hms(2026, 10, 25, 12, 0, 0).unwrap(),
+        slot: 9,
+        transaction_index: None,
+        event_index: 2,
+        operator: key(10),
+        params_raw,
+    })
+}
+
+/// Mutation: the two variants swapped in the conversion, or the tag renamed — a change read
+/// as the other.
 #[test]
 fn each_change_says_its_kind_and_its_own_fields() {
-    let at = Utc.with_ymd_and_hms(2026, 10, 25, 12, 0, 0).unwrap();
-    let signature = Signature::from([2; 64]);
-
     let status = block(MeteoraDammV2PoolChange::Status(
         MeteoraDammV2SetPoolStatusEvent {
             pool_address: key(1),
-            signature,
-            timestamp: at,
+            signature: Signature::from([2; 64]),
+            timestamp: Utc.with_ymd_and_hms(2026, 10, 25, 12, 0, 0).unwrap(),
             slot: 9,
             transaction_index: None,
             event_index: 2,
             status: 7,
         },
     ));
-    let fees = block(MeteoraDammV2PoolChange::Fees(
-        MeteoraDammV2UpdatePoolFeesEvent {
-            pool_address: key(1),
-            signature,
-            timestamp: at,
-            slot: 9,
-            transaction_index: None,
-            event_index: 2,
-            operator: key(10),
-            params_raw: vec![1, 2, 3],
-        },
-    ));
+    // A real `params_raw`: the base fee set to 85.999996 %, nothing else.
+    let fees = block(fee_update(vec![
+        1, 0xd8, 0x8e, 0x42, 0x33, 0, 0, 0, 0, 0, 0,
+    ]));
 
     assert_eq!(status, json!({"kind": "status", "status": 7}));
     assert_eq!(
         fees,
-        json!({"kind": "fees", "operator": key(10).to_string()})
+        json!({
+            "kind": "fees", "operator": key(10).to_string(),
+            "fees": {
+                "cliffFeeNumerator": {"change": "set", "value": "859999960"},
+                "dynamicFee": {"change": "unchanged"},
+                "compoundingFeeBps": {"change": "unchanged"}
+            }
+        })
+    );
+}
+
+/// Mutation: `disabled` served as `set`, or an unchanged field served as set.
+#[test]
+fn a_fee_update_names_each_state_of_its_fields() {
+    let mut params_raw = vec![0, 1];
+    params_raw.extend([0; 32]);
+    params_raw.extend([1, 0xd0, 0x07]);
+    assert_eq!(
+        block(fee_update(params_raw))["fees"],
+        json!({
+            "cliffFeeNumerator": {"change": "unchanged"},
+            "dynamicFee": {"change": "disabled"},
+            "compoundingFeeBps": {"change": "set", "value": 2000}
+        })
+    );
+}
+
+/// Mutation: a blob that does not decode served as anything but `null` — or the item dropped.
+#[test]
+fn a_fee_update_that_does_not_decode_is_served_with_null_fees() {
+    assert_eq!(
+        block(fee_update(vec![1, 2, 3])),
+        json!({"kind": "fees", "operator": key(10).to_string(), "fees": null})
     );
 }

@@ -751,7 +751,7 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 transaction_index: None,
                 event_index: 0,
                 operator: pk(12),
-                // Not decoded: a fee change flags the pool, yog-context re-reads the account.
+                // A fee change flags the pool: yog-context re-reads the account.
                 params_raw: vec![1, 160, 37, 38, 0, 0, 0, 0, 0],
             })
         )
@@ -922,4 +922,101 @@ fn a_failed_pool_upsert_is_counted_per_event_kind_and_the_event_still_persists()
             "a failed pool upsert on a {kind} event must be counted, not only logged"
         );
     }
+}
+
+// ── fee parameters the decoder cannot read are counted, the event stored all the same ──────
+
+/// Mutations this is written against: the insert skipped on a refusal, the counter dropped, or
+/// a readable blob counted. Not `#[tokio::test]`: `with_local_recorder` binds the thread.
+#[test]
+fn undecodable_fee_parameters_are_counted_and_the_event_stored() {
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+    let update = |params_raw| {
+        MeteoraDammV2Event::UpdatePoolFees(MeteoraDammV2UpdatePoolFeesEvent {
+            pool_address: pk(1),
+            signature: sg(),
+            timestamp: ts(),
+            slot: 1,
+            transaction_index: None,
+            event_index: 0,
+            operator: pk(12),
+            params_raw,
+        })
+    };
+
+    metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("current-thread runtime")
+            .block_on(async {
+                let calls: Calls = Arc::new(Mutex::new(Vec::new()));
+                let p = build(calls.clone());
+                // Unreadable: a creation one byte short, an update cut inside its base fee.
+                p.persist(&MeteoraDammV2Event::InitializePool(initialize_pool(vec![
+                    0;
+                    30
+                ])))
+                .await;
+                p.persist(&update(vec![1, 160, 37])).await;
+                // Readable: a constant 0.1 %, and the base fee set to 1 %.
+                let constant = [vec![0x40, 0x42, 0x0f], vec![0; 28]].concat();
+                p.persist(&MeteoraDammV2Event::InitializePool(initialize_pool(
+                    constant,
+                )))
+                .await;
+                p.persist(&update(vec![1, 0x80, 0x96, 0x98, 0, 0, 0, 0, 0, 0, 0]))
+                    .await;
+
+                let inserts: Vec<&str> = calls
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .filter(|call| call.starts_with("insert:"))
+                    .copied()
+                    .collect();
+                assert_eq!(
+                    inserts,
+                    [
+                        "insert:initialize_pool",
+                        "insert:update_pool_fees",
+                        "insert:initialize_pool",
+                        "insert:update_pool_fees"
+                    ],
+                    "an event whose fees do not decode is stored raw like any other"
+                );
+            });
+    });
+
+    // One snapshot: `Snapshotter::snapshot` swaps counters to 0.
+    let mut counted: Vec<(String, String, u64)> = snapshotter
+        .snapshot()
+        .into_vec()
+        .into_iter()
+        .filter(|(key, _, _, _)| key.key().name() == "yog_indexer_fee_parameters_undecodable_total")
+        .map(|(key, _, _, value)| {
+            let label = |name: &str| {
+                key.key()
+                    .labels()
+                    .find(|l| l.key() == name)
+                    .map(|l| l.value().to_string())
+                    .unwrap_or_default()
+            };
+            let DebugValue::Counter(n) = value else {
+                panic!("a counter")
+            };
+            (label("event_kind"), label("reason"), n)
+        })
+        .collect();
+    counted.sort_unstable();
+    assert_eq!(
+        counted,
+        [
+            ("initialize_pool".to_string(), "truncated".to_string(), 1),
+            ("update_pool_fees".to_string(), "truncated".to_string(), 1),
+        ],
+        "each unreadable blob counted once, by event and reason, and no readable one"
+    );
 }

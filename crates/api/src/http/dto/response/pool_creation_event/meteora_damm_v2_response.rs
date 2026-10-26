@@ -1,12 +1,15 @@
 use serde::Serialize;
 use utoipa::ToSchema;
+use yog_core::application::decode_meteora_damm_v2_pool_fees;
 use yog_core::domain::MeteoraDammV2InitializePoolEvent;
 
+use super::super::meteora_damm_v2_fees::MeteoraDammV2FeeParametersResponse;
 use crate::http::dto::schema::U128String;
 
 /// What a DAMM v2 creation says beyond every protocol's: who paid, the price range and the
 /// first price (Q64.64), the liquidity, the activation, the fee and pool modes, the token
-/// flags, and the amounts deposited — in raw units, the totals including the fees taken.
+/// flags, the amounts deposited — in raw units, the totals including the fees taken — and its
+/// fees, `null` when their bytes do not decode.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct PoolCreationEventMeteoraDammV2Response {
@@ -37,6 +40,7 @@ pub(super) struct PoolCreationEventMeteoraDammV2Response {
     total_amount_a: String,
     #[schema(value_type = U128String)]
     total_amount_b: String,
+    fees: Option<MeteoraDammV2FeeParametersResponse>,
 }
 
 impl From<&MeteoraDammV2InitializePoolEvent> for PoolCreationEventMeteoraDammV2Response {
@@ -58,6 +62,9 @@ impl From<&MeteoraDammV2InitializePoolEvent> for PoolCreationEventMeteoraDammV2R
             token_b_amount: e.token_b_amount.to_string(),
             total_amount_a: e.total_amount_a.to_string(),
             total_amount_b: e.total_amount_b.to_string(),
+            fees: decode_meteora_damm_v2_pool_fees(&e.pool_fees_raw)
+                .ok()
+                .map(Into::into),
         }
     }
 }
