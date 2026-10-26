@@ -9,6 +9,7 @@ const PERSIST_FAILURE: &str = "yog_indexer_persist_failure_total";
 const POOL_UPSERT_FAILURE: &str = "yog_indexer_pool_upsert_failure_total";
 const INSERT_SKIPPED: &str = "yog_indexer_event_insert_skipped_total";
 const PCS_SAME_SLOT: &str = "yog_indexer_pool_current_state_same_slot_total";
+const FEES_UNDECODABLE: &str = "yog_indexer_fee_parameters_undecodable_total";
 
 pub(crate) struct EventPersistorMetrics;
 
@@ -39,6 +40,11 @@ impl EventPersistorMetrics {
             PCS_SAME_SLOT,
             "Projection upserts that met state from the same slot under another \
              signature — the case the ordering key cannot rank"
+        );
+        describe_counter!(
+            FEES_UNDECODABLE,
+            "Fee parameters of an event the decoder cannot read, stored raw all the same \
+             (labels: event_kind, reason)"
         );
     }
 
@@ -78,6 +84,22 @@ impl EventPersistorMetrics {
     /// ⚠️ Large by construction on a hot pool: read its ratio to `pool_current_state_applied`.
     pub(crate) fn record_pool_current_state_same_slot(protocol: &Protocol) {
         counter!(PCS_SAME_SLOT, "protocol" => protocol.as_str().to_string()).increment(1);
+    }
+
+    /// Not a failure: the event is stored, its fees served as unknown until the decoder learns
+    /// their layout.
+    pub(crate) fn record_fee_parameters_undecodable(
+        protocol: &Protocol,
+        event_kind: &'static str,
+        reason: &'static str,
+    ) {
+        counter!(
+            FEES_UNDECODABLE,
+            "protocol" => protocol.as_str().to_string(),
+            "event_kind" => event_kind,
+            "reason" => reason,
+        )
+        .increment(1);
     }
 
     pub(crate) fn record_persist_failure(protocol: &Protocol, event_kind: &'static str) {

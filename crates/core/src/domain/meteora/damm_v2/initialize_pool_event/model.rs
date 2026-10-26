@@ -39,6 +39,6 @@ pub struct MeteoraDammV2InitializePoolEvent {
     pub total_amount_a: u64,
     pub total_amount_b: u64,
 
-    /// Raw borsh bytes of the on-chain `PoolFeeParameters`, never decoded.
+    /// Raw borsh bytes of the on-chain `PoolFeeParameters`, decoded where they are read.
     pub pool_fees_raw: Vec<u8>,
 }

@@ -14,6 +14,6 @@ pub struct MeteoraDammV2UpdatePoolFeesEvent {
     pub transaction_index: Option<u32>,
     pub event_index: u16,
     pub operator: Pubkey,
-    /// Raw, undecoded bytes of the on-chain `UpdatePoolFeesParameters`.
+    /// Raw bytes of the on-chain `UpdatePoolFeesParameters`, decoded where they are read.
     pub params_raw: Vec<u8>,
 }

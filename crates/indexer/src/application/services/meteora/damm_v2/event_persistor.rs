@@ -3,7 +3,13 @@
 
 use std::sync::Arc;
 use std::time::Instant;
+
+use solana_pubkey::Pubkey;
 use tracing::{debug, error, warn};
+use yog_core::application::{
+    MeteoraDammV2FeeParametersRejection, decode_meteora_damm_v2_pool_fees,
+    decode_meteora_damm_v2_pool_fees_update,
+};
 use yog_core::domain::{
     InsertOutcome, MeteoraDammV2ClaimPositionFeeEvent,
     MeteoraDammV2ClaimPositionFeeEventRepository, MeteoraDammV2ClaimProtocolFeeEvent,
@@ -384,11 +390,18 @@ impl MeteoraDammV2EventPersistor {
             .await;
         // Fee columns are yog-context's, read from the account; `discover_pool` leaves them NULL,
         // which queues the pool for enrichment. The blob is stored verbatim by the insert.
-        self.repos
+        let outcome = self
+            .repos
             .initialize_pool
             .insert(event)
             .await
-            .map_err(anyhow::Error::new)
+            .map_err(anyhow::Error::new)?;
+        if outcome == InsertOutcome::Inserted
+            && let Err(reason) = decode_meteora_damm_v2_pool_fees(&event.pool_fees_raw)
+        {
+            Self::fees_undecodable(kind, &event.pool_address, &reason);
+        }
+        Ok(outcome)
     }
 
     /// A split moves contents between two positions, nothing in or out of the pool: touch + insert.
@@ -420,6 +433,20 @@ impl MeteoraDammV2EventPersistor {
             .map_err(anyhow::Error::new)
     }
 
+    /// Fee parameters of a stored event the decoder cannot read: logged and counted, once per row.
+    fn fees_undecodable(
+        kind: &'static str,
+        pool: &Pubkey,
+        reason: &MeteoraDammV2FeeParametersRejection,
+    ) {
+        warn!(%pool, kind, %reason, "fee parameters undecodable, stored raw");
+        EventPersistorMetrics::record_fee_parameters_undecodable(
+            &Self::PROTOCOL,
+            kind,
+            reason.as_str(),
+        );
+    }
+
     async fn persist_update_pool_fees(
         &self,
         event: &MeteoraDammV2UpdatePoolFeesEvent,
@@ -428,8 +455,8 @@ impl MeteoraDammV2EventPersistor {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
-        // ⚠️ Flag the pool rather than decode the update: yog-context rewrites every property from
-        // the account, one writer per column, and this blob's borsh layout shifts with its contents.
+        // ⚠️ Flag the pool rather than write what the update changed: yog-context rewrites every
+        // property from the account, one writer per column.
         if let Err(err) = self
             .pool_maintenance
             .mark_needs_refresh(Self::PROTOCOL, &event.pool_address)
@@ -437,11 +464,18 @@ impl MeteoraDammV2EventPersistor {
         {
             warn!(error = %err, kind, "mark_needs_refresh failed");
         }
-        self.repos
+        let outcome = self
+            .repos
             .update_pool_fees
             .insert(event)
             .await
-            .map_err(anyhow::Error::new)
+            .map_err(anyhow::Error::new)?;
+        if outcome == InsertOutcome::Inserted
+            && let Err(reason) = decode_meteora_damm_v2_pool_fees_update(&event.params_raw)
+        {
+            Self::fees_undecodable(kind, &event.pool_address, &reason);
+        }
+        Ok(outcome)
     }
 }
 

@@ -2,6 +2,7 @@ mod announcement;
 mod ingestion;
 mod liquidity_change_event;
 mod liquidity_move;
+mod meteora_damm_v2_fees;
 mod network;
 mod page;
 mod pool;

@@ -11,12 +11,12 @@ pub fn discriminator_update_pool_fees() -> [u8; DISCRIMINATOR_LEN] {
 }
 
 /// Mirror of `cp-amm::EvtUpdatePoolFees`: the two leading pubkeys, then the
-/// `UpdatePoolFeesParameters` bytes kept verbatim; that layout has no fixture.
+/// `UpdatePoolFeesParameters` bytes kept verbatim.
 #[derive(Debug, Clone)]
 pub struct EvtUpdatePoolFees {
     pub pool: Pubkey,
     pub operator: Pubkey,
-    /// Raw, undecoded bytes of the trailing `UpdatePoolFeesParameters`.
+    /// Raw bytes of the trailing `UpdatePoolFeesParameters`.
     pub params_raw: Vec<u8>,
 }
 
