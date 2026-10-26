@@ -1,7 +1,6 @@
 //! A compressed chunk of `signals` serves a page filtered by protocol or by severity through
 //! the Bloom filter TimescaleDB draws from each index, whether it was compressed before 040
-//! or after. ⚠️ `compress_chunk` is called by hand: the local Postgres has no background
-//! workers, so the policy never fires and a test relying on it would read uncompressed rows.
+//! or after. ⚠️ `compress_chunk` is called by hand: the policy never fires in a local run.
 
 use super::helpers::pk;
 use chrono::{Duration, Utc};

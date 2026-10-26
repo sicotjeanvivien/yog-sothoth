@@ -1,8 +1,6 @@
--- 040_signals_filtered_reads_indexed.sql — a page of signals filtered by protocol or by
--- severity, newest first. Without them, a filter that matches few signals reads every chunk.
--- A compressed chunk is served by the Bloom filter TimescaleDB draws from each index at
--- compression (`timescaledb.auto_sparse_indexes`): one compressed before this file is
--- decompressed and compressed again to draw them.
+-- 040_signals_filtered_reads_indexed.sql — the two filters of a page of signals, protocol and
+-- severity, indexed newest first. A compressed chunk is served by the Bloom filters drawn from
+-- them at compression: one compressed before this file is decompressed and compressed again.
 
 CREATE INDEX signals_by_protocol ON signals (protocol, triggered_at DESC);
 CREATE INDEX signals_by_severity ON signals (severity, triggered_at DESC);
