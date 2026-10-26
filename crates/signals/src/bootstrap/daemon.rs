@@ -107,8 +107,7 @@ impl Daemon {
     }
 
     /// Run the engine and the materialisation alarm until the stop, then let every detector loop
-    /// finish its tick; the alarm ends at once, its check racing the stop.
-    /// ⚠️ `engine.run` joins its detectors with no deadline: a detector stuck in a slow query holds the stop.
+    /// finish its tick within the grace; the alarm ends at once, its check racing the stop.
     pub(crate) async fn run(self) -> anyhow::Result<()> {
         let shutdown = CancellationToken::new();
 
@@ -123,6 +122,8 @@ impl Daemon {
             self.engine.run(shutdown.clone()),
             self.alarm.run(shutdown.clone()),
         );
-        engine.map_err(anyhow::Error::new)
+        let overran = engine.map_err(anyhow::Error::new)?;
+        yog_bootstrap::report_overrun(&overran);
+        Ok(())
     }
 }

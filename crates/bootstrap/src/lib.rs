@@ -30,4 +30,6 @@ pub use heartbeat::RecordingHeartbeat;
 pub use heartbeat::{HealthchecksHeartbeat, Heartbeat, HeartbeatSettings};
 pub use runtime::{init_rustls, init_tracing};
 pub use secret::{SecretKey, SecretUrl};
-pub use shutdown::{SHUTDOWN_GRACE, Stop, TaskEnd, handle_task_result, shutdown_signal};
+pub use shutdown::{
+    SHUTDOWN_GRACE, Stop, TaskEnd, handle_task_result, report_overrun, shutdown_signal,
+};

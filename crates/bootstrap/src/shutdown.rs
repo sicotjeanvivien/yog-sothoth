@@ -111,14 +111,19 @@ impl Stop {
 
     /// Say who outlived the grace, then hand back the verdict.
     pub fn finish(self) -> anyhow::Result<()> {
-        if !self.still_running.is_empty() {
-            tracing::warn!(
-                tasks = ?self.still_running,
-                grace_secs = SHUTDOWN_GRACE.as_secs(),
-                "shutdown grace expired — these tasks are destroyed mid-flight with the runtime"
-            );
-        }
+        report_overrun(&self.still_running);
         self.outcome
+    }
+}
+
+/// Name the tasks still running when [`SHUTDOWN_GRACE`] ran out; nothing when there are none.
+pub fn report_overrun(tasks: &[&'static str]) {
+    if !tasks.is_empty() {
+        tracing::warn!(
+            tasks = ?tasks,
+            grace_secs = SHUTDOWN_GRACE.as_secs(),
+            "shutdown grace expired — these tasks are destroyed mid-flight with the runtime"
+        );
     }
 }
 
