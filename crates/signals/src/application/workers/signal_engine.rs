@@ -48,7 +48,7 @@ impl SignalEngine {
 
     /// Spawn one poll loop per detector and run until `shutdown`, then wait for them within
     /// [`SHUTDOWN_GRACE`], naming those still running (`report_overrun`) and returning them. The
-    /// first panic ends it: at once while running, after the drain once the stop is asked for.
+    /// first panic stops every loop, and is returned once they are drained.
     pub async fn run(self, shutdown: CancellationToken) -> Result<Vec<&'static str>, EngineError> {
         if self.detectors.is_empty() {
             warn!("signal engine started with no detectors — nothing to do");
@@ -65,24 +65,25 @@ impl SignalEngine {
             running.insert(task.id(), name);
         }
 
+        let mut first_panic = None;
         loop {
             tokio::select! {
                 biased;
                 _ = shutdown.cancelled() => break,
                 joined = set.join_next_with_id() => match joined {
                     None => return Ok(Vec::new()),
+                    // ⚠️ Not `set.shutdown()`: it aborts the others mid-tick.
                     Some(joined) => if let Some(panic) = settle(joined, &mut running) {
+                        first_panic = Some(panic);
                         shutdown.cancel();
-                        let _ = tokio::time::timeout(SHUTDOWN_GRACE, set.shutdown()).await;
-                        return Err(panic);
+                        break;
                     },
                 },
             }
         }
 
-        // ⚠️ A panic now does not end the drain: the detector still stuck must be named all the same.
+        // A panic does not end the drain either: the detector still stuck is named all the same.
         let deadline = Instant::now() + SHUTDOWN_GRACE;
-        let mut first_panic = None;
         while let Ok(Some(joined)) =
             tokio::time::timeout_at(deadline, set.join_next_with_id()).await
         {
