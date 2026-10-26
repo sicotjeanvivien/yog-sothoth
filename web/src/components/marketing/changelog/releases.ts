@@ -53,7 +53,7 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "Its second tab, Volume: each hour or day of volume split between rotation runs and the rest. A rotation run is a stretch of 5-minute slices in which a pool's SOL, USDC or USDT side (its smaller side if it has none or two) changes hands at least once, no more than 30 minutes apart — most often a pool born within the minute that trades thousands of balanced swaps before its liquidity leaves. Under the chart, the period's split, or the hour's or the day's under the pointer; beside it, the runs of the period, how long they last and how much of their volume their first hour holds; below, the largest runs, named by their tokens. The published volume does not change.",
+            text: "Its second tab, Volume: each hour or day of volume split between rotation runs and the rest. A rotation run is a stretch of 5-minute slices in which a pool's SOL, USDC or USDT side (both its sides if it has none or two) changes hands at least once, no more than 30 minutes apart — most often a pool born within the minute that trades thousands of balanced swaps before its liquidity leaves. Under the chart, the period's split, or the hour's or the day's under the pointer; beside it, the runs of the period, how long they last and how much of their volume their first hour holds; below, the largest runs, named by their tokens. The published volume does not change.",
             technical: false,
           },
           {
@@ -69,7 +69,7 @@ export const RELEASES: readonly Release[] = [
             technical: true,
           },
           {
-            text: "The API follows its route rules: the on-chain collections at /api and under /api/protocols/{protocol}, and all but pool-creations under /api/pools/{pool} (swaps, liquidity-changes, pool-creations, position-changes, position-fee-claims, protocol-fee-claims, reward-claims, reward-changes, pool-changes); the measures yog-analytic computes — swaps and pool-creations at /api and under a protocol, liquidity-moves and rotation-runs under a protocol (totals, hourly, daily), tvl and its hourly readings, pool-discoveries — and the pages of liquidity-moves and rotation-runs under a protocol and a pool; pools, tokens and their prices; the signals of one protocol or one pool; /api/announcements with ?status=. Migrations 037 and 038 open the pool facts to the API and index the business reads.",
+            text: "The API follows its route rules: the on-chain collections at /api and under /api/protocols/{protocol}, and all but pool-creations under /api/pools/{pool} (swaps, liquidity-changes, pool-creations, position-changes, position-fee-claims, protocol-fee-claims, reward-claims, reward-changes, pool-changes); the measures yog-analytic computes — swaps at /api, under a protocol and under a pool, pool-creations at /api and under a protocol, liquidity-moves and rotation-runs under a protocol (totals, hourly, daily), tvl and its hourly readings, pool-discoveries — and the pages of liquidity-moves and rotation-runs under a protocol and a pool; pools, tokens and their prices; the signals of one protocol or one pool; /api/announcements with ?status=. Migrations 037 and 038 open the pool facts to the API and index the business reads.",
             technical: true,
           },
           {

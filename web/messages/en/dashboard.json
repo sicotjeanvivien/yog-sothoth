@@ -230,7 +230,7 @@
       },
       "volume": {
         "title": "Where the volume comes from",
-        "info": "A rotation run: 5-minute stretches in which a pool's SOL, USDC or USDT side (its smaller side if it has none or two) changes hands at least once, no more than 30 minutes apart; the run lasts from the first to the last. The volume shown stays the real volume; the run says where it comes from.",
+        "info": "A rotation run: 5-minute slices in which a pool's SOL, USDC or USDT side (both its sides if it has none or two) changes hands at least once, no more than 30 minutes apart; the run lasts from the first to the last. The volume shown stays the real volume; the run says where it comes from.",
         "inRuns": "In runs",
         "outside": "Outside runs",
         "unsplit": "Before runs were measured",
