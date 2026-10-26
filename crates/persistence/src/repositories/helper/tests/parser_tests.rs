@@ -90,13 +90,60 @@ fn convert_bigdecimal_to_u128_should_convert() {
     assert_eq!(result, 123456789u128);
 }
 
+/// Mutation: `to_string()`, which writes these `…e+16` and `…e+20`.
 #[test]
-fn convert_bigdecimal_to_u128_should_fail_for_invalid_value() {
-    let value = BigDecimal::from_str("-1").unwrap();
+fn convert_bigdecimal_to_u128_reads_an_integer_with_many_trailing_zeros() {
+    use bigdecimal::num_bigint::BigInt;
+    for (digits, scale, expected) in [
+        (
+            18_446_744_073_709_500i64,
+            -16,
+            184_467_440_737_095 * 10u128.pow(18),
+        ),
+        (1, -20, 10u128.pow(20)),
+    ] {
+        let value = BigDecimal::new(BigInt::from(digits), scale);
 
-    let result = convert_bigdecimal_to_u128(value, "price");
+        assert_eq!(
+            convert_bigdecimal_to_u128(value, "liquidity").unwrap(),
+            expected,
+            "{digits}e{}",
+            -scale
+        );
+    }
+}
 
-    assert!(matches!(result, Err(RepositoryError::Integrity(_))));
+/// Mutation: a conversion that truncates `1.5`, wraps `-1`, or narrows the range below
+/// `u128::MAX`.
+#[test]
+fn convert_bigdecimal_to_u128_refuses_what_a_u128_cannot_hold() {
+    let max = BigDecimal::from_str("340282366920938463463374607431768211455").unwrap();
+    assert_eq!(
+        convert_bigdecimal_to_u128(max, "liquidity").unwrap(),
+        u128::MAX
+    );
+
+    for (text, reason) in [
+        ("1.5", "invalid digit found in string"),
+        ("-1", "invalid digit found in string"),
+        (
+            "340282366920938463463374607431768211456",
+            "number too large to fit in target type",
+        ),
+    ] {
+        let value = BigDecimal::from_str(text).unwrap();
+
+        match convert_bigdecimal_to_u128(value, "liquidity") {
+            Err(RepositoryError::Integrity(message)) => {
+                assert_eq!(
+                    message,
+                    format!("liquidity parse error: {reason}"),
+                    "{text}"
+                )
+            }
+            other => panic!("{text}: {other:?}"),
+        }
+    }
 }
 
 #[test]
