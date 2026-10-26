@@ -230,7 +230,7 @@
       },
       "volume": {
         "title": "D'où vient le volume",
-        "info": "Une rafale : une pool dont le côté SOL, USDC ou USDT change de mains au moins une fois toutes les 5 minutes, sans pause de plus de 30 minutes. Le volume affiché reste le volume réel ; la rafale dit d'où il vient.",
+        "info": "Une rafale : des tranches de 5 minutes où le côté SOL, USDC ou USDT d'une pool (le plus petit de ses deux côtés si elle n'en a aucun ou deux) change de mains au moins une fois, à moins de 30 minutes d'écart ; la rafale court de la première à la dernière. Le volume affiché reste le volume réel ; la rafale dit d'où il vient.",
         "inRuns": "En rafale",
         "outside": "Hors rafale",
         "unsplit": "Avant la mesure des rafales",

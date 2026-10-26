@@ -53,27 +53,27 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "Its second tab, Volume: each hour or day of volume split between rotation runs and the rest. A rotation run is a pool whose SOL, USDC or USDT side changes hands at least once every 5 minutes, with no pause longer than 30 minutes — most often a pool born within the minute that trades thousands of balanced swaps before its liquidity leaves. Under the chart, the period's split, or the hour's under the pointer; beside it, the runs of the period, how long they last and how much of their volume their first hour holds; below, the largest runs, named by their tokens. The published volume does not change.",
+            text: "Its second tab, Volume: each hour or day of volume split between rotation runs and the rest. A rotation run is a stretch of 5-minute slices in which a pool's SOL, USDC or USDT side (its smaller side if it has none or two) changes hands at least once, no more than 30 minutes apart — most often a pool born within the minute that trades thousands of balanced swaps before its liquidity leaves. Under the chart, the period's split, or the hour's or the day's under the pointer; beside it, the runs of the period, how long they last and how much of their volume their first hour holds; below, the largest runs, named by their tokens. The published volume does not change.",
             technical: false,
           },
           {
-            text: "Rotation runs are measured from this release on: a bar they do not cover whole keeps its volume, unsplit, in a neutral tint, and the 7-day figures fill in over a week.",
+            text: "Rotation runs are measured from this release on: a bar they do not cover whole keeps its volume, unsplit, in a neutral tint; the 24-hour figures fill in over a day and the 7-day ones over a week.",
             technical: false,
           },
           {
-            text: "A green dot beside DAMM v2 in the menu while the ingestion is live.",
+            text: "A green dot beside DAMM v2 in the menu while the ingestion is live, and its page in the sitemap.",
             technical: false,
           },
           {
-            text: "yog-analytic writes each liquidity move into analytic_liquidity_moves and their sums per protocol and hour (migration 035), and each tranche's rotation and the rotation runs it draws into analytic_rotation_runs and analytic_rotation_run_hours (migrations 036 and 039).",
+            text: "yog-analytic writes each liquidity move into analytic_liquidity_moves and their sums per protocol and hour (migration 035), and each tranche's rotation into analytic_pool_5min, and the rotation runs drawn from it into analytic_rotation_runs and analytic_rotation_run_hours (migrations 036 and 039).",
             technical: true,
           },
           {
-            text: "The API follows its route rules: the on-chain collections at /api, under /api/protocols/{protocol} and under /api/pools/{pool} (swaps, liquidity-changes, pool-creations, position-changes, position-fee-claims, protocol-fee-claims, reward-claims, reward-changes, pool-changes); the measures yog-analytic computes (swaps, pool-creations, liquidity-moves, rotation-runs: totals, hourly, daily; tvl and its hourly readings; pool-discoveries); pools, tokens and their prices; /api/protocols paginated; /api/announcements with ?status=. Migrations 037 and 038 open the pool facts to the API and index the business reads.",
+            text: "The API follows its route rules: the on-chain collections at /api and under /api/protocols/{protocol}, and all but pool-creations under /api/pools/{pool} (swaps, liquidity-changes, pool-creations, position-changes, position-fee-claims, protocol-fee-claims, reward-claims, reward-changes, pool-changes); the measures yog-analytic computes — swaps and pool-creations at /api and under a protocol, liquidity-moves and rotation-runs under a protocol (totals, hourly, daily), tvl and its hourly readings, pool-discoveries — and the pages of liquidity-moves and rotation-runs under a protocol and a pool; pools, tokens and their prices; the signals of one protocol or one pool; /api/announcements with ?status=. Migrations 037 and 038 open the pool facts to the API and index the business reads.",
             technical: true,
           },
           {
-            text: "Removed, their readers moved: /api/protocols/activity and its series, /api/protocols/tvl and its hourly series, /api/tokens/activity (now /api/swaps/by-token), /api/announcements/active (now /api/announcements?status=open), and the pool filter of /api/signals (now /api/pools/{pool}/signals); /api/signals refuses a query key it does not take.",
+            text: "Changed: /api/protocols is now a page with a cursor, its entries under items. Removed, their readers moved: /api/protocols/activity and its series, /api/protocols/tvl and its hourly series, /api/tokens/activity (now /api/swaps/by-token), /api/announcements/active (now /api/announcements?status=open), and the pool filter of /api/signals (now /api/pools/{pool}/signals); /api/signals refuses a query key it does not take.",
             technical: true,
           },
         ],
