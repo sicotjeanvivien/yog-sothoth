@@ -120,6 +120,14 @@ describe("SidebarNavList on the collapsed rail", () => {
     }
   });
 
+  // Mutation: the logo sized by its attributes alone — Tailwind's `height: auto` gives it the file's proportions.
+  it("gives each platform's logo the size of its box", () => {
+    const logos = [...collapsedMarkup().matchAll(/<img[^>]*logo_[a-z]+\.svg[^>]*>/g)].map(([tag]) => tag);
+
+    expect(logos).toHaveLength(3);
+    for (const tag of logos) expect(tag).toMatch(/class="[^"]*\bsize-5\b/);
+  });
+
   // Mutation: `rail:hidden` instead of `rail:sr-only` on the tag — a screen reader no longer hears « Bientôt ».
   it("keeps « Bientôt » for screen readers", () => {
     const tags = [...collapsedMarkup().matchAll(/<span class="([^"]*)">Bientôt</g)];
