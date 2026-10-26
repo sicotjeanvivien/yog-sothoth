@@ -1,6 +1,5 @@
 //! Every route of the document refuses a query key it does not take, and takes every key
-//! it documents. Called through the real router: the refusal happens at extraction, before
-//! any read, so the test state's failing reads are never reached.
+//! it documents, called through the real router.
 
 use std::time::Duration;
 
@@ -43,8 +42,8 @@ fn routes() -> Vec<(String, Vec<Value>)> {
         .collect()
 }
 
-/// A value the schema accepts: its first enumerated value, or its minimum. `None` for a
-/// free string such as `cursor`, which only an encoding makes valid.
+/// A value the schema accepts: its first enumerated value, or its minimum. ⚠️ `cursor` has
+/// none: only an encoding makes it valid, so the control skips it by name.
 fn valid_value(schema: &Value) -> Option<String> {
     if let Some(first) = schema["enum"].as_array().and_then(|values| values.first()) {
         return first.as_str().map(str::to_string);
@@ -100,13 +99,21 @@ async fn every_route_takes_every_key_it_documents() {
     for (uri, query) in routes() {
         for parameter in query {
             let name = parameter["name"].as_str().expect("a named parameter");
+            if name == "cursor" {
+                continue;
+            }
             let Some(value) = valid_value(&parameter["schema"]) else {
+                refused.push(format!(
+                    "{uri}: no valid value read from the schema of `{name}`"
+                ));
                 continue;
             };
             tried += 1;
             let request = format!("{uri}?{name}={value}");
             match answer(&request).await {
-                Some((_, _, detail)) if detail.contains("unknown field") => {
+                Some((_, _, detail))
+                    if detail.contains("unknown field") || detail.contains("unknown variant") =>
+                {
                     refused.push(format!("{request}: {detail}"));
                 }
                 Some(_) => {}
