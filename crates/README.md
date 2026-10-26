@@ -317,7 +317,7 @@ Add the SQL in the corresponding `Pg*Repository` impl (see the [query-shape poli
 ### 3. Add the handler in `api`
 
 - Create or extend a module under `api/src/http/handlers/`.
-- Create request/response DTOs in `api/src/http/dto/` (request validation happens here, before any DB call). They derive `ToSchema` (`IntoParams` for a query), with their wire forms named — see [the contract](./api/README.md#the-contract).
+- Create request/response DTOs in `api/src/http/dto/` (request validation happens here, before any DB call). They derive `ToSchema` (`IntoParams` and `#[serde(deny_unknown_fields)]` for a query; a route that takes none extracts `Query<NoQuery>`), with their wire forms named — see [the contract](./api/README.md#the-contract).
 - Declare the route on its handler with `#[utoipa::path]` and mount it in `http.rs::api_routes` with `.routes(routes!(…))` — never `.route("/api/…")`, which serves it without a contract.
 - Regenerate the contract and commit it: `YOG_WRITE_OPENAPI=1 cargo test -p yog-api contract`, then `npm run gen:api` in `web/`.
 - A **new service** is reached through `AppState`, in two places and two layers: its field in `api/src/http/state.rs`, and its construction in `api/src/bootstrap/app_state.rs::build_app_state`, where the repositories are wired in.

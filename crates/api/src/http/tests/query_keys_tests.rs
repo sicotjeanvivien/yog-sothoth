@@ -42,8 +42,7 @@ fn routes() -> Vec<(String, Vec<Value>)> {
         .collect()
 }
 
-/// A value the schema accepts: its first enumerated value, or its minimum. ⚠️ `cursor` has
-/// none: only an encoding makes it valid, so the control skips it by name.
+/// A value the schema accepts: its first enumerated value, or its minimum.
 fn valid_value(schema: &Value) -> Option<String> {
     if let Some(first) = schema["enum"].as_array().and_then(|values| values.first()) {
         return first.as_str().map(str::to_string);
@@ -99,6 +98,7 @@ async fn every_route_takes_every_key_it_documents() {
     for (uri, query) in routes() {
         for parameter in query {
             let name = parameter["name"].as_str().expect("a named parameter");
+            // ⚠️ No value read from a schema makes a cursor valid: only its encoding does.
             if name == "cursor" {
                 continue;
             }
