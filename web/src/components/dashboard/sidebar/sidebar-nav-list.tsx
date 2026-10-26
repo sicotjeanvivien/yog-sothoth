@@ -210,7 +210,7 @@ function EntryIcon({ icon, tone }: { icon: NavIcon; tone: string }) {
     </span>
   ) : (
     <span aria-hidden="true" className={`${ICON_BOX} ${tone}`}>
-      <StaticSvg src={icon.src} width={20} height={20} className="object-contain" />
+      <StaticSvg src={icon.src} width={20} height={20} className="size-5 object-contain" />
     </span>
   );
 }
