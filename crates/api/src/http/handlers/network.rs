@@ -1,7 +1,14 @@
 //! `GET /api/network` — the slot and latency of the dashboard's "Solana" panel.
 
-use crate::http::{AppState, dto::NetworkResponse, error::ApiError};
-use axum::{Json, extract::State};
+use crate::http::{
+    AppState,
+    dto::{NetworkResponse, request::NoQuery},
+    error::ApiError,
+};
+use axum::{
+    Json,
+    extract::{Query, State},
+};
 
 /// Where the chain is: the latest slot and the probe's latency. The
 /// `network_status` row is seeded by the baseline migration: its absence is a
@@ -17,6 +24,7 @@ use axum::{Json, extract::State};
 )]
 pub(crate) async fn get_network(
     State(state): State<AppState>,
+    _query: Query<NoQuery>,
 ) -> Result<Json<NetworkResponse>, ApiError> {
     let status = state.network_service.get().await?.ok_or_else(|| {
         ApiError::Internal(

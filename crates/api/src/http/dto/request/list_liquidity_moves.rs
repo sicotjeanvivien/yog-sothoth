@@ -13,6 +13,7 @@ use sort_param::SortParam;
 
 /// A window, the order, and forward-only cursor pagination.
 #[derive(Debug, Deserialize, IntoParams)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct LiquidityMovesParams {
     #[serde(default)]
     #[param(inline)]

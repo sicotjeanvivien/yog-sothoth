@@ -194,3 +194,7 @@ fn collect_refs<'a>(node: &'a Value, refs: &mut Vec<&'a str>) {
 #[cfg(test)]
 #[path = "contract_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "query_keys_tests.rs"]
+mod query_keys_tests;

@@ -320,7 +320,10 @@ fn every_handler_declares_the_body_and_query_it_has() {
             let body = between(&attr, "body=", ')').unwrap_or_default();
             let query = between(&attr, "params(", ')').unwrap_or_default();
             let returned = generic_of(&sig, "Json<").unwrap_or("String");
-            let extracted = generic_of(&sig, "Query<").unwrap_or_default();
+            // ⚠️ `NoQuery` is declared by no `params(…)`: utoipa would write an empty list.
+            let extracted = generic_of(&sig, "Query<")
+                .filter(|query| *query != "NoQuery")
+                .unwrap_or_default();
             if body != returned || query != extracted {
                 drift.push(format!(
                     "{name}: body {body} for {returned}, params {query} for {extracted}"

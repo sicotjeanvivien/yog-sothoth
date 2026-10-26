@@ -10,7 +10,7 @@ use crate::http::{
     AppState,
     dto::{
         PageResponse, PoolDetailResponse, PoolResponse,
-        request::{ListPoolsRequest, PoolsParams, parse_mint, parse_pool, parse_protocol},
+        request::{ListPoolsRequest, NoQuery, PoolsParams, parse_mint, parse_pool, parse_protocol},
     },
     error::ApiError,
 };
@@ -105,6 +105,7 @@ async fn list_request(
 pub(crate) async fn get_pool(
     State(state): State<AppState>,
     Path(pool): Path<String>,
+    _query: Query<NoQuery>,
 ) -> Result<Json<PoolDetailResponse>, ApiError> {
     let address = parse_pool(&pool)?;
     let detail = state

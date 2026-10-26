@@ -266,7 +266,8 @@ yet frozen is in the list and not in the bars. A cursor whose window starts past
 margin) or after its own key is refused (400). A parameter never changes the shape of a response;
 `topics` (rule 5) chooses which messages come, not their shape. `asOf` is the field of the
 instant a response reflects. The protocol is written `meteora_damm_v2` everywhere (field,
-path); fields in camelCase.
+path); fields in camelCase. A query key a route does not take is refused (400), never ignored:
+a filter dropped in silence would answer as if it had been applied.
 
 **Not yet following these rules**: `/api/signals/stream`, the live stream, until `/api/live`
 serves it.

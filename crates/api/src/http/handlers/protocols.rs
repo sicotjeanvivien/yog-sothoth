@@ -9,7 +9,7 @@ use crate::http::{
     AppState,
     dto::{
         PageResponse, ProtocolCatalogResponse,
-        request::{ListProtocolsRequest, ProtocolsParams, parse_protocol},
+        request::{ListProtocolsRequest, NoQuery, ProtocolsParams, parse_protocol},
     },
     error::ApiError,
 };
@@ -48,6 +48,7 @@ pub(crate) async fn list_protocols(
 pub(crate) async fn get_protocol(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
+    _query: Query<NoQuery>,
 ) -> Result<Json<ProtocolCatalogResponse>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
     let entry = state

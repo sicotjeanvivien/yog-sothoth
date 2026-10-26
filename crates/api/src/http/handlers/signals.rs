@@ -20,7 +20,7 @@ use crate::http::{
     cursor::encode_cursor_opt,
     dto::{
         PageResponse, SignalResponse,
-        request::{ListSignalsRequest, SignalsParams, parse_pool, parse_protocol},
+        request::{ListSignalsRequest, NoQuery, SignalsParams, parse_pool, parse_protocol},
     },
     error::ApiError,
 };
@@ -123,7 +123,10 @@ async fn signal_page(
         body = String
     ))
 )]
-pub(crate) async fn stream_signals(State(state): State<AppState>) -> Response {
+pub(crate) async fn stream_signals(
+    State(state): State<AppState>,
+    _query: Query<NoQuery>,
+) -> Response {
     open_signal_stream(
         state.stream_slots.clone(),
         state.signal_stream.subscribe(),

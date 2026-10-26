@@ -11,7 +11,7 @@ use crate::http::{
     dto::{
         PageResponse, TokenPriceResponse, TokenResponse,
         request::{
-            GetTokenRequest, ListTokenPricesRequest, ListTokensRequest, TokenPricesParams,
+            GetTokenRequest, ListTokenPricesRequest, ListTokensRequest, NoQuery, TokenPricesParams,
             TokensParams,
         },
     },
@@ -30,6 +30,7 @@ use crate::http::{
 pub(crate) async fn get_token(
     State(state): State<AppState>,
     Path(mint): Path<String>,
+    _query: Query<NoQuery>,
 ) -> Result<Json<TokenResponse>, ApiError> {
     let request = GetTokenRequest::parse(mint)?;
 

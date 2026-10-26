@@ -10,7 +10,7 @@ use crate::http::{
     AppState,
     dto::{
         ProtocolTvlResponse, ReadingResponse, WindowedResponse,
-        request::{WindowParams, parse_protocol},
+        request::{NoQuery, WindowParams, parse_protocol},
     },
     error::ApiError,
 };
@@ -26,6 +26,7 @@ use crate::http::{
 )]
 pub(crate) async fn get_tvl(
     State(state): State<AppState>,
+    _query: Query<NoQuery>,
 ) -> Result<Json<ReadingResponse<ProtocolTvlResponse>>, ApiError> {
     get_latest(&state, None).await
 }
@@ -42,6 +43,7 @@ pub(crate) async fn get_tvl(
 pub(crate) async fn get_protocol_tvl_reading(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
+    _query: Query<NoQuery>,
 ) -> Result<Json<ReadingResponse<ProtocolTvlResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
     get_latest(&state, Some(protocol)).await

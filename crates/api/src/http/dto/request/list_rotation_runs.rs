@@ -13,6 +13,7 @@ use sort_param::RotationRunSortParam;
 
 /// A window, the order, and forward-only cursor pagination.
 #[derive(Debug, Deserialize, IntoParams)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct RotationRunsParams {
     #[serde(default)]
     #[param(inline)]
