@@ -12,7 +12,7 @@ use tokio::task::{Id, JoinError, JoinSet};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
-use yog_bootstrap::{SHUTDOWN_GRACE, TaskEnd};
+use yog_bootstrap::{SHUTDOWN_GRACE, TaskEnd, report_overrun};
 
 use yog_core::domain::{EvalContext, Severity, Signal, SignalDetector, SignalRepository};
 
@@ -47,8 +47,8 @@ impl SignalEngine {
     }
 
     /// Spawn one poll loop per detector and run until `shutdown`, then wait for them within
-    /// [`SHUTDOWN_GRACE`]: the detectors still running then, by name, or the first panic, after
-    /// cancelling the rest.
+    /// [`SHUTDOWN_GRACE`], naming those still running (`report_overrun`) and returning them. The
+    /// first panic ends it: at once while running, after the drain once the stop is asked for.
     pub async fn run(self, shutdown: CancellationToken) -> Result<Vec<&'static str>, EngineError> {
         if self.detectors.is_empty() {
             warn!("signal engine started with no detectors — nothing to do");
@@ -70,35 +70,46 @@ impl SignalEngine {
                 biased;
                 _ = shutdown.cancelled() => break,
                 joined = set.join_next_with_id() => match joined {
-                    Some(joined) => settle(joined, &mut running, &shutdown, &mut set).await?,
                     None => return Ok(Vec::new()),
+                    Some(joined) => if let Some(panic) = settle(joined, &mut running) {
+                        shutdown.cancel();
+                        let _ = tokio::time::timeout(SHUTDOWN_GRACE, set.shutdown()).await;
+                        return Err(panic);
+                    },
                 },
             }
         }
 
+        // ⚠️ A panic now does not end the drain: the detector still stuck must be named all the same.
         let deadline = Instant::now() + SHUTDOWN_GRACE;
+        let mut first_panic = None;
         while let Ok(Some(joined)) =
             tokio::time::timeout_at(deadline, set.join_next_with_id()).await
         {
-            settle(joined, &mut running, &shutdown, &mut set).await?;
+            if let Some(panic) = settle(joined, &mut running) {
+                first_panic.get_or_insert(panic);
+            }
         }
         let mut overran: Vec<&'static str> = running.into_values().collect();
         overran.sort_unstable();
-        Ok(overran)
+        report_overrun(&overran);
+        match first_panic {
+            Some(panic) => Err(panic),
+            None => Ok(overran),
+        }
     }
 }
 
-/// One detector loop's end: logged and struck off `running`, or the engine stopped on a panic.
-async fn settle(
+/// One detector loop's end, logged and struck off `running`; a panic is returned.
+fn settle(
     joined: Result<(Id, ()), JoinError>,
     running: &mut HashMap<Id, &'static str>,
-    shutdown: &CancellationToken,
-    set: &mut JoinSet<()>,
-) -> Result<(), EngineError> {
+) -> Option<EngineError> {
     match joined {
         Ok((id, ())) => {
             let name = running.remove(&id).unwrap_or("unknown");
             info!(detector = name, "detector loop stopped");
+            None
         }
         // ⚠️ A `JoinError` is a panic or a cancellation ([`TaskEnd`]), and only the first is a
         // failure, and the reading must not default to panic.
@@ -107,17 +118,15 @@ async fn settle(
             match TaskEnd::from(&e) {
                 TaskEnd::Panicked => {
                     error!(detector = name, error = %e, "detector task panicked — stopping engine");
-                    shutdown.cancel();
-                    set.shutdown().await;
-                    return Err(EngineError::DetectorPanicked(e.to_string()));
+                    Some(EngineError::DetectorPanicked(e.to_string()))
                 }
                 TaskEnd::Cancelled => {
                     debug!(detector = name, error = %e, "detector task was cancelled before it could stop");
+                    None
                 }
             }
         }
     }
-    Ok(())
 }
 
 /// One detector's interval loop. Returns when `shutdown` is cancelled.
@@ -133,7 +142,7 @@ async fn run_detector_loop(
     loop {
         tokio::select! {
             // ⚠️ `biased`: with the default `Burst`, a slow tick leaves `tick()` ready, and an
-            // unbiased pick would run a new tick after the stop, which `run` waits for without deadline.
+            // unbiased pick would run a new tick after the stop.
             biased;
 
             _ = shutdown.cancelled() => {

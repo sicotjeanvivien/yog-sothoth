@@ -122,8 +122,6 @@ impl Daemon {
             self.engine.run(shutdown.clone()),
             self.alarm.run(shutdown.clone()),
         );
-        let overran = engine.map_err(anyhow::Error::new)?;
-        yog_bootstrap::report_overrun(&overran);
-        Ok(())
+        engine.map(drop).map_err(anyhow::Error::new)
     }
 }

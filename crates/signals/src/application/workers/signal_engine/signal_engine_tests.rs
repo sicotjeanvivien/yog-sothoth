@@ -80,7 +80,7 @@ fn mixed_batch_keeps_only_new_and_escalating() {
 
 // ── the stop: bounded by the shared grace, the detector that holds it named ────────────────
 
-/// A detector whose tick ends at once, never ends, or panics.
+/// A detector whose tick ends at once, never ends, panics, or panics a second after it began.
 struct Detector {
     name: &'static str,
     tick: Tick,
@@ -91,6 +91,7 @@ enum Tick {
     Returns,
     NeverReturns,
     Panics,
+    PanicsAfterASecond,
 }
 
 #[async_trait::async_trait]
@@ -112,6 +113,10 @@ impl SignalDetector for Detector {
             Tick::Returns => Ok(Vec::new()),
             Tick::NeverReturns => std::future::pending().await,
             Tick::Panics => panic!("the detector's tick panicked"),
+            Tick::PanicsAfterASecond => {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                panic!("the detector's tick panicked during the stop")
+            }
         }
     }
 }
@@ -163,7 +168,7 @@ async fn a_detector_that_never_returns_is_named_once_the_grace_runs_out() {
     assert_eq!(waited, SHUTDOWN_GRACE);
 }
 
-/// Mutation: the drain waiting out the grace whatever happens — an ordinary stop then lasts five seconds.
+/// Mutation: the drain waiting out the grace whatever happens — an ordinary stop then lasts the whole grace.
 #[tokio::test(start_paused = true)]
 async fn an_ordinary_stop_does_not_wait_for_the_grace() {
     let (result, waited) =
@@ -178,32 +183,43 @@ async fn an_ordinary_stop_does_not_wait_for_the_grace() {
 
 /// Mutation: a panic read as an ordinary end while the engine runs — the other detectors go on, the
 /// engine never stops.
-#[test]
-fn a_detector_that_panics_stops_the_engine() {
-    let result = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .start_paused(true)
-        .build()
-        .unwrap()
-        .block_on(async {
-            let engine = SignalEngine::new(
-                Arc::new(NoSignals),
-                vec![
-                    Arc::new(Detector {
-                        name: "quick",
-                        tick: Tick::Returns,
-                    }) as Arc<dyn SignalDetector>,
-                    Arc::new(Detector {
-                        name: "broken",
-                        tick: Tick::Panics,
-                    }),
-                ],
-            );
-            engine.run(CancellationToken::new()).await
-        });
+#[tokio::test(start_paused = true)]
+async fn a_detector_that_panics_stops_the_engine() {
+    let engine = SignalEngine::new(
+        Arc::new(NoSignals),
+        vec![
+            Arc::new(Detector {
+                name: "quick",
+                tick: Tick::Returns,
+            }) as Arc<dyn SignalDetector>,
+            Arc::new(Detector {
+                name: "broken",
+                tick: Tick::Panics,
+            }),
+        ],
+    );
+
+    let result = engine.run(CancellationToken::new()).await;
 
     assert!(
         matches!(result, Err(EngineError::DetectorPanicked(_))),
         "{result:?}"
     );
+}
+
+/// Mutation: a panic during the stop ending the drain at once — the detector still stuck is then never
+/// named, which is the case the grace exists for.
+#[tokio::test(start_paused = true)]
+async fn a_panic_during_the_stop_still_waits_for_the_grace_then_fails() {
+    let (result, waited) = stop_after_first_ticks(&[
+        ("stuck", Tick::NeverReturns),
+        ("broken", Tick::PanicsAfterASecond),
+    ])
+    .await;
+
+    assert!(
+        matches!(result, Err(EngineError::DetectorPanicked(_))),
+        "{result:?}"
+    );
+    assert_eq!(waited, SHUTDOWN_GRACE);
 }
