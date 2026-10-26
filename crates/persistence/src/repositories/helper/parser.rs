@@ -75,7 +75,8 @@ pub(crate) fn convert_bigdecimal_to_u128(
     field: &str,
 ) -> RepositoryResult<u128> {
     bigdecimal
-        .to_string()
+        // ⚠️ Never `to_string()`: sixteen trailing zeros or more are written `…e+16`, refused.
+        .to_plain_string()
         .parse::<u128>()
         .map_err(|e| RepositoryError::Integrity(format!("{field} parse error: {e}")))
 }
