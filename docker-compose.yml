@@ -62,7 +62,8 @@ services:
     # Safe for the local app stack too: the caggs are materialized_only = false,
     # so reads stay correct via real-time aggregation; only the durable backfill
     # and retention drops (themselves scheduler jobs) are paused locally.
-    command: ["postgres", "-c", "timescaledb.max_background_workers=0"]
+    command: ["postgres", "-c", "timescaledb.max_background_workers=0",
+              "-c", "client_connection_check_interval=10s"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-yog}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-yog}

@@ -114,6 +114,9 @@ services:
       - shared_buffers=512MB
       - -c
       - effective_cache_size=1536MB
+      # A query outlives its client otherwise: the restarted daemon reruns it beside the orphan.
+      - -c
+      - client_connection_check_interval=10s
       - -c
       - work_mem=4MB
       - -c
