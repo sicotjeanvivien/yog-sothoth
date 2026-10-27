@@ -132,6 +132,23 @@ pub async fn write_facts_spanning(pool: &PgPool, first: i64, last: i64) {
         .unwrap();
 }
 
+/// What yog-analytic writes and freezes of the hours of [`period`]`(hours)`, whatever they hold.
+pub async fn write_frozen_hours(pool: &PgPool, hours: i64) {
+    let cycle = CycleWrite {
+        tranches_from: as_of() - Duration::hours(hours),
+        tranches_through: as_of() - Duration::minutes(5),
+        from: as_of() - Duration::hours(hours),
+        through: as_of() - Duration::hours(1),
+        freeze_through: Some(as_of() - Duration::hours(1)),
+        tvl_hour: None,
+        at: as_of() + Duration::minutes(10),
+    };
+    PgAnalyticRepository::new(pool.clone())
+        .write_cycle(&cycle)
+        .await
+        .unwrap();
+}
+
 pub fn ts() -> DateTime<Utc> {
     Utc.timestamp_opt(1_700_000_000, 0).unwrap()
 }

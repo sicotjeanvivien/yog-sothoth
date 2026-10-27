@@ -163,7 +163,7 @@ async fn list_buckets(
     params(WindowParams),
     responses((
         status = 200,
-        description = "The pool's swaps over the window; no row when it did not swap.",
+        description = "The pool's swaps over the window, 0 when it did not swap; no row before it was first seen.",
         body = WindowedResponse<SwapActivityResponse>
     ))
 )]
