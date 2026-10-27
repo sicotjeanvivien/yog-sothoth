@@ -304,7 +304,8 @@ point. With that understood:
 cat > /tmp/scheduler-on.yml <<'YML'
 services:
   postgres:
-    command: ["postgres", "-c", "timescaledb.max_background_workers=8"]
+    command: ["postgres", "-c", "timescaledb.max_background_workers=8",
+              "-c", "client_connection_check_interval=10s"]
 YML
 docker compose -f docker-compose.yml -f /tmp/scheduler-on.yml up -d postgres
 
