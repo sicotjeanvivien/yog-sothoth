@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT all_mints.mint AS \"mint!: String\" FROM (\n    SELECT token_a_mint AS mint FROM pools\n    UNION\n    SELECT token_b_mint AS mint FROM pools\n) AS all_mints\n-- ⚠️ `IS NOT NULL` is load-bearing: `NOT EXISTS` keeps a NULL mint, which fails the `!`.\nWHERE all_mints.mint IS NOT NULL\n  -- ⚠️ Never `NOT IN`: unhashed past `work_mem`, it rereads `token_metadata` for each mint.\n  AND NOT EXISTS (SELECT 1 FROM token_metadata tm WHERE tm.mint = all_mints.mint)\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mint!: String",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8b0531162763d17fa5928b2e4b6ce6fe667b2c8b457da296fcfa76294a63557b"
+}

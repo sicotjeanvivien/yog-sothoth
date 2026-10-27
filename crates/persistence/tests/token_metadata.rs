@@ -111,8 +111,7 @@ async fn both_mints_are_proposed_once_each(pool: PgPool) {
     assert_eq!(missing, expected);
 }
 
-/// Against `NOT IN` back in the sweep: past `work_mem`, its subplan rereads `token_metadata`
-/// for each mint of the pools.
+/// Mutation: `NOT IN` back in the sweep.
 #[sqlx::test]
 async fn the_sweep_reads_token_metadata_as_an_anti_join(pool: PgPool) {
     let explain = concat!(
