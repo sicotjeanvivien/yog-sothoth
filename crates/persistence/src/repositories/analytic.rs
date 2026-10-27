@@ -215,12 +215,16 @@ async fn upsert_pool_hourly(
     Ok(upserted.rows_affected())
 }
 
-/// Every protocol's facts of the hours, summed per protocol.
+/// The protocols whose tranches the cycle values: the only ones it writes a protocol hour for.
+const MEASURED: [Protocol; 1] = [Protocol::MeteoraDammV2];
+
+/// The facts of the hours summed per measured protocol, an hour without any at 0.
 async fn upsert_protocol_hourly(
     tx: &mut Transaction<'static, Postgres>,
     from: DateTime<Utc>,
     through: DateTime<Utc>,
 ) -> RepositoryResult<()> {
+    let measured: Vec<&str> = MEASURED.iter().map(|p| p.as_str()).collect();
     sqlx::query!(
         r#"
         INSERT INTO analytic_protocol_hourly (
@@ -228,14 +232,29 @@ async fn upsert_protocol_hourly(
             protocol_fees_usd, referral_fees_usd,
             swap_count, active_pools, active_pools_valued
         )
-        SELECT protocol, bucket,
-               SUM(volume_in_a_usd + volume_in_b_usd),
-               SUM(fees_usd), SUM(lp_fees_usd),
-               SUM(protocol_fees_usd), SUM(referral_fees_usd),
-               SUM(swap_count), COUNT(*), COUNT(*) FILTER (WHERE valued)
-          FROM analytic_pool_hourly
-         WHERE bucket BETWEEN $1 AND $2
-         GROUP BY protocol, bucket
+        -- ⚠️ 0 only for an hour without any pool: one whose pools are all unvalued sums to NULL.
+        SELECT pr.protocol, h.bucket,
+               CASE WHEN a.bucket IS NULL THEN 0 ELSE a.volume_usd END,
+               CASE WHEN a.bucket IS NULL THEN 0 ELSE a.fees_usd END,
+               CASE WHEN a.bucket IS NULL THEN 0 ELSE a.lp_fees_usd END,
+               CASE WHEN a.bucket IS NULL THEN 0 ELSE a.protocol_fees_usd END,
+               CASE WHEN a.bucket IS NULL THEN 0 ELSE a.referral_fees_usd END,
+               COALESCE(a.swap_count, 0), COALESCE(a.active_pools, 0),
+               COALESCE(a.active_pools_valued, 0)
+          FROM generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ, INTERVAL '1 hour') AS h (bucket)
+         CROSS JOIN UNNEST($3::TEXT[]) AS pr (protocol)
+          LEFT JOIN (
+              SELECT protocol, bucket,
+                     SUM(volume_in_a_usd + volume_in_b_usd) AS volume_usd,
+                     SUM(fees_usd) AS fees_usd, SUM(lp_fees_usd) AS lp_fees_usd,
+                     SUM(protocol_fees_usd) AS protocol_fees_usd,
+                     SUM(referral_fees_usd) AS referral_fees_usd,
+                     SUM(swap_count) AS swap_count, COUNT(*) AS active_pools,
+                     COUNT(*) FILTER (WHERE valued) AS active_pools_valued
+                FROM analytic_pool_hourly
+               WHERE bucket BETWEEN $1 AND $2
+               GROUP BY protocol, bucket
+          ) a ON a.protocol = pr.protocol AND a.bucket = h.bucket
         ON CONFLICT (protocol, bucket) DO UPDATE SET
             volume_usd          = EXCLUDED.volume_usd,
             fees_usd            = EXCLUDED.fees_usd,
@@ -248,6 +267,7 @@ async fn upsert_protocol_hourly(
         "#,
         from,
         through,
+        &measured as &[&str],
     )
     .execute(&mut **tx)
     .await

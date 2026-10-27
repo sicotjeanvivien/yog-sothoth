@@ -146,15 +146,23 @@ impl SwapActivityLookup for PgSwapActivityRepository {
         let row = sqlx::query_as!(
             SwapActivityRow,
             r#"
-            SELECT SUM(swap_count)::BIGINT AS "swaps!",
-                   SUM(volume_in_a_usd + volume_in_b_usd) AS volume_usd,
-                   SUM(fees_usd) AS fees_usd, SUM(lp_fees_usd) AS lp_fees_usd,
-                   SUM(protocol_fees_usd) AS protocol_fees_usd,
-                   SUM(referral_fees_usd) AS referral_fees_usd,
-                   COUNT(*) AS "pool_hours!",
-                   COUNT(*) FILTER (WHERE valued) AS "pool_hours_valued!"
-              FROM analytic_pool_hourly
-             WHERE pool_address = $3 AND bucket >= $1 AND bucket < $2
+            SELECT COALESCE(SUM(f.swap_count), 0)::BIGINT AS "swaps!",
+                   CASE WHEN COUNT(f.bucket) = 0 THEN 0
+                        ELSE SUM(f.volume_in_a_usd + f.volume_in_b_usd) END AS volume_usd,
+                   CASE WHEN COUNT(f.bucket) = 0 THEN 0 ELSE SUM(f.fees_usd) END AS fees_usd,
+                   CASE WHEN COUNT(f.bucket) = 0 THEN 0 ELSE SUM(f.lp_fees_usd) END AS lp_fees_usd,
+                   CASE WHEN COUNT(f.bucket) = 0 THEN 0
+                        ELSE SUM(f.protocol_fees_usd) END AS protocol_fees_usd,
+                   CASE WHEN COUNT(f.bucket) = 0 THEN 0
+                        ELSE SUM(f.referral_fees_usd) END AS referral_fees_usd,
+                   COUNT(f.bucket) AS "pool_hours!",
+                   COUNT(f.bucket) FILTER (WHERE f.valued) AS "pool_hours_valued!"
+              FROM analytic_hours h
+              JOIN pools p ON p.pool_address = $3
+              LEFT JOIN analytic_pool_hourly f ON f.pool_address = $3 AND f.bucket = h.bucket
+             WHERE h.bucket >= $1 AND h.bucket < $2
+               -- ⚠️ The bound zeroes no fact: an event indexed late can precede `first_seen_at`.
+               AND (h.bucket >= date_trunc('hour', p.first_seen_at) OR f.bucket IS NOT NULL)
             HAVING COUNT(*) > 0
             "#,
             period.from,
@@ -176,15 +184,24 @@ impl SwapActivityLookup for PgSwapActivityRepository {
         let rows = sqlx::query_as!(
             PoolSwapBucketRow,
             r#"
-            SELECT bucket AS bucket_from, swap_count AS swaps,
-                   volume_in_a_usd + volume_in_b_usd AS volume_usd,
-                   fees_usd, lp_fees_usd, protocol_fees_usd, referral_fees_usd,
-                   1::BIGINT AS "pool_hours!",
-                   (CASE WHEN valued THEN 1 ELSE 0 END)::BIGINT AS "pool_hours_valued!"
-              FROM analytic_pool_hourly
-             WHERE pool_address = $4
-               AND bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND bucket < $2
-             ORDER BY bucket
+            SELECT h.bucket AS bucket_from, COALESCE(f.swap_count, 0) AS "swaps!",
+                   CASE WHEN f.bucket IS NULL THEN 0
+                        ELSE f.volume_in_a_usd + f.volume_in_b_usd END AS volume_usd,
+                   CASE WHEN f.bucket IS NULL THEN 0 ELSE f.fees_usd END AS fees_usd,
+                   CASE WHEN f.bucket IS NULL THEN 0 ELSE f.lp_fees_usd END AS lp_fees_usd,
+                   CASE WHEN f.bucket IS NULL THEN 0 ELSE f.protocol_fees_usd END
+                       AS protocol_fees_usd,
+                   CASE WHEN f.bucket IS NULL THEN 0 ELSE f.referral_fees_usd END
+                       AS referral_fees_usd,
+                   (CASE WHEN f.bucket IS NULL THEN 0 ELSE 1 END)::BIGINT AS "pool_hours!",
+                   (CASE WHEN f.valued THEN 1 ELSE 0 END)::BIGINT AS "pool_hours_valued!"
+              FROM analytic_hours h
+              JOIN pools p ON p.pool_address = $4
+              LEFT JOIN analytic_pool_hourly f ON f.pool_address = $4 AND f.bucket = h.bucket
+             WHERE h.bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND h.bucket < $2
+               -- ⚠️ The bound zeroes no fact: an event indexed late can precede `first_seen_at`.
+               AND (h.bucket >= date_trunc('hour', p.first_seen_at) OR f.bucket IS NOT NULL)
+             ORDER BY h.bucket
             "#,
             period.from,
             period.as_of,
@@ -207,19 +224,30 @@ impl SwapActivityLookup for PgSwapActivityRepository {
             PoolSwapBucketRow,
             r#"
             SELECT bucket_from AS "bucket_from!",
-                   SUM(swap_count)::BIGINT AS "swaps!",
-                   SUM(volume_in_a_usd + volume_in_b_usd) AS volume_usd,
-                   SUM(fees_usd) AS fees_usd, SUM(lp_fees_usd) AS lp_fees_usd,
-                   SUM(protocol_fees_usd) AS protocol_fees_usd,
-                   SUM(referral_fees_usd) AS referral_fees_usd,
-                   COUNT(*) AS "pool_hours!",
-                   COUNT(*) FILTER (WHERE valued) AS "pool_hours_valued!"
+                   COALESCE(SUM(swap_count), 0)::BIGINT AS "swaps!",
+                   CASE WHEN COUNT(fact) = 0 THEN 0
+                        ELSE SUM(volume_in_a_usd + volume_in_b_usd) END AS volume_usd,
+                   CASE WHEN COUNT(fact) = 0 THEN 0 ELSE SUM(fees_usd) END AS fees_usd,
+                   CASE WHEN COUNT(fact) = 0 THEN 0 ELSE SUM(lp_fees_usd) END AS lp_fees_usd,
+                   CASE WHEN COUNT(fact) = 0 THEN 0 ELSE SUM(protocol_fees_usd) END
+                       AS protocol_fees_usd,
+                   CASE WHEN COUNT(fact) = 0 THEN 0 ELSE SUM(referral_fees_usd) END
+                       AS referral_fees_usd,
+                   COUNT(fact) AS "pool_hours!",
+                   COUNT(fact) FILTER (WHERE valued) AS "pool_hours_valued!"
               FROM (
-                  SELECT h.*,
-                         time_bucket(INTERVAL '1 day', bucket, origin => $2::TIMESTAMPTZ)
+                  SELECT f.bucket AS fact, f.swap_count, f.volume_in_a_usd, f.volume_in_b_usd,
+                         f.fees_usd, f.lp_fees_usd, f.protocol_fees_usd, f.referral_fees_usd,
+                         f.valued,
+                         time_bucket(INTERVAL '1 day', h.bucket, origin => $2::TIMESTAMPTZ)
                              AS bucket_from
-                    FROM analytic_pool_hourly h
-                   WHERE pool_address = $4 AND bucket >= $1 AND bucket < $2
+                    FROM analytic_hours h
+                    JOIN pools p ON p.pool_address = $4
+                    LEFT JOIN analytic_pool_hourly f
+                           ON f.pool_address = $4 AND f.bucket = h.bucket
+                   WHERE h.bucket >= $1 AND h.bucket < $2
+                     -- ⚠️ The bound zeroes no fact: an event indexed late can precede `first_seen_at`.
+                     AND (h.bucket >= date_trunc('hour', p.first_seen_at) OR f.bucket IS NOT NULL)
               ) hours
              WHERE bucket_from >= $3
              GROUP BY bucket_from

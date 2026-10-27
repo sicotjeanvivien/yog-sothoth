@@ -303,5 +303,5 @@ async fn a_birth_is_an_initialize_pool_and_nothing_else(pool: PgPool) {
     .fetch_all(&pool)
     .await
     .unwrap();
-    assert_eq!(births, [(hour(1), 2)]);
+    assert_eq!(births, [(hour(0), 0), (hour(1), 2)]);
 }

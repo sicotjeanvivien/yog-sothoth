@@ -4,7 +4,7 @@ use sqlx::PgPool;
 use yog_core::domain::{PoolCreationsLookup, Protocol};
 use yog_persistence::PgPoolCreationsRepository;
 
-use super::helpers::{DAMM, DLMM, as_of, period, setup_roles_and_connect_as};
+use super::helpers::{DAMM, DLMM, as_of, period, setup_roles_and_connect_as, write_frozen_hours};
 
 async fn repository(pool: &PgPool) -> PgPoolCreationsRepository {
     PgPoolCreationsRepository::new(setup_roles_and_connect_as(pool, "yog_api").await)
@@ -42,4 +42,33 @@ async fn a_protocols_creations_count_only_it(pool: PgPool) {
     assert_eq!(totals[0].pools, 4);
     assert_eq!(hourly.len(), 2);
     assert_eq!(all.len(), 2);
+}
+
+/// Mutation: yog-analytic's births written from the creations alone — an hour without one
+/// unwritten, its window without totals.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_protocols_hour_without_a_creation_reads_zero(pool: PgPool) {
+    write_frozen_hours(&pool, 24).await;
+    let repository = repository(&pool).await;
+    let day = period(24);
+
+    let totals = PoolCreationsLookup::list_totals(&repository, &day, None)
+        .await
+        .unwrap();
+    let hourly = PoolCreationsLookup::list_hourly(&repository, &day, None)
+        .await
+        .unwrap();
+    let daily = PoolCreationsLookup::list_daily(&repository, &day, None)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        totals.len(),
+        1,
+        "DAMM v2 alone, DLMM unmeasured: {totals:?}"
+    );
+    assert_eq!(totals[0].pools, 0);
+    assert_eq!(hourly.len(), 24);
+    assert!(hourly.iter().all(|b| b.value.pools == 0));
+    assert_eq!(daily.len(), 1);
 }

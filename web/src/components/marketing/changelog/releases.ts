@@ -32,6 +32,26 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.3.2",
+    date: "2026-10-27",
+    summary: "An hour where nothing happened now counts 0, instead of missing like an hour nobody watched.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "A covered hour without a swap or a pool creation counts 0 in a protocol's series and totals, and a pool's swaps count 0 for each hour it did not swap since it was first seen; a missing hour now only means it was not covered.",
+            technical: true,
+          },
+          {
+            text: "The database stops a query within 10 seconds once the program that asked for it is gone, instead of running it for nobody beside the one asked again.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.3.1",
     date: "2026-10-27",
     summary: "The hourly sweep for the tokens without metadata no longer compares each one to the whole table.",

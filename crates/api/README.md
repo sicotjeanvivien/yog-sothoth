@@ -156,7 +156,9 @@ future events starts there), and
 no read counts an open hour. Each response carries `asOf`, `coveredSince`, the first
 hour of the facts, and `from` when it is read over a window: a total whose window starts before
 it returns no row rather than a partial sum; a series returns the buckets the facts
-hold whole. The TVL is each protocol's last measure by that hour, its `at` said,
+hold whole. Inside the coverage, an hour without a fact counts 0: the protocol's, written so
+by yog-analytic for each protocol it measures; a pool's, read so from the hour of its
+`first_seen_at`, a fact before it kept. The TVL is each protocol's last measure by that hour, its `at` said,
 with the part of it held by the pools discovered in each window, measured with it
 (a window without its part was not measured: the web then withholds the change).
 The liquidity is measured from a later hour than the swaps, its own start: its
@@ -212,6 +214,8 @@ at the end of this section.
      the path's scope (every protocol at the root), a ranking paginated as a collection.
 
    A measure's row is not an item: it carries a protocol only where it is cut by protocol.
+   An hour observed without a fact is a row or a bucket at 0; an absent one says only that it
+   is not covered, that the protocol is not measured, or that the pool was not yet seen.
 
    `tvl` is a reading at an instant, never a sum over a period, read at the root (one per
    protocol) and under a protocol (its own), with three forms only: `/tvl`, the last reading

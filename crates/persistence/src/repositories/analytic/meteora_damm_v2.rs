@@ -125,7 +125,7 @@ pub(super) async fn upsert_liquidity_hourly(
     Ok(())
 }
 
-/// The pools initialized in the hours `from..=through`, each hour rewritten whole.
+/// The pools initialized in the hours `from..=through`, each hour rewritten whole, zero included.
 pub(super) async fn upsert_births(
     tx: &mut Transaction<'static, Postgres>,
     from: DateTime<Utc>,
@@ -134,10 +134,11 @@ pub(super) async fn upsert_births(
     sqlx::query!(
         r#"
         INSERT INTO analytic_protocol_births_hourly (protocol, bucket, births)
-        SELECT $3, time_bucket('1 hour', timestamp), COUNT(DISTINCT pool_address)
-          FROM meteora_damm_v2_initialize_pool_events
-         WHERE timestamp >= $1 AND timestamp < $2::TIMESTAMPTZ + INTERVAL '1 hour'
-         GROUP BY time_bucket('1 hour', timestamp)
+        SELECT $3, h.bucket, COUNT(DISTINCT e.pool_address)
+          FROM generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ, INTERVAL '1 hour') AS h (bucket)
+          LEFT JOIN meteora_damm_v2_initialize_pool_events e
+                 ON e.timestamp >= h.bucket AND e.timestamp < h.bucket + INTERVAL '1 hour'
+         GROUP BY h.bucket
         ON CONFLICT (protocol, bucket) DO UPDATE SET births = EXCLUDED.births
         "#,
         from,

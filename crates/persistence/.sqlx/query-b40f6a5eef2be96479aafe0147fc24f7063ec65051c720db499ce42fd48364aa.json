@@ -1,0 +1,87 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT h.bucket AS bucket_from, COALESCE(f.swap_count, 0) AS \"swaps!\",\n                   CASE WHEN f.bucket IS NULL THEN 0\n                        ELSE f.volume_in_a_usd + f.volume_in_b_usd END AS volume_usd,\n                   CASE WHEN f.bucket IS NULL THEN 0 ELSE f.fees_usd END AS fees_usd,\n                   CASE WHEN f.bucket IS NULL THEN 0 ELSE f.lp_fees_usd END AS lp_fees_usd,\n                   CASE WHEN f.bucket IS NULL THEN 0 ELSE f.protocol_fees_usd END\n                       AS protocol_fees_usd,\n                   CASE WHEN f.bucket IS NULL THEN 0 ELSE f.referral_fees_usd END\n                       AS referral_fees_usd,\n                   (CASE WHEN f.bucket IS NULL THEN 0 ELSE 1 END)::BIGINT AS \"pool_hours!\",\n                   (CASE WHEN f.valued THEN 1 ELSE 0 END)::BIGINT AS \"pool_hours_valued!\"\n              FROM analytic_hours h\n              JOIN pools p ON p.pool_address = $4\n              LEFT JOIN analytic_pool_hourly f ON f.pool_address = $4 AND f.bucket = h.bucket\n             WHERE h.bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND h.bucket < $2\n               -- ⚠️ The bound zeroes no fact: an event indexed late can precede `first_seen_at`.\n               AND (h.bucket >= date_trunc('hour', p.first_seen_at) OR f.bucket IS NOT NULL)\n             ORDER BY h.bucket\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bucket_from",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "analytic_hours",
+            "name": "bucket"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "swaps!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "volume_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "lp_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "protocol_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "referral_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "pool_hours!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "pool_hours_valued!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "b40f6a5eef2be96479aafe0147fc24f7063ec65051c720db499ce42fd48364aa"
+}

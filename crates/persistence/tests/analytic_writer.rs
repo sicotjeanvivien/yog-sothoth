@@ -678,6 +678,77 @@ async fn a_window_without_a_discovered_pool_writes_zero(pool: PgPool) {
     );
 }
 
+/// Mutation: the `generate_series` of either writer dropped — an hour without a swap or without a
+/// creation unwritten; or `Protocol::all()` for the measured protocols — DLMM written at 0.
+#[sqlx::test]
+async fn an_hour_without_a_fact_is_written_zero_for_the_measured_protocol_only(pool: PgPool) {
+    let now = now();
+    let cycle = cycle_from(now, hours_before(now, 3));
+
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
+    repository.write_cycle(&cycle).await.unwrap();
+
+    let hours = (cycle.through - cycle.from).num_hours() + 1;
+    let swaps: Vec<(String, i64, BigDecimal)> = sqlx::query_as(
+        "SELECT protocol, swap_count, volume_usd FROM analytic_protocol_hourly ORDER BY bucket",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let births: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT protocol, births FROM analytic_protocol_births_hourly ORDER BY bucket",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(swaps.len() as i64, hours, "{swaps:?}");
+    assert!(
+        swaps
+            .iter()
+            .all(|(p, n, v)| p == "meteora_damm_v2" && *n == 0 && *v == dec("0"))
+    );
+    assert_eq!(births.len() as i64, hours, "{births:?}");
+    assert!(
+        births
+            .iter()
+            .all(|(p, n)| p == "meteora_damm_v2" && *n == 0)
+    );
+}
+
+/// Mutation: an hour without a fact zeroed by a `COALESCE` on the sums — an hour whose pools are
+/// all unvalued written at 0 instead of `null`.
+#[sqlx::test]
+async fn a_protocol_hour_of_unvalued_pools_stays_unvalued(pool: PgPool) {
+    let now = now();
+    let cycle = cycle_from(now, hours_before(now, 3));
+    let hour = hours_before(now, 2);
+    sqlx::query(
+        "INSERT INTO analytic_pool_5min (pool_address, bucket, protocol, swap_count, valued)
+         VALUES ($1, $2, 'meteora_damm_v2', 1, false)",
+    )
+    .bind(pk(1).to_string())
+    .bind(hour + Duration::minutes(5))
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
+    repository.write_cycle(&cycle).await.unwrap();
+
+    let (volume, pools, valued): (Option<BigDecimal>, i64, i64) = sqlx::query_as(
+        "SELECT volume_usd, active_pools, active_pools_valued
+           FROM analytic_protocol_hourly WHERE bucket = $1",
+    )
+    .bind(hour)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!((volume, pools, valued), (None, 1, 0));
+}
+
 /// Against `yog_analytic` made a member of `pg_read_all_data`, which reads
 /// every role's password hash.
 #[sqlx::test]
