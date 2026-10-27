@@ -306,10 +306,10 @@ async fn a_pool_has_no_bucket_before_the_hour_it_appeared(pool: PgPool) {
     assert_eq!(hourly[0].from, as_of() - Duration::hours(10));
 }
 
-/// Mutation: the `first_seen_at` bound applied to the facts too — a swap indexed after the pool's
-/// first event, and earlier than it, dropped.
+/// Mutation: the zeros bounded by `first_seen_at` alone — a fact indexed late, older than the pool's
+/// first event, dropped, or the hours between them missing.
 #[sqlx::test(migrations = "./migrations")]
-async fn a_fact_older_than_first_seen_at_is_still_served(pool: PgPool) {
+async fn a_fact_older_than_first_seen_at_starts_the_pools_hours(pool: PgPool) {
     let late = pk(1);
     know_pool(
         &pool,
@@ -332,12 +332,46 @@ async fn a_fact_older_than_first_seen_at_is_still_served(pool: PgPool) {
         .await
         .unwrap();
 
-    assert_eq!(
-        hourly.len(),
-        6,
-        "the fact at -12 h, then the 5 hours since first_seen_at"
-    );
+    assert_eq!(hourly.len(), 12, "every hour from the fact at -12 h on");
+    assert_eq!(hourly[0].from, as_of() - Duration::hours(12));
     assert_eq!(hourly[0].activity.swaps, 2);
+}
+
+/// Mutation: the pool's protocol not checked against the measured ones — a DLMM pool, whose swaps
+/// yog-analytic never values, read at 0.
+#[sqlx::test(migrations = "./migrations")]
+async fn an_unmeasured_protocols_pool_reads_nothing(pool: PgPool) {
+    let dlmm = pk(1);
+    know_pool(&pool, &dlmm.to_string(), as_of() - Duration::hours(48), 24).await;
+    sqlx::query("UPDATE pools SET protocol = 'meteora_dlmm' WHERE pool_address = $1")
+        .bind(dlmm.to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+    let repository = repository(&pool).await;
+    let day = period(24);
+
+    assert!(
+        repository
+            .find_pool_totals(&day, dlmm)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        repository
+            .list_pool_hourly(&day, dlmm)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        repository
+            .list_pool_daily(&day, dlmm)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 /// Mutation: the zero of an hour without a fact applied to the sums too — an unvalued hour's

@@ -138,6 +138,8 @@ pub(super) async fn upsert_births(
           FROM generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ, INTERVAL '1 hour') AS h (bucket)
           LEFT JOIN meteora_damm_v2_initialize_pool_events e
                  ON e.timestamp >= h.bucket AND e.timestamp < h.bucket + INTERVAL '1 hour'
+                -- ⚠️ Constant bounds too: the planner excludes chunks on them, never on `h.bucket`.
+                AND e.timestamp >= $1 AND e.timestamp < $2::TIMESTAMPTZ + INTERVAL '1 hour'
          GROUP BY h.bucket
         ON CONFLICT (protocol, bucket) DO UPDATE SET births = EXCLUDED.births
         "#,

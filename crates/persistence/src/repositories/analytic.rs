@@ -215,8 +215,8 @@ async fn upsert_pool_hourly(
     Ok(upserted.rows_affected())
 }
 
-/// The protocols whose tranches the cycle values: the only ones it writes a protocol hour for.
-const MEASURED: [Protocol; 1] = [Protocol::MeteoraDammV2];
+/// The protocols whose tranches the cycle values: the only ones whose hours count 0 without a fact.
+pub(crate) const MEASURED: [Protocol; 1] = [Protocol::MeteoraDammV2];
 
 /// The facts of the hours summed per measured protocol, an hour without any at 0.
 async fn upsert_protocol_hourly(

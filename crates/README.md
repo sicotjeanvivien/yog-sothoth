@@ -287,6 +287,7 @@ There is no central registry. A protocol is added by writing isolated per-protoc
 | `ExtractionDispatcher::implemented_protocols` | `core` | whether the ingestion subscribes to it at all |
 | `decode_pool_account` | `core` | account bytes → properties |
 | `PgAnalyticRepository::write_cycle` | `persistence` | tranche valuation, births and discovered TVL |
+| `MEASURED` (`repositories/analytic.rs`) | `persistence` | the protocols whose hours count 0 without a fact, protocol and pools alike; a protocol missing here gets no protocol hour written |
 | `EventPersistor::persist` | `indexer` | event → sub-persistor |
 | `init_event_persistor` (`bootstrap/daemon/init.rs`) | `indexer` | sub-persistor instantiation |
 | `pool_account_resolvers` vec (`bootstrap/daemon.rs`) | `context` | property backfill |

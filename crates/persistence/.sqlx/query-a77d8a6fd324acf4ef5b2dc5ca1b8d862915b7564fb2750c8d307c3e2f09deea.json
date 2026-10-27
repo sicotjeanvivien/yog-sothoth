@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO analytic_protocol_births_hourly (protocol, bucket, births)\n        SELECT $3, h.bucket, COUNT(DISTINCT e.pool_address)\n          FROM generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ, INTERVAL '1 hour') AS h (bucket)\n          LEFT JOIN meteora_damm_v2_initialize_pool_events e\n                 ON e.timestamp >= h.bucket AND e.timestamp < h.bucket + INTERVAL '1 hour'\n                -- ⚠️ Constant bounds too: the planner excludes chunks on them, never on `h.bucket`.\n                AND e.timestamp >= $1 AND e.timestamp < $2::TIMESTAMPTZ + INTERVAL '1 hour'\n         GROUP BY h.bucket\n        ON CONFLICT (protocol, bucket) DO UPDATE SET births = EXCLUDED.births\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a77d8a6fd324acf4ef5b2dc5ca1b8d862915b7564fb2750c8d307c3e2f09deea"
+}

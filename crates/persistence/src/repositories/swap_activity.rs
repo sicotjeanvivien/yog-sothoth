@@ -15,6 +15,7 @@ use yog_core::{
     },
 };
 
+use crate::repositories::analytic::MEASURED;
 use crate::repositories::helper::{bind_protocol_filter, map_sqlx_error};
 
 pub struct PgSwapActivityRepository {
@@ -146,6 +147,17 @@ impl SwapActivityLookup for PgSwapActivityRepository {
         let row = sqlx::query_as!(
             SwapActivityRow,
             r#"
+            WITH facts AS MATERIALIZED (
+                SELECT * FROM analytic_pool_hourly
+                 WHERE pool_address = $3 AND bucket >= $1 AND bucket < $2
+            ),
+            seen AS (
+                -- ⚠️ From its first fact when earlier: an event indexed late can precede `first_seen_at`.
+                SELECT LEAST(date_trunc('hour', first_seen_at), (SELECT MIN(bucket) FROM facts))
+                           AS since
+                  FROM pools
+                 WHERE pool_address = $3 AND protocol = ANY($4::TEXT[])
+            )
             SELECT COALESCE(SUM(f.swap_count), 0)::BIGINT AS "swaps!",
                    CASE WHEN COUNT(f.bucket) = 0 THEN 0
                         ELSE SUM(f.volume_in_a_usd + f.volume_in_b_usd) END AS volume_usd,
@@ -157,17 +169,16 @@ impl SwapActivityLookup for PgSwapActivityRepository {
                         ELSE SUM(f.referral_fees_usd) END AS referral_fees_usd,
                    COUNT(f.bucket) AS "pool_hours!",
                    COUNT(f.bucket) FILTER (WHERE f.valued) AS "pool_hours_valued!"
-              FROM analytic_hours h
-              JOIN pools p ON p.pool_address = $3
-              LEFT JOIN analytic_pool_hourly f ON f.pool_address = $3 AND f.bucket = h.bucket
+              FROM seen
+              JOIN analytic_hours h ON h.bucket >= seen.since
+              LEFT JOIN facts f ON f.bucket = h.bucket
              WHERE h.bucket >= $1 AND h.bucket < $2
-               -- ⚠️ The bound zeroes no fact: an event indexed late can precede `first_seen_at`.
-               AND (h.bucket >= date_trunc('hour', p.first_seen_at) OR f.bucket IS NOT NULL)
             HAVING COUNT(*) > 0
             "#,
             period.from,
             period.as_of,
             pool.to_string(),
+            &measured() as &[&str],
         )
         .fetch_optional(&self.pool)
         .await
@@ -184,6 +195,17 @@ impl SwapActivityLookup for PgSwapActivityRepository {
         let rows = sqlx::query_as!(
             PoolSwapBucketRow,
             r#"
+            WITH facts AS MATERIALIZED (
+                SELECT * FROM analytic_pool_hourly
+                 WHERE pool_address = $4 AND bucket >= $1 AND bucket < $2
+            ),
+            seen AS (
+                -- ⚠️ From its first fact when earlier: an event indexed late can precede `first_seen_at`.
+                SELECT LEAST(date_trunc('hour', first_seen_at), (SELECT MIN(bucket) FROM facts))
+                           AS since
+                  FROM pools
+                 WHERE pool_address = $4 AND protocol = ANY($5::TEXT[])
+            )
             SELECT h.bucket AS bucket_from, COALESCE(f.swap_count, 0) AS "swaps!",
                    CASE WHEN f.bucket IS NULL THEN 0
                         ELSE f.volume_in_a_usd + f.volume_in_b_usd END AS volume_usd,
@@ -195,18 +217,17 @@ impl SwapActivityLookup for PgSwapActivityRepository {
                        AS referral_fees_usd,
                    (CASE WHEN f.bucket IS NULL THEN 0 ELSE 1 END)::BIGINT AS "pool_hours!",
                    (CASE WHEN f.valued THEN 1 ELSE 0 END)::BIGINT AS "pool_hours_valued!"
-              FROM analytic_hours h
-              JOIN pools p ON p.pool_address = $4
-              LEFT JOIN analytic_pool_hourly f ON f.pool_address = $4 AND f.bucket = h.bucket
+              FROM seen
+              JOIN analytic_hours h ON h.bucket >= seen.since
+              LEFT JOIN facts f ON f.bucket = h.bucket
              WHERE h.bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND h.bucket < $2
-               -- ⚠️ The bound zeroes no fact: an event indexed late can precede `first_seen_at`.
-               AND (h.bucket >= date_trunc('hour', p.first_seen_at) OR f.bucket IS NOT NULL)
              ORDER BY h.bucket
             "#,
             period.from,
             period.as_of,
             period.covered_since,
             pool.to_string(),
+            &measured() as &[&str],
         )
         .fetch_all(&self.pool)
         .await
@@ -223,40 +244,43 @@ impl SwapActivityLookup for PgSwapActivityRepository {
         let rows = sqlx::query_as!(
             PoolSwapBucketRow,
             r#"
-            SELECT bucket_from AS "bucket_from!",
-                   COALESCE(SUM(swap_count), 0)::BIGINT AS "swaps!",
-                   CASE WHEN COUNT(fact) = 0 THEN 0
-                        ELSE SUM(volume_in_a_usd + volume_in_b_usd) END AS volume_usd,
-                   CASE WHEN COUNT(fact) = 0 THEN 0 ELSE SUM(fees_usd) END AS fees_usd,
-                   CASE WHEN COUNT(fact) = 0 THEN 0 ELSE SUM(lp_fees_usd) END AS lp_fees_usd,
-                   CASE WHEN COUNT(fact) = 0 THEN 0 ELSE SUM(protocol_fees_usd) END
-                       AS protocol_fees_usd,
-                   CASE WHEN COUNT(fact) = 0 THEN 0 ELSE SUM(referral_fees_usd) END
-                       AS referral_fees_usd,
-                   COUNT(fact) AS "pool_hours!",
-                   COUNT(fact) FILTER (WHERE valued) AS "pool_hours_valued!"
-              FROM (
-                  SELECT f.bucket AS fact, f.swap_count, f.volume_in_a_usd, f.volume_in_b_usd,
-                         f.fees_usd, f.lp_fees_usd, f.protocol_fees_usd, f.referral_fees_usd,
-                         f.valued,
-                         time_bucket(INTERVAL '1 day', h.bucket, origin => $2::TIMESTAMPTZ)
-                             AS bucket_from
-                    FROM analytic_hours h
-                    JOIN pools p ON p.pool_address = $4
-                    LEFT JOIN analytic_pool_hourly f
-                           ON f.pool_address = $4 AND f.bucket = h.bucket
-                   WHERE h.bucket >= $1 AND h.bucket < $2
-                     -- ⚠️ The bound zeroes no fact: an event indexed late can precede `first_seen_at`.
-                     AND (h.bucket >= date_trunc('hour', p.first_seen_at) OR f.bucket IS NOT NULL)
-              ) hours
-             WHERE bucket_from >= $3
-             GROUP BY bucket_from
-             ORDER BY bucket_from
+            WITH facts AS MATERIALIZED (
+                SELECT * FROM analytic_pool_hourly
+                 WHERE pool_address = $4 AND bucket >= $1 AND bucket < $2
+            ),
+            seen AS (
+                -- ⚠️ From its first fact when earlier: an event indexed late can precede `first_seen_at`.
+                SELECT LEAST(date_trunc('hour', first_seen_at), (SELECT MIN(bucket) FROM facts))
+                           AS since
+                  FROM pools
+                 WHERE pool_address = $4 AND protocol = ANY($5::TEXT[])
+            )
+            SELECT time_bucket(INTERVAL '1 day', h.bucket, origin => $2::TIMESTAMPTZ)
+                       AS "bucket_from!",
+                   COALESCE(SUM(f.swap_count), 0)::BIGINT AS "swaps!",
+                   CASE WHEN COUNT(f.bucket) = 0 THEN 0
+                        ELSE SUM(f.volume_in_a_usd + f.volume_in_b_usd) END AS volume_usd,
+                   CASE WHEN COUNT(f.bucket) = 0 THEN 0 ELSE SUM(f.fees_usd) END AS fees_usd,
+                   CASE WHEN COUNT(f.bucket) = 0 THEN 0 ELSE SUM(f.lp_fees_usd) END AS lp_fees_usd,
+                   CASE WHEN COUNT(f.bucket) = 0 THEN 0
+                        ELSE SUM(f.protocol_fees_usd) END AS protocol_fees_usd,
+                   CASE WHEN COUNT(f.bucket) = 0 THEN 0
+                        ELSE SUM(f.referral_fees_usd) END AS referral_fees_usd,
+                   COUNT(f.bucket) AS "pool_hours!",
+                   COUNT(f.bucket) FILTER (WHERE f.valued) AS "pool_hours_valued!"
+              FROM seen
+              JOIN analytic_hours h ON h.bucket >= seen.since
+              LEFT JOIN facts f ON f.bucket = h.bucket
+             WHERE h.bucket >= $1 AND h.bucket < $2
+               AND time_bucket(INTERVAL '1 day', h.bucket, origin => $2::TIMESTAMPTZ) >= $3
+             GROUP BY 1
+             ORDER BY 1
             "#,
             period.from,
             period.as_of,
             period.covered_since,
             pool.to_string(),
+            &measured() as &[&str],
         )
         .fetch_all(&self.pool)
         .await
@@ -264,4 +288,9 @@ impl SwapActivityLookup for PgSwapActivityRepository {
 
         rows.into_iter().map(PoolSwapBucket::try_from).collect()
     }
+}
+
+/// The protocols whose pools read 0 for a covered hour without a swap.
+fn measured() -> Vec<&'static str> {
+    MEASURED.iter().map(|p| p.as_str()).collect()
 }
