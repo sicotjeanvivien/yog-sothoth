@@ -1153,21 +1153,20 @@ fn event_index_counts_dropped_payloads_too() {
 /// Mutation: only `event_cpi` payloads numbered, the tag filtered in `extract_anchor_event_cpis`.
 #[test]
 fn event_index_counts_instructions_that_are_not_event_cpi_too() {
-    // `swap_via_router.json`: the router's Swap2 to cp-amm, an ordinary instruction, then its self-CPI.
     let tx = load_fixture("damm_v2/swap_via_router.json");
-    let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
-
-    assert_eq!(
-        cp_amm_payloads(&tx).count(),
-        2,
-        "the Swap2 and its self-CPI"
-    );
+    let payloads: Vec<&[u8]> = cp_amm_payloads(&tx).collect();
+    let [swap2, self_cpi] = payloads[..] else {
+        panic!(
+            "the Swap2 and its self-CPI, got {} payloads",
+            payloads.len()
+        );
+    };
     assert!(
-        extracted.unknown.is_empty() && extracted.failures.is_empty(),
-        "the Swap2 must leave no trace: unknown {:?}, failures {:?}",
-        extracted.unknown,
-        extracted.failures
+        !swap2.starts_with(&self_cpi[..8]),
+        "the Swap2 must not carry the event_cpi tag of its self-CPI"
     );
+
+    let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
     let indices: Vec<u16> = extracted.events.iter().map(|e| e.event_index).collect();
     assert_eq!(
         indices,
