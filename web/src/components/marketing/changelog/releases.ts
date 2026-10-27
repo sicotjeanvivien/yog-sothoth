@@ -32,6 +32,22 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.3.1",
+    date: "2026-10-27",
+    summary: "The API no longer slows down, or fails, while the token metadata are swept every hour.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "The hourly sweep for the mints without metadata no longer holds the database for half an hour: some API requests failed meanwhile, past their 8-second limit.",
+            technical: false,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.3.0",
     date: "2026-10-27",
     summary:

@@ -47,8 +47,7 @@ async fn insert_metadata(pool: &PgPool, mint: &str) {
     .unwrap();
 }
 
-/// Mutation: `mint IS NOT NULL` dropped. ⚠️ Needs an empty `token_metadata`: `x NOT IN ()` is
-/// TRUE even for NULL, while with one row present the broken query filters it anyway.
+/// Mutation: `mint IS NOT NULL` dropped.
 #[sqlx::test]
 async fn unresolved_mints_are_ignored_when_no_metadata_exists_yet(pool: PgPool) {
     insert_unresolved_pool(&pool, &pk(1).to_string()).await;
@@ -110,6 +109,21 @@ async fn both_mints_are_proposed_once_each(pool: PgPool) {
     let mut expected = vec![mint_a, mint_b];
     expected.sort();
     assert_eq!(missing, expected);
+}
+
+/// Against `NOT IN` back in the sweep: past `work_mem`, its subplan rereads `token_metadata`
+/// for each mint of the pools.
+#[sqlx::test]
+async fn the_sweep_reads_token_metadata_as_an_anti_join(pool: PgPool) {
+    let explain = concat!(
+        "EXPLAIN ",
+        include_str!("../src/repositories/token_metadata/missing_mints_of_all_pools.sql")
+    );
+    let plan: Vec<String> = sqlx::query_scalar(explain).fetch_all(&pool).await.unwrap();
+    let plan = plan.join("\n");
+
+    assert!(plan.contains("Anti Join"), "{plan}");
+    assert!(!plan.contains("SubPlan"), "{plan}");
 }
 
 async fn insert_pool_discovered_at(

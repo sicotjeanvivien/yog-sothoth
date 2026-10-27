@@ -119,18 +119,8 @@ impl TokenMetadataRepository for PgTokenMetadataRepository {
     }
 
     async fn list_missing_mints_of_all_pools(&self) -> RepositoryResult<Vec<Pubkey>> {
-        // ⚠️ `IS NOT NULL` is load-bearing: `x NOT IN ()` is TRUE even for a NULL x, so on an empty
-        // `token_metadata` an unresolved pool's NULL mint would fail the `!` and stall the worker.
-        let mints = sqlx::query_scalar!(
-            r#"
-            SELECT mint AS "mint!: String" FROM (
-                SELECT token_a_mint AS mint FROM pools
-                UNION
-                SELECT token_b_mint AS mint FROM pools
-            ) AS all_mints
-            WHERE mint IS NOT NULL
-              AND mint NOT IN (SELECT mint FROM token_metadata)
-            "#
+        let mints = sqlx::query_file_scalar!(
+            "src/repositories/token_metadata/missing_mints_of_all_pools.sql"
         )
         .fetch_all(&self.pool)
         .await
