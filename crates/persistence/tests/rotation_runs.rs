@@ -281,14 +281,15 @@ async fn the_bars_sum_the_frozen_hours_of_the_runs(pool: PgPool) {
     );
 }
 
-/// Mutation: the run hours read alone, the hours drawn from the window, the coverage bound or the
-/// protocol filter dropped — an observed hour without a run missing, or another hour drawn.
+/// Mutation: the run hours read alone, the hours drawn from the window, the coverage bound or either
+/// protocol filter dropped — an observed hour without a run missing, another hour or run drawn.
 #[sqlx::test(migrations = "./migrations")]
 async fn an_observed_hour_without_a_run_is_zero_and_an_unobserved_one_absent(pool: PgPool) {
-    // Hour -6 is before the coverage, hour -3 unobserved but for DLMM.
+    // Hour -6 is before the coverage, hour -3 unobserved but for DLMM, hour -4 a DLMM run's.
     insert_protocol_hours(&pool, "meteora_damm_v2", &[-6, -5, -4, -2]).await;
     insert_protocol_hours(&pool, "meteora_dlmm", &[-3]).await;
     insert_run(&pool, "meteora_damm_v2", 1, -150, "7", &[(-2, "7")]).await;
+    insert_run(&pool, "meteora_dlmm", 2, -250, "5", &[(-4, "5")]).await;
     let repository =
         PgRotationRunRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
     let frozen = FrozenPeriod {
@@ -312,13 +313,14 @@ async fn an_observed_hour_without_a_run_is_zero_and_an_unobserved_one_absent(poo
     );
 }
 
-/// Mutation: the run hours read alone, or the days drawn from the window — a covered day without
-/// a run missing, or a day without an observed hour drawn.
+/// Mutation: the run hours read alone, the days drawn from the window or the runs' protocol filter
+/// dropped — a covered day without a run missing, another day or run drawn.
 #[sqlx::test(migrations = "./migrations")]
 async fn a_covered_day_without_a_run_is_zero_and_one_unobserved_absent(pool: PgPool) {
-    // Three days ending at `at(0)`: the first observed without a run, the second unobserved.
+    // Three days ending at `at(0)`: the first observed without a DAMM v2 run, the second unobserved.
     insert_protocol_hours(&pool, "meteora_damm_v2", &[-70, -60, -10, -5]).await;
     insert_run(&pool, "meteora_damm_v2", 1, -5 * 60, "9", &[(-5, "9")]).await;
+    insert_run(&pool, "meteora_dlmm", 2, -70 * 60, "4", &[(-70, "4")]).await;
     let repository =
         PgRotationRunRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
     let frozen = FrozenPeriod {
