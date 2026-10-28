@@ -129,7 +129,7 @@ UNION ALL
 SELECT * FROM unswapped;
 END;
 
--- Written once: no UPDATE, so a second write fails in Postgres itself.
+-- Written once: no UPDATE.
 GRANT SELECT, INSERT ON analytic_position_fee_claims, analytic_reward_claims TO yog_analytic;
 GRANT SELECT ON meteora_damm_v2_claim_position_fee_events, meteora_damm_v2_claim_reward_events
     TO yog_analytic;

@@ -123,7 +123,8 @@ async fn an_empty_claim_is_worth_zero_and_one_in_a_pool_never_priced_is_not_valu
 }
 
 /// Mutation: a reward of the pool's own token valued at its market — 10 X at $1, $10 instead of
-/// $0.10; or one outside the pool valued at nothing, or at the pool's price of another token.
+/// $0.10; one outside the pool valued at nothing, or at the pool's price of another token; or
+/// one in a pool whose mints are unresolved valued at market, when it may be the pool's.
 #[sqlx::test]
 async fn a_reward_takes_its_pools_price_and_one_outside_the_pool_its_market(pool: PgPool) {
     let tranche = settled_hour() + Duration::minutes(10);
@@ -143,12 +144,28 @@ async fn a_reward_takes_its_pools_price_and_one_outside_the_pool_its_market(pool
     .await;
     insert_reward_claim(&pool, &pool_x, "outside", &outside, 3_000_000, tranche).await;
     insert_reward_claim(&pool, &pool_x, "no-price", &unpriced, 3_000_000, tranche).await;
+    let unresolved = pk(32).to_string();
+    sqlx::query("INSERT INTO pools (pool_address, protocol) VALUES ($1, 'meteora_damm_v2')")
+        .bind(&unresolved)
+        .execute(&pool)
+        .await
+        .unwrap();
+    insert_reward_claim(
+        &pool,
+        &unresolved,
+        "unresolved",
+        &outside,
+        3_000_000,
+        tranche,
+    )
+    .await;
 
     value(&pool, tranche, tranche).await;
 
     assert_eq!(reward_claim_usd(&pool, "in-pool").await, Some(dec("0.1")));
     assert_eq!(reward_claim_usd(&pool, "outside").await, Some(dec("6")));
     assert_eq!(reward_claim_usd(&pool, "no-price").await, None);
+    assert_eq!(reward_claim_usd(&pool, "unresolved").await, None);
 }
 
 fn at(hours: i64) -> DateTime<Utc> {

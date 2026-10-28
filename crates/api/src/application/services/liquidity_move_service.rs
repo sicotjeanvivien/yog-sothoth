@@ -13,7 +13,7 @@ use yog_core::{
     },
 };
 
-use super::period::{BucketPeriod, Measured, build_frozen_period};
+use super::period::{BucketPeriod, Measured, build_frozen_period, measured_from};
 
 /// Why a page of moves is not read.
 #[derive(Debug)]
@@ -56,12 +56,7 @@ impl LiquidityMoveService {
             return Ok(None);
         };
         let since = self.liquidity_moves.find_measured_since(protocol).await?;
-        // ⚠️ Not measured yet: covered from `as_of` on, so no period reads as covered.
-        let covered_since = since.map_or(period.as_of, |since| since.max(period.covered_since));
-        Ok(Some(FrozenPeriod {
-            covered_since,
-            ..period
-        }))
+        Ok(Some(measured_from(period, since)))
     }
 
     pub(crate) async fn get_liquidity_totals(

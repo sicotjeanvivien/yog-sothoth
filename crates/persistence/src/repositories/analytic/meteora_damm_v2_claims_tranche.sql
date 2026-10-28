@@ -14,6 +14,7 @@ reward_claims AS (
            c.total_reward AS amount,
            CASE WHEN c.mint_reward = p.token_a_mint::TEXT THEN 'a'
                 WHEN c.mint_reward = p.token_b_mint::TEXT THEN 'b' END AS side,
+           p.token_a_mint IS NOT NULL AND p.token_b_mint IS NOT NULL AS resolved,
            tm.decimals AS dec
       FROM meteora_damm_v2_claim_reward_events c
       LEFT JOIN pools p ON p.pool_address = c.pool_address
@@ -58,9 +59,10 @@ SELECT r.signature, r.event_index, r.timestamp, $1, r.pool_address, $2, r.owner,
             THEN yog_token_amount(r.amount::NUMERIC, r.dec) * v.price END
   FROM reward_claims r
   LEFT JOIN prices pr ON pr.pool_address = r.pool_address
-  LEFT JOIN LATERAL yog_price_asof(r.mint_reward, $1::TIMESTAMPTZ + $3::INTERVAL) market ON r.side IS NULL
+  LEFT JOIN LATERAL yog_price_asof(r.mint_reward, $1::TIMESTAMPTZ + $3::INTERVAL) market
+         ON r.side IS NULL AND r.resolved
  -- A token of the pool at the pool's bounded price, only with a market price as a move's side;
- -- any other at its market price.
+ -- any other at its market price. ⚠️ A pool's mints unresolved: the reward may be one, unvalued.
  CROSS JOIN LATERAL (
      SELECT CASE r.side
                 WHEN 'a' THEN CASE WHEN pr.market_a_usd IS NOT NULL THEN pr.price_a_usd END

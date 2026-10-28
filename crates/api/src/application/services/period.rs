@@ -65,6 +65,16 @@ pub(crate) async fn build_frozen_period(
         .map(|hours| FrozenPeriod::of(hours, window, offset)))
 }
 
+/// `period` covered from `since`, the first hour a resource was measured, and no earlier than it.
+pub(crate) fn measured_from(period: FrozenPeriod, since: Option<DateTime<Utc>>) -> FrozenPeriod {
+    // ⚠️ Not measured yet: covered from `as_of` on, so no period reads as covered.
+    let covered_since = since.map_or(period.as_of, |since| since.max(period.covered_since));
+    FrozenPeriod {
+        covered_since,
+        ..period
+    }
+}
+
 /// The first hour that starts at or after `at`: an hour measured from its start.
 pub(crate) fn first_whole_hour(at: DateTime<Utc>) -> DateTime<Utc> {
     let start = at.duration_trunc(TimeDelta::hours(1)).unwrap_or(at);

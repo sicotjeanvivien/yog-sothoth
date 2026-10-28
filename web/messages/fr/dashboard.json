@@ -297,7 +297,7 @@
         "chartLabelDaily": "Fees par jour, par destination",
         "claims": {
           "title": "Ce que les LP récupèrent",
-          "info": "Les déposants ne touchent leurs fees que lorsqu'ils les réclament : ces chiffres sont ce qui a réellement été retiré, valorisé au prix de la pool à l'instant du retrait, un reward hors de la pool à son prix de marché. La part réclamée peut dépasser 100 % : un retrait récupère aussi des fees générées avant la période.",
+          "info": "Les déposants ne touchent leurs fees que lorsqu'ils les réclament : ces chiffres sont ce qui a réellement été retiré, valorisé au prix de la pool à l'instant du retrait, un reward hors de la pool à son prix de marché. La part réclamée peut dépasser 100 % : un retrait récupère aussi des fees générées avant la période. Les fees générées comprennent celles qu'une pool en compounding réinvestit, qui ne se réclament pas.",
           "feesClaimed": "Fees réclamées · {period}",
           "rewardsClaimed": "Rewards réclamés · {period}",
           "generated": "Fees générées pour les LP · {period}",

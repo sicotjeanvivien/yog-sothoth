@@ -88,7 +88,8 @@ A claim of a position's fees is worth its two amounts at the price a move of the
 would take in the tranche — the same rule, a token without a market price counting 0; an
 empty claim, both amounts 0, is worth 0, priced or not: it took nothing. A reward in a token
 of its pool takes that side's price under the same condition; a reward in another token, its
-market price (`yog_price_asof`) at the end of the tranche. Without a price or decimals,
+market price (`yog_price_asof`) at the end of the tranche, once its pool's mints are known:
+unresolved, the reward may be one of them. Without a price or decimals,
 `amount_usd` stays `NULL`, the claim counted unvalued. No backfill:
 `analytic_tranches.claims` marks the tranches written with their claims, and the first of them
 is when the claims started being measured.
