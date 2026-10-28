@@ -45,8 +45,8 @@ import {
   splitTotalsOf,
 } from "@/lib/protocol/volume";
 
-import { SPLIT_TONE } from "./split-tones";
-import { VolumeSplitBars, type SplitDetail } from "./volume-split-bars";
+import { SplitBars, type SplitDetail } from "../split-bars";
+import { SPLIT_TONE, type SplitTone } from "./split-tones";
 
 /** The chart's height, and its tallest bar a little under it for the top mark's label. */
 const CHART_PX = { height: 122, top: 112 } as const;
@@ -160,7 +160,12 @@ async function VolumeSources({ period, protocol }: TabProps) {
   const daysAgo = (days: number) => (days === 0 ? tVolume("today") : tVolume("daysAgo", { days }));
   const moment = (date: Date) => formatUtcMoment(date, locale) ?? "—";
 
-  const detailOf = (when: string, inRuns: number, outside: number, unsplit: number): SplitDetail => {
+  const detailOf = (
+    when: string,
+    inRuns: number,
+    outside: number,
+    unsplit: number,
+  ): SplitDetail<SplitTone> => {
     // ⚠️ The shares over the split volume only, as the legend's: an unsplit part is not outside.
     const split = inRuns + outside;
     return {
@@ -245,7 +250,7 @@ async function VolumeSources({ period, protocol }: TabProps) {
               </span>
             )}
           </p>
-          <VolumeSplitBars
+          <SplitBars
             bars={bars}
             period={detailOf(
               t("periodTotal", { period: tPeriod(`short.${period}`) }),
@@ -260,6 +265,7 @@ async function VolumeSources({ period, protocol }: TabProps) {
             axis={axisOf(period, slots, daysAgo)}
             height={CHART_PX.height}
             label={t(CHART_LABEL[period])}
+            tones={SPLIT_TONE}
           />
         </>
       )}

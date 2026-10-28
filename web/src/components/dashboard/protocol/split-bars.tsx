@@ -1,38 +1,38 @@
 "use client";
 
 /**
- * The volume per bar, its part in rotation runs stacked under the rest; a bar the runs do not
- * cover whole stays one neutral block. Under the chart, the period's detail, replaced by the
- * bar's under hover, touch or arrow keys.
+ * Bars stacked by part, each part in its tone. Under the chart, the period's detail, replaced by
+ * the bar's under hover, touch or arrow keys.
  */
 
 import { useState, type KeyboardEvent } from "react";
 
 import { LABEL_CLASS } from "@/components/dashboard/overview/overview-layout";
 
-import { SPLIT_TONE, type SplitTone } from "./split-tones";
-
-export type SplitDetail = {
+export type SplitDetail<T extends string> = {
   when: string;
   total: string;
-  rows: readonly { tone: SplitTone; name: string; value: string; share: string }[];
+  rows: readonly { tone: T; name: string; value: string; share: string }[];
 };
 
-export function VolumeSplitBars({
+export function SplitBars<T extends string>({
   bars,
   period,
   ticks,
   axis,
   height,
   label,
+  tones,
 }: {
-  /** Heights in pixels, bottom first; no segment for a bar without valued volume. */
-  bars: readonly { segments: readonly { tone: SplitTone; height: number }[]; detail: SplitDetail }[];
-  period: SplitDetail;
+  /** Heights in pixels, bottom first; no segment for a bar without a value. */
+  bars: readonly { segments: readonly { tone: T; height: number }[]; detail: SplitDetail<T> }[];
+  period: SplitDetail<T>;
   ticks: readonly { bottom: number; label: string }[];
   axis: readonly string[];
   height: number;
   label: string;
+  /** The class of each tone, shared with the legend the server draws. */
+  tones: Record<T, string>;
 }) {
   const [active, setActive] = useState<number | null>(null);
 
@@ -86,7 +86,7 @@ export function VolumeSplitBars({
             {bar.segments.map((segment, j) => (
               <div
                 key={segment.tone}
-                className={`w-full shrink-0 ${SPLIT_TONE[segment.tone]} ${
+                className={`w-full shrink-0 ${tones[segment.tone]} ${
                   j === bar.segments.length - 1 ? "rounded-t-[2px]" : ""
                 }`}
                 style={{ height: segment.height }}
@@ -113,7 +113,7 @@ export function VolumeSplitBars({
             <span>
               <span
                 aria-hidden="true"
-                className={`mr-1.5 inline-block h-2.5 w-2.5 align-[-1px] ${SPLIT_TONE[row.tone]}`}
+                className={`mr-1.5 inline-block h-2.5 w-2.5 align-[-1px] ${tones[row.tone]}`}
               />
               {row.name}
             </span>

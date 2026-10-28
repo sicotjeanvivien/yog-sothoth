@@ -359,13 +359,21 @@ two routes on the same frozen hours: `swaps/hourly|daily` and
 swaps: a bar they do not cover whole keeps its volume, unsplit, in a neutral
 tint, and the legend says since when they are measured. Under the chart, the
 period's detail, replaced by the bar's under the pointer
-(`volume-split-bars.tsx`). Beside it, the runs of the period
+(`protocol/split-bars.tsx`, shared with the fees). Beside it, the runs of the period
 (`rotation-runs/totals`: their count and pools, those in progress over 24 h,
 the median and p90 length, the share seen in the first hour), and under both
 the five largest (`rotation-runs?sort=volume`), named by their tokens. The
 runs' totals and list end at the last tranche written: until a window is
 covered, they say so instead of a partial count. The words are "rafale" and
 "rotation run": what is seen, never an intent.
+
+**03 Fees** — `protocol/fees/fees-tab.tsx`: where the protocol's fees go, the
+LPs' part (`claiming_fee + compounding_fee`), the protocol's and the referral's,
+read on `swaps/hourly|daily` of the protocol and summed per bar by
+`lib/protocol/fees.ts`: per destination over the period, amount and share, and
+per bar stacked in the three tints (`dash-fee-*`), the bar under the pointer
+detailed under the chart. The three parts make the fees whole; the LPs' split
+between claiming and compounding, and what they claim, are not drawn yet.
 
 **Tabs** — `lib/protocol/tabs.ts` lists the six tabs of the canvas, in order;
 a tab joins the row when its content ships (`READY_TABS`), numbered by its
