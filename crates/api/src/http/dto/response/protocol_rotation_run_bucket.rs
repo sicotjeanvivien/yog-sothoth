@@ -14,10 +14,10 @@ use crate::http::dto::schema::UnsignedDecimal;
 pub(crate) struct ProtocolRotationRunBucketResponse {
     protocol: ProtocolResponse,
     from: DateTime<Utc>,
-    /// Every swap of the bucket, as `swaps/hourly`; `null` where none is valued.
+    /// Every swap of the bucket, as `swaps/hourly|daily`; `null` where none is valued.
     #[schema(value_type = Option<UnsignedDecimal>)]
     volume_usd: Option<Decimal>,
-    /// `null` where the runs do not cover the bucket whole.
+    /// `null` where the runs do not cover the bucket whole, or an hour of it is not valued.
     #[schema(value_type = Option<UnsignedDecimal>)]
     in_runs_usd: Option<Decimal>,
     /// `volumeUsd − inRunsUsd`, never under 0; `null` as soon as one of them is.

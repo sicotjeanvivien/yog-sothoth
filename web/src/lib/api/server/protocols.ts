@@ -136,7 +136,7 @@ export const fetchLargestLiquidityMoves = cache(
     ),
 );
 
-/** The protocol's volume in rotation runs, on the bars of `fetchSwapsSeries`. */
+/** The protocol's volume by bar, split by its rotation runs. */
 export const fetchRotationRunsSeries = cache((protocol: ProtocolResponse, window: WindowResponse) =>
   readsHours(window)
     ? apiGet(

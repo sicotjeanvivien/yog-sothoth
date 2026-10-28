@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT $4::TEXT AS \"protocol!\", h.bucket AS \"bucket_from!\", h.volume_usd,\n                   CASE WHEN h.bucket >= $5 THEN COALESCE(r.volume_usd, 0) END AS in_runs_usd\n              FROM analytic_protocol_hourly h\n              LEFT JOIN (\n                  SELECT bucket, SUM(volume_usd) AS volume_usd\n                    FROM analytic_rotation_run_hours\n                   WHERE protocol = $4 AND bucket >= $1 AND bucket < $2\n                   GROUP BY bucket\n              ) r ON r.bucket = h.bucket\n             WHERE h.protocol = $4\n               AND h.bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND h.bucket < $2\n             ORDER BY h.bucket\n            ",
+  "query": "\n            SELECT $4::TEXT AS \"protocol!\", h.bucket AS \"bucket_from!\", h.volume_usd,\n                   CASE WHEN h.bucket >= $5 AND h.volume_usd IS NOT NULL\n                        THEN COALESCE(r.volume_usd, 0) END AS in_runs_usd\n              FROM analytic_protocol_hourly h\n              LEFT JOIN (\n                  SELECT bucket, SUM(volume_usd) AS volume_usd\n                    FROM analytic_rotation_run_hours\n                   WHERE protocol = $4 AND bucket >= $1 AND bucket < $2\n                   GROUP BY bucket\n              ) r ON r.bucket = h.bucket\n             WHERE h.protocol = $4\n               AND h.bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND h.bucket < $2\n             ORDER BY h.bucket\n            ",
   "describe": {
     "columns": [
       {
@@ -54,5 +54,5 @@
       null
     ]
   },
-  "hash": "17df0ea37ac7c1620c6e6a3c860cb8b02acc8c01c2108bcaf4e856588cd3de50"
+  "hash": "321d3260b9b17a6768be614206ea88fcdca56e0f0c9145406e4709a4486fe284"
 }

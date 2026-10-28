@@ -137,19 +137,21 @@ impl RotationRunService {
         bucket: BucketPeriod,
         protocol: Protocol,
     ) -> RepositoryResult<Measured<Vec<ProtocolBucket<RunSplit>>>> {
-        let period = build_frozen_period(self.hours.as_ref(), window, None).await?;
-        let items = match (&period, bucket) {
-            (Some(period), BucketPeriod::Hour) => {
-                let since = self.find_split_since(protocol).await?;
-                self.runs.list_hourly(period, since, protocol).await?
-            }
-            (Some(period), BucketPeriod::Day) => {
-                let since = self.find_split_since(protocol).await?;
-                self.runs.list_daily(period, since, protocol).await?
-            }
-            (None, _) => Vec::new(),
+        let Some(period) = build_frozen_period(self.hours.as_ref(), window, None).await? else {
+            return Ok(Measured {
+                period: None,
+                items: Vec::new(),
+            });
         };
-        Ok(Measured { period, items })
+        let since = self.find_split_since(protocol).await?;
+        let items = match bucket {
+            BucketPeriod::Hour => self.runs.list_hourly(&period, since, protocol).await?,
+            BucketPeriod::Day => self.runs.list_daily(&period, since, protocol).await?,
+        };
+        Ok(Measured {
+            period: Some(period),
+            items,
+        })
     }
 }
 

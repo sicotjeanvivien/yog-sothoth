@@ -3494,7 +3494,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/UnsignedDecimal",
-                "description": "`null` where the runs do not cover the bucket whole."
+                "description": "`null` where the runs do not cover the bucket whole, or an hour of it is not valued."
               },
               {
                 "type": "null"
@@ -3519,7 +3519,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/UnsignedDecimal",
-                "description": "Every swap of the bucket, as `swaps/hourly`; `null` where none is valued."
+                "description": "Every swap of the bucket, as `swaps/hourly|daily`; `null` where none is valued."
               },
               {
                 "type": "null"
@@ -5384,7 +5384,7 @@
                   "oneOf": [
                     {
                       "$ref": "#/components/schemas/UnsignedDecimal",
-                      "description": "`null` where the runs do not cover the bucket whole."
+                      "description": "`null` where the runs do not cover the bucket whole, or an hour of it is not valued."
                     },
                     {
                       "type": "null"
@@ -5409,7 +5409,7 @@
                   "oneOf": [
                     {
                       "$ref": "#/components/schemas/UnsignedDecimal",
-                      "description": "Every swap of the bucket, as `swaps/hourly`; `null` where none is valued."
+                      "description": "Every swap of the bucket, as `swaps/hourly|daily`; `null` where none is valued."
                     },
                     {
                       "type": "null"

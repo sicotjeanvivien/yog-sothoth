@@ -285,7 +285,8 @@ impl RotationRunLookup for PgRotationRunRepository {
             RunSplitRow,
             r#"
             SELECT $4::TEXT AS "protocol!", h.bucket AS "bucket_from!", h.volume_usd,
-                   CASE WHEN h.bucket >= $5 THEN COALESCE(r.volume_usd, 0) END AS in_runs_usd
+                   CASE WHEN h.bucket >= $5 AND h.volume_usd IS NOT NULL
+                        THEN COALESCE(r.volume_usd, 0) END AS in_runs_usd
               FROM analytic_protocol_hourly h
               LEFT JOIN (
                   SELECT bucket, SUM(volume_usd) AS volume_usd
@@ -322,7 +323,8 @@ impl RotationRunLookup for PgRotationRunRepository {
             r#"
             SELECT $4::TEXT AS "protocol!", h.bucket_from AS "bucket_from!",
                    SUM(h.volume_usd) AS volume_usd,
-                   CASE WHEN h.bucket_from >= $5 THEN COALESCE(SUM(r.volume_usd), 0) END
+                   CASE WHEN h.bucket_from >= $5 AND COUNT(h.volume_usd) = COUNT(*)
+                        THEN COALESCE(SUM(r.volume_usd), 0) END
                        AS in_runs_usd
               FROM (
                   SELECT bucket, volume_usd,

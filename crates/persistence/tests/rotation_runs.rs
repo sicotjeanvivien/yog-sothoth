@@ -324,6 +324,57 @@ async fn a_day_sums_each_hour_once_and_is_split_only_whole(pool: PgPool) {
     );
 }
 
+/// Mutation: an hour not valued split anyway — its runs' volume drawn against no volume; or a
+/// day holding one split, as its 6-hour slice would not be.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_bar_with_an_hour_not_valued_is_not_split(pool: PgPool) {
+    insert_protocol_hours(&pool, "meteora_damm_v2", &[(-1, "10")]).await;
+    sqlx::query(
+        "INSERT INTO analytic_protocol_hourly
+           (protocol, bucket, volume_usd, swap_count, active_pools, active_pools_valued)
+         VALUES ('meteora_damm_v2', $1, NULL, 1, 1, 0)",
+    )
+    .bind(at(-2 * 60))
+    .execute(&pool)
+    .await
+    .unwrap();
+    insert_run(
+        &pool,
+        "meteora_damm_v2",
+        1,
+        -150,
+        "7",
+        &[(-2, "3"), (-1, "4")],
+    )
+    .await;
+    let repository =
+        PgRotationRunRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+    let frozen = FrozenPeriod {
+        from: at(-24 * 60),
+        as_of: at(0),
+        covered_since: at(-24 * 60),
+    };
+    let since = Some(at(-24 * 60));
+
+    let hourly = repository
+        .list_hourly(&frozen, since, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+    let daily = repository
+        .list_daily(&frozen, since, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+
+    let read = |bars: &[ProtocolBucket<RunSplit>]| {
+        bars.iter()
+            .map(|b| (b.value.volume_usd, b.value.in_runs_usd))
+            .collect::<Vec<_>>()
+    };
+    let dec = |v: i64| Some(Decimal::from(v));
+    assert_eq!(read(&hourly), [(None, None), (dec(10), dec(4))]);
+    assert_eq!(read(&daily), [(dec(10), None)]);
+}
+
 /// Mutation: the coverage read from another column, or every tranche taken as measured — a
 /// protocol covered before its rotation was, or the end of the tranches misread.
 #[sqlx::test(migrations = "./migrations")]

@@ -40,7 +40,7 @@ pub trait RotationRunLookup: Send + Sync {
     ) -> RepositoryResult<Page<RotationRun>>;
 
     /// The protocol's volume hour by hour over the frozen `period`, split by its runs in the
-    /// hours from `runs_since`, the first whole hour they were measured.
+    /// valued hours from `runs_since`, the first whole hour they were measured.
     async fn list_hourly(
         &self,
         period: &FrozenPeriod,
@@ -49,7 +49,7 @@ pub trait RotationRunLookup: Send + Sync {
     ) -> RepositoryResult<Vec<ProtocolBucket<RunSplit>>>;
 
     /// The same, by 24 hours ending at the period's `as_of`, split only when whole from
-    /// `runs_since`.
+    /// `runs_since` and valued every hour.
     async fn list_daily(
         &self,
         period: &FrozenPeriod,
