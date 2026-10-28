@@ -57,20 +57,14 @@ async fn insert_run(
     }
 }
 
-/// The swaps' row of `protocol` for each of `hours`, counted from `at(0)`: hours observed, empty.
-async fn insert_protocol_hours(pool: &PgPool, protocol: &str, hours: &[i64]) {
+/// Each of `hours`, counted from `at(0)`, in the ledger of the frozen hours.
+async fn insert_frozen_hours(pool: &PgPool, hours: &[i64]) {
     for hour in hours {
-        sqlx::query(
-            "INSERT INTO analytic_protocol_hourly
-               (protocol, bucket, volume_usd, fees_usd, lp_fees_usd, protocol_fees_usd,
-                referral_fees_usd, swap_count, active_pools, active_pools_valued)
-             VALUES ($1, $2, 0, 0, 0, 0, 0, 0, 0, 0)",
-        )
-        .bind(protocol)
-        .bind(at(hour * 60))
-        .execute(pool)
-        .await
-        .unwrap();
+        sqlx::query("INSERT INTO analytic_hours (bucket, frozen_at) VALUES ($1, $1)")
+            .bind(at(hour * 60))
+            .execute(pool)
+            .await
+            .unwrap();
     }
 }
 
@@ -223,7 +217,7 @@ async fn both_orders_page_without_repeat_nor_gap(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn the_bars_sum_the_frozen_hours_of_the_runs(pool: PgPool) {
     // Two runs over the hours -2, -1 and 0; hour 0 is open: past the frozen `as_of`.
-    insert_protocol_hours(&pool, "meteora_damm_v2", &[-3, -2, -1, 0]).await;
+    insert_frozen_hours(&pool, &[-3, -2, -1, 0]).await;
     insert_run(
         &pool,
         "meteora_damm_v2",
@@ -281,13 +275,12 @@ async fn the_bars_sum_the_frozen_hours_of_the_runs(pool: PgPool) {
     );
 }
 
-/// Mutation: the run hours read alone, the hours drawn from the window, the coverage bound or either
-/// protocol filter dropped — an observed hour without a run missing, another hour or run drawn.
+/// Mutation: the run hours read alone, the hours drawn from the window, the coverage bound or the
+/// runs' protocol filter dropped — an observed hour without a run missing, another hour or run drawn.
 #[sqlx::test(migrations = "./migrations")]
 async fn an_observed_hour_without_a_run_is_zero_and_an_unobserved_one_absent(pool: PgPool) {
-    // Hour -6 is before the coverage, hour -3 unobserved but for DLMM, hour -4 a DLMM run's.
-    insert_protocol_hours(&pool, "meteora_damm_v2", &[-6, -5, -4, -2]).await;
-    insert_protocol_hours(&pool, "meteora_dlmm", &[-3]).await;
+    // Hour -6 is before the coverage, hour -3 not frozen, hour -4 a DLMM run's.
+    insert_frozen_hours(&pool, &[-6, -5, -4, -2]).await;
     insert_run(&pool, "meteora_damm_v2", 1, -150, "7", &[(-2, "7")]).await;
     insert_run(&pool, "meteora_dlmm", 2, -250, "5", &[(-4, "5")]).await;
     let repository =
@@ -313,12 +306,13 @@ async fn an_observed_hour_without_a_run_is_zero_and_an_unobserved_one_absent(poo
     );
 }
 
-/// Mutation: the run hours read alone, the days drawn from the window or the runs' protocol filter
-/// dropped — a covered day without a run missing, another day or run drawn.
+/// Mutation: the run hours read alone, the days drawn from the window, its start or the runs'
+/// protocol filter dropped — a covered day without a run missing, another day or run drawn.
 #[sqlx::test(migrations = "./migrations")]
 async fn a_covered_day_without_a_run_is_zero_and_one_unobserved_absent(pool: PgPool) {
-    // Three days ending at `at(0)`: the first observed without a DAMM v2 run, the second unobserved.
-    insert_protocol_hours(&pool, "meteora_damm_v2", &[-70, -60, -10, -5]).await;
+    // Four days ending at `at(0)`, covered: the first before the window, the second frozen without a
+    // DAMM v2 run, the third not frozen.
+    insert_frozen_hours(&pool, &[-80, -70, -60, -10, -5]).await;
     insert_run(&pool, "meteora_damm_v2", 1, -5 * 60, "9", &[(-5, "9")]).await;
     insert_run(&pool, "meteora_dlmm", 2, -70 * 60, "4", &[(-70, "4")]).await;
     let repository =
@@ -326,7 +320,7 @@ async fn a_covered_day_without_a_run_is_zero_and_one_unobserved_absent(pool: PgP
     let frozen = FrozenPeriod {
         from: at(-72 * 60),
         as_of: at(0),
-        covered_since: at(-72 * 60),
+        covered_since: at(-96 * 60),
     };
 
     let daily = repository

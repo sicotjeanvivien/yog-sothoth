@@ -280,18 +280,17 @@ impl RotationRunLookup for PgRotationRunRepository {
         period: &FrozenPeriod,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<Decimal>>> {
-        // ⚠️ On the swaps' hours, not the runs': an hour observed without a run has no run row.
+        // ⚠️ On the frozen hours, not the runs': an hour observed without a run has no run row.
         let rows = sqlx::query_as!(
             RotationRunHourRow,
             r#"
-            SELECT h.protocol AS "protocol!", h.bucket AS "bucket_from!",
+            SELECT $4::TEXT AS "protocol!", h.bucket AS "bucket_from!",
                    COALESCE(SUM(r.volume_usd), 0) AS "volume_usd!"
-              FROM analytic_protocol_hourly h
+              FROM analytic_hours h
               LEFT JOIN analytic_rotation_run_hours r
-                ON r.protocol = h.protocol AND r.bucket = h.bucket
-             WHERE h.protocol = $4
-               AND h.bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND h.bucket < $2
-             GROUP BY h.protocol, h.bucket
+                ON r.protocol = $4 AND r.bucket = h.bucket
+             WHERE h.bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND h.bucket < $2
+             GROUP BY h.bucket
              ORDER BY h.bucket
             "#,
             period.from,
@@ -314,19 +313,19 @@ impl RotationRunLookup for PgRotationRunRepository {
         let rows = sqlx::query_as!(
             RotationRunHourRow,
             r#"
-            SELECT h.protocol AS "protocol!", h.bucket_from AS "bucket_from!",
+            SELECT $4::TEXT AS "protocol!", h.bucket_from AS "bucket_from!",
                    COALESCE(SUM(r.volume_usd), 0) AS "volume_usd!"
               FROM (
-                  SELECT protocol, bucket,
+                  SELECT bucket,
                          time_bucket(INTERVAL '1 day', bucket, origin => $2::TIMESTAMPTZ)
                              AS bucket_from
-                    FROM analytic_protocol_hourly
-                   WHERE protocol = $4 AND bucket >= $1 AND bucket < $2
+                    FROM analytic_hours
+                   WHERE bucket >= $1 AND bucket < $2
               ) h
               LEFT JOIN analytic_rotation_run_hours r
-                ON r.protocol = h.protocol AND r.bucket = h.bucket
+                ON r.protocol = $4 AND r.bucket = h.bucket
              WHERE h.bucket_from >= $3
-             GROUP BY h.protocol, h.bucket_from
+             GROUP BY h.bucket_from
              ORDER BY h.bucket_from
             "#,
             period.from,
