@@ -7,7 +7,7 @@ use sqlx::PgPool;
 use yog_core::{
     Cursor,
     domain::{
-        FrozenPeriod, LiquidityMoveKind, LiquidityMoveList, LiquidityMoveLookup,
+        FrozenPeriod, LiquidityMoveKind, LiquidityMoveList, LiquidityMoveLock, LiquidityMoveLookup,
         LiquidityMoveOrder, LiquidityMoveScope, Protocol, Window,
     },
 };
@@ -323,4 +323,43 @@ async fn a_list_of_one_kind_keeps_that_kind_in_each_scope_and_order(pool: PgPool
             assert_eq!(seen, ["create-a", "create-b"], "{scope:?} {order:?}");
         }
     }
+}
+
+/// Mutation: the lock not read — a creation's vesting lock served as not measured; or a move
+/// valued before the lock was measured served as one without.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_listed_move_carries_its_lock_and_none_before_it_was_measured(pool: PgPool) {
+    let mine = pk(1).to_string();
+    insert_move(&pool, &mine, "unmeasured", 5, Some(20)).await;
+    insert_move(&pool, &mine, "locked", 10, Some(10)).await;
+    sqlx::query("UPDATE analytic_liquidity_moves SET lock = 'vesting' WHERE signature = 'locked'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let repository = repository(&pool).await;
+
+    let page = repository
+        .list_moves(
+            &period(24),
+            Window::Day,
+            LiquidityMoveList::every_kind(LiquidityMoveScope::Pool(pk(1))),
+            LiquidityMoveOrder::Amount,
+            None,
+            5,
+        )
+        .await
+        .unwrap();
+
+    let locks: Vec<_> = page
+        .items
+        .iter()
+        .map(|m| (m.signature.as_str(), m.lock))
+        .collect();
+    assert_eq!(
+        locks,
+        [
+            ("unmeasured", None),
+            ("locked", Some(LiquidityMoveLock::Vesting))
+        ]
+    );
 }

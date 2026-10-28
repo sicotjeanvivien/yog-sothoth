@@ -81,6 +81,14 @@ export const zLiquidityMoveKindResponse = z.enum([
 
 export type LiquidityMoveKindResponse = z.infer<typeof zLiquidityMoveKindResponse>;
 
+export const zLiquidityMoveLockResponse = z.enum([
+    'none',
+    'vesting',
+    'permanent'
+]);
+
+export type LiquidityMoveLockResponse = z.infer<typeof zLiquidityMoveLockResponse>;
+
 export const zMeteoraDammV2BpsChangeResponse = z.union([
     z.object({
         change: z.enum(['unchanged'])
@@ -889,6 +897,7 @@ export const zLiquidityMoveResponse = z.object({
     amountUsd: zUnsignedDecimal,
     at: z.iso.datetime({ offset: true }),
     kind: zLiquidityMoveKindResponse,
+    lock: zLiquidityMoveLockResponse.nullable(),
     owner: z.string(),
     poolAddress: z.string(),
     protocol: zProtocolResponse,
@@ -1257,6 +1266,7 @@ export const zWindowedPageResponseLiquidityMoveResponse = z.object({
         amountUsd: zUnsignedDecimal,
         at: z.iso.datetime({ offset: true }),
         kind: zLiquidityMoveKindResponse,
+        lock: zLiquidityMoveLockResponse.nullable(),
         owner: z.string(),
         poolAddress: z.string(),
         protocol: zProtocolResponse,

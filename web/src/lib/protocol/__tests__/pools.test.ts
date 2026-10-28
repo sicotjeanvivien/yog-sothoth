@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { birthSlotsOf, birthTotalOf } from "../pools";
+import { birthSlotsOf, birthTotalOf, lockKey } from "../pools";
 
 const AS_OF = "2026-10-25T03:00:00Z";
 
@@ -37,5 +37,16 @@ describe("birthTotalOf", () => {
 
     expect(birthTotalOf(slots)).toBe(7);
     expect(birthTotalOf(birthSlotsOf("24h", AS_OF, []))).toBeNull();
+  });
+});
+
+describe("lockKey", () => {
+  // Mutation: a lock not measured read as none — a creation valued before the lock was measured
+  // said unlocked.
+  it("keeps each lock, and a lock not measured apart from none", () => {
+    expect(lockKey("permanent")).toBe("permanent");
+    expect(lockKey("vesting")).toBe("vesting");
+    expect(lockKey("none")).toBe("none");
+    expect(lockKey(null)).toBe("unmeasured");
   });
 });

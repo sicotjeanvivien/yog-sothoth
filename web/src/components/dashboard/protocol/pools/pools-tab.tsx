@@ -26,7 +26,7 @@ import { formatUsdCompact } from "@/lib/format/format-usd";
 import { pairLabel, shortenPubkey } from "@/lib/format/pubkey";
 import { axisOf, daysAgoOf, hourOf, roundTicks } from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
-import { birthSlotsOf, birthTotalOf } from "@/lib/protocol/pools";
+import { birthSlotsOf, birthTotalOf, lockKey } from "@/lib/protocol/pools";
 
 import { SplitBars, type SplitDetail } from "../split-bars";
 
@@ -43,7 +43,7 @@ const BIRTHS_CLASS = `${CELL_CLASS} ${BIRTHS_SPAN} min-h-[262px]`;
 
 const DEPOSITS_CLASS = `${CELL_CLASS} ${DEPOSITS_SPAN} min-h-[262px]`;
 
-const DEPOSIT_COLUMNS = "grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_auto_auto]";
+const DEPOSIT_COLUMNS = "grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_auto_auto_auto]";
 
 const BIRTH_TONE = { births: "bg-dash-flow-create" } as const;
 
@@ -205,10 +205,11 @@ async function LargestDeposits({ period, protocol }: TabProps) {
         <p className="py-6 text-[14px] text-dash-ink-2">{t("empty")}</p>
       ) : (
         <div className="overflow-x-auto">
-          <div role="table" aria-label={t("tableLabel")} className="min-w-[360px]">
+          <div role="table" aria-label={t("tableLabel")} className="min-w-[420px]">
             <div role="row" className={`${HEAD_ROW_CLASS} ${DEPOSIT_COLUMNS}`}>
               <div role="columnheader">{t("pair")}</div>
               <div role="columnheader">{t("creator")}</div>
+              <div role="columnheader">{t("lock")}</div>
               <div role="columnheader" className={NUM_CLASS}>
                 {t("deposit")}
               </div>
@@ -224,6 +225,9 @@ async function LargestDeposits({ period, protocol }: TabProps) {
                 </div>
                 <div role="cell" className="font-dash-mono text-[12px] whitespace-nowrap text-dash-ink-2">
                   {shortenPubkey(creation.owner)}
+                </div>
+                <div role="cell" className="font-dash-mono text-[12px] whitespace-nowrap text-dash-ink-2">
+                  {t(`locks.${lockKey(creation.lock)}`)}
                 </div>
                 <div role="cell" className={`${NUM_CLASS} text-dash-ink`}>
                   {formatUsdCompact(creation.amountUsd)}

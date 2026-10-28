@@ -62,7 +62,7 @@ pub use liquidity_change_event::{LiquidityChangeEvent, LiquidityChangeEventLooku
 pub use liquidity_flow::{LiquidityFlowRepository, PoolLiquidityFlow};
 pub use liquidity_moves::{
     LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveKind, LiquidityMoveList,
-    LiquidityMoveLookup, LiquidityMoveOrder, LiquidityMoveScope,
+    LiquidityMoveLock, LiquidityMoveLookup, LiquidityMoveOrder, LiquidityMoveScope,
 };
 pub use materialization_backlog::{MaterializationBacklog, MaterializationBacklogRepository};
 pub use meteora::{

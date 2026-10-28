@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::Serialize;
 use utoipa::ToSchema;
-use yog_core::domain::{LiquidityFlows, LiquidityMove, LiquidityMoveKind};
+use yog_core::domain::{LiquidityFlows, LiquidityMove, LiquidityMoveKind, LiquidityMoveLock};
 
 use super::protocol::ProtocolResponse;
 use crate::http::dto::schema::{Count, UnsignedDecimal};
@@ -47,6 +47,15 @@ pub(crate) enum LiquidityMoveKindResponse {
     Remove,
 }
 
+/// The lock a move's transaction puts on a position.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum LiquidityMoveLockResponse {
+    None,
+    Vesting,
+    Permanent,
+}
+
 /// One valued liquidity move, with its pool's token symbols.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -59,6 +68,8 @@ pub(crate) struct LiquidityMoveResponse {
     token_b_symbol: Option<String>,
     owner: String,
     kind: LiquidityMoveKindResponse,
+    /// The lock its transaction puts on a position; `null` for a move valued before it was measured.
+    lock: Option<LiquidityMoveLockResponse>,
     #[schema(value_type = UnsignedDecimal)]
     amount_usd: Decimal,
 }
@@ -78,7 +89,16 @@ impl From<LiquidityMove> for LiquidityMoveResponse {
                 LiquidityMoveKind::Add => LiquidityMoveKindResponse::Add,
                 LiquidityMoveKind::Remove => LiquidityMoveKindResponse::Remove,
             },
+            lock: m.lock.map(|lock| match lock {
+                LiquidityMoveLock::None => LiquidityMoveLockResponse::None,
+                LiquidityMoveLock::Vesting => LiquidityMoveLockResponse::Vesting,
+                LiquidityMoveLock::Permanent => LiquidityMoveLockResponse::Permanent,
+            }),
             amount_usd: m.amount_usd,
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/liquidity_move_tests.rs"]
+mod tests;

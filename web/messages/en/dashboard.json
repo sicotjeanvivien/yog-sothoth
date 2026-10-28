@@ -321,13 +321,20 @@
         },
         "deposits": {
           "title": "Largest first deposits · {period}",
-          "info": "The pools born over the period whose first deposit is worth the most, valued at the pool's price in its 5-minute tranche. A pool whose deposit could not be valued is not listed; the chart counts it. The address is its creator's.",
+          "info": "The pools born over the period whose first deposit is worth the most, valued at the pool's price in its 5-minute tranche. A pool whose deposit could not be valued is not listed; the chart counts it. The address is its creator's. The lock is the one the birth's transaction puts on a position: permanent, vesting, or none; “—” before it was measured.",
           "tableLabel": "Largest first deposits over the chosen period",
           "pair": "Pair",
           "creator": "Creator",
+          "lock": "Lock",
           "deposit": "Deposit",
           "ago": "Ago",
-          "empty": "No valued birth over the period."
+          "empty": "No valued birth over the period.",
+          "locks": {
+            "permanent": "permanent",
+            "vesting": "vesting",
+            "none": "none",
+            "unmeasured": "—"
+          }
         }
       }
     },

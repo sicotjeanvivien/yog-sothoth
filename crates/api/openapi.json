@@ -288,6 +288,15 @@
         ],
         "type": "string"
       },
+      "LiquidityMoveLockResponse": {
+        "description": "The lock a move's transaction puts on a position.",
+        "enum": [
+          "none",
+          "vesting",
+          "permanent"
+        ],
+        "type": "string"
+      },
       "LiquidityMoveResponse": {
         "description": "One valued liquidity move, with its pool's token symbols.",
         "properties": {
@@ -300,6 +309,17 @@
           },
           "kind": {
             "$ref": "#/components/schemas/LiquidityMoveKindResponse"
+          },
+          "lock": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LiquidityMoveLockResponse",
+                "description": "The lock its transaction puts on a position; `null` for a move valued before it was measured."
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "owner": {
             "type": "string"
@@ -334,6 +354,7 @@
           "owner",
           "kind",
           "amountUsd",
+          "lock",
           "tokenASymbol",
           "tokenBSymbol"
         ],
@@ -4721,6 +4742,17 @@
                 "kind": {
                   "$ref": "#/components/schemas/LiquidityMoveKindResponse"
                 },
+                "lock": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/LiquidityMoveLockResponse",
+                      "description": "The lock its transaction puts on a position; `null` for a move valued before it was measured."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "owner": {
                   "type": "string"
                 },
@@ -4754,6 +4786,7 @@
                 "owner",
                 "kind",
                 "amountUsd",
+                "lock",
                 "tokenASymbol",
                 "tokenBSymbol"
               ],

@@ -43,6 +43,32 @@ impl LiquidityMoveKind {
     }
 }
 
+/// The lock a move's transaction puts on a position.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LiquidityMoveLock {
+    None,
+    Vesting,
+    Permanent,
+}
+
+impl LiquidityMoveLock {
+    /// ⚠️ The labels `analytic_liquidity_moves.lock` holds, checked by migration 043.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            LiquidityMoveLock::None => "none",
+            LiquidityMoveLock::Vesting => "vesting",
+            LiquidityMoveLock::Permanent => "permanent",
+        }
+    }
+
+    /// The lock `label` names, `None` for a label [`Self::as_str`] never writes.
+    pub fn from_label(label: &str) -> Option<Self> {
+        [Self::None, Self::Vesting, Self::Permanent]
+            .into_iter()
+            .find(|lock| lock.as_str() == label)
+    }
+}
+
 /// One valued liquidity move, with the identity of its pool's tokens.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiquidityMove {
@@ -56,6 +82,8 @@ pub struct LiquidityMove {
     pub token_b_symbol: Option<String>,
     pub owner: Pubkey,
     pub kind: LiquidityMoveKind,
+    /// `None` for a move valued before its lock was measured.
+    pub lock: Option<LiquidityMoveLock>,
     pub amount_usd: Decimal,
 }
 

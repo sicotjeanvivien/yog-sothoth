@@ -21,3 +21,10 @@ export function birthTotalOf(slots: readonly Slot[]): number | null {
     null,
   );
 }
+
+/** The word of a creation's lock: `unmeasured` for a move valued before it was measured. */
+export function lockKey(
+  lock: "none" | "vesting" | "permanent" | null | undefined,
+): "none" | "vesting" | "permanent" | "unmeasured" {
+  return lock ?? "unmeasured";
+}

@@ -321,13 +321,20 @@
         },
         "deposits": {
           "title": "Plus gros dépôts initiaux · {period}",
-          "info": "Les pools nées pendant la période dont le premier dépôt vaut le plus, valorisé au prix de la pool dans sa tranche de 5 minutes. Une pool dont le dépôt n'a pas pu être valorisé n'y figure pas ; le graphique la compte. L'adresse est celle de son créateur.",
+          "info": "Les pools nées pendant la période dont le premier dépôt vaut le plus, valorisé au prix de la pool dans sa tranche de 5 minutes. Une pool dont le dépôt n'a pas pu être valorisé n'y figure pas ; le graphique la compte. L'adresse est celle de son créateur. Le verrou est celui que la transaction de naissance pose sur une position : permanent, à vesting, ou aucun ; « — » avant sa mesure.",
           "tableLabel": "Plus gros dépôts initiaux sur la période choisie",
           "pair": "Paire",
           "creator": "Créateur",
+          "lock": "Verrou",
           "deposit": "Dépôt",
           "ago": "Il y a",
-          "empty": "Aucune naissance valorisée sur la période."
+          "empty": "Aucune naissance valorisée sur la période.",
+          "locks": {
+            "permanent": "permanent",
+            "vesting": "vesting",
+            "none": "aucun",
+            "unmeasured": "—"
+          }
         }
       }
     },

@@ -169,7 +169,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
                 r#"
                 SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index,
                        m.pool_address, ta.symbol AS "token_a_symbol?",
-                       tb.symbol AS "token_b_symbol?", m.owner, m.kind,
+                       tb.symbol AS "token_b_symbol?", m.owner, m.kind, m.lock,
                        m.amount_usd AS "amount_usd!",
                        ROUND(m.amount_usd, 6) AS "amount_key!"
                   FROM analytic_liquidity_moves m
@@ -207,7 +207,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
                 r#"
                 SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index,
                        m.pool_address, ta.symbol AS "token_a_symbol?",
-                       tb.symbol AS "token_b_symbol?", m.owner, m.kind,
+                       tb.symbol AS "token_b_symbol?", m.owner, m.kind, m.lock,
                        m.amount_usd AS "amount_usd!",
                        ROUND(m.amount_usd, 6) AS "amount_key!"
                   FROM analytic_liquidity_moves m
@@ -241,7 +241,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
                 r#"
                 SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index,
                        m.pool_address, ta.symbol AS "token_a_symbol?",
-                       tb.symbol AS "token_b_symbol?", m.owner, m.kind,
+                       tb.symbol AS "token_b_symbol?", m.owner, m.kind, m.lock,
                        m.amount_usd AS "amount_usd!",
                        ROUND(m.amount_usd, 6) AS "amount_key!"
                   FROM analytic_liquidity_moves m
@@ -279,7 +279,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
                 r#"
                 SELECT m.protocol, m.timestamp AS at, m.signature, m.event_index,
                        m.pool_address, ta.symbol AS "token_a_symbol?",
-                       tb.symbol AS "token_b_symbol?", m.owner, m.kind,
+                       tb.symbol AS "token_b_symbol?", m.owner, m.kind, m.lock,
                        m.amount_usd AS "amount_usd!",
                        ROUND(m.amount_usd, 6) AS "amount_key!"
                   FROM analytic_liquidity_moves m
