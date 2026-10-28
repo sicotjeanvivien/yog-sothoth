@@ -71,6 +71,22 @@ async fn the_compression_policy_is_declared_as_intended(pool: PgPool) {
          compressed only once it closes, a week of rows uncompressed behind it"
     );
 
+    // ⚠️ Compared as an INTERVAL: the catalog holds it as text.
+    let rolled_up_by_week: Option<bool> = sqlx::query_scalar(
+        "SELECT compress_interval_length::interval = INTERVAL '7 days'
+           FROM timescaledb_information.hypertable_compression_settings
+          WHERE hypertable = 'token_prices'::regclass",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("the compression settings must be readable from the catalog");
+    assert_eq!(
+        rolled_up_by_week,
+        Some(true),
+        "the compressed chunks must be rolled up by week since 041: without a \
+         retention, 1-day chunks would never stop adding relations to lock"
+    );
+
     // No retention, on purpose: an as-of gap never heals, nothing backfills prices.
     let retention: i64 = sqlx::query_scalar(
         "SELECT count(*)::BIGINT

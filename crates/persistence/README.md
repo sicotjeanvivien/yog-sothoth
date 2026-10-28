@@ -361,10 +361,12 @@ latest row. Tests price through `helpers::price_mint_since` and
 
 ### How the price series is stored (migrations 011 and 041)
 
-`token_prices` is cut in 1-day chunks, each compressed a day after it closes,
-segmented by `mint` and ordered by `fetched_at DESC` (041 over the 7 and 7 days of
-`001` and `011`): about two days stay uncompressed, which is what the readers
-read hot. It has no retention — a dropped price is a bucket unvalued for good.
+`token_prices` is cut in 1-day chunks, each compressed a day after it closes and
+rolled up by week once compressed, segmented by `mint` and ordered by
+`fetched_at DESC` (041 over the 7 and 7 days of `001` and `011`): about two days stay
+uncompressed. It has no retention — a dropped price is a bucket unvalued for good —
+so the weekly rollup is what keeps its chunk count, and the locks a dump or an
+unbounded lookup takes on every chunk, where they were.
 `tests/price_compression.rs` holds the settings and the lookups over compressed
 chunks.
 

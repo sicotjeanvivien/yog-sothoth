@@ -57,7 +57,7 @@ export const RELEASES: readonly Release[] = [
             technical: true,
           },
           {
-            text: "The price series is stored in 1-day chunks, each compressed a day after it closes, instead of 7-day chunks compressed a week after: about two days of prices stay uncompressed instead of one to two weeks (migration 041).",
+            text: "The price series is stored in 1-day chunks, each compressed a day after it closes and rolled up by week, instead of 7-day chunks compressed a week after: about two days of prices stay uncompressed instead of one to two weeks (migration 041).",
             technical: true,
           },
         ],
