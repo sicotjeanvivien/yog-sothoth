@@ -355,11 +355,11 @@ with a green dot beside it while the ingestion is live
 
 **02 Volume** — `protocol/volume/volume-tab.tsx`: where the volume comes from,
 each bar of the protocol's swaps split between its rotation runs
-(`dash-run`) and the rest (`dash-run-out`) by `lib/protocol/volume.ts`, from
-two routes on the same frozen hours: `swaps/hourly|daily` and
-`rotation-runs/hourly|daily`. The runs are measured from a later hour than the
-swaps: a bar they do not cover whole keeps its volume, unsplit, in a neutral
-tint, and the legend says since when they are measured. Under the chart, the
+(`dash-run`) and the rest (`dash-run-out`), as `rotation-runs/hourly|daily` serves
+it; `lib/protocol/volume.ts` sums the hours of a 7-day slice, split only when each
+of them is. The runs are measured from a later hour than the swaps: a bar they do
+not split keeps its volume, unsplit, in a neutral tint, and the legend says since
+which bar they split it. Under the chart, the
 period's detail, replaced by the bar's under the pointer
 (`protocol/split-bars.tsx`, shared with the fees). Beside it, the runs of the period
 (`rotation-runs/totals`: their count and pools, those in progress over 24 h,

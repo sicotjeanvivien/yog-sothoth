@@ -3490,16 +3490,48 @@
             "format": "date-time",
             "type": "string"
           },
+          "inRunsUsd": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal",
+                "description": "`null` where the runs do not cover the bucket whole."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outsideRunsUsd": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal",
+                "description": "`volumeUsd − inRunsUsd`, never under 0; `null` as soon as one of them is."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "protocol": {
             "$ref": "#/components/schemas/ProtocolResponse"
           },
           "volumeUsd": {
-            "$ref": "#/components/schemas/UnsignedDecimal"
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal",
+                "description": "Every swap of the bucket, as `swaps/hourly`; `null` where none is valued."
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "protocol",
           "from",
+          "inRunsUsd",
+          "outsideRunsUsd",
           "volumeUsd"
         ],
         "type": "object"
@@ -5348,16 +5380,48 @@
                   "format": "date-time",
                   "type": "string"
                 },
+                "inRunsUsd": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/UnsignedDecimal",
+                      "description": "`null` where the runs do not cover the bucket whole."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "outsideRunsUsd": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/UnsignedDecimal",
+                      "description": "`volumeUsd − inRunsUsd`, never under 0; `null` as soon as one of them is."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "protocol": {
                   "$ref": "#/components/schemas/ProtocolResponse"
                 },
                 "volumeUsd": {
-                  "$ref": "#/components/schemas/UnsignedDecimal"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/UnsignedDecimal",
+                      "description": "Every swap of the bucket, as `swaps/hourly`; `null` where none is valued."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               },
               "required": [
                 "protocol",
                 "from",
+                "inRunsUsd",
+                "outsideRunsUsd",
                 "volumeUsd"
               ],
               "type": "object"

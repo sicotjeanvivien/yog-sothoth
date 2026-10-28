@@ -26,7 +26,6 @@ import { ApiClientError } from "@/lib/api/errors";
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
 import {
   fetchLargestRotationRuns,
-  fetchSwapsSeries,
   fetchRotationRunsSeries,
   fetchRotationRunTotals,
 } from "@/lib/api/server/protocols";
@@ -39,8 +38,7 @@ import { axisOf, daysAgoOf, hourOf, roundTicks } from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
 import {
   durationOf,
-  outsideRuns,
-  runsMeasuredSince,
+  splitSinceOf,
   splitSlotsOf,
   splitTotalsOf,
 } from "@/lib/protocol/volume";
@@ -130,12 +128,9 @@ async function VolumeSources({ period, protocol }: TabProps) {
   const locale = (await getLocale()) as FormatLocale;
   const title = t("title");
 
-  let swaps, runs;
+  let runs;
   try {
-    [swaps, runs] = await Promise.all([
-      fetchSwapsSeries(protocol, period),
-      fetchRotationRunsSeries(protocol, period),
-    ]);
+    runs = await fetchRotationRunsSeries(protocol, period);
   } catch (err) {
     if (err instanceof ApiClientError) {
       return (
@@ -148,12 +143,12 @@ async function VolumeSources({ period, protocol }: TabProps) {
     throw err;
   }
 
-  const closed = await closedReason(period, swaps);
+  const closed = await closedReason(period, runs);
   const usd = (value: number | null) => formatUsdCompact(value === null ? null : String(value));
   const share = (part: number, whole: number) =>
     whole > 0 ? formatPercent(String(part / whole), locale) : "—";
 
-  const slots = swaps.asOf === null ? [] : splitSlotsOf(period, swaps.asOf, swaps.items, runs);
+  const slots = runs.asOf === null ? [] : splitSlotsOf(period, runs.asOf, runs.items);
   const totals = splitTotalsOf(slots);
   const max = Math.max(0, ...slots.map((s) => s.total ?? 0));
   const scale = (v: number) => (max > 0 ? (v / max) * CHART_PX.top : 0);
@@ -190,12 +185,11 @@ async function VolumeSources({ period, protocol }: TabProps) {
       period !== "24h"
         ? `${daysAgo(daysAgoOf(period, slots.length, i))} · ${moment(slot.from)} → ${moment(slot.to)}`
       : `${hourOf(slot.from)} UTC`;
-    const outside = outsideRuns(slot);
     if (slot.total === null) {
       return { segments: [], detail: { when, total: tVolume("noValue"), rows: [] } };
     }
     const height = (v: number) => Math.max(v > 0 ? 1 : 0, Math.round(scale(v)));
-    if (slot.inRuns === null || outside === null) {
+    if (slot.inRuns === null || slot.outside === null) {
       return {
         segments: [{ tone: "unsplit" as const, height: height(slot.total) }],
         detail: detailOf(when, 0, 0, slot.total),
@@ -204,13 +198,13 @@ async function VolumeSources({ period, protocol }: TabProps) {
     return {
       segments: [
         { tone: "in" as const, height: height(slot.inRuns) },
-        { tone: "out" as const, height: height(outside) },
+        { tone: "out" as const, height: height(slot.outside) },
       ].filter((s) => s.height > 0),
-      detail: detailOf(when, slot.inRuns, outside, 0),
+      detail: detailOf(when, slot.inRuns, slot.outside, 0),
     };
   });
 
-  const measuredSince = runsMeasuredSince(runs);
+  const measuredSince = splitSinceOf(runs.items);
   const partly = totals.unsplit > 0;
   const legend = (
     <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] text-dash-ink-2">

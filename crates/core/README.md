@@ -35,7 +35,8 @@ core/src/
 │   ├── pool_creations/    (PoolCreations, by protocol — PoolCreationsLookup)
 │   ├── liquidity_moves/   (LiquidityMove, LiquidityFlows, its order, scope and cursor —
 │   │                       LiquidityMoveLookup)
-│   ├── rotation_runs/     (RotationRun, its totals, order, scope and cursor —
+│   ├── rotation_runs/     (RotationRun, its totals, order, scope and cursor; RunSplit, a bar's
+│   │                       volume split by the runs —
 │   │                       RotationRunLookup; TranchePeriod, through the last tranche
 │   │                       written, in analytic/window.rs)
 │   ├── claim_totals/      (ClaimTotals, the claims of fees or rewards by protocol —

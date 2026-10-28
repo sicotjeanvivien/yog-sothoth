@@ -3,11 +3,11 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use yog_core::{
     RepositoryError,
-    domain::{ProtocolBucket, RotationRun, RotationRunTotals},
+    domain::{ProtocolBucket, RotationRun, RotationRunTotals, RunSplit},
 };
 
 use crate::repositories::helper::{
-    convert_bigdecimal_to_decimal, convert_string_to_pubkey, parse_protocol,
+    convert_bigdecimal_to_decimal, convert_optional, convert_string_to_pubkey, parse_protocol,
 };
 
 /// A run, and the volume its page is ordered by: rounded as the cursor holds it.
@@ -76,21 +76,26 @@ impl TryFrom<RotationRunTotalsRow> for RotationRunTotals {
     }
 }
 
-/// The volume in runs over one bucket.
-pub(super) struct RotationRunHourRow {
+/// A bucket's volume and its part in runs.
+pub(super) struct RunSplitRow {
     pub(super) protocol: String,
     pub(super) bucket_from: DateTime<Utc>,
-    pub(super) volume_usd: BigDecimal,
+    pub(super) volume_usd: Option<BigDecimal>,
+    pub(super) in_runs_usd: Option<BigDecimal>,
 }
 
-impl TryFrom<RotationRunHourRow> for ProtocolBucket<Decimal> {
+impl TryFrom<RunSplitRow> for ProtocolBucket<RunSplit> {
     type Error = RepositoryError;
 
-    fn try_from(row: RotationRunHourRow) -> Result<Self, Self::Error> {
+    fn try_from(row: RunSplitRow) -> Result<Self, Self::Error> {
+        let decimal = |value, field| convert_optional(value, field, convert_bigdecimal_to_decimal);
         Ok(ProtocolBucket {
             protocol: parse_protocol(&row.protocol)?,
             from: row.bucket_from,
-            value: convert_bigdecimal_to_decimal(row.volume_usd, "volume_usd")?,
+            value: RunSplit {
+                volume_usd: decimal(row.volume_usd, "volume_usd")?,
+                in_runs_usd: decimal(row.in_runs_usd, "in_runs_usd")?,
+            },
         })
     }
 }
