@@ -1,6 +1,6 @@
 /** The Overview's bar series: fixed slots ending at `asOf`, and the scale's two round marks. */
 
-import { HOUR_MS, periodMs, type Period } from "./period";
+import { HOUR_MS, periodMs, readsHours, SLOT_HOURS, type Period } from "./period";
 
 /** Each chart's height, and its tallest bar a little under it so the top mark's label stays clear. */
 export const CHART_PX = {
@@ -13,32 +13,45 @@ export type Slot = { from: Date; to: Date; value: number | null };
 
 type Bar = { from: string; value: string | null };
 
-/** Hours over 24 h, 24-hour slices beyond: one slot each, summed across protocols. */
+/**
+ * Hours over 24 h, 6-hour slices over 7 days, 24-hour slices beyond: each slot sums the valued bars
+ * it holds, across protocols, as the API's days do; `null` without any.
+ */
 export function slotsOf(
   period: Period,
   asOf: string,
   bars: readonly Bar[],
 ): Slot[] {
-  const step = period === "24h" ? HOUR_MS : 24 * HOUR_MS;
-  const end = Date.parse(asOf);
+  const step = SLOT_HOURS[period] * HOUR_MS;
   const count = periodMs(period) / step;
+  const start = Date.parse(asOf) - count * step;
+  const barStep = readsHours(period) ? HOUR_MS : step;
 
-  const sums = new Map<number, number>();
+  const sums = Array.from({ length: count }, (): number | null => null);
   for (const bar of bars) {
+    const at = Date.parse(bar.from);
+    const i = Math.floor((at - start) / step);
+    // ⚠️ A bar off the slots' grid (read at another `asOf`) belongs to none of them.
+    if (i < 0 || i >= count || (at - start) % barStep !== 0) continue;
     const value = bar.value === null ? NaN : Number.parseFloat(bar.value);
-    if (!Number.isFinite(value)) continue;
-    const key = Date.parse(bar.from);
-    sums.set(key, (sums.get(key) ?? 0) + value);
+    if (Number.isFinite(value)) {
+      sums[i] = (sums[i] ?? 0) + value;
+    }
   }
 
-  return Array.from({ length: count }, (_, i) => {
-    const from = end - (count - i) * step;
+  return sums.map((sum, i) => {
+    const from = start + i * step;
     return {
       from: new Date(from),
       to: new Date(from + step),
-      value: sums.get(from) ?? null,
+      value: sum,
     };
   });
+}
+
+/** How many 24-hour slices before `asOf` slot `i` of `count` falls in. */
+export function daysAgoOf(period: Period, count: number, i: number): number {
+  return Math.floor(((count - 1 - i) * SLOT_HOURS[period]) / 24);
 }
 
 /**
@@ -58,7 +71,7 @@ export function roundTicks(max: number): number[] {
 }
 
 /** The step between axis labels; the last slot always has one. */
-const AXIS_EVERY: Record<Period, number> = { "24h": 6, "7d": 1, "30d": 7 };
+const AXIS_EVERY: Record<Period, number> = { "24h": 6, "7d": 4, "30d": 7 };
 
 /** "14:00", the slot's hour in UTC. */
 export function hourOf(date: Date): string {
@@ -73,11 +86,16 @@ export function axisOf(
 ): string[] {
   const every = AXIS_EVERY[period];
   const last = slots.length - 1;
+  // ⚠️ Over 7 days, one label per day's four slices: the others' rule names today twice.
+  const labelled = (i: number) =>
+    period === "7d"
+      ? (last - i) % every === 0
+      : i === last || (i % every === 0 && i <= last - every / 2);
   return slots.flatMap((slot, i) =>
-    i === last || (i % every === 0 && i <= last - every / 2)
+    labelled(i)
       ? [
           period !== "24h"
-            ? dayLabel(last - i)
+            ? dayLabel(daysAgoOf(period, slots.length, i))
             : i === last
               ? `${hourOf(slot.from)} UTC`
               : hourOf(slot.from),

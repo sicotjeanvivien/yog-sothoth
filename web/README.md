@@ -255,8 +255,8 @@ moved, while the ⓘ (`InfoPopover`) and `BlockError` they share keep it.
 ## Overview
 
 `(dashboard)/overview/page.tsx`, after the canvas: four KPIs (TVL, volume,
-fees, active pools), activity by protocol, the latest signals, volume by hour
-or by day, the most traded tokens. The header is the title alone, then "Live",
+fees, active pools), activity by protocol, the latest signals, volume per bar
+of the period, the most traded tokens. The header is the title alone, then "Live",
 the period and the advanced mode at its right. Every figure comes from yog-analytic's
 measures (`/api/swaps/…`, `/api/tvl…`, `/api/pool-creations/…`,
 `/api/pool-discoveries/…`), which all end at the same `asOf`, the close of the last frozen
@@ -264,8 +264,10 @@ hour.
 
 **The period** — `?period=24h|7d|30d` (`lib/overview/period.ts`; missing or
 unknown is 24h) drives every label, section title, chart and ⓘ, which speak of
-"the chosen period". The TVL stays the value of the last frozen hour; only its
-change follows the period. The selector (`period-selector.tsx`) is a set of
+"the chosen period". A bar is an hour over 24h, a 6-hour slice over 7d, a 24-hour
+slice over 30d (`SLOT_HOURS`), each ending at `asOf`; over 7d the web sums the
+`hourly` series by six, as the API sums its days: whether an hour is covered is the API's. The TVL stays
+the value of the last frozen hour; only its change follows the period. The selector (`period-selector.tsx`) is a set of
 links, in its own unkeyed `<Suspense>` so a period change keeps it; every block
 that reads the period has its `<Suspense key={period}>`, so the change shows
 their waiting slots only; the signals do not reload.
@@ -341,8 +343,8 @@ liquidity without an addition, so it has its own colour (`dash-flow-create`),
 stacked under the additions; the TVL hour by hour on a tight axis
 (`lib/protocol/liquidity.ts`), its reading fixed above and a dashed mark under
 the pointer; the liquidity created and added above the axis and removed under
-it (`dash-flow-out`, darker than the text red), per hour
-or per day, with symmetric marks; and, in the advanced mode, the largest moves
+it (`dash-flow-out`, darker than the text red), per bar
+of the period, with symmetric marks; and, in the advanced mode, the largest moves
 beside the chart, so the page is no longer. The liquidity is measured from a
 later hour than the swaps: until a window is covered, its totals, bars and
 moves say so instead of a partial sum, while the period stays open on the swaps' span. Opening this tab opened the menu entry,

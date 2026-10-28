@@ -34,7 +34,7 @@ import {
 import { formatRelative, formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { shortenPubkey } from "@/lib/format/pubkey";
-import { axisOf, hourOf, roundTicks } from "@/lib/overview/chart";
+import { axisOf, daysAgoOf, hourOf, roundTicks } from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
 import { CURVE_BOX, curveOf, flowSlotsOf } from "@/lib/protocol/liquidity";
 
@@ -45,6 +45,8 @@ import { TvlCurve } from "./tvl-curve";
 const FLOW_PX = { half: 64, top: 58 } as const;
 
 const MOVES_SHOWN = 5;
+
+const FLOWS = { "24h": "flowsHourly", "7d": "flowsSixHours", "30d": "flowsDaily" } as const;
 
 /** A creation enters as an addition does: its own colour, the same sign. */
 const SIGN = {
@@ -213,7 +215,6 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
       />
     );
 
-  const daily = period !== "24h";
   const slots = series.asOf === null ? [] : flowSlotsOf(period, series.asOf, series.items);
   const max = Math.max(
     0,
@@ -223,8 +224,9 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
   const height = (v: number | null) => (v === null ? null : Math.max(v > 0 ? 2 : 0, scale(v)));
   const daysAgo = (days: number) => (days === 0 ? tVolume("today") : tVolume("daysAgo", { days }));
   const bars = slots.map((slot, i) => {
-    const name = daily
-      ? `${daysAgo(slots.length - 1 - i)} · ${moment(slot.from)} → ${moment(slot.to)}`
+    const name =
+      period !== "24h"
+        ? `${daysAgo(daysAgoOf(period, slots.length, i))} · ${moment(slot.from)} → ${moment(slot.to)}`
       : `${hourOf(slot.from)} UTC`;
     const reading =
       slot.created === null || slot.added === null || slot.removed === null
@@ -259,7 +261,7 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
           )}
           {curveBlock}
           <p className="mt-[18px] mb-1 font-dash-mono text-[11px] font-medium tracking-[0.12em] text-dash-ink-3 uppercase">
-            {t(daily ? "flowsDaily" : "flowsHourly")}
+            {t(FLOWS[period])}
           </p>
           <FlowBars
             bars={bars}

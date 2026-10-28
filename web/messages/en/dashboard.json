@@ -124,8 +124,10 @@
       "volume": {
         "titleHourly": "Volume by hour · {period}",
         "titleDaily": "Volume by day · {period}",
+        "titleSixHours": "Volume by 6-hour slice · {period}",
         "infoHourly": "What was traded, hour by hour, over the chosen period.",
         "infoDaily": "What was traded, by 24-hour slices ending at the last complete hour, over the chosen period.",
+        "infoSixHours": "What was traded, by 6-hour slices ending at the last complete hour, over the chosen period.",
         "chartLabel": "Volume over the chosen period, all protocols",
         "invite": "Hover or tap a bar for its detail",
         "today": "today",
@@ -133,6 +135,7 @@
         "noValue": "no valued volume",
         "feesHourly": "Fees by hour",
         "feesDaily": "Fees by day",
+        "feesSixHours": "Fees by 6-hour slice",
         "feesTotal": "{total} in total",
         "feesChartLabel": "Fees over the chosen period, all protocols",
         "feesNoValue": "no valued fees"
@@ -212,6 +215,7 @@
         "tvlNow": "Now: {tvl} · hover or touch the curve for detail",
         "flowsHourly": "Created, added and removed per hour",
         "flowsDaily": "Created, added and removed per day",
+        "flowsSixHours": "Created, added and removed per 6-hour slice",
         "flowsLabel": "Liquidity created, added and removed over the chosen period",
         "flowReading": "created {created}, added {added}, removed {removed}, net {net}",
         "moves": {
@@ -237,11 +241,13 @@
         "share": "Share in runs",
         "perHour": "Volume per hour",
         "perDay": "Volume per day",
+        "perSixHours": "Volume per 6-hour slice",
         "measuredSince": "Runs measured since {since}",
         "notMeasured": "Rotation runs are not measured yet.",
         "periodTotal": "Total over {period}",
         "chartLabelHourly": "Volume per hour, in runs and outside them",
         "chartLabelDaily": "Volume per day, in runs and outside them",
+        "chartLabelSixHours": "Volume per 6-hour slice, in runs and outside them",
         "stats": {
           "title": "Rotation runs · {period}",
           "info": "The runs that started in the period: how many, on how many pools, how many still go on, how long they last from start to end (so far for those in progress), and the share of their volume traded in their first hour.",
