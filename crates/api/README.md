@@ -132,7 +132,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/tokens/{mint}/prices` | A page of the token's prices over `?window=`, the most recent first; the window ends at the first page, whose start the cursor carries, refused (400) for another mint; 404 for a mint without metadata |
 | `GET` | `/api/tokens/{mint}` | Token metadata + latest price (200 with `price: null` if no price yet) |
 | `GET` | `/api/announcements` | A page of every announcement, the latest start first, ties by id: kind, severity, message, link, window, and `status` — `upcoming`, `open` or `closed` at the request; `?status=` keeps one; forward-only cursor, refused (400) under another status |
-| `GET` | `/api/swaps/totals` (`?offset=`), `/hourly`, `/daily` | Per protocol, the swaps over `?window=`, then per bucket: swaps, volume, fees and their shares, pool-hours and the valued ones; the totals with the distinct pools that swapped |
+| `GET` | `/api/swaps/totals` (`?offset=`), `/hourly`, `/daily` | Per protocol, the swaps over `?window=`, then per bucket: swaps, volume, fees and their shares — LP, protocol and referral sum to the fees, all known or all null — pool-hours and the valued ones; the totals with the distinct pools that swapped |
 | `GET` | `/api/protocols/{protocol}/swaps/totals`, `/hourly`, `/daily` | The same, the protocol's own |
 | `GET` | `/api/pools/{pool}/swaps/totals`, `/hourly`, `/daily` | The same for one pool, without the protocol nor the distinct pools; 404 for a pool unknown |
 | `GET` | `/api/swaps/by-token` | Tokens by volume over `?window=`, every protocol summed, identity embedded, forward-only cursor; a swap counts for both its tokens |

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { feePartsOf, feeSharesOf, feeSlotsOf, feeTotalsOf } from "../fees";
+import { feeSharesOf, feeSlotsOf, feeSumOf, feeTotalsOf } from "../fees";
 
 const AS_OF = "2026-10-25T03:00:00Z";
 
@@ -67,21 +67,14 @@ describe("feeTotalsOf and feeSharesOf", () => {
     expect(feeTotalsOf(slots)).toBeNull();
   });
 
-  // Mutation: an hour's parts kept when one is unknown — a 6-hour slice adding its LPs' part alone.
-  it("leaves out of a 7 days' slice an hour one of whose parts is unknown", () => {
-    const slots = feeSlotsOf("7d", AS_OF, [
-      bar("2026-10-24T21:00:00Z", "10", null, null),
-      bar("2026-10-24T22:00:00Z", "10", "2", "1"),
-    ]);
+  // Mutation: an unknown part read as 0 — a fee not measured drawn and listed as one not paid.
+  it("leaves an unknown part out of the sum, as unknown, not zero", () => {
+    const slots = feeSlotsOf("24h", AS_OF, [bar(hour(23), "20", null, "5")]);
+    const slot = slots.at(-1)!;
 
-    expect(slots.at(-1)).toMatchObject({ lp: 10, protocol: 2, referral: 1 });
-  });
-
-  // Mutation: an unknown part read as 0 — the bar counted, its known parts' shares inflated.
-  it("leaves out a bar one of whose parts is unknown", () => {
-    const slots = feeSlotsOf("24h", AS_OF, [bar(hour(22), "60", "15", "5"), bar(hour(23), "20", null, "1")]);
-
-    expect(feePartsOf(slots.at(-1)!)).toBeNull();
-    expect(feeTotalsOf(slots)).toEqual({ lp: 60, protocol: 15, referral: 5 });
+    expect(slot).toMatchObject({ lp: 20, protocol: null, referral: 5 });
+    expect(feeSumOf(slot)).toBe(25);
+    expect(feeSharesOf(slot)).toEqual({ lp: 0.8, protocol: null, referral: 0.2 });
+    expect(feeTotalsOf(slots)).toEqual({ lp: 20, protocol: null, referral: 5 });
   });
 });

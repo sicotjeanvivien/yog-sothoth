@@ -21,15 +21,11 @@ type FeeBar = {
 
 /** The fees in the period's slots, each part summed as `slotsOf` sums a bar. */
 export function feeSlotsOf(period: Period, asOf: string, bars: readonly FeeBar[]): FeeSlot[] {
-  // ⚠️ Before slotting: a 6-hour slice would add the known parts of an hour missing one.
-  const known = bars.filter(
-    (bar) => bar.lpFeesUsd !== null && bar.protocolFeesUsd !== null && bar.referralFeesUsd !== null,
-  );
   const slots = (pick: (bar: FeeBar) => string | null) =>
     slotsOf(
       period,
       asOf,
-      known.map((bar) => ({ from: bar.from, value: pick(bar) })),
+      bars.map((bar) => ({ from: bar.from, value: pick(bar) })),
     );
   const lp = slots((bar) => bar.lpFeesUsd);
   const protocol = slots((bar) => bar.protocolFeesUsd);
@@ -43,33 +39,30 @@ export function feeSlotsOf(period: Period, asOf: string, bars: readonly FeeBar[]
   }));
 }
 
-/** A bar's three parts, `null` unless all three are known: an unknown part is not 0. */
-export function feePartsOf(slot: FeeSlot): Record<FeePart, number> | null {
-  const { lp, protocol, referral } = slot;
-  return lp === null || protocol === null || referral === null ? null : { lp, protocol, referral };
+/** The parts of a bar or a period, each `null` where it is not known. */
+export type FeeParts = Record<FeePart, number | null>;
+
+/** The sum of the known parts, as the API's own sums skip a value not known. */
+export function feeSumOf(parts: FeeParts): number {
+  return FEE_PARTS.reduce((sum, part) => sum + (parts[part] ?? 0), 0);
 }
 
-/** The whole the three parts make. */
-export function feeSumOf(parts: Record<FeePart, number>): number {
-  return parts.lp + parts.protocol + parts.referral;
-}
-
-/** The period's fees by part over its known bars; `null` without any. */
-export function feeTotalsOf(slots: readonly FeeSlot[]): Record<FeePart, number> | null {
-  let totals: Record<FeePart, number> | null = null;
+/** The period's fees by part, each `null` where no bar knows it; `null` without any part known. */
+export function feeTotalsOf(slots: readonly FeeSlot[]): FeeParts | null {
+  const totals: FeeParts = { lp: null, protocol: null, referral: null };
   for (const slot of slots) {
-    const parts = feePartsOf(slot);
-    if (parts === null) continue;
-    totals ??= { lp: 0, protocol: 0, referral: 0 };
     for (const part of FEE_PARTS) {
-      totals[part] += parts[part];
+      const value = slot[part];
+      if (value !== null) {
+        totals[part] = (totals[part] ?? 0) + value;
+      }
     }
   }
-  return totals;
+  return FEE_PARTS.every((part) => totals[part] === null) ? null : totals;
 }
 
-/** Each part's share of their sum, `null` where they sum to nothing. */
-export function feeSharesOf(parts: Record<FeePart, number>): Record<FeePart, number | null> {
+/** Each part's share of the known parts' sum, `null` where it is not known or they sum to nothing. */
+export function feeSharesOf(parts: FeeParts): FeeParts {
   const whole = feeSumOf(parts);
   return {
     lp: shareOf(parts.lp, whole),

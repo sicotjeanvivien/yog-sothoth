@@ -27,12 +27,12 @@ import { axisOf, daysAgoOf, hourOf, roundTicks } from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
 import {
   FEE_PARTS,
-  feePartsOf,
   feeSharesOf,
   feeSlotsOf,
   feeSumOf,
   feeTotalsOf,
   type FeePart,
+  type FeeParts,
 } from "@/lib/protocol/fees";
 
 import { SplitBars, type SplitDetail } from "../split-bars";
@@ -110,15 +110,12 @@ async function FeeSplit({ period, protocol }: TabProps) {
   const slots = swaps.asOf === null ? [] : feeSlotsOf(period, swaps.asOf, swaps.items);
   const totals = feeTotalsOf(slots);
   const shares = totals === null ? null : feeSharesOf(totals);
-  const max = Math.max(0, ...slots.map((slot) => {
-    const parts = feePartsOf(slot);
-    return parts === null ? 0 : feeSumOf(parts);
-  }));
+  const max = Math.max(0, ...slots.map(feeSumOf));
   const scale = (v: number) => (max > 0 ? (v / max) * CHART_PX.top : 0);
   const daysAgo = (days: number) => (days === 0 ? tVolume("today") : tVolume("daysAgo", { days }));
   const moment = (date: Date) => formatUtcMoment(date, locale) ?? "—";
 
-  const detailOf = (when: string, parts: Record<FeePart, number> | null): SplitDetail<FeePart> => {
+  const detailOf = (when: string, parts: FeeParts | null): SplitDetail<FeePart> => {
     const split = parts === null ? null : feeSharesOf(parts);
     return {
       when,
@@ -137,16 +134,15 @@ async function FeeSplit({ period, protocol }: TabProps) {
       period !== "24h"
         ? `${daysAgo(daysAgoOf(period, slots.length, i))} · ${moment(slot.from)} → ${moment(slot.to)}`
         : `${hourOf(slot.from)} UTC`;
-    const parts = feePartsOf(slot);
-    if (parts === null) {
+    if (FEE_PARTS.every((part) => slot[part] === null)) {
       return { segments: [], detail: { when, total: t("noValue"), rows: [] } };
     }
-    const height = (v: number) => Math.max(v > 0 ? 1 : 0, Math.round(scale(v)));
+    const height = (v: number | null) => (v === null ? 0 : Math.max(v > 0 ? 1 : 0, Math.round(scale(v))));
     return {
-      segments: FEE_PARTS.map((part) => ({ tone: part, height: height(parts[part]) })).filter(
+      segments: FEE_PARTS.map((part) => ({ tone: part, height: height(slot[part]) })).filter(
         (s) => s.height > 0,
       ),
-      detail: detailOf(when, parts),
+      detail: detailOf(when, slot),
     };
   });
 
