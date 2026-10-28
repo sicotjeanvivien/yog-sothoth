@@ -146,7 +146,7 @@ async fn a_cursor_end_is_bound_to_the_last_tranche_written_not_the_clock() {
 /// after it — an hour half measured, or holding a run cut by the start, split as whole.
 #[tokio::test]
 async fn the_bars_split_from_the_first_whole_hour_measured() {
-    // A gap after 09:50 is 10:20, inside the hour of 10:00: the bars start at 11:00.
+    // A gap after 09:50 is 10:20, inside the hour of 10:00: the split starts at 11:00.
     let inside_an_hour = Arc::new(MockRotationRunRepo {
         measured_since: Some(minutes(at_october(19, 9), 50)),
         ..MockRotationRunRepo::default()

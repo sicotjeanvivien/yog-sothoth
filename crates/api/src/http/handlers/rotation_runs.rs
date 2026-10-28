@@ -138,7 +138,7 @@ pub(crate) async fn get_protocol_rotation_run_totals(
     params(WindowParams),
     responses((
         status = 200,
-        description = "The protocol's volume in rotation runs, hour by hour.",
+        description = "The protocol's volume hour by hour, split by its rotation runs.",
         body = WindowedResponse<ProtocolRotationRunBucketResponse>
     ))
 )]
@@ -156,7 +156,7 @@ pub(crate) async fn get_protocol_rotation_runs_hourly(
     params(WindowParams),
     responses((
         status = 200,
-        description = "The protocol's volume in rotation runs, by 24 hours ending at `asOf`.",
+        description = "The protocol's volume by 24 hours ending at `asOf`, split by its rotation runs.",
         body = WindowedResponse<ProtocolRotationRunBucketResponse>
     ))
 )]

@@ -225,8 +225,8 @@ fn splits(bars: &[ProtocolBucket<RunSplit>]) -> Vec<(DateTime<Utc>, Decimal, Opt
         .collect()
 }
 
-/// Mutation: the split drawn before the runs' first hour, an hour without a run left unsplit, the
-/// coverage or the end dropped, or another protocol's facts or runs read.
+/// Mutation: the split drawn before the runs' first hour or for a protocol never measured, an hour
+/// without a run left unsplit, the coverage or the end dropped, or another protocol's rows read.
 #[sqlx::test(migrations = "./migrations")]
 async fn the_bars_split_the_protocols_hours_from_the_runs_first_hour(pool: PgPool) {
     insert_protocol_hours(
@@ -274,6 +274,10 @@ async fn the_bars_split_the_protocols_hours_from_the_runs_first_hour(pool: PgPoo
         .list_hourly(&frozen, Some(at(-3 * 60)), Protocol::MeteoraDammV2)
         .await
         .unwrap();
+    let never_measured = repository
+        .list_hourly(&frozen, None, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
 
     let dec = |v: i64| Decimal::from(v);
     assert_eq!(
@@ -285,10 +289,12 @@ async fn the_bars_split_the_protocols_hours_from_the_runs_first_hour(pool: PgPoo
             (at(-60), dec(30), Some(dec(8))),
         ]
     );
+    assert!(never_measured.iter().all(|b| b.value.in_runs_usd.is_none()));
+    assert_eq!(never_measured.len(), 4);
 }
 
 /// Mutation: the runs joined hour by hour unsummed — an hour of two runs counted twice in its day;
-/// or a day split though the runs start inside it.
+/// or a day split though the runs start inside it, or never measured.
 #[sqlx::test(migrations = "./migrations")]
 async fn a_day_sums_each_hour_once_and_is_split_only_whole(pool: PgPool) {
     insert_protocol_hours(
@@ -312,6 +318,10 @@ async fn a_day_sums_each_hour_once_and_is_split_only_whole(pool: PgPool) {
         .list_daily(&frozen, Some(at(-40 * 60)), Protocol::MeteoraDammV2)
         .await
         .unwrap();
+    let never_measured = repository
+        .list_daily(&frozen, None, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
 
     let dec = |v: i64| Decimal::from(v);
     assert_eq!(
@@ -322,6 +332,8 @@ async fn a_day_sums_each_hour_once_and_is_split_only_whole(pool: PgPool) {
             (at(-24 * 60), dec(10), Some(dec(6))),
         ]
     );
+    assert!(never_measured.iter().all(|b| b.value.in_runs_usd.is_none()));
+    assert_eq!(never_measured.len(), 3);
 }
 
 /// Mutation: an hour not valued split anyway — its runs' volume drawn against no volume; or a
