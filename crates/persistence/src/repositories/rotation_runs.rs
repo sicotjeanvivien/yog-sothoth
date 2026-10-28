@@ -280,16 +280,18 @@ impl RotationRunLookup for PgRotationRunRepository {
         period: &FrozenPeriod,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<Decimal>>> {
+        // ⚠️ On the frozen hours, not the runs': an hour observed without a run has no run row.
         let rows = sqlx::query_as!(
             RotationRunHourRow,
             r#"
-            SELECT protocol AS "protocol!", bucket AS "bucket_from!",
-                   SUM(volume_usd) AS "volume_usd!"
-              FROM analytic_rotation_run_hours
-             WHERE protocol = $4
-               AND bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND bucket < $2
-             GROUP BY protocol, bucket
-             ORDER BY bucket
+            SELECT $4::TEXT AS "protocol!", h.bucket AS "bucket_from!",
+                   COALESCE(SUM(r.volume_usd), 0) AS "volume_usd!"
+              FROM analytic_hours h
+              LEFT JOIN analytic_rotation_run_hours r
+                ON r.protocol = $4 AND r.bucket = h.bucket
+             WHERE h.bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND h.bucket < $2
+             GROUP BY h.bucket
+             ORDER BY h.bucket
             "#,
             period.from,
             period.as_of,
@@ -311,18 +313,20 @@ impl RotationRunLookup for PgRotationRunRepository {
         let rows = sqlx::query_as!(
             RotationRunHourRow,
             r#"
-            SELECT protocol AS "protocol!", bucket_from AS "bucket_from!",
-                   SUM(volume_usd) AS "volume_usd!"
+            SELECT $4::TEXT AS "protocol!", h.bucket_from AS "bucket_from!",
+                   COALESCE(SUM(r.volume_usd), 0) AS "volume_usd!"
               FROM (
-                  SELECT h.protocol, h.volume_usd,
+                  SELECT bucket,
                          time_bucket(INTERVAL '1 day', bucket, origin => $2::TIMESTAMPTZ)
                              AS bucket_from
-                    FROM analytic_rotation_run_hours h
-                   WHERE protocol = $4 AND bucket >= $1 AND bucket < $2
-              ) hours
-             WHERE bucket_from >= $3
-             GROUP BY protocol, bucket_from
-             ORDER BY bucket_from
+                    FROM analytic_hours
+                   WHERE bucket >= $1 AND bucket < $2
+              ) h
+              LEFT JOIN analytic_rotation_run_hours r
+                ON r.protocol = $4 AND r.bucket = h.bucket
+             WHERE h.bucket_from >= $3
+             GROUP BY h.bucket_from
+             ORDER BY h.bucket_from
             "#,
             period.from,
             period.as_of,

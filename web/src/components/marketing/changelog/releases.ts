@@ -40,7 +40,7 @@ export const RELEASES: readonly Release[] = [
         kind: "fixes",
         items: [
           {
-            text: "A covered hour without a swap or a pool creation counts 0 in a protocol's series and totals, and a pool's swaps count 0 for each hour it did not swap since it was first seen; a missing hour now only means it was not covered.",
+            text: "A covered hour without a swap or a pool creation counts 0 in a protocol's series and totals, an hour without a rotation run 0 in the runs' bars, and a pool's swaps count 0 for each hour it did not swap since it was first seen; a missing hour now only means it was not covered.",
             technical: true,
           },
           {
