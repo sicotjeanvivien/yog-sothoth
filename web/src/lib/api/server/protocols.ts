@@ -140,7 +140,6 @@ export const fetchLargestLiquidityMoves = cache(
     ),
 );
 
-/** The pools the protocol saw born, hour by hour up to 7 days, by 24-hour slices beyond. */
 /** The positions the protocol opened, locked, split and closed over the window. */
 export const fetchPositionChangeTotals = cache(
   (protocol: ProtocolResponse, window: WindowResponse) =>
@@ -151,6 +150,7 @@ export const fetchPositionChangeTotals = cache(
     ),
 );
 
+/** The pools the protocol saw born, hour by hour up to 7 days, by 24-hour slices beyond. */
 export const fetchPoolCreationsSeries = cache((protocol: ProtocolResponse, window: WindowResponse) =>
   readsHours(window)
     ? apiGet(

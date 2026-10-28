@@ -775,7 +775,7 @@ async fn yog_analytic_cannot_write_signals(pool: PgPool) {
     assert!(message.contains("table signals"), "{message}");
 }
 
-/// One row per position event of each kind, `n` of each, at `at`: its own signature each.
+/// `n` rows of the position event `sql` inserts, at `at`, each with its own signature.
 async fn insert_position_events(pool: &PgPool, sql: &'static str, n: usize, at: DateTime<Utc>) {
     for i in 0..n {
         sqlx::query(sql)

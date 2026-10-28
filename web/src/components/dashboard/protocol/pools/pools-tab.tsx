@@ -65,7 +65,6 @@ const BIRTHS_CLASS = `${CELL_CLASS} ${BIRTHS_SPAN} min-h-[262px]`;
 
 const DEPOSITS_CLASS = `${CELL_CLASS} ${DEPOSITS_SPAN} min-h-[262px]`;
 
-
 const DEPOSIT_COLUMNS = "grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_auto_auto_auto]";
 
 const BIRTH_TONE = { births: "bg-dash-flow-create" } as const;
@@ -109,7 +108,12 @@ export async function PoolsTab({ period, protocol }: TabProps) {
       </Suspense>
       <Suspense
         fallback={
-          <BlockSkeleton title={t("life.title")} span={LIFE_SPAN} minHeight="min-h-[262px]" shape={{ rows: 6 }} />
+          <BlockSkeleton
+            title={t("life.title")}
+            span={LIFE_SPAN}
+            minHeight="min-h-[262px]"
+            shape={{ rows: 6 }}
+          />
         }
       >
         <LifeCycle protocol={protocol} />
@@ -308,7 +312,7 @@ async function LifeCycle({ protocol }: { protocol: ProtocolResponse }) {
     })),
     {
       key: "owners" as const,
-      event: "owner",
+      event: "owner (liquidity)",
       day: lifeCountOf(dayOwners.items, (r) => r.owners),
       week: lifeCountOf(weekOwners.items, (r) => r.owners),
     },

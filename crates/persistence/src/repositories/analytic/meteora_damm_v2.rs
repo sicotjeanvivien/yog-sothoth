@@ -181,43 +181,9 @@ pub(super) async fn upsert_position_changes(
 ) -> RepositoryResult<()> {
     sqlx::query!(
         r#"
-        WITH counts AS (
-            SELECT time_bucket('1 hour', timestamp) AS bucket, 'opened' AS kind, COUNT(*) AS n
-              FROM meteora_damm_v2_create_position_events
-             WHERE timestamp >= $1 AND timestamp < $2::TIMESTAMPTZ + INTERVAL '1 hour'
-             GROUP BY 1
-            UNION ALL
-            SELECT time_bucket('1 hour', timestamp), 'vesting', COUNT(*)
-              FROM meteora_damm_v2_lock_position_events
-             WHERE timestamp >= $1 AND timestamp < $2::TIMESTAMPTZ + INTERVAL '1 hour'
-             GROUP BY 1
-            UNION ALL
-            SELECT time_bucket('1 hour', timestamp), 'permanent', COUNT(*)
-              FROM meteora_damm_v2_permanent_lock_position_events
-             WHERE timestamp >= $1 AND timestamp < $2::TIMESTAMPTZ + INTERVAL '1 hour'
-             GROUP BY 1
-            UNION ALL
-            SELECT time_bucket('1 hour', timestamp), 'split', COUNT(*)
-              FROM meteora_damm_v2_split_position_events
-             WHERE timestamp >= $1 AND timestamp < $2::TIMESTAMPTZ + INTERVAL '1 hour'
-             GROUP BY 1
-            UNION ALL
-            SELECT time_bucket('1 hour', timestamp), 'closed', COUNT(*)
-              FROM meteora_damm_v2_close_position_events
-             WHERE timestamp >= $1 AND timestamp < $2::TIMESTAMPTZ + INTERVAL '1 hour'
-             GROUP BY 1
-        )
         INSERT INTO analytic_protocol_position_changes_hourly
             (protocol, bucket, opened, vesting_locks, permanent_locks, splits, closed)
-        SELECT $3, h.bucket,
-               COALESCE(SUM(c.n) FILTER (WHERE c.kind = 'opened'), 0),
-               COALESCE(SUM(c.n) FILTER (WHERE c.kind = 'vesting'), 0),
-               COALESCE(SUM(c.n) FILTER (WHERE c.kind = 'permanent'), 0),
-               COALESCE(SUM(c.n) FILTER (WHERE c.kind = 'split'), 0),
-               COALESCE(SUM(c.n) FILTER (WHERE c.kind = 'closed'), 0)
-          FROM generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ, INTERVAL '1 hour') AS h (bucket)
-          LEFT JOIN counts c ON c.bucket = h.bucket
-         GROUP BY h.bucket
+        SELECT $3, c.* FROM meteora_damm_v2_position_changes($1, $2) AS c
         ON CONFLICT (protocol, bucket) DO UPDATE SET
             opened          = EXCLUDED.opened,
             vesting_locks   = EXCLUDED.vesting_locks,
