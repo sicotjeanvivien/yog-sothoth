@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            WITH latest AS (\n                SELECT DISTINCT ON (protocol) protocol, bucket, tvl_usd\n                  FROM analytic_protocol_tvl\n                 WHERE bucket <= $1 AND ($4::TEXT IS NULL OR protocol = $4)\n                 ORDER BY protocol, bucket DESC\n            )\n            SELECT l.protocol, l.bucket + INTERVAL '1 hour' AS \"end_at!\", l.tvl_usd AS end_tvl_usd,\n                   s.bucket + INTERVAL '1 hour' AS start_at, s.tvl_usd AS start_tvl_usd,\n                   d.tvl_usd AS \"discovered_tvl_usd?\"\n              FROM latest l\n              LEFT JOIN analytic_protocol_tvl s\n                     ON s.protocol = l.protocol\n                    AND s.bucket = l.bucket - make_interval(hours => $2)\n              LEFT JOIN analytic_protocol_tvl_discovered d\n                     ON d.protocol = l.protocol AND d.period = $3 AND d.bucket = l.bucket\n             ORDER BY l.protocol\n            ",
+  "query": "\n            WITH latest AS (\n                SELECT DISTINCT ON (protocol) protocol, bucket, tvl_usd\n                  FROM analytic_protocol_tvl\n                 WHERE bucket <= $1 AND ($4::TEXT IS NULL OR protocol = $4)\n                 ORDER BY protocol, bucket DESC\n            )\n            SELECT l.protocol, l.bucket + INTERVAL '1 hour' AS \"end_at!\", l.tvl_usd AS end_tvl_usd,\n                   s.bucket + INTERVAL '1 hour' AS start_at, s.tvl_usd AS start_tvl_usd,\n                   d.tvl_usd AS \"discovered_tvl_usd?\"\n              FROM latest l\n              LEFT JOIN analytic_protocol_tvl s\n                     ON s.protocol = l.protocol\n                    AND s.bucket = l.bucket - make_interval(hours => $2)\n                    -- ⚠️ A last reading older than `$1` would serve a change ending before `asOf`.\n                    AND l.bucket = $1\n              LEFT JOIN analytic_protocol_tvl_discovered d\n                     ON d.protocol = l.protocol AND d.period = $3 AND d.bucket = l.bucket\n             ORDER BY l.protocol\n            ",
   "describe": {
     "columns": [
       {
@@ -77,5 +77,5 @@
       true
     ]
   },
-  "hash": "faa5befa3fe4d7317971a04e61b53e4d4fafb174dc557825a737187386de8be1"
+  "hash": "4c18018b6bc7209b7d994657e973ffc67dfea288c00e6406fc8b447694ce6a46"
 }

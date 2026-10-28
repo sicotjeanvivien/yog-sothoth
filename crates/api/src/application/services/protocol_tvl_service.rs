@@ -68,8 +68,7 @@ impl ProtocolTvlService {
         Ok(Measured { period, items })
     }
 
-    /// Each protocol's change over `window`, to its last reading; nothing over a window the facts
-    /// do not cover whole.
+    /// Each protocol's change over `window`, to its last reading by the last frozen hour.
     pub(crate) async fn get_tvl_change(
         &self,
         window: Window,
@@ -77,12 +76,12 @@ impl ProtocolTvlService {
     ) -> RepositoryResult<Measured<Vec<ProtocolTvlChange>>> {
         let period = build_frozen_period(self.hours.as_ref(), window, None).await?;
         let items = match &period {
-            Some(period) if period.is_covered() => {
+            Some(period) => {
                 self.protocol_tvl
                     .list_changes(period.last_hour(), window, protocol)
                     .await?
             }
-            _ => Vec::new(),
+            None => Vec::new(),
         };
         Ok(Measured { period, items })
     }

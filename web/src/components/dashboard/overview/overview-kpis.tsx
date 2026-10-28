@@ -39,21 +39,17 @@ export async function TvlKpi({ period, scope }: { period: Period; scope: Scope }
   const info = t("kpis.info.tvl");
   const suffix = t("kpis.tvlChange", { period: t(`period.short.${period}`) });
 
-  const [latest, totals] = await Promise.allSettled([
-    fetchTvl(scope),
-    fetchTvlTotals(scope, period),
-  ]);
-  if (latest.status === "rejected") {
-    return kpiError(latest.reason, label, info);
+  let totals;
+  try {
+    totals = await fetchTvlTotals(scope, period);
+  } catch (err) {
+    return kpiError(err, label, info);
   }
 
-  const items = latest.value.items;
-  const current = sumUsd(items.map((i) => i.tvlUsd));
+  const rows = totals.items;
+  const current = sumUsd(rows.map((r) => r.end.tvlUsd));
   let sub: ReactNode;
-  if (totals.status === "rejected") {
-    sub = <Withheld reason={await failure(totals.reason)} suffix={suffix} />;
-  } else if (current !== null) {
-    const rows = totals.value.items;
+  if (current !== null) {
     const start = sumUsd(rows.map((r) => r.start?.tvlUsd ?? null));
     const discovered = sumUsd(rows.map((r) => r.discoveredTvlUsd));
     const ratio = shareOf(sumUsd(rows.map((r) => r.changeUsd)), start);
@@ -77,7 +73,7 @@ export async function TvlKpi({ period, scope }: { period: Period; scope: Scope }
       info={info}
       value={usd(current)}
       sub={sub}
-      stamp={await lateStamp(latest.value.asOf)}
+      stamp={await lateStamp(totals.asOf)}
     />
   );
 }

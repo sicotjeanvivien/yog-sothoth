@@ -933,6 +933,7 @@ impl LiquidityMoveLookup for MockLiquidityMoveRepo {
 #[derive(Default)]
 pub(crate) struct MockProtocolTvlRepo {
     pub(crate) instants: Mutex<Vec<InstantRead>>,
+    pub(crate) windows: Mutex<Vec<Window>>,
 }
 
 #[async_trait]
@@ -960,9 +961,10 @@ impl ProtocolTvlLookup for MockProtocolTvlRepo {
     async fn list_changes(
         &self,
         last: DateTime<Utc>,
-        _: Window,
+        window: Window,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolTvlChange>> {
+        self.windows.lock().unwrap().push(window);
         self.instants
             .lock()
             .unwrap()

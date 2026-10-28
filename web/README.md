@@ -261,8 +261,7 @@ moved, while the ⓘ (`InfoPopover`) and `BlockError` they share keep it.
 fees, active pools), activity by protocol, the latest signals, volume per bar
 of the period, the most traded tokens. The header is the title alone, then "Live",
 the period and the advanced mode at its right. Every figure comes from yog-analytic's
-measures (`/api/swaps/…`, `/api/tvl…`, `/api/pool-creations/…`,
-`/api/tvl/totals`), which all end at the same `asOf`, the close of the last frozen
+measures (`/api/swaps/…`, `/api/tvl…`, `/api/pool-creations/…`), which all end at the same `asOf`, the close of the last frozen
 hour.
 
 **The period** — `?period=24h|7d|30d` (`lib/overview/period.ts`; missing or

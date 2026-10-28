@@ -23,7 +23,8 @@ pub trait ProtocolTvlLookup: Send + Sync {
     ) -> RepositoryResult<Vec<ProtocolTvl>>;
 
     /// Each protocol's last reading at or before the hour `last`, with the reading exactly
-    /// `window` before it and the part `window`'s discovered pools held at it.
+    /// `window` before it when the last is `last`'s, and the part `window`'s discovered pools
+    /// held at it.
     async fn list_changes(
         &self,
         last: DateTime<Utc>,

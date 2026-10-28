@@ -145,7 +145,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/protocols/{protocol}/liquidity-moves`, `/api/pools/{pool}/liquidity-moves` | A page of the valued moves (creations, additions, removals), their pool's token symbols embedded, `?sort=amount` (default) or `at`, forward-only cursor, refused (400) under another list or window or after a freeze; empty while the protocol's liquidity does not cover the window |
 | `GET` | `/api/tvl`, `/api/protocols/{protocol}/tvl` | Per protocol, the last TVL reading at or before `asOf`, its `at` said |
 | `GET` | `/api/tvl/hourly`, `/api/protocols/{protocol}/tvl/hourly` | Per protocol, the reading of every hour measured from the window's start |
-| `GET` | `/api/tvl/totals`, `/api/protocols/{protocol}/tvl/totals` | Per protocol, the last reading, the one exactly a window before it (`null` when not measured), the part the pools discovered in the window hold at the last, and the change without it, `null` as soon as one term is |
+| `GET` | `/api/tvl/totals`, `/api/protocols/{protocol}/tvl/totals` | Per protocol, the last reading, the one exactly a window before it (`null` when not measured, or when the last is not at `asOf`), the part the pools discovered in the window hold at the last, and the change without it, `null` as soon as one term is |
 | `GET` | `/api/pool-discoveries/totals`, and under `/api/protocols/{protocol}/` | Per protocol, the pools first seen in the window without their birth observed, and what they hold at the last reading |
 | `GET` | `/api/protocols/{protocol}/signals`, `/api/pools/{pool}/signals` | The signals of one protocol or one pool, paginated as `/api/signals`, `?severity=` |
 

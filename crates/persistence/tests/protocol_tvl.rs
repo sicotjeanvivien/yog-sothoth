@@ -94,12 +94,18 @@ async fn the_tvl_series_holds_both_ends_and_every_protocol(pool: PgPool) {
     assert_eq!(read, expected);
 }
 
-async fn insert_discovered(pool: &PgPool, period: &str, bucket: DateTime<Utc>, tvl: i64) {
+async fn insert_discovered(
+    pool: &PgPool,
+    protocol: &str,
+    period: &str,
+    bucket: DateTime<Utc>,
+    tvl: i64,
+) {
     sqlx::query(
         "INSERT INTO analytic_protocol_tvl_discovered (protocol, period, bucket, tvl_usd, pools)
          VALUES ($1, $2, $3, $4, 1)",
     )
-    .bind(DAMM)
+    .bind(protocol)
     .bind(period)
     .bind(bucket)
     .bind(tvl)
@@ -108,21 +114,24 @@ async fn insert_discovered(pool: &PgPool, period: &str, bucket: DateTime<Utc>, t
     .unwrap();
 }
 
-/// Mutations: the start taken as the series' first reading, or the discovered part as the last
-/// one, another window's, or one at another reading than the end's; or a protocol without a
-/// start left out, its addition then unable to see the term it misses.
+/// Mutations: the start taken as any reading before the window's, or paired with a last reading
+/// older than the hour asked — a change ending before `asOf`; the discovered part taken at the
+/// hour asked, or another window's; or a protocol without a start left out, its addition then
+/// unable to see the term it misses.
 #[sqlx::test(migrations = "./migrations")]
 async fn the_change_pairs_the_reading_a_window_before_and_the_part_at_the_end(pool: PgPool) {
     let last = as_of() - Duration::hours(1);
-    let end = last - Duration::hours(1);
-    insert_tvl(&pool, DAMM, end - Duration::hours(30), 500).await;
-    insert_tvl(&pool, DAMM, end - Duration::hours(24), 1_000).await;
-    insert_tvl(&pool, DAMM, end - Duration::hours(23), 990).await;
-    insert_tvl(&pool, DAMM, end, 1_300).await;
-    insert_discovered(&pool, "24h", end, 200).await;
-    insert_discovered(&pool, "24h", last, 999).await;
-    insert_discovered(&pool, "7d", end, 77).await;
-    insert_tvl(&pool, DLMM, last, 5).await;
+    let stale = last - Duration::hours(1);
+    insert_tvl(&pool, DAMM, last - Duration::hours(30), 500).await;
+    insert_tvl(&pool, DAMM, last - Duration::hours(24), 1_000).await;
+    insert_tvl(&pool, DAMM, last - Duration::hours(23), 990).await;
+    insert_tvl(&pool, DAMM, last, 1_300).await;
+    insert_discovered(&pool, DAMM, "24h", last, 200).await;
+    insert_discovered(&pool, DAMM, "7d", last, 77).await;
+    insert_tvl(&pool, DLMM, stale - Duration::hours(24), 4).await;
+    insert_tvl(&pool, DLMM, stale, 5).await;
+    insert_discovered(&pool, DLMM, "24h", stale, 3).await;
+    insert_discovered(&pool, DLMM, "24h", last, 999).await;
     let repository = repository(&pool).await;
 
     let changes = repository
@@ -141,8 +150,8 @@ async fn the_change_pairs_the_reading_a_window_before_and_the_part_at_the_end(po
             )
         })
         .collect();
-    let reading = |at: DateTime<Utc>, tvl: i64| TvlReading {
-        at: at + Duration::hours(1),
+    let reading = |bucket: DateTime<Utc>, tvl: i64| TvlReading {
+        at: bucket + Duration::hours(1),
         tvl_usd: Some(Decimal::from(tvl)),
     };
     assert_eq!(
@@ -150,11 +159,11 @@ async fn the_change_pairs_the_reading_a_window_before_and_the_part_at_the_end(po
         [
             (
                 DAMM,
-                reading(end, 1_300),
-                Some(reading(end - Duration::hours(24), 1_000)),
+                reading(last, 1_300),
+                Some(reading(last - Duration::hours(24), 1_000)),
                 Some(Decimal::from(200))
             ),
-            (DLMM, reading(last, 5), None, None),
+            (DLMM, reading(stale, 5), None, Some(Decimal::from(3))),
         ]
     );
 }

@@ -98,6 +98,8 @@ impl ProtocolTvlLookup for PgProtocolTvlRepository {
               LEFT JOIN analytic_protocol_tvl s
                      ON s.protocol = l.protocol
                     AND s.bucket = l.bucket - make_interval(hours => $2)
+                    -- ⚠️ A last reading older than `$1` would serve a change ending before `asOf`.
+                    AND l.bucket = $1
               LEFT JOIN analytic_protocol_tvl_discovered d
                      ON d.protocol = l.protocol AND d.period = $3 AND d.bucket = l.bucket
              ORDER BY l.protocol

@@ -9586,7 +9586,7 @@
                 }
               }
             },
-            "description": "The protocol's last TVL reading, the one a window before it, and the change without the pools discovered in the window; nothing while the facts do not cover the window whole."
+            "description": "The protocol's last TVL reading, the one a window before it, and the change without the pools discovered in the window; no start but for a last reading at `asOf`."
           },
           "default": {
             "content": {
@@ -10469,7 +10469,7 @@
                 }
               }
             },
-            "description": "Each protocol's last TVL reading, the one a window before it, and the change without the pools discovered in the window; nothing while the facts do not cover the window whole."
+            "description": "Each protocol's last TVL reading, the one a window before it, and the change without the pools discovered in the window; no start but for a last reading at `asOf`."
           },
           "default": {
             "content": {

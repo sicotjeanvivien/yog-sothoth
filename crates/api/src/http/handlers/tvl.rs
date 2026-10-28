@@ -114,8 +114,8 @@ async fn list_hourly(
     responses((
         status = 200,
         description = "Each protocol's last TVL reading, the one a window before it, and the \
-                       change without the pools discovered in the window; nothing while the \
-                       facts do not cover the window whole.",
+                       change without the pools discovered in the window; no start but for a \
+                       last reading at `asOf`.",
         body = WindowedResponse<ProtocolTvlChangeResponse>
     ))
 )]
@@ -133,8 +133,8 @@ pub(crate) async fn get_tvl_totals(
     responses((
         status = 200,
         description = "The protocol's last TVL reading, the one a window before it, and the \
-                       change without the pools discovered in the window; nothing while the \
-                       facts do not cover the window whole.",
+                       change without the pools discovered in the window; no start but for a \
+                       last reading at `asOf`.",
         body = WindowedResponse<ProtocolTvlChangeResponse>
     ))
 )]
