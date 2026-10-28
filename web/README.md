@@ -255,8 +255,8 @@ moved, while the ⓘ (`InfoPopover`) and `BlockError` they share keep it.
 ## Overview
 
 `(dashboard)/overview/page.tsx`, after the canvas: four KPIs (TVL, volume,
-fees, active pools), activity by protocol, the latest signals, volume by hour
-or by day, the most traded tokens. The header is the title alone, then "Live",
+fees, active pools), activity by protocol, the latest signals, volume per bar
+of the period, the most traded tokens. The header is the title alone, then "Live",
 the period and the advanced mode at its right. Every figure comes from yog-analytic's
 measures (`/api/swaps/…`, `/api/tvl…`, `/api/pool-creations/…`,
 `/api/pool-discoveries/…`), which all end at the same `asOf`, the close of the last frozen
