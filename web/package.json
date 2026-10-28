@@ -18,7 +18,7 @@
     "lint": "eslint --cache --cache-location .next/cache/eslint/",
     "lint:fix": "eslint --fix --cache --cache-location .next/cache/eslint/",
     "typecheck": "tsc --noEmit",
-    "gen:api": "openapi-ts",
+    "gen:api": "openapi-ts && cp ../crates/api/openapi.json src/lib/api/schema/openapi.json",
     "test": "vitest run",
     "test:watch": "vitest"
   },

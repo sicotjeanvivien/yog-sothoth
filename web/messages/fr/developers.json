@@ -1,0 +1,105 @@
+{
+  "Developers": {
+    "page": {
+      "title": "API",
+      "description": "Les routes de l'API de Yog-Scope, leurs paramètres et leurs réponses, à essayer depuis le navigateur."
+    },
+    "devbar": {
+      "home": "Yog-Scope, retour au site",
+      "name": "Development"
+    },
+    "unlisted": {
+      "label": "Non listée",
+      "body": "Aucun lien vers cette page : ni menu, ni pied de page, ni plan du site. On y arrive en connaissant l'URL. Page en noindex."
+    },
+    "meta": {
+      "base": "Base",
+      "spec": "Spec",
+      "download": "openapi.json ↓"
+    },
+    "list": {
+      "toggle": "Endpoints",
+      "filter": "Filtrer : swaps, tvl, '{pool}'…",
+      "filterLabel": "Filtrer les endpoints",
+      "count": "{count} endpoints",
+      "countFiltered": "{shown} sur {count} endpoints",
+      "collapseAll": "Tout replier",
+      "expandAll": "Tout déplier",
+      "noMatch": "Aucun endpoint ne correspond."
+    },
+    "families": {
+      "service": "État du service",
+      "swaps": "Swaps",
+      "liquidity": "Liquidité",
+      "poolCreations": "Créations de pools",
+      "positionsFees": "Positions et fees",
+      "rewards": "Rewards",
+      "tvl": "TVL",
+      "signals": "Signaux",
+      "announcements": "Annonces",
+      "byProtocol": "Par protocole",
+      "byPool": "Par pool",
+      "byToken": "Par token"
+    },
+    "detail": {
+      "copyPath": "Copier le chemin",
+      "copied": "Copié",
+      "response200": "Réponse 200"
+    },
+    "params": {
+      "title": "Paramètres",
+      "none": "Aucun paramètre.",
+      "path": "chemin",
+      "query": "query",
+      "required": "requis",
+      "cursor": "Curseur opaque renvoyé par la page précédente (nextCursor / prevCursor).",
+      "limit": "Entre {min} et {max}. Vide : valeur par défaut du serveur.",
+      "protocol": "Identifiant du protocole.",
+      "address": "Adresse base58.",
+      "enumDefault": "Aucun choix : valeur par défaut du serveur."
+    },
+    "request": {
+      "missing": "Renseignez {names} pour envoyer.",
+      "copyCurl": "Copier en curl",
+      "send": "Envoyer",
+      "sending": "Envoi…",
+      "listen": "Écouter le flux",
+      "stop": "Arrêter"
+    },
+    "tabs": {
+      "label": "Résultat",
+      "response": "Réponse",
+      "schema": "Schéma"
+    },
+    "response": {
+      "empty": "Envoyez la requête pour voir la réponse ici.",
+      "sending": "Envoi…",
+      "body": "Corps de la réponse",
+      "copyJson": "Copier le JSON",
+      "network": "La requête n'a pas abouti : {message}",
+      "prev": "← Page précédente",
+      "next": "Page suivante →",
+      "cursorHint": "Le paramètre cursor est rempli à partir de la réponse."
+    },
+    "stream": {
+      "connected": "Connecté",
+      "connecting": "Connexion…",
+      "disconnected": "Déconnecté",
+      "events": "{count, plural, =0 {0 événement} one {# événement} other {# événements}}",
+      "log": "Événements reçus",
+      "idle": "Cliquez sur « Écouter le flux » pour recevoir les nouveaux signaux en direct.",
+      "waiting": "Connecté. Seuls les nouveaux signaux arrivent ici ; l'historique vient de GET /api/signals."
+    },
+    "schema": {
+      "returns": "Type renvoyé :",
+      "table": "Champs de la réponse",
+      "field": "Champ",
+      "type": "Type",
+      "description": "Description",
+      "alwaysPresent": "toujours présent",
+      "legend": "champ toujours présent dans la réponse.",
+      "errorTitle": "En cas d'erreur",
+      "error": "Corps application/problem+json (RFC 9457) : type, title, status, detail. Les clients se basent sur title."
+    }
+  }
+}

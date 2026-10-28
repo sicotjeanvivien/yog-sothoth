@@ -1,0 +1,105 @@
+{
+  "Developers": {
+    "page": {
+      "title": "API",
+      "description": "The Yog-Scope API's routes, their parameters and responses, to try from the browser."
+    },
+    "devbar": {
+      "home": "Yog-Scope, back to the site",
+      "name": "Development"
+    },
+    "unlisted": {
+      "label": "Unlisted",
+      "body": "No link leads here: no menu, no footer, no sitemap. You reach it by knowing the URL. The page is noindex."
+    },
+    "meta": {
+      "base": "Base",
+      "spec": "Spec",
+      "download": "openapi.json ↓"
+    },
+    "list": {
+      "toggle": "Endpoints",
+      "filter": "Filter: swaps, tvl, '{pool}'…",
+      "filterLabel": "Filter the endpoints",
+      "count": "{count} endpoints",
+      "countFiltered": "{shown} of {count} endpoints",
+      "collapseAll": "Collapse all",
+      "expandAll": "Expand all",
+      "noMatch": "No endpoint matches."
+    },
+    "families": {
+      "service": "Service status",
+      "swaps": "Swaps",
+      "liquidity": "Liquidity",
+      "poolCreations": "Pool creations",
+      "positionsFees": "Positions and fees",
+      "rewards": "Rewards",
+      "tvl": "TVL",
+      "signals": "Signals",
+      "announcements": "Announcements",
+      "byProtocol": "By protocol",
+      "byPool": "By pool",
+      "byToken": "By token"
+    },
+    "detail": {
+      "copyPath": "Copy the path",
+      "copied": "Copied",
+      "response200": "Response 200"
+    },
+    "params": {
+      "title": "Parameters",
+      "none": "No parameter.",
+      "path": "path",
+      "query": "query",
+      "required": "required",
+      "cursor": "Opaque cursor returned by the previous page (nextCursor / prevCursor).",
+      "limit": "Between {min} and {max}. Empty: the server's default.",
+      "protocol": "The protocol's identifier.",
+      "address": "A base58 address.",
+      "enumDefault": "No choice: the server's default."
+    },
+    "request": {
+      "missing": "Fill in {names} to send.",
+      "copyCurl": "Copy as curl",
+      "send": "Send",
+      "sending": "Sending…",
+      "listen": "Listen to the stream",
+      "stop": "Stop"
+    },
+    "tabs": {
+      "label": "Result",
+      "response": "Response",
+      "schema": "Schema"
+    },
+    "response": {
+      "empty": "Send the request to see the response here.",
+      "sending": "Sending…",
+      "body": "Response body",
+      "copyJson": "Copy the JSON",
+      "network": "The request failed: {message}",
+      "prev": "← Previous page",
+      "next": "Next page →",
+      "cursorHint": "The cursor parameter is filled from the response."
+    },
+    "stream": {
+      "connected": "Connected",
+      "connecting": "Connecting…",
+      "disconnected": "Disconnected",
+      "events": "{count, plural, =0 {0 events} one {# event} other {# events}}",
+      "log": "Events received",
+      "idle": "Click “Listen to the stream” to receive new signals live.",
+      "waiting": "Connected. Only new signals arrive here; the history comes from GET /api/signals."
+    },
+    "schema": {
+      "returns": "Type returned:",
+      "table": "Response fields",
+      "field": "Field",
+      "type": "Type",
+      "description": "Description",
+      "alwaysPresent": "always present",
+      "legend": "field always present in the response.",
+      "errorTitle": "On error",
+      "error": "Body application/problem+json (RFC 9457): type, title, status, detail. Clients rely on title."
+    }
+  }
+}

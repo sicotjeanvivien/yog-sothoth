@@ -83,6 +83,10 @@ export const RELEASES: readonly Release[] = [
             text: "/api/protocols/{protocol}/position-changes/totals serves the positions opened, locked, split and closed over the window, counted by yog-analytic per hour and filled since the first event (migration 044); liquidity-moves/totals carries the distinct owners of the window's moves.",
             technical: true,
           },
+          {
+            text: "The API's OpenAPI contract carries the version it ships in, 0.5.0, and follows each release from now on.",
+            technical: true,
+          },
         ],
       },
     ],
