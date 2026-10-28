@@ -9,6 +9,7 @@ import {
   byteSize,
   curlOf,
   missingOf,
+  pageValues,
   urlOf,
   type ParamValues,
 } from "@/lib/developers/request";
@@ -227,7 +228,8 @@ export function EndpointDetail({
   };
 
   const cursors = result?.kind === "response" ? cursorsOf(result.json) : null;
-  const pageTo = (cursor: string) => sendWith({ ...values, cursor });
+  const pageTo = (cursor: string, dir: "next" | "prev") =>
+    sendWith(pageValues(endpoint, values, cursor, dir));
 
   return (
     <section
@@ -362,10 +364,10 @@ export function EndpointDetail({
               <JsonView text={result.text} label={t("response.body")} />
               {cursors && (
                 <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-2">
-                  <GhostButton disabled={!cursors.prev} onClick={() => cursors.prev && pageTo(cursors.prev)}>
+                  <GhostButton disabled={!cursors.prev} onClick={() => cursors.prev && pageTo(cursors.prev, "prev")}>
                     {t("response.prev")}
                   </GhostButton>
-                  <GhostButton disabled={!cursors.next} onClick={() => cursors.next && pageTo(cursors.next)}>
+                  <GhostButton disabled={!cursors.next} onClick={() => cursors.next && pageTo(cursors.next, "next")}>
                     {t("response.next")}
                   </GhostButton>
                   <span className="text-[12px] text-dash-ink-3">{t("response.cursorHint")}</span>

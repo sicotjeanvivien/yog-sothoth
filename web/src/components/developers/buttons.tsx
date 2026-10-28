@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ButtonHTMLAttributes } from "react";
+import { useEffect, useRef, useState, type ButtonHTMLAttributes } from "react";
 
 const GHOST =
   "border border-dash-rule bg-transparent text-[12px] text-dash-ink transition-colors hover:border-dash-ink-3 disabled:cursor-not-allowed disabled:text-dash-ink-3 disabled:hover:border-dash-rule";
@@ -42,16 +42,17 @@ export function CopyButton({
   small?: boolean;
 }) {
   const [done, setDone] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  useEffect(() => {
-    if (!done) return;
-    const timer = setTimeout(() => setDone(false), 1400);
-    return () => clearTimeout(timer);
-  }, [done]);
+  useEffect(() => () => clearTimeout(timer.current), []);
 
   const copy = () => {
     navigator.clipboard?.writeText(text).then(
-      () => setDone(true),
+      () => {
+        setDone(true);
+        clearTimeout(timer.current);
+        timer.current = setTimeout(() => setDone(false), 1400);
+      },
       () => {},
     );
   };

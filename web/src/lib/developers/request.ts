@@ -19,8 +19,25 @@ export function urlOf(base: string, endpoint: Endpoint, values: ParamValues): st
   return `${base}${path}${query.length ? `?${query.join("&")}` : ""}`;
 }
 
+/** ⚠️ Single quotes: a `!` that `encodeURIComponent` leaves would expand inside double ones. */
 export function curlOf(url: string, sse: boolean): string {
-  return sse ? `curl -N -H "Accept: text/event-stream" "${url}"` : `curl -s "${url}"`;
+  return sse ? `curl -N -H 'Accept: text/event-stream' '${url}'` : `curl -s '${url}'`;
+}
+
+/**
+ * The values that fetch the page `cursor` points at: its direction set where the route takes
+ * `dir`, and `position` dropped, which the API refuses beside a cursor.
+ */
+export function pageValues(
+  endpoint: Endpoint,
+  values: ParamValues,
+  cursor: string,
+  dir: "next" | "prev",
+): ParamValues {
+  const next: ParamValues = { ...values, cursor };
+  if (endpoint.params.some((p) => p.name === "position")) next["position"] = "";
+  if (endpoint.params.some((p) => p.name === "dir")) next["dir"] = dir;
+  return next;
 }
 
 export function missingOf(endpoint: Endpoint, values: ParamValues): string[] {

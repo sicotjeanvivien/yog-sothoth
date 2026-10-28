@@ -1,6 +1,6 @@
 /**
  * The API contract read for the developers page: each operation, its parameters and the
- * fields of its 200 response. Server-side only — the client gets this digest, not the file.
+ * fields of its 200 response.
  */
 
 export type Schema = {

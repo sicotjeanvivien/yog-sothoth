@@ -8,10 +8,12 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { ApiExplorer } from "@/components/developers/api-explorer";
 import { UnlistedTag } from "@/components/developers/unlisted-tag";
-import spec from "@/lib/api/schema/openapi.json";
 import { loadClientEnv } from "@/lib/config/client-env.schema";
 import { endpointsOf, type OpenApi } from "@/lib/developers/contract";
 import { pageMetadata } from "@/lib/seo/page-metadata";
+
+// The contract `gen:api` copies into `public/`, the same file `/openapi.json` serves.
+import spec from "../../../../../public/openapi.json";
 
 type DevelopersPageProps = {
   params: Promise<{ locale: string }>;

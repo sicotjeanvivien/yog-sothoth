@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import spec from "@/lib/api/schema/openapi.json";
+import { RELEASES } from "@/components/marketing/changelog/releases";
+
+import spec from "../../../../public/openapi.json";
 
 import { FAMILIES, endpointsOf, familyOf, type Endpoint, type OpenApi } from "../contract";
 
@@ -86,5 +88,12 @@ describe("familyOf", () => {
   // Mutation: a fallback family — an unknown route would land somewhere unnamed.
   it("refuses a route of no family", () => {
     expect(() => familyOf("/api/unknown")).toThrow("no family for /api/unknown");
+  });
+});
+
+describe("the contract's version", () => {
+  // Mutation: a release in the changelog without the API crate's version raised to it.
+  it("is the latest release's", () => {
+    expect(`v${contract.info.version}`).toBe(RELEASES[0]?.version);
   });
 });

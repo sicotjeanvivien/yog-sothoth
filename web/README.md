@@ -86,8 +86,8 @@ not a rendering surprise.
 The schemas are **generated**, not written: `npm run gen:api` rewrites
 `schema/zod.gen.ts` from `crates/api/openapi.json`, the OpenAPI document the API
 derives from its routes ([`crates/api/README.md`](../crates/api/README.md#the-contract)),
-and copies that document to `schema/openapi.json` for the developers page: the
-image is built from `web/` alone.
+and copies that document to `public/openapi.json`, served as is at
+`/openapi.json` and read by the developers page: the image is built from `web/` alone.
 The names are the Rust ones — `zSignalResponse` and its type `SignalResponse`,
 `EmbeddedTokenResponse` for a token inside a signal — and each route has its
 response schema, named after the handler (`zListSignalsResponse`). A fetcher
@@ -473,11 +473,11 @@ its `curl`, the cursor's pages, Problem Details on failure, the signal stream
 listened to. It is unlisted: `noindex`, out of the sitemap, and no link of the
 site or the dashboard leads to it.
 
-`lib/developers/contract.ts` reads `schema/openapi.json` on the server and hands
-the client a digest, not the 300 KB document. A route of a new first segment
+The page reads `public/openapi.json` on the server through
+`lib/developers/contract.ts`. A route of a new first segment
 has no family until `FAMILY_OF_SEGMENT` names one, and the build fails until
-then. `/openapi.json` serves the document unchanged, and a test compares it byte
-for byte with `crates/api/openapi.json`. Another holds the contract's
+then. CI's `contract` job fails when `public/openapi.json` differs from
+`crates/api/openapi.json`. A test holds the contract's
 `info.version`, the API crate's version, to the latest release of the
 changelog: a new release fails it until `crates/api/Cargo.toml` is raised and
 the contract regenerated.
