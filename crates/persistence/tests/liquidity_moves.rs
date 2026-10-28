@@ -7,7 +7,8 @@ use sqlx::PgPool;
 use yog_core::{
     Cursor,
     domain::{
-        FrozenPeriod, LiquidityMoveLookup, LiquidityMoveOrder, LiquidityMoveScope, Protocol, Window,
+        FrozenPeriod, LiquidityMoveKind, LiquidityMoveList, LiquidityMoveLookup,
+        LiquidityMoveOrder, LiquidityMoveScope, Protocol, Window,
     },
 };
 use yog_persistence::PgLiquidityMoveRepository;
@@ -135,7 +136,14 @@ async fn the_moves_page_without_repeat_nor_gap_in_each_scope_and_order(pool: PgP
             let mut cursor = None;
             loop {
                 let page = repository
-                    .list_moves(&day, Window::Day, scope, order, cursor.take(), 3)
+                    .list_moves(
+                        &day,
+                        Window::Day,
+                        LiquidityMoveList::every_kind(scope),
+                        order,
+                        cursor.take(),
+                        3,
+                    )
                     .await
                     .unwrap();
                 seen.extend(page.items.iter().map(|m| m.signature.clone()));
@@ -191,7 +199,7 @@ async fn a_page_follows_a_move_whose_amount_has_more_digits_than_a_cursor(pool: 
                 .list_moves(
                     &period(24),
                     Window::Day,
-                    scope,
+                    LiquidityMoveList::every_kind(scope),
                     LiquidityMoveOrder::Amount,
                     cursor.take(),
                     1,
@@ -239,7 +247,14 @@ async fn a_move_keeps_its_amount_whole_whatever_its_scope_and_order(pool: PgPool
     ] {
         for order in [LiquidityMoveOrder::Amount, LiquidityMoveOrder::At] {
             let page = repository
-                .list_moves(&period(24), Window::Day, scope, order, None, 5)
+                .list_moves(
+                    &period(24),
+                    Window::Day,
+                    LiquidityMoveList::every_kind(scope),
+                    order,
+                    None,
+                    5,
+                )
                 .await
                 .unwrap();
             assert_eq!(
@@ -247,6 +262,65 @@ async fn a_move_keeps_its_amount_whole_whatever_its_scope_and_order(pool: PgPool
                 Decimal::new(12_345_678_901_234, 10),
                 "{scope:?} {order:?}"
             );
+        }
+    }
+}
+
+/// Mutation: the kind not filtered in one of the four reads — an addition listed among the pools'
+/// creations, or a page of creations followed by every kind.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_list_of_one_kind_keeps_that_kind_in_each_scope_and_order(pool: PgPool) {
+    let mine = pk(1).to_string();
+    for (signature, minutes, usd) in [("add-big", 5, 900), ("add-late", 1, 1)] {
+        insert_move(&pool, &mine, signature, minutes, Some(usd)).await;
+    }
+    for (signature, minutes, usd) in [("create-a", 10, 50), ("create-b", 20, 40)] {
+        sqlx::query(
+            "INSERT INTO analytic_liquidity_moves
+               (signature, event_index, timestamp, bucket, pool_address, protocol, owner, kind,
+                amount_usd)
+             VALUES ($1, 0, $2, time_bucket('5 minutes', $2), $3, $4, $5, 'create', $6)",
+        )
+        .bind(signature)
+        .bind(as_of() - Duration::minutes(minutes))
+        .bind(&mine)
+        .bind(DAMM)
+        .bind(pk(9).to_string())
+        .bind(usd)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let repository = repository(&pool).await;
+
+    for scope in [
+        LiquidityMoveScope::Pool(pk(1)),
+        LiquidityMoveScope::Protocol(Protocol::MeteoraDammV2),
+    ] {
+        let list = LiquidityMoveList {
+            scope,
+            kind: Some(LiquidityMoveKind::Create),
+        };
+        for order in [LiquidityMoveOrder::Amount, LiquidityMoveOrder::At] {
+            let first = repository
+                .list_moves(&period(24), Window::Day, list, order, None, 1)
+                .await
+                .unwrap();
+            let Some(Cursor::LiquidityMove(next)) = first.next_cursor else {
+                panic!("{scope:?} {order:?}: no next page");
+            };
+            let second = repository
+                .list_moves(&period(24), Window::Day, list, order, Some(*next), 1)
+                .await
+                .unwrap();
+
+            let seen: Vec<_> = first
+                .items
+                .iter()
+                .chain(&second.items)
+                .map(|m| m.signature.as_str())
+                .collect();
+            assert_eq!(seen, ["create-a", "create-b"], "{scope:?} {order:?}");
         }
     }
 }

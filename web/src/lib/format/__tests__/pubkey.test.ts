@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { shortenPubkey } from "../pubkey";
+
+import { pairLabel, shortenPubkey } from "../pubkey";
 
 describe("shortenPubkey", () => {
   it("shortens a standard 44-char Solana pubkey", () => {
@@ -25,5 +26,14 @@ describe("shortenPubkey", () => {
   it("rejects a non-positive chars argument", () => {
     expect(() => shortenPubkey("anything", 0)).toThrow(RangeError);
     expect(() => shortenPubkey("anything", -1)).toThrow(RangeError);
+  });
+});
+
+describe("pairLabel", () => {
+  // Mutation: a pair named with one symbol unknown — "SOL / null" in a cell.
+  it("names a pool by its pair, and by its address while a symbol is unknown", () => {
+    const pool = { poolAddress: "CGPxRANDOMMIDDLEPARTZp5j", tokenASymbol: "SOL", tokenBSymbol: "USDC" };
+    expect(pairLabel(pool)).toBe("SOL / USDC");
+    expect(pairLabel({ ...pool, tokenBSymbol: null })).toBe("CGPx…Zp5j");
   });
 });

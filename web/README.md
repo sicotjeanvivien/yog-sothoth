@@ -381,6 +381,13 @@ LPs' fees claimed would cross two routes, a rule the web does not hold. The clai
 than the swaps: until a window is covered, the block says so. The LPs' split between
 claiming and compounding is not drawn yet.
 
+**04 Pools & positions** — `protocol/pools/pools-tab.tsx`: the pools born over the
+period, bar by bar, from `pool-creations/hourly|daily` of the protocol
+(`lib/protocol/pools.ts`), and the five whose first deposit is worth the most, from
+`liquidity-moves?kind=create&sort=amount`: pair, creator, deposit, age. A pool whose deposit
+could not be valued is not in that list; the chart counts it. The positions' life cycle is not
+drawn yet.
+
 **Tabs** — `lib/protocol/tabs.ts` lists the six tabs of the canvas, in order;
 a tab joins the row when its content ships (`READY_TABS`), numbered by its
 place in the full list so it never moves. `?tab=` picks one, a bad value falls

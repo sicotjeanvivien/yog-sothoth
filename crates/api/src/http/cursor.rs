@@ -12,9 +12,9 @@ use yog_core::{
     Cursor,
     domain::{
         AnnouncementCursor, AnnouncementStatus, EventCursor, EventScope, LiquidityMoveCursor,
-        LiquidityMoveOrder, LiquidityMoveScope, PoolCursor, PoolScope, Protocol, RotationRunCursor,
-        RotationRunOrder, RotationRunScope, SignalCursor, TokenActivityCursor, TokenCursor,
-        TokenPriceCursor, Window,
+        LiquidityMoveKind, LiquidityMoveList, LiquidityMoveOrder, LiquidityMoveScope, PoolCursor,
+        PoolScope, Protocol, RotationRunCursor, RotationRunOrder, RotationRunScope, SignalCursor,
+        TokenActivityCursor, TokenCursor, TokenPriceCursor, Window,
     },
 };
 
@@ -37,6 +37,8 @@ struct TokenActivityCursorWire {
 #[serde(deny_unknown_fields)]
 struct LiquidityMoveCursorWire {
     scope: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    kind: Option<String>,
     window: String,
     as_of: String,
     order: String,
@@ -193,7 +195,8 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
             mint: c.mint.to_string(),
         }),
         Cursor::LiquidityMove(c) => encode_b64_json(&LiquidityMoveCursorWire {
-            scope: liquidity_move_scope_tag(c.scope),
+            scope: liquidity_move_scope_tag(c.list.scope),
+            kind: c.list.kind.map(|k| k.as_str().to_owned()),
             window: c.window.as_str().to_owned(),
             as_of: c.as_of.to_rfc3339(),
             order: order_tag(c.order).to_owned(),
@@ -290,15 +293,17 @@ pub(crate) fn decode_token_activity_cursor(raw: &str) -> Result<TokenActivityCur
     })
 }
 
-/// A cursor of `scope`'s moves in `order`; one of another scope or order is refused, its key
-/// meaningless here.
+/// A cursor of `list`'s moves in `order`; one of another scope, kind or order is refused, its
+/// key meaningless here.
 pub(crate) fn decode_liquidity_move_cursor(
     raw: &str,
-    scope: LiquidityMoveScope,
+    list: LiquidityMoveList,
     order: LiquidityMoveOrder,
 ) -> Result<LiquidityMoveCursor, ApiError> {
     let wire: LiquidityMoveCursorWire = decode_b64_json(raw)?;
-    if wire.scope != liquidity_move_scope_tag(scope) {
+    if wire.scope != liquidity_move_scope_tag(list.scope)
+        || wire.kind.as_deref() != list.kind.map(LiquidityMoveKind::as_str)
+    {
         return Err(ApiError::BadRequest(
             "invalid cursor: taken in another list".to_string(),
         ));
@@ -309,7 +314,7 @@ pub(crate) fn decode_liquidity_move_cursor(
         ));
     }
     Ok(LiquidityMoveCursor {
-        scope,
+        list,
         window: Window::ALL
             .into_iter()
             .find(|w| w.as_str() == wire.window)

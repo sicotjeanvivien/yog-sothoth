@@ -24,3 +24,14 @@ export function shortenPubkey(
   const tail = pubkey.slice(-chars);
   return `${head}${ELLIPSIS}${tail}`;
 }
+
+/** A pool named by its pair, `"SOL / USDC"`, or by its shortened address while a symbol is unknown. */
+export function pairLabel(pool: {
+  poolAddress: string;
+  tokenASymbol: string | null;
+  tokenBSymbol: string | null;
+}): string {
+  return pool.tokenASymbol !== null && pool.tokenBSymbol !== null
+    ? `${pool.tokenASymbol} / ${pool.tokenBSymbol}`
+    : shortenPubkey(pool.poolAddress);
+}

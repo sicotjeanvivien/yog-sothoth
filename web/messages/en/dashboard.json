@@ -303,6 +303,32 @@
           "addresses": "{owners} {count, plural, one {address} other {addresses}}",
           "unvalued": "{n} not valued"
         }
+      },
+      "pools": {
+        "births": {
+          "title": "The pools being born",
+          "info": "The pools created over the chosen period, bar by bar: a birth is the initialize_pool instruction, which creates the pool and deposits its first liquidity.",
+          "perHour": "Births per hour",
+          "perSixHours": "Births per 6-hour slice",
+          "perDay": "Births per day",
+          "total": "{total} in total",
+          "chartLabelHourly": "Pool births per hour over 24 hours",
+          "chartLabelSixHours": "Pool births per 6-hour slice over 7 days",
+          "chartLabelDaily": "Pool births per day over 30 days",
+          "periodTotal": "Total over {period}",
+          "pools": "Pools born",
+          "noValue": "No birth measured"
+        },
+        "deposits": {
+          "title": "Largest first deposits · {period}",
+          "info": "The pools born over the period whose first deposit is worth the most, valued at the pool's price in its 5-minute tranche. A pool whose deposit could not be valued is not listed; the chart counts it. The address is its creator's.",
+          "tableLabel": "Largest first deposits over the chosen period",
+          "pair": "Pair",
+          "creator": "Creator",
+          "deposit": "Deposit",
+          "ago": "Ago",
+          "empty": "No valued birth over the period."
+        }
       }
     },
     "BlockError": {

@@ -6549,6 +6549,20 @@
           },
           {
             "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "description": "`create`, the pools' creations, `add` or `remove`: the moves of that kind only.",
+              "enum": [
+                "create",
+                "add",
+                "remove"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
             "name": "sort",
             "required": false,
             "schema": {
@@ -7844,6 +7858,20 @@
                 "24h",
                 "7d",
                 "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "description": "`create`, the pools' creations, `add` or `remove`: the moves of that kind only.",
+              "enum": [
+                "create",
+                "add",
+                "remove"
               ],
               "type": "string"
             }

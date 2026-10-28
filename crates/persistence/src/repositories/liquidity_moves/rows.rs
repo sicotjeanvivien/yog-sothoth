@@ -27,16 +27,9 @@ pub(super) struct LiquidityMoveRow {
 
 impl LiquidityMoveRow {
     pub(super) fn into_keyed(self) -> Result<(LiquidityMove, Decimal), RepositoryError> {
-        let kind = match self.kind.as_str() {
-            "create" => LiquidityMoveKind::Create,
-            "add" => LiquidityMoveKind::Add,
-            "remove" => LiquidityMoveKind::Remove,
-            other => {
-                return Err(RepositoryError::Integrity(format!(
-                    "unknown liquidity move kind {other:?}"
-                )));
-            }
-        };
+        let kind = LiquidityMoveKind::from_label(&self.kind).ok_or_else(|| {
+            RepositoryError::Integrity(format!("unknown liquidity move kind {:?}", self.kind))
+        })?;
         let item = LiquidityMove {
             protocol: parse_protocol(&self.protocol)?,
             at: self.at,

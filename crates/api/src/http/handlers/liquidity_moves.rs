@@ -126,7 +126,7 @@ pub(crate) async fn list_protocol_liquidity_moves(
     let protocol = parse_protocol(&protocol)?;
     let scope = LiquidityMoveScope::Protocol(protocol);
     let request = ListLiquidityMovesRequest::parse(params, scope)?;
-    read_moves(&state, request, scope, protocol).await
+    read_moves(&state, request, protocol).await
 }
 
 #[utoipa::path(
@@ -148,20 +148,19 @@ pub(crate) async fn list_pool_liquidity_moves(
     let scope = LiquidityMoveScope::Pool(parse_pool(&pool)?);
     let request = ListLiquidityMovesRequest::parse(params, scope)?;
     let pool = super::known_pool(&state, &pool).await?;
-    read_moves(&state, request, scope, pool.protocol).await
+    read_moves(&state, request, pool.protocol).await
 }
 
 async fn read_moves(
     state: &AppState,
     request: ListLiquidityMovesRequest,
-    scope: LiquidityMoveScope,
     protocol: Protocol,
 ) -> Result<Json<WindowedPageResponse<LiquidityMoveResponse>>, ApiError> {
     let measured = state
         .liquidity_move_service
         .list_liquidity_moves(
             request.window,
-            scope,
+            request.list,
             protocol,
             request.order,
             request.cursor,

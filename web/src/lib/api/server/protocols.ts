@@ -13,6 +13,8 @@ import { apiGet } from "../client/server";
 import {
   zGetPoolCreationTotalsResponse,
   zGetProtocolLiquidityMovesDailyResponse,
+  zGetProtocolPoolCreationsDailyResponse,
+  zGetProtocolPoolCreationsHourlyResponse,
   zGetProtocolLiquidityMovesHourlyResponse,
   zGetProtocolLiquidityMoveTotalsResponse,
   zGetProtocolPositionFeeClaimTotalsResponse,
@@ -30,6 +32,7 @@ import {
   zListProtocolLiquidityMovesResponse,
   zListProtocolRotationRunsResponse,
   zListProtocolsResponse,
+  type LiquidityMoveKindResponse,
   type ProtocolResponse,
   type WindowResponse,
 } from "../schema/zod.gen";
@@ -128,12 +131,27 @@ export const fetchLiquiditySeries = cache((protocol: ProtocolResponse, window: W
 
 /** The protocol's largest valued liquidity moves over the window. */
 export const fetchLargestLiquidityMoves = cache(
-  (protocol: ProtocolResponse, window: WindowResponse, limit: number) =>
+  (protocol: ProtocolResponse, window: WindowResponse, limit: number, kind?: LiquidityMoveKindResponse) =>
     apiGet(
       `/api/protocols/${protocol}/liquidity-moves`,
-      { window, sort: "amount", limit: String(limit) },
+      { window, sort: "amount", limit: String(limit), ...(kind === undefined ? {} : { kind }) },
       zListProtocolLiquidityMovesResponse,
     ),
+);
+
+/** The pools the protocol saw born, hour by hour up to 7 days, by 24-hour slices beyond. */
+export const fetchPoolCreationsSeries = cache((protocol: ProtocolResponse, window: WindowResponse) =>
+  readsHours(window)
+    ? apiGet(
+        `/api/protocols/${protocol}/pool-creations/hourly`,
+        { window },
+        zGetProtocolPoolCreationsHourlyResponse,
+      )
+    : apiGet(
+        `/api/protocols/${protocol}/pool-creations/daily`,
+        { window },
+        zGetProtocolPoolCreationsDailyResponse,
+      ),
 );
 
 /** The protocol's volume by bar, split by its rotation runs. */

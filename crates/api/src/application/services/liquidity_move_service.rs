@@ -7,8 +7,8 @@ use std::sync::Arc;
 use yog_core::{
     Page, RepositoryError, RepositoryResult,
     domain::{
-        FrozenPeriod, LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup,
-        LiquidityMoveOrder, LiquidityMoveScope, Protocol, ProtocolActivityLookup, ProtocolBucket,
+        FrozenPeriod, LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveList,
+        LiquidityMoveLookup, LiquidityMoveOrder, Protocol, ProtocolActivityLookup, ProtocolBucket,
         Window,
     },
 };
@@ -96,12 +96,12 @@ impl LiquidityMoveService {
         Ok(Measured { period, items })
     }
 
-    /// `scope`'s valued moves; an empty page over a period `protocol`'s liquidity does not cover
+    /// `list`'s valued moves; an empty page over a period `protocol`'s liquidity does not cover
     /// whole.
     pub(crate) async fn list_liquidity_moves(
         &self,
         window: Window,
-        scope: LiquidityMoveScope,
+        list: LiquidityMoveList,
         protocol: Protocol,
         order: LiquidityMoveOrder,
         cursor: Option<LiquidityMoveCursor>,
@@ -116,7 +116,7 @@ impl LiquidityMoveService {
         let items = match &period {
             Some(period) if period.is_covered() => {
                 self.liquidity_moves
-                    .list_moves(period, window, scope, order, cursor, limit)
+                    .list_moves(period, window, list, order, cursor, limit)
                     .await?
             }
             _ => Page::empty(),
