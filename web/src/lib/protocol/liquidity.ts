@@ -59,10 +59,7 @@ export type FlowSlot = {
 
 type LiquidityBar = { from: string; createdUsd: string; addedUsd: string; removedUsd: string };
 
-/**
- * The flows in the period's slots: hours over 24 h, 24-hour slices beyond. A slot without a
- * bar was not measured.
- */
+/** The flows in the period's slots (`slotsOf`): a slot not whole was not measured. */
 export function flowSlotsOf(
   period: Period,
   asOf: string,

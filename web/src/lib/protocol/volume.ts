@@ -40,7 +40,7 @@ export function splitSlotsOf(
       from: slot.from,
       to: slot.to,
       total: slot.value,
-      inRuns: slot.value === null || !covered ? null : (inRuns[i]?.value ?? 0),
+      inRuns: slot.value === null || !covered ? null : (inRuns[i]?.value ?? null),
     };
   });
 }

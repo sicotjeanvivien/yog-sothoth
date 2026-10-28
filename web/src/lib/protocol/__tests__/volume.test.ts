@@ -28,12 +28,34 @@ describe("splitSlotsOf", () => {
       "24h",
       AS_OF,
       [bar(hour(22), "100"), bar(hour(23), "50")],
-      runsOf([bar(hour(22), "80")]),
+      runsOf([bar(hour(22), "80"), bar(hour(23), "0")]),
     );
 
     expect(slots.slice(22).map((s) => [s.total, s.inRuns])).toEqual([
       [100, 80],
       [50, 0],
+    ]);
+  });
+
+  const hoursFrom = (from: string, values: string[]) =>
+    values.map((v, h) => bar(new Date(Date.parse(from) + h * 3_600_000).toISOString(), v));
+
+  // Mutation: a slice of runs missing an hour read as none in runs — its whole volume drawn
+  // outside them; or the runs' hours not summed — a slice worth one hour of runs.
+  it("splits a 7 days' slice by its runs' hours, and leaves it unsplit when one is missing", () => {
+    const slices = splitSlotsOf(
+      "7d",
+      AS_OF,
+      [...hoursFrom("2026-10-24T15:00:00Z", Array(12).fill("10"))],
+      runsOf([
+        ...hoursFrom("2026-10-24T15:00:00Z", ["2", "0", "3", "0", "0", "0"]),
+        ...hoursFrom("2026-10-24T21:00:00Z", ["10", "10", "10", "10", "10"]),
+      ]),
+    );
+
+    expect(slices.slice(26).map((s) => [s.total, s.inRuns])).toEqual([
+      [60, 5],
+      [60, null],
     ]);
   });
 

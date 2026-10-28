@@ -88,7 +88,7 @@ export function axisOf(
 ): string[] {
   const every = AXIS_EVERY[period];
   const last = slots.length - 1;
-  // ⚠️ Over 7 days, under the last of each day's slices: from the first, today would show twice.
+  // ⚠️ Over 7 days, one label per day's four slices: the others' rule names today twice.
   const labelled = (i: number) =>
     period === "7d"
       ? (last - i) % every === 0
