@@ -643,7 +643,9 @@ price, `amount_usd` stays `NULL`, the move counted unvalued. Never at a market p
 alone, nor at the pool's mid price. `analytic_protocol_liquidity_hourly` sums them per
 protocol and hour, one row per hour written, zero included, and none before the first
 hour whose tranches were all valued with their moves: its first row is when the
-liquidity started being measured, which the reads take as its coverage. The moves are
+liquidity started being measured, which the reads take as its coverage. 043 gives each move its
+`lock`, read in the lock events of its transaction on its position (same signature, instant, pool
+and position; a creation, which has none, on its pool). The moves are
 kept 31 days, a day past the longest window: a chunk is dropped whole; `tests/analytic_liquidity.rs` holds the price rule and
 the start.
 

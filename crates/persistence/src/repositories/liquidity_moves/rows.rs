@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use yog_core::{
     RepositoryError,
-    domain::{LiquidityFlows, LiquidityMove, LiquidityMoveKind, ProtocolBucket},
+    domain::{LiquidityFlows, LiquidityMove, LiquidityMoveKind, LiquidityMoveLock, ProtocolBucket},
 };
 
 use crate::repositories::helper::{
@@ -21,6 +21,7 @@ pub(super) struct LiquidityMoveRow {
     pub(super) token_b_symbol: Option<String>,
     pub(super) owner: String,
     pub(super) kind: String,
+    pub(super) lock: Option<String>,
     pub(super) amount_usd: BigDecimal,
     pub(super) amount_key: BigDecimal,
 }
@@ -30,6 +31,14 @@ impl LiquidityMoveRow {
         let kind = LiquidityMoveKind::from_label(&self.kind).ok_or_else(|| {
             RepositoryError::Integrity(format!("unknown liquidity move kind {:?}", self.kind))
         })?;
+        let lock = self
+            .lock
+            .map(|label| {
+                LiquidityMoveLock::from_label(&label).ok_or_else(|| {
+                    RepositoryError::Integrity(format!("unknown liquidity move lock {label:?}"))
+                })
+            })
+            .transpose()?;
         let item = LiquidityMove {
             protocol: parse_protocol(&self.protocol)?,
             at: self.at,
@@ -40,6 +49,7 @@ impl LiquidityMoveRow {
             token_b_symbol: self.token_b_symbol,
             owner: convert_string_to_pubkey(self.owner, "owner")?,
             kind,
+            lock,
             amount_usd: convert_bigdecimal_to_decimal(self.amount_usd, "amount_usd")?,
         };
         Ok((

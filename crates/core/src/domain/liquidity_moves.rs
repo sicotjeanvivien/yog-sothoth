@@ -3,6 +3,6 @@ mod repository;
 
 pub use model::{
     LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveKind, LiquidityMoveList,
-    LiquidityMoveOrder, LiquidityMoveScope,
+    LiquidityMoveLock, LiquidityMoveOrder, LiquidityMoveScope,
 };
 pub use repository::LiquidityMoveLookup;

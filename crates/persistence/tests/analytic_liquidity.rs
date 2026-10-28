@@ -346,3 +346,103 @@ async fn the_hours_sum_their_moves_from_the_first_hour_valued_whole(pool: PgPool
         vec![(hour, dec("10.1"), dec("10.1"), dec("5"), 4, 3)],
     );
 }
+
+async fn insert_vesting_lock(pool: &PgPool, address: &str, signature: &str, at: DateTime<Utc>) {
+    sqlx::query(
+        "INSERT INTO meteora_damm_v2_lock_position_events
+           (pool_address, signature, position, owner, vesting, cliff_point, period_frequency,
+            cliff_unlock_liquidity, liquidity_per_period, number_of_period, timestamp, slot,
+            event_index)
+         VALUES ($1, $2, 'position', 'owner', 'vesting', 0, 0, 0, 0, 0, $3, 0, 1)",
+    )
+    .bind(address)
+    .bind(signature)
+    .bind(at)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// A permanent lock of `position` in pool `address`; the moves of these tests hold `position`.
+async fn insert_permanent_lock(
+    pool: &PgPool,
+    (address, position): (&str, &str),
+    signature: &str,
+    at: DateTime<Utc>,
+) {
+    sqlx::query(
+        "INSERT INTO meteora_damm_v2_permanent_lock_position_events
+           (pool_address, signature, position, lock_liquidity_amount,
+            total_permanent_locked_liquidity, timestamp, slot, event_index)
+         VALUES ($1, $2, $3, 0, 0, $4, 0, 2)",
+    )
+    .bind(address)
+    .bind(signature)
+    .bind(position)
+    .bind(at)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn move_lock(pool: &PgPool, tag: &str) -> Option<String> {
+    sqlx::query_scalar("SELECT lock FROM analytic_liquidity_moves WHERE signature = $1")
+        .bind(tag)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+/// Mutation: the lock looked up without its signature, instant, pool or, for an addition, position
+/// — another one's lock taken; vesting preferred to permanent; or no lock left `NULL`.
+#[sqlx::test]
+async fn a_move_says_the_lock_its_transaction_puts_on_a_position(pool: PgPool) {
+    let tranche = settled_hour() + Duration::minutes(10);
+    let pool_x = setup_inflated_token(&pool, tranche).await;
+    let at = tranche + Duration::minutes(1);
+    for tag in [
+        "vesting",
+        "permanent",
+        "both",
+        "none",
+        "elsewhere",
+        "other-pool",
+    ] {
+        insert_creation(&pool, &pool_x, tag, (1, 1), at).await;
+    }
+    for tag in ["add", "add-locked", "add-other-position"] {
+        insert_move(&pool, &pool_x, tag, "add", (1, 0), at).await;
+    }
+    let own = (pool_x.as_str(), "position");
+    insert_vesting_lock(&pool, &pool_x, "vesting", at).await;
+    insert_permanent_lock(&pool, own, "permanent", at).await;
+    insert_vesting_lock(&pool, &pool_x, "both", at).await;
+    insert_permanent_lock(&pool, own, "both", at).await;
+    insert_vesting_lock(&pool, &pool_x, "another-transaction", at).await;
+    insert_permanent_lock(&pool, own, "elsewhere", at + Duration::seconds(30)).await;
+    insert_permanent_lock(&pool, ("another-pool", "position"), "other-pool", at).await;
+    insert_permanent_lock(&pool, own, "add-locked", at).await;
+    insert_permanent_lock(
+        &pool,
+        (&pool_x, "another-position"),
+        "add-other-position",
+        at,
+    )
+    .await;
+
+    value(&pool, tranche, tranche).await;
+
+    for (tag, lock) in [
+        ("vesting", "vesting"),
+        ("permanent", "permanent"),
+        ("both", "permanent"),
+        ("none", "none"),
+        ("elsewhere", "none"),
+        ("other-pool", "none"),
+        ("add", "none"),
+        ("add-locked", "permanent"),
+        ("add-other-position", "none"),
+    ] {
+        assert_eq!(move_lock(&pool, tag).await.as_deref(), Some(lock), "{tag}");
+    }
+}
