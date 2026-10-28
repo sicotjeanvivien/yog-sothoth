@@ -857,3 +857,48 @@ async fn each_kind_of_position_change_is_counted_in_its_hour_and_an_hour_without
             .all(|h| (h.1, h.2, h.3, h.4, h.5) == (0, 0, 0, 0, 0))
     );
 }
+
+/// Mutation: the cycle's hours alone rewritten — an hour written partly before it, and frozen
+/// since, kept partial, and the hours after it never written.
+#[sqlx::test]
+async fn a_cycle_rewrites_from_the_last_hour_already_written(pool: PgPool) {
+    let now = now();
+    let cycle = cycle_from(now, hours_before(now, 1));
+    let partial = cycle.from - Duration::hours(3);
+    sqlx::query(
+        "INSERT INTO analytic_protocol_position_changes_hourly
+           (protocol, bucket, opened, vesting_locks, permanent_locks, splits, closed)
+         VALUES ('meteora_damm_v2', $1, 1, 0, 0, 0, 0)",
+    )
+    .bind(partial)
+    .execute(&pool)
+    .await
+    .unwrap();
+    insert_position_events(
+        &pool,
+        "INSERT INTO meteora_damm_v2_create_position_events
+           (pool_address, signature, owner, position, position_nft_mint, timestamp, slot,
+            event_index)
+         VALUES ('x', $1, 'x', 'x', 'x', $2, 0, 0)",
+        3,
+        partial + Duration::minutes(50),
+    )
+    .await;
+
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
+    repository.write_cycle(&cycle).await.unwrap();
+
+    let opened: Vec<(DateTime<Utc>, i64)> = sqlx::query_as(
+        "SELECT bucket, opened FROM analytic_protocol_position_changes_hourly ORDER BY bucket",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(opened[0], (partial, 3));
+    assert_eq!(
+        opened.len() as i64,
+        (cycle.through - partial).num_hours() + 1,
+        "{opened:?}"
+    );
+}

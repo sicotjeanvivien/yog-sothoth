@@ -42,9 +42,9 @@ const CHART_PX = { height: 122, top: 112 } as const;
 const DEPOSITS_SHOWN = 5;
 
 /** ⚠️ Three side by side in the advanced mode: the life cycle below would lengthen the page. */
-const BIRTHS_SPAN = "col-span-12 dash-wide:col-span-7 adv:dash-wide:col-span-4";
+const BIRTHS_SPAN = "col-span-12 dash-wide:col-span-7 adv:dash-wide:col-span-3";
 
-const DEPOSITS_SPAN = "col-span-12 dash-wide:col-span-5 adv:dash-wide:col-span-4";
+const DEPOSITS_SPAN = "col-span-12 dash-wide:col-span-5";
 
 const LIFE_SPAN = `col-span-12 dash-wide:col-span-4 ${ADVANCED_ONLY.block}`;
 

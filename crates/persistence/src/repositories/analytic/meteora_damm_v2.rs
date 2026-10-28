@@ -173,7 +173,7 @@ pub(super) async fn upsert_births(
 }
 
 /// The positions opened, locked, split and closed in the hours `from..=through`, each hour
-/// rewritten whole, zero included.
+/// rewritten whole, zero included, and from the last hour already written when it is earlier.
 pub(super) async fn upsert_position_changes(
     tx: &mut Transaction<'static, Postgres>,
     from: DateTime<Utc>,
@@ -183,7 +183,12 @@ pub(super) async fn upsert_position_changes(
         r#"
         INSERT INTO analytic_protocol_position_changes_hourly
             (protocol, bucket, opened, vesting_locks, permanent_locks, splits, closed)
-        SELECT $3, c.* FROM meteora_damm_v2_position_changes($1, $2) AS c
+        SELECT $3, c.*
+          -- ⚠️ From the last hour written too: one frozen before this writer ran is never rewritten.
+          FROM meteora_damm_v2_position_changes(
+                   LEAST($1, (SELECT MAX(bucket) FROM analytic_protocol_position_changes_hourly
+                               WHERE protocol = $3)),
+                   $2) AS c
         ON CONFLICT (protocol, bucket) DO UPDATE SET
             opened          = EXCLUDED.opened,
             vesting_locks   = EXCLUDED.vesting_locks,

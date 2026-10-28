@@ -62,13 +62,13 @@ INSERT INTO analytic_protocol_position_changes_hourly
     (protocol, bucket, opened, vesting_locks, permanent_locks, splits, closed)
 SELECT 'meteora_damm_v2', c.*
   FROM meteora_damm_v2_position_changes(
-           date_trunc('hour', LEAST(
+           time_bucket('1 hour', LEAST(
                (SELECT MIN(timestamp) FROM meteora_damm_v2_create_position_events),
                (SELECT MIN(timestamp) FROM meteora_damm_v2_lock_position_events),
                (SELECT MIN(timestamp) FROM meteora_damm_v2_permanent_lock_position_events),
                (SELECT MIN(timestamp) FROM meteora_damm_v2_split_position_events),
                (SELECT MIN(timestamp) FROM meteora_damm_v2_close_position_events))),
-           date_trunc('hour', now())) AS c;
+           time_bucket('1 hour', now())) AS c;
 
 GRANT SELECT, INSERT, UPDATE ON analytic_protocol_position_changes_hourly TO yog_analytic;
 GRANT SELECT ON meteora_damm_v2_create_position_events, meteora_damm_v2_close_position_events,
