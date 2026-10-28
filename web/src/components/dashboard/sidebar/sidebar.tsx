@@ -8,6 +8,7 @@
 import { useTranslations } from "next-intl";
 
 import { Link } from "@/i18n/navigation";
+import { BetaBadge } from "@/components/dashboard/beta/beta-badge";
 import { LogoMark } from "@/components/shared/logo-mark";
 import { ChevronLeftIcon, CloseIcon } from "@/components/shared/icon";
 
@@ -90,10 +91,13 @@ export function Brand({
     <div className={`flex ${collapsed ? "rail:justify-center" : ""}`}>
       <Link href="/" className="flex items-center gap-3">
         <LogoMark width={small ? 30 : 36} priority />
-        <span
-          className={`font-display text-[16px] font-semibold tracking-[0.16em] whitespace-nowrap uppercase ${collapsed ? "rail:sr-only" : ""}`}
-        >
-          {t("name")}
+        <span className="flex flex-col items-end gap-1">
+          <span
+            className={`font-display text-[16px] font-semibold tracking-[0.16em] whitespace-nowrap uppercase ${collapsed ? "rail:sr-only" : ""}`}
+          >
+            {t("name")}
+          </span>
+          <BetaBadge className={collapsed ? "rail:hidden" : ""} />
         </span>
       </Link>
     </div>

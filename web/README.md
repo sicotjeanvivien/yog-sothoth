@@ -191,10 +191,17 @@ from 721 px, the `rail:` breakpoint of `globals.css`; a drawer behind a thin
 "Menu" bar up to 720 px), the announcement banner and the live status. The
 rail collapses to 64 px from the toggle beside the logo, with a cookie.
 
-**Nothing waits for data** — the layout reads only its two cookies before
+**Nothing waits for data** — the layout reads only its three cookies before
 rendering: the announcement streams in its own `<Suspense>`, and each Overview
 block in its own, behind its skeleton. A failed block shows its error box;
 the status code is already sent.
+
+**Beta** — `dashboard/beta/`: a "Bêta" badge under the name, in the rail and
+the mobile bar, hidden on the collapsed rail; and a banner at the top of every
+page, above the announcement so that one streams in below it without moving
+it. Its "Signaler une erreur" mails `CONTACT_EMAIL_HREF` with one subject in
+both locales; "Compris" sets `yog_beta_dismissed` for 30 days, which the
+layout reads, so a dismissed banner never paints.
 
 **Menu** — `sidebar/sidebar-nav.ts` is pure data: Overview, then the
 platforms (Meteora, with DAMM v2 and DLMM under it; Raydium; Orca), then Token.

@@ -56,6 +56,10 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
+            text: "The dashboard says it is in beta: a badge under the name in the menu, and a banner on every page warning that the figures may be incomplete or wrong, with a link to report an error. \"Got it\" hides the banner for 30 days.",
+            technical: false,
+          },
+          {
             text: "yog-analytic values each claim of a position's fees or rewards once, at its pool's price in the tranche as a liquidity move (one shared function, yog_pool_amounts_usd), a reward outside its pool at its market price; /api/protocols/{protocol}/position-fee-claims/totals and /reward-claims/totals serve their totals. Migration 042.",
             technical: true,
           },

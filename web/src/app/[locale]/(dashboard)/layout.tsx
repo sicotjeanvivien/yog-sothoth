@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * The `(dashboard)` layout: the chrome is `DashboardShell`'s; this prepares only what the first
- * paint needs — the two frame cookies. ⚠️ No API call before rendering: the announcement
+ * paint needs — the frame cookies. ⚠️ No API call before rendering: the announcement
  * streams in its own `<Suspense>`.
  */
 
@@ -11,6 +11,11 @@ import { Suspense } from "react";
 import { cookies } from "next/headers";
 
 import { AnnouncementBanner } from "@/components/dashboard/announcements/announcement-banner";
+import { BetaBanner } from "@/components/dashboard/beta/beta-banner";
+import {
+  BETA_DISMISSED_COOKIE,
+  isBetaDismissed,
+} from "@/components/dashboard/beta/beta-state";
 import { PREFERENCES_OPEN_COOKIE } from "@/components/dashboard/sidebar/preferences-state";
 import { SIDEBAR_COLLAPSED_COOKIE } from "@/components/dashboard/sidebar/sidebar-state";
 import { DashboardShell } from "@/components/dashboard/shell/dashboard-shell";
@@ -56,12 +61,16 @@ export default async function DashboardLayout({
     cookieStore.get(SIDEBAR_COLLAPSED_COOKIE)?.value === "1";
   const initialPreferencesOpen =
     cookieStore.get(PREFERENCES_OPEN_COOKIE)?.value === "1";
+  const betaDismissed = isBetaDismissed(
+    cookieStore.get(BETA_DISMISSED_COOKIE)?.value,
+  );
 
   return (
     <DashboardShell
       initialCollapsed={initialCollapsed}
       initialPreferencesOpen={initialPreferencesOpen}
     >
+      {!betaDismissed && <BetaBanner />}
       <Suspense fallback={null}>
         <AnnouncementSlot />
       </Suspense>
