@@ -22,7 +22,7 @@ pub(crate) struct LiquidityMovesParams {
     #[serde(default)]
     #[param(inline)]
     window: WindowParam,
-    #[param(inline)]
+    #[param(inline, nullable = false)]
     kind: Option<KindParam>,
     #[serde(default)]
     #[param(inline)]

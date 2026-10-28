@@ -33,7 +33,7 @@ import { formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatCount } from "@/lib/format/format-count";
 import { formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
-import { shortenPubkey } from "@/lib/format/pubkey";
+import { pairLabel } from "@/lib/format/pubkey";
 import { axisOf, daysAgoOf, hourOf, roundTicks } from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
 import {
@@ -398,9 +398,7 @@ async function LargestRuns({ period, protocol }: TabProps) {
             {runs.items.map((run) => (
                 <div key={`${run.poolAddress}-${run.startedAt}`} role="row" className={`${ROW_CLASS} ${RUN_COLUMNS}`}>
                   <div role="cell" className="truncate text-dash-ink">
-                    {run.tokenASymbol !== null && run.tokenBSymbol !== null
-                      ? `${run.tokenASymbol} / ${run.tokenBSymbol}`
-                      : shortenPubkey(run.poolAddress)}
+                    {pairLabel(run)}
                   </div>
                   <div role="cell" className="font-dash-mono text-[12px] whitespace-nowrap text-dash-ink-2">
                     {formatUtcMoment(run.startedAt, locale) ?? "—"}

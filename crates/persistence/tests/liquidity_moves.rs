@@ -65,10 +65,6 @@ async fn a_protocols_liquidity_starts_and_sums_on_its_own(pool: PgPool) {
     assert_eq!(hourly.len(), 10);
 }
 
-fn every_kind(scope: LiquidityMoveScope) -> LiquidityMoveList {
-    LiquidityMoveList { scope, kind: None }
-}
-
 /// One move of a DAMM v2 `pool`, worth `usd`, `minutes` before [`as_of`]; `None` leaves it
 /// unvalued.
 async fn insert_move(
@@ -143,7 +139,7 @@ async fn the_moves_page_without_repeat_nor_gap_in_each_scope_and_order(pool: PgP
                     .list_moves(
                         &day,
                         Window::Day,
-                        every_kind(scope),
+                        LiquidityMoveList::every_kind(scope),
                         order,
                         cursor.take(),
                         3,
@@ -203,7 +199,7 @@ async fn a_page_follows_a_move_whose_amount_has_more_digits_than_a_cursor(pool: 
                 .list_moves(
                     &period(24),
                     Window::Day,
-                    every_kind(scope),
+                    LiquidityMoveList::every_kind(scope),
                     LiquidityMoveOrder::Amount,
                     cursor.take(),
                     1,
@@ -251,7 +247,14 @@ async fn a_move_keeps_its_amount_whole_whatever_its_scope_and_order(pool: PgPool
     ] {
         for order in [LiquidityMoveOrder::Amount, LiquidityMoveOrder::At] {
             let page = repository
-                .list_moves(&period(24), Window::Day, every_kind(scope), order, None, 5)
+                .list_moves(
+                    &period(24),
+                    Window::Day,
+                    LiquidityMoveList::every_kind(scope),
+                    order,
+                    None,
+                    5,
+                )
                 .await
                 .unwrap();
             assert_eq!(

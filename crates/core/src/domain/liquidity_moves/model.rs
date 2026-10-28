@@ -73,6 +73,13 @@ pub struct LiquidityMoveList {
     pub kind: Option<LiquidityMoveKind>,
 }
 
+impl LiquidityMoveList {
+    /// Every move of `scope`, whatever its kind.
+    pub fn every_kind(scope: LiquidityMoveScope) -> Self {
+        Self { scope, kind: None }
+    }
+}
+
 /// The order of a list of liquidity moves; each breaks its ties the same way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LiquidityMoveOrder {

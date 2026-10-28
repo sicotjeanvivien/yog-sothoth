@@ -32,6 +32,7 @@ import {
   zListProtocolLiquidityMovesResponse,
   zListProtocolRotationRunsResponse,
   zListProtocolsResponse,
+  type LiquidityMoveKindResponse,
   type ProtocolResponse,
   type WindowResponse,
 } from "../schema/zod.gen";
@@ -130,10 +131,10 @@ export const fetchLiquiditySeries = cache((protocol: ProtocolResponse, window: W
 
 /** The protocol's largest valued liquidity moves over the window. */
 export const fetchLargestLiquidityMoves = cache(
-  (protocol: ProtocolResponse, window: WindowResponse, limit: number) =>
+  (protocol: ProtocolResponse, window: WindowResponse, limit: number, kind?: LiquidityMoveKindResponse) =>
     apiGet(
       `/api/protocols/${protocol}/liquidity-moves`,
-      { window, sort: "amount", limit: String(limit) },
+      { window, sort: "amount", limit: String(limit), ...(kind === undefined ? {} : { kind }) },
       zListProtocolLiquidityMovesResponse,
     ),
 );
@@ -151,16 +152,6 @@ export const fetchPoolCreationsSeries = cache((protocol: ProtocolResponse, windo
         { window },
         zGetProtocolPoolCreationsDailyResponse,
       ),
-);
-
-/** The pools' creations whose first deposit is worth the most, valued. */
-export const fetchLargestPoolCreations = cache(
-  (protocol: ProtocolResponse, window: WindowResponse, limit: number) =>
-    apiGet(
-      `/api/protocols/${protocol}/liquidity-moves`,
-      { window, kind: "create", sort: "amount", limit: String(limit) },
-      zListProtocolLiquidityMovesResponse,
-    ),
 );
 
 /** The protocol's volume by bar, split by its rotation runs. */

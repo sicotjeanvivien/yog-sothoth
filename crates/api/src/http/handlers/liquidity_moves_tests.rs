@@ -27,10 +27,7 @@ async fn an_unknown_protocol_order_or_a_cursor_of_another_list_is_refused() {
     };
     let pool_cursor =
         crate::http::cursor::encode_cursor(&Cursor::LiquidityMove(Box::new(LiquidityMoveCursor {
-            list: LiquidityMoveList {
-                scope: LiquidityMoveScope::Pool(pk(1)),
-                kind: None,
-            },
+            list: LiquidityMoveList::every_kind(LiquidityMoveScope::Pool(pk(1))),
             window: Window::Day,
             as_of: chrono::Utc::now(),
             order: LiquidityMoveOrder::Amount,

@@ -19,11 +19,11 @@ import { BlockHeading, closedReason, PeriodNotice } from "@/components/dashboard
 import { BlockFailed, BlockSkeleton } from "@/components/dashboard/overview/overview-states";
 import { ApiClientError } from "@/lib/api/errors";
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
-import { fetchLargestPoolCreations, fetchPoolCreationsSeries } from "@/lib/api/server/protocols";
+import { fetchLargestLiquidityMoves, fetchPoolCreationsSeries } from "@/lib/api/server/protocols";
 import { formatCount } from "@/lib/format/format-count";
 import { formatRelative, formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatUsdCompact } from "@/lib/format/format-usd";
-import { shortenPubkey } from "@/lib/format/pubkey";
+import { pairLabel, shortenPubkey } from "@/lib/format/pubkey";
 import { axisOf, daysAgoOf, hourOf, roundTicks } from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
 import { birthSlotsOf, birthTotalOf } from "@/lib/protocol/pools";
@@ -158,7 +158,7 @@ async function Births({ period, protocol }: TabProps) {
             ticks={roundTicks(max)
               .filter(Number.isInteger)
               .map((value) => ({
-              bottom: Math.round(scale(value)),
+                bottom: Math.round(scale(value)),
                 label: formatCount(value),
               }))}
             axis={axisOf(period, slots, daysAgo)}
@@ -180,7 +180,7 @@ async function LargestDeposits({ period, protocol }: TabProps) {
 
   let creations;
   try {
-    creations = await fetchLargestPoolCreations(protocol, period, DEPOSITS_SHOWN);
+    creations = await fetchLargestLiquidityMoves(protocol, period, DEPOSITS_SHOWN, "create");
   } catch (err) {
     if (err instanceof ApiClientError) {
       return (
@@ -220,9 +220,7 @@ async function LargestDeposits({ period, protocol }: TabProps) {
             {creations.items.map((creation, rank) => (
               <div key={`${creation.signature}-${rank}`} role="row" className={`${ROW_CLASS} ${DEPOSIT_COLUMNS}`}>
                 <div role="cell" className="truncate text-dash-ink">
-                  {creation.tokenASymbol !== null && creation.tokenBSymbol !== null
-                    ? `${creation.tokenASymbol} / ${creation.tokenBSymbol}`
-                    : shortenPubkey(creation.poolAddress)}
+                  {pairLabel(creation)}
                 </div>
                 <div role="cell" className="font-dash-mono text-[12px] whitespace-nowrap text-dash-ink-2">
                   {shortenPubkey(creation.owner)}

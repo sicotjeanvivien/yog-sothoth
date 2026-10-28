@@ -6552,20 +6552,13 @@
             "name": "kind",
             "required": false,
             "schema": {
-              "oneOf": [
-                {
-                  "description": "`create`, the pools' creations, `add` or `remove`: the moves of that kind only.",
-                  "enum": [
-                    "create",
-                    "add",
-                    "remove"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "description": "`create`, the pools' creations, `add` or `remove`: the moves of that kind only.",
+              "enum": [
+                "create",
+                "add",
+                "remove"
+              ],
+              "type": "string"
             }
           },
           {
@@ -7874,20 +7867,13 @@
             "name": "kind",
             "required": false,
             "schema": {
-              "oneOf": [
-                {
-                  "description": "`create`, the pools' creations, `add` or `remove`: the moves of that kind only.",
-                  "enum": [
-                    "create",
-                    "add",
-                    "remove"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "description": "`create`, the pools' creations, `add` or `remove`: the moves of that kind only.",
+              "enum": [
+                "create",
+                "add",
+                "remove"
+              ],
+              "type": "string"
             }
           },
           {

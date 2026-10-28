@@ -9,10 +9,6 @@ use yog_core::domain::{
     Window,
 };
 
-fn every_kind(scope: LiquidityMoveScope) -> LiquidityMoveList {
-    LiquidityMoveList { scope, kind: None }
-}
-
 use super::{LiquidityMoveService, MovesError};
 use crate::testing::{
     MockLiquidityMoveRepo, at_october, frozen_hours_repo, make_frozen_hours, make_pool, pk,
@@ -76,7 +72,7 @@ async fn the_moves_wait_for_their_protocols_liquidity() {
             service(repo)
                 .list_liquidity_moves(
                     Window::Day,
-                    every_kind(scope),
+                    LiquidityMoveList::every_kind(scope),
                     pool.protocol,
                     LiquidityMoveOrder::Amount,
                     None,
@@ -102,7 +98,7 @@ async fn a_cursor_of_another_list_or_before_the_last_freeze_is_refused() {
     });
     let svc = service(&repo);
     let cursor = |as_of, window, address| LiquidityMoveCursor {
-        list: every_kind(LiquidityMoveScope::Pool(address)),
+        list: LiquidityMoveList::every_kind(LiquidityMoveScope::Pool(address)),
         window,
         as_of,
         order: LiquidityMoveOrder::Amount,
@@ -114,7 +110,7 @@ async fn a_cursor_of_another_list_or_before_the_last_freeze_is_refused() {
     let read = |c| {
         svc.list_liquidity_moves(
             Window::Day,
-            every_kind(LiquidityMoveScope::Pool(pool.pool_address)),
+            LiquidityMoveList::every_kind(LiquidityMoveScope::Pool(pool.pool_address)),
             pool.protocol,
             LiquidityMoveOrder::Amount,
             Some(c),

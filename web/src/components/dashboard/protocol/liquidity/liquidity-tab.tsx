@@ -33,7 +33,7 @@ import {
 } from "@/lib/api/server/protocols";
 import { formatRelative, formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatUsdCompact } from "@/lib/format/format-usd";
-import { shortenPubkey } from "@/lib/format/pubkey";
+import { pairLabel, shortenPubkey } from "@/lib/format/pubkey";
 import { axisOf, daysAgoOf, hourOf, roundTicks } from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
 import { CURVE_BOX, curveOf, flowSlotsOf } from "@/lib/protocol/liquidity";
@@ -334,9 +334,7 @@ async function LargestMoves({ period, protocol }: TabProps) {
                   {shortenPubkey(move.owner)}
                 </div>
                 <div role="cell" className="truncate text-dash-ink">
-                  {move.tokenASymbol !== null && move.tokenBSymbol !== null
-                    ? `${move.tokenASymbol} / ${move.tokenBSymbol}`
-                    : shortenPubkey(move.poolAddress)}
+                  {pairLabel(move)}
                 </div>
                 <div role="cell" className={`${NUM_CLASS} text-dash-ink`}>
                   <span aria-hidden="true" className={`font-bold ${SIGN[move.kind].tone}`}>
