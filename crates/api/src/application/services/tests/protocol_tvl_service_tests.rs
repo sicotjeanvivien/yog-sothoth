@@ -29,3 +29,17 @@ async fn the_tvl_reads_the_last_frozen_hour_and_the_series_from_the_windows_star
         )
     );
 }
+
+/// Mutation: the change read at the open hour, or over another window than the one asked — a
+/// 7-day request served the 24-hour change.
+#[tokio::test]
+async fn the_change_reads_the_last_frozen_hour_over_its_window() {
+    let repo = Arc::new(MockProtocolTvlRepo::default());
+    let svc = ProtocolTvlService::new(frozen_hours_repo(Some(make_frozen_hours())), repo.clone());
+
+    svc.get_tvl_change(Window::Week, None).await.unwrap();
+
+    let instants = repo.instants.lock().unwrap().clone();
+    assert_eq!(instants, vec![("tvl_changes", at_october(20, 12), None)]);
+    assert_eq!(*repo.windows.lock().unwrap(), vec![Window::Week]);
+}

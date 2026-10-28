@@ -51,6 +51,10 @@ export const RELEASES: readonly Release[] = [
             text: "yog-analytic values each claim of a position's fees or rewards once, at its pool's price in the tranche as a liquidity move (one shared function, yog_pool_amounts_usd), a reward outside its pool at its market price; /api/protocols/{protocol}/position-fee-claims/totals and /reward-claims/totals serve their totals. Migration 042.",
             technical: true,
           },
+          {
+            text: "/api/tvl/totals and /api/protocols/{protocol}/tvl/totals serve the TVL's change over the window: the last reading, the one a window before it, the part the pools discovered in the window hold, and the change without it. The dashboard reads its TVL change there instead of pairing three routes itself; the API's README writes the line: a rule that combines several routes is served.",
+            technical: true,
+          },
         ],
       },
     ],

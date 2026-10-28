@@ -28,6 +28,7 @@ mod protocol_rotation_run_totals;
 mod protocol_swap_activity;
 mod protocol_swap_activity_bucket;
 mod protocol_tvl;
+mod protocol_tvl_change;
 mod readiness;
 mod reading;
 mod reward_change_event;
@@ -69,6 +70,7 @@ pub(crate) use protocol_rotation_run_totals::ProtocolRotationRunTotalsResponse;
 pub(crate) use protocol_swap_activity::ProtocolSwapActivityResponse;
 pub(crate) use protocol_swap_activity_bucket::ProtocolSwapActivityBucketResponse;
 pub(crate) use protocol_tvl::ProtocolTvlResponse;
+pub(crate) use protocol_tvl_change::ProtocolTvlChangeResponse;
 pub(crate) use readiness::{
     ChecksReportResponse, ComponentStatusResponse, ReadinessResponse, ReadinessStatusResponse,
 };

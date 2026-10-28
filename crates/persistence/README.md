@@ -664,8 +664,10 @@ the rules of `crates/api/README.md`: one static query per resource and cut, the 
 checked at compile time. The swaps by pool read `analytic_pool_hourly`, which 037 opens to
 `yog_api`, read only; 037 also indexes the liquidity moves by pool. The liquidity moves of a
 protocol or a pool page by a key of their order — amount or instant, then signature and
-`event_index` — forward only. The tests of the same names hold the
-scopes, the days, the TVL's last reading and the pages.
+`event_index` — forward only. The TVL's change pairs each protocol's last reading with the one
+exactly a window before it, only when the last is the hour asked, and with the discovered part
+at the last. The tests of the same names hold the scopes, the days, the TVL's last reading and
+its change, and the pages.
 
 **The on-chain events.** `swap_event.rs`, `liquidity_change_event.rs` and
 `pool_creation_event.rs` read each protocol's event table — the cross-protocol views hold

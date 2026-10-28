@@ -3613,6 +3613,58 @@
           }
         ]
       },
+      "ProtocolTvlChangeResponse": {
+        "properties": {
+          "changeUsd": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SignedDecimal",
+                "description": "`end − discoveredTvlUsd − start`; `null` as soon as one of them is."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "discoveredTvlUsd": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal",
+                "description": "What the pools first seen in the window, their birth unobserved, hold at `end`; `null`\nwhen not measured at that reading."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "end": {
+            "$ref": "#/components/schemas/TvlReadingResponse",
+            "description": "The last reading at or before `asOf`."
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          },
+          "start": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TvlReadingResponse",
+                "description": "The reading exactly a window before `end`, when `end` is at `asOf`."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "protocol",
+          "end",
+          "changeUsd",
+          "discoveredTvlUsd",
+          "start"
+        ],
+        "type": "object"
+      },
       "ProtocolTvlResponse": {
         "description": "A protocol's TVL at `at`, the close of the hour it was last measured in.",
         "properties": {
@@ -4554,6 +4606,30 @@
         ],
         "type": "object"
       },
+      "TvlReadingResponse": {
+        "description": "The TVL at `at`, the close of the hour it was measured in.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "tvlUsd": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "at",
+          "tvlUsd"
+        ],
+        "type": "object"
+      },
       "U128String": {
         "pattern": "^\\d+$",
         "type": "string"
@@ -5422,6 +5498,100 @@
                   "type": "object"
                 }
               ]
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
+      "WindowedResponse_ProtocolTvlChangeResponse": {
+        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "properties": {
+          "asOf": {
+            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "description": "The first hour the facts hold.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "changeUsd": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/SignedDecimal",
+                      "description": "`end − discoveredTvlUsd − start`; `null` as soon as one of them is."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "discoveredTvlUsd": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/UnsignedDecimal",
+                      "description": "What the pools first seen in the window, their birth unobserved, hold at `end`; `null`\nwhen not measured at that reading."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "end": {
+                  "$ref": "#/components/schemas/TvlReadingResponse",
+                  "description": "The last reading at or before `asOf`."
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "start": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TvlReadingResponse",
+                      "description": "The reading exactly a window before `end`, when `end` is at `asOf`."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "protocol",
+                "end",
+                "changeUsd",
+                "discoveredTvlUsd",
+                "start"
+              ],
+              "type": "object"
             },
             "type": "array"
           },
@@ -9381,6 +9551,56 @@
         }
       }
     },
+    "/api/protocols/{protocol}/tvl/totals": {
+      "get": {
+        "operationId": "get_protocol_tvl_totals",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolTvlChangeResponse"
+                }
+              }
+            },
+            "description": "The protocol's last TVL reading, the one a window before it, and the change without the pools discovered in the window; no start but for a last reading at `asOf`."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/reward-changes": {
       "get": {
         "operationId": "list_reward_changes",
@@ -10208,6 +10428,48 @@
               }
             },
             "description": "Each protocol's TVL reading of every hour measured, from the window's start."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/tvl/totals": {
+      "get": {
+        "operationId": "get_tvl_totals",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolTvlChangeResponse"
+                }
+              }
+            },
+            "description": "Each protocol's last TVL reading, the one a window before it, and the change without the pools discovered in the window; no start but for a last reading at `asOf`."
           },
           "default": {
             "content": {

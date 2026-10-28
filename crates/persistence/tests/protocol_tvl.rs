@@ -1,9 +1,10 @@
-//! `PgProtocolTvlRepository` under `yog_api`: the readings of one protocol, seeded here.
+//! `PgProtocolTvlRepository` under `yog_api`: the readings of one protocol and their change over
+//! a window, seeded here.
 
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
-use yog_core::domain::{Protocol, ProtocolTvlLookup};
+use yog_core::domain::{Protocol, ProtocolTvlLookup, TvlReading, Window};
 use yog_persistence::PgProtocolTvlRepository;
 
 use super::helpers::{DAMM, DLMM, as_of, setup_roles_and_connect_as};
@@ -91,4 +92,94 @@ async fn the_tvl_series_holds_both_ends_and_every_protocol(pool: PgPool) {
         })
         .collect();
     assert_eq!(read, expected);
+}
+
+async fn insert_discovered(
+    pool: &PgPool,
+    protocol: &str,
+    period: &str,
+    bucket: DateTime<Utc>,
+    tvl: i64,
+) {
+    sqlx::query(
+        "INSERT INTO analytic_protocol_tvl_discovered (protocol, period, bucket, tvl_usd, pools)
+         VALUES ($1, $2, $3, $4, 1)",
+    )
+    .bind(protocol)
+    .bind(period)
+    .bind(bucket)
+    .bind(tvl)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// Mutations: the start taken before the window's, or paired with a last reading older than the
+/// hour asked; the discovered part taken at the hour asked, or another window's; or a protocol
+/// without a start left out.
+#[sqlx::test(migrations = "./migrations")]
+async fn the_change_pairs_the_reading_a_window_before_and_the_part_at_the_end(pool: PgPool) {
+    let last = as_of() - Duration::hours(1);
+    let stale = last - Duration::hours(1);
+    insert_tvl(&pool, DAMM, last - Duration::hours(30), 500).await;
+    insert_tvl(&pool, DAMM, last - Duration::hours(24), 1_000).await;
+    insert_tvl(&pool, DAMM, last - Duration::hours(23), 990).await;
+    insert_tvl(&pool, DAMM, last, 1_300).await;
+    insert_discovered(&pool, DAMM, "24h", last, 200).await;
+    insert_discovered(&pool, DAMM, "7d", last, 77).await;
+    insert_tvl(&pool, DLMM, stale - Duration::hours(24), 4).await;
+    insert_tvl(&pool, DLMM, stale, 5).await;
+    insert_discovered(&pool, DLMM, "24h", stale, 3).await;
+    insert_discovered(&pool, DLMM, "24h", last, 999).await;
+    let repository = repository(&pool).await;
+
+    let changes = repository
+        .list_changes(last, Window::Day, None)
+        .await
+        .unwrap();
+
+    let read: Vec<_> = changes
+        .iter()
+        .map(|c| {
+            (
+                c.protocol.as_str(),
+                c.end.clone(),
+                c.start.clone(),
+                c.discovered_tvl_usd,
+            )
+        })
+        .collect();
+    let reading = |bucket: DateTime<Utc>, tvl: i64| TvlReading {
+        at: bucket + Duration::hours(1),
+        tvl_usd: Some(Decimal::from(tvl)),
+    };
+    assert_eq!(
+        read,
+        [
+            (
+                DAMM,
+                reading(last, 1_300),
+                Some(reading(last - Duration::hours(24), 1_000)),
+                Some(Decimal::from(200))
+            ),
+            (DLMM, reading(stale, 5), None, Some(Decimal::from(3))),
+        ]
+    );
+}
+
+/// Mutation: the protocol filter dropped — DLMM's change read under DAMM v2.
+#[sqlx::test(migrations = "./migrations")]
+async fn the_change_of_one_protocol_is_its_own(pool: PgPool) {
+    let last = as_of() - Duration::hours(1);
+    insert_tvl(&pool, DAMM, last, 1_300).await;
+    insert_tvl(&pool, DLMM, last, 5).await;
+    let repository = repository(&pool).await;
+
+    let changes = repository
+        .list_changes(last, Window::Day, Some(Protocol::MeteoraDammV2))
+        .await
+        .unwrap();
+
+    assert_eq!(changes.len(), 1);
+    assert_eq!(changes[0].protocol, Protocol::MeteoraDammV2);
 }

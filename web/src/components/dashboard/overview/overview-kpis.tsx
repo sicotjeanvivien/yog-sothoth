@@ -10,29 +10,21 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { ApiClientError } from "@/lib/api/errors";
 import {
   fetchPoolCreationTotals,
-  fetchPoolDiscoveryTotals,
   fetchPreviousSwapTotals,
   fetchProtocol,
   fetchProtocols,
   fetchSwapTotals,
   fetchTvl,
-  fetchTvlHourly,
+  fetchTvlTotals,
 } from "@/lib/api/server/protocols";
 import type { Scope } from "@/lib/api/server/scope";
 import { volumeCoverage } from "@/lib/coverage/volume-coverage";
 import { formatCount, formatCountCompact, formatRate } from "@/lib/format/format-count";
 import { formatTimes } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
-import { previousWindowCovered, tvlStart } from "@/lib/overview/availability";
+import { previousWindowCovered } from "@/lib/overview/availability";
 import type { Period } from "@/lib/overview/period";
-import {
-  changeRatio,
-  discoveredTvl,
-  rotation,
-  sumUsd,
-  swapsPerSecond,
-  tvlChange,
-} from "@/lib/overview/totals";
+import { changeRatio, rotation, shareOf, sumUsd, swapsPerSecond } from "@/lib/overview/totals";
 
 import { Change, closedReason, KpiCell, Unavailable, utcMoment } from "./overview-parts";
 import { KpiFailedLine, KpiSkeleton, lateStamp } from "./overview-states";
@@ -47,29 +39,20 @@ export async function TvlKpi({ period, scope }: { period: Period; scope: Scope }
   const info = t("kpis.info.tvl");
   const suffix = t("kpis.tvlChange", { period: t(`period.short.${period}`) });
 
-  const [latest, hourly, discoveries] = await Promise.allSettled([
-    fetchTvl(scope),
-    fetchTvlHourly(scope, period),
-    fetchPoolDiscoveryTotals(scope, period),
-  ]);
-  if (latest.status === "rejected") {
-    return kpiError(latest.reason, label, info);
+  let totals;
+  try {
+    totals = await fetchTvlTotals(scope, period);
+  } catch (err) {
+    return kpiError(err, label, info);
   }
 
-  const items = latest.value.items;
-  const current = sumUsd(items.map((i) => i.tvlUsd));
+  const rows = totals.items;
+  const current = sumUsd(rows.map((r) => r.end.tvlUsd));
   let sub: ReactNode;
-  if (hourly.status === "rejected") {
-    sub = <Withheld reason={await failure(hourly.reason)} suffix={suffix} />;
-  } else if (discoveries.status === "rejected") {
-    sub = <Withheld reason={await failure(discoveries.reason)} suffix={suffix} />;
-  } else if (current !== null) {
-    const starts = items.map((i) => tvlStart(hourly.value.items, i, period));
-    const start = starts.some((s) => s === null)
-      ? null
-      : sumUsd(starts.map((s) => s?.tvlUsd ?? null));
-    const discovered = discoveredTvl(items, discoveries.value.items);
-    const ratio = tvlChange(current, start, discovered);
+  if (current !== null) {
+    const start = sumUsd(rows.map((r) => r.start?.tvlUsd ?? null));
+    const discovered = sumUsd(rows.map((r) => r.discoveredTvlUsd));
+    const ratio = shareOf(sumUsd(rows.map((r) => r.changeUsd)), start);
     sub =
       ratio !== null ? (
         <>
@@ -90,7 +73,7 @@ export async function TvlKpi({ period, scope }: { period: Period; scope: Scope }
       info={info}
       value={usd(current)}
       sub={sub}
-      stamp={await lateStamp(latest.value.asOf)}
+      stamp={await lateStamp(totals.asOf)}
     />
   );
 }

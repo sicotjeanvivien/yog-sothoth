@@ -9,6 +9,9 @@ browser calls the Rust API directly.
 
 Comments follow the absolute rule of `CLAUDE.md` (*Comments — absolute rule*).
 
+What the web computes stops at the arithmetic over one response and the presentation: a rule
+that combines several routes is the API's, rule 11 of `crates/api/README.md`.
+
 ## Stack
 
 - **Next.js 16** — App Router, Server Components, standalone output, Turbopack by default
@@ -258,8 +261,7 @@ moved, while the ⓘ (`InfoPopover`) and `BlockError` they share keep it.
 fees, active pools), activity by protocol, the latest signals, volume per bar
 of the period, the most traded tokens. The header is the title alone, then "Live",
 the period and the advanced mode at its right. Every figure comes from yog-analytic's
-measures (`/api/swaps/…`, `/api/tvl…`, `/api/pool-creations/…`,
-`/api/pool-discoveries/…`), which all end at the same `asOf`, the close of the last frozen
+measures (`/api/swaps/…`, `/api/tvl…`, `/api/pool-creations/…`), which all end at the same `asOf`, the close of the last frozen
 hour.
 
 **The period** — `?period=24h|7d|30d` (`lib/overview/period.ts`; missing or
@@ -282,8 +284,8 @@ figure the facts do not cover whole is "—", never a smaller number:
   back to 24h, so its reads never run;
 - the volume change is "—" when the previous window (`offset`) starts before
   `coveredSince`;
-- the TVL change is "—" when `/tvl/hourly` has no point at the window's start:
-  the hours before the first complete TVL are deleted.
+- the TVL change is "—" when `tvl/totals` has no reading a window before the last,
+  or no discovered part at it: the hours before the first complete TVL are deleted.
 Each "—" carries an ⓘ with its reason.
 
 **ⓘ** — every KPI and section has one, click-toggled

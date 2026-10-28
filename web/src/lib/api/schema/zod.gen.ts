@@ -1187,6 +1187,23 @@ export const zTokenResponse = z.object({
 
 export type TokenResponse = z.infer<typeof zTokenResponse>;
 
+export const zTvlReadingResponse = z.object({
+    at: z.iso.datetime({ offset: true }),
+    tvlUsd: zUnsignedDecimal.nullable()
+});
+
+export type TvlReadingResponse = z.infer<typeof zTvlReadingResponse>;
+
+export const zProtocolTvlChangeResponse = z.object({
+    changeUsd: zSignedDecimal.nullable(),
+    discoveredTvlUsd: zUnsignedDecimal.nullable(),
+    end: zTvlReadingResponse,
+    protocol: zProtocolResponse,
+    start: zTvlReadingResponse.nullable()
+});
+
+export type ProtocolTvlChangeResponse = z.infer<typeof zProtocolTvlChangeResponse>;
+
 export const zWindowResponse = z.enum([
     '24h',
     '7d',
@@ -1410,6 +1427,22 @@ export const zWindowedResponseProtocolSwapActivityResponse = z.object({
 });
 
 export type WindowedResponseProtocolSwapActivityResponse = z.infer<typeof zWindowedResponseProtocolSwapActivityResponse>;
+
+export const zWindowedResponseProtocolTvlChangeResponse = z.object({
+    asOf: z.iso.datetime({ offset: true }).nullable(),
+    coveredSince: z.iso.datetime({ offset: true }).nullable(),
+    from: z.iso.datetime({ offset: true }).nullable(),
+    items: z.array(z.object({
+        changeUsd: zSignedDecimal.nullable(),
+        discoveredTvlUsd: zUnsignedDecimal.nullable(),
+        end: zTvlReadingResponse,
+        protocol: zProtocolResponse,
+        start: zTvlReadingResponse.nullable()
+    })),
+    window: zWindowResponse
+});
+
+export type WindowedResponseProtocolTvlChangeResponse = z.infer<typeof zWindowedResponseProtocolTvlChangeResponse>;
 
 export const zWindowedResponseProtocolTvlResponse = z.object({
     asOf: z.iso.datetime({ offset: true }).nullable(),
@@ -2270,6 +2303,20 @@ export const zGetProtocolTvlReadingsHourlyQuery = z.object({
 
 export const zGetProtocolTvlReadingsHourlyResponse = zWindowedResponseProtocolTvlResponse;
 
+export const zGetProtocolTvlTotalsPath = z.object({
+    protocol: z.string()
+});
+
+export const zGetProtocolTvlTotalsQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional()
+});
+
+export const zGetProtocolTvlTotalsResponse = zWindowedResponseProtocolTvlChangeResponse;
+
 export const zListRewardChangesQuery = z.object({
     window: z.enum([
         '24h',
@@ -2424,3 +2471,13 @@ export const zGetTvlHourlyQuery = z.object({
 });
 
 export const zGetTvlHourlyResponse = zWindowedResponseProtocolTvlResponse;
+
+export const zGetTvlTotalsQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional()
+});
+
+export const zGetTvlTotalsResponse = zWindowedResponseProtocolTvlChangeResponse;

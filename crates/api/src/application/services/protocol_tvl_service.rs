@@ -1,12 +1,14 @@
-//! The TVL, a reading at an instant: the last reading by the last frozen hour, and one
-//! reading per hour of a window.
+//! The TVL, a reading at an instant: the last reading by the last frozen hour, one reading per
+//! hour of a window, and its change over a window.
 
 use std::sync::Arc;
 
 use chrono::TimeDelta;
 use yog_core::{
     RepositoryResult,
-    domain::{Protocol, ProtocolActivityLookup, ProtocolTvl, ProtocolTvlLookup, Window},
+    domain::{
+        Protocol, ProtocolActivityLookup, ProtocolTvl, ProtocolTvlChange, ProtocolTvlLookup, Window,
+    },
 };
 
 use super::period::{Measured, build_frozen_period};
@@ -59,6 +61,24 @@ impl ProtocolTvlService {
                         period.last_hour(),
                         protocol,
                     )
+                    .await?
+            }
+            None => Vec::new(),
+        };
+        Ok(Measured { period, items })
+    }
+
+    /// Each protocol's change over `window`, to its last reading by the last frozen hour.
+    pub(crate) async fn get_tvl_change(
+        &self,
+        window: Window,
+        protocol: Option<Protocol>,
+    ) -> RepositoryResult<Measured<Vec<ProtocolTvlChange>>> {
+        let period = build_frozen_period(self.hours.as_ref(), window, None).await?;
+        let items = match &period {
+            Some(period) => {
+                self.protocol_tvl
+                    .list_changes(period.last_hour(), window, protocol)
                     .await?
             }
             None => Vec::new(),

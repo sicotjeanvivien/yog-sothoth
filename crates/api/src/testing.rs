@@ -27,13 +27,13 @@ use yog_core::{
         PositionChangeEventLookup, PositionFeeClaimEvent, PositionFeeClaimEventLookup, Protocol,
         ProtocolActivityLookup, ProtocolBucket, ProtocolDiscoveredTvl, ProtocolFeeClaimEvent,
         ProtocolFeeClaimEventLookup, ProtocolPoolCreations, ProtocolPools, ProtocolSwapActivity,
-        ProtocolTvl, ProtocolTvlLookup, RewardChangeEvent, RewardChangeEventLookup,
-        RewardClaimEvent, RewardClaimEventLookup, RotationRun, RotationRunCursor,
-        RotationRunLookup, RotationRunOrder, RotationRunScope, RotationRunTotals, Severity, Signal,
-        SignalCursor, SignalFeed, SignalFilter, SignalRecord, SwapActivity, SwapActivityLookup,
-        SwapEvent, SwapEventLookup, TokenActivityCursor, TokenActivityFeed, TokenActivityPage,
-        TokenCursor, TokenEntry, TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceCursor,
-        TokenPriceLookup, TranchePeriod, Window,
+        ProtocolTvl, ProtocolTvlChange, ProtocolTvlLookup, RewardChangeEvent,
+        RewardChangeEventLookup, RewardClaimEvent, RewardClaimEventLookup, RotationRun,
+        RotationRunCursor, RotationRunLookup, RotationRunOrder, RotationRunScope,
+        RotationRunTotals, Severity, Signal, SignalCursor, SignalFeed, SignalFilter, SignalRecord,
+        SwapActivity, SwapActivityLookup, SwapEvent, SwapEventLookup, TokenActivityCursor,
+        TokenActivityFeed, TokenActivityPage, TokenCursor, TokenEntry, TokenMetadata,
+        TokenMetadataLookup, TokenPrice, TokenPriceCursor, TokenPriceLookup, TranchePeriod, Window,
     },
 };
 
@@ -933,6 +933,7 @@ impl LiquidityMoveLookup for MockLiquidityMoveRepo {
 #[derive(Default)]
 pub(crate) struct MockProtocolTvlRepo {
     pub(crate) instants: Mutex<Vec<InstantRead>>,
+    pub(crate) windows: Mutex<Vec<Window>>,
 }
 
 #[async_trait]
@@ -955,6 +956,19 @@ impl ProtocolTvlLookup for MockProtocolTvlRepo {
             .lock()
             .unwrap()
             .push(("tvl_hourly", first, protocol));
+        Ok(vec![])
+    }
+    async fn list_changes(
+        &self,
+        last: DateTime<Utc>,
+        window: Window,
+        protocol: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolTvlChange>> {
+        self.windows.lock().unwrap().push(window);
+        self.instants
+            .lock()
+            .unwrap()
+            .push(("tvl_changes", last, protocol));
         Ok(vec![])
     }
 }
