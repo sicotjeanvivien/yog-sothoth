@@ -34,7 +34,7 @@ export const RELEASES: readonly Release[] = [
   {
     version: "v0.5.0",
     date: "2026-10-28",
-    summary: "DAMM v2 has two new tabs: Fees, where its fees go and what the LPs take back, and Pools & positions, the pools being born and the positions' life cycle.",
+    summary: "DAMM v2 has two new tabs: Fees, where its fees go and what the LPs take back, and Pools & positions, the pools being born and the positions' life cycle. The dashboard says it is in beta.",
     sections: [
       {
         kind: "features",
@@ -53,6 +53,10 @@ export const RELEASES: readonly Release[] = [
           },
           {
             text: "In the advanced mode, the positions' life cycle on DAMM v2 over 24 hours and 7 days: positions opened, vesting and permanent locks, positions split and closed, and the distinct active LPs.",
+            technical: false,
+          },
+          {
+            text: "The dashboard says it is in beta: a badge under the name in the menu, and a banner on every page warning that the figures may be incomplete or wrong, with a link to report an error. \"Got it\" hides the banner for 30 days.",
             technical: false,
           },
           {

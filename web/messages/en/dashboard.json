@@ -418,6 +418,14 @@
         }
       }
     },
+    "Beta": {
+      "badge": "Beta",
+      "badgeTitle": "Beta version: check the figures",
+      "lead": "Yog-Scope is under construction.",
+      "body": "The figures shown may be incomplete or wrong: check them before any decision.",
+      "report": "Report an error",
+      "dismiss": "Got it"
+    },
     "Announcements": {
       "kinds": {
         "maintenance": "Maintenance",
