@@ -24,7 +24,7 @@ pub struct TvlReading {
 }
 
 /// One protocol's TVL over a window: its last reading, the one a window before it, and the part
-/// of the last held by the pools discovered in the window. `start` is `None` when not measured.
+/// of the last held by the pools discovered in the window.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolTvlChange {
     pub protocol: Protocol,

@@ -114,10 +114,9 @@ async fn insert_discovered(
     .unwrap();
 }
 
-/// Mutations: the start taken as any reading before the window's, or paired with a last reading
-/// older than the hour asked — a change ending before `asOf`; the discovered part taken at the
-/// hour asked, or another window's; or a protocol without a start left out, its addition then
-/// unable to see the term it misses.
+/// Mutations: the start taken before the window's, or paired with a last reading older than the
+/// hour asked; the discovered part taken at the hour asked, or another window's; or a protocol
+/// without a start left out.
 #[sqlx::test(migrations = "./migrations")]
 async fn the_change_pairs_the_reading_a_window_before_and_the_part_at_the_end(pool: PgPool) {
     let last = as_of() - Duration::hours(1);

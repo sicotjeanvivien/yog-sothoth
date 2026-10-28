@@ -3648,7 +3648,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/TvlReadingResponse",
-                "description": "The reading exactly a window before `end`; `null` when it was not measured."
+                "description": "The reading exactly a window before `end`, when `end` is at `asOf`."
               },
               {
                 "type": "null"
@@ -5576,7 +5576,7 @@
                   "oneOf": [
                     {
                       "$ref": "#/components/schemas/TvlReadingResponse",
-                      "description": "The reading exactly a window before `end`; `null` when it was not measured."
+                      "description": "The reading exactly a window before `end`, when `end` is at `asOf`."
                     },
                     {
                       "type": "null"
