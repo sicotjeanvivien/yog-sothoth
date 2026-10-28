@@ -4,17 +4,16 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, TimeDelta, Utc};
-use rust_decimal::Decimal;
 use yog_core::{
     Page, RepositoryError, RepositoryResult,
     domain::{
-        FrozenPeriod, Protocol, ProtocolActivityLookup, ProtocolBucket, RUN_GAP, RotationRun,
-        RotationRunCursor, RotationRunLookup, RotationRunOrder, RotationRunScope,
-        RotationRunTotals, TranchePeriod, Window,
+        Protocol, ProtocolActivityLookup, ProtocolBucket, RUN_GAP, RotationRun, RotationRunCursor,
+        RotationRunLookup, RotationRunOrder, RotationRunScope, RotationRunTotals, RunSplit,
+        TranchePeriod, Window,
     },
 };
 
-use super::period::{BucketPeriod, Measured, build_frozen_period, first_whole_hour, measured_from};
+use super::period::{BucketPeriod, Measured, build_frozen_period, first_whole_hour};
 
 /// How far behind the last tranche written a cursor's end stays accepted, for pages read slowly.
 const CURSOR_END_MARGIN: TimeDelta = TimeDelta::hours(1);
@@ -69,22 +68,16 @@ impl RotationRunService {
         )))
     }
 
-    /// The frozen period of the bars: covered from the first whole hour a gap after the first
-    /// tranche measured.
-    async fn build_bar_period(
+    /// The first whole hour a gap after the first tranche measured: the bars split from it.
+    async fn find_split_since(
         &self,
-        window: Window,
         protocol: Protocol,
-    ) -> RepositoryResult<Option<FrozenPeriod>> {
-        let Some(period) = build_frozen_period(self.hours.as_ref(), window, None).await? else {
-            return Ok(None);
-        };
-        let since = self
+    ) -> RepositoryResult<Option<DateTime<Utc>>> {
+        Ok(self
             .runs
             .find_measured_since(protocol)
             .await?
-            .map(|since| first_whole_hour(since + RUN_GAP));
-        Ok(Some(measured_from(period, since)))
+            .map(|since| first_whole_hour(since + RUN_GAP)))
     }
 
     pub(crate) async fn get_totals(
@@ -143,14 +136,22 @@ impl RotationRunService {
         window: Window,
         bucket: BucketPeriod,
         protocol: Protocol,
-    ) -> RepositoryResult<Measured<Vec<ProtocolBucket<Decimal>>>> {
-        let period = self.build_bar_period(window, protocol).await?;
-        let items = match (&period, bucket) {
-            (Some(period), BucketPeriod::Hour) => self.runs.list_hourly(period, protocol).await?,
-            (Some(period), BucketPeriod::Day) => self.runs.list_daily(period, protocol).await?,
-            (None, _) => Vec::new(),
+    ) -> RepositoryResult<Measured<Vec<ProtocolBucket<RunSplit>>>> {
+        let Some(period) = build_frozen_period(self.hours.as_ref(), window, None).await? else {
+            return Ok(Measured {
+                period: None,
+                items: Vec::new(),
+            });
         };
-        Ok(Measured { period, items })
+        let since = self.find_split_since(protocol).await?;
+        let items = match bucket {
+            BucketPeriod::Hour => self.runs.list_hourly(&period, since, protocol).await?,
+            BucketPeriod::Day => self.runs.list_daily(&period, since, protocol).await?,
+        };
+        Ok(Measured {
+            period: Some(period),
+            items,
+        })
     }
 }
 

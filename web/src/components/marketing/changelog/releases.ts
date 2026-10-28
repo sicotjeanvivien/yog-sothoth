@@ -55,6 +55,10 @@ export const RELEASES: readonly Release[] = [
             text: "/api/tvl/totals and /api/protocols/{protocol}/tvl/totals serve the TVL's change over the window: the last reading, the one a window before it, the part the pools discovered in the window hold, and the change without it. The dashboard reads its TVL change there instead of pairing three routes itself; the API's README writes the line: a rule that combines several routes is served.",
             technical: true,
           },
+          {
+            text: "/api/protocols/{protocol}/rotation-runs/hourly and /daily serve each bar's volume split by the runs — volumeUsd, now every swap of the bar, inRunsUsd and outsideRunsUsd — and the Volume tab reads that one route instead of matching it with swaps/hourly.",
+            technical: true,
+          },
         ],
       },
     ],

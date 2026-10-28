@@ -142,11 +142,11 @@ async fn a_cursor_end_is_bound_to_the_last_tranche_written_not_the_clock() {
     assert!(matches!(too_old, Err(RotationRunsError::CursorRefused)));
 }
 
-/// Mutation: the bars covered from the first measured tranche, not the first whole hour a gap
-/// after it — an hour half measured, or holding a run cut by the start, drawn as whole.
+/// Mutation: the bars split from the first measured tranche, not the first whole hour a gap
+/// after it — an hour half measured, or holding a run cut by the start, split as whole.
 #[tokio::test]
-async fn the_bars_start_at_the_first_whole_hour_measured() {
-    // A gap after 09:50 is 10:20, inside the hour of 10:00: the bars start at 11:00.
+async fn the_bars_split_from_the_first_whole_hour_measured() {
+    // A gap after 09:50 is 10:20, inside the hour of 10:00: the split starts at 11:00.
     let inside_an_hour = Arc::new(MockRotationRunRepo {
         measured_since: Some(minutes(at_october(19, 9), 50)),
         ..MockRotationRunRepo::default()
@@ -157,15 +157,21 @@ async fn the_bars_start_at_the_first_whole_hour_measured() {
     });
     let protocol = Protocol::MeteoraDammV2;
 
-    let inside = service(&inside_an_hour)
+    service(&inside_an_hour)
         .list_buckets(Window::Day, BucketPeriod::Hour, protocol)
         .await
         .unwrap();
-    let on = service(&on_the_hour)
-        .list_buckets(Window::Day, BucketPeriod::Hour, protocol)
+    service(&on_the_hour)
+        .list_buckets(Window::Day, BucketPeriod::Day, protocol)
         .await
         .unwrap();
 
-    assert_eq!(inside.period.unwrap().covered_since, at_october(19, 11));
-    assert_eq!(on.period.unwrap().covered_since, at_october(19, 10));
+    assert_eq!(
+        *inside_an_hour.splits_since.lock().unwrap(),
+        [Some(at_october(19, 11))]
+    );
+    assert_eq!(
+        *on_the_hour.splits_since.lock().unwrap(),
+        [Some(at_october(19, 10))]
+    );
 }

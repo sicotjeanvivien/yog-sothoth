@@ -1,9 +1,8 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use rust_decimal::Decimal;
 
 use super::{
-    RotationRun, RotationRunCursor, RotationRunOrder, RotationRunScope, RotationRunTotals,
+    RotationRun, RotationRunCursor, RotationRunOrder, RotationRunScope, RotationRunTotals, RunSplit,
 };
 use crate::domain::{FrozenPeriod, Protocol, ProtocolBucket, TranchePeriod, Window};
 use crate::{Page, RepositoryResult};
@@ -40,17 +39,21 @@ pub trait RotationRunLookup: Send + Sync {
         limit: i64,
     ) -> RepositoryResult<Page<RotationRun>>;
 
-    /// The protocol's volume in runs, hour by hour, over the frozen `period`.
+    /// The protocol's volume hour by hour over the frozen `period`, split by its runs in the
+    /// valued hours from `runs_since`, the first whole hour they were measured.
     async fn list_hourly(
         &self,
         period: &FrozenPeriod,
+        runs_since: Option<DateTime<Utc>>,
         protocol: Protocol,
-    ) -> RepositoryResult<Vec<ProtocolBucket<Decimal>>>;
+    ) -> RepositoryResult<Vec<ProtocolBucket<RunSplit>>>;
 
-    /// The same, by 24 hours ending at the period's `as_of`.
+    /// The same, by 24 hours ending at the period's `as_of`, split only when whole from
+    /// `runs_since` and valued every hour.
     async fn list_daily(
         &self,
         period: &FrozenPeriod,
+        runs_since: Option<DateTime<Utc>>,
         protocol: Protocol,
-    ) -> RepositoryResult<Vec<ProtocolBucket<Decimal>>>;
+    ) -> RepositoryResult<Vec<ProtocolBucket<RunSplit>>>;
 }

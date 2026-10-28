@@ -5,14 +5,14 @@ mod rows;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use rows::{RotationRunHourRow, RotationRunRow, RotationRunTotalsRow};
-use rust_decimal::Decimal;
+use rows::{RotationRunRow, RotationRunTotalsRow, RunSplitRow};
 use sqlx::PgPool;
 use yog_core::{
     Cursor, Page, RepositoryResult,
     domain::{
         FrozenPeriod, Protocol, ProtocolBucket, RotationRun, RotationRunCursor, RotationRunLookup,
-        RotationRunOrder, RotationRunScope, RotationRunTotals, TRANCHE, TranchePeriod, Window,
+        RotationRunOrder, RotationRunScope, RotationRunTotals, RunSplit, TRANCHE, TranchePeriod,
+        Window,
     },
 };
 
@@ -278,25 +278,31 @@ impl RotationRunLookup for PgRotationRunRepository {
     async fn list_hourly(
         &self,
         period: &FrozenPeriod,
+        runs_since: Option<DateTime<Utc>>,
         protocol: Protocol,
-    ) -> RepositoryResult<Vec<ProtocolBucket<Decimal>>> {
-        // ⚠️ On the frozen hours, not the runs': an hour observed without a run has no run row.
+    ) -> RepositoryResult<Vec<ProtocolBucket<RunSplit>>> {
         let rows = sqlx::query_as!(
-            RotationRunHourRow,
+            RunSplitRow,
             r#"
-            SELECT $4::TEXT AS "protocol!", h.bucket AS "bucket_from!",
-                   COALESCE(SUM(r.volume_usd), 0) AS "volume_usd!"
-              FROM analytic_hours h
-              LEFT JOIN analytic_rotation_run_hours r
-                ON r.protocol = $4 AND r.bucket = h.bucket
-             WHERE h.bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND h.bucket < $2
-             GROUP BY h.bucket
+            SELECT $4::TEXT AS "protocol!", h.bucket AS "bucket_from!", h.volume_usd,
+                   CASE WHEN h.bucket >= $5 AND h.volume_usd IS NOT NULL
+                        THEN COALESCE(r.volume_usd, 0) END AS in_runs_usd
+              FROM analytic_protocol_hourly h
+              LEFT JOIN (
+                  SELECT bucket, SUM(volume_usd) AS volume_usd
+                    FROM analytic_rotation_run_hours
+                   WHERE protocol = $4 AND bucket >= $1 AND bucket < $2
+                   GROUP BY bucket
+              ) r ON r.bucket = h.bucket
+             WHERE h.protocol = $4
+               AND h.bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND h.bucket < $2
              ORDER BY h.bucket
             "#,
             period.from,
             period.as_of,
             period.covered_since,
             protocol.as_str(),
+            runs_since,
         )
         .fetch_all(&self.pool)
         .await
@@ -308,22 +314,31 @@ impl RotationRunLookup for PgRotationRunRepository {
     async fn list_daily(
         &self,
         period: &FrozenPeriod,
+        runs_since: Option<DateTime<Utc>>,
         protocol: Protocol,
-    ) -> RepositoryResult<Vec<ProtocolBucket<Decimal>>> {
+    ) -> RepositoryResult<Vec<ProtocolBucket<RunSplit>>> {
+        // ⚠️ The runs summed by hour first: several in one hour would repeat its volume in the day.
         let rows = sqlx::query_as!(
-            RotationRunHourRow,
+            RunSplitRow,
             r#"
             SELECT $4::TEXT AS "protocol!", h.bucket_from AS "bucket_from!",
-                   COALESCE(SUM(r.volume_usd), 0) AS "volume_usd!"
+                   SUM(h.volume_usd) AS volume_usd,
+                   CASE WHEN h.bucket_from >= $5 AND COUNT(h.volume_usd) = COUNT(*)
+                        THEN COALESCE(SUM(r.volume_usd), 0) END
+                       AS in_runs_usd
               FROM (
-                  SELECT bucket,
+                  SELECT bucket, volume_usd,
                          time_bucket(INTERVAL '1 day', bucket, origin => $2::TIMESTAMPTZ)
                              AS bucket_from
-                    FROM analytic_hours
-                   WHERE bucket >= $1 AND bucket < $2
+                    FROM analytic_protocol_hourly
+                   WHERE protocol = $4 AND bucket >= $1 AND bucket < $2
               ) h
-              LEFT JOIN analytic_rotation_run_hours r
-                ON r.protocol = $4 AND r.bucket = h.bucket
+              LEFT JOIN (
+                  SELECT bucket, SUM(volume_usd) AS volume_usd
+                    FROM analytic_rotation_run_hours
+                   WHERE protocol = $4 AND bucket >= $1 AND bucket < $2
+                   GROUP BY bucket
+              ) r ON r.bucket = h.bucket
              WHERE h.bucket_from >= $3
              GROUP BY h.bucket_from
              ORDER BY h.bucket_from
@@ -332,6 +347,7 @@ impl RotationRunLookup for PgRotationRunRepository {
             period.as_of,
             period.covered_since,
             protocol.as_str(),
+            runs_since,
         )
         .fetch_all(&self.pool)
         .await

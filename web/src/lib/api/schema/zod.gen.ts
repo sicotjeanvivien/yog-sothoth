@@ -1031,8 +1031,10 @@ export type ProtocolLiquidityFlowsResponse = z.infer<typeof zProtocolLiquidityFl
 
 export const zProtocolRotationRunBucketResponse = z.object({
     from: z.iso.datetime({ offset: true }),
+    inRunsUsd: zUnsignedDecimal.nullable(),
+    outsideRunsUsd: zUnsignedDecimal.nullable(),
     protocol: zProtocolResponse,
-    volumeUsd: zUnsignedDecimal
+    volumeUsd: zUnsignedDecimal.nullable()
 });
 
 export type ProtocolRotationRunBucketResponse = z.infer<typeof zProtocolRotationRunBucketResponse>;
@@ -1394,8 +1396,10 @@ export const zWindowedResponseProtocolRotationRunBucketResponse = z.object({
     from: z.iso.datetime({ offset: true }).nullable(),
     items: z.array(z.object({
         from: z.iso.datetime({ offset: true }),
+        inRunsUsd: zUnsignedDecimal.nullable(),
+        outsideRunsUsd: zUnsignedDecimal.nullable(),
         protocol: zProtocolResponse,
-        volumeUsd: zUnsignedDecimal
+        volumeUsd: zUnsignedDecimal.nullable()
     })),
     window: zWindowResponse
 });

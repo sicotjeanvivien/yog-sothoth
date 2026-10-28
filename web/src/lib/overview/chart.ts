@@ -15,12 +15,13 @@ type Bar = { from: string; value: string | null };
 
 /**
  * Hours over 24 h, 6-hour slices over 7 days, 24-hour slices beyond: each slot sums the valued bars
- * it holds, across protocols, as the API's days do; `null` without any.
+ * it holds, across protocols, as the API's days do; `null` without any, or, `strict`, with one unknown.
  */
 export function slotsOf(
   period: Period,
   asOf: string,
   bars: readonly Bar[],
+  { strict = false }: { strict?: boolean } = {},
 ): Slot[] {
   const step = SLOT_HOURS[period] * HOUR_MS;
   const count = periodMs(period) / step;
@@ -28,6 +29,7 @@ export function slotsOf(
   const barStep = readsHours(period) ? HOUR_MS : step;
 
   const sums = Array.from({ length: count }, (): number | null => null);
+  const unknown = Array.from({ length: count }, () => false);
   for (const bar of bars) {
     const at = Date.parse(bar.from);
     const i = Math.floor((at - start) / step);
@@ -36,6 +38,8 @@ export function slotsOf(
     const value = bar.value === null ? NaN : Number.parseFloat(bar.value);
     if (Number.isFinite(value)) {
       sums[i] = (sums[i] ?? 0) + value;
+    } else {
+      unknown[i] = true;
     }
   }
 
@@ -44,7 +48,7 @@ export function slotsOf(
     return {
       from: new Date(from),
       to: new Date(from + step),
-      value: sum,
+      value: strict && unknown[i] ? null : sum,
     };
   });
 }

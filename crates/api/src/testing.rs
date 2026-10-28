@@ -30,10 +30,11 @@ use yog_core::{
         ProtocolTvl, ProtocolTvlChange, ProtocolTvlLookup, RewardChangeEvent,
         RewardChangeEventLookup, RewardClaimEvent, RewardClaimEventLookup, RotationRun,
         RotationRunCursor, RotationRunLookup, RotationRunOrder, RotationRunScope,
-        RotationRunTotals, Severity, Signal, SignalCursor, SignalFeed, SignalFilter, SignalRecord,
-        SwapActivity, SwapActivityLookup, SwapEvent, SwapEventLookup, TokenActivityCursor,
-        TokenActivityFeed, TokenActivityPage, TokenCursor, TokenEntry, TokenMetadata,
-        TokenMetadataLookup, TokenPrice, TokenPriceCursor, TokenPriceLookup, TranchePeriod, Window,
+        RotationRunTotals, RunSplit, Severity, Signal, SignalCursor, SignalFeed, SignalFilter,
+        SignalRecord, SwapActivity, SwapActivityLookup, SwapEvent, SwapEventLookup,
+        TokenActivityCursor, TokenActivityFeed, TokenActivityPage, TokenCursor, TokenEntry,
+        TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceCursor, TokenPriceLookup,
+        TranchePeriod, Window,
     },
 };
 
@@ -1185,12 +1186,14 @@ impl PoolCreationEventLookup for MockPoolCreationEventRepo {
 }
 
 /// A `RotationRunLookup` set by each test: when the tranches were written through, when the
-/// rotation was measured since, and the scope and end each list was read with.
+/// rotation was measured since, the scope and end each list was read with, and the hour each
+/// series of bars is split from.
 #[derive(Default)]
 pub(crate) struct MockRotationRunRepo {
     pub(crate) written_through: Option<DateTime<Utc>>,
     pub(crate) measured_since: Option<DateTime<Utc>>,
     pub(crate) lists: Mutex<Vec<(RotationRunScope, TranchePeriod)>>,
+    pub(crate) splits_since: Mutex<Vec<Option<DateTime<Utc>>>>,
 }
 
 #[async_trait]
@@ -1235,16 +1238,20 @@ impl RotationRunLookup for MockRotationRunRepo {
     async fn list_hourly(
         &self,
         _: &FrozenPeriod,
+        runs_since: Option<DateTime<Utc>>,
         _: Protocol,
-    ) -> RepositoryResult<Vec<ProtocolBucket<rust_decimal::Decimal>>> {
+    ) -> RepositoryResult<Vec<ProtocolBucket<RunSplit>>> {
+        self.splits_since.lock().unwrap().push(runs_since);
         Ok(Vec::new())
     }
 
     async fn list_daily(
         &self,
         _: &FrozenPeriod,
+        runs_since: Option<DateTime<Utc>>,
         _: Protocol,
-    ) -> RepositoryResult<Vec<ProtocolBucket<rust_decimal::Decimal>>> {
+    ) -> RepositoryResult<Vec<ProtocolBucket<RunSplit>>> {
+        self.splits_since.lock().unwrap().push(runs_since);
         Ok(Vec::new())
     }
 }

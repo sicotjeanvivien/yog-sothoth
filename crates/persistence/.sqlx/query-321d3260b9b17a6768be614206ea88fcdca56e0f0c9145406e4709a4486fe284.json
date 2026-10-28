@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT $4::TEXT AS \"protocol!\", h.bucket AS \"bucket_from!\", h.volume_usd,\n                   CASE WHEN h.bucket >= $5 AND h.volume_usd IS NOT NULL\n                        THEN COALESCE(r.volume_usd, 0) END AS in_runs_usd\n              FROM analytic_protocol_hourly h\n              LEFT JOIN (\n                  SELECT bucket, SUM(volume_usd) AS volume_usd\n                    FROM analytic_rotation_run_hours\n                   WHERE protocol = $4 AND bucket >= $1 AND bucket < $2\n                   GROUP BY bucket\n              ) r ON r.bucket = h.bucket\n             WHERE h.protocol = $4\n               AND h.bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND h.bucket < $2\n             ORDER BY h.bucket\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "bucket_from!",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_hourly",
+            "name": "bucket"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "volume_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_hourly",
+            "name": "volume_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "in_runs_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "321d3260b9b17a6768be614206ea88fcdca56e0f0c9145406e4709a4486fe284"
+}
