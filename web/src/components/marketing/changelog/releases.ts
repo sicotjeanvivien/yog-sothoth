@@ -32,9 +32,9 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
-    version: "v0.3.2",
-    date: "2026-10-27",
-    summary: "An hour where nothing happened now counts 0, instead of missing like an hour nobody watched.",
+    version: "v0.4.0",
+    date: "2026-10-28",
+    summary: "Over 7 days, the bar charts show 28 bars of 6 hours instead of 7 bars of a day.",
     sections: [
       {
         kind: "features",
