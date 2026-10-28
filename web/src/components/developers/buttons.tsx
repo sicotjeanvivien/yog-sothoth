@@ -57,8 +57,14 @@ export function CopyButton({
   };
 
   return (
-    <GhostButton small={small} onClick={copy}>
-      {done ? copied : label}
-    </GhostButton>
+    <>
+      <GhostButton small={small} onClick={copy}>
+        {done ? copied : label}
+      </GhostButton>
+      {/* ⚠️ A focused button's new label is rarely read out: the live region announces it. */}
+      <span aria-live="polite" className="sr-only">
+        {done ? copied : ""}
+      </span>
+    </>
   );
 }

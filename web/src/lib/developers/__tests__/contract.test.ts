@@ -52,6 +52,14 @@ describe("endpointsOf", () => {
     expect(lock?.type).toBe("enum | null");
   });
 
+  // Mutation: a union of objects left unexpanded — a change's protocol fields would not show.
+  it("lists a union's fields, required only where every variant requires them", () => {
+    const fields = new Map(endpoint("list_position_changes").fields.map((f) => [f.path, f]));
+    expect(fields.get("items[].meteoraDammV2")?.type).toBe("one of");
+    expect(fields.get("items[].meteoraDammV2.kind")?.required).toBe(true);
+    expect(fields.get("items[].meteoraDammV2.vesting")?.required).toBe(false);
+  });
+
   // Mutations: a path parameter listed after the query; the bounds of `limit` lost.
   it("reads the parameters, path first", () => {
     const params = endpoint("list_pool_swaps").params;

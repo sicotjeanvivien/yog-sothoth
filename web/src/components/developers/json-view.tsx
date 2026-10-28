@@ -1,5 +1,7 @@
 /** A JSON body, pretty-printed and coloured line by line: keys, strings, numbers, literals. */
 
+import { memo } from "react";
+
 const TOKEN =
   /("(?:\\.|[^"\\])*")(\s*:)?|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|\b(true|false|null)\b/g;
 
@@ -30,7 +32,8 @@ function segmentsOf(line: string): Segment[] {
   return out;
 }
 
-export function JsonView({ text, label }: { text: string; label: string }) {
+/** Memoised: a keystroke in a parameter must not re-colour a long body. */
+export const JsonView = memo(function JsonView({ text, label }: { text: string; label: string }) {
   return (
     <pre
       tabIndex={0}
@@ -50,4 +53,4 @@ export function JsonView({ text, label }: { text: string; label: string }) {
       ))}
     </pre>
   );
-}
+});

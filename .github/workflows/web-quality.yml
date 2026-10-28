@@ -20,6 +20,8 @@ on:
       # Read by src/lib/config/__tests__/compose-env.test.ts: a change to the
       # compose alone must still run the test that watches it.
       - "docker-compose.yml"
+      # Read by src/lib/developers/__tests__/contract-file.test.ts.
+      - "crates/api/openapi.json"
       - ".github/workflows/web-quality.yml"
   # Every pull request, whatever it touches: see the `changes` job.
   pull_request:
@@ -56,7 +58,7 @@ jobs:
       - id: diff
         uses: ./.github/actions/changes
         with:
-          pattern: '^(web/|docker-compose\.yml$|\.github/workflows/web-quality\.yml$)'
+          pattern: '^(web/|docker-compose\.yml$|crates/api/openapi\.json$|\.github/workflows/web-quality\.yml$)'
 
   typecheck:
     name: TypeScript

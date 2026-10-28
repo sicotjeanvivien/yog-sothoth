@@ -145,12 +145,11 @@ function unwrapNull(s: Schema): { schema: Schema; nullable: boolean } {
   }
   const union = s.oneOf ?? s.anyOf;
   if (union?.some(isNull)) {
-    const [only, ...more] = union.filter((b) => !isNull(b));
-    const { anyOf: _anyOf, ...rest } = s;
-    return {
-      schema: only && more.length === 0 ? only : { ...rest, oneOf: only ? [only, ...more] : [] },
-      nullable: true,
-    };
+    const variants = union.filter((b) => !isNull(b));
+    const [only] = variants;
+    if (only && variants.length === 1) return { schema: only, nullable: true };
+    const described = s.description ? { description: s.description } : {};
+    return { schema: { oneOf: variants, ...described }, nullable: true };
   }
   return { schema: s, nullable: false };
 }
@@ -159,9 +158,24 @@ function resolve(s: Schema, spec: OpenApi): Schema {
   return s.$ref ? (spec.components.schemas[refName(s.$ref)] ?? {}) : s;
 }
 
-/** An object's properties and required names, `allOf` parts merged. */
+/**
+ * An object's properties and required names: `allOf` parts merged, and a union's variants too,
+ * a name required only where every variant requires it.
+ */
 function objectOf(s: Schema, spec: OpenApi): Pick<Schema, "properties" | "required"> | null {
   const r = resolve(s, spec);
+  const variants = r.oneOf ?? r.anyOf;
+  if (variants?.length && !variants.some(isNull)) {
+    const parts = variants.map((v) => objectOf(v, spec));
+    if (parts.some((p) => p === null)) return null;
+    const objects = parts as Pick<Schema, "properties" | "required">[];
+    return {
+      properties: Object.assign({}, ...objects.map((p) => p.properties)),
+      required: objects
+        .map((p) => p.required ?? [])
+        .reduce((all, next) => all.filter((name) => next.includes(name))),
+    };
+  }
   if (r.allOf) {
     const parts = r.allOf.map((p) => objectOf(p, spec)).filter((p) => p !== null);
     return {
@@ -176,11 +190,12 @@ function baseType(s: Schema, spec: OpenApi): string {
   if (s.$ref) {
     const target = resolve(s, spec);
     if (target.enum) return "enum";
+    if ((target.oneOf ?? target.anyOf)?.length) return "one of";
     if (objectOf(target, spec)) return "object";
     return refName(s.$ref);
   }
   if ((s.oneOf ?? s.anyOf)?.length) return "one of";
-  if (s.allOf) return objectOf(s, spec) ? "object" : "one of";
+  if (s.allOf) return "object";
   if (s.enum) return "enum";
   if (s.format === "date-time") return "date-time";
   return Array.isArray(s.type) ? s.type.join(" | ") : (s.type ?? "any");

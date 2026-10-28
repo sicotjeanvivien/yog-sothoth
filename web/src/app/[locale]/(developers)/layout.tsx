@@ -1,11 +1,19 @@
 /** The `(developers)` layout: the dashboard's colours under a bar of its own, no menu. */
 
-import { getTranslations } from "next-intl/server";
+import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { Link } from "@/i18n/navigation";
 import { LogoMark } from "@/components/shared/logo-mark";
 
-export default async function DevelopersLayout({ children }: { children: React.ReactNode }) {
+export default async function DevelopersLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  setRequestLocale(locale);
   const t = await getTranslations("Developers.devbar");
   const tBrand = await getTranslations("Brand");
 

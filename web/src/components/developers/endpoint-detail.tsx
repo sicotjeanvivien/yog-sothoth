@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { loadClientEnv } from "@/lib/config/client-env.schema";
 import type { Endpoint, EndpointParam } from "@/lib/developers/contract";
 import {
   byteSize,
@@ -47,7 +48,10 @@ const LABEL =
 async function send(url: string): Promise<SendResult> {
   const started = performance.now();
   try {
-    const response = await fetch(url, { headers: { Accept: "application/json" } });
+    const response = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(loadClientEnv().NEXT_PUBLIC_YOG_API_TIMEOUT_MS),
+    });
     const text = await response.text();
     let json: unknown = null;
     try {
@@ -272,7 +276,10 @@ export function EndpointDetail({
               key={param.name}
               param={param}
               value={values[param.name] ?? ""}
-              onChange={(value) => onValues({ ...values, [param.name]: value })}
+              onChange={(value) =>
+                // ⚠️ A cursor belongs to the query it came from: another parameter drops it.
+                onValues({ ...values, ...(param.name === "cursor" ? {} : { cursor: "" }), [param.name]: value })
+              }
             />
           ))}
         </div>

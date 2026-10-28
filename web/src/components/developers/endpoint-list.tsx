@@ -88,7 +88,7 @@ export function EndpointList({
             <button
               type="button"
               aria-expanded={expanded}
-              onClick={toggle}
+              onClick={query ? undefined : toggle}
               className="flex min-h-10 w-full items-center gap-2 px-4 text-left text-[14px] font-medium text-dash-ink"
             >
               <span className="flex-1">{t(`families.${family}`)}</span>
