@@ -544,7 +544,8 @@ decisions of very different standing:
   and every price-dependent read hashing identically before and after.
 
 The direction the sentence named is real — a point lookup into a compressed
-chunk decompresses a batch of ~1000 rows to yield one, 0.123 ms → 0.304 ms on
+chunk decompresses a batch of ~1000 rows to yield one (~120 since 041 rolls up
+1-day chunks, a batch per mint and day), 0.123 ms → 0.304 ms on
 the same row, and the 30-day history read of one pool goes from 1.19 s to
 1.38 s (**+16 %**). What was never weighed is what it buys: by the time anyone
 measured, the table §7 describes had grown to 90.6 % of the database. That is
