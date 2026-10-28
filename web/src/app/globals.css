@@ -46,6 +46,10 @@
   /* Volume bars: in rotation runs; outside them. */
   --color-dash-run: #987aee;
   --color-dash-run-out: #1798ad;
+  /* Fee bars: the LPs' part, the protocol's, the referral's. */
+  --color-dash-fee-lp: #987aee;
+  --color-dash-fee-protocol: #1798ad;
+  --color-dash-fee-referral: #b48a3c;
 
   /* 721 px: up to 720 px is the phone — the dashboard menu a drawer, the
      site menu folded behind "Menu". */

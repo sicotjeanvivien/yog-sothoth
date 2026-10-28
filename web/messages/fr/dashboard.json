@@ -274,6 +274,27 @@
           "done": "éteinte",
           "empty": "Aucune rafale sur la période."
         }
+      },
+      "fees": {
+        "title": "Où vont les fees",
+        "info": "Chaque échange paie des fees. La plus grande part revient aux déposants (LP), versée à part ou réinvestie dans la pool ; une part revient au protocole, et parfois une part à un apporteur d'affaires (referral).",
+        "parts": {
+          "lp": "LP",
+          "protocol": "Protocole",
+          "referral": "Referral"
+        },
+        "tableLabel": "Fees par destination sur la période",
+        "destination": "Destination",
+        "share": "Part",
+        "total": "{total} au total",
+        "noValue": "aucune fee valorisée",
+        "periodTotal": "Total sur {period}",
+        "perHour": "Fees par heure",
+        "perSixHours": "Fees par tranche de 6 h",
+        "perDay": "Fees par jour",
+        "chartLabelHourly": "Fees par heure, par destination",
+        "chartLabelSixHours": "Fees par tranche de 6 h, par destination",
+        "chartLabelDaily": "Fees par jour, par destination"
       }
     },
     "BlockError": {

@@ -32,6 +32,22 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.5.0",
+    date: "2026-10-28",
+    summary: "DAMM v2 has a third tab, Fees: where its fees go, to the LPs, the protocol or the referral.",
+    sections: [
+      {
+        kind: "features",
+        items: [
+          {
+            text: "The Fees tab of DAMM v2: the period's fees by destination — the LPs, the protocol, the referral — with each one's amount and share, and the fees per bar stacked by destination, the bar under the pointer detailed under the chart.",
+            technical: false,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.4.0",
     date: "2026-10-28",
     summary: "Over 7 days, the bar charts show 28 bars of 6 hours instead of 7 bars of a day.",

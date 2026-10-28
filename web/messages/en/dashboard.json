@@ -274,6 +274,27 @@
           "done": "ended",
           "empty": "No run in the period."
         }
+      },
+      "fees": {
+        "title": "Where the fees go",
+        "info": "Every swap pays fees. Most go to the liquidity providers (LPs), paid out or reinvested in the pool; a part goes to the protocol, and sometimes a part to a referrer.",
+        "parts": {
+          "lp": "LP",
+          "protocol": "Protocol",
+          "referral": "Referral"
+        },
+        "tableLabel": "Fees by destination over the period",
+        "destination": "Destination",
+        "share": "Share",
+        "total": "{total} in total",
+        "noValue": "no valued fees",
+        "periodTotal": "Total over {period}",
+        "perHour": "Fees per hour",
+        "perSixHours": "Fees per 6-hour slice",
+        "perDay": "Fees per day",
+        "chartLabelHourly": "Fees per hour, by destination",
+        "chartLabelSixHours": "Fees per 6-hour slice, by destination",
+        "chartLabelDaily": "Fees per day, by destination"
       }
     },
     "BlockError": {
