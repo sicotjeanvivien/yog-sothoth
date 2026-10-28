@@ -15,6 +15,7 @@ import {
   zGetProtocolLiquidityMovesDailyResponse,
   zGetProtocolPoolCreationsDailyResponse,
   zGetProtocolPoolCreationsHourlyResponse,
+  zGetProtocolPositionChangeTotalsResponse,
   zGetProtocolLiquidityMovesHourlyResponse,
   zGetProtocolLiquidityMoveTotalsResponse,
   zGetProtocolPositionFeeClaimTotalsResponse,
@@ -140,6 +141,16 @@ export const fetchLargestLiquidityMoves = cache(
 );
 
 /** The pools the protocol saw born, hour by hour up to 7 days, by 24-hour slices beyond. */
+/** The positions the protocol opened, locked, split and closed over the window. */
+export const fetchPositionChangeTotals = cache(
+  (protocol: ProtocolResponse, window: WindowResponse) =>
+    apiGet(
+      `/api/protocols/${protocol}/position-changes/totals`,
+      { window },
+      zGetProtocolPositionChangeTotalsResponse,
+    ),
+);
+
 export const fetchPoolCreationsSeries = cache((protocol: ProtocolResponse, window: WindowResponse) =>
   readsHours(window)
     ? apiGet(

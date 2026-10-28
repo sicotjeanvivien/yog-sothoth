@@ -335,6 +335,21 @@
             "none": "none",
             "unmeasured": "—"
           }
+        },
+        "life": {
+          "title": "Positions' life cycle",
+          "info": "The positions opened, locked, split and closed over 24 hours and over 7 days, one per event, whatever the chosen period; the distinct LPs are the addresses that created a pool, added or removed liquidity. “—” while the window is not measured.",
+          "step": "Step",
+          "day": "24 h",
+          "week": "7 d",
+          "rows": {
+            "opened": "Positions opened",
+            "vestingLocks": "Vesting locks",
+            "permanentLocks": "Permanent locks",
+            "splits": "Positions split",
+            "closed": "Positions closed",
+            "owners": "Distinct active LPs"
+          }
         }
       }
     },

@@ -12,11 +12,11 @@ pub(crate) use services::{
     IngestionAggregate, IngestionService, LiquidityChangeEventService, LiquidityMoveService,
     Measured, MovesError, NetworkService, PeriodBounds, PoolChangeEventService,
     PoolCreationEventService, PoolCreationsService, PoolDetail, PoolProperties, PoolService,
-    PositionChangeEventService, PositionFeeClaimEventService, ProtocolCatalogService,
-    ProtocolEntry, ProtocolFeeClaimEventService, ProtocolTvlService, RewardChangeEventService,
-    RewardClaimEventService, RotationRunService, RotationRunsError, SignalListParams,
-    SignalService, SwapActivityService, SwapEventService, TokenActivityRead, TokenAggregate,
-    TokenService,
+    PositionChangeCountsService, PositionChangeEventService, PositionFeeClaimEventService,
+    ProtocolCatalogService, ProtocolEntry, ProtocolFeeClaimEventService, ProtocolTvlService,
+    RewardChangeEventService, RewardClaimEventService, RotationRunService, RotationRunsError,
+    SignalListParams, SignalService, SwapActivityService, SwapEventService, TokenActivityRead,
+    TokenAggregate, TokenService,
 };
 pub(crate) use signal_stream::{STREAM_CHANNEL_CAPACITY, SignalStreamPoller};
 pub(crate) use work_slots::WorkSlots;

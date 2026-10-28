@@ -3,6 +3,7 @@ mod announcement;
 mod claim_totals;
 mod event_freshness;
 mod helper;
+mod position_change_counts;
 
 mod discovered_tvl;
 mod liquidity_change_event;
@@ -64,6 +65,7 @@ pub use pool_creation_event::PgPoolCreationEventRepository;
 pub use pool_creations::PgPoolCreationsRepository;
 pub use pool_current_state::PgPoolCurrentStateRepository;
 pub use pool_price_snapshot::PgPoolPriceSnapshotRepository;
+pub use position_change_counts::PgPositionChangeCountsRepository;
 pub use position_change_event::PgPositionChangeEventRepository;
 pub use position_fee_claim_event::PgPositionFeeClaimEventRepository;
 pub use protocol_activity::PgProtocolActivityRepository;

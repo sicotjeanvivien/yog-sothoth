@@ -34,7 +34,7 @@ export const RELEASES: readonly Release[] = [
   {
     version: "v0.5.0",
     date: "2026-10-28",
-    summary: "DAMM v2 has two new tabs: Fees, where its fees go and what the LPs take back, and Pools & positions, the pools being born.",
+    summary: "DAMM v2 has two new tabs: Fees, where its fees go and what the LPs take back, and Pools & positions, the pools being born and the positions' life cycle.",
     sections: [
       {
         kind: "features",
@@ -49,6 +49,10 @@ export const RELEASES: readonly Release[] = [
           },
           {
             text: "The Pools & positions tab of DAMM v2: the pools born over the period, bar by bar, and the five whose first deposit is worth the most, with their pair, creator, the lock their birth puts on a position — permanent, vesting or none — and age.",
+            technical: false,
+          },
+          {
+            text: "In the advanced mode, the positions' life cycle on DAMM v2 over 24 hours and 7 days: positions opened, vesting and permanent locks, positions split and closed, and the distinct active LPs.",
             technical: false,
           },
           {
@@ -69,6 +73,10 @@ export const RELEASES: readonly Release[] = [
           },
           {
             text: "yog-analytic notes the lock each liquidity move's transaction puts on a position — permanent, vesting or none — served as lock on liquidity-moves, null for a move valued before it was measured. Migration 043.",
+            technical: true,
+          },
+          {
+            text: "/api/protocols/{protocol}/position-changes/totals serves the positions opened, locked, split and closed over the window, counted by yog-analytic per hour and filled since the first event (migration 044); liquidity-moves/totals carries the distinct owners of the window's moves.",
             technical: true,
           },
         ],

@@ -10,7 +10,8 @@ into `analytic_pool_5min`, then each of its liquidity moves into
 `analytic_rotation_runs` and `analytic_rotation_run_hours`; sums the tranches per pool and hour into
 `analytic_pool_hourly`, and those facts per protocol into
 `analytic_protocol_hourly`; counts the pools born per protocol and hour into
-`analytic_protocol_births_hourly`; measures the TVL of every protocol into
+`analytic_protocol_births_hourly`, and the positions opened, locked, split and closed into
+`analytic_protocol_position_changes_hourly`; measures the TVL of every protocol into
 `analytic_protocol_tvl`, and the part of it the pools discovered in each window
 hold into `analytic_protocol_tvl_discovered`; and freezes each hour ten minutes after its close,
 writing then the distinct pools and the tokens of every window ending at it.

@@ -335,6 +335,21 @@
             "none": "aucun",
             "unmeasured": "—"
           }
+        },
+        "life": {
+          "title": "Cycle de vie des positions",
+          "info": "Les positions ouvertes, verrouillées, partagées et fermées sur 24 heures et sur 7 jours, une par événement, quelle que soit la période choisie ; les LP distincts sont les adresses qui ont créé une pool, ajouté ou retiré de la liquidité. « — » tant que la fenêtre n'est pas mesurée.",
+          "step": "Étape",
+          "day": "24 h",
+          "week": "7 j",
+          "rows": {
+            "opened": "Positions ouvertes",
+            "vestingLocks": "Verrouillages à vesting",
+            "permanentLocks": "Verrouillages permanents",
+            "splits": "Positions partagées",
+            "closed": "Positions fermées",
+            "owners": "LP distincts actifs"
+          }
         }
       }
     },

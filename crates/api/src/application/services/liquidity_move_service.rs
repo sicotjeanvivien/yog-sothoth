@@ -8,8 +8,8 @@ use yog_core::{
     Page, RepositoryError, RepositoryResult,
     domain::{
         FrozenPeriod, LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveList,
-        LiquidityMoveLookup, LiquidityMoveOrder, Protocol, ProtocolActivityLookup, ProtocolBucket,
-        Window,
+        LiquidityMoveLookup, LiquidityMoveOrder, LiquidityTotals, Protocol, ProtocolActivityLookup,
+        ProtocolBucket, Window,
     },
 };
 
@@ -63,7 +63,7 @@ impl LiquidityMoveService {
         &self,
         window: Window,
         protocol: Protocol,
-    ) -> RepositoryResult<Measured<Vec<LiquidityFlows>>> {
+    ) -> RepositoryResult<Measured<Vec<LiquidityTotals>>> {
         let period = self.build_liquidity_period(window, protocol).await?;
         let items = match &period {
             Some(period) if period.is_covered() => self

@@ -774,3 +774,86 @@ async fn yog_analytic_cannot_write_signals(pool: PgPool) {
     let message = err.as_database_error().unwrap().message().to_owned();
     assert!(message.contains("table signals"), "{message}");
 }
+
+/// One row per position event of each kind, `n` of each, at `at`: its own signature each.
+async fn insert_position_events(pool: &PgPool, sql: &'static str, n: usize, at: DateTime<Utc>) {
+    for i in 0..n {
+        sqlx::query(sql)
+            .bind(format!("{sql:.40}-{i}"))
+            .bind(at)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+}
+
+/// Mutation: one kind counted in another's column, or the hours without a change unwritten —
+/// the `generate_series` dropped.
+#[sqlx::test]
+async fn each_kind_of_position_change_is_counted_in_its_hour_and_an_hour_without_any_is_zero(
+    pool: PgPool,
+) {
+    let now = now();
+    let cycle = cycle_from(now, hours_before(now, 3));
+    let at = cycle.from + Duration::minutes(10);
+    for (sql, n) in [
+        (
+            "INSERT INTO meteora_damm_v2_create_position_events
+               (pool_address, signature, owner, position, position_nft_mint, timestamp, slot,
+                event_index)
+             VALUES ('x', $1, 'x', 'x', 'x', $2, 0, 0)",
+            5,
+        ),
+        (
+            "INSERT INTO meteora_damm_v2_lock_position_events
+               (pool_address, signature, position, owner, vesting, cliff_point, period_frequency,
+                cliff_unlock_liquidity, liquidity_per_period, number_of_period, timestamp, slot,
+                event_index)
+             VALUES ('x', $1, 'x', 'x', 'x', 0, 0, 0, 0, 0, $2, 0, 0)",
+            4,
+        ),
+        (
+            "INSERT INTO meteora_damm_v2_permanent_lock_position_events
+               (pool_address, signature, position, lock_liquidity_amount,
+                total_permanent_locked_liquidity, timestamp, slot, event_index)
+             VALUES ('x', $1, 'x', 0, 0, $2, 0, 0)",
+            3,
+        ),
+        (
+            "INSERT INTO meteora_damm_v2_split_position_events (pool_address, signature, first_owner, second_owner, first_position, second_position, current_sqrt_price, split_permanent_locked_liquidity, split_unlocked_liquidity, split_vested_liquidity, split_fee_a, split_fee_b, split_reward_0, split_reward_1, first_unlocked_liquidity, first_permanent_locked_liquidity, first_vested_liquidity, first_fee_a, first_fee_b, first_reward_0, first_reward_1, second_unlocked_liquidity, second_permanent_locked_liquidity, second_vested_liquidity, second_fee_a, second_fee_b, second_reward_0, second_reward_1, num_unlocked_liquidity, num_permanent_locked_liquidity, num_fee_a, num_fee_b, num_reward_0, num_reward_1, num_inner_vesting_liquidity, timestamp, slot, event_index) VALUES ('x', $1, 'x', 'x', 'x', 'x', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, $2, 0, 0)",
+            2,
+        ),
+        (
+            "INSERT INTO meteora_damm_v2_close_position_events
+               (pool_address, signature, owner, position, position_nft_mint, timestamp, slot,
+                event_index)
+             VALUES ('x', $1, 'x', 'x', 'x', $2, 0, 0)",
+            1,
+        ),
+    ] {
+        insert_position_events(&pool, sql, n, at).await;
+    }
+
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
+    repository.write_cycle(&cycle).await.unwrap();
+
+    let hours: Vec<(DateTime<Utc>, i64, i64, i64, i64, i64)> = sqlx::query_as(
+        "SELECT bucket, opened, vesting_locks, permanent_locks, splits, closed
+           FROM analytic_protocol_position_changes_hourly ORDER BY bucket",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        hours.len() as i64,
+        (cycle.through - cycle.from).num_hours() + 1,
+        "{hours:?}"
+    );
+    assert_eq!(hours[0], (cycle.from, 5, 4, 3, 2, 1));
+    assert!(
+        hours[1..]
+            .iter()
+            .all(|h| (h.1, h.2, h.3, h.4, h.5) == (0, 0, 0, 0, 0))
+    );
+}

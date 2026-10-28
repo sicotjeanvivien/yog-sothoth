@@ -20,10 +20,11 @@ use yog_core::{
         DiscoveredTvlLookup, EventCursor, EventFreshnessRepository, EventScope, FrozenHours,
         FrozenPeriod, LiquidityChangeEvent, LiquidityChangeEventLookup, LiquidityFlows,
         LiquidityMove, LiquidityMoveCursor, LiquidityMoveList, LiquidityMoveLookup,
-        LiquidityMoveOrder, MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesLookup,
-        NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog, PoolChangeEvent,
-        PoolChangeEventLookup, PoolCreationEvent, PoolCreationEventLookup, PoolCreations,
-        PoolCreationsLookup, PoolCursor, PoolEntry, PoolScope, PoolSwapBucket, PositionChangeEvent,
+        LiquidityMoveOrder, LiquidityTotals, MeteoraDammV2PoolProperties,
+        MeteoraDammV2PoolPropertiesLookup, NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog,
+        PoolChangeEvent, PoolChangeEventLookup, PoolCreationEvent, PoolCreationEventLookup,
+        PoolCreations, PoolCreationsLookup, PoolCursor, PoolEntry, PoolScope, PoolSwapBucket,
+        PositionChangeCounts, PositionChangeCountsLookup, PositionChangeEvent,
         PositionChangeEventLookup, PositionFeeClaimEvent, PositionFeeClaimEventLookup, Protocol,
         ProtocolActivityLookup, ProtocolBucket, ProtocolDiscoveredTvl, ProtocolFeeClaimEvent,
         ProtocolFeeClaimEventLookup, ProtocolPoolCreations, ProtocolPools, ProtocolSwapActivity,
@@ -41,10 +42,11 @@ use yog_core::{
 use crate::application::{
     AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService,
     LiquidityChangeEventService, LiquidityMoveService, NetworkService, PoolChangeEventService,
-    PoolCreationEventService, PoolCreationsService, PoolService, PositionChangeEventService,
-    PositionFeeClaimEventService, ProtocolCatalogService, ProtocolFeeClaimEventService,
-    ProtocolTvlService, RewardChangeEventService, RewardClaimEventService, RotationRunService,
-    SignalService, SwapActivityService, SwapEventService, TokenService, WorkSlots,
+    PoolCreationEventService, PoolCreationsService, PoolService, PositionChangeCountsService,
+    PositionChangeEventService, PositionFeeClaimEventService, ProtocolCatalogService,
+    ProtocolFeeClaimEventService, ProtocolTvlService, RewardChangeEventService,
+    RewardClaimEventService, RotationRunService, SignalService, SwapActivityService,
+    SwapEventService, TokenService, WorkSlots,
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
@@ -91,6 +93,10 @@ pub(crate) fn app_state() -> AppState {
         claim_totals_service: Arc::new(ClaimTotalsService::new(
             frozen_hours_repo(None),
             Arc::new(MockClaimTotalsRepo::default()),
+        )),
+        position_change_counts_service: Arc::new(PositionChangeCountsService::new(
+            frozen_hours_repo(None),
+            Arc::new(MockPositionChangeCountsRepo::default()),
         )),
         rotation_run_service: Arc::new(RotationRunService::new(
             frozen_hours_repo(None),
@@ -829,6 +835,30 @@ impl PoolCreationsLookup for MockPoolCreationsRepo {
     }
 }
 
+/// A `PositionChangeCountsLookup` answering zero changes, which records each period it reads.
+#[derive(Default)]
+pub(crate) struct MockPositionChangeCountsRepo {
+    pub(crate) reads: Mutex<Vec<FrozenPeriod>>,
+}
+
+#[async_trait]
+impl PositionChangeCountsLookup for MockPositionChangeCountsRepo {
+    async fn find_totals(
+        &self,
+        period: &FrozenPeriod,
+        _: Protocol,
+    ) -> RepositoryResult<Option<PositionChangeCounts>> {
+        self.reads.lock().unwrap().push(*period);
+        Ok(Some(PositionChangeCounts {
+            opened: 0,
+            vesting_locks: 0,
+            permanent_locks: 0,
+            splits: 0,
+            closed: 0,
+        }))
+    }
+}
+
 /// A `ClaimTotalsLookup` measured from `since`, answering zero claims, which records the period
 /// and the protocol of each read.
 #[derive(Default)]
@@ -896,7 +926,7 @@ impl LiquidityMoveLookup for MockLiquidityMoveRepo {
         &self,
         period: &FrozenPeriod,
         protocol: Protocol,
-    ) -> RepositoryResult<Option<LiquidityFlows>> {
+    ) -> RepositoryResult<Option<LiquidityTotals>> {
         self.record("liquidity_totals", period, Some(protocol));
         Ok(None)
     }

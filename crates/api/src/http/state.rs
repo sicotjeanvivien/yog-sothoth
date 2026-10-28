@@ -13,10 +13,10 @@ use crate::application::{
     AnnouncementService, ClaimTotalsService, DiscoveredTvlService, EnrichedSignal,
     IngestionService, LiquidityChangeEventService, LiquidityMoveService, NetworkService,
     PoolChangeEventService, PoolCreationEventService, PoolCreationsService, PoolService,
-    PositionChangeEventService, PositionFeeClaimEventService, ProtocolCatalogService,
-    ProtocolFeeClaimEventService, ProtocolTvlService, RewardChangeEventService,
-    RewardClaimEventService, RotationRunService, SignalService, SwapActivityService,
-    SwapEventService, TokenService, WorkSlots,
+    PositionChangeCountsService, PositionChangeEventService, PositionFeeClaimEventService,
+    ProtocolCatalogService, ProtocolFeeClaimEventService, ProtocolTvlService,
+    RewardChangeEventService, RewardClaimEventService, RotationRunService, SignalService,
+    SwapActivityService, SwapEventService, TokenService, WorkSlots,
 };
 
 /// The services and the runtime handles the router and handlers read. Handlers never reach a
@@ -39,6 +39,7 @@ pub(crate) struct AppState {
     pub(crate) pool_creations_service: Arc<PoolCreationsService>,
     pub(crate) liquidity_move_service: Arc<LiquidityMoveService>,
     pub(crate) claim_totals_service: Arc<ClaimTotalsService>,
+    pub(crate) position_change_counts_service: Arc<PositionChangeCountsService>,
     pub(crate) rotation_run_service: Arc<RotationRunService>,
     pub(crate) protocol_tvl_service: Arc<ProtocolTvlService>,
     pub(crate) discovered_tvl_service: Arc<DiscoveredTvlService>,

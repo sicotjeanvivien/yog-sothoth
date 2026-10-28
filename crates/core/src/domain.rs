@@ -21,6 +21,7 @@ mod pool_creation_event;
 mod pool_creations;
 mod pool_current_state;
 mod pool_price_snapshot;
+mod position_change_counts;
 mod position_change_event;
 mod position_fee_claim_event;
 mod protocol;
@@ -63,6 +64,7 @@ pub use liquidity_flow::{LiquidityFlowRepository, PoolLiquidityFlow};
 pub use liquidity_moves::{
     LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveKind, LiquidityMoveList,
     LiquidityMoveLock, LiquidityMoveLookup, LiquidityMoveOrder, LiquidityMoveScope,
+    LiquidityTotals,
 };
 pub use materialization_backlog::{MaterializationBacklog, MaterializationBacklogRepository};
 pub use meteora::{
@@ -108,6 +110,7 @@ pub use pool_current_state::{
     PoolCurrentStateUpsertOutcome,
 };
 pub use pool_price_snapshot::{PoolPriceSnapshot, PoolPriceSnapshotRepository};
+pub use position_change_counts::{PositionChangeCounts, PositionChangeCountsLookup};
 pub use position_change_event::{
     MeteoraDammV2PositionChange, PositionChangeEvent, PositionChangeEventLookup,
 };

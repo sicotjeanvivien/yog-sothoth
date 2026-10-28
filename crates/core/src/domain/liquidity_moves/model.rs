@@ -17,6 +17,13 @@ pub struct LiquidityFlows {
     pub moves_valued: i64,
 }
 
+/// A period's liquidity, and the distinct owners of its moves: a count no sum of hours gives.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LiquidityTotals {
+    pub flows: LiquidityFlows,
+    pub owners: i64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LiquidityMoveKind {
     /// A pool's creation, which deposits its first liquidity.

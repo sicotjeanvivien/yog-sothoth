@@ -61,7 +61,7 @@ async fn a_protocols_liquidity_starts_and_sums_on_its_own(pool: PgPool) {
         .unwrap();
 
     assert_eq!(since, Some(start));
-    assert_eq!(totals.added_usd, Decimal::from(50));
+    assert_eq!(totals.flows.added_usd, Decimal::from(50));
     assert_eq!(hourly.len(), 10);
 }
 
@@ -362,4 +362,43 @@ async fn a_listed_move_carries_its_lock_and_none_before_it_was_measured(pool: Pg
             ("locked", Some(LiquidityMoveLock::Vesting))
         ]
     );
+}
+
+/// Mutation: the owners counted per move, the protocol filter dropped, or a bound of the period
+/// dropped — an owner of two moves counted twice, DLMM's owner or one outside the period counted.
+#[sqlx::test(migrations = "./migrations")]
+async fn the_totals_count_each_owner_of_the_periods_moves_once(pool: PgPool) {
+    let start = as_of() - Duration::hours(10);
+    insert_liquidity_hour(&pool, DAMM, start, 5).await;
+    for (signature, protocol, owner, minutes) in [
+        ("a1", DAMM, "alice", 60),
+        ("a2", DAMM, "alice", 120),
+        ("b", DAMM, "bob", 180),
+        ("c", DLMM, "carol", 60),
+        ("before", DAMM, "dave", 11 * 60),
+        ("at-end", DAMM, "erin", 0),
+    ] {
+        sqlx::query(
+            "INSERT INTO analytic_liquidity_moves
+               (signature, event_index, timestamp, bucket, pool_address, protocol, owner, kind,
+                amount_usd)
+             VALUES ($1, 0, $2, $2, 'pool', $3, $4, 'add', NULL)",
+        )
+        .bind(signature)
+        .bind(as_of() - Duration::minutes(minutes))
+        .bind(protocol)
+        .bind(owner)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let repository = repository(&pool).await;
+
+    let totals =
+        LiquidityMoveLookup::find_totals(&repository, &period(10), Protocol::MeteoraDammV2)
+            .await
+            .unwrap()
+            .unwrap();
+
+    assert_eq!(totals.owners, 2);
 }

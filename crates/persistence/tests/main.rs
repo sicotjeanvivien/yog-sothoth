@@ -44,6 +44,7 @@ mod pool_entries;
 mod pool_price_snapshot;
 mod pool_properties;
 mod pool_registry;
+mod position_change_counts;
 mod position_change_events;
 mod position_fee_claim_events;
 mod price_compression;

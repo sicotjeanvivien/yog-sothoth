@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 
 use super::{
     LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveList, LiquidityMoveOrder,
+    LiquidityTotals,
 };
 use crate::domain::{FrozenPeriod, Protocol, ProtocolBucket, Window};
 use crate::{Page, RepositoryResult};
@@ -17,11 +18,12 @@ pub trait LiquidityMoveLookup: Send + Sync {
         protocol: Protocol,
     ) -> RepositoryResult<Option<DateTime<Utc>>>;
 
+    /// `protocol`'s liquidity over the hours of `period`, with the distinct owners of its moves.
     async fn find_totals(
         &self,
         period: &FrozenPeriod,
         protocol: Protocol,
-    ) -> RepositoryResult<Option<LiquidityFlows>>;
+    ) -> RepositoryResult<Option<LiquidityTotals>>;
 
     async fn list_hourly(
         &self,

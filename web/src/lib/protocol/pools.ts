@@ -27,3 +27,9 @@ export function birthTotalOf(slots: readonly Slot[]): number | null {
 export function lockKey(lock: LiquidityMoveLockResponse | null): LiquidityMoveLockResponse | "unmeasured" {
   return lock ?? "unmeasured";
 }
+
+/** A life cycle count as its window serves it: `null` while the window holds no row. */
+export function lifeCountOf<T>(items: readonly T[], count: (row: T) => number): number | null {
+  const row = items[0];
+  return row === undefined ? null : count(row);
+}

@@ -3451,12 +3451,17 @@
           },
           {
             "properties": {
+              "owners": {
+                "$ref": "#/components/schemas/Count",
+                "description": "The addresses that created a pool, added or removed liquidity over the window, once each."
+              },
               "protocol": {
                 "$ref": "#/components/schemas/ProtocolResponse"
               }
             },
             "required": [
-              "protocol"
+              "protocol",
+              "owners"
             ],
             "type": "object"
           }
@@ -3494,6 +3499,37 @@
         "required": [
           "protocol",
           "pools"
+        ],
+        "type": "object"
+      },
+      "ProtocolPositionChangeTotalsResponse": {
+        "properties": {
+          "closed": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "opened": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "permanentLocks": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          },
+          "splits": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "vestingLocks": {
+            "$ref": "#/components/schemas/Count"
+          }
+        },
+        "required": [
+          "protocol",
+          "opened",
+          "vestingLocks",
+          "permanentLocks",
+          "splits",
+          "closed"
         ],
         "type": "object"
       },
@@ -5235,12 +5271,17 @@
                 },
                 {
                   "properties": {
+                    "owners": {
+                      "$ref": "#/components/schemas/Count",
+                      "description": "The addresses that created a pool, added or removed liquidity over the window, once each."
+                    },
                     "protocol": {
                       "$ref": "#/components/schemas/ProtocolResponse"
                     }
                   },
                   "required": [
-                    "protocol"
+                    "protocol",
+                    "owners"
                   ],
                   "type": "object"
                 }
@@ -5362,6 +5403,79 @@
               "required": [
                 "protocol",
                 "pools"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
+      "WindowedResponse_ProtocolPositionChangeTotalsResponse": {
+        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "properties": {
+          "asOf": {
+            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "description": "The first hour the facts hold.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "closed": {
+                  "$ref": "#/components/schemas/Count"
+                },
+                "opened": {
+                  "$ref": "#/components/schemas/Count"
+                },
+                "permanentLocks": {
+                  "$ref": "#/components/schemas/Count"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "splits": {
+                  "$ref": "#/components/schemas/Count"
+                },
+                "vestingLocks": {
+                  "$ref": "#/components/schemas/Count"
+                }
+              },
+              "required": [
+                "protocol",
+                "opened",
+                "vestingLocks",
+                "permanentLocks",
+                "splits",
+                "closed"
               ],
               "type": "object"
             },
@@ -8593,6 +8707,56 @@
               }
             },
             "description": "A page of the protocol's position changes, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/protocols/{protocol}/position-changes/totals": {
+      "get": {
+        "operationId": "get_protocol_position_change_totals",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPositionChangeTotalsResponse"
+                }
+              }
+            },
+            "description": "The positions the protocol opened, locked, split and closed over the window; no row while the facts do not cover the window whole."
           },
           "default": {
             "content": {

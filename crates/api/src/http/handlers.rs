@@ -13,6 +13,7 @@ pub(super) mod pool_changes;
 pub(super) mod pool_creations;
 pub(super) mod pool_discoveries;
 pub(super) mod pools;
+pub(super) mod position_change_counts;
 pub(super) mod position_changes;
 pub(super) mod position_fee_claims;
 pub(super) mod protocol_fee_claims;

@@ -82,6 +82,13 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
         ],
     ),
     (
+        "analytic_protocol_position_changes_hourly",
+        &[
+            ("yog_analytic", &["INSERT", "SELECT", "UPDATE"]),
+            ("yog_api", &["SELECT"]),
+        ],
+    ),
+    (
         "analytic_protocol_tvl",
         &[
             ("yog_analytic", &["INSERT", "SELECT", "UPDATE"]),
@@ -172,6 +179,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     (
         "meteora_damm_v2_close_position_events",
         &[
+            ("yog_analytic", &["SELECT"]),
             ("yog_api", &["SELECT"]),
             ("yog_indexer", &["INSERT", "SELECT", "UPDATE"]),
         ],
@@ -179,6 +187,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     (
         "meteora_damm_v2_create_position_events",
         &[
+            ("yog_analytic", &["SELECT"]),
             ("yog_api", &["SELECT"]),
             ("yog_indexer", &["INSERT", "SELECT", "UPDATE"]),
         ],
@@ -266,6 +275,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     (
         "meteora_damm_v2_split_position_events",
         &[
+            ("yog_analytic", &["SELECT"]),
             ("yog_api", &["SELECT"]),
             ("yog_indexer", &["INSERT", "SELECT", "UPDATE"]),
         ],

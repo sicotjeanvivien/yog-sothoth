@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { birthSlotsOf, birthTotalOf, lockKey } from "../pools";
+import { birthSlotsOf, birthTotalOf, lifeCountOf, lockKey } from "../pools";
 
 const AS_OF = "2026-10-25T03:00:00Z";
 
@@ -48,5 +48,15 @@ describe("lockKey", () => {
     expect(lockKey("vesting")).toBe("vesting");
     expect(lockKey("none")).toBe("none");
     expect(lockKey(null)).toBe("unmeasured");
+  });
+});
+
+describe("lifeCountOf", () => {
+  // Mutation: a window without a row read as 0 — a life cycle not measured shown as one without
+  // any change.
+  it("is the row's count, and nothing while the window holds no row", () => {
+    expect(lifeCountOf([{ opened: 7 }], (r) => r.opened)).toBe(7);
+    expect(lifeCountOf([{ opened: 0 }], (r) => r.opened)).toBe(0);
+    expect(lifeCountOf([] as { opened: number }[], (r) => r.opened)).toBeNull();
   });
 });

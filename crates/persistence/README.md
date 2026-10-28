@@ -38,7 +38,7 @@ persistence/
 │   │   ├── pool/, pool_current_state/ (the registry, and the catalog the API pages:
 │   │   │                     a page of keys first, then their entries)
 │   │   ├── swap_activity/, pool_creations/, liquidity_moves/, discovered_tvl/, protocol_tvl.rs,
-│   │   │   claim_totals.rs
+│   │   │   claim_totals.rs, position_change_counts.rs
 │   │   │                     (the produced resources the API reads by scope:
 │   │   │                     every protocol, one protocol, one pool)
 │   │   ├── protocol_activity.rs, token_activity/ (the frozen hours every
@@ -660,7 +660,14 @@ being the claims' coverage. `claim_totals.rs` reads their totals over the frozen
 rows themselves — the distinct owners do not add up by hour. `tests/analytic_claims.rs` holds
 the price rules, the totals and the coverage.
 
-**Read by scope.** One repository per produced resource (`swap_activity.rs`, `pool_creations.rs`, `liquidity_moves.rs`, `claim_totals.rs`, `protocol_tvl.rs`, `discovered_tvl.rs`) reads the same tables for the routes under
+**The positions' life cycle (044).** Each cycle rewrites its hours of
+`analytic_protocol_position_changes_hourly` whole, zero included: one count per position event
+— opened, vesting and permanent locks, splits, closed. The raw position events are kept without
+limit, and 044 filled every hour since the first. `position_change_counts.rs` sums them over the
+frozen period; `liquidity_moves.rs` counts the distinct owners of the period's moves on the
+rows, which no sum of hours gives (`tests/position_change_counts.rs`, `tests/liquidity_moves.rs`).
+
+**Read by scope.** One repository per produced resource (`swap_activity.rs`, `pool_creations.rs`, `liquidity_moves.rs`, `claim_totals.rs`, `position_change_counts.rs`, `protocol_tvl.rs`, `discovered_tvl.rs`) reads the same tables for the routes under
 the rules of `crates/api/README.md`: one static query per resource and cut, the protocol
 (`$n::TEXT IS NULL OR protocol = $n`) or the pool in the `WHERE`, so every one stays
 checked at compile time. The swaps by pool read `analytic_pool_hourly`, which 037 opens to

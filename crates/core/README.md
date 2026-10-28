@@ -40,6 +40,8 @@ core/src/
 │   │                       volume split by the runs —
 │   │                       RotationRunLookup; TranchePeriod, through the last tranche
 │   │                       written, in analytic/window.rs)
+│   ├── position_change_counts/ (PositionChangeCounts, a protocol's positions opened, locked,
+│   │                       split and closed — PositionChangeCountsLookup)
 │   ├── claim_totals/      (ClaimTotals, the claims of fees or rewards by protocol —
 │   │                       ClaimTotalsLookup)
 │   ├── protocol_tvl/      (ProtocolTvl, a reading at an instant; ProtocolTvlChange, from the
