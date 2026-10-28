@@ -34,6 +34,13 @@ impl LiquidityMoveKind {
             LiquidityMoveKind::Remove => "remove",
         }
     }
+
+    /// The kind `label` names, `None` for a label [`Self::as_str`] never writes.
+    pub fn from_label(label: &str) -> Option<Self> {
+        [Self::Create, Self::Add, Self::Remove]
+            .into_iter()
+            .find(|kind| kind.as_str() == label)
+    }
 }
 
 /// One valued liquidity move, with the identity of its pool's tokens.

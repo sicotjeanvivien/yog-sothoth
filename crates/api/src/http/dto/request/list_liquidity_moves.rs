@@ -71,3 +71,7 @@ impl ListLiquidityMovesRequest {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "tests/list_liquidity_moves_tests.rs"]
+mod tests;

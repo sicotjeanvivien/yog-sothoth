@@ -307,7 +307,7 @@
       "pools": {
         "births": {
           "title": "Les pools qui naissent",
-          "info": "Les pools créées sur DAMM v2 pendant la période choisie, par barre : une naissance est l'instruction initialize_pool, qui crée la pool et y dépose sa première liquidité.",
+          "info": "Les pools créées pendant la période choisie, par barre : une naissance est l'instruction initialize_pool, qui crée la pool et y dépose sa première liquidité.",
           "perHour": "Naissances par heure",
           "perSixHours": "Naissances par tranche de 6 h",
           "perDay": "Naissances par jour",
@@ -321,7 +321,7 @@
         },
         "deposits": {
           "title": "Plus gros dépôts initiaux · {period}",
-          "info": "Les pools nées pendant la période dont le premier dépôt vaut le plus, valorisé au prix de la pool à sa naissance. Une pool dont aucun token n'a de prix n'y figure pas ; le graphique la compte. L'adresse est celle de son créateur.",
+          "info": "Les pools nées pendant la période dont le premier dépôt vaut le plus, valorisé au prix de la pool dans sa tranche de 5 minutes. Une pool dont le dépôt n'a pas pu être valorisé n'y figure pas ; le graphique la compte. L'adresse est celle de son créateur.",
           "tableLabel": "Plus gros dépôts initiaux sur la période choisie",
           "pair": "Paire",
           "creator": "Créateur",

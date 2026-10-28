@@ -155,10 +155,12 @@ async function Births({ period, protocol }: TabProps) {
           <SplitBars
             bars={bars}
             period={detailOf(t("periodTotal", { period: tPeriod(`short.${period}`) }), total)}
-            ticks={roundTicks(max).map((value) => ({
+            ticks={roundTicks(max)
+              .filter(Number.isInteger)
+              .map((value) => ({
               bottom: Math.round(scale(value)),
-              label: formatCount(value),
-            }))}
+                label: formatCount(value),
+              }))}
             axis={axisOf(period, slots, daysAgo)}
             height={CHART_PX.height}
             label={t(CHART_LABEL[period])}

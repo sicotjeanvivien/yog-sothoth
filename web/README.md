@@ -384,8 +384,8 @@ claiming and compounding is not drawn yet.
 **04 Pools & positions** — `protocol/pools/pools-tab.tsx`: the pools born over the
 period, bar by bar, from `pool-creations/hourly|daily` of the protocol
 (`lib/protocol/pools.ts`), and the five whose first deposit is worth the most, from
-`liquidity-moves?kind=create&sort=amount`: pair, creator, deposit, age. A pool none of whose
-tokens has a price is not in that list; the chart counts it. The positions' life cycle is not
+`liquidity-moves?kind=create&sort=amount`: pair, creator, deposit, age. A pool whose deposit
+could not be valued is not in that list; the chart counts it. The positions' life cycle is not
 drawn yet.
 
 **Tabs** — `lib/protocol/tabs.ts` lists the six tabs of the canvas, in order;
