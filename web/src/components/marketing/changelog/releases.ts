@@ -34,8 +34,7 @@ export const RELEASES: readonly Release[] = [
   {
     version: "v0.4.0",
     date: "2026-10-28",
-    summary:
-      "Over 7 days the charts show 6-hour bars, an hour where nothing happened counts 0 instead of missing, and the price series keeps two days uncompressed instead of one to two weeks.",
+    summary: "Over 7 days, the bar charts show 28 bars of 6 hours instead of 7 bars of a day.",
     sections: [
       {
         kind: "features",
