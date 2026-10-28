@@ -129,6 +129,28 @@ UNION ALL
 SELECT * FROM unswapped;
 END;
 
+-- What two amounts of a pool are worth at its prices in a tranche; NULL when unvalued.
+-- ⚠️ As the TVL: a side without a market price counts 0, never one small trade's price.
+CREATE FUNCTION yog_pool_amounts_usd(
+    amount_a     NUMERIC,
+    amount_b     NUMERIC,
+    dec_a        INTEGER,
+    dec_b        INTEGER,
+    price_a_usd  NUMERIC,
+    price_b_usd  NUMERIC,
+    market_a_usd NUMERIC,
+    market_b_usd NUMERIC
+)
+RETURNS NUMERIC
+LANGUAGE sql IMMUTABLE PARALLEL SAFE
+RETURN CASE
+    WHEN (amount_a > 0 AND market_a_usd IS NOT NULL) OR (amount_b > 0 AND market_b_usd IS NOT NULL)
+    THEN CASE WHEN amount_a = 0 OR market_a_usd IS NULL THEN 0
+              ELSE yog_token_amount(amount_a, dec_a) * price_a_usd END
+       + CASE WHEN amount_b = 0 OR market_b_usd IS NULL THEN 0
+              ELSE yog_token_amount(amount_b, dec_b) * price_b_usd END
+END;
+
 -- Written once: no UPDATE.
 GRANT SELECT, INSERT ON analytic_position_fee_claims, analytic_reward_claims TO yog_analytic;
 GRANT SELECT ON meteora_damm_v2_claim_position_fee_events, meteora_damm_v2_claim_reward_events

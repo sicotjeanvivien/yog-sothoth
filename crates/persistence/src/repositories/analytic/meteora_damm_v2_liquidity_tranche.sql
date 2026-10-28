@@ -28,18 +28,7 @@ INSERT INTO analytic_liquidity_moves (
     signature, event_index, timestamp, bucket, pool_address, protocol, owner, kind, amount_usd
 )
 SELECT m.signature, m.event_index, m.timestamp, $1, m.pool_address, $2, m.owner, m.kind,
-       CASE WHEN v.priced THEN v.a + v.b END
+       yog_pool_amounts_usd(m.amount_a, m.amount_b, m.dec_a, m.dec_b,
+                            pr.price_a_usd, pr.price_b_usd, pr.market_a_usd, pr.market_b_usd)
   FROM moves m
   LEFT JOIN prices pr ON pr.pool_address = m.pool_address
- -- ⚠️ As the TVL: a token without a market price counts 0, never the price of one small trade
- -- spread over a whole stock. A side moved with a market price needs its bounded price.
- CROSS JOIN LATERAL (
-     SELECT CASE WHEN m.amount_a = 0 OR pr.market_a_usd IS NULL THEN 0
-                 WHEN pr.price_a_usd IS NOT NULL AND m.dec_a IS NOT NULL
-                 THEN yog_token_amount(m.amount_a::NUMERIC, m.dec_a) * pr.price_a_usd END AS a,
-            CASE WHEN m.amount_b = 0 OR pr.market_b_usd IS NULL THEN 0
-                 WHEN pr.price_b_usd IS NOT NULL AND m.dec_b IS NOT NULL
-                 THEN yog_token_amount(m.amount_b::NUMERIC, m.dec_b) * pr.price_b_usd END AS b,
-            (m.amount_a > 0 AND pr.market_a_usd IS NOT NULL)
-                OR (m.amount_b > 0 AND pr.market_b_usd IS NOT NULL) AS priced
- ) v

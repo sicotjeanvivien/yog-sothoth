@@ -34,21 +34,11 @@ fees_written AS (
     )
     SELECT f.signature, f.event_index, f.timestamp, $1, f.pool_address, $2, f.owner,
            -- An empty claim took nothing: worth 0, priced or not.
-           CASE WHEN f.amount_a = 0 AND f.amount_b = 0 THEN 0 WHEN v.priced THEN v.a + v.b END
+           CASE WHEN f.amount_a = 0 AND f.amount_b = 0 THEN 0
+                ELSE yog_pool_amounts_usd(f.amount_a, f.amount_b, f.dec_a, f.dec_b, pr.price_a_usd,
+                                          pr.price_b_usd, pr.market_a_usd, pr.market_b_usd) END
       FROM fee_claims f
       LEFT JOIN prices pr ON pr.pool_address = f.pool_address
-     -- ⚠️ As a liquidity move: a side without a market price counts 0, and a side claimed with
-     -- one needs its bounded price.
-     CROSS JOIN LATERAL (
-         SELECT CASE WHEN f.amount_a = 0 OR pr.market_a_usd IS NULL THEN 0
-                     WHEN pr.price_a_usd IS NOT NULL AND f.dec_a IS NOT NULL
-                     THEN yog_token_amount(f.amount_a::NUMERIC, f.dec_a) * pr.price_a_usd END AS a,
-                CASE WHEN f.amount_b = 0 OR pr.market_b_usd IS NULL THEN 0
-                     WHEN pr.price_b_usd IS NOT NULL AND f.dec_b IS NOT NULL
-                     THEN yog_token_amount(f.amount_b::NUMERIC, f.dec_b) * pr.price_b_usd END AS b,
-                (f.amount_a > 0 AND pr.market_a_usd IS NOT NULL)
-                    OR (f.amount_b > 0 AND pr.market_b_usd IS NOT NULL) AS priced
-     ) v
 )
 INSERT INTO analytic_reward_claims (
     signature, event_index, timestamp, bucket, pool_address, protocol, owner, mint_reward, amount_usd

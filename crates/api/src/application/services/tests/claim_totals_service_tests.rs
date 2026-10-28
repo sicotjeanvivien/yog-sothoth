@@ -1,12 +1,12 @@
 //! Unit tests for `ClaimTotalsService`: the claims' own coverage, from the first whole hour
-//! valued, and the kind of claims a covered window reads.
+//! valued, and the claims each total reads over a covered window.
 
 use std::sync::Arc;
 
 use chrono::TimeDelta;
 use yog_core::domain::{Protocol, Window};
 
-use super::{ClaimKind, ClaimTotalsService};
+use super::ClaimTotalsService;
 use crate::testing::{MockClaimTotalsRepo, at_october, frozen_hours_repo, make_frozen_hours};
 
 fn service(repo: &Arc<MockClaimTotalsRepo>) -> ClaimTotalsService {
@@ -28,19 +28,11 @@ async fn the_claims_are_covered_from_the_first_whole_hour_valued() {
     let unmeasured = Arc::new(MockClaimTotalsRepo::default());
 
     let day = service(&measured)
-        .get_claim_totals(
-            Window::Day,
-            Protocol::MeteoraDammV2,
-            ClaimKind::PositionFees,
-        )
+        .get_position_fee_claim_totals(Window::Day, Protocol::MeteoraDammV2)
         .await
         .unwrap();
     let not_yet = service(&unmeasured)
-        .get_claim_totals(
-            Window::Day,
-            Protocol::MeteoraDammV2,
-            ClaimKind::PositionFees,
-        )
+        .get_position_fee_claim_totals(Window::Day, Protocol::MeteoraDammV2)
         .await
         .unwrap();
 
@@ -57,24 +49,37 @@ async fn the_claims_are_covered_from_the_first_whole_hour_valued() {
     assert!(reads(&unmeasured).is_empty());
 }
 
-/// Mutation: the kinds crossed — the rewards read for the fees' totals, or the reverse.
+fn covering() -> Arc<MockClaimTotalsRepo> {
+    Arc::new(MockClaimTotalsRepo {
+        since: Some(at_october(13, 13)),
+        ..MockClaimTotalsRepo::default()
+    })
+}
+
+/// Mutation: the fees' totals read from the rewards.
 #[tokio::test]
-async fn a_covered_window_reads_the_claims_of_its_kind() {
-    for (kind, read) in [
-        (ClaimKind::PositionFees, "position_fee_claim_totals"),
-        (ClaimKind::Rewards, "reward_claim_totals"),
-    ] {
-        let repo = Arc::new(MockClaimTotalsRepo {
-            since: Some(at_october(13, 13)),
-            ..MockClaimTotalsRepo::default()
-        });
+async fn the_fees_totals_read_the_fee_claims() {
+    let repo = covering();
 
-        let totals = service(&repo)
-            .get_claim_totals(Window::Day, Protocol::MeteoraDammV2, kind)
-            .await
-            .unwrap();
+    let totals = service(&repo)
+        .get_position_fee_claim_totals(Window::Day, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
 
-        assert_eq!(totals.items.len(), 1);
-        assert_eq!(reads(&repo), [read]);
-    }
+    assert_eq!(totals.items.len(), 1);
+    assert_eq!(reads(&repo), ["position_fee_claim_totals"]);
+}
+
+/// Mutation: the rewards' totals read from the fees.
+#[tokio::test]
+async fn the_rewards_totals_read_the_reward_claims() {
+    let repo = covering();
+
+    let totals = service(&repo)
+        .get_reward_claim_totals(Window::Day, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+
+    assert_eq!(totals.items.len(), 1);
+    assert_eq!(reads(&repo), ["reward_claim_totals"]);
 }

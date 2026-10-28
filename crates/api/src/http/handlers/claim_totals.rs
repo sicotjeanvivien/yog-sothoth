@@ -6,7 +6,9 @@ use axum::{
     extract::{Path, Query, State},
 };
 
-use crate::application::{ClaimKind, Measured};
+use yog_core::domain::{ClaimTotals, Protocol, Window};
+
+use crate::application::Measured;
 use crate::http::{
     AppState,
     dto::{
@@ -32,7 +34,13 @@ pub(crate) async fn get_protocol_position_fee_claim_totals(
     Path(protocol): Path<String>,
     Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolClaimTotalsResponse>>, ApiError> {
-    claim_totals(state, &protocol, params, ClaimKind::PositionFees).await
+    let protocol = parse_protocol(&protocol)?;
+    let window = params.window.into();
+    let measured = state
+        .claim_totals_service
+        .get_position_fee_claim_totals(window, protocol)
+        .await?;
+    Ok(respond(protocol, window, measured))
 }
 
 #[utoipa::path(
@@ -51,21 +59,20 @@ pub(crate) async fn get_protocol_reward_claim_totals(
     Path(protocol): Path<String>,
     Query(params): Query<WindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolClaimTotalsResponse>>, ApiError> {
-    claim_totals(state, &protocol, params, ClaimKind::Rewards).await
-}
-
-async fn claim_totals(
-    state: AppState,
-    protocol: &str,
-    params: WindowParams,
-    kind: ClaimKind,
-) -> Result<Json<WindowedResponse<ProtocolClaimTotalsResponse>>, ApiError> {
-    let protocol = parse_protocol(protocol)?;
+    let protocol = parse_protocol(&protocol)?;
     let window = params.window.into();
     let measured = state
         .claim_totals_service
-        .get_claim_totals(window, protocol, kind)
+        .get_reward_claim_totals(window, protocol)
         .await?;
+    Ok(respond(protocol, window, measured))
+}
+
+fn respond(
+    protocol: Protocol,
+    window: Window,
+    measured: Measured<Vec<ClaimTotals>>,
+) -> Json<WindowedResponse<ProtocolClaimTotalsResponse>> {
     let measured = Measured {
         period: measured.period,
         items: measured
@@ -74,5 +81,5 @@ async fn claim_totals(
             .map(|totals| ProtocolClaimTotalsResponse::new(protocol, totals))
             .collect::<Vec<_>>(),
     };
-    Ok(Json(WindowedResponse::new(window, measured)))
+    Json(WindowedResponse::new(window, measured))
 }

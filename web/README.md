@@ -374,9 +374,9 @@ read on `swaps/hourly|daily` of the protocol and summed per bar by
 per bar stacked in the three tints (`dash-fee-*`), the bar under the pointer
 detailed under the chart. The three parts make the fees whole. Beside it, what the
 LPs take back: the fees and the rewards claimed, valued, with their addresses
-(`position-fee-claims/totals`, `reward-claims/totals`), and the LPs' fees generated, with
-the share claimed (`claimedShareOf`, only over the same `asOf`; it can exceed 100 %, a
-claim taking fees earned before the period). The claims are measured from a later hour
+(`position-fee-claims/totals`, `reward-claims/totals`), and beside them the LPs' fees
+generated, read on `swaps/totals`. No share is drawn between the two: it would cross two
+routes, a rule the web does not hold. The claims are measured from a later hour
 than the swaps: until a window is covered, the block says so. The LPs' split between
 claiming and compounding is not drawn yet.
 

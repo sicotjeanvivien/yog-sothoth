@@ -649,7 +649,8 @@ the start.
 
 **The claims (042).** The pools' prices a move is valued at are a SQL function,
 `meteora_damm_v2_tranche_pool_prices(tranche, width, pools)`: each statement passes its own
-pools, and the anchor counts them with the tranche's swaps. A third statement
+pools, and the anchor counts them with the tranche's swaps; a move and a claim of fees are worth
+their two amounts at those prices through one function, `yog_pool_amounts_usd`. A third statement
 (`meteora_damm_v2_claims_tranche.sql`) reads the tranche's claims of fees and rewards and writes
 each one, valued once, into `analytic_position_fee_claims` and `analytic_reward_claims`, kept 31
 days as the moves; `analytic_tranches.claims` marks the tranches written with them, the first

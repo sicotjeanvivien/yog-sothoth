@@ -26,7 +26,7 @@ mod swap_event_service;
 mod token_service;
 
 pub(crate) use announcement_service::AnnouncementService;
-pub(crate) use claim_totals_service::{ClaimKind, ClaimTotalsService};
+pub(crate) use claim_totals_service::ClaimTotalsService;
 pub(crate) use discovered_tvl_service::DiscoveredTvlService;
 pub(crate) use ingestion_service::{IngestionAggregate, IngestionService};
 pub(crate) use liquidity_change_event_service::LiquidityChangeEventService;

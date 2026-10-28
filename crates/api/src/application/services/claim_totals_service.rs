@@ -12,13 +12,6 @@ use yog_core::{
 
 use super::period::{Measured, build_frozen_period, first_whole_hour, measured_from};
 
-/// Which claims a total sums.
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum ClaimKind {
-    PositionFees,
-    Rewards,
-}
-
 pub(crate) struct ClaimTotalsService {
     hours: Arc<dyn ProtocolActivityLookup>,
     claims: Arc<dyn ClaimTotalsLookup>,
@@ -49,31 +42,46 @@ impl ClaimTotalsService {
         Ok(Some(measured_from(period, since)))
     }
 
-    /// `protocol`'s claims of `kind` over `window`; no row while they do not cover it whole.
-    pub(crate) async fn get_claim_totals(
+    /// `protocol`'s fees claimed over `window`; no row while the claims do not cover it whole.
+    pub(crate) async fn get_position_fee_claim_totals(
         &self,
         window: Window,
         protocol: Protocol,
-        kind: ClaimKind,
     ) -> RepositoryResult<Measured<Vec<ClaimTotals>>> {
         let period = self.build_claims_period(window, protocol).await?;
-        let items = match &period {
-            Some(period) if period.is_covered() => vec![match kind {
-                ClaimKind::PositionFees => {
-                    self.claims
-                        .find_position_fee_claim_totals(period, protocol)
-                        .await?
-                }
-                ClaimKind::Rewards => {
-                    self.claims
-                        .find_reward_claim_totals(period, protocol)
-                        .await?
-                }
-            }],
-            _ => Vec::new(),
+        let items = match covered(period.as_ref()) {
+            Some(period) => vec![
+                self.claims
+                    .find_position_fee_claim_totals(period, protocol)
+                    .await?,
+            ],
+            None => Vec::new(),
         };
         Ok(Measured { period, items })
     }
+
+    /// `protocol`'s rewards claimed over `window`; no row while the claims do not cover it whole.
+    pub(crate) async fn get_reward_claim_totals(
+        &self,
+        window: Window,
+        protocol: Protocol,
+    ) -> RepositoryResult<Measured<Vec<ClaimTotals>>> {
+        let period = self.build_claims_period(window, protocol).await?;
+        let items = match covered(period.as_ref()) {
+            Some(period) => vec![
+                self.claims
+                    .find_reward_claim_totals(period, protocol)
+                    .await?,
+            ],
+            None => Vec::new(),
+        };
+        Ok(Measured { period, items })
+    }
+}
+
+/// The period, if the claims cover it whole.
+fn covered(period: Option<&FrozenPeriod>) -> Option<&FrozenPeriod> {
+    period.filter(|period| period.is_covered())
 }
 
 #[cfg(test)]

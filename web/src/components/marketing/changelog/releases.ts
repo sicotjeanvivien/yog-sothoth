@@ -44,11 +44,11 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "Beside it, what the LPs take back: the fees and the rewards their positions claimed over the period, valued, with the addresses that claimed them, and the share of the LPs' fees generated that was claimed. Measured from this release on.",
+            text: "Beside it, what the LPs take back: the fees and the rewards their positions claimed over the period, valued, with the addresses that claimed them, beside the LPs' fees generated. Measured from this release on.",
             technical: false,
           },
           {
-            text: "yog-analytic values each claim of a position's fees or rewards once, at its pool's price in the tranche, a reward outside its pool at its market price; /api/protocols/{protocol}/position-fee-claims/totals and /reward-claims/totals serve their totals. Migration 042.",
+            text: "yog-analytic values each claim of a position's fees or rewards once, at its pool's price in the tranche as a liquidity move (one shared function, yog_pool_amounts_usd), a reward outside its pool at its market price; /api/protocols/{protocol}/position-fee-claims/totals and /reward-claims/totals serve their totals. Migration 042.",
             technical: true,
           },
         ],

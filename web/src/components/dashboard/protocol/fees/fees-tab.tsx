@@ -32,7 +32,6 @@ import { formatUsdCompact } from "@/lib/format/format-usd";
 import { axisOf, daysAgoOf, hourOf, roundTicks } from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
 import {
-  claimedShareOf,
   FEE_PARTS,
   feeSharesOf,
   feeSlotsOf,
@@ -253,7 +252,6 @@ async function FeeSplit({ period, protocol }: TabProps) {
 async function LpClaims({ period, protocol }: TabProps) {
   const t = await getTranslations("Dashboard.Protocol.fees.claims");
   const tPeriod = await getTranslations("Dashboard.Overview.period");
-  const locale = (await getLocale()) as FormatLocale;
   const title = t("title");
   const short = tPeriod(`short.${period}`);
 
@@ -280,10 +278,6 @@ async function LpClaims({ period, protocol }: TabProps) {
   const feeClaims = fees.items.find((i) => i.protocol === protocol);
   const rewardClaims = rewards.items.find((i) => i.protocol === protocol);
   const lpFees = swaps.items.find((i) => i.protocol === protocol)?.lpFeesUsd ?? null;
-  const share = claimedShareOf(
-    { asOf: fees.asOf, amountUsd: feeClaims?.amountUsd ?? null },
-    { asOf: swaps.asOf, amountUsd: lpFees },
-  );
 
   const stat = (label: string, big: string, sub: ReactNode, last = false) => (
     <div className={`flex flex-col gap-1 py-3 ${last ? "" : "border-b border-dash-rule"}`}>
@@ -334,9 +328,11 @@ async function LpClaims({ period, protocol }: TabProps) {
           {stat(
             t("generated", { period: short }),
             formatUsdCompact(lpFees),
-            t("claimedShare", {
-              share: share === null ? "—" : formatPercent(String(share), locale),
-            }),
+            <>
+              {t("lpPart")}
+              {" · "}
+              <span className="font-dash-mono text-[11px] text-dash-ink-3">swap</span>
+            </>,
             true,
           )}
         </>
