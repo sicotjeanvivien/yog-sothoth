@@ -25,7 +25,15 @@ import { formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { axisOf, daysAgoOf, hourOf, roundTicks } from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
-import { FEE_PARTS, feeSharesOf, feeSlotsOf, feeTotalsOf, type FeePart } from "@/lib/protocol/fees";
+import {
+  FEE_PARTS,
+  feePartsOf,
+  feeSharesOf,
+  feeSlotsOf,
+  feeSumOf,
+  feeTotalsOf,
+  type FeePart,
+} from "@/lib/protocol/fees";
 
 import { SplitBars, type SplitDetail } from "../split-bars";
 import { FEE_TONE } from "./fee-tones";
@@ -95,33 +103,30 @@ async function FeeSplit({ period, protocol }: TabProps) {
   }
 
   const closed = await closedReason(period, swaps);
-  const usd = (value: number) => formatUsdCompact(String(value));
-  const percent = (ratio: number | undefined) =>
-    ratio === undefined ? "—" : formatPercent(String(ratio), locale);
+  const usd = (value: number | null) => formatUsdCompact(value === null ? null : String(value));
+  const percent = (ratio: number | null | undefined) =>
+    ratio === null || ratio === undefined ? "—" : formatPercent(String(ratio), locale);
 
   const slots = swaps.asOf === null ? [] : feeSlotsOf(period, swaps.asOf, swaps.items);
   const totals = feeTotalsOf(slots);
-  const shares = feeSharesOf(totals);
-  const sumOf = (parts: Record<FeePart, number>) => parts.lp + parts.protocol + parts.referral;
-  const valued = slots.map((slot) =>
-    FEE_PARTS.every((part) => slot[part] === null)
-      ? null
-      : { lp: slot.lp ?? 0, protocol: slot.protocol ?? 0, referral: slot.referral ?? 0 },
-  );
-  const max = Math.max(0, ...valued.map((parts) => (parts === null ? 0 : sumOf(parts))));
+  const shares = totals === null ? null : feeSharesOf(totals);
+  const max = Math.max(0, ...slots.map((slot) => {
+    const parts = feePartsOf(slot);
+    return parts === null ? 0 : feeSumOf(parts);
+  }));
   const scale = (v: number) => (max > 0 ? (v / max) * CHART_PX.top : 0);
   const daysAgo = (days: number) => (days === 0 ? tVolume("today") : tVolume("daysAgo", { days }));
   const moment = (date: Date) => formatUtcMoment(date, locale) ?? "—";
 
-  const detailOf = (when: string, parts: Record<FeePart, number>): SplitDetail<FeePart> => {
-    const split = feeSharesOf(parts);
+  const detailOf = (when: string, parts: Record<FeePart, number> | null): SplitDetail<FeePart> => {
+    const split = parts === null ? null : feeSharesOf(parts);
     return {
       when,
-      total: usd(sumOf(parts)),
+      total: usd(parts === null ? null : feeSumOf(parts)),
       rows: FEE_PARTS.map((part) => ({
         tone: part,
         name: t(`parts.${part}`),
-        value: usd(parts[part]),
+        value: usd(parts === null ? null : parts[part]),
         share: percent(split?.[part]),
       })),
     };
@@ -132,8 +137,8 @@ async function FeeSplit({ period, protocol }: TabProps) {
       period !== "24h"
         ? `${daysAgo(daysAgoOf(period, slots.length, i))} · ${moment(slot.from)} → ${moment(slot.to)}`
         : `${hourOf(slot.from)} UTC`;
-    const parts = valued[i];
-    if (parts === null || parts === undefined) {
+    const parts = feePartsOf(slot);
+    if (parts === null) {
       return { segments: [], detail: { when, total: tVolume("noValue"), rows: [] } };
     }
     const height = (v: number) => Math.max(v > 0 ? 1 : 0, Math.round(scale(v)));
@@ -191,7 +196,7 @@ async function FeeSplit({ period, protocol }: TabProps) {
                   </div>
                 </div>
                 <div role="cell" className={`${NUM_CLASS} text-dash-ink`}>
-                  {usd(totals[part])}
+                  {usd(totals === null ? null : totals[part])}
                 </div>
                 <div role="cell" className={`${NUM_CLASS} text-dash-ink-2`}>
                   {percent(shares?.[part])}
@@ -203,7 +208,7 @@ async function FeeSplit({ period, protocol }: TabProps) {
             <p className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <span className={LABEL_CLASS}>{t(PER_SLOT[period])}</span>
               <span className="font-dash-mono text-[12px] text-dash-ink-2 tabular-nums">
-                {t("total", { total: usd(sumOf(totals)) })}
+                {t("total", { total: usd(totals === null ? null : feeSumOf(totals)) })}
               </span>
             </p>
             <SplitBars

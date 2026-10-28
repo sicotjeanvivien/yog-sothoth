@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { feeSharesOf, feeSlotsOf, feeTotalsOf } from "../fees";
+import { feePartsOf, feeSharesOf, feeSlotsOf, feeTotalsOf } from "../fees";
 
 const AS_OF = "2026-10-25T03:00:00Z";
 
@@ -48,11 +48,30 @@ describe("feeTotalsOf and feeSharesOf", () => {
     const totals = feeTotalsOf(slots);
 
     expect(totals).toEqual({ lp: 80, protocol: 15, referral: 5 });
-    expect(feeSharesOf(totals)).toEqual({ lp: 0.8, protocol: 0.15, referral: 0.05 });
+    expect(totals && feeSharesOf(totals)).toEqual({ lp: 0.8, protocol: 0.15, referral: 0.05 });
   });
 
   // Mutation: the shares of a period without fees read as 0 % each — a split nobody paid.
   it("has no split for a period without fees", () => {
-    expect(feeSharesOf({ lp: 0, protocol: 0, referral: 0 })).toBeNull();
+    expect(feeSharesOf({ lp: 0, protocol: 0, referral: 0 })).toEqual({
+      lp: null,
+      protocol: null,
+      referral: null,
+    });
+  });
+
+  // Mutation: the totals started at zero — a period nothing valued read as one where nobody paid.
+  it("has no totals for a period without a known bar", () => {
+    const slots = feeSlotsOf("24h", AS_OF, [bar(hour(23), null, null, null)]);
+
+    expect(feeTotalsOf(slots)).toBeNull();
+  });
+
+  // Mutation: an unknown part read as 0 — the bar counted, its known parts' shares inflated.
+  it("leaves out a bar one of whose parts is unknown", () => {
+    const slots = feeSlotsOf("24h", AS_OF, [bar(hour(22), "60", "15", "5"), bar(hour(23), "20", null, "1")]);
+
+    expect(feePartsOf(slots.at(-1)!)).toBeNull();
+    expect(feeTotalsOf(slots)).toEqual({ lp: 60, protocol: 15, referral: 5 });
   });
 });
