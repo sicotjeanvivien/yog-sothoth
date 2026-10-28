@@ -369,8 +369,8 @@ so the weekly rollup is what keeps its chunk count, and the locks a dump or an
 unbounded lookup takes on every chunk, where they were. Its price: a rolled-up week
 keeps the batches of its seven days side by side, ~120 rows per mint each instead of
 one of ~840, ~46 % larger compressed than a week compressed whole (measured in
-review of 041). ⚠️ The rollup joins a chunk only to a fully compressed one before
-it: a write into a compressed chunk — a repair, a raw fixture — starts a new group.
+review of 041). ⚠️ The rollup joins a chunk only to the fully compressed chunk just
+before it.
 `tests/price_compression.rs` holds the settings and the lookups over compressed
 chunks.
 
