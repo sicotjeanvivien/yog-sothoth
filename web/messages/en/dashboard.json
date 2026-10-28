@@ -287,6 +287,7 @@
         "destination": "Destination",
         "share": "Share",
         "total": "{total} in total",
+        "noValue": "no valued fees",
         "periodTotal": "Total over {period}",
         "perHour": "Fees per hour",
         "perSixHours": "Fees per 6-hour slice",

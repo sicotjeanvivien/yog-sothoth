@@ -21,11 +21,15 @@ type FeeBar = {
 
 /** The fees in the period's slots, each part summed as `slotsOf` sums a bar. */
 export function feeSlotsOf(period: Period, asOf: string, bars: readonly FeeBar[]): FeeSlot[] {
+  // ⚠️ Before slotting: a 6-hour slice would add the known parts of an hour missing one.
+  const known = bars.filter(
+    (bar) => bar.lpFeesUsd !== null && bar.protocolFeesUsd !== null && bar.referralFeesUsd !== null,
+  );
   const slots = (pick: (bar: FeeBar) => string | null) =>
     slotsOf(
       period,
       asOf,
-      bars.map((bar) => ({ from: bar.from, value: pick(bar) })),
+      known.map((bar) => ({ from: bar.from, value: pick(bar) })),
     );
   const lp = slots((bar) => bar.lpFeesUsd);
   const protocol = slots((bar) => bar.protocolFeesUsd);

@@ -139,7 +139,7 @@ async function FeeSplit({ period, protocol }: TabProps) {
         : `${hourOf(slot.from)} UTC`;
     const parts = feePartsOf(slot);
     if (parts === null) {
-      return { segments: [], detail: { when, total: tVolume("noValue"), rows: [] } };
+      return { segments: [], detail: { when, total: t("noValue"), rows: [] } };
     }
     const height = (v: number) => Math.max(v > 0 ? 1 : 0, Math.round(scale(v)));
     return {

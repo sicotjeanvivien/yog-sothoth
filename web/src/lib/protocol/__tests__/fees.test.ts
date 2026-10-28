@@ -67,6 +67,16 @@ describe("feeTotalsOf and feeSharesOf", () => {
     expect(feeTotalsOf(slots)).toBeNull();
   });
 
+  // Mutation: an hour's parts kept when one is unknown — a 6-hour slice adding its LPs' part alone.
+  it("leaves out of a 7 days' slice an hour one of whose parts is unknown", () => {
+    const slots = feeSlotsOf("7d", AS_OF, [
+      bar("2026-10-24T21:00:00Z", "10", null, null),
+      bar("2026-10-24T22:00:00Z", "10", "2", "1"),
+    ]);
+
+    expect(slots.at(-1)).toMatchObject({ lp: 10, protocol: 2, referral: 1 });
+  });
+
   // Mutation: an unknown part read as 0 — the bar counted, its known parts' shares inflated.
   it("leaves out a bar one of whose parts is unknown", () => {
     const slots = feeSlotsOf("24h", AS_OF, [bar(hour(22), "60", "15", "5"), bar(hour(23), "20", null, "1")]);
