@@ -16,6 +16,14 @@ export const PERIOD_HOURS: Record<Period, number> = {
   "30d": 30 * 24,
 };
 
+/** A bar's width over each period: hourly bars are summed into it below a day. */
+export const SLOT_HOURS: Record<Period, number> = { "24h": 1, "7d": 6, "30d": 24 };
+
+/** Whether the period's bars are summed from the API's hours rather than read as its days. */
+export function readsHours(period: Period): boolean {
+  return SLOT_HOURS[period] < 24;
+}
+
 /** Closed whatever the facts hold, until its own times are measured on the prod. */
 export const CLOSED_PERIODS: ReadonlySet<Period> = new Set<Period>(["30d"]);
 

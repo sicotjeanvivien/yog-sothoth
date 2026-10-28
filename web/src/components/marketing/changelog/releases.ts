@@ -37,6 +37,15 @@ export const RELEASES: readonly Release[] = [
     summary: "An hour where nothing happened now counts 0, instead of missing like an hour nobody watched.",
     sections: [
       {
+        kind: "features",
+        items: [
+          {
+            text: "Over 7 days, the bar charts show 28 bars of 6 hours each, ending at the last complete hour, instead of 7 bars of a day.",
+            technical: false,
+          },
+        ],
+      },
+      {
         kind: "fixes",
         items: [
           {

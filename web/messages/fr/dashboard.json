@@ -124,8 +124,10 @@
       "volume": {
         "titleHourly": "Volume par heure · {period}",
         "titleDaily": "Volume par jour · {period}",
+        "titleSixHours": "Volume par tranche de 6 h · {period}",
         "infoHourly": "Ce qui s'est échangé, heure par heure, sur la période choisie.",
         "infoDaily": "Ce qui s'est échangé, par tranche de 24 heures finissant à la dernière heure complète, sur la période choisie.",
+        "infoSixHours": "Ce qui s'est échangé, par tranche de 6 heures finissant à la dernière heure complète, sur la période choisie.",
         "chartLabel": "Volume sur la période choisie, tous protocoles",
         "invite": "Survolez ou touchez une barre pour son détail",
         "today": "aujourd'hui",
@@ -133,6 +135,7 @@
         "noValue": "aucun volume valorisé",
         "feesHourly": "Fees par heure",
         "feesDaily": "Fees par jour",
+        "feesSixHours": "Fees par tranche de 6 h",
         "feesTotal": "{total} au total",
         "feesChartLabel": "Fees sur la période choisie, tous protocoles",
         "feesNoValue": "aucune fee valorisée"
@@ -212,6 +215,7 @@
         "tvlNow": "Maintenant : {tvl} · survolez ou touchez la courbe pour le détail",
         "flowsHourly": "Créations, ajouts et retraits par heure",
         "flowsDaily": "Créations, ajouts et retraits par jour",
+        "flowsSixHours": "Créations, ajouts et retraits par tranche de 6 h",
         "flowsLabel": "Liquidité créée, ajoutée et retirée sur la période choisie",
         "flowReading": "créé {created}, ajouté {added}, retiré {removed}, net {net}",
         "moves": {
@@ -237,11 +241,13 @@
         "share": "Part en rafale",
         "perHour": "Volume par heure",
         "perDay": "Volume par jour",
+        "perSixHours": "Volume par tranche de 6 h",
         "measuredSince": "Rafales mesurées depuis le {since}",
         "notMeasured": "Les rafales ne sont pas encore mesurées.",
         "periodTotal": "Total sur {period}",
         "chartLabelHourly": "Volume par heure, en rafale et hors rafale",
         "chartLabelDaily": "Volume par jour, en rafale et hors rafale",
+        "chartLabelSixHours": "Volume par tranche de 6 h, en rafale et hors rafale",
         "stats": {
           "title": "Les rafales · {period}",
           "info": "Les rafales commencées sur la période : leur nombre et celui de leurs pools, combien durent encore, leur durée du début à la fin (jusqu'ici pour celles en cours), et la part de leur volume échangée dans leur première heure.",

@@ -12,7 +12,7 @@ import { fetchSwapsSeries } from "@/lib/api/server/protocols";
 import { formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatUsdCompact } from "@/lib/format/format-usd";
-import { axisOf, CHART_PX, hourOf, roundTicks, slotsOf, type Slot } from "@/lib/overview/chart";
+import { axisOf, CHART_PX, daysAgoOf, hourOf, roundTicks, slotsOf, type Slot } from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
 import { sumUsd } from "@/lib/overview/totals";
 
@@ -23,12 +23,17 @@ import { VolumeBars } from "./volume-bars";
 
 const SECTION_CLASS = `${CELL_CLASS} ${SPAN.main} ${MIN_HEIGHT.volume}`;
 
+const TITLE = { "24h": "titleHourly", "7d": "titleSixHours", "30d": "titleDaily" } as const;
+
+const INFO = { "24h": "infoHourly", "7d": "infoSixHours", "30d": "infoDaily" } as const;
+
+const FEES = { "24h": "feesHourly", "7d": "feesSixHours", "30d": "feesDaily" } as const;
+
 export async function VolumeChart({ period }: { period: Period }) {
   const t = await getTranslations("Dashboard.Overview.volume");
   const tPeriod = await getTranslations("Dashboard.Overview.period");
   const locale = (await getLocale()) as FormatLocale;
-  const daily = period !== "24h";
-  const title = t(daily ? "titleDaily" : "titleHourly", {
+  const title = t(TITLE[period], {
     period: tPeriod(`short.${period}`),
   });
 
@@ -39,7 +44,7 @@ export async function VolumeChart({ period }: { period: Period }) {
     if (err instanceof ApiClientError) {
       return (
         <section aria-label={title} className={SECTION_CLASS}>
-          <BlockHeading title={title} info={t(daily ? "infoDaily" : "infoHourly")} />
+          <BlockHeading title={title} info={t(INFO[period])} />
           <BlockFailed kind={err.details.kind} />
         </section>
       );
@@ -60,9 +65,9 @@ export async function VolumeChart({ period }: { period: Period }) {
   const feeSlots = slotsFor((bar) => bar.feesUsd);
 
   const daysAgo = (days: number) => (days === 0 ? t("today") : t("daysAgo", { days }));
-  const dayLabel = (i: number) => daysAgo(slots.length - 1 - i);
+  const dayLabel = (i: number) => daysAgo(daysAgoOf(period, slots.length, i));
   const slotName = (slot: Slot, i: number) =>
-    daily
+    period !== "24h"
       ? `${dayLabel(i)} · ${formatUtcMoment(slot.from, locale)} → ${formatUtcMoment(slot.to, locale)}`
       : `${hourOf(slot.from)} UTC`;
 
@@ -104,7 +109,7 @@ export async function VolumeChart({ period }: { period: Period }) {
 
   return (
     <section aria-label={title} className={SECTION_CLASS}>
-      <BlockHeading title={title} info={t(daily ? "infoDaily" : "infoHourly")}>
+      <BlockHeading title={title} info={t(INFO[period])}>
         {closed === null && (
           <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] text-dash-ink-2">
             {protocols.map((p) => (
@@ -137,7 +142,7 @@ export async function VolumeChart({ period }: { period: Period }) {
               ticks={fees.ticks}
               axis={axis}
               height={CHART_PX.fees.height}
-              caption={t(daily ? "feesDaily" : "feesHourly")}
+              caption={t(FEES[period])}
               invite={t("feesTotal", { total: formatUsdCompact(feesTotal) })}
               label={t("feesChartLabel")}
             />
@@ -152,7 +157,7 @@ export async function VolumeChartPlaceholder({ period }: { period: Period }) {
   const t = await getTranslations("Dashboard.Overview");
   return (
     <BlockSkeleton
-      title={t(period === "24h" ? "volume.titleHourly" : "volume.titleDaily", {
+      title={t(`volume.${TITLE[period]}`, {
         period: t(`period.short.${period}`),
       })}
       span={SPAN.main}

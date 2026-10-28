@@ -41,13 +41,13 @@ describe("splitSlotsOf", () => {
   // only partly measured split as whole.
   it("leaves unsplit a bar that starts before the runs are measured", () => {
     const days = splitSlotsOf(
-      "7d",
+      "30d",
       AS_OF,
       [bar("2026-10-18T03:00:00Z", "700"), bar("2026-10-19T03:00:00Z", "300")],
       runsOf([bar("2026-10-19T03:00:00Z", "200")], "2026-10-18T04:00:00Z"),
     );
 
-    expect(days.slice(0, 2).map((s) => [s.total, s.inRuns])).toEqual([
+    expect(days.slice(23, 25).map((s) => [s.total, s.inRuns])).toEqual([
       [700, null],
       [300, 200],
     ]);
@@ -58,13 +58,13 @@ describe("splitSlotsOf", () => {
   it("leaves every bar unsplit when the runs end at another hour", () => {
     const later = "2026-10-25T04:00:00Z";
     const days = splitSlotsOf(
-      "7d",
+      "30d",
       AS_OF,
       [bar("2026-10-24T03:00:00Z", "300")],
       runsOf([bar("2026-10-24T04:00:00Z", "200")], "2026-10-01T00:00:00Z", later),
     );
 
-    expect(days.map((s) => s.inRuns)).toEqual(Array(7).fill(null));
+    expect(days.map((s) => s.inRuns)).toEqual(Array(30).fill(null));
   });
 });
 

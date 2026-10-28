@@ -35,7 +35,7 @@ import { formatCount } from "@/lib/format/format-count";
 import { formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { shortenPubkey } from "@/lib/format/pubkey";
-import { axisOf, hourOf, roundTicks } from "@/lib/overview/chart";
+import { axisOf, daysAgoOf, hourOf, roundTicks } from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
 import {
   durationOf,
@@ -52,6 +52,14 @@ import { VolumeSplitBars, type SplitDetail } from "./volume-split-bars";
 const CHART_PX = { height: 122, top: 112 } as const;
 
 const RUNS_SHOWN = 5;
+
+const PER_SLOT = { "24h": "perHour", "7d": "perSixHours", "30d": "perDay" } as const;
+
+const CHART_LABEL = {
+  "24h": "chartLabelHourly",
+  "7d": "chartLabelSixHours",
+  "30d": "chartLabelDaily",
+} as const;
 
 const SOURCES_SPAN = "col-span-12 dash-wide:col-span-8";
 
@@ -145,7 +153,6 @@ async function VolumeSources({ period, protocol }: TabProps) {
   const share = (part: number, whole: number) =>
     whole > 0 ? formatPercent(String(part / whole), locale) : "—";
 
-  const daily = period !== "24h";
   const slots = swaps.asOf === null ? [] : splitSlotsOf(period, swaps.asOf, swaps.items, runs);
   const totals = splitTotalsOf(slots);
   const max = Math.max(0, ...slots.map((s) => s.total ?? 0));
@@ -174,8 +181,9 @@ async function VolumeSources({ period, protocol }: TabProps) {
   };
 
   const bars = slots.map((slot, i) => {
-    const when = daily
-      ? `${daysAgo(slots.length - 1 - i)} · ${moment(slot.from)} → ${moment(slot.to)}`
+    const when =
+      period !== "24h"
+        ? `${daysAgo(daysAgoOf(period, slots.length, i))} · ${moment(slot.from)} → ${moment(slot.to)}`
       : `${hourOf(slot.from)} UTC`;
     const outside = outsideRuns(slot);
     if (slot.total === null) {
@@ -228,7 +236,7 @@ async function VolumeSources({ period, protocol }: TabProps) {
       ) : (
         <>
           <p className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <span className={LABEL_CLASS}>{t(daily ? "perDay" : "perHour")}</span>
+            <span className={LABEL_CLASS}>{t(PER_SLOT[period])}</span>
             {partly && (
               <span className="text-[12px] text-dash-ink-3">
                 {measuredSince === null
@@ -251,7 +259,7 @@ async function VolumeSources({ period, protocol }: TabProps) {
             }))}
             axis={axisOf(period, slots, daysAgo)}
             height={CHART_PX.height}
-            label={t(daily ? "chartLabelDaily" : "chartLabelHourly")}
+            label={t(CHART_LABEL[period])}
           />
         </>
       )}

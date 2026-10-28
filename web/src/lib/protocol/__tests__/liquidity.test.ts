@@ -47,4 +47,18 @@ describe("flowSlotsOf", () => {
     // Mutation: the creations read from the added column — a creation drawn as an addition.
     expect(slots.at(-1)).toMatchObject({ created: 7, added: 5, removed: 2 });
   });
+
+  // Mutation: each flow kept from one hour of the slice — a 6-hour bar worth its last hour.
+  it("sums each flow over the hours of a 7 days' slice", () => {
+    const hours = Array.from({ length: 6 }, (_, h) => ({
+      from: new Date(Date.parse("2026-10-24T06:00:00Z") + h * 3_600_000).toISOString(),
+      createdUsd: "1",
+      addedUsd: "2",
+      removedUsd: "3",
+    }));
+    const slots = flowSlotsOf("7d", "2026-10-24T12:00:00Z", hours);
+
+    expect(slots).toHaveLength(28);
+    expect(slots.at(-1)).toMatchObject({ created: 6, added: 12, removed: 18 });
+  });
 });

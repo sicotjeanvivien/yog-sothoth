@@ -7,6 +7,8 @@
 
 import { cache } from "react";
 
+import { readsHours } from "@/lib/overview/period";
+
 import { apiGet } from "../client/server";
 import {
   zGetPoolCreationTotalsResponse,
@@ -53,9 +55,9 @@ export const fetchPreviousSwapTotals = cache((scope: Scope, window: WindowRespon
   ),
 );
 
-/** Hour by hour over 24 h, by 24-hour slices ending at `asOf` beyond. */
+/** Hour by hour up to 7 days, by 24-hour slices ending at `asOf` beyond. */
 export const fetchSwapsSeries = cache((scope: Scope, window: WindowResponse) =>
-  window === "24h"
+  readsHours(window)
     ? apiGet(scopedPath(scope, "swaps/hourly"), { window }, zGetSwapsHourlyResponse)
     : apiGet(scopedPath(scope, "swaps/daily"), { window }, zGetSwapsDailyResponse),
 );
@@ -94,7 +96,7 @@ export const fetchLiquidityMoveTotals = cache(
 
 /** The protocol's liquidity flows, on the bars of `fetchSwapsSeries`. */
 export const fetchLiquiditySeries = cache((protocol: ProtocolResponse, window: WindowResponse) =>
-  window === "24h"
+  readsHours(window)
     ? apiGet(
         `/api/protocols/${protocol}/liquidity-moves/hourly`,
         { window },
@@ -119,7 +121,7 @@ export const fetchLargestLiquidityMoves = cache(
 
 /** The protocol's volume in rotation runs, on the bars of `fetchSwapsSeries`. */
 export const fetchRotationRunsSeries = cache((protocol: ProtocolResponse, window: WindowResponse) =>
-  window === "24h"
+  readsHours(window)
     ? apiGet(
         `/api/protocols/${protocol}/rotation-runs/hourly`,
         { window },
