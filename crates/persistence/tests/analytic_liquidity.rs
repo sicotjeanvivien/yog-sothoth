@@ -347,14 +347,15 @@ async fn the_hours_sum_their_moves_from_the_first_hour_valued_whole(pool: PgPool
     );
 }
 
-async fn insert_vesting_lock(pool: &PgPool, signature: &str, at: DateTime<Utc>) {
+async fn insert_vesting_lock(pool: &PgPool, address: &str, signature: &str, at: DateTime<Utc>) {
     sqlx::query(
         "INSERT INTO meteora_damm_v2_lock_position_events
            (pool_address, signature, position, owner, vesting, cliff_point, period_frequency,
             cliff_unlock_liquidity, liquidity_per_period, number_of_period, timestamp, slot,
             event_index)
-         VALUES ('pool', $1, 'position', 'owner', 'vesting', 0, 0, 0, 0, 0, $2, 0, 1)",
+         VALUES ($1, $2, 'position', 'owner', 'vesting', 0, 0, 0, 0, 0, $3, 0, 1)",
     )
+    .bind(address)
     .bind(signature)
     .bind(at)
     .execute(pool)
@@ -362,13 +363,14 @@ async fn insert_vesting_lock(pool: &PgPool, signature: &str, at: DateTime<Utc>) 
     .unwrap();
 }
 
-async fn insert_permanent_lock(pool: &PgPool, signature: &str, at: DateTime<Utc>) {
+async fn insert_permanent_lock(pool: &PgPool, address: &str, signature: &str, at: DateTime<Utc>) {
     sqlx::query(
         "INSERT INTO meteora_damm_v2_permanent_lock_position_events
            (pool_address, signature, position, lock_liquidity_amount,
             total_permanent_locked_liquidity, timestamp, slot, event_index)
-         VALUES ('pool', $1, 'position', 0, 0, $2, 0, 2)",
+         VALUES ($1, $2, 'position', 0, 0, $3, 0, 2)",
     )
+    .bind(address)
     .bind(signature)
     .bind(at)
     .execute(pool)
@@ -384,24 +386,31 @@ async fn move_lock(pool: &PgPool, tag: &str) -> Option<String> {
         .unwrap()
 }
 
-/// Mutation: the lock looked up by signature alone or by instant alone — another transaction's
-/// lock taken; the vesting lock preferred to the permanent one; or no lock left `NULL`, read as
-/// not measured.
+/// Mutation: the lock looked up without its signature, its instant or its pool — another
+/// transaction's or pool's lock taken; vesting preferred to permanent; or no lock left `NULL`.
 #[sqlx::test]
 async fn a_move_says_the_lock_its_transaction_puts_on_a_position(pool: PgPool) {
     let tranche = settled_hour() + Duration::minutes(10);
     let pool_x = setup_inflated_token(&pool, tranche).await;
     let at = tranche + Duration::minutes(1);
-    for tag in ["vesting", "permanent", "both", "none", "elsewhere"] {
+    for tag in [
+        "vesting",
+        "permanent",
+        "both",
+        "none",
+        "elsewhere",
+        "other-pool",
+    ] {
         insert_creation(&pool, &pool_x, tag, (1, 1), at).await;
     }
     insert_move(&pool, &pool_x, "add", "add", (1, 0), at).await;
-    insert_vesting_lock(&pool, "vesting", at).await;
-    insert_permanent_lock(&pool, "permanent", at).await;
-    insert_vesting_lock(&pool, "both", at).await;
-    insert_permanent_lock(&pool, "both", at).await;
-    insert_vesting_lock(&pool, "another-transaction", at).await;
-    insert_permanent_lock(&pool, "elsewhere", at - Duration::days(1)).await;
+    insert_vesting_lock(&pool, &pool_x, "vesting", at).await;
+    insert_permanent_lock(&pool, &pool_x, "permanent", at).await;
+    insert_vesting_lock(&pool, &pool_x, "both", at).await;
+    insert_permanent_lock(&pool, &pool_x, "both", at).await;
+    insert_vesting_lock(&pool, &pool_x, "another-transaction", at).await;
+    insert_permanent_lock(&pool, &pool_x, "elsewhere", at - Duration::days(1)).await;
+    insert_permanent_lock(&pool, "another-pool", "other-pool", at).await;
 
     value(&pool, tranche, tranche).await;
 
@@ -411,6 +420,7 @@ async fn a_move_says_the_lock_its_transaction_puts_on_a_position(pool: PgPool) {
         ("both", "permanent"),
         ("none", "none"),
         ("elsewhere", "none"),
+        ("other-pool", "none"),
         ("add", "none"),
     ] {
         assert_eq!(move_lock(&pool, tag).await.as_deref(), Some(lock), "{tag}");

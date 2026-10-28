@@ -1,5 +1,6 @@
 /** The pools tab's chart, as data: the pools born in each bar. */
 
+import type { LiquidityMoveLockResponse } from "@/lib/api/schema/zod.gen";
 import { slotsOf, type Slot } from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
 
@@ -23,8 +24,6 @@ export function birthTotalOf(slots: readonly Slot[]): number | null {
 }
 
 /** The word of a creation's lock: `unmeasured` for a move valued before it was measured. */
-export function lockKey(
-  lock: "none" | "vesting" | "permanent" | null | undefined,
-): "none" | "vesting" | "permanent" | "unmeasured" {
+export function lockKey(lock: LiquidityMoveLockResponse | null): LiquidityMoveLockResponse | "unmeasured" {
   return lock ?? "unmeasured";
 }

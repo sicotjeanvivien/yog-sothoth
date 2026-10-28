@@ -74,8 +74,8 @@ prices just written for the swaps: what the pool traded bounds them, not the mar
 TVL, a token without a market price counts 0: one small trade's price never values a whole
 stock deposited (a pool created with 10¹⁴ units of such a token was worth $5,751 billion by
 its tranche's trade); a move none of whose moved tokens has a market price stays unvalued, and an
-empty one is worth 0. Each move also says the lock its transaction puts on a position — permanent,
-vesting or none, permanent first when it holds both — `NULL` for a move valued before 043. A deposit of a
+empty one is worth 0. Each move also says the lock its transaction puts on a position of its pool —
+permanent, vesting or none, permanent first when it holds both — `NULL` for a move valued before 043. A deposit of a
 token the market overprices is worth what the pool would pay for it — on the dev week,
 $3.09 million of deposits in tranches with a swap, $19.41 million at market. In a
 tranche where the pool did not swap, the anchor keeps its market price and the other

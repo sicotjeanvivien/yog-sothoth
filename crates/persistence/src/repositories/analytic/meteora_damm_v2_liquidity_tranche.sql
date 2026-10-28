@@ -28,12 +28,17 @@ INSERT INTO analytic_liquidity_moves (
     signature, event_index, timestamp, bucket, pool_address, protocol, owner, kind, lock, amount_usd
 )
 SELECT m.signature, m.event_index, m.timestamp, $1, m.pool_address, $2, m.owner, m.kind,
-       -- ⚠️ Permanent first: a transaction locking both ways keeps the stronger lock.
+       -- ⚠️ Permanent first: a transaction locking both ways keeps the stronger lock. The tranche's
+       -- constant bounds too: the planner excludes chunks on them, never on `m.timestamp`.
        CASE WHEN EXISTS (SELECT 1 FROM meteora_damm_v2_permanent_lock_position_events l
-                          WHERE l.signature = m.signature AND l.timestamp = m.timestamp)
+                          WHERE l.signature = m.signature AND l.timestamp = m.timestamp
+                            AND l.pool_address = m.pool_address
+                            AND l.timestamp >= $1 AND l.timestamp < $1::TIMESTAMPTZ + $3::INTERVAL)
             THEN 'permanent'
             WHEN EXISTS (SELECT 1 FROM meteora_damm_v2_lock_position_events l
-                          WHERE l.signature = m.signature AND l.timestamp = m.timestamp)
+                          WHERE l.signature = m.signature AND l.timestamp = m.timestamp
+                            AND l.pool_address = m.pool_address
+                            AND l.timestamp >= $1 AND l.timestamp < $1::TIMESTAMPTZ + $3::INTERVAL)
             THEN 'vesting'
             ELSE 'none' END,
        yog_pool_amounts_usd(m.amount_a, m.amount_b, m.dec_a, m.dec_b,
