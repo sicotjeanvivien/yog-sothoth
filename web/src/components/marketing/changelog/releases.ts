@@ -34,7 +34,7 @@ export const RELEASES: readonly Release[] = [
   {
     version: "v0.5.0",
     date: "2026-10-28",
-    summary: "DAMM v2 has a third tab, Fees: where its fees go, to the LPs, the protocol or the referral, and what the LPs take back.",
+    summary: "DAMM v2 has two new tabs: Fees, where its fees go and what the LPs take back, and Pools & positions, the pools being born.",
     sections: [
       {
         kind: "features",
@@ -48,6 +48,10 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
+            text: "The Pools & positions tab of DAMM v2: the pools born over the period, bar by bar, and the five whose first deposit is worth the most, with their pair, creator and age.",
+            technical: false,
+          },
+          {
             text: "yog-analytic values each claim of a position's fees or rewards once, at its pool's price in the tranche as a liquidity move (one shared function, yog_pool_amounts_usd), a reward outside its pool at its market price; /api/protocols/{protocol}/position-fee-claims/totals and /reward-claims/totals serve their totals. Migration 042.",
             technical: true,
           },
@@ -57,6 +61,10 @@ export const RELEASES: readonly Release[] = [
           },
           {
             text: "/api/protocols/{protocol}/rotation-runs/hourly and /daily serve each bar's volume split by the runs — volumeUsd, now every swap of the bar, inRunsUsd and outsideRunsUsd — and the Volume tab reads that one route instead of matching it with swaps/hourly.",
+            technical: true,
+          },
+          {
+            text: "/api/protocols/{protocol}/liquidity-moves and /api/pools/{pool}/liquidity-moves take ?kind=create|add|remove to keep one kind of move; the cursor carries it.",
             technical: true,
           },
         ],

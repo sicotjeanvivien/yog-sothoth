@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
 use super::{
-    LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveOrder, LiquidityMoveScope,
+    LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveList, LiquidityMoveOrder,
 };
 use crate::domain::{FrozenPeriod, Protocol, ProtocolBucket, Window};
 use crate::{Page, RepositoryResult};
@@ -35,13 +35,13 @@ pub trait LiquidityMoveLookup: Send + Sync {
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<LiquidityFlows>>>;
 
-    /// `scope`'s valued moves in `period`, the period of `window`, in `order`, after `cursor`'s
+    /// `list`'s valued moves in `period`, the period of `window`, in `order`, after `cursor`'s
     /// key; forward only.
     async fn list_moves(
         &self,
         period: &FrozenPeriod,
         window: Window,
-        scope: LiquidityMoveScope,
+        list: LiquidityMoveList,
         order: LiquidityMoveOrder,
         cursor: Option<LiquidityMoveCursor>,
         limit: i64,

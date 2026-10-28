@@ -61,8 +61,8 @@ pub use kept_prices::{KeptPrices, PRICE_MAX_AGE_LATEST};
 pub use liquidity_change_event::{LiquidityChangeEvent, LiquidityChangeEventLookup};
 pub use liquidity_flow::{LiquidityFlowRepository, PoolLiquidityFlow};
 pub use liquidity_moves::{
-    LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveKind, LiquidityMoveLookup,
-    LiquidityMoveOrder, LiquidityMoveScope,
+    LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveKind, LiquidityMoveList,
+    LiquidityMoveLookup, LiquidityMoveOrder, LiquidityMoveScope,
 };
 pub use materialization_backlog::{MaterializationBacklog, MaterializationBacklogRepository};
 pub use meteora::{

@@ -1614,6 +1614,11 @@ export const zListPoolLiquidityMovesQuery = z.object({
         '7d',
         '30d'
     ]).optional(),
+    kind: z.union([
+        z.literal('create'),
+        z.literal('add'),
+        z.literal('remove')
+    ]).nullish(),
     sort: z.enum(['amount', 'at']).optional(),
     cursor: z.string().min(1).nullish(),
     limit: z.int().gte(1).lte(200).optional()
@@ -1888,6 +1893,11 @@ export const zListProtocolLiquidityMovesQuery = z.object({
         '7d',
         '30d'
     ]).optional(),
+    kind: z.union([
+        z.literal('create'),
+        z.literal('add'),
+        z.literal('remove')
+    ]).nullish(),
     sort: z.enum(['amount', 'at']).optional(),
     cursor: z.string().min(1).nullish(),
     limit: z.int().gte(1).lte(200).optional()

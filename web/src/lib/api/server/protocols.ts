@@ -13,6 +13,8 @@ import { apiGet } from "../client/server";
 import {
   zGetPoolCreationTotalsResponse,
   zGetProtocolLiquidityMovesDailyResponse,
+  zGetProtocolPoolCreationsDailyResponse,
+  zGetProtocolPoolCreationsHourlyResponse,
   zGetProtocolLiquidityMovesHourlyResponse,
   zGetProtocolLiquidityMoveTotalsResponse,
   zGetProtocolPositionFeeClaimTotalsResponse,
@@ -132,6 +134,31 @@ export const fetchLargestLiquidityMoves = cache(
     apiGet(
       `/api/protocols/${protocol}/liquidity-moves`,
       { window, sort: "amount", limit: String(limit) },
+      zListProtocolLiquidityMovesResponse,
+    ),
+);
+
+/** The pools the protocol saw born, hour by hour up to 7 days, by 24-hour slices beyond. */
+export const fetchPoolCreationsSeries = cache((protocol: ProtocolResponse, window: WindowResponse) =>
+  readsHours(window)
+    ? apiGet(
+        `/api/protocols/${protocol}/pool-creations/hourly`,
+        { window },
+        zGetProtocolPoolCreationsHourlyResponse,
+      )
+    : apiGet(
+        `/api/protocols/${protocol}/pool-creations/daily`,
+        { window },
+        zGetProtocolPoolCreationsDailyResponse,
+      ),
+);
+
+/** The pools' creations whose first deposit is worth the most, valued. */
+export const fetchLargestPoolCreations = cache(
+  (protocol: ProtocolResponse, window: WindowResponse, limit: number) =>
+    apiGet(
+      `/api/protocols/${protocol}/liquidity-moves`,
+      { window, kind: "create", sort: "amount", limit: String(limit) },
       zListProtocolLiquidityMovesResponse,
     ),
 );

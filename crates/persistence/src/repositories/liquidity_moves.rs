@@ -10,8 +10,9 @@ use sqlx::PgPool;
 use yog_core::{
     Cursor, Page, RepositoryResult,
     domain::{
-        FrozenPeriod, LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup,
-        LiquidityMoveOrder, LiquidityMoveScope, Protocol, ProtocolBucket, Window,
+        FrozenPeriod, LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveKind,
+        LiquidityMoveList, LiquidityMoveLookup, LiquidityMoveOrder, LiquidityMoveScope, Protocol,
+        ProtocolBucket, Window,
     },
 };
 
@@ -143,11 +144,12 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
         &self,
         period: &FrozenPeriod,
         window: Window,
-        scope: LiquidityMoveScope,
+        list: LiquidityMoveList,
         order: LiquidityMoveOrder,
         cursor: Option<LiquidityMoveCursor>,
         limit: i64,
     ) -> RepositoryResult<Page<LiquidityMove>> {
+        let kind = list.kind.map(LiquidityMoveKind::as_str);
         let had_cursor = cursor.is_some();
         let (after_amount, after_at, after_signature, after_index) = match cursor {
             Some(c) => (
@@ -161,7 +163,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
             ),
             None => (None, None, None, None),
         };
-        let rows = match (scope, order) {
+        let rows = match (list.scope, order) {
             (LiquidityMoveScope::Protocol(protocol), LiquidityMoveOrder::Amount) => sqlx::query_as!(
                 LiquidityMoveRow,
                 r#"
@@ -177,6 +179,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
                  WHERE m.protocol = $3
                    AND m.timestamp >= $1 AND m.timestamp < $2
                    AND m.amount_usd IS NOT NULL
+                   AND ($9::TEXT IS NULL OR m.kind = $9)
                    -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits, the column more.
                    AND ($4::NUMERIC IS NULL
                         OR ROUND(m.amount_usd, 6) < $4
@@ -194,6 +197,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
                 after_signature,
                 after_index,
                 limit + 1,
+                kind,
             )
             .fetch_all(&self.pool)
             .await
@@ -213,6 +217,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
                  WHERE m.protocol = $3
                    AND m.timestamp >= $1 AND m.timestamp < $2
                    AND m.amount_usd IS NOT NULL
+                   AND ($8::TEXT IS NULL OR m.kind = $8)
                    AND ($4::TIMESTAMPTZ IS NULL
                         OR m.timestamp < $4
                         OR (m.timestamp = $4 AND (m.signature, m.event_index) > ($5, $6)))
@@ -226,6 +231,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
                 after_signature,
                 after_index,
                 limit + 1,
+                kind,
             )
             .fetch_all(&self.pool)
             .await
@@ -245,6 +251,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
                  WHERE m.pool_address = $3
                    AND m.timestamp >= $1 AND m.timestamp < $2
                    AND m.amount_usd IS NOT NULL
+                   AND ($9::TEXT IS NULL OR m.kind = $9)
                    -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits, the column more.
                    AND ($4::NUMERIC IS NULL
                         OR ROUND(m.amount_usd, 6) < $4
@@ -262,6 +269,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
                 after_signature,
                 after_index,
                 limit + 1,
+                kind,
             )
             .fetch_all(&self.pool)
             .await
@@ -281,6 +289,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
                  WHERE m.pool_address = $3
                    AND m.timestamp >= $1 AND m.timestamp < $2
                    AND m.amount_usd IS NOT NULL
+                   AND ($8::TEXT IS NULL OR m.kind = $8)
                    AND ($4::TIMESTAMPTZ IS NULL
                         OR m.timestamp < $4
                         OR (m.timestamp = $4 AND (m.signature, m.event_index) > ($5, $6)))
@@ -294,6 +303,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
                 after_signature,
                 after_index,
                 limit + 1,
+                kind,
             )
             .fetch_all(&self.pool)
             .await
@@ -306,7 +316,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
         let page =
             PageBuilder::new(moves, limit, QueryMode::Forward, had_cursor).finalize(|(m, key)| {
                 Cursor::LiquidityMove(Box::new(LiquidityMoveCursor {
-                    scope,
+                    list,
                     window,
                     as_of: period.as_of,
                     order,

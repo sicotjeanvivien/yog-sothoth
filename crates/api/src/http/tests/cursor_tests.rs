@@ -14,8 +14,8 @@ use crate::http::error::ApiError;
 use yog_core::{
     Cursor,
     domain::{
-        EventCursor, EventScope, LiquidityMoveCursor, LiquidityMoveOrder, LiquidityMoveScope,
-        Protocol, SignalCursor, Window,
+        EventCursor, EventScope, LiquidityMoveCursor, LiquidityMoveKind, LiquidityMoveList,
+        LiquidityMoveOrder, LiquidityMoveScope, Protocol, SignalCursor, Window,
     },
 };
 
@@ -45,13 +45,18 @@ fn signal_cursor_round_trip() {
     assert_eq!(decoded, original);
 }
 
-/// Mutation: the scope or the window not written to, or not read from, the wire — a page of a
-/// pool followed under its protocol, or the service comparing a cursor to its list on a default.
+/// Mutation: the scope, the kind or the window not written to, or not read from, the wire — a
+/// page of a pool followed under its protocol, of the creations over every move, or compared on a
+/// default.
 #[test]
 fn liquidity_move_cursor_round_trip() {
     let scope = LiquidityMoveScope::Pool(Pubkey::new_unique());
-    let original = LiquidityMoveCursor {
+    let list = LiquidityMoveList {
         scope,
+        kind: Some(LiquidityMoveKind::Create),
+    };
+    let original = LiquidityMoveCursor {
+        list,
         window: Window::Week,
         as_of: ts(1_700_000_400),
         order: LiquidityMoveOrder::At,
@@ -61,10 +66,15 @@ fn liquidity_move_cursor_round_trip() {
         event_index: 3,
     };
     let encoded = encode_cursor(&Cursor::LiquidityMove(Box::new(original.clone()))).unwrap();
-    let decoded = decode_liquidity_move_cursor(&encoded, scope, LiquidityMoveOrder::At).unwrap();
-    let elsewhere = LiquidityMoveScope::Protocol(Protocol::MeteoraDammV2);
+    let decoded = decode_liquidity_move_cursor(&encoded, list, LiquidityMoveOrder::At).unwrap();
+    let elsewhere = LiquidityMoveList {
+        scope: LiquidityMoveScope::Protocol(Protocol::MeteoraDammV2),
+        ..list
+    };
+    let every_kind = LiquidityMoveList { kind: None, ..list };
     assert_eq!(decoded, original);
     assert!(decode_liquidity_move_cursor(&encoded, elsewhere, LiquidityMoveOrder::At).is_err());
+    assert!(decode_liquidity_move_cursor(&encoded, every_kind, LiquidityMoveOrder::At).is_err());
 }
 
 /// Mutation: the protocol not written to, or not read from, the wire — every page after the

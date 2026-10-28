@@ -25,6 +25,17 @@ pub enum LiquidityMoveKind {
     Remove,
 }
 
+impl LiquidityMoveKind {
+    /// ⚠️ The labels `analytic_liquidity_moves.kind` holds: another would match no stored move.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            LiquidityMoveKind::Create => "create",
+            LiquidityMoveKind::Add => "add",
+            LiquidityMoveKind::Remove => "remove",
+        }
+    }
+}
+
 /// One valued liquidity move, with the identity of its pool's tokens.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiquidityMove {
@@ -48,6 +59,13 @@ pub enum LiquidityMoveScope {
     Pool(Pubkey),
 }
 
+/// Which moves a list reads: its scope's, of one kind when it keeps one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LiquidityMoveList {
+    pub scope: LiquidityMoveScope,
+    pub kind: Option<LiquidityMoveKind>,
+}
+
 /// The order of a list of liquidity moves; each breaks its ties the same way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LiquidityMoveOrder {
@@ -58,11 +76,11 @@ pub enum LiquidityMoveOrder {
     At,
 }
 
-/// The key of the last move of a page, and the list it was read from — its scope, window,
-/// order and instant: a page of another list, or read after a freeze, would not follow.
+/// The key of the last move of a page, and the list it was read from — its scope and kind,
+/// window, order and instant: a page of another list, or read after a freeze, would not follow.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiquidityMoveCursor {
-    pub scope: LiquidityMoveScope,
+    pub list: LiquidityMoveList,
     pub window: Window,
     pub as_of: DateTime<Utc>,
     pub order: LiquidityMoveOrder,

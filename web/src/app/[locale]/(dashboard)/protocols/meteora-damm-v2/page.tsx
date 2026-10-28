@@ -20,6 +20,7 @@ import { OVERVIEW_ADVANCED_COOKIE } from "@/components/dashboard/overview/overvi
 import { StaleBanner } from "@/components/dashboard/overview/overview-states";
 import { FeesTab } from "@/components/dashboard/protocol/fees/fees-tab";
 import { LiquidityTab } from "@/components/dashboard/protocol/liquidity/liquidity-tab";
+import { PoolsTab } from "@/components/dashboard/protocol/pools/pools-tab";
 import { ProtocolHeader } from "@/components/dashboard/protocol/protocol-header";
 import { FeesRateKpi, ProtocolFeesKpi } from "@/components/dashboard/protocol/protocol-kpis";
 import { ProtocolTabs } from "@/components/dashboard/protocol/protocol-tabs";
@@ -102,6 +103,7 @@ export default async function DammV2Page({ params, searchParams }: ProtocolPageP
       {tab === "liquidity" && <LiquidityTab period={period} protocol={PROTOCOL} />}
       {tab === "volume" && <VolumeTab period={period} protocol={PROTOCOL} />}
       {tab === "fees" && <FeesTab period={period} protocol={PROTOCOL} />}
+      {tab === "pools" && <PoolsTab period={period} protocol={PROTOCOL} />}
     </OverviewMode>
   );
 }

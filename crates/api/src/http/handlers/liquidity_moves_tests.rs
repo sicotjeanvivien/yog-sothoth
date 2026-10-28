@@ -15,17 +15,22 @@ async fn the_protocol_moves_take_a_protocol_of_the_domain() {
     }
 }
 
-/// Mutation: the protocol or the order read as a free string, or a cursor decoded without its
-/// scope — an unknown one answered empty, or a page of a pool followed under its protocol.
+/// Mutation: the protocol, the order or the kind read as a free string, or a cursor decoded
+/// without its scope — an unknown one answered empty, or a page of a pool followed elsewhere.
 #[tokio::test]
 async fn an_unknown_protocol_order_or_a_cursor_of_another_list_is_refused() {
     use yog_core::{
         Cursor,
-        domain::{LiquidityMoveCursor, LiquidityMoveOrder, LiquidityMoveScope, Window},
+        domain::{
+            LiquidityMoveCursor, LiquidityMoveList, LiquidityMoveOrder, LiquidityMoveScope, Window,
+        },
     };
     let pool_cursor =
         crate::http::cursor::encode_cursor(&Cursor::LiquidityMove(Box::new(LiquidityMoveCursor {
-            scope: LiquidityMoveScope::Pool(pk(1)),
+            list: LiquidityMoveList {
+                scope: LiquidityMoveScope::Pool(pk(1)),
+                kind: None,
+            },
             window: Window::Day,
             as_of: chrono::Utc::now(),
             order: LiquidityMoveOrder::Amount,
@@ -42,6 +47,7 @@ async fn an_unknown_protocol_order_or_a_cursor_of_another_list_is_refused() {
         "/api/protocols/meteora_damm_v2/liquidity-moves?limit=201".to_owned(),
         "/api/protocols/meteora_damm_v2/liquidity-moves?window=1h".to_owned(),
         "/api/protocols/meteora_damm_v2/liquidity-moves?sort=volume".to_owned(),
+        "/api/protocols/meteora_damm_v2/liquidity-moves?kind=burn".to_owned(),
         format!("/api/protocols/meteora_damm_v2/liquidity-moves?cursor={pool_cursor}"),
     ] {
         let (status, content_type, body) = get(&uri).await;

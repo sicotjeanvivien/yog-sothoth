@@ -5,8 +5,13 @@ use std::sync::Arc;
 
 use rust_decimal::Decimal;
 use yog_core::domain::{
-    LiquidityMoveCursor, LiquidityMoveOrder, LiquidityMoveScope, Protocol, Window,
+    LiquidityMoveCursor, LiquidityMoveList, LiquidityMoveOrder, LiquidityMoveScope, Protocol,
+    Window,
 };
+
+fn every_kind(scope: LiquidityMoveScope) -> LiquidityMoveList {
+    LiquidityMoveList { scope, kind: None }
+}
 
 use super::{LiquidityMoveService, MovesError};
 use crate::testing::{
@@ -71,7 +76,7 @@ async fn the_moves_wait_for_their_protocols_liquidity() {
             service(repo)
                 .list_liquidity_moves(
                     Window::Day,
-                    scope,
+                    every_kind(scope),
                     pool.protocol,
                     LiquidityMoveOrder::Amount,
                     None,
@@ -97,7 +102,7 @@ async fn a_cursor_of_another_list_or_before_the_last_freeze_is_refused() {
     });
     let svc = service(&repo);
     let cursor = |as_of, window, address| LiquidityMoveCursor {
-        scope: LiquidityMoveScope::Pool(address),
+        list: every_kind(LiquidityMoveScope::Pool(address)),
         window,
         as_of,
         order: LiquidityMoveOrder::Amount,
@@ -109,7 +114,7 @@ async fn a_cursor_of_another_list_or_before_the_last_freeze_is_refused() {
     let read = |c| {
         svc.list_liquidity_moves(
             Window::Day,
-            LiquidityMoveScope::Pool(pool.pool_address),
+            every_kind(LiquidityMoveScope::Pool(pool.pool_address)),
             pool.protocol,
             LiquidityMoveOrder::Amount,
             Some(c),
