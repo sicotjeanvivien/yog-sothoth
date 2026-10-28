@@ -298,7 +298,9 @@ path, parameters, 200 body. Its DTOs derive `ToSchema`. The OpenAPI document
 read from that list is committed as [`openapi.json`](./openapi.json), and the
 web generates its zod from it — see
 [`web/README.md`](../../web/README.md#the-api-contract). The API does not serve
-it.
+it; the web does, at `/openapi.json` and on its developers page. Its
+`info.version` is this crate's version, raised to each release: a web test holds
+it to the changelog's latest.
 
 What the derive cannot say is said once:
 

@@ -85,7 +85,9 @@ not a rendering surprise.
 
 The schemas are **generated**, not written: `npm run gen:api` rewrites
 `schema/zod.gen.ts` from `crates/api/openapi.json`, the OpenAPI document the API
-derives from its routes ([`crates/api/README.md`](../crates/api/README.md#the-contract)).
+derives from its routes ([`crates/api/README.md`](../crates/api/README.md#the-contract)),
+and copies that document to `public/openapi.json`, served as is at
+`/openapi.json` and read by the developers page: the image is built from `web/` alone.
 The names are the Rust ones — `zSignalResponse` and its type `SignalResponse`,
 `EmbeddedTokenResponse` for a token inside a signal — and each route has its
 response schema, named after the handler (`zListSignalsResponse`). A fetcher
@@ -450,9 +452,9 @@ hides the rest.
 `src/config/site.ts` holds the site's origin, the preview image
 (`public/og-image.png`, one for every page and both languages) and the pages in
 two lists: `SITEMAP_PATHS`, which `app/sitemap.ts` lists and `app/robots.ts`
-points at, the Overview included, and `UNLISTED_PATHS`, the signal feed, served
-with its metadata but kept out of the sitemap — its reads are live, slow, and
-fail with the API. The locale layout sets `metadataBase`
+points at, the Overview included, and `UNLISTED_PATHS`, served
+with their metadata but kept out of the sitemap: the signal feed, whose reads
+are live, slow, and fail with the API, and the developers page. The locale layout sets `metadataBase`
 and the only title template, `%s — ${SITE_NAME}`. Each page builds its metadata
 through `lib/seo/page-metadata.ts` — title, description, preview, canonical
 without parameters, its two languages and `x-default` to the unprefixed path —
@@ -462,6 +464,23 @@ the layout's `og:title`.
 A new page goes in one of the two lists and calls `pageMetadata`, or
 `lib/seo/__tests__/seo.test.ts` fails. Cloudflare prepends its own comments to
 `robots.txt`: check the `Sitemap:` line on the prod, after it.
+
+## Developers page
+
+`/developers` lists every route of the API contract by family, with its
+parameters and the fields of its response, and sends one from the browser —
+its `curl`, the cursor's pages, Problem Details on failure, the signal stream
+listened to. It is unlisted: `noindex`, out of the sitemap, and no link of the
+site or the dashboard leads to it.
+
+The page reads `public/openapi.json` on the server through
+`lib/developers/contract.ts`. A route of a new first segment
+has no family until `FAMILY_OF_SEGMENT` names one, and the build fails until
+then. CI's `contract` job fails when `public/openapi.json` differs from
+`crates/api/openapi.json`. A test holds the contract's
+`info.version`, the API crate's version, to the latest release of the
+changelog: a new release fails it until `crates/api/Cargo.toml` is raised and
+the contract regenerated.
 
 ## Operator announcements
 

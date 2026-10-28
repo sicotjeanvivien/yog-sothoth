@@ -21,8 +21,8 @@ export const SITEMAP_PATHS = [
   "/terms",
 ] as const;
 
-/** Served with their metadata, out of the sitemap: their reads are live, slow, and fail with the API. */
-export const UNLISTED_PATHS = ["/signals"] as const;
+/** Served with their metadata, out of the sitemap. */
+export const UNLISTED_PATHS = ["/signals", "/developers"] as const;
 
 export type PagePath = (typeof SITEMAP_PATHS)[number] | (typeof UNLISTED_PATHS)[number];
 

@@ -85,7 +85,7 @@ jobs:
       - id: contract
         uses: ./.github/actions/changes
         with:
-          pattern: '^(crates/api/|Cargo\.(toml|lock)$|rust-toolchain\.toml$|web/src/lib/api/schema/|web/openapi-ts\.config\.ts$|web/package(-lock)?\.json$|\.github/workflows/crates\.yml$)'
+          pattern: '^(crates/api/|Cargo\.(toml|lock)$|rust-toolchain\.toml$|web/src/lib/api/schema/|web/public/openapi\.json$|web/openapi-ts\.config\.ts$|web/package(-lock)?\.json$|\.github/workflows/crates\.yml$)'
 
   check:
     name: Check
@@ -523,10 +523,10 @@ jobs:
         run: npm run gen:api
       - name: Nothing differs from what is committed
         run: |
-          changed=$(git status --porcelain -- web/src/lib/api/schema)
+          changed=$(git status --porcelain -- web/src/lib/api/schema web/public/openapi.json)
           if [ -n "$changed" ]; then
             echo "$changed"
-            git diff -- web/src/lib/api/schema | head -100
+            git diff -- web/src/lib/api/schema web/public/openapi.json | head -100
             echo "::error::regenerate: npm run gen:api in web/"
             exit 1
           fi

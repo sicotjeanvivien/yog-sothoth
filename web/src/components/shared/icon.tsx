@@ -204,3 +204,14 @@ export const ChevronLeftIcon: React.FC<IconProps> = ({
     <path d="M15 5.25 8.25 12 15 18.75" />
   </svg>
 );
+
+export const SearchIcon: React.FC<IconProps> = ({
+  size = 16,
+  strokeWidth = 1.8,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="m16 16 4.5 4.5" />
+  </svg>
+);
