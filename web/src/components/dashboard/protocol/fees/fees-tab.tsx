@@ -1,10 +1,10 @@
 /**
  * The tab 03 of a protocol's page: where its fees go — the LPs, the protocol, the referral — over
- * the period and bar by bar. The server words every reading; the chart only tracks the bar under
- * the pointer.
+ * the period and bar by bar, then what the LPs claimed. The server words every reading; the chart
+ * only tracks the bar under the pointer.
  */
 
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import {
@@ -19,7 +19,12 @@ import { BlockHeading, closedReason, PeriodNotice } from "@/components/dashboard
 import { BlockFailed, BlockSkeleton } from "@/components/dashboard/overview/overview-states";
 import { ApiClientError } from "@/lib/api/errors";
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
-import { fetchSwapsSeries } from "@/lib/api/server/protocols";
+import {
+  fetchPositionFeeClaimTotals,
+  fetchRewardClaimTotals,
+  fetchSwapsSeries,
+} from "@/lib/api/server/protocols";
+import { formatCount } from "@/lib/format/format-count";
 import { formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
@@ -41,7 +46,11 @@ import { FEE_TONE } from "./fee-tones";
 /** The chart's height, and its tallest bar a little under it for the top mark's label. */
 const CHART_PX = { height: 122, top: 112 } as const;
 
-const SPLIT_SPAN = "col-span-12";
+const SPLIT_SPAN = "col-span-12 dash-wide:col-span-8";
+
+const CLAIMS_SPAN = "col-span-12 dash-wide:col-span-4";
+
+const CLAIMS_CLASS = `${CELL_CLASS} ${CLAIMS_SPAN} min-h-[380px]`;
 
 const SPLIT_CLASS = `${CELL_CLASS} ${SPLIT_SPAN} min-h-[380px]`;
 
@@ -74,6 +83,19 @@ export async function FeesTab({ period, protocol }: TabProps) {
         fallback={<BlockSkeleton title={t("title")} span={SPLIT_SPAN} minHeight="min-h-[380px]" shape="chart" />}
       >
         <FeeSplit period={period} protocol={protocol} />
+      </Suspense>
+      <Suspense
+        key={`claims-${period}`}
+        fallback={
+          <BlockSkeleton
+            title={t("claims.title")}
+            span={CLAIMS_SPAN}
+            minHeight="min-h-[380px]"
+            shape={{ rows: 3 }}
+          />
+        }
+      >
+        <LpClaims period={period} protocol={protocol} />
       </Suspense>
     </div>
   );
@@ -221,6 +243,87 @@ async function FeeSplit({ period, protocol }: TabProps) {
             />
           </div>
         </div>
+      )}
+    </section>
+  );
+}
+
+async function LpClaims({ period, protocol }: TabProps) {
+  const t = await getTranslations("Dashboard.Protocol.fees.claims");
+  const tPeriod = await getTranslations("Dashboard.Overview.period");
+  const title = t("title");
+  const short = tPeriod(`short.${period}`);
+
+  let fees, rewards;
+  try {
+    [fees, rewards] = await Promise.all([
+      fetchPositionFeeClaimTotals(protocol, period),
+      fetchRewardClaimTotals(protocol, period),
+    ]);
+  } catch (err) {
+    if (err instanceof ApiClientError) {
+      return (
+        <section aria-label={title} className={CLAIMS_CLASS}>
+          <BlockHeading title={title} info={t("info")} />
+          <BlockFailed kind={err.details.kind} />
+        </section>
+      );
+    }
+    throw err;
+  }
+
+  const closed = await closedReason(period, fees);
+  const feeClaims = fees.items.find((i) => i.protocol === protocol);
+  const rewardClaims = rewards.items.find((i) => i.protocol === protocol);
+
+  const stat = (label: string, big: string, sub: ReactNode, last = false) => (
+    <div className={`flex flex-col gap-1 py-3 ${last ? "" : "border-b border-dash-rule"}`}>
+      <span className={LABEL_CLASS}>{label}</span>
+      <span className="font-dash-mono text-[24px] leading-[1.1] font-medium tracking-[-0.02em] text-dash-ink tabular-nums">
+        {big}
+      </span>
+      <span className="text-[12px] text-dash-ink-2">{sub}</span>
+    </div>
+  );
+  const claimed = (
+    totals: { claims: number; claimsValued: number; amountUsd: string; owners: number } | undefined,
+    event: string,
+  ) => (
+    <>
+      {totals === undefined ? "—" : t("addresses", { owners: formatCount(totals.owners), count: totals.owners })}
+      {totals !== undefined && totals.claimsValued < totals.claims && (
+        <>
+          {" · "}
+          {t("unvalued", {
+            n: formatCount(totals.claims - totals.claimsValued),
+            count: totals.claims - totals.claimsValued,
+          })}
+        </>
+      )}
+      {" · "}
+      <span className="font-dash-mono text-[11px] text-dash-ink-3">{event}</span>
+    </>
+  );
+
+  return (
+    <section aria-label={title} className={CLAIMS_CLASS}>
+      <BlockHeading title={title} info={t("info")} />
+      {closed !== null ? (
+        <PeriodNotice reason={closed} />
+      ) : (
+        <>
+          {stat(
+            t("feesClaimed", { period: short }),
+            formatUsdCompact(feeClaims?.amountUsd ?? null),
+            claimed(feeClaims, "claim_position_fee"),
+          )}
+          {stat(
+            t("rewardsClaimed", { period: short }),
+            formatUsdCompact(rewardClaims?.amountUsd ?? null),
+            claimed(rewardClaims, "claim_reward"),
+            true,
+          )}
+        </>
       )}
     </section>
   );

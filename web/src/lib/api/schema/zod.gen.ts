@@ -997,6 +997,16 @@ export const zPoolDetailResponse = zPoolResponse.and(z.object({
 
 export type PoolDetailResponse = z.infer<typeof zPoolDetailResponse>;
 
+export const zProtocolClaimTotalsResponse = z.object({
+    amountUsd: zUnsignedDecimal,
+    claims: zCount,
+    claimsValued: zCount,
+    owners: zCount,
+    protocol: zProtocolResponse
+});
+
+export type ProtocolClaimTotalsResponse = z.infer<typeof zProtocolClaimTotalsResponse>;
+
 export const zProtocolDiscoveredTvlResponse = z.object({
     at: z.iso.datetime({ offset: true }),
     pools: zCount,
@@ -1277,6 +1287,22 @@ export const zWindowedResponsePoolSwapBucketResponse = z.object({
 });
 
 export type WindowedResponsePoolSwapBucketResponse = z.infer<typeof zWindowedResponsePoolSwapBucketResponse>;
+
+export const zWindowedResponseProtocolClaimTotalsResponse = z.object({
+    asOf: z.iso.datetime({ offset: true }).nullable(),
+    coveredSince: z.iso.datetime({ offset: true }).nullable(),
+    from: z.iso.datetime({ offset: true }).nullable(),
+    items: z.array(z.object({
+        amountUsd: zUnsignedDecimal,
+        claims: zCount,
+        claimsValued: zCount,
+        owners: zCount,
+        protocol: zProtocolResponse
+    })),
+    window: zWindowResponse
+});
+
+export type WindowedResponseProtocolClaimTotalsResponse = z.infer<typeof zWindowedResponseProtocolClaimTotalsResponse>;
 
 export const zWindowedResponseProtocolDiscoveredTvlResponse = z.object({
     asOf: z.iso.datetime({ offset: true }).nullable(),
@@ -2005,6 +2031,20 @@ export const zListProtocolPositionFeeClaimsQuery = z.object({
 
 export const zListProtocolPositionFeeClaimsResponse = zPageResponsePositionFeeClaimEventResponse;
 
+export const zGetProtocolPositionFeeClaimTotalsPath = z.object({
+    protocol: z.string()
+});
+
+export const zGetProtocolPositionFeeClaimTotalsQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional()
+});
+
+export const zGetProtocolPositionFeeClaimTotalsResponse = zWindowedResponseProtocolClaimTotalsResponse;
+
 export const zListProtocolProtocolFeeClaimsPath = z.object({
     protocol: z.string()
 });
@@ -2052,6 +2092,20 @@ export const zListProtocolRewardClaimsQuery = z.object({
 });
 
 export const zListProtocolRewardClaimsResponse = zPageResponseRewardClaimEventResponse;
+
+export const zGetProtocolRewardClaimTotalsPath = z.object({
+    protocol: z.string()
+});
+
+export const zGetProtocolRewardClaimTotalsQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional()
+});
+
+export const zGetProtocolRewardClaimTotalsResponse = zWindowedResponseProtocolClaimTotalsResponse;
 
 export const zListProtocolRotationRunsPath = z.object({
     protocol: z.string()

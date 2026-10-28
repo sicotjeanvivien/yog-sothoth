@@ -37,7 +37,8 @@ persistence/
 │   │   │                     repositories yet)
 │   │   ├── pool/, pool_current_state/ (the registry, and the catalog the API pages:
 │   │   │                     a page of keys first, then their entries)
-│   │   ├── swap_activity/, pool_creations/, liquidity_moves/, discovered_tvl/, protocol_tvl.rs
+│   │   ├── swap_activity/, pool_creations/, liquidity_moves/, discovered_tvl/, protocol_tvl.rs,
+│   │   │   claim_totals.rs
 │   │   │                     (the produced resources the API reads by scope:
 │   │   │                     every protocol, one protocol, one pool)
 │   │   ├── protocol_activity.rs, token_activity/ (the frozen hours every
@@ -615,7 +616,8 @@ tokens — the rate the tranche traded at, from the aggregate's `traded_a` and
 each direction's gross trusted leg through `yog_moved_amount_usd` (025): both read
 one snapshot of the aggregate, which carries the buys' input fees in B beside the
 B fees of both directions.
-Only the liquidity tranche below also reads a market price, to cap the last bounded one, and no
+Only the liquidity and claims tranches below also read a market price, to cap the last bounded
+one or to price a reward outside its pool, and no
 view a binary reads values a swap by the hour
 (`tests/analytic_prices.rs`): the hourly priced view (023) is left to the
 activity view alone. The two 5-minute tables are kept 7 days, as the raw swaps.
@@ -645,7 +647,18 @@ liquidity started being measured, which the reads take as its coverage. The move
 kept 31 days, a day past the longest window: a chunk is dropped whole; `tests/analytic_liquidity.rs` holds the price rule and
 the start.
 
-**Read by scope.** One repository per produced resource (`swap_activity.rs`, `pool_creations.rs`, `liquidity_moves.rs`, `protocol_tvl.rs`, `discovered_tvl.rs`) reads the same tables for the routes under
+**The claims (042).** The pools' prices a move is valued at are a SQL function,
+`meteora_damm_v2_tranche_pool_prices(tranche, width, pools)`: each statement passes its own
+pools, and the anchor counts them with the tranche's swaps; a move and a claim of fees are worth
+their two amounts at those prices through one function, `yog_pool_amounts_usd`. A third statement
+(`meteora_damm_v2_claims_tranche.sql`) reads the tranche's claims of fees and rewards and writes
+each one, valued once, into `analytic_position_fee_claims` and `analytic_reward_claims`, kept 31
+days as the moves; `analytic_tranches.claims` marks the tranches written with them, the first
+being the claims' coverage. `claim_totals.rs` reads their totals over the frozen period on the
+rows themselves — the distinct owners do not add up by hour. `tests/analytic_claims.rs` holds
+the price rules, the totals and the coverage.
+
+**Read by scope.** One repository per produced resource (`swap_activity.rs`, `pool_creations.rs`, `liquidity_moves.rs`, `claim_totals.rs`, `protocol_tvl.rs`, `discovered_tvl.rs`) reads the same tables for the routes under
 the rules of `crates/api/README.md`: one static query per resource and cut, the protocol
 (`$n::TEXT IS NULL OR protocol = $n`) or the pool in the `WHERE`, so every one stays
 checked at compile time. The swaps by pool read `analytic_pool_hourly`, which 037 opens to

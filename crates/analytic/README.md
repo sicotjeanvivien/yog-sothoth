@@ -5,7 +5,8 @@ two tokens of every pool **once** per closed 5-minute tranche into
 `analytic_pool_prices_5min`, and values that tranche's swaps at those prices
 into `analytic_pool_5min`, then each of its liquidity moves into
 `analytic_liquidity_moves`, summed per protocol and hour into
-`analytic_protocol_liquidity_hourly`; draws the rotation runs from the tranches into
+`analytic_protocol_liquidity_hourly`, and each claim of a position's fees or rewards into
+`analytic_position_fee_claims` and `analytic_reward_claims`; draws the rotation runs from the tranches into
 `analytic_rotation_runs` and `analytic_rotation_run_hours`; sums the tranches per pool and hour into
 `analytic_pool_hourly`, and those facts per protocol into
 `analytic_protocol_hourly`; counts the pools born per protocol and hour into
@@ -72,7 +73,8 @@ without a liquidity event — is worth its two amounts at its pool's prices in t
 prices just written for the swaps: what the pool traded bounds them, not the market. As in the
 TVL, a token without a market price counts 0: one small trade's price never values a whole
 stock deposited (a pool created with 10¹⁴ units of such a token was worth $5,751 billion by
-its tranche's trade); a move none of whose moved tokens has a market price stays unvalued. A deposit of a
+its tranche's trade); a move none of whose moved tokens has a market price stays unvalued, and an
+empty one is worth 0. A deposit of a
 token the market overprices is worth what the pool would pay for it — on the dev week,
 $3.09 million of deposits in tranches with a swap, $19.41 million at market. In a
 tranche where the pool did not swap, the anchor keeps its market price and the other
@@ -80,6 +82,18 @@ token takes the lower of its market price and the pool's last bounded one: never
 than the pool last traded it, nor than the market now. A pool never priced in the last
 seven days — the price table's — has no bound, and its move stays unvalued, counted.
 Pools that only move liquidity stay out of the swaps' facts: they are not active pools.
+
+## The value of a claim
+
+A claim of a position's fees is worth its two amounts at the price a move of the same pool
+would take in the tranche — the same rule, a token without a market price counting 0; an
+empty claim, both amounts 0, is worth 0, priced or not: it took nothing. A reward in a token
+of its pool takes that side's price under the same condition; a reward in another token, its
+market price (`yog_price_asof`) at the end of the tranche, once its pool's mints are known:
+unresolved, the reward may be one of them. Without a price or decimals,
+`amount_usd` stays `NULL`, the claim counted unvalued. No backfill:
+`analytic_tranches.claims` marks the tranches written with their claims, and the first of them
+is when the claims started being measured.
 
 ## The rotation runs
 

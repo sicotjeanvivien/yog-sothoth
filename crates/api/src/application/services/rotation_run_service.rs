@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use chrono::{DateTime, DurationRound, TimeDelta, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use rust_decimal::Decimal;
 use yog_core::{
     Page, RepositoryError, RepositoryResult,
@@ -14,7 +14,7 @@ use yog_core::{
     },
 };
 
-use super::period::{BucketPeriod, Measured, build_frozen_period};
+use super::period::{BucketPeriod, Measured, build_frozen_period, first_whole_hour, measured_from};
 
 /// How far behind the last tranche written a cursor's end stays accepted, for pages read slowly.
 const CURSOR_END_MARGIN: TimeDelta = TimeDelta::hours(1);
@@ -84,12 +84,7 @@ impl RotationRunService {
             .find_measured_since(protocol)
             .await?
             .map(|since| first_whole_hour(since + RUN_GAP));
-        // ⚠️ Not measured yet: covered from `as_of` on, so no period reads as covered.
-        let covered_since = since.map_or(period.as_of, |since| since.max(period.covered_since));
-        Ok(Some(FrozenPeriod {
-            covered_since,
-            ..period
-        }))
+        Ok(Some(measured_from(period, since)))
     }
 
     pub(crate) async fn get_totals(
@@ -156,16 +151,6 @@ impl RotationRunService {
             (None, _) => Vec::new(),
         };
         Ok(Measured { period, items })
-    }
-}
-
-/// The first hour that starts at or after `at`: an hour measured from its start.
-fn first_whole_hour(at: DateTime<Utc>) -> DateTime<Utc> {
-    let start = at.duration_trunc(TimeDelta::hours(1)).unwrap_or(at);
-    if start == at {
-        at
-    } else {
-        start + TimeDelta::hours(1)
     }
 }
 

@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) AS \"claims!\", COUNT(amount_usd) AS \"claims_valued!\",\n                   COALESCE(SUM(amount_usd), 0) AS \"amount_usd!\",\n                   COUNT(DISTINCT owner) AS \"owners!\"\n              FROM analytic_position_fee_claims\n             WHERE protocol = $3 AND timestamp >= $1 AND timestamp < $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "claims!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "claims_valued!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "amount_usd!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "owners!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "6bd1fa33bf88399c56ca516b2d6b08d2486e7c6ed988cf8b93fe83cb4ec3d74f"
+}

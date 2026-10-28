@@ -219,6 +219,12 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
             handlers::liquidity_moves::get_protocol_liquidity_move_totals
         ))
         .routes(routes!(
+            handlers::claim_totals::get_protocol_position_fee_claim_totals
+        ))
+        .routes(routes!(
+            handlers::claim_totals::get_protocol_reward_claim_totals
+        ))
+        .routes(routes!(
             handlers::liquidity_moves::get_protocol_liquidity_moves_hourly
         ))
         .routes(routes!(

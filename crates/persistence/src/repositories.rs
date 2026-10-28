@@ -1,5 +1,6 @@
 mod analytic;
 mod announcement;
+mod claim_totals;
 mod event_freshness;
 mod helper;
 
@@ -35,6 +36,7 @@ mod watched_pool;
 
 pub use analytic::PgAnalyticRepository;
 pub use announcement::PgAnnouncementRepository;
+pub use claim_totals::PgClaimTotalsRepository;
 pub use discovered_tvl::PgDiscoveredTvlRepository;
 pub use event_freshness::PgEventFreshnessRepository;
 pub use liquidity_change_event::PgLiquidityChangeEventRepository;

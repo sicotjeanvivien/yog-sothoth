@@ -16,7 +16,9 @@ import {
   zGetProtocolLiquidityMovesDailyResponse,
   zGetProtocolLiquidityMovesHourlyResponse,
   zGetProtocolLiquidityMoveTotalsResponse,
+  zGetProtocolPositionFeeClaimTotalsResponse,
   zGetProtocolResponse,
+  zGetProtocolRewardClaimTotalsResponse,
   zGetProtocolRotationRunsDailyResponse,
   zGetProtocolRotationRunsHourlyResponse,
   zGetProtocolRotationRunTotalsResponse,
@@ -92,6 +94,25 @@ export const fetchLiquidityMoveTotals = cache(
       { window },
       zGetProtocolLiquidityMoveTotalsResponse,
     ),
+);
+
+/** The fees the protocol's positions claimed over the window, valued. */
+export const fetchPositionFeeClaimTotals = cache(
+  (protocol: ProtocolResponse, window: WindowResponse) =>
+    apiGet(
+      `/api/protocols/${protocol}/position-fee-claims/totals`,
+      { window },
+      zGetProtocolPositionFeeClaimTotalsResponse,
+    ),
+);
+
+/** The rewards the protocol's positions claimed over the window, valued. */
+export const fetchRewardClaimTotals = cache((protocol: ProtocolResponse, window: WindowResponse) =>
+  apiGet(
+    `/api/protocols/${protocol}/reward-claims/totals`,
+    { window },
+    zGetProtocolRewardClaimTotalsResponse,
+  ),
 );
 
 /** The protocol's liquidity flows, on the bars of `fetchSwapsSeries`. */

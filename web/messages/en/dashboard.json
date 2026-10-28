@@ -294,7 +294,15 @@
         "perDay": "Fees per day",
         "chartLabelHourly": "Fees per hour, by destination",
         "chartLabelSixHours": "Fees per 6-hour slice, by destination",
-        "chartLabelDaily": "Fees per day, by destination"
+        "chartLabelDaily": "Fees per day, by destination",
+        "claims": {
+          "title": "What the LPs take back",
+          "info": "Liquidity providers get their fees only when they claim them: these figures are what was actually withdrawn, valued at the pool's price at the moment of the claim, a reward outside the pool at its market price.",
+          "feesClaimed": "Fees claimed · {period}",
+          "rewardsClaimed": "Rewards claimed · {period}",
+          "addresses": "{owners} {count, plural, one {address} other {addresses}}",
+          "unvalued": "{n} not valued"
+        }
       }
     },
     "BlockError": {

@@ -11,18 +11,18 @@ use yog_persistence::PgAnalyticRepository;
 use super::helpers::{pk, price_at, setup_roles_and_connect_as, sqrt_price_x64};
 
 /// The first tranche of the hour three hours back: settled, and the start of its hour.
-fn settled_hour() -> DateTime<Utc> {
+pub(super) fn settled_hour() -> DateTime<Utc> {
     (Utc::now() - Duration::hours(3))
         .duration_trunc(Duration::hours(1))
         .unwrap()
 }
 
-fn dec(value: &str) -> BigDecimal {
+pub(super) fn dec(value: &str) -> BigDecimal {
     value.parse().unwrap()
 }
 
 /// A pool of `token` (6 decimals) against SOL (9 decimals).
-async fn setup_pool(pool: &PgPool, seed: u8, token: &str, sol: &str) -> String {
+pub(super) async fn setup_pool(pool: &PgPool, seed: u8, token: &str, sol: &str) -> String {
     let address = pk(seed).to_string();
     sqlx::query(
         "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint)
@@ -50,7 +50,14 @@ async fn setup_pool(pool: &PgPool, seed: u8, token: &str, sol: &str) -> String {
 }
 
 /// A swap of `a` token units for `b` lamports, without fee.
-async fn insert_swap(pool: &PgPool, address: &str, tag: &str, a: i64, b: i64, at: DateTime<Utc>) {
+pub(super) async fn insert_swap(
+    pool: &PgPool,
+    address: &str,
+    tag: &str,
+    a: i64,
+    b: i64,
+    at: DateTime<Utc>,
+) {
     sqlx::query(
         "INSERT INTO meteora_damm_v2_swap_events
            (pool_address, signature, trade_direction,
@@ -96,7 +103,7 @@ async fn insert_move(
 }
 
 /// Values the tranches from `first` through `last`, at the first instant the last one may be.
-async fn value(pool: &PgPool, first: DateTime<Utc>, last: DateTime<Utc>) {
+pub(super) async fn value(pool: &PgPool, first: DateTime<Utc>, last: DateTime<Utc>) {
     let progress = AnalyticProgress {
         first_hour: Some(first.duration_trunc(Duration::hours(1)).unwrap()),
         last_frozen: None,
@@ -118,7 +125,7 @@ async fn move_usd(pool: &PgPool, tag: &str) -> Option<BigDecimal> {
 
 /// Token X trades at 0.0001 SOL in its pool while its market says $1; SOL is at $100 and is the
 /// anchor, traded in a second pool. Returns the pool of X.
-async fn setup_inflated_token(pool: &PgPool, tranche: DateTime<Utc>) -> String {
+pub(super) async fn setup_inflated_token(pool: &PgPool, tranche: DateTime<Utc>) -> String {
     let (x, y, sol) = (pk(10).to_string(), pk(11).to_string(), pk(12).to_string());
     let pool_x = setup_pool(pool, 1, &x, &sol).await;
     let pool_y = setup_pool(pool, 2, &y, &sol).await;
@@ -176,9 +183,10 @@ async fn a_move_without_a_swap_takes_the_lower_of_its_market_and_the_last_bounde
     assert_eq!(move_usd(&pool, "remove").await, Some(dec("10.05")));
 }
 
-/// Mutation: a pool never priced valued anyway, at market or at its mid price.
+/// Mutation: a pool never priced valued anyway, at market or at its mid price; or an empty move
+/// left to the price, read as not valued when it moved nothing.
 #[sqlx::test]
-async fn a_move_in_a_pool_never_priced_is_not_valued(pool: PgPool) {
+async fn a_move_in_a_pool_never_priced_is_not_valued_and_an_empty_one_is_worth_zero(pool: PgPool) {
     let tranche = settled_hour() + Duration::minutes(10);
     setup_inflated_token(&pool, tranche).await;
     let (z, sol) = (pk(13).to_string(), pk(12).to_string());
@@ -193,10 +201,12 @@ async fn a_move_in_a_pool_never_priced_is_not_valued(pool: PgPool) {
         tranche,
     )
     .await;
+    insert_move(&pool, &pool_z, "empty", "add", (0, 0), tranche).await;
 
     value(&pool, tranche, tranche).await;
 
     assert_eq!(move_usd(&pool, "new").await, None);
+    assert_eq!(move_usd(&pool, "empty").await, Some(dec("0")));
 }
 
 /// Mutation: the newest price row taken whatever it holds — its side without a price leaves

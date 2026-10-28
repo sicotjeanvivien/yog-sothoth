@@ -34,7 +34,7 @@ export const RELEASES: readonly Release[] = [
   {
     version: "v0.5.0",
     date: "2026-10-28",
-    summary: "DAMM v2 has a third tab, Fees: where its fees go, to the LPs, the protocol or the referral.",
+    summary: "DAMM v2 has a third tab, Fees: where its fees go, to the LPs, the protocol or the referral, and what the LPs take back.",
     sections: [
       {
         kind: "features",
@@ -42,6 +42,14 @@ export const RELEASES: readonly Release[] = [
           {
             text: "The Fees tab of DAMM v2: the period's fees by destination — the LPs, the protocol, the referral — with each one's amount and share, and the fees per bar stacked by destination, the bar under the pointer detailed under the chart.",
             technical: false,
+          },
+          {
+            text: "Beside it, what the LPs take back: the fees and the rewards their positions claimed over the period, valued, with the addresses that claimed them. Measured from this release on.",
+            technical: false,
+          },
+          {
+            text: "yog-analytic values each claim of a position's fees or rewards once, at its pool's price in the tranche as a liquidity move (one shared function, yog_pool_amounts_usd), a reward outside its pool at its market price; /api/protocols/{protocol}/position-fee-claims/totals and /reward-claims/totals serve their totals. Migration 042.",
+            technical: true,
           },
         ],
       },

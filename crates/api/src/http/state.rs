@@ -10,12 +10,13 @@ use tokio_util::sync::CancellationToken;
 use yog_persistence::PgHealthChecker;
 
 use crate::application::{
-    AnnouncementService, DiscoveredTvlService, EnrichedSignal, IngestionService,
-    LiquidityChangeEventService, LiquidityMoveService, NetworkService, PoolChangeEventService,
-    PoolCreationEventService, PoolCreationsService, PoolService, PositionChangeEventService,
-    PositionFeeClaimEventService, ProtocolCatalogService, ProtocolFeeClaimEventService,
-    ProtocolTvlService, RewardChangeEventService, RewardClaimEventService, RotationRunService,
-    SignalService, SwapActivityService, SwapEventService, TokenService, WorkSlots,
+    AnnouncementService, ClaimTotalsService, DiscoveredTvlService, EnrichedSignal,
+    IngestionService, LiquidityChangeEventService, LiquidityMoveService, NetworkService,
+    PoolChangeEventService, PoolCreationEventService, PoolCreationsService, PoolService,
+    PositionChangeEventService, PositionFeeClaimEventService, ProtocolCatalogService,
+    ProtocolFeeClaimEventService, ProtocolTvlService, RewardChangeEventService,
+    RewardClaimEventService, RotationRunService, SignalService, SwapActivityService,
+    SwapEventService, TokenService, WorkSlots,
 };
 
 /// The services and the runtime handles the router and handlers read. Handlers never reach a
@@ -37,6 +38,7 @@ pub(crate) struct AppState {
     pub(crate) swap_activity_service: Arc<SwapActivityService>,
     pub(crate) pool_creations_service: Arc<PoolCreationsService>,
     pub(crate) liquidity_move_service: Arc<LiquidityMoveService>,
+    pub(crate) claim_totals_service: Arc<ClaimTotalsService>,
     pub(crate) rotation_run_service: Arc<RotationRunService>,
     pub(crate) protocol_tvl_service: Arc<ProtocolTvlService>,
     pub(crate) discovered_tvl_service: Arc<DiscoveredTvlService>,

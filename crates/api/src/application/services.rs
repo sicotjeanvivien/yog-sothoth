@@ -1,6 +1,7 @@
 //! Application services, between the HTTP handlers and the `yog-core` repository traits.
 
 mod announcement_service;
+mod claim_totals_service;
 mod discovered_tvl_service;
 mod ingestion_service;
 mod liquidity_change_event_service;
@@ -25,6 +26,7 @@ mod swap_event_service;
 mod token_service;
 
 pub(crate) use announcement_service::AnnouncementService;
+pub(crate) use claim_totals_service::ClaimTotalsService;
 pub(crate) use discovered_tvl_service::DiscoveredTvlService;
 pub(crate) use ingestion_service::{IngestionAggregate, IngestionService};
 pub(crate) use liquidity_change_event_service::LiquidityChangeEventService;

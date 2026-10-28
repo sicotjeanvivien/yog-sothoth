@@ -38,6 +38,8 @@ core/src/
 │   ├── rotation_runs/     (RotationRun, its totals, order, scope and cursor —
 │   │                       RotationRunLookup; TranchePeriod, through the last tranche
 │   │                       written, in analytic/window.rs)
+│   ├── claim_totals/      (ClaimTotals, the claims of fees or rewards by protocol —
+│   │                       ClaimTotalsLookup)
 │   ├── protocol_tvl/      (ProtocolTvl, a reading at an instant — ProtocolTvlLookup)
 │   ├── discovered_tvl/    (ProtocolDiscoveredTvl — DiscoveredTvlLookup)
 │   ├── protocol_activity/ (ProtocolActivityLookup: the frozen hours every measure is read over)
@@ -269,7 +271,7 @@ Each domain aggregate that needs persistence declares a repository trait in its 
 At runtime, the connected Postgres role determines which methods actually succeed: calling `insert` from the api process fails with `permission denied` from Postgres itself, by design (see [Database roles](../README.md#database-roles)). Where a trait's write side and read side have disjoint consumers, the trait is split per consumer — one lens per process, same `Pg*` struct behind both. The write/owning side keeps the `*Repository` name; read lenses are named by intent, from a deliberately small vocabulary:
 
 - **`*Feed`** — a cursor-paginated listing in a fixed order (`SignalFeed` by time, `TokenActivityFeed` by volume).
-- **`*Lookup`** — point reads by key or of a projection (`TokenMetadataLookup`, `TokenPriceLookup`, `NetworkStatusLookup`, `ProtocolActivityLookup`, and the produced resources by scope: `SwapActivityLookup`, `PoolCreationsLookup`, `LiquidityMoveLookup`, `ProtocolTvlLookup`, `DiscoveredTvlLookup`).
+- **`*Lookup`** — point reads by key or of a projection (`TokenMetadataLookup`, `TokenPriceLookup`, `NetworkStatusLookup`, `ProtocolActivityLookup`, and the produced resources by scope: `SwapActivityLookup`, `PoolCreationsLookup`, `LiquidityMoveLookup`, `ClaimTotalsLookup`, `ProtocolTvlLookup`, `DiscoveredTvlLookup`).
 - **`PoolCatalog`** — the consultation surface of the pool registry (batch lookup + counts).
 - **`PoolAccountResolver`** — context's property-backfill lens, named by its capability.
 

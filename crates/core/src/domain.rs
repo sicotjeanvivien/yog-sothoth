@@ -1,5 +1,6 @@
 mod analytic;
 mod announcements;
+mod claim_totals;
 mod discovered_tvl;
 mod domain_event;
 mod event_cursor;
@@ -49,6 +50,7 @@ pub use announcements::{
     Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementKind, AnnouncementLookup,
     AnnouncementSeverity, AnnouncementStatus,
 };
+pub use claim_totals::{ClaimTotals, ClaimTotalsLookup};
 pub use discovered_tvl::{DiscoveredTvlLookup, ProtocolDiscoveredTvl};
 pub use domain_event::DomainEvent;
 pub use event_cursor::{EventCursor, EventScope};
