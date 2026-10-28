@@ -75,6 +75,7 @@ impl AnalyticRepository for PgAnalyticRepository {
         )
         .await?;
         meteora_damm_v2::upsert_births(&mut tx, cycle.from, cycle.through).await?;
+        meteora_damm_v2::upsert_position_changes(&mut tx, cycle.from, cycle.through).await?;
         record_hours(&mut tx, cycle.from, cycle.through).await?;
         let hours_frozen = match cycle.freeze_through {
             Some(through) => {

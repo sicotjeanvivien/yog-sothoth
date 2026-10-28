@@ -15,6 +15,7 @@ import {
   zGetProtocolLiquidityMovesDailyResponse,
   zGetProtocolPoolCreationsDailyResponse,
   zGetProtocolPoolCreationsHourlyResponse,
+  zGetProtocolPositionChangeTotalsResponse,
   zGetProtocolLiquidityMovesHourlyResponse,
   zGetProtocolLiquidityMoveTotalsResponse,
   zGetProtocolPositionFeeClaimTotalsResponse,
@@ -136,6 +137,16 @@ export const fetchLargestLiquidityMoves = cache(
       `/api/protocols/${protocol}/liquidity-moves`,
       { window, sort: "amount", limit: String(limit), ...(kind === undefined ? {} : { kind }) },
       zListProtocolLiquidityMovesResponse,
+    ),
+);
+
+/** The positions the protocol opened, locked, split and closed over the window. */
+export const fetchPositionChangeTotals = cache(
+  (protocol: ProtocolResponse, window: WindowResponse) =>
+    apiGet(
+      `/api/protocols/${protocol}/position-changes/totals`,
+      { window },
+      zGetProtocolPositionChangeTotalsResponse,
     ),
 );
 

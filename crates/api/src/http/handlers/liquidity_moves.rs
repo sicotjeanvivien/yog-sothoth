@@ -49,7 +49,7 @@ pub(crate) async fn get_protocol_liquidity_move_totals(
         items: measured
             .items
             .into_iter()
-            .map(|flows| ProtocolLiquidityFlowsResponse::new(protocol, flows))
+            .map(|totals| ProtocolLiquidityFlowsResponse::new(protocol, totals))
             .collect::<Vec<_>>(),
     };
     Ok(Json(WindowedResponse::new(window, measured)))

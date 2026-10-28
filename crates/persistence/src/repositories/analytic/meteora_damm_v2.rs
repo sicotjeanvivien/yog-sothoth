@@ -172,6 +172,42 @@ pub(super) async fn upsert_births(
     Ok(())
 }
 
+/// The positions opened, locked, split and closed in the hours `from..=through`, each hour
+/// rewritten whole, zero included; an hour missing since the last one written is written too.
+pub(super) async fn upsert_position_changes(
+    tx: &mut Transaction<'static, Postgres>,
+    from: DateTime<Utc>,
+    through: DateTime<Utc>,
+) -> RepositoryResult<()> {
+    sqlx::query!(
+        r#"
+        INSERT INTO analytic_protocol_position_changes_hourly
+            (protocol, bucket, opened, vesting_locks, permanent_locks, splits, closed)
+        SELECT $3, c.*
+          FROM meteora_damm_v2_position_changes(
+                   LEAST($1, (SELECT MAX(bucket) + INTERVAL '1 hour'
+                                FROM analytic_protocol_position_changes_hourly
+                               WHERE protocol = $3)),
+                   $2) AS c
+        ON CONFLICT (protocol, bucket) DO UPDATE SET
+            opened          = EXCLUDED.opened,
+            vesting_locks   = EXCLUDED.vesting_locks,
+            permanent_locks = EXCLUDED.permanent_locks,
+            splits          = EXCLUDED.splits,
+            closed          = EXCLUDED.closed
+        -- ⚠️ A frozen hour, before `from`, is written once: missing, never rewritten.
+        WHERE analytic_protocol_position_changes_hourly.bucket >= $1
+        "#,
+        from,
+        through,
+        Protocol::MeteoraDammV2.as_str(),
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(map_sqlx_error)?;
+    Ok(())
+}
+
 /// The current TVL of the pools first seen in each window ending with `hour`, their birth
 /// unobserved, counted among those `pool_current_tvl` holds: what a variation of the TVL would
 /// take for a deposit. 0 for a window without.

@@ -33,13 +33,16 @@ core/src/
 │   │                       or pool change is one of several events, MeteoraDammV2*Change;
 │   │                       EventScope, EventCursor and its window_start in event_cursor.rs)
 │   ├── pool_creations/    (PoolCreations, by protocol — PoolCreationsLookup)
-│   ├── liquidity_moves/   (LiquidityMove and its LiquidityMoveLock, LiquidityFlows, its order,
+│   ├── liquidity_moves/   (LiquidityMove and its LiquidityMoveLock, LiquidityFlows and
+│   │                       LiquidityTotals, its order,
 │   │                       list (scope and kind) and cursor —
 │   │                       LiquidityMoveLookup)
 │   ├── rotation_runs/     (RotationRun, its totals, order, scope and cursor; RunSplit, a bar's
 │   │                       volume split by the runs —
 │   │                       RotationRunLookup; TranchePeriod, through the last tranche
 │   │                       written, in analytic/window.rs)
+│   ├── position_change_counts/ (PositionChangeCounts, a protocol's positions opened, locked,
+│   │                       split and closed — PositionChangeCountsLookup)
 │   ├── claim_totals/      (ClaimTotals, the claims of fees or rewards by protocol —
 │   │                       ClaimTotalsLookup)
 │   ├── protocol_tvl/      (ProtocolTvl, a reading at an instant; ProtocolTvlChange, from the

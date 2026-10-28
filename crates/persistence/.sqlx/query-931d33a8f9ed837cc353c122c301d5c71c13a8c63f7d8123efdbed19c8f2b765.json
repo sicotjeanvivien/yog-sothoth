@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO analytic_protocol_position_changes_hourly\n            (protocol, bucket, opened, vesting_locks, permanent_locks, splits, closed)\n        SELECT $3, c.*\n          FROM meteora_damm_v2_position_changes(\n                   LEAST($1, (SELECT MAX(bucket) + INTERVAL '1 hour'\n                                FROM analytic_protocol_position_changes_hourly\n                               WHERE protocol = $3)),\n                   $2) AS c\n        ON CONFLICT (protocol, bucket) DO UPDATE SET\n            opened          = EXCLUDED.opened,\n            vesting_locks   = EXCLUDED.vesting_locks,\n            permanent_locks = EXCLUDED.permanent_locks,\n            splits          = EXCLUDED.splits,\n            closed          = EXCLUDED.closed\n        -- ⚠️ A frozen hour, before `from`, is written once: missing, never rewritten.\n        WHERE analytic_protocol_position_changes_hourly.bucket >= $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "931d33a8f9ed837cc353c122c301d5c71c13a8c63f7d8123efdbed19c8f2b765"
+}

@@ -5,14 +5,14 @@ mod rows;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use rows::{LiquidityFlowsRow, LiquidityMoveRow};
+use rows::{LiquidityFlowsRow, LiquidityMoveRow, LiquidityTotalsRow};
 use sqlx::PgPool;
 use yog_core::{
     Cursor, Page, RepositoryResult,
     domain::{
         FrozenPeriod, LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveKind,
-        LiquidityMoveList, LiquidityMoveLookup, LiquidityMoveOrder, LiquidityMoveScope, Protocol,
-        ProtocolBucket, Window,
+        LiquidityMoveList, LiquidityMoveLookup, LiquidityMoveOrder, LiquidityMoveScope,
+        LiquidityTotals, Protocol, ProtocolBucket, Window,
     },
 };
 
@@ -55,14 +55,16 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
         &self,
         period: &FrozenPeriod,
         protocol: Protocol,
-    ) -> RepositoryResult<Option<LiquidityFlows>> {
+    ) -> RepositoryResult<Option<LiquidityTotals>> {
         let row = sqlx::query_as!(
-            LiquidityFlowsRow,
+            LiquidityTotalsRow,
             r#"
-            SELECT $3::TEXT AS "protocol!", NULL::TIMESTAMPTZ AS bucket_from,
-                   SUM(created_usd) AS "created_usd!", SUM(added_usd) AS "added_usd!",
+            SELECT SUM(created_usd) AS "created_usd!", SUM(added_usd) AS "added_usd!",
                    SUM(removed_usd) AS "removed_usd!", SUM(moves)::BIGINT AS "moves!",
-                   SUM(moves_valued)::BIGINT AS "moves_valued!"
+                   SUM(moves_valued)::BIGINT AS "moves_valued!",
+                   -- ⚠️ On the moves, not the hours: one owner in two hours is one.
+                   (SELECT COUNT(DISTINCT owner) FROM analytic_liquidity_moves
+                     WHERE protocol = $3 AND timestamp >= $1 AND timestamp < $2) AS "owners!"
               FROM analytic_protocol_liquidity_hourly
              WHERE protocol = $3 AND bucket >= $1 AND bucket < $2
             HAVING COUNT(*) > 0
@@ -75,7 +77,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
         .await
         .map_err(map_sqlx_error)?;
 
-        row.map(LiquidityFlows::try_from).transpose()
+        row.map(LiquidityTotals::try_from).transpose()
     }
 
     async fn list_hourly(

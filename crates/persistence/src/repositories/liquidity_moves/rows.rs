@@ -3,7 +3,10 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use yog_core::{
     RepositoryError,
-    domain::{LiquidityFlows, LiquidityMove, LiquidityMoveKind, LiquidityMoveLock, ProtocolBucket},
+    domain::{
+        LiquidityFlows, LiquidityMove, LiquidityMoveKind, LiquidityMoveLock, LiquidityTotals,
+        ProtocolBucket,
+    },
 };
 
 use crate::repositories::helper::{
@@ -79,6 +82,33 @@ impl TryFrom<LiquidityFlowsRow> for LiquidityFlows {
             removed_usd: convert_bigdecimal_to_decimal(row.removed_usd, "removed_usd")?,
             moves: row.moves,
             moves_valued: row.moves_valued,
+        })
+    }
+}
+
+/// A period's liquidity and the distinct owners of its moves.
+pub(super) struct LiquidityTotalsRow {
+    pub(super) created_usd: BigDecimal,
+    pub(super) added_usd: BigDecimal,
+    pub(super) removed_usd: BigDecimal,
+    pub(super) moves: i64,
+    pub(super) moves_valued: i64,
+    pub(super) owners: i64,
+}
+
+impl TryFrom<LiquidityTotalsRow> for LiquidityTotals {
+    type Error = RepositoryError;
+
+    fn try_from(row: LiquidityTotalsRow) -> Result<Self, Self::Error> {
+        Ok(LiquidityTotals {
+            flows: LiquidityFlows {
+                created_usd: convert_bigdecimal_to_decimal(row.created_usd, "created_usd")?,
+                added_usd: convert_bigdecimal_to_decimal(row.added_usd, "added_usd")?,
+                removed_usd: convert_bigdecimal_to_decimal(row.removed_usd, "removed_usd")?,
+                moves: row.moves,
+                moves_valued: row.moves_valued,
+            },
+            owners: row.owners,
         })
     }
 }

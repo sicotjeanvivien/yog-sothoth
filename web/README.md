@@ -386,8 +386,11 @@ period, bar by bar, from `pool-creations/hourly|daily` of the protocol
 (`lib/protocol/pools.ts`), and the five whose first deposit is worth the most, from
 `liquidity-moves?kind=create&sort=amount`: pair, creator, lock, deposit, age; a lock not measured
 yet reads "—", apart from "none" (`lockKey`). A pool whose deposit
-could not be valued is not in that list; the chart counts it. The positions' life cycle is not
-drawn yet.
+could not be valued is not in that list; the chart counts it. In the advanced mode, beside them
+so the page is no longer, the positions' life cycle in two fixed columns, 24 h and 7 d, whatever
+the period: `position-changes/totals` for the positions opened, locked, split and closed, and the
+`owners` of `liquidity-moves/totals` for the distinct LPs; a window without a row reads "—"
+(`lifeCountOf`).
 
 **Tabs** — `lib/protocol/tabs.ts` lists the six tabs of the canvas, in order;
 a tab joins the row when its content ships (`READY_TABS`), numbered by its

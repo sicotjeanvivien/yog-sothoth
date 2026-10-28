@@ -8,6 +8,7 @@ import { Suspense } from "react";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import {
+  ADVANCED_ONLY,
   CELL_CLASS,
   GRID_CLASS,
   HEAD_ROW_CLASS,
@@ -19,14 +20,19 @@ import { BlockHeading, closedReason, PeriodNotice } from "@/components/dashboard
 import { BlockFailed, BlockSkeleton } from "@/components/dashboard/overview/overview-states";
 import { ApiClientError } from "@/lib/api/errors";
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
-import { fetchLargestLiquidityMoves, fetchPoolCreationsSeries } from "@/lib/api/server/protocols";
+import {
+  fetchLargestLiquidityMoves,
+  fetchLiquidityMoveTotals,
+  fetchPoolCreationsSeries,
+  fetchPositionChangeTotals,
+} from "@/lib/api/server/protocols";
 import { formatCount } from "@/lib/format/format-count";
 import { formatRelative, formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { pairLabel, shortenPubkey } from "@/lib/format/pubkey";
 import { axisOf, daysAgoOf, hourOf, roundTicks } from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
-import { birthSlotsOf, birthTotalOf, lockKey } from "@/lib/protocol/pools";
+import { birthSlotsOf, birthTotalOf, lifeCountOf, lockKey } from "@/lib/protocol/pools";
 
 import { SplitBars, type SplitDetail } from "../split-bars";
 
@@ -35,9 +41,25 @@ const CHART_PX = { height: 122, top: 112 } as const;
 
 const DEPOSITS_SHOWN = 5;
 
-const BIRTHS_SPAN = "col-span-12 dash-wide:col-span-7";
+/** ⚠️ Three side by side in the advanced mode: the life cycle below would lengthen the page. */
+const BIRTHS_SPAN = "col-span-12 dash-wide:col-span-7 adv:dash-wide:col-span-3";
 
 const DEPOSITS_SPAN = "col-span-12 dash-wide:col-span-5";
+
+const LIFE_SPAN = `col-span-12 dash-wide:col-span-4 ${ADVANCED_ONLY.block}`;
+
+const LIFE_CLASS = `${CELL_CLASS} ${LIFE_SPAN} min-h-[262px]`;
+
+const LIFE_COLUMNS = "grid-cols-[minmax(0,1fr)_auto_auto]";
+
+/** The life cycle's rows, each with the event it counts; the owners are the liquidity moves'. */
+const LIFE_ROWS = [
+  { key: "opened", event: "create_position" },
+  { key: "vestingLocks", event: "lock_position" },
+  { key: "permanentLocks", event: "permanent_lock_position" },
+  { key: "splits", event: "split_position" },
+  { key: "closed", event: "close_position" },
+] as const;
 
 const BIRTHS_CLASS = `${CELL_CLASS} ${BIRTHS_SPAN} min-h-[262px]`;
 
@@ -83,6 +105,18 @@ export async function PoolsTab({ period, protocol }: TabProps) {
         }
       >
         <LargestDeposits period={period} protocol={protocol} />
+      </Suspense>
+      <Suspense
+        fallback={
+          <BlockSkeleton
+            title={t("life.title")}
+            span={LIFE_SPAN}
+            minHeight="min-h-[262px]"
+            shape={{ rows: 6 }}
+          />
+        }
+      >
+        <LifeCycle protocol={protocol} />
       </Suspense>
     </div>
   );
@@ -240,6 +274,78 @@ async function LargestDeposits({ period, protocol }: TabProps) {
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+/** The positions' life cycle, in two fixed columns whatever the period: a comparison. */
+async function LifeCycle({ protocol }: { protocol: ProtocolResponse }) {
+  const t = await getTranslations("Dashboard.Protocol.pools.life");
+  const title = t("title");
+
+  let day, week, dayOwners, weekOwners;
+  try {
+    [day, week, dayOwners, weekOwners] = await Promise.all([
+      fetchPositionChangeTotals(protocol, "24h"),
+      fetchPositionChangeTotals(protocol, "7d"),
+      fetchLiquidityMoveTotals(protocol, "24h"),
+      fetchLiquidityMoveTotals(protocol, "7d"),
+    ]);
+  } catch (err) {
+    if (err instanceof ApiClientError) {
+      return (
+        <section aria-label={title} className={LIFE_CLASS}>
+          <BlockHeading title={title} info={t("info")} />
+          <BlockFailed kind={err.details.kind} />
+        </section>
+      );
+    }
+    throw err;
+  }
+
+  const rows = [
+    ...LIFE_ROWS.map(({ key, event }) => ({
+      key,
+      event,
+      day: lifeCountOf(day.items, (r) => r[key]),
+      week: lifeCountOf(week.items, (r) => r[key]),
+    })),
+    {
+      key: "owners" as const,
+      event: "owner (liquidity)",
+      day: lifeCountOf(dayOwners.items, (r) => r.owners),
+      week: lifeCountOf(weekOwners.items, (r) => r.owners),
+    },
+  ];
+
+  return (
+    <section aria-label={title} className={LIFE_CLASS}>
+      <BlockHeading title={title} info={t("info")} />
+      <div role="table" aria-label={title}>
+        <div role="row" className={`${HEAD_ROW_CLASS} ${LIFE_COLUMNS}`}>
+          <div role="columnheader">{t("step")}</div>
+          <div role="columnheader" className={NUM_CLASS}>
+            {t("day")}
+          </div>
+          <div role="columnheader" className={NUM_CLASS}>
+            {t("week")}
+          </div>
+        </div>
+        {rows.map((row) => (
+          <div key={row.key} role="row" className={`${ROW_CLASS} ${LIFE_COLUMNS}`}>
+            <div role="cell" className="min-w-0">
+              <div className="truncate text-dash-ink">{t(`rows.${row.key}`)}</div>
+              <div className="truncate font-dash-mono text-[11px] text-dash-ink-3">{row.event}</div>
+            </div>
+            <div role="cell" className={`${NUM_CLASS} text-dash-ink`}>
+              {formatCount(row.day)}
+            </div>
+            <div role="cell" className={`${NUM_CLASS} text-dash-ink-2`}>
+              {formatCount(row.week)}
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
