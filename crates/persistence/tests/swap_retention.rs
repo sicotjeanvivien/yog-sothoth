@@ -87,8 +87,11 @@ const TRANCHES: [&str; 2] = ["analytic_pool_prices_5min", "analytic_pool_5min"];
 /// The valued liquidity moves (035), kept a day past the 30-day window that ranks them.
 const LIQUIDITY_MOVES: &str = "analytic_liquidity_moves";
 
-/// Mutation this is written against: one line of 014 pointed at another
-/// table, or the swap settings made the house default.
+/// The price series (041), in 1-day chunks compressed a day after they close.
+const PRICES: &str = "token_prices";
+
+/// Mutation this is written against: one line of 014 or 041 pointed at another
+/// table, or the swap or price settings made the house default.
 #[sqlx::test]
 async fn no_other_hypertable_moves(pool: PgPool) {
     let chunks = settings(
@@ -101,7 +104,7 @@ async fn no_other_hypertable_moves(pool: PgPool) {
     )
     .await;
     assert_house("chunk_time_interval", &chunks, |table| {
-        if TRANCHES.contains(&table) {
+        if TRANCHES.contains(&table) || table == PRICES {
             DAY
         } else {
             7 * DAY
@@ -120,6 +123,8 @@ async fn no_other_hypertable_moves(pool: PgPool) {
     assert_house("compress_after", &compression, |table| {
         if table == "signals" {
             30 * DAY
+        } else if table == PRICES {
+            DAY
         } else {
             7 * DAY
         }

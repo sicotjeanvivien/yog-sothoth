@@ -1,6 +1,6 @@
-//! The price series is compressed past seven days, and compressing it changes nothing a
-//! reader sees: the catalog's policy, both lookup shapes over compressed chunks, and writes
-//! into one. ⚠️ `compress_chunk` is called by hand: the local Postgres has no background
+//! The price series is cut in 1-day chunks, each compressed a day after it closes, and compressing
+//! it changes nothing a reader sees: the catalog's settings, both lookup shapes over compressed
+//! chunks, and writes into one. ⚠️ `compress_chunk` is called by hand: the local Postgres has no background
 //! workers, so the policy never fires and a test relying on it would read uncompressed rows.
 
 use super::helpers::{UNIQUE_VIOLATION, pk, price_mint_since, record_prices, sqlstate};
@@ -13,7 +13,7 @@ use sqlx::{PgPool, Row};
 use yog_core::domain::{PriceProvider, TokenPrice, TokenPriceLookup, TokenPriceRepository};
 use yog_persistence::PgTokenPriceRepository;
 
-/// Days of hourly prices seeded: several 7-day chunks, so the unbounded latest lookup
+/// Days of hourly prices seeded: several chunks, so the unbounded latest lookup
 /// reads a compressed one.
 const SEEDED_DAYS: i64 = 30;
 
@@ -32,8 +32,8 @@ struct CompressionSetting {
 async fn the_compression_policy_is_declared_as_intended(pool: PgPool) {
     // ⚠️ Compared as an INTERVAL: the catalog's text follows the `IntervalStyle` of creation.
     let policies: Vec<(bool, String)> = sqlx::query(
-        "SELECT (config->>'compress_after')::interval = INTERVAL '7 days' AS is_house_delay,
-                (config->>'compress_after')                               AS declared
+        "SELECT (config->>'compress_after')::interval = INTERVAL '1 day' AS is_one_day,
+                (config->>'compress_after')                              AS declared
            FROM timescaledb_information.jobs
           WHERE proc_name = 'policy_compression'
             AND hypertable_name = 'token_prices'",
@@ -42,7 +42,7 @@ async fn the_compression_policy_is_declared_as_intended(pool: PgPool) {
     .await
     .expect("the compression policy must be readable from the catalog")
     .iter()
-    .map(|row| (row.get("is_house_delay"), row.get("declared")))
+    .map(|row| (row.get("is_one_day"), row.get("declared")))
     .collect();
 
     assert_eq!(
@@ -52,10 +52,23 @@ async fn the_compression_policy_is_declared_as_intended(pool: PgPool) {
     );
     assert!(
         policies[0].0,
-        "the compression delay must be the house 7 days — the one every other \
-         hypertable `001` compresses uses, `signals` excepted at 30 days and \
-         the swaps at 1 day since 014 — and the catalog declares {}",
+        "the compression delay must be 1 day since 041 — no reader needs a price \
+         older than that uncompressed — and the catalog declares {}",
         policies[0].1
+    );
+
+    let chunk_interval: bool = sqlx::query_scalar(
+        "SELECT time_interval = INTERVAL '1 day'
+           FROM timescaledb_information.dimensions
+          WHERE hypertable_name = 'token_prices' AND dimension_number = 1",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("the time dimension must be readable from the catalog");
+    assert!(
+        chunk_interval,
+        "token_prices must be cut in 1-day chunks since 041: a 7-day chunk is \
+         compressed only once it closes, a week of rows uncompressed behind it"
     );
 
     // No retention, on purpose: an as-of gap never heals, nothing backfills prices.
@@ -271,7 +284,7 @@ async fn compress_every_chunk(pool: &PgPool) {
     let (compressed, total): (i64, i64) = (row.get("compressed"), row.get("total"));
     assert!(
         total >= 4,
-        "the fixture must span several 7-day chunks, got {total} — otherwise \
+        "the fixture must span several chunks, got {total} — otherwise \
          the compressed path is barely exercised"
     );
     assert_eq!(

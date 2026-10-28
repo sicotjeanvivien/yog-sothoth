@@ -56,6 +56,10 @@ export const RELEASES: readonly Release[] = [
             text: "The database stops a query within 10 seconds once the program that asked for it is gone, instead of running it for nobody beside the one asked again.",
             technical: true,
           },
+          {
+            text: "The price series is stored in 1-day chunks, each compressed a day after it closes, instead of 7-day chunks compressed a week after: about two days of prices stay uncompressed instead of one to two weeks (migration 041).",
+            technical: true,
+          },
         ],
       },
     ],

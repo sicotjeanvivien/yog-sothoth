@@ -359,6 +359,15 @@ that deletes rows — leaves this table behind. After a repair, re-run the
 latest row. Tests price through `helpers::price_mint_since` and
 `helpers::price_at`; raw SQL stays for the prices the writer refuses.
 
+### How the price series is stored (migrations 011 and 041)
+
+`token_prices` is cut in 1-day chunks, each compressed a day after it closes,
+segmented by `mint` and ordered by `fetched_at DESC` (041 over the 7 and 7 days of
+`001` and `011`): about two days stay uncompressed, which is what the readers
+read hot. It has no retention — a dropped price is a bucket unvalued for good.
+`tests/price_compression.rs` holds the settings and the lookups over compressed
+chunks.
+
 ### Three ways to say "we don't know", and what each one does
 
 A missing price does not behave the same way everywhere in the chain:
