@@ -57,6 +57,23 @@ async fn insert_run(
     }
 }
 
+/// The swaps' row of `protocol` for each of `hours`, counted from `at(0)`: hours observed, empty.
+async fn insert_protocol_hours(pool: &PgPool, protocol: &str, hours: &[i64]) {
+    for hour in hours {
+        sqlx::query(
+            "INSERT INTO analytic_protocol_hourly
+               (protocol, bucket, volume_usd, fees_usd, lp_fees_usd, protocol_fees_usd,
+                referral_fees_usd, swap_count, active_pools, active_pools_valued)
+             VALUES ($1, $2, 0, 0, 0, 0, 0, 0, 0, 0)",
+        )
+        .bind(protocol)
+        .bind(at(hour * 60))
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+}
+
 async fn insert_tranche(pool: &PgPool, minutes: i64, rotations: bool) {
     sqlx::query(
         "INSERT INTO analytic_tranches (bucket, written_at, rotations) VALUES ($1, $1, $2)",
@@ -206,6 +223,7 @@ async fn both_orders_page_without_repeat_nor_gap(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn the_bars_sum_the_frozen_hours_of_the_runs(pool: PgPool) {
     // Two runs over the hours -2, -1 and 0; hour 0 is open: past the frozen `as_of`.
+    insert_protocol_hours(&pool, "meteora_damm_v2", &[-3, -2, -1, 0]).await;
     insert_run(
         &pool,
         "meteora_damm_v2",
@@ -260,6 +278,66 @@ async fn the_bars_sum_the_frozen_hours_of_the_runs(pool: PgPool) {
     assert_eq!(
         daily.iter().map(|b| (b.from, b.value)).collect::<Vec<_>>(),
         [(at(-24 * 60), Decimal::from(15))]
+    );
+}
+
+/// Mutation: the run hours read alone, the hours drawn from the window, the coverage bound or the
+/// protocol filter dropped — an observed hour without a run missing, or another hour drawn.
+#[sqlx::test(migrations = "./migrations")]
+async fn an_observed_hour_without_a_run_is_zero_and_an_unobserved_one_absent(pool: PgPool) {
+    // Hour -6 is before the coverage, hour -3 unobserved but for DLMM.
+    insert_protocol_hours(&pool, "meteora_damm_v2", &[-6, -5, -4, -2]).await;
+    insert_protocol_hours(&pool, "meteora_dlmm", &[-3]).await;
+    insert_run(&pool, "meteora_damm_v2", 1, -150, "7", &[(-2, "7")]).await;
+    let repository =
+        PgRotationRunRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+    let frozen = FrozenPeriod {
+        from: at(-24 * 60),
+        as_of: at(0),
+        covered_since: at(-5 * 60),
+    };
+
+    let hourly = repository
+        .list_hourly(&frozen, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        hourly.iter().map(|b| (b.from, b.value)).collect::<Vec<_>>(),
+        [
+            (at(-5 * 60), Decimal::ZERO),
+            (at(-4 * 60), Decimal::ZERO),
+            (at(-2 * 60), Decimal::from(7)),
+        ]
+    );
+}
+
+/// Mutation: the run hours read alone, or the days drawn from the window — a covered day without
+/// a run missing, or a day without an observed hour drawn.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_covered_day_without_a_run_is_zero_and_one_unobserved_absent(pool: PgPool) {
+    // Three days ending at `at(0)`: the first observed without a run, the second unobserved.
+    insert_protocol_hours(&pool, "meteora_damm_v2", &[-70, -60, -10, -5]).await;
+    insert_run(&pool, "meteora_damm_v2", 1, -5 * 60, "9", &[(-5, "9")]).await;
+    let repository =
+        PgRotationRunRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+    let frozen = FrozenPeriod {
+        from: at(-72 * 60),
+        as_of: at(0),
+        covered_since: at(-72 * 60),
+    };
+
+    let daily = repository
+        .list_daily(&frozen, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        daily.iter().map(|b| (b.from, b.value)).collect::<Vec<_>>(),
+        [
+            (at(-72 * 60), Decimal::ZERO),
+            (at(-24 * 60), Decimal::from(9))
+        ]
     );
 }
 
