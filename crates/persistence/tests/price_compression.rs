@@ -280,12 +280,25 @@ async fn seed(pool: &PgPool) -> String {
 }
 
 /// Compresses every chunk, the open one included — the policy never would — so the latest
-/// lookup reads compressed rows. Asserts they are.
-async fn compress_every_chunk(pool: &PgPool) {
-    sqlx::query("SELECT compress_chunk(c) FROM show_chunks('token_prices') c")
-        .execute(pool)
-        .await
-        .expect("compressing the seeded chunks must succeed");
+/// lookup reads compressed rows. Asserts they are, and returns how many chunks remain.
+async fn compress_every_chunk(pool: &PgPool) -> i64 {
+    // ⚠️ In time order, as the policy goes: a chunk is rolled up only into the one before it.
+    let chunks: Vec<String> = sqlx::query_scalar(
+        "SELECT format('%I.%I', chunk_schema, chunk_name)
+           FROM timescaledb_information.chunks
+          WHERE hypertable_name = 'token_prices'
+          ORDER BY range_start",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap();
+    for chunk in &chunks {
+        sqlx::query("SELECT compress_chunk($1::regclass)")
+            .bind(chunk)
+            .execute(pool)
+            .await
+            .expect("compressing the seeded chunks must succeed");
+    }
 
     let row = sqlx::query(
         "SELECT (count(*) FILTER (WHERE is_compressed))::BIGINT AS compressed,
@@ -300,13 +313,42 @@ async fn compress_every_chunk(pool: &PgPool) {
     let (compressed, total): (i64, i64) = (row.get("compressed"), row.get("total"));
     assert!(
         total >= 4,
-        "the fixture must span several chunks, got {total} — otherwise \
+        "the fixture must leave several compressed chunks, got {total} — otherwise \
          the compressed path is barely exercised"
     );
     assert_eq!(
         compressed, total,
         "every chunk must be compressed before the re-read, or the rest of this \
          test passes on an uncompressed table and proves nothing"
+    );
+    total
+}
+
+/// Mutation: the rollup dropped from 041, or its interval shortened — the 1-day chunks stay one
+/// compressed chunk each, or fall in more groups than weeks.
+#[sqlx::test]
+async fn the_compressed_chunks_are_rolled_up_by_week(pool: PgPool) {
+    price_mint_since(&pool, &pk(2).to_string(), "1.5", SEEDED_DAYS * 24).await;
+    let daily: i64 = sqlx::query_scalar(
+        "SELECT count(*)::BIGINT FROM timescaledb_information.chunks
+          WHERE hypertable_name = 'token_prices'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        daily > SEEDED_DAYS,
+        "{SEEDED_DAYS} days of prices must fall in 1-day chunks, got {daily} chunks"
+    );
+
+    let weekly = compress_every_chunk(&pool).await;
+
+    assert_eq!(
+        weekly,
+        (daily + 6) / 7,
+        "{daily} chunks of a day must be rolled up into weeks once compressed: without \
+         the rollup, a table that keeps every price would add a relation per day to \
+         every lock a dump or an unbounded read takes"
     );
 }
 

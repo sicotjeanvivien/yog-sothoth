@@ -130,6 +130,19 @@ async fn no_other_hypertable_moves(pool: PgPool) {
         }
     });
 
+    let rolled_up: Vec<String> = sqlx::query_scalar(
+        "SELECT hypertable::TEXT FROM timescaledb_information.hypertable_compression_settings
+          WHERE compress_interval_length IS NOT NULL ORDER BY 1",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        rolled_up,
+        [PRICES],
+        "only the price series rolls its compressed chunks up"
+    );
+
     let retention = settings(
         &pool,
         "SELECT hypertable_name::TEXT,
