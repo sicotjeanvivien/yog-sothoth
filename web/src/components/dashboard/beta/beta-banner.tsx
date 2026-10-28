@@ -5,7 +5,7 @@
  * In the flow, not sticky: a warning read once, not an alert.
  */
 
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
 
 import { BetaBadge } from "./beta-badge";
@@ -15,27 +15,24 @@ import {
   rememberBetaDismissed,
 } from "./beta-state";
 
-const listeners = new Set<() => void>();
-
-function subscribe(onChange: () => void) {
-  listeners.add(onChange);
-  return () => listeners.delete(onChange);
-}
+const subscribeNever = () => () => {};
 
 export function BetaBanner() {
   const t = useTranslations("Dashboard.Beta");
-  // ⚠️ The cookie, not a state: Back restores the layout from the router cache, banner included.
-  const dismissed = useSyncExternalStore(
-    subscribe,
+  // ⚠️ Read from the cookie at each mount: Back restores the layout from the router cache.
+  // The click wins after it, so a refused cookie still closes the banner.
+  const fromCookie = useSyncExternalStore(
+    subscribeNever,
     () => isBetaDismissedIn(document.cookie),
     () => false,
   );
+  const [clicked, setClicked] = useState(false);
 
-  if (dismissed) return null;
+  if (clicked || fromCookie) return null;
 
   const dismiss = () => {
     rememberBetaDismissed();
-    listeners.forEach((onChange) => onChange());
+    setClicked(true);
   };
 
   return (
