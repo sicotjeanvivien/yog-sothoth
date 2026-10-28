@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
-use super::ProtocolTvl;
+use super::{ProtocolTvl, ProtocolTvlChange};
 use crate::RepositoryResult;
-use crate::domain::Protocol;
+use crate::domain::{Protocol, Window};
 
 #[async_trait]
 pub trait ProtocolTvlLookup: Send + Sync {
@@ -21,4 +21,13 @@ pub trait ProtocolTvlLookup: Send + Sync {
         last: DateTime<Utc>,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolTvl>>;
+
+    /// Each protocol's last reading at or before the hour `last`, with the reading exactly
+    /// `window` before it and the part `window`'s discovered pools held at it.
+    async fn list_changes(
+        &self,
+        last: DateTime<Utc>,
+        window: Window,
+        protocol: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolTvlChange>>;
 }

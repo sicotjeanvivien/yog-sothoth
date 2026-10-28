@@ -29,3 +29,17 @@ async fn the_tvl_reads_the_last_frozen_hour_and_the_series_from_the_windows_star
         )
     );
 }
+
+/// Mutation: the `is_covered` guard dropped — a 30-day change over seven days of facts; or the
+/// change read at the open hour.
+#[tokio::test]
+async fn the_change_reads_the_last_frozen_hour_of_a_covered_window_only() {
+    let repo = Arc::new(MockProtocolTvlRepo::default());
+    let svc = ProtocolTvlService::new(frozen_hours_repo(Some(make_frozen_hours())), repo.clone());
+
+    svc.get_tvl_change(Window::Month, None).await.unwrap();
+    svc.get_tvl_change(Window::Week, None).await.unwrap();
+
+    let instants = repo.instants.lock().unwrap().clone();
+    assert_eq!(instants, vec![("tvl_changes", at_october(20, 12), None)]);
+}

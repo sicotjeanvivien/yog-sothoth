@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   periodState,
   previousWindowCovered,
-  tvlStart,
 } from "../availability";
 
 const FIRST_HOUR = "2026-10-13T13:00:00Z";
@@ -86,36 +85,5 @@ describe("previousWindowCovered", () => {
     expect(
       previousWindowCovered({ from: null, asOf: null, coveredSince: null }),
     ).toBe(false);
-  });
-});
-
-describe("tvlStart", () => {
-  const point = (protocol: "meteora_damm_v2" | "meteora_dlmm", at: string) => ({
-    protocol,
-    at,
-    tvlUsd: "1000",
-    poolsPriced: 1,
-    poolsUnvalued: 0,
-  });
-  const latest = { protocol: "meteora_damm_v2" as const, at: "2026-10-20T14:00:00Z" };
-
-  it("is the point a period before the latest measure", () => {
-    const start = point("meteora_damm_v2", "2026-10-19T14:00:00Z");
-    expect(
-      tvlStart([start, point("meteora_damm_v2", "2026-10-19T15:00:00Z")], latest, "24h"),
-    ).toBe(start);
-  });
-
-  // Mutation: the protocol's first point taken, two hours past the start its discovered part
-  // was measured from (or past the floor, the hours before it deleted).
-  it("is null when the series starts after the latest measure's own start", () => {
-    expect(
-      tvlStart([point("meteora_damm_v2", "2026-10-19T16:00:00Z")], latest, "24h"),
-    ).toBeNull();
-  });
-
-  // Mutation: the protocol filter dropped, another protocol's start is borrowed.
-  it("never takes another protocol's point", () => {
-    expect(tvlStart([point("meteora_dlmm", "2026-10-19T14:00:00Z")], latest, "24h")).toBeNull();
   });
 });

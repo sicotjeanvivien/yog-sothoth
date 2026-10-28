@@ -1,4 +1,5 @@
-//! The TVL, a reading at an instant: the last reading, and one reading per hour of a window.
+//! The TVL, a reading at an instant: the last reading, one reading per hour of a window, and its
+//! change over a window.
 
 use axum::{
     Json,
@@ -9,7 +10,7 @@ use yog_core::domain::Protocol;
 use crate::http::{
     AppState,
     dto::{
-        ProtocolTvlResponse, ReadingResponse, WindowedResponse,
+        ProtocolTvlChangeResponse, ProtocolTvlResponse, ReadingResponse, WindowedResponse,
         request::{NoQuery, WindowParams, parse_protocol},
     },
     error::ApiError,
@@ -102,6 +103,59 @@ async fn list_hourly(
     let measured = state
         .protocol_tvl_service
         .list_tvl_hourly(window, protocol)
+        .await?;
+    Ok(Json(WindowedResponse::new(window, measured)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/tvl/totals",
+    params(WindowParams),
+    responses((
+        status = 200,
+        description = "Each protocol's last TVL reading, the one a window before it, and the \
+                       change without the pools discovered in the window; nothing while the \
+                       facts do not cover the window whole.",
+        body = WindowedResponse<ProtocolTvlChangeResponse>
+    ))
+)]
+pub(crate) async fn get_tvl_totals(
+    State(state): State<AppState>,
+    Query(params): Query<WindowParams>,
+) -> Result<Json<WindowedResponse<ProtocolTvlChangeResponse>>, ApiError> {
+    get_change(&state, params, None).await
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/protocols/{protocol}/tvl/totals",
+    params(WindowParams),
+    responses((
+        status = 200,
+        description = "The protocol's last TVL reading, the one a window before it, and the \
+                       change without the pools discovered in the window; nothing while the \
+                       facts do not cover the window whole.",
+        body = WindowedResponse<ProtocolTvlChangeResponse>
+    ))
+)]
+pub(crate) async fn get_protocol_tvl_totals(
+    State(state): State<AppState>,
+    Path(protocol): Path<String>,
+    Query(params): Query<WindowParams>,
+) -> Result<Json<WindowedResponse<ProtocolTvlChangeResponse>>, ApiError> {
+    let protocol = parse_protocol(&protocol)?;
+    get_change(&state, params, Some(protocol)).await
+}
+
+async fn get_change(
+    state: &AppState,
+    params: WindowParams,
+    protocol: Option<Protocol>,
+) -> Result<Json<WindowedResponse<ProtocolTvlChangeResponse>>, ApiError> {
+    let window = params.window.into();
+    let measured = state
+        .protocol_tvl_service
+        .get_tvl_change(window, protocol)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }

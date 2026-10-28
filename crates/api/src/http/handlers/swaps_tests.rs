@@ -26,6 +26,8 @@ async fn the_produced_routes_are_mounted() {
         "/api/tvl/hourly?window=7d",
         "/api/protocols/meteora_damm_v2/tvl",
         "/api/protocols/meteora_damm_v2/tvl/hourly",
+        "/api/tvl/totals?window=7d",
+        "/api/protocols/meteora_damm_v2/tvl/totals",
         "/api/pool-discoveries/totals?window=30d",
         "/api/protocols/meteora_damm_v2/pool-discoveries/totals",
         "/api/protocols/meteora_damm_v2/signals",
@@ -46,10 +48,12 @@ async fn an_unknown_protocol_or_window_is_refused_in_problem_details() {
         "/api/protocols/meteora/liquidity-moves/hourly",
         "/api/protocols/meteora/tvl",
         "/api/protocols/meteora/tvl/hourly",
+        "/api/protocols/meteora/tvl/totals",
         "/api/protocols/meteora/pool-discoveries/totals",
         "/api/protocols/meteora/signals",
         "/api/swaps/totals?window=1h",
         "/api/tvl/hourly?window=90d",
+        "/api/tvl/totals?window=90d",
     ] {
         let (status, content_type, _) = get(uri).await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}");

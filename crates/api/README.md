@@ -145,6 +145,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/protocols/{protocol}/liquidity-moves`, `/api/pools/{pool}/liquidity-moves` | A page of the valued moves (creations, additions, removals), their pool's token symbols embedded, `?sort=amount` (default) or `at`, forward-only cursor, refused (400) under another list or window or after a freeze; empty while the protocol's liquidity does not cover the window |
 | `GET` | `/api/tvl`, `/api/protocols/{protocol}/tvl` | Per protocol, the last TVL reading at or before `asOf`, its `at` said |
 | `GET` | `/api/tvl/hourly`, `/api/protocols/{protocol}/tvl/hourly` | Per protocol, the reading of every hour measured from the window's start |
+| `GET` | `/api/tvl/totals`, `/api/protocols/{protocol}/tvl/totals` | Per protocol, the last reading, the one exactly a window before it (`null` when not measured), the part the pools discovered in the window hold at the last, and the change without it, `null` as soon as one term is |
 | `GET` | `/api/pool-discoveries/totals`, and under `/api/protocols/{protocol}/` | Per protocol, the pools first seen in the window without their birth observed, and what they hold at the last reading |
 | `GET` | `/api/protocols/{protocol}/signals`, `/api/pools/{pool}/signals` | The signals of one protocol or one pool, paginated as `/api/signals`, `?severity=` |
 
@@ -160,8 +161,9 @@ it returns no row rather than a partial sum; a series returns the buckets the fa
 hold whole. Inside the coverage, an hour without a fact counts 0: the protocol's, written so
 by yog-analytic for each protocol it measures; a pool's, read so from the hour of its
 `first_seen_at`, a fact before it kept. The TVL is each protocol's last measure by that hour, its `at` said,
-with the part of it held by the pools discovered in each window, measured with it
-(a window without its part was not measured: the web then withholds the change).
+with the part of it held by the pools discovered in each window, measured with it;
+`tvl/totals` pairs the last reading with the one a window before it and with that part, and
+serves the change without it.
 The liquidity is measured from a later hour than the swaps, its own start: its
 `liquidity` is `null` on a total, a bucket or a ranking of moves whose window starts
 before it, rather than a partial sum.
@@ -219,10 +221,11 @@ at the end of this section.
    is not covered, that the protocol is not measured, or that the pool was not yet seen.
 
    `tvl` is a reading at an instant, never a sum over a period, read at the root (one per
-   protocol) and under a protocol (its own), with three forms only: `/tvl`, the last reading
+   protocol) and under a protocol (its own), with four forms only: `/tvl`, the last reading
    at or before `asOf`, its instant (`at`) said, without a window; `hourly`, the readings of
-   the window, one per hour measured, each at its hour's close; `by-token` and `by-pool`,
-   ranked at that last reading, without a window. Every response of what `yog-analytic`
+   the window, one per hour measured, each at its hour's close; `totals`, from the reading a
+   window before the last to the last, with the change between them — a change is not a sum;
+   `by-token` and `by-pool`, ranked at that last reading, without a window. Every response of what `yog-analytic`
    computes carries the instant it reflects (`asOf`), its coverage (`coveredSince`), and its
    window when it is read over one.
 5. **The live stream has its own prefix, `/api/live`**, apart from the requests: an SSE
@@ -256,6 +259,10 @@ at the end of this section.
 10. **The contract is written once, on the server, and the client derives from it**: an
     OpenAPI document drawn from the Rust types, from which the web's zod is generated
     ([The contract](#the-contract)).
+11. **A rule that combines several routes or makes a choice is served** — which reading,
+    which coverage, which floor. A client keeps only the arithmetic over the fields of one
+    response, and the presentation. One exception, the rotation (volume over TVL): no route
+    can carry it under rule 6, and its ⓘ says the TVL is the last reading.
 
 **Parameters and fields.** `window=24h|7d|30d`, a closed list, 400 otherwise; `offset` for the
 previous window. For a collection of future events (`vesting-unlocks`), `window` covers the

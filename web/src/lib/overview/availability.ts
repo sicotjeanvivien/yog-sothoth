@@ -1,10 +1,8 @@
 /**
  * What the Overview may show, read on the span each measure carries: a period, a variation
- * on the previous window, a variation of the TVL. ⚠️ A figure the facts do not cover whole
+ * on the previous window. ⚠️ A figure the facts do not cover whole
  * is "—", never a smaller number.
  */
-
-import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
 
 import { CLOSED_PERIODS, periodMs, type Period } from "./period";
 
@@ -38,23 +36,5 @@ export function previousWindowCovered(span: MeasuredSpan): boolean {
     span.from !== null &&
     span.coveredSince !== null &&
     Date.parse(span.from) >= Date.parse(span.coveredSince)
-  );
-}
-
-type TvlPoint = { protocol: ProtocolResponse; at: string; tvlUsd: string | null };
-
-/**
- * The protocol's TVL a period before its `latest` measure, the start its discovered part was
- * measured from. `null` when the series has no point there: measured later, or deleted.
- */
-export function tvlStart<T extends TvlPoint>(
-  points: readonly T[],
-  latest: { protocol: ProtocolResponse; at: string },
-  period: Period,
-): T | null {
-  const start = Date.parse(latest.at) - periodMs(period);
-  return (
-    points.find((p) => p.protocol === latest.protocol && Date.parse(p.at) === start) ??
-    null
   );
 }

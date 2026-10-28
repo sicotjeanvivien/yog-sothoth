@@ -1,0 +1,81 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH latest AS (\n                SELECT DISTINCT ON (protocol) protocol, bucket, tvl_usd\n                  FROM analytic_protocol_tvl\n                 WHERE bucket <= $1 AND ($4::TEXT IS NULL OR protocol = $4)\n                 ORDER BY protocol, bucket DESC\n            )\n            SELECT l.protocol, l.bucket + INTERVAL '1 hour' AS \"end_at!\", l.tvl_usd AS end_tvl_usd,\n                   s.bucket + INTERVAL '1 hour' AS start_at, s.tvl_usd AS start_tvl_usd,\n                   d.tvl_usd AS \"discovered_tvl_usd?\"\n              FROM latest l\n              LEFT JOIN analytic_protocol_tvl s\n                     ON s.protocol = l.protocol\n                    AND s.bucket = l.bucket - make_interval(hours => $2)\n              LEFT JOIN analytic_protocol_tvl_discovered d\n                     ON d.protocol = l.protocol AND d.period = $3 AND d.bucket = l.bucket\n             ORDER BY l.protocol\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "protocol"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "end_at!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "end_tvl_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "tvl_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "start_at",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "start_tvl_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "tvl_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "discovered_tvl_usd?",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl_discovered",
+            "name": "tvl_usd"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int4",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      true,
+      null,
+      true,
+      true
+    ]
+  },
+  "hash": "faa5befa3fe4d7317971a04e61b53e4d4fafb174dc557825a737187386de8be1"
+}

@@ -115,7 +115,7 @@ pub use position_fee_claim_event::{PositionFeeClaimEvent, PositionFeeClaimEventL
 pub use protocol::Protocol;
 pub use protocol_activity::ProtocolActivityLookup;
 pub use protocol_fee_claim_event::{ProtocolFeeClaimEvent, ProtocolFeeClaimEventLookup};
-pub use protocol_tvl::{ProtocolTvl, ProtocolTvlLookup};
+pub use protocol_tvl::{ProtocolTvl, ProtocolTvlChange, ProtocolTvlLookup, TvlReading};
 pub use reward_change_event::{
     MeteoraDammV2RewardChange, RewardChangeEvent, RewardChangeEventLookup,
 };

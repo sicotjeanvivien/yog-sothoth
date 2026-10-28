@@ -237,6 +237,8 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         .routes(routes!(handlers::tvl::get_protocol_tvl_reading))
         .routes(routes!(handlers::tvl::get_tvl_hourly))
         .routes(routes!(handlers::tvl::get_protocol_tvl_readings_hourly))
+        .routes(routes!(handlers::tvl::get_tvl_totals))
+        .routes(routes!(handlers::tvl::get_protocol_tvl_totals))
         .routes(routes!(
             handlers::pool_discoveries::get_pool_discovery_totals
         ))

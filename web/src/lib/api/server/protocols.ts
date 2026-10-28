@@ -12,7 +12,6 @@ import { readsHours } from "@/lib/overview/period";
 import { apiGet } from "../client/server";
 import {
   zGetPoolCreationTotalsResponse,
-  zGetPoolDiscoveryTotalsResponse,
   zGetProtocolLiquidityMovesDailyResponse,
   zGetProtocolLiquidityMovesHourlyResponse,
   zGetProtocolLiquidityMoveTotalsResponse,
@@ -27,6 +26,7 @@ import {
   zGetSwapTotalsResponse,
   zGetTvlHourlyResponse,
   zGetTvlResponse,
+  zGetTvlTotalsResponse,
   zListProtocolLiquidityMovesResponse,
   zListProtocolRotationRunsResponse,
   zListProtocolsResponse,
@@ -77,13 +77,9 @@ export const fetchTvlHourly = cache((scope: Scope, window: WindowResponse) =>
   apiGet(scopedPath(scope, "tvl/hourly"), { window }, zGetTvlHourlyResponse),
 );
 
-/** What the pools first seen in the window hold, at the last reading of their part. */
-export const fetchPoolDiscoveryTotals = cache((scope: Scope, window: WindowResponse) =>
-  apiGet(
-    scopedPath(scope, "pool-discoveries/totals"),
-    { window },
-    zGetPoolDiscoveryTotalsResponse,
-  ),
+/** The TVL a window before its last reading, and the change without the pools discovered. */
+export const fetchTvlTotals = cache((scope: Scope, window: WindowResponse) =>
+  apiGet(scopedPath(scope, "tvl/totals"), { window }, zGetTvlTotalsResponse),
 );
 
 /** No row while the protocol's liquidity does not cover the window whole. */

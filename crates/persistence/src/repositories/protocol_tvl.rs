@@ -7,11 +7,11 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
-    domain::{Protocol, ProtocolTvl, ProtocolTvlLookup},
+    domain::{Protocol, ProtocolTvl, ProtocolTvlChange, ProtocolTvlLookup, Window},
 };
 
 use crate::repositories::helper::{bind_protocol_filter, map_sqlx_error};
-use rows::ProtocolTvlRow;
+use rows::{ProtocolTvlChangeRow, ProtocolTvlRow};
 
 pub struct PgProtocolTvlRepository {
     pool: PgPool,
@@ -74,5 +74,43 @@ impl ProtocolTvlLookup for PgProtocolTvlRepository {
         .map_err(map_sqlx_error)?;
 
         rows.into_iter().map(ProtocolTvl::try_from).collect()
+    }
+
+    async fn list_changes(
+        &self,
+        last: DateTime<Utc>,
+        window: Window,
+        protocol: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolTvlChange>> {
+        let rows = sqlx::query_as!(
+            ProtocolTvlChangeRow,
+            r#"
+            WITH latest AS (
+                SELECT DISTINCT ON (protocol) protocol, bucket, tvl_usd
+                  FROM analytic_protocol_tvl
+                 WHERE bucket <= $1 AND ($4::TEXT IS NULL OR protocol = $4)
+                 ORDER BY protocol, bucket DESC
+            )
+            SELECT l.protocol, l.bucket + INTERVAL '1 hour' AS "end_at!", l.tvl_usd AS end_tvl_usd,
+                   s.bucket + INTERVAL '1 hour' AS start_at, s.tvl_usd AS start_tvl_usd,
+                   d.tvl_usd AS "discovered_tvl_usd?"
+              FROM latest l
+              LEFT JOIN analytic_protocol_tvl s
+                     ON s.protocol = l.protocol
+                    AND s.bucket = l.bucket - make_interval(hours => $2)
+              LEFT JOIN analytic_protocol_tvl_discovered d
+                     ON d.protocol = l.protocol AND d.period = $3 AND d.bucket = l.bucket
+             ORDER BY l.protocol
+            "#,
+            last,
+            window.hours(),
+            window.as_str(),
+            bind_protocol_filter(protocol),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter().map(ProtocolTvlChange::try_from).collect()
     }
 }

@@ -94,7 +94,7 @@
           "fees": "What those trades paid in fees over the chosen period: the depositors' (LP) share and the protocol's.",
           "swaps": "The number of trades over the chosen period, and their average pace per second.",
           "pools": "The pools with at least one trade over the chosen period, among every pool Yog-Scope has seen, and those born during the period.",
-          "rotation": "The chosen period's volume divided by the TVL: how many times the deposited liquidity changed hands."
+          "rotation": "The chosen period's volume divided by the TVL of the last reading: how many times the deposited liquidity changed hands."
         }
       },
       "protocols": {

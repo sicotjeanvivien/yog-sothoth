@@ -94,7 +94,7 @@
           "fees": "Ce que ces échanges ont payé en frais sur la période choisie : la part des déposants (LP) et celle du protocole.",
           "swaps": "Le nombre d'échanges sur la période choisie, et leur rythme moyen par seconde.",
           "pools": "Les pools qui ont eu au moins un échange sur la période choisie, parmi toutes celles que Yog-Scope a vues, et celles nées pendant la période.",
-          "rotation": "Le volume de la période choisie divisé par la TVL : combien de fois la liquidité déposée a changé de mains."
+          "rotation": "Le volume de la période choisie divisé par la TVL du dernier relevé : combien de fois la liquidité déposée a changé de mains."
         }
       },
       "protocols": {
