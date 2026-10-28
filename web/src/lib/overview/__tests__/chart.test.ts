@@ -72,14 +72,14 @@ describe("slotsOf", () => {
     });
   });
 
-  // Mutation: a slice drawn from the hours it has — five hours shown as a whole slice.
-  it("leaves empty a slice missing one of its hours", () => {
+  // Mutation: a slice missing an hour emptied — a coverage rule the API's days do not apply.
+  it("sums the hours a slice holds, without judging whether it is whole", () => {
     const slots = slotsOf("7d", asOf, hoursOf("2026-10-20T09:00:00Z", 5));
-    expect(slots[27]?.value).toBeNull();
+    expect(slots[27]?.value).toBe(5);
   });
 
-  // Mutation: an unvalued hour counted as missing — the slice emptied, unlike the API's days.
-  it("sums the valued hours of a slice whose every hour is there", () => {
+  // Mutation: an unvalued hour emptying its slice — unlike the SUM of the API's days.
+  it("sums the valued hours of a slice, an unvalued one left out", () => {
     const slots = slotsOf("7d", asOf, [
       ...hoursOf("2026-10-20T08:00:00Z", 5, "2"),
       ...hoursOf("2026-10-20T13:00:00Z", 1, null),

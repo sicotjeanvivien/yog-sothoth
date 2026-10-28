@@ -89,9 +89,9 @@ export async function VolumeChart({ period }: { period: Period }) {
   };
   const volume = drawn(slots, CHART_PX.volume.top, t("noValue"));
   const fees = drawn(feeSlots, CHART_PX.fees.top, t("feesNoValue"));
-  // ⚠️ From the hours, not the slots: a slice left empty still adds its valued hours, as below.
-  const valuedFees = sumUsd(series.items.flatMap((i) => (i.feesUsd === null ? [] : [i.feesUsd])));
-  const feesTotal = valuedFees === null ? null : String(valuedFees);
+  const feesTotal = feeSlots.some((s) => s.value !== null)
+    ? String(feeSlots.reduce((sum, s) => sum + (s.value ?? 0), 0))
+    : null;
   const axis = axisOf(period, slots, daysAgo);
 
   // Like the API's totals, a bar without a valued volume adds nothing.

@@ -14,8 +14,8 @@ export type Slot = { from: Date; to: Date; value: number | null };
 type Bar = { from: string; value: string | null };
 
 /**
- * Hours over 24 h, 6-hour slices over 7 days, 24-hour slices beyond, summed across protocols. A
- * slot missing one of its bars is not whole: `null`, as is one without any valued bar.
+ * Hours over 24 h, 6-hour slices over 7 days, 24-hour slices beyond: each slot sums the valued bars
+ * it holds, across protocols, as the API's days do; `null` without any.
  */
 export function slotsOf(
   period: Period,
@@ -27,14 +27,12 @@ export function slotsOf(
   const start = Date.parse(asOf) - count * step;
   const barStep = readsHours(period) ? HOUR_MS : step;
 
-  const seen = Array.from({ length: count }, () => new Set<number>());
   const sums = Array.from({ length: count }, (): number | null => null);
   for (const bar of bars) {
     const at = Date.parse(bar.from);
     const i = Math.floor((at - start) / step);
     // ⚠️ A bar off the slots' grid (read at another `asOf`) belongs to none of them.
     if (i < 0 || i >= count || (at - start) % barStep !== 0) continue;
-    seen[i]!.add(at);
     const value = bar.value === null ? NaN : Number.parseFloat(bar.value);
     if (Number.isFinite(value)) {
       sums[i] = (sums[i] ?? 0) + value;
@@ -46,7 +44,7 @@ export function slotsOf(
     return {
       from: new Date(from),
       to: new Date(from + step),
-      value: seen[i]!.size === step / barStep ? sum : null,
+      value: sum,
     };
   });
 }

@@ -40,17 +40,14 @@ describe("splitSlotsOf", () => {
   const hoursFrom = (from: string, values: string[]) =>
     values.map((v, h) => bar(new Date(Date.parse(from) + h * 3_600_000).toISOString(), v));
 
-  // Mutation: a slice of runs missing an hour read as none in runs — its whole volume drawn
-  // outside them; or the runs' hours not summed — a slice worth one hour of runs.
-  it("splits a 7 days' slice by its runs' hours, and leaves it unsplit when one is missing", () => {
+  // Mutation: a covered slice without any runs' hour read as none in runs — its whole volume
+  // drawn outside them; or the runs' hours not summed — a slice worth one hour of runs.
+  it("splits a 7 days' slice by its runs' hours, and leaves it unsplit without any", () => {
     const slices = splitSlotsOf(
       "7d",
       AS_OF,
       [...hoursFrom("2026-10-24T15:00:00Z", Array(12).fill("10"))],
-      runsOf([
-        ...hoursFrom("2026-10-24T15:00:00Z", ["2", "0", "3", "0", "0", "0"]),
-        ...hoursFrom("2026-10-24T21:00:00Z", ["10", "10", "10", "10", "10"]),
-      ]),
+      runsOf(hoursFrom("2026-10-24T15:00:00Z", ["2", "0", "3", "0", "0", "0"])),
     );
 
     expect(slices.slice(26).map((s) => [s.total, s.inRuns])).toEqual([

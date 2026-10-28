@@ -266,7 +266,7 @@ hour.
 unknown is 24h) drives every label, section title, chart and ⓘ, which speak of
 "the chosen period". A bar is an hour over 24h, a 6-hour slice over 7d, a 24-hour
 slice over 30d (`SLOT_HOURS`), each ending at `asOf`; over 7d the web sums the
-`hourly` series by six, a slice missing one of its hours left empty. The TVL stays
+`hourly` series by six, as the API sums its days: whether an hour is covered is the API's. The TVL stays
 the value of the last frozen hour; only its change follows the period. The selector (`period-selector.tsx`) is a set of
 links, in its own unkeyed `<Suspense>` so a period change keeps it; every block
 that reads the period has its `<Suspense key={period}>`, so the change shows
