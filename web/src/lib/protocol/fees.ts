@@ -70,3 +70,19 @@ export function feeSharesOf(parts: FeeParts): FeeParts {
     referral: shareOf(parts.referral, whole),
   };
 }
+
+/** A reading of what the LPs took or were owed over a period, as the API dates it. */
+type Reading = { asOf: string | null; amountUsd: string | null };
+
+/**
+ * The fees claimed as a share of those generated for the LPs; `null` unless both readings end at
+ * the same `asOf`. Above 1 is possible: a claim also takes fees generated before the period.
+ */
+export function claimedShareOf(claimed: Reading, generated: Reading): number | null {
+  if (claimed.asOf === null || claimed.asOf !== generated.asOf) {
+    return null;
+  }
+  const part = claimed.amountUsd === null ? null : Number.parseFloat(claimed.amountUsd);
+  const whole = generated.amountUsd === null ? null : Number.parseFloat(generated.amountUsd);
+  return shareOf(part, whole);
+}

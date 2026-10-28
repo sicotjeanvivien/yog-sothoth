@@ -8,12 +8,12 @@ mod work_slots;
 pub(crate) use enriched_signal::EnrichedSignal;
 pub(crate) use enriched_token::EnrichedToken;
 pub(crate) use services::{
-    AnnouncementService, BucketPeriod, DiscoveredTvlService, IngestionAggregate, IngestionService,
-    LiquidityChangeEventService, LiquidityMoveService, Measured, MovesError, NetworkService,
-    PeriodBounds, PoolChangeEventService, PoolCreationEventService, PoolCreationsService,
-    PoolDetail, PoolProperties, PoolService, PositionChangeEventService,
-    PositionFeeClaimEventService, ProtocolCatalogService, ProtocolEntry,
-    ProtocolFeeClaimEventService, ProtocolTvlService, RewardChangeEventService,
+    AnnouncementService, BucketPeriod, ClaimKind, ClaimTotalsService, DiscoveredTvlService,
+    IngestionAggregate, IngestionService, LiquidityChangeEventService, LiquidityMoveService,
+    Measured, MovesError, NetworkService, PeriodBounds, PoolChangeEventService,
+    PoolCreationEventService, PoolCreationsService, PoolDetail, PoolProperties, PoolService,
+    PositionChangeEventService, PositionFeeClaimEventService, ProtocolCatalogService,
+    ProtocolEntry, ProtocolFeeClaimEventService, ProtocolTvlService, RewardChangeEventService,
     RewardClaimEventService, RotationRunService, RotationRunsError, SignalListParams,
     SignalService, SwapActivityService, SwapEventService, TokenActivityRead, TokenAggregate,
     TokenService,

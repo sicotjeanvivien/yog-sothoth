@@ -294,7 +294,17 @@
         "perDay": "Fees par jour",
         "chartLabelHourly": "Fees par heure, par destination",
         "chartLabelSixHours": "Fees par tranche de 6 h, par destination",
-        "chartLabelDaily": "Fees par jour, par destination"
+        "chartLabelDaily": "Fees par jour, par destination",
+        "claims": {
+          "title": "Ce que les LP récupèrent",
+          "info": "Les déposants ne touchent leurs fees que lorsqu'ils les réclament : ces chiffres sont ce qui a réellement été retiré, valorisé au prix de la pool à l'instant du retrait, un reward hors de la pool à son prix de marché. La part réclamée peut dépasser 100 % : un retrait récupère aussi des fees générées avant la période.",
+          "feesClaimed": "Fees réclamées · {period}",
+          "rewardsClaimed": "Rewards réclamés · {period}",
+          "generated": "Fees générées pour les LP · {period}",
+          "addresses": "{owners} {count, plural, one {adresse} other {adresses}}",
+          "unvalued": "dont {n} non {count, plural, one {valorisé} other {valorisés}}",
+          "claimedShare": "réclamées à {share} sur la période"
+        }
       }
     },
     "BlockError": {

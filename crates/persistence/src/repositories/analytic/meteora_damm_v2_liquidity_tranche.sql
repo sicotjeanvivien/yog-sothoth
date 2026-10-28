@@ -20,71 +20,9 @@ moves AS (
       LEFT JOIN token_metadata tma ON tma.mint = p.token_a_mint::TEXT
       LEFT JOIN token_metadata tmb ON tmb.mint = p.token_b_mint::TEXT
 ),
-moved_pools AS (
-    SELECT DISTINCT pool_address, mint_a, mint_b FROM moves
-),
--- The anchor: the token in more pools of the tranche, these included; none on a tie.
-pools_per_mint AS (
-    SELECT m.mint, COUNT(*) AS pools
-      FROM (SELECT s.pool_address, p.token_a_mint::TEXT AS mint_a, p.token_b_mint::TEXT AS mint_b
-              FROM meteora_damm_v2_swap_events_5min s
-              JOIN pools p ON p.pool_address = s.pool_address
-             WHERE s.bucket = $1
-            UNION
-            SELECT pool_address, mint_a, mint_b FROM moved_pools) t
-     CROSS JOIN LATERAL (VALUES (t.mint_a), (t.mint_b)) m (mint)
-     WHERE m.mint IS NOT NULL
-     GROUP BY m.mint
-),
-swapped AS (
-    SELECT q.pool_address, q.price_a_usd, q.price_b_usd, q.market_a_usd, q.market_b_usd
-      FROM moved_pools mp
-      JOIN analytic_pool_prices_5min q ON q.pool_address = mp.pool_address AND q.bucket = $1
-),
--- Without a swap: the anchor at market, the other at the lower of its market and the pool's
--- last bounded price. ⚠️ Never the pool's mid price; without a last price, no value.
-unswapped AS (
-    SELECT mp.pool_address,
-           CASE WHEN n.anchor = 'a' THEN COALESCE(ma.price_usd, last_a.price)
-                -- ⚠️ LEAST skips NULL: without a bound, the market alone would price the side.
-                WHEN last_a.price IS NOT NULL THEN LEAST(ma.price_usd, last_a.price) END
-               AS price_a_usd,
-           CASE WHEN n.anchor = 'b' THEN COALESCE(mb.price_usd, last_b.price)
-                WHEN last_b.price IS NOT NULL THEN LEAST(mb.price_usd, last_b.price) END
-               AS price_b_usd,
-           ma.price_usd AS market_a_usd,
-           mb.price_usd AS market_b_usd
-      FROM moved_pools mp
-      LEFT JOIN LATERAL (
-          SELECT q.price_a_usd AS price
-            FROM analytic_pool_prices_5min q
-           WHERE q.pool_address = mp.pool_address AND q.bucket < $1 AND q.price_a_usd IS NOT NULL
-           ORDER BY q.bucket DESC
-           LIMIT 1
-      ) last_a ON true
-      LEFT JOIN LATERAL (
-          SELECT q.price_b_usd AS price
-            FROM analytic_pool_prices_5min q
-           WHERE q.pool_address = mp.pool_address AND q.bucket < $1 AND q.price_b_usd IS NOT NULL
-           ORDER BY q.bucket DESC
-           LIMIT 1
-      ) last_b ON true
-      LEFT JOIN pools_per_mint na ON na.mint = mp.mint_a
-      LEFT JOIN pools_per_mint nb ON nb.mint = mp.mint_b
-     CROSS JOIN LATERAL (
-         SELECT CASE WHEN na.pools > nb.pools THEN 'a' WHEN nb.pools > na.pools THEN 'b' END
-                    AS anchor
-     ) n
-      LEFT JOIN LATERAL yog_price_asof(mp.mint_a, $1::TIMESTAMPTZ + $3::INTERVAL) ma ON true
-      LEFT JOIN LATERAL yog_price_asof(mp.mint_b, $1::TIMESTAMPTZ + $3::INTERVAL) mb ON true
-     WHERE NOT EXISTS (SELECT 1 FROM swapped s WHERE s.pool_address = mp.pool_address)
-       -- A pool never priced has no bound at all: its moves stay unvalued.
-       AND (last_a.price IS NOT NULL OR last_b.price IS NOT NULL)
-),
 prices AS (
-    SELECT * FROM swapped
-    UNION ALL
-    SELECT * FROM unswapped
+    SELECT * FROM meteora_damm_v2_tranche_pool_prices(
+        $1, $3, ARRAY(SELECT DISTINCT pool_address FROM moves))
 )
 INSERT INTO analytic_liquidity_moves (
     signature, event_index, timestamp, bucket, pool_address, protocol, owner, kind, amount_usd

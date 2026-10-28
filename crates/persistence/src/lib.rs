@@ -13,9 +13,9 @@ pub use database::{Database, PoolSettings};
 pub use error::BackupError;
 pub use health::{HealthError, PgHealthChecker};
 pub use repositories::{
-    PgAnalyticRepository, PgAnnouncementRepository, PgDiscoveredTvlRepository,
-    PgEventFreshnessRepository, PgLiquidityChangeEventRepository, PgLiquidityFlowRepository,
-    PgLiquidityMoveRepository, PgMaterializationBacklogRepository,
+    PgAnalyticRepository, PgAnnouncementRepository, PgClaimTotalsRepository,
+    PgDiscoveredTvlRepository, PgEventFreshnessRepository, PgLiquidityChangeEventRepository,
+    PgLiquidityFlowRepository, PgLiquidityMoveRepository, PgMaterializationBacklogRepository,
     PgMeteoraDammV2ClaimPositionFeeEventRepository, PgMeteoraDammV2ClaimProtocolFeeEventRepository,
     PgMeteoraDammV2ClaimRewardEventRepository, PgMeteoraDammV2ClosePositionEventRepository,
     PgMeteoraDammV2CreatePositionEventRepository, PgMeteoraDammV2FundRewardEventRepository,

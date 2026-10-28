@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT MIN(bucket) AS \"since?: DateTime<Utc>\"\n                      FROM analytic_tranches\n                     WHERE claims\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "since?: DateTime<Utc>",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "944803c3b5aa10a85ecef159cde2048b42f6252169d369d4be201a4cb7a59048"
+}

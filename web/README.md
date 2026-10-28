@@ -372,8 +372,13 @@ LPs' part (`claiming_fee + compounding_fee`), the protocol's and the referral's,
 read on `swaps/hourly|daily` of the protocol and summed per bar by
 `lib/protocol/fees.ts`: per destination over the period, amount and share, and
 per bar stacked in the three tints (`dash-fee-*`), the bar under the pointer
-detailed under the chart. The three parts make the fees whole; the LPs' split
-between claiming and compounding, and what they claim, are not drawn yet.
+detailed under the chart. The three parts make the fees whole. Beside it, what the
+LPs take back: the fees and the rewards claimed, valued, with their addresses
+(`position-fee-claims/totals`, `reward-claims/totals`), and the LPs' fees generated, with
+the share claimed (`claimedShareOf`, only over the same `asOf`; it can exceed 100 %, a
+claim taking fees earned before the period). The claims are measured from a later hour
+than the swaps: until a window is covered, the block says so. The LPs' split between
+claiming and compounding is not drawn yet.
 
 **Tabs** — `lib/protocol/tabs.ts` lists the six tabs of the canvas, in order;
 a tab joins the row when its content ships (`READY_TABS`), numbered by its

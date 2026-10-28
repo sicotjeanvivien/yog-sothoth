@@ -3303,6 +3303,34 @@
         ],
         "type": "object"
       },
+      "ProtocolClaimTotalsResponse": {
+        "description": "The sum skips the claims not valued; `owners` is distinct over the window.",
+        "properties": {
+          "amountUsd": {
+            "$ref": "#/components/schemas/UnsignedDecimal"
+          },
+          "claims": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "claimsValued": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "owners": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/ProtocolResponse"
+          }
+        },
+        "required": [
+          "protocol",
+          "claims",
+          "claimsValued",
+          "amountUsd",
+          "owners"
+        ],
+        "type": "object"
+      },
       "ProtocolDiscoveredTvlResponse": {
         "properties": {
           "at": {
@@ -4815,6 +4843,76 @@
                   "type": "object"
                 }
               ]
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
+      "WindowedResponse_ProtocolClaimTotalsResponse": {
+        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "properties": {
+          "asOf": {
+            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "description": "The first hour the facts hold.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "items": {
+              "description": "The sum skips the claims not valued; `owners` is distinct over the window.",
+              "properties": {
+                "amountUsd": {
+                  "$ref": "#/components/schemas/UnsignedDecimal"
+                },
+                "claims": {
+                  "$ref": "#/components/schemas/Count"
+                },
+                "claimsValued": {
+                  "$ref": "#/components/schemas/Count"
+                },
+                "owners": {
+                  "$ref": "#/components/schemas/Count"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                }
+              },
+              "required": [
+                "protocol",
+                "claims",
+                "claimsValued",
+                "amountUsd",
+                "owners"
+              ],
+              "type": "object"
             },
             "type": "array"
           },
@@ -8287,6 +8385,56 @@
         }
       }
     },
+    "/api/protocols/{protocol}/position-fee-claims/totals": {
+      "get": {
+        "operationId": "get_protocol_position_fee_claim_totals",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolClaimTotalsResponse"
+                }
+              }
+            },
+            "description": "The fees the protocol's positions claimed over the window, valued; no row while its claims do not cover the window whole."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/protocols/{protocol}/protocol-fee-claims": {
       "get": {
         "operationId": "list_protocol_protocol_fee_claims",
@@ -8492,6 +8640,56 @@
               }
             },
             "description": "A page of the protocol's reward claims, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/protocols/{protocol}/reward-claims/totals": {
+      "get": {
+        "operationId": "get_protocol_reward_claim_totals",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolClaimTotalsResponse"
+                }
+              }
+            },
+            "description": "The rewards the protocol's positions claimed over the window, valued; no row while its claims do not cover the window whole."
           },
           "default": {
             "content": {

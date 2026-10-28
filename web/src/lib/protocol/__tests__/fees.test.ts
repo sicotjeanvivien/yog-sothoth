@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { feeSharesOf, feeSlotsOf, feeSumOf, feeTotalsOf } from "../fees";
+import { claimedShareOf, feeSharesOf, feeSlotsOf, feeSumOf, feeTotalsOf } from "../fees";
 
 const AS_OF = "2026-10-25T03:00:00Z";
 
@@ -76,5 +76,21 @@ describe("feeTotalsOf and feeSharesOf", () => {
     expect(feeSumOf(slot)).toBe(25);
     expect(feeSharesOf(slot)).toEqual({ lp: 0.8, protocol: null, referral: 0.2 });
     expect(feeTotalsOf(slots)).toEqual({ lp: 20, protocol: null, referral: 5 });
+  });
+});
+
+describe("claimedShareOf", () => {
+  const reading = (asOf: string | null, amountUsd: string | null) => ({ asOf, amountUsd });
+
+  // Mutation: the readings divided whatever their end — two periods an hour apart compared.
+  it("divides the fees claimed by those generated only over the same period", () => {
+    expect(claimedShareOf(reading(AS_OF, "81"), reading(AS_OF, "100"))).toBe(0.81);
+    expect(claimedShareOf(reading(AS_OF, "81"), reading("2026-10-25T04:00:00Z", "100"))).toBeNull();
+  });
+
+  // Mutation: the share capped at 1, or read as 0 without fees generated.
+  it("can exceed the whole, and has no share without fees generated", () => {
+    expect(claimedShareOf(reading(AS_OF, "150"), reading(AS_OF, "100"))).toBe(1.5);
+    expect(claimedShareOf(reading(AS_OF, "10"), reading(AS_OF, "0"))).toBeNull();
   });
 });

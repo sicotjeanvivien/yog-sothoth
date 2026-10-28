@@ -3,6 +3,7 @@ use solana_pubkey::Pubkey;
 use crate::http::{AppState, dto::request::parse_pool, error::ApiError};
 
 pub(super) mod announcements;
+pub(super) mod claim_totals;
 pub(super) mod health;
 pub(super) mod ingestion;
 pub(super) mod liquidity_changes;

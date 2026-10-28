@@ -84,8 +84,12 @@ async fn the_raw_swaps_take_the_four_settings(pool: PgPool) {
 /// The tranches valued by yog-analytic (028), kept as long as the raw swaps.
 const TRANCHES: [&str; 2] = ["analytic_pool_prices_5min", "analytic_pool_5min"];
 
-/// The valued liquidity moves (035), kept a day past the 30-day window that ranks them.
-const LIQUIDITY_MOVES: &str = "analytic_liquidity_moves";
+/// The valued liquidity moves (035) and claims (042), kept a day past the 30-day window.
+const VALUED_ROWS: [&str; 3] = [
+    "analytic_liquidity_moves",
+    "analytic_position_fee_claims",
+    "analytic_reward_claims",
+];
 
 /// The price series (041), in 1-day chunks compressed a day after they close.
 const PRICES: &str = "token_prices";
@@ -155,7 +159,7 @@ async fn no_other_hypertable_moves(pool: PgPool) {
     assert_house("drop_after", &retention, |table| {
         if TRANCHES.contains(&table) {
             7 * DAY
-        } else if table == LIQUIDITY_MOVES {
+        } else if VALUED_ROWS.contains(&table) {
             31 * DAY
         } else {
             30 * DAY

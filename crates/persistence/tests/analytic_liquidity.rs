@@ -11,18 +11,18 @@ use yog_persistence::PgAnalyticRepository;
 use super::helpers::{pk, price_at, setup_roles_and_connect_as, sqrt_price_x64};
 
 /// The first tranche of the hour three hours back: settled, and the start of its hour.
-fn settled_hour() -> DateTime<Utc> {
+pub(super) fn settled_hour() -> DateTime<Utc> {
     (Utc::now() - Duration::hours(3))
         .duration_trunc(Duration::hours(1))
         .unwrap()
 }
 
-fn dec(value: &str) -> BigDecimal {
+pub(super) fn dec(value: &str) -> BigDecimal {
     value.parse().unwrap()
 }
 
 /// A pool of `token` (6 decimals) against SOL (9 decimals).
-async fn setup_pool(pool: &PgPool, seed: u8, token: &str, sol: &str) -> String {
+pub(super) async fn setup_pool(pool: &PgPool, seed: u8, token: &str, sol: &str) -> String {
     let address = pk(seed).to_string();
     sqlx::query(
         "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint)
@@ -50,7 +50,14 @@ async fn setup_pool(pool: &PgPool, seed: u8, token: &str, sol: &str) -> String {
 }
 
 /// A swap of `a` token units for `b` lamports, without fee.
-async fn insert_swap(pool: &PgPool, address: &str, tag: &str, a: i64, b: i64, at: DateTime<Utc>) {
+pub(super) async fn insert_swap(
+    pool: &PgPool,
+    address: &str,
+    tag: &str,
+    a: i64,
+    b: i64,
+    at: DateTime<Utc>,
+) {
     sqlx::query(
         "INSERT INTO meteora_damm_v2_swap_events
            (pool_address, signature, trade_direction,
@@ -96,7 +103,7 @@ async fn insert_move(
 }
 
 /// Values the tranches from `first` through `last`, at the first instant the last one may be.
-async fn value(pool: &PgPool, first: DateTime<Utc>, last: DateTime<Utc>) {
+pub(super) async fn value(pool: &PgPool, first: DateTime<Utc>, last: DateTime<Utc>) {
     let progress = AnalyticProgress {
         first_hour: Some(first.duration_trunc(Duration::hours(1)).unwrap()),
         last_frozen: None,
@@ -118,7 +125,7 @@ async fn move_usd(pool: &PgPool, tag: &str) -> Option<BigDecimal> {
 
 /// Token X trades at 0.0001 SOL in its pool while its market says $1; SOL is at $100 and is the
 /// anchor, traded in a second pool. Returns the pool of X.
-async fn setup_inflated_token(pool: &PgPool, tranche: DateTime<Utc>) -> String {
+pub(super) async fn setup_inflated_token(pool: &PgPool, tranche: DateTime<Utc>) -> String {
     let (x, y, sol) = (pk(10).to_string(), pk(11).to_string(), pk(12).to_string());
     let pool_x = setup_pool(pool, 1, &x, &sol).await;
     let pool_y = setup_pool(pool, 2, &y, &sol).await;

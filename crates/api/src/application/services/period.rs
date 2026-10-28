@@ -1,7 +1,7 @@
 //! What every read of a produced resource shares: the period it covers, and the buckets a
 //! series is cut into.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, DurationRound, TimeDelta, Utc};
 use yog_core::{
     RepositoryResult,
     domain::{FrozenPeriod, ProtocolActivityLookup, TranchePeriod, Window},
@@ -63,4 +63,14 @@ pub(crate) async fn build_frozen_period(
         .frozen_hours()
         .await?
         .map(|hours| FrozenPeriod::of(hours, window, offset)))
+}
+
+/// The first hour that starts at or after `at`: an hour measured from its start.
+pub(crate) fn first_whole_hour(at: DateTime<Utc>) -> DateTime<Utc> {
+    let start = at.duration_trunc(TimeDelta::hours(1)).unwrap_or(at);
+    if start == at {
+        at
+    } else {
+        start + TimeDelta::hours(1)
+    }
 }

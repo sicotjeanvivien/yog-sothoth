@@ -8,7 +8,7 @@ pub(crate) use response::{
     LiquidityMoveResponse, NetworkResponse, PageResponse, PoolChangeEventResponse,
     PoolCreationEventResponse, PoolDetailResponse, PoolResponse, PoolSwapBucketResponse,
     PositionChangeEventResponse, PositionFeeClaimEventResponse, ProtocolCatalogResponse,
-    ProtocolDiscoveredTvlResponse, ProtocolFeeClaimEventResponse,
+    ProtocolClaimTotalsResponse, ProtocolDiscoveredTvlResponse, ProtocolFeeClaimEventResponse,
     ProtocolLiquidityFlowsBucketResponse, ProtocolLiquidityFlowsResponse,
     ProtocolPoolCreationsBucketResponse, ProtocolPoolCreationsResponse,
     ProtocolRotationRunBucketResponse, ProtocolRotationRunTotalsResponse,

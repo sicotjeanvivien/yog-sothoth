@@ -60,6 +60,25 @@ pub(super) async fn write_rotation_runs(
     Ok(())
 }
 
+/// The tranche's claims of fees and rewards, each valued once at its pool's price in it, a reward
+/// outside the pool at its market price.
+pub(super) async fn value_claims_tranche(
+    tx: &mut Transaction<'static, Postgres>,
+    tranche: DateTime<Utc>,
+    width: PgInterval,
+) -> RepositoryResult<()> {
+    sqlx::query_file!(
+        "src/repositories/analytic/meteora_damm_v2_claims_tranche.sql",
+        tranche,
+        Protocol::MeteoraDammV2.as_str(),
+        width,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(map_sqlx_error)?;
+    Ok(())
+}
+
 /// The tranche's liquidity moves, each valued once at its pool's price in it.
 pub(super) async fn value_liquidity_tranche(
     tx: &mut Transaction<'static, Postgres>,

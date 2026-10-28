@@ -16,33 +16,34 @@ use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
         Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementKind, AnnouncementLookup,
-        AnnouncementSeverity, AnnouncementStatus, DiscoveredTvlLookup, EventCursor,
-        EventFreshnessRepository, EventScope, FrozenHours, FrozenPeriod, LiquidityChangeEvent,
-        LiquidityChangeEventLookup, LiquidityFlows, LiquidityMove, LiquidityMoveCursor,
-        LiquidityMoveLookup, LiquidityMoveOrder, LiquidityMoveScope, MeteoraDammV2PoolProperties,
-        MeteoraDammV2PoolPropertiesLookup, NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog,
-        PoolChangeEvent, PoolChangeEventLookup, PoolCreationEvent, PoolCreationEventLookup,
-        PoolCreations, PoolCreationsLookup, PoolCursor, PoolEntry, PoolScope, PoolSwapBucket,
-        PositionChangeEvent, PositionChangeEventLookup, PositionFeeClaimEvent,
-        PositionFeeClaimEventLookup, Protocol, ProtocolActivityLookup, ProtocolBucket,
-        ProtocolDiscoveredTvl, ProtocolFeeClaimEvent, ProtocolFeeClaimEventLookup,
-        ProtocolPoolCreations, ProtocolPools, ProtocolSwapActivity, ProtocolTvl, ProtocolTvlLookup,
-        RewardChangeEvent, RewardChangeEventLookup, RewardClaimEvent, RewardClaimEventLookup,
-        RotationRun, RotationRunCursor, RotationRunLookup, RotationRunOrder, RotationRunScope,
-        RotationRunTotals, Severity, Signal, SignalCursor, SignalFeed, SignalFilter, SignalRecord,
-        SwapActivity, SwapActivityLookup, SwapEvent, SwapEventLookup, TokenActivityCursor,
-        TokenActivityFeed, TokenActivityPage, TokenCursor, TokenEntry, TokenMetadata,
-        TokenMetadataLookup, TokenPrice, TokenPriceCursor, TokenPriceLookup, TranchePeriod, Window,
+        AnnouncementSeverity, AnnouncementStatus, ClaimTotals, ClaimTotalsLookup,
+        DiscoveredTvlLookup, EventCursor, EventFreshnessRepository, EventScope, FrozenHours,
+        FrozenPeriod, LiquidityChangeEvent, LiquidityChangeEventLookup, LiquidityFlows,
+        LiquidityMove, LiquidityMoveCursor, LiquidityMoveLookup, LiquidityMoveOrder,
+        LiquidityMoveScope, MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesLookup,
+        NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog, PoolChangeEvent,
+        PoolChangeEventLookup, PoolCreationEvent, PoolCreationEventLookup, PoolCreations,
+        PoolCreationsLookup, PoolCursor, PoolEntry, PoolScope, PoolSwapBucket, PositionChangeEvent,
+        PositionChangeEventLookup, PositionFeeClaimEvent, PositionFeeClaimEventLookup, Protocol,
+        ProtocolActivityLookup, ProtocolBucket, ProtocolDiscoveredTvl, ProtocolFeeClaimEvent,
+        ProtocolFeeClaimEventLookup, ProtocolPoolCreations, ProtocolPools, ProtocolSwapActivity,
+        ProtocolTvl, ProtocolTvlLookup, RewardChangeEvent, RewardChangeEventLookup,
+        RewardClaimEvent, RewardClaimEventLookup, RotationRun, RotationRunCursor,
+        RotationRunLookup, RotationRunOrder, RotationRunScope, RotationRunTotals, Severity, Signal,
+        SignalCursor, SignalFeed, SignalFilter, SignalRecord, SwapActivity, SwapActivityLookup,
+        SwapEvent, SwapEventLookup, TokenActivityCursor, TokenActivityFeed, TokenActivityPage,
+        TokenCursor, TokenEntry, TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceCursor,
+        TokenPriceLookup, TranchePeriod, Window,
     },
 };
 
 use crate::application::{
-    AnnouncementService, DiscoveredTvlService, IngestionService, LiquidityChangeEventService,
-    LiquidityMoveService, NetworkService, PoolChangeEventService, PoolCreationEventService,
-    PoolCreationsService, PoolService, PositionChangeEventService, PositionFeeClaimEventService,
-    ProtocolCatalogService, ProtocolFeeClaimEventService, ProtocolTvlService,
-    RewardChangeEventService, RewardClaimEventService, RotationRunService, SignalService,
-    SwapActivityService, SwapEventService, TokenService, WorkSlots,
+    AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService,
+    LiquidityChangeEventService, LiquidityMoveService, NetworkService, PoolChangeEventService,
+    PoolCreationEventService, PoolCreationsService, PoolService, PositionChangeEventService,
+    PositionFeeClaimEventService, ProtocolCatalogService, ProtocolFeeClaimEventService,
+    ProtocolTvlService, RewardChangeEventService, RewardClaimEventService, RotationRunService,
+    SignalService, SwapActivityService, SwapEventService, TokenService, WorkSlots,
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
@@ -85,6 +86,10 @@ pub(crate) fn app_state() -> AppState {
         liquidity_move_service: Arc::new(LiquidityMoveService::new(
             frozen_hours_repo(None),
             Arc::new(MockLiquidityMoveRepo::default()),
+        )),
+        claim_totals_service: Arc::new(ClaimTotalsService::new(
+            frozen_hours_repo(None),
+            Arc::new(MockClaimTotalsRepo::default()),
         )),
         rotation_run_service: Arc::new(RotationRunService::new(
             frozen_hours_repo(None),
@@ -820,6 +825,50 @@ impl PoolCreationsLookup for MockPoolCreationsRepo {
         _: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBucket<PoolCreations>>> {
         Ok(vec![])
+    }
+}
+
+/// A `ClaimTotalsLookup` measured from `since`, answering zero claims, which records the period
+/// and the protocol of each read.
+#[derive(Default)]
+pub(crate) struct MockClaimTotalsRepo {
+    pub(crate) since: Option<DateTime<Utc>>,
+    pub(crate) reads: Mutex<Vec<PeriodRead>>,
+}
+
+impl MockClaimTotalsRepo {
+    fn totals(&self, name: &'static str, period: &FrozenPeriod, protocol: Protocol) -> ClaimTotals {
+        self.reads
+            .lock()
+            .unwrap()
+            .push((name, *period, Some(protocol)));
+        ClaimTotals {
+            claims: 0,
+            claims_valued: 0,
+            amount_usd: rust_decimal::Decimal::ZERO,
+            owners: 0,
+        }
+    }
+}
+
+#[async_trait]
+impl ClaimTotalsLookup for MockClaimTotalsRepo {
+    async fn find_measured_since(&self, _: Protocol) -> RepositoryResult<Option<DateTime<Utc>>> {
+        Ok(self.since)
+    }
+    async fn find_position_fee_claim_totals(
+        &self,
+        period: &FrozenPeriod,
+        protocol: Protocol,
+    ) -> RepositoryResult<ClaimTotals> {
+        Ok(self.totals("position_fee_claim_totals", period, protocol))
+    }
+    async fn find_reward_claim_totals(
+        &self,
+        period: &FrozenPeriod,
+        protocol: Protocol,
+    ) -> RepositoryResult<ClaimTotals> {
+        Ok(self.totals("reward_claim_totals", period, protocol))
     }
 }
 

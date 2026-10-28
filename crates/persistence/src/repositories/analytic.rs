@@ -44,6 +44,7 @@ impl AnalyticRepository for PgAnalyticRepository {
         while tranche <= cycle.tranches_through {
             meteora_damm_v2::value_tranche(&mut tx, tranche, tranche_interval()).await?;
             meteora_damm_v2::value_liquidity_tranche(&mut tx, tranche, tranche_interval()).await?;
+            meteora_damm_v2::value_claims_tranche(&mut tx, tranche, tranche_interval()).await?;
             tranches_written += 1;
             tranche += TRANCHE;
         }
@@ -156,8 +157,8 @@ async fn record_tranches(
 ) -> RepositoryResult<()> {
     sqlx::query!(
         r#"
-        INSERT INTO analytic_tranches (bucket, written_at, rotations)
-        SELECT generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ, $4::INTERVAL), $3, true
+        INSERT INTO analytic_tranches (bucket, written_at, rotations, claims)
+        SELECT generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ, $4::INTERVAL), $3, true, true
         "#,
         from,
         through,
