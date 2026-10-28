@@ -19,6 +19,13 @@ export function isBetaDismissed(raw: string | undefined): boolean {
   return raw === "1";
 }
 
+/** The dismissal in a `document.cookie` string. */
+export function isBetaDismissedIn(cookies: string): boolean {
+  const prefix = `${BETA_DISMISSED_COOKIE}=`;
+  const pair = cookies.split("; ").find((c) => c.startsWith(prefix));
+  return isBetaDismissed(pair?.slice(prefix.length));
+}
+
 export function rememberBetaDismissed() {
   writeCookie(BETA_DISMISSED_COOKIE, true, BETA_COOKIE_MAX_AGE_S);
 }

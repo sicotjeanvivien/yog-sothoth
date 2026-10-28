@@ -91,13 +91,13 @@ export function Brand({
     <div className={`flex ${collapsed ? "rail:justify-center" : ""}`}>
       <Link href="/" className="flex items-center gap-3">
         <LogoMark width={small ? 30 : 36} priority />
-        <span className="flex flex-col items-end gap-1">
-          <span
-            className={`font-display text-[16px] font-semibold tracking-[0.16em] whitespace-nowrap uppercase ${collapsed ? "rail:sr-only" : ""}`}
-          >
+        <span
+          className={`flex flex-col items-end gap-1 ${collapsed ? "rail:sr-only" : ""}`}
+        >
+          <span className="font-display text-[16px] font-semibold tracking-[0.16em] whitespace-nowrap uppercase">
             {t("name")}
           </span>
-          <BetaBadge className={collapsed ? "rail:hidden" : ""} />
+          <BetaBadge />
         </span>
       </Link>
     </div>

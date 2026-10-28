@@ -5,6 +5,7 @@ import { CONTACT_EMAIL_HREF } from "@/components/marketing/contact";
 import {
   REPORT_ERROR_HREF,
   isBetaDismissed,
+  isBetaDismissedIn,
   rememberBetaDismissed,
 } from "../beta-state";
 
@@ -42,4 +43,19 @@ describe("isBetaDismissed", () => {
   it.each([undefined, "0", "oui"])("shows the banner for %s", (raw) => {
     expect(isBetaDismissed(raw)).toBe(false);
   });
+});
+
+describe("isBetaDismissedIn", () => {
+  // Mutation: only the first cookie read — the dismissal hides behind any other cookie.
+  it("finds the dismissal among other cookies", () => {
+    expect(isBetaDismissedIn("yog_sidebar_collapsed=0; yog_beta_dismissed=1")).toBe(true);
+  });
+
+  // Mutation: an unanchored match — another cookie's name ending with this one counts.
+  it.each(["", "yog_beta_dismissed=0", "not_yog_beta_dismissed=1"])(
+    "shows the banner for %j",
+    (cookies) => {
+      expect(isBetaDismissedIn(cookies)).toBe(false);
+    },
+  );
 });

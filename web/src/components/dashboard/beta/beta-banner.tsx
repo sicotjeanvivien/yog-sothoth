@@ -5,21 +5,37 @@
  * In the flow, not sticky: a warning read once, not an alert.
  */
 
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
 
 import { BetaBadge } from "./beta-badge";
-import { REPORT_ERROR_HREF, rememberBetaDismissed } from "./beta-state";
+import {
+  REPORT_ERROR_HREF,
+  isBetaDismissedIn,
+  rememberBetaDismissed,
+} from "./beta-state";
+
+const listeners = new Set<() => void>();
+
+function subscribe(onChange: () => void) {
+  listeners.add(onChange);
+  return () => listeners.delete(onChange);
+}
 
 export function BetaBanner() {
   const t = useTranslations("Dashboard.Beta");
-  const [dismissed, setDismissed] = useState(false);
+  // ⚠️ The cookie, not a state: Back restores the layout from the router cache, banner included.
+  const dismissed = useSyncExternalStore(
+    subscribe,
+    () => isBetaDismissedIn(document.cookie),
+    () => false,
+  );
 
   if (dismissed) return null;
 
   const dismiss = () => {
     rememberBetaDismissed();
-    setDismissed(true);
+    listeners.forEach((onChange) => onChange());
   };
 
   return (
