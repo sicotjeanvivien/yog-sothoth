@@ -1,6 +1,6 @@
 -- 044_position_changes_hourly.sql — the positions a protocol opened, locked (vesting or
 -- permanent), split and closed, counted by yog-analytic per hour. The raw position events are
--- kept without limit: every hour since the first one is filled here, zero included.
+-- kept without limit: every closed hour since the first one is filled here, zero included.
 
 CREATE TABLE analytic_protocol_position_changes_hourly (
     protocol        TEXT        NOT NULL,
@@ -68,7 +68,7 @@ SELECT 'meteora_damm_v2', c.*
                (SELECT MIN(timestamp) FROM meteora_damm_v2_permanent_lock_position_events),
                (SELECT MIN(timestamp) FROM meteora_damm_v2_split_position_events),
                (SELECT MIN(timestamp) FROM meteora_damm_v2_close_position_events))),
-           time_bucket('1 hour', now())) AS c;
+           time_bucket('1 hour', now()) - INTERVAL '1 hour') AS c;
 
 GRANT SELECT, INSERT, UPDATE ON analytic_protocol_position_changes_hourly TO yog_analytic;
 GRANT SELECT ON meteora_damm_v2_create_position_events, meteora_damm_v2_close_position_events,

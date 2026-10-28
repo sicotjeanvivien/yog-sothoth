@@ -858,32 +858,36 @@ async fn each_kind_of_position_change_is_counted_in_its_hour_and_an_hour_without
     );
 }
 
-/// Mutation: the cycle's hours alone rewritten — an hour written partly before it, and frozen
-/// since, kept partial, and the hours after it never written.
+/// Mutation: the hours missing since the last one written left unwritten, or a frozen hour
+/// before the cycle rewritten — its counts changing after they were served.
 #[sqlx::test]
-async fn a_cycle_rewrites_from_the_last_hour_already_written(pool: PgPool) {
+async fn a_cycle_writes_the_hours_missing_since_the_last_and_never_rewrites_a_frozen_one(
+    pool: PgPool,
+) {
     let now = now();
     let cycle = cycle_from(now, hours_before(now, 1));
-    let partial = cycle.from - Duration::hours(3);
+    let frozen = cycle.from - Duration::hours(3);
     sqlx::query(
         "INSERT INTO analytic_protocol_position_changes_hourly
            (protocol, bucket, opened, vesting_locks, permanent_locks, splits, closed)
          VALUES ('meteora_damm_v2', $1, 1, 0, 0, 0, 0)",
     )
-    .bind(partial)
+    .bind(frozen)
     .execute(&pool)
     .await
     .unwrap();
-    insert_position_events(
-        &pool,
-        "INSERT INTO meteora_damm_v2_create_position_events
-           (pool_address, signature, owner, position, position_nft_mint, timestamp, slot,
-            event_index)
-         VALUES ('x', $1, 'x', 'x', 'x', $2, 0, 0)",
-        3,
-        partial + Duration::minutes(50),
-    )
-    .await;
+    for at in [frozen, frozen + Duration::hours(1)] {
+        insert_position_events(
+            &pool,
+            "INSERT INTO meteora_damm_v2_create_position_events
+               (pool_address, signature, owner, position, position_nft_mint, timestamp, slot,
+                event_index)
+             VALUES ('x', $1, 'x', 'x', 'x', $2, 0, 0)",
+            3,
+            at + Duration::minutes(50),
+        )
+        .await;
+    }
 
     let repository =
         PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
@@ -895,10 +899,11 @@ async fn a_cycle_rewrites_from_the_last_hour_already_written(pool: PgPool) {
     .fetch_all(&pool)
     .await
     .unwrap();
-    assert_eq!(opened[0], (partial, 3));
+    assert_eq!(opened[0], (frozen, 1));
+    assert_eq!(opened[1], (frozen + Duration::hours(1), 3));
     assert_eq!(
         opened.len() as i64,
-        (cycle.through - partial).num_hours() + 1,
+        (cycle.through - frozen).num_hours() + 1,
         "{opened:?}"
     );
 }

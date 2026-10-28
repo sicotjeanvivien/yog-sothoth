@@ -173,7 +173,7 @@ pub(super) async fn upsert_births(
 }
 
 /// The positions opened, locked, split and closed in the hours `from..=through`, each hour
-/// rewritten whole, zero included, and from the last hour already written when it is earlier.
+/// rewritten whole, zero included; an hour missing since the last one written is written too.
 pub(super) async fn upsert_position_changes(
     tx: &mut Transaction<'static, Postgres>,
     from: DateTime<Utc>,
@@ -184,9 +184,9 @@ pub(super) async fn upsert_position_changes(
         INSERT INTO analytic_protocol_position_changes_hourly
             (protocol, bucket, opened, vesting_locks, permanent_locks, splits, closed)
         SELECT $3, c.*
-          -- ⚠️ From the last hour written too: one frozen before this writer ran is never rewritten.
           FROM meteora_damm_v2_position_changes(
-                   LEAST($1, (SELECT MAX(bucket) FROM analytic_protocol_position_changes_hourly
+                   LEAST($1, (SELECT MAX(bucket) + INTERVAL '1 hour'
+                                FROM analytic_protocol_position_changes_hourly
                                WHERE protocol = $3)),
                    $2) AS c
         ON CONFLICT (protocol, bucket) DO UPDATE SET
@@ -195,6 +195,8 @@ pub(super) async fn upsert_position_changes(
             permanent_locks = EXCLUDED.permanent_locks,
             splits          = EXCLUDED.splits,
             closed          = EXCLUDED.closed
+        -- ⚠️ A frozen hour, before `from`, is written once: missing, never rewritten.
+        WHERE analytic_protocol_position_changes_hourly.bucket >= $1
         "#,
         from,
         through,
