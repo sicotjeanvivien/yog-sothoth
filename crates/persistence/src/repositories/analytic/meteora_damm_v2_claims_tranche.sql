@@ -33,10 +33,8 @@ fees_written AS (
         signature, event_index, timestamp, bucket, pool_address, protocol, owner, amount_usd
     )
     SELECT f.signature, f.event_index, f.timestamp, $1, f.pool_address, $2, f.owner,
-           -- An empty claim took nothing: worth 0, priced or not.
-           CASE WHEN f.amount_a = 0 AND f.amount_b = 0 THEN 0
-                ELSE yog_pool_amounts_usd(f.amount_a, f.amount_b, f.dec_a, f.dec_b, pr.price_a_usd,
-                                          pr.price_b_usd, pr.market_a_usd, pr.market_b_usd) END
+           yog_pool_amounts_usd(f.amount_a, f.amount_b, f.dec_a, f.dec_b,
+                                pr.price_a_usd, pr.price_b_usd, pr.market_a_usd, pr.market_b_usd)
       FROM fee_claims f
       LEFT JOIN prices pr ON pr.pool_address = f.pool_address
 )

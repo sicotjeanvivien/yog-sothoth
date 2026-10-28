@@ -297,11 +297,9 @@
         "chartLabelDaily": "Fees per day, by destination",
         "claims": {
           "title": "What the LPs take back",
-          "info": "Liquidity providers get their fees only when they claim them: these figures are what was actually withdrawn, valued at the pool's price at the moment of the claim, a reward outside the pool at its market price. A claim also takes fees generated before the period: the fees claimed can exceed those generated. The fees generated include those a compounding pool reinvests, which are never claimed.",
+          "info": "Liquidity providers get their fees only when they claim them: these figures are what was actually withdrawn, valued at the pool's price at the moment of the claim, a reward outside the pool at its market price. A claim also takes fees generated before the period: the fees claimed can exceed the LPs' part in “Where the fees go”, which also holds those a compounding pool reinvests and which are never claimed.",
           "feesClaimed": "Fees claimed · {period}",
           "rewardsClaimed": "Rewards claimed · {period}",
-          "generated": "Fees generated for the LPs · {period}",
-          "lpPart": "the LPs' part of the swaps' fees",
           "addresses": "{owners} {count, plural, one {address} other {addresses}}",
           "unvalued": "{n} not valued"
         }

@@ -23,7 +23,6 @@ import {
   fetchPositionFeeClaimTotals,
   fetchRewardClaimTotals,
   fetchSwapsSeries,
-  fetchSwapTotals,
 } from "@/lib/api/server/protocols";
 import { formatCount } from "@/lib/format/format-count";
 import { formatUtcMoment, type FormatLocale } from "@/lib/format/date";
@@ -255,12 +254,11 @@ async function LpClaims({ period, protocol }: TabProps) {
   const title = t("title");
   const short = tPeriod(`short.${period}`);
 
-  let fees, rewards, swaps;
+  let fees, rewards;
   try {
-    [fees, rewards, swaps] = await Promise.all([
+    [fees, rewards] = await Promise.all([
       fetchPositionFeeClaimTotals(protocol, period),
       fetchRewardClaimTotals(protocol, period),
-      fetchSwapTotals(protocol, period),
     ]);
   } catch (err) {
     if (err instanceof ApiClientError) {
@@ -277,7 +275,6 @@ async function LpClaims({ period, protocol }: TabProps) {
   const closed = await closedReason(period, fees);
   const feeClaims = fees.items.find((i) => i.protocol === protocol);
   const rewardClaims = rewards.items.find((i) => i.protocol === protocol);
-  const lpFees = swaps.items.find((i) => i.protocol === protocol)?.lpFeesUsd ?? null;
 
   const stat = (label: string, big: string, sub: ReactNode, last = false) => (
     <div className={`flex flex-col gap-1 py-3 ${last ? "" : "border-b border-dash-rule"}`}>
@@ -324,15 +321,6 @@ async function LpClaims({ period, protocol }: TabProps) {
             t("rewardsClaimed", { period: short }),
             formatUsdCompact(rewardClaims?.amountUsd ?? null),
             claimed(rewardClaims, "claim_reward"),
-          )}
-          {stat(
-            t("generated", { period: short }),
-            formatUsdCompact(lpFees),
-            <>
-              {t("lpPart")}
-              {" · "}
-              <span className="font-dash-mono text-[11px] text-dash-ink-3">swap</span>
-            </>,
             true,
           )}
         </>

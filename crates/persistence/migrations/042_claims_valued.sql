@@ -144,6 +144,7 @@ CREATE FUNCTION yog_pool_amounts_usd(
 RETURNS NUMERIC
 LANGUAGE sql IMMUTABLE PARALLEL SAFE
 RETURN CASE
+    WHEN amount_a = 0 AND amount_b = 0 THEN 0
     WHEN (amount_a > 0 AND market_a_usd IS NOT NULL) OR (amount_b > 0 AND market_b_usd IS NOT NULL)
     THEN CASE WHEN amount_a = 0 OR market_a_usd IS NULL THEN 0
               ELSE yog_token_amount(amount_a, dec_a) * price_a_usd END

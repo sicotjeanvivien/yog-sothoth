@@ -44,7 +44,7 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "Beside it, what the LPs take back: the fees and the rewards their positions claimed over the period, valued, with the addresses that claimed them, beside the LPs' fees generated. Measured from this release on.",
+            text: "Beside it, what the LPs take back: the fees and the rewards their positions claimed over the period, valued, with the addresses that claimed them. Measured from this release on.",
             technical: false,
           },
           {

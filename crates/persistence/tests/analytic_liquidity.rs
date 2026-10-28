@@ -183,9 +183,10 @@ async fn a_move_without_a_swap_takes_the_lower_of_its_market_and_the_last_bounde
     assert_eq!(move_usd(&pool, "remove").await, Some(dec("10.05")));
 }
 
-/// Mutation: a pool never priced valued anyway, at market or at its mid price.
+/// Mutation: a pool never priced valued anyway, at market or at its mid price; or an empty move
+/// left to the price, read as not valued when it moved nothing.
 #[sqlx::test]
-async fn a_move_in_a_pool_never_priced_is_not_valued(pool: PgPool) {
+async fn a_move_in_a_pool_never_priced_is_not_valued_and_an_empty_one_is_worth_zero(pool: PgPool) {
     let tranche = settled_hour() + Duration::minutes(10);
     setup_inflated_token(&pool, tranche).await;
     let (z, sol) = (pk(13).to_string(), pk(12).to_string());
@@ -200,10 +201,12 @@ async fn a_move_in_a_pool_never_priced_is_not_valued(pool: PgPool) {
         tranche,
     )
     .await;
+    insert_move(&pool, &pool_z, "empty", "add", (0, 0), tranche).await;
 
     value(&pool, tranche, tranche).await;
 
     assert_eq!(move_usd(&pool, "new").await, None);
+    assert_eq!(move_usd(&pool, "empty").await, Some(dec("0")));
 }
 
 /// Mutation: the newest price row taken whatever it holds — its side without a price leaves
