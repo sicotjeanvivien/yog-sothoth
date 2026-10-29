@@ -33,7 +33,7 @@ export type Release = {
 export const RELEASES: readonly Release[] = [
   {
     version: "v0.5.0",
-    date: "2026-10-28",
+    date: "2026-10-29",
     summary: "DAMM v2 has two new tabs: Fees, where its fees go and what the LPs take back, and Pools & positions, the pools being born and the positions' life cycle. The dashboard says it is in beta.",
     sections: [
       {
