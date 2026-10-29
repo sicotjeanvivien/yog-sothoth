@@ -1222,14 +1222,25 @@ async fn ceiling_of(pool: &PgPool, mint: &str) -> Option<BigDecimal> {
 }
 
 /// Against the trade's price written from the published one: a token without a market price has
-/// one there, $25, and none it was traded at would be lost.
+/// one there, $25, and none it was traded at would be lost. Against the minimum dropped: a dust
+/// trade, $0.0001 of B, would witness A.
 #[sqlx::test]
 async fn a_tranche_writes_what_its_trade_implies_for_each_token(pool: PgPool) {
     let tranche = settled_tranche();
-    let (a, b) = (pk(10).to_string(), pk(11).to_string());
+    let (a, b, c) = (pk(10).to_string(), pk(11).to_string(), pk(12).to_string());
     let address = setup_pool(&pool, 1, (&a, 6), (&b, 6)).await;
+    let dust = setup_pool(&pool, 2, (&c, 6), (&b, 6)).await;
     price_at(&pool, &b, "100", tranche).await;
-    insert_swap(&pool, &address, "ab", (4, 1), sqrt_price_x64(4, 1), tranche).await;
+    insert_swap(
+        &pool,
+        &address,
+        "ab",
+        (4_000_000, 1_000_000),
+        sqrt_price_x64(4, 1),
+        tranche,
+    )
+    .await;
+    insert_swap(&pool, &dust, "cb", (4, 1), sqrt_price_x64(4, 1), tranche).await;
 
     value(&pool, tranche).await;
 
@@ -1238,6 +1249,7 @@ async fn a_tranche_writes_what_its_trade_implies_for_each_token(pool: PgPool) {
         implied(&pool, &address, tranche).await,
         (Some(dec("25")), None)
     );
+    assert_eq!(implied(&pool, &dust, tranche).await, (None, None));
 }
 
 /// The anchor, published at its market price, is witnessed at its trade's. Against the ceiling
@@ -1256,7 +1268,7 @@ async fn an_anchor_is_witnessed_at_its_trade_not_its_quote(pool: PgPool) {
             &pool,
             &address,
             &format!("xy{seed}"),
-            (1, 1),
+            (5_000_000, 5_000_000),
             sqrt_price_x64(1, 1),
             tranche,
         )
@@ -1284,8 +1296,24 @@ async fn the_cycle_keeps_each_tokens_ceiling_within_the_window(pool: PgPool) {
     let high = setup_pool(&pool, 2, (&a, 6), (&b, 6)).await;
     let stale = setup_pool(&pool, 3, (&old, 6), (&b, 6)).await;
     price_at(&pool, &b, "100", tranche).await;
-    insert_swap(&pool, &low, "low", (4, 1), sqrt_price_x64(4, 1), tranche).await;
-    insert_swap(&pool, &high, "high", (1, 1), sqrt_price_x64(1, 1), tranche).await;
+    insert_swap(
+        &pool,
+        &low,
+        "low",
+        (4_000_000, 1_000_000),
+        sqrt_price_x64(4, 1),
+        tranche,
+    )
+    .await;
+    insert_swap(
+        &pool,
+        &high,
+        "high",
+        (1_000_000, 1_000_000),
+        sqrt_price_x64(1, 1),
+        tranche,
+    )
+    .await;
     sqlx::query(
         "INSERT INTO analytic_pool_prices_5min (pool_address, bucket, pool_a_usd)
          VALUES ($1, $2, 5)",

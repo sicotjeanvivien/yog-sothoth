@@ -316,7 +316,8 @@ Two consequences worth knowing before you touch a valuation view:
   figure. Its two sides (`value_a_usd`, `value_b_usd`, migration 019) go NULL each
   on its own price, read from `token_stock_price` (045), which drops a market
   price more than `yog_market_over_pool_max()` times its token's ceiling — the
-  highest price our pools' trades gave it over `yog_pool_witness_window()`.
+  highest price our pools' trades gave it over `yog_pool_witness_window()`, a
+  trade paying less than `yog_pool_witness_min_usd()` for it witnessing nothing.
   `tvl_usd` sums the sides valued, a side without a price
   counting 0 (034), and goes NULL only when neither is; `tvl_complete_usd` is
   NULL as soon as one side is. `tvl_drain` reads the second: a drain over half a

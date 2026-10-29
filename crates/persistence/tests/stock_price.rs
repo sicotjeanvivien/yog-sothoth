@@ -104,7 +104,8 @@ async fn a_market_price_our_pools_contradict_counts_zero(pool: PgPool) {
     );
 }
 
-/// Against the threshold moved to 1 (the 9 times refused) or to 100 (the 11 times believed).
+/// Against the threshold moved to 1 (the 9 times refused) or to 100 (the 11 times believed), and
+/// against `>=` for `>` (exactly 10 times refused).
 #[sqlx::test]
 async fn a_market_price_up_to_ten_times_the_ceiling_is_believed(pool: PgPool) {
     let (a, b) = mints();
@@ -116,6 +117,12 @@ async fn a_market_price_up_to_ten_times_the_ceiling_is_believed(pool: PgPool) {
     assert_eq!(
         sides(&pool, &address).await,
         (usd("180"), usd("100"), usd("280"), usd("280"))
+    );
+
+    price_now(&pool, &a, "20").await;
+    assert_eq!(
+        sides(&pool, &address).await,
+        (usd("200"), usd("100"), usd("300"), usd("300"))
     );
 
     price_now(&pool, &a, "22").await;

@@ -34,7 +34,7 @@ market AS (
       LEFT JOIN LATERAL yog_price_asof(n.mint, $1::TIMESTAMPTZ + $3::INTERVAL) pr ON true
 ),
 quoted AS (
-    SELECT t.pool_address,
+    SELECT t.pool_address, t.traded_a, t.traded_b, t.dec_a, t.dec_b,
            ma.price_usd AS market_a,
            mb.price_usd AS market_b,
            n.anchor,
@@ -72,7 +72,10 @@ prices AS (
         pool_a_usd, pool_b_usd
     )
     SELECT q.pool_address, $1, q.market_a, x.price_a, q.market_b, x.price_b,
-           q.rate * q.market_b, q.market_a / q.rate
+           CASE WHEN yog_amount_usd(q.traded_b, q.dec_b, q.market_b) >= yog_pool_witness_min_usd()
+                THEN q.rate * q.market_b END,
+           CASE WHEN yog_amount_usd(q.traded_a, q.dec_a, q.market_a) >= yog_pool_witness_min_usd()
+                THEN q.market_a / q.rate END
       FROM quoted q
      -- ⚠️ LEAST skips NULL: a token without a market price takes its price in the pool.
      -- Without the tranche's rate there is nothing to bound by, and no price but the anchor's.

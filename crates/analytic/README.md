@@ -163,7 +163,8 @@ in `persistence` (`repositories/analytic.rs`).
   trades gave the token over 7 days, its ceiling. A side without one counts 0, a
   pool with no side valued is counted apart (`pools_unvalued`). Each cycle keeps
   every token's ceiling (`analytic_token_pool_ceilings`) from what each tranche's
-  trade implied for it (`pool_a_usd`, `pool_b_usd` of the price table). The
+  trade implied for it (`pool_a_usd`, `pool_b_usd` of the price table), a trade
+  that paid less than $1 for it witnessing nothing. The
   pools Meteora holds that never emitted an event since are out of it: a limit of
   observation, which grows the figure as dormant pools wake.
 - **Discovered part**: with each TVL, for every window — 24 h, 7 and 30 days — the
