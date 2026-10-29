@@ -14,7 +14,8 @@ use yog_core::{
 };
 
 use super::period::{
-    BucketPeriod, Measured, ReadPeriod, SeriesInterval, build_frozen_period, build_read_period,
+    BucketPeriod, Measured, ReadPeriod, SeriesInterval, build_frozen_period, build_last_hour,
+    build_read_period,
 };
 
 /// A page of tokens, or the refusal of a cursor taken in a ranking since rewritten.
@@ -148,15 +149,16 @@ impl SwapActivityService {
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Measured<Vec<ProtocolBucket<SwapActivity>>, ReadPeriod>> {
         let Some(bucket) = interval.frozen_bucket() else {
-            let period = build_read_period(self.hours.as_ref(), Window::Hour, None).await?;
+            let period = build_last_hour(self.hours.as_ref()).await?;
             let items = match &period {
-                Some(ReadPeriod::Tranche(p)) => {
+                Some(p) => {
                     self.swap_activity
                         .list_protocol_tranches(p, protocol)
                         .await?
                 }
-                _ => Vec::new(),
+                None => Vec::new(),
             };
+            let period = period.map(ReadPeriod::Tranche);
             return Ok(Measured { period, items });
         };
         let measured = self.list_swap_buckets(window, bucket, protocol).await?;

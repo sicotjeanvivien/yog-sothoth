@@ -93,6 +93,16 @@ pub(crate) async fn build_read_period(
     })
 }
 
+/// The last hour through the last tranche written; `None` before the first.
+pub(crate) async fn build_last_hour(
+    hours: &dyn ProtocolActivityLookup,
+) -> RepositoryResult<Option<TranchePeriod>> {
+    Ok(hours
+        .written_tranches()
+        .await?
+        .map(|tranches| TranchePeriod::hour_through(tranches, None)))
+}
+
 /// The step of a `…/series`: 5 minutes over the last hour only, an hour or 24 hours otherwise.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SeriesInterval {

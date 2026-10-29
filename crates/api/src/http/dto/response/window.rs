@@ -31,7 +31,7 @@ impl From<Window> for WindowResponse {
     }
 }
 
-/// `from..asOf`, each `null` before the first hour is frozen.
+/// `from..asOf`, each `null` before any fact.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct WindowedResponse<T> {
@@ -40,7 +40,7 @@ pub(crate) struct WindowedResponse<T> {
     /// The close of the last frozen hour, or for `1h` the end of the last tranche written: the
     /// instant the rows reflect.
     as_of: Option<DateTime<Utc>>,
-    /// The first hour the facts hold.
+    /// Where the facts start.
     covered_since: Option<DateTime<Utc>>,
     items: Vec<T>,
 }

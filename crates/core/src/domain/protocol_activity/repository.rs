@@ -3,8 +3,7 @@ use async_trait::async_trait;
 use crate::RepositoryResult;
 use crate::domain::{FrozenHours, WrittenTranches};
 
-/// Read lens on yog-analytic's hours, the api's: every measure takes a
-/// [`FrozenPeriod`](crate::domain::FrozenPeriod) built from [`Self::frozen_hours`].
+/// Read lens on yog-analytic's hours and tranches, the api's.
 #[async_trait]
 pub trait ProtocolActivityLookup: Send + Sync {
     /// `None` before the first freeze.

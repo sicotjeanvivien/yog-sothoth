@@ -11,7 +11,8 @@ use yog_core::{
 };
 
 use super::period::{
-    BucketPeriod, Measured, ReadPeriod, SeriesInterval, build_frozen_period, build_read_period,
+    BucketPeriod, Measured, ReadPeriod, SeriesInterval, build_frozen_period, build_last_hour,
+    build_read_period,
 };
 
 pub(crate) struct PoolCreationsService {
@@ -59,13 +60,12 @@ impl PoolCreationsService {
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Measured<Vec<ProtocolBucket<PoolCreations>>, ReadPeriod>> {
         let Some(bucket) = interval.frozen_bucket() else {
-            let period = build_read_period(self.hours.as_ref(), Window::Hour, None).await?;
+            let period = build_last_hour(self.hours.as_ref()).await?;
             let items = match &period {
-                Some(ReadPeriod::Tranche(p)) => {
-                    self.pool_creations.list_tranches(p, protocol).await?
-                }
-                _ => Vec::new(),
+                Some(p) => self.pool_creations.list_tranches(p, protocol).await?,
+                None => Vec::new(),
             };
+            let period = period.map(ReadPeriod::Tranche);
             return Ok(Measured { period, items });
         };
         let measured = self

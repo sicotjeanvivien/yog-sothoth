@@ -4977,7 +4977,7 @@
         "type": "object"
       },
       "WindowedResponse_PoolSwapBucketResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
             "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
@@ -4988,7 +4988,7 @@
             ]
           },
           "coveredSince": {
-            "description": "The first hour the facts hold.",
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -5038,7 +5038,7 @@
         "type": "object"
       },
       "WindowedResponse_ProtocolClaimTotalsResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
             "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
@@ -5049,7 +5049,7 @@
             ]
           },
           "coveredSince": {
-            "description": "The first hour the facts hold.",
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -5108,7 +5108,7 @@
         "type": "object"
       },
       "WindowedResponse_ProtocolDiscoveredTvlResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
             "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
@@ -5119,7 +5119,7 @@
             ]
           },
           "coveredSince": {
-            "description": "The first hour the facts hold.",
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -5174,7 +5174,7 @@
         "type": "object"
       },
       "WindowedResponse_ProtocolLiquidityFlowsBucketResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
             "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
@@ -5185,7 +5185,7 @@
             ]
           },
           "coveredSince": {
-            "description": "The first hour the facts hold.",
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -5239,7 +5239,7 @@
         "type": "object"
       },
       "WindowedResponse_ProtocolLiquidityFlowsResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
             "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
@@ -5250,7 +5250,7 @@
             ]
           },
           "coveredSince": {
-            "description": "The first hour the facts hold.",
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -5304,7 +5304,7 @@
         "type": "object"
       },
       "WindowedResponse_ProtocolPoolCreationsBucketResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
             "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
@@ -5315,7 +5315,7 @@
             ]
           },
           "coveredSince": {
-            "description": "The first hour the facts hold.",
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -5366,7 +5366,7 @@
         "type": "object"
       },
       "WindowedResponse_ProtocolPoolCreationsResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
             "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
@@ -5377,7 +5377,7 @@
             ]
           },
           "coveredSince": {
-            "description": "The first hour the facts hold.",
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -5423,7 +5423,7 @@
         "type": "object"
       },
       "WindowedResponse_ProtocolPositionChangeTotalsResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
             "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
@@ -5434,7 +5434,7 @@
             ]
           },
           "coveredSince": {
-            "description": "The first hour the facts hold.",
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -5496,7 +5496,7 @@
         "type": "object"
       },
       "WindowedResponse_ProtocolRotationRunBucketResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
             "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
@@ -5507,7 +5507,7 @@
             ]
           },
           "coveredSince": {
-            "description": "The first hour the facts hold.",
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -5590,7 +5590,7 @@
         "type": "object"
       },
       "WindowedResponse_ProtocolSwapActivityBucketResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
             "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
@@ -5601,7 +5601,7 @@
             ]
           },
           "coveredSince": {
-            "description": "The first hour the facts hold.",
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -5655,7 +5655,7 @@
         "type": "object"
       },
       "WindowedResponse_ProtocolSwapActivityResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
             "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
@@ -5666,7 +5666,7 @@
             ]
           },
           "coveredSince": {
-            "description": "The first hour the facts hold.",
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -5727,7 +5727,7 @@
         "type": "object"
       },
       "WindowedResponse_ProtocolTvlChangeResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
             "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
@@ -5738,7 +5738,7 @@
             ]
           },
           "coveredSince": {
-            "description": "The first hour the facts hold.",
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -5821,7 +5821,7 @@
         "type": "object"
       },
       "WindowedResponse_ProtocolTvlResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
             "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
@@ -5832,7 +5832,7 @@
             ]
           },
           "coveredSince": {
-            "description": "The first hour the facts hold.",
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -5901,7 +5901,7 @@
         "type": "object"
       },
       "WindowedResponse_SwapActivityResponse": {
-        "description": "`from..asOf`, each `null` before the first hour is frozen.",
+        "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
             "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
@@ -5912,7 +5912,7 @@
             ]
           },
           "coveredSince": {
-            "description": "The first hour the facts hold.",
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
