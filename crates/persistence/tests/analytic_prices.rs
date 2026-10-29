@@ -1170,6 +1170,7 @@ fn the_writer_reads_market_prices_in_the_price_table_alone() {
             [
                 "token_prices",
                 "yog_price_asof",
+                "yog_market_believed",
                 "swap_hour_prices",
                 "hourly_priced",
                 "tranche_pool_prices",
@@ -1337,4 +1338,95 @@ async fn the_cycle_keeps_each_tokens_ceiling_within_the_window(pool: PgPool) {
     assert_eq!(ceiling_of(&pool, &a).await, Some(dec("100")));
     assert_eq!(ceiling_of(&pool, &old).await, None);
     assert_eq!(ceiling_of(&pool, &gone).await, None);
+}
+
+/// The anchor whose quote our pools contradict has none (046): published at what its pool traded,
+/// its trades valued by the other token. Against `yog_price_asof` in the tranche's `market`: X
+/// sold for $5 of Y would be $5 000 of volume.
+#[sqlx::test]
+async fn an_anchor_our_pools_contradict_is_valued_by_its_partner(pool: PgPool) {
+    let tranche = settled_tranche();
+    let x = pk(30).to_string();
+    price_at(&pool, &x, "1000", tranche).await;
+    sqlx::query("INSERT INTO analytic_token_pool_ceilings (mint, ceiling_usd) VALUES ($1, 1)")
+        .bind(&x)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut found = Vec::new();
+    for seed in [1u8, 2] {
+        let y = pk(seed + 30).to_string();
+        let address = setup_pool(&pool, seed, (&x, 6), (&y, 6)).await;
+        price_at(&pool, &y, "1", tranche).await;
+        insert_swap(
+            &pool,
+            &address,
+            &format!("xy{seed}"),
+            (5_000_000, 5_000_000),
+            sqrt_price_x64(1, 1),
+            tranche,
+        )
+        .await;
+        found.push(address);
+    }
+
+    value(&pool, tranche).await;
+
+    let (market_x, price_x, _, price_y) = prices(&pool, &found[0], tranche).await;
+    assert_eq!(market_x, None, "a contradicted quote is no quote");
+    assert_eq!((price_x, price_y), (Some(dec("1")), Some(dec("1"))));
+    // Against the witness drawn from X's quote: Y's ceiling would be $1 000 for a week.
+    assert_eq!(implied(&pool, &found[0], tranche).await.1, None);
+    let volume: Option<BigDecimal> = sqlx::query_scalar(
+        "SELECT volume_in_a_usd FROM analytic_pool_5min WHERE pool_address = $1",
+    )
+    .bind(&found[0])
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(volume, Some(dec("5")));
+}
+
+/// X, anchor of two pools that did not swap, quoted $1 000 against a $1 ceiling, counts 0 in a move
+/// (046). Against the rule dropped from `meteora_damm_v2_tranche_pool_prices`: 1 X and 1 Y, $1 001.
+#[sqlx::test]
+async fn an_unswapped_anchor_our_pools_contradict_counts_zero_in_a_move(pool: PgPool) {
+    let tranche = settled_tranche();
+    let x = pk(30).to_string();
+    price_at(&pool, &x, "1000", tranche).await;
+    sqlx::query("INSERT INTO analytic_token_pool_ceilings (mint, ceiling_usd) VALUES ($1, 1)")
+        .bind(&x)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut pools = Vec::new();
+    for seed in [1u8, 2] {
+        let y = pk(seed + 30).to_string();
+        let address = setup_pool(&pool, seed, (&x, 6), (&y, 6)).await;
+        sqlx::query(
+            "INSERT INTO analytic_pool_prices_5min (pool_address, bucket, price_a_usd, price_b_usd)
+             VALUES ($1, $2, 1, 1)",
+        )
+        .bind(&address)
+        .bind(tranche - Duration::minutes(5))
+        .execute(&pool)
+        .await
+        .unwrap();
+        pools.push(address);
+    }
+
+    price_at(&pool, &pk(31).to_string(), "1", tranche).await;
+    let move_usd: Option<BigDecimal> = sqlx::query_scalar(
+        "SELECT yog_pool_amounts_usd(1000000, 1000000, 6, 6,
+                                     p.price_a_usd, p.price_b_usd, p.market_a_usd, p.market_b_usd)
+           FROM meteora_damm_v2_tranche_pool_prices($1, INTERVAL '5 minutes', $2) p
+          WHERE p.pool_address = $3",
+    )
+    .bind(tranche)
+    .bind(&pools)
+    .bind(&pools[0])
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(move_usd, Some(dec("1")));
 }

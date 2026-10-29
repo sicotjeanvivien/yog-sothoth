@@ -29,7 +29,10 @@ and nothing else ([`crates/README.md`](../README.md#database-roles)).
 
 In each pool and tranche, the **anchor** is the token traded in more pools of
 the tranche — SOL almost always. It keeps its market price, the last one at or
-before the end of the tranche (`yog_price_asof`). The other token takes the
+before the end of the tranche (`yog_price_asof`), unless our pools contradict it
+more than ten times over (`yog_market_believed`, 046): it then has none — its
+price falls to what its pool traded, its swaps are valued by the other token, and
+a move or a claim counts its side 0 beside a valued one, and is unvalued alone. The other token takes the
 lower of its market price and its price in the pool: what the tranche traded,
 `traded_b / traded_a` in token units, times the anchor's — never the pool's mid
 price, which one swap sends to the end of its range on an empty pool. When both
@@ -38,8 +41,9 @@ without a market price takes its price in the pool. Without that rate — a
 token's decimals unknown — there is nothing to bound by, and only the anchor
 keeps a price.
 
-Both prices are kept, `market_*` beside the published `price_*`: their gap is
-how far the pool and the market disagree. The table covers the pools with
+Both prices are kept, `market_*` — the believed quote — beside the published
+`price_*`: their gap is how far the pool and the market disagree, past a quote our
+pools contradict, which `market_*` does not keep. The table covers the pools with
 swaps in the tranche, and only them.
 
 ## The value of a swap

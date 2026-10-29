@@ -2,7 +2,10 @@
 //! bound (one hour) and the latest bound (15 minutes), asserted through the views
 //! themselves. In the schema, `yog_price_asof` alone reads `token_prices`; every price reader bounds its age.
 
-use super::helpers::{DEPENDENT_OBJECTS_STILL_EXIST, catalog_definitions, pk, price_at, sqlstate};
+use super::helpers::{
+    DEPENDENT_OBJECTS_STILL_EXIST, catalog_definitions, pk, price_at, setup_roles_and_connect_as,
+    sqlstate,
+};
 use chrono::{DateTime, Duration, DurationRound, Utc};
 use rust_decimal::Decimal;
 use sqlx::{AssertSqlSafe, PgPool, postgres::PgDatabaseError};
@@ -470,6 +473,21 @@ async fn the_price_lookup_is_inlined(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn the_stock_rule_is_inlined(pool: PgPool) {
+    // Mutation: `yog_market_believed` as a scalar function with an EXISTS — Postgres cannot inline
+    // it, and every side of `pool_current_tvl` becomes a call outside the plan.
+    let plan: Vec<String> =
+        sqlx::query_scalar("EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM pool_current_tvl")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    let plan = plan.join("\n");
+
+    assert!(!plan.contains("yog_market_believed"), "{plan}");
+    assert!(plan.contains("analytic_token_pool_ceilings"), "{plan}");
+}
+
+#[sqlx::test]
 async fn the_guard_catches_a_price_read_that_is_not_a_lateral(pool: PgPool) {
     // The guard must bite on the likeliest next shape: a plain join, no `FROM token_prices`.
     sqlx::query(
@@ -500,4 +518,54 @@ async fn the_guard_catches_a_price_read_that_is_not_a_lateral(pool: PgPool) {
         "an unbounded price read must be flagged even when no lookup can be \
          counted — a `bounds < lookups` predicate scores this 0/0 and lets it pass"
     );
+}
+
+async fn as_of(pool: &PgPool, mint: &str, at: DateTime<Utc>) -> Option<Decimal> {
+    sqlx::query_scalar("SELECT price_usd FROM yog_price_asof($1, $2)")
+        .bind(mint)
+        .bind(at)
+        .fetch_optional(pool)
+        .await
+        .unwrap()
+}
+
+async fn ceiling(pool: &PgPool, mint: &str, usd: &str) {
+    sqlx::query(
+        "INSERT INTO analytic_token_pool_ceilings (mint, ceiling_usd) VALUES ($1, $2::NUMERIC)",
+    )
+    .bind(mint)
+    .bind(usd)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// Against the ceiling checked in `yog_price_asof`: today's ceiling, $2, would erase a quote of
+/// three hours ago, $22, and with it what every valued view shows of that past.
+#[sqlx::test]
+async fn an_as_of_price_is_never_held_to_todays_ceiling(pool: PgPool) {
+    let (_, mint_a, _) = seed_pool(&pool).await;
+    let at = settled_bucket();
+    ceiling(&pool, &mint_a, "2").await;
+    price_at(&pool, &mint_a, "22", at - Duration::minutes(5)).await;
+
+    assert_eq!(as_of(&pool, &mint_a, at).await, Some(Decimal::from(22)));
+}
+
+/// `yog_market_believed` reads the ceilings as its caller. Against the grant dropped from 046:
+/// the API and the signals, reading `pool_current_tvl` under their own role, would be refused.
+#[sqlx::test]
+async fn the_readers_of_the_tvl_read_the_ceilings(pool: PgPool) {
+    let (pool_addr, mint_a, _) = seed_pool(&pool).await;
+    seed_current_state(&pool, &pool_addr).await;
+    ceiling(&pool, &mint_a, "2").await;
+    price_at(&pool, &mint_a, "1.0", Utc::now()).await;
+
+    for role in ["yog_api", "yog_signals"] {
+        let scoped = setup_roles_and_connect_as(&pool, role).await;
+        sqlx::query("SELECT * FROM pool_current_tvl")
+            .fetch_all(&scoped)
+            .await
+            .unwrap_or_else(|e| panic!("{role} reads pool_current_tvl: {e}"));
+    }
 }

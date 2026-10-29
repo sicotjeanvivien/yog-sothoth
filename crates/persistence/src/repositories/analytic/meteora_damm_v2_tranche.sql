@@ -31,7 +31,7 @@ pools_per_mint AS (
 market AS (
     SELECT n.mint, pr.price_usd
       FROM pools_per_mint n
-      LEFT JOIN LATERAL yog_price_asof(n.mint, $1::TIMESTAMPTZ + $3::INTERVAL) pr ON true
+      LEFT JOIN LATERAL yog_market_believed_asof(n.mint, $1::TIMESTAMPTZ + $3::INTERVAL) pr ON true
 ),
 quoted AS (
     SELECT t.pool_address, t.traded_a, t.traded_b, t.dec_a, t.dec_b,
