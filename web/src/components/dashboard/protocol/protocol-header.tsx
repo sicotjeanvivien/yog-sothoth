@@ -16,12 +16,12 @@ import { ApiClientError } from "@/lib/api/errors";
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
 import { fetchSwapTotals } from "@/lib/api/server/protocols";
 import { shortenPubkey } from "@/lib/format/pubkey";
-import type { Period } from "@/lib/overview/period";
+import { PROTOCOL_PERIODS, type FrozenPeriod } from "@/lib/overview/period";
 import { tabQuery, type ProtocolTab } from "@/lib/protocol/tabs";
 
 type HeaderProps = {
   pathname: PagePath;
-  period: Period;
+  period: FrozenPeriod;
   tab: ProtocolTab | null;
   protocol: ProtocolResponse;
   programId: string;
@@ -51,7 +51,13 @@ export async function ProtocolHeader({ pathname, period, tab, protocol, programI
           </InfoPopover>
         </span>
       </div>
-      <HeaderControls period={period} scope={protocol} pathname={pathname} keep={tabQuery(tab)} />
+      <HeaderControls
+        period={period}
+        periods={PROTOCOL_PERIODS}
+        scope={protocol}
+        pathname={pathname}
+        keep={tabQuery(tab)}
+      />
     </header>
   );
 }
@@ -61,7 +67,7 @@ async function MeasuredSince({
   period,
   protocol,
 }: {
-  period: Period;
+  period: FrozenPeriod;
   protocol: ProtocolResponse;
 }) {
   const t = await getTranslations("Dashboard.Protocol.page");

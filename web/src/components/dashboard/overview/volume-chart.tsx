@@ -1,5 +1,5 @@
 /**
- * Volume by hour (24H) or by 24-hour slice (7D, 30D), all protocols summed: the page's main
+ * Volume by 5-minute tranche (1H), by hour (24H) or by 6- or 24-hour slice (7D, 30D), all protocols summed: the page's main
  * chart, and the fees under it in the advanced mode. The server lays the slots and words every
  * reading; `VolumeBars` only tracks the bar under the pointer.
  */
@@ -12,7 +12,16 @@ import { fetchSwapsSeries } from "@/lib/api/server/protocols";
 import { formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatUsdCompact } from "@/lib/format/format-usd";
-import { axisOf, CHART_PX, daysAgoOf, hourOf, roundTicks, slotsOf, type Slot } from "@/lib/overview/chart";
+import {
+  axisOf,
+  CHART_PX,
+  daysAgoOf,
+  hourOf,
+  readsClock,
+  roundTicks,
+  slotsOf,
+  type Slot,
+} from "@/lib/overview/chart";
 import type { Period } from "@/lib/overview/period";
 import { sumUsd } from "@/lib/overview/totals";
 
@@ -23,11 +32,11 @@ import { VolumeBars } from "./volume-bars";
 
 const SECTION_CLASS = `${CELL_CLASS} ${SPAN.main} ${MIN_HEIGHT.volume}`;
 
-const TITLE = { "24h": "titleHourly", "7d": "titleSixHours", "30d": "titleDaily" } as const;
+const TITLE = { "1h": "titleFiveMinutes", "24h": "titleHourly", "7d": "titleSixHours", "30d": "titleDaily" } as const;
 
-const INFO = { "24h": "infoHourly", "7d": "infoSixHours", "30d": "infoDaily" } as const;
+const INFO = { "1h": "infoFiveMinutes", "24h": "infoHourly", "7d": "infoSixHours", "30d": "infoDaily" } as const;
 
-const FEES = { "24h": "feesHourly", "7d": "feesSixHours", "30d": "feesDaily" } as const;
+const FEES = { "1h": "feesFiveMinutes", "24h": "feesHourly", "7d": "feesSixHours", "30d": "feesDaily" } as const;
 
 export async function VolumeChart({ period }: { period: Period }) {
   const t = await getTranslations("Dashboard.Overview.volume");
@@ -67,7 +76,7 @@ export async function VolumeChart({ period }: { period: Period }) {
   const daysAgo = (days: number) => (days === 0 ? t("today") : t("daysAgo", { days }));
   const dayLabel = (i: number) => daysAgo(daysAgoOf(period, slots.length, i));
   const slotName = (slot: Slot, i: number) =>
-    period !== "24h"
+    !readsClock(period)
       ? `${dayLabel(i)} · ${formatUtcMoment(slot.from, locale)} → ${formatUtcMoment(slot.to, locale)}`
       : `${hourOf(slot.from)} UTC`;
 

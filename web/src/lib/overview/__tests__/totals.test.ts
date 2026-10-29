@@ -62,5 +62,6 @@ describe("swapsPerSecond", () => {
   it("spreads the swaps over the period's seconds", () => {
     expect(swapsPerSecond(86_400 * 39, "24h")).toBe(39);
     expect(swapsPerSecond(604_800 * 39, "7d")).toBe(39);
+    expect(swapsPerSecond(3_600 * 39, "1h")).toBe(39);
   });
 });

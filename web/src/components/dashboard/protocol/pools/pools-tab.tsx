@@ -31,7 +31,7 @@ import { formatRelative, formatUtcMoment, type FormatLocale } from "@/lib/format
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { pairLabel, shortenPubkey } from "@/lib/format/pubkey";
 import { axisOf, daysAgoOf, hourOf, roundTicks } from "@/lib/overview/chart";
-import type { Period } from "@/lib/overview/period";
+import type { FrozenPeriod } from "@/lib/overview/period";
 import { birthSlotsOf, birthTotalOf, lifeCountOf, lockKey } from "@/lib/protocol/pools";
 
 import { SplitBars, type SplitDetail } from "../split-bars";
@@ -77,7 +77,7 @@ const CHART_LABEL = {
   "30d": "chartLabelDaily",
 } as const;
 
-type TabProps = { period: Period; protocol: ProtocolResponse };
+type TabProps = { period: FrozenPeriod; protocol: ProtocolResponse };
 
 export async function PoolsTab({ period, protocol }: TabProps) {
   const t = await getTranslations("Dashboard.Protocol.pools");

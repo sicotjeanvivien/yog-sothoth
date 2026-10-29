@@ -2,7 +2,7 @@
 
 import { getTranslations } from "next-intl/server";
 
-import type { Period } from "@/lib/overview/period";
+import { OVERVIEW_PERIODS, type Period } from "@/lib/overview/period";
 
 import { HeaderControls } from "./header-controls";
 
@@ -14,7 +14,13 @@ export async function OverviewHeader({ period }: { period: Period }) {
       <h1 className="min-w-0 flex-[1_1_360px] text-[20px] leading-[1.2] font-semibold tracking-[-0.01em] text-dash-ink">
         {t("title")}
       </h1>
-      <HeaderControls period={period} scope="all" pathname="/overview" keep={{}} />
+      <HeaderControls
+        period={period}
+        periods={OVERVIEW_PERIODS}
+        scope="all"
+        pathname="/overview"
+        keep={{}}
+      />
     </header>
   );
 }

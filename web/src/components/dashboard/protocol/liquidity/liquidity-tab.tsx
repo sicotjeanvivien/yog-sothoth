@@ -35,7 +35,7 @@ import { formatRelative, formatUtcMoment, type FormatLocale } from "@/lib/format
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { pairLabel, shortenPubkey } from "@/lib/format/pubkey";
 import { axisOf, daysAgoOf, hourOf, roundTicks } from "@/lib/overview/chart";
-import type { Period } from "@/lib/overview/period";
+import type { FrozenPeriod } from "@/lib/overview/period";
 import { CURVE_BOX, curveOf, flowSlotsOf } from "@/lib/protocol/liquidity";
 
 import { FlowBars } from "./flow-bars";
@@ -66,7 +66,7 @@ const MOVES_CLASS = `${CELL_CLASS} ${MOVES_SPAN} min-h-[262px]`;
 
 const MOVE_COLUMNS = "grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)_auto_auto]";
 
-type TabProps = { period: Period; protocol: ProtocolResponse };
+type TabProps = { period: FrozenPeriod; protocol: ProtocolResponse };
 
 export async function LiquidityTab({ period, protocol }: TabProps) {
   const t = await getTranslations("Dashboard.Protocol.liquidity");

@@ -35,7 +35,7 @@ import { formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { pairLabel } from "@/lib/format/pubkey";
 import { axisOf, daysAgoOf, hourOf, roundTicks } from "@/lib/overview/chart";
-import type { Period } from "@/lib/overview/period";
+import type { FrozenPeriod } from "@/lib/overview/period";
 import {
   durationOf,
   splitSinceOf,
@@ -74,7 +74,7 @@ const RUNS_CLASS = `${CELL_CLASS} ${RUNS_SPAN} min-h-[262px]`;
 const RUN_COLUMNS =
   "grid-cols-[minmax(0,1.6fr)_10.5rem_minmax(0,0.7fr)_minmax(0,0.9fr)_minmax(0,0.8fr)]";
 
-type TabProps = { period: Period; protocol: ProtocolResponse };
+type TabProps = { period: FrozenPeriod; protocol: ProtocolResponse };
 
 export async function VolumeTab({ period, protocol }: TabProps) {
   const t = await getTranslations("Dashboard.Protocol.volume");

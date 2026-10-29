@@ -271,15 +271,18 @@ fees, active pools), activity by protocol, the latest signals, volume per bar
 of the period, the most traded tokens. The header is the title alone, then "Live",
 the period and the advanced mode at its right. Every figure comes from yog-analytic's
 measures (`/api/swaps/…`, `/api/tvl…`, `/api/pool-creations/…`), which all end at the same `asOf`, the close of the last frozen
-hour.
+hour — over the last hour, the end of the last 5-minute tranche written.
 
-**The period** — `?period=24h|7d|30d` (`lib/overview/period.ts`; missing or
-unknown is 24h) drives every label, section title, chart and ⓘ, which speak of
-"the chosen period". A bar is an hour over 24h, a 6-hour slice over 7d, a 24-hour
-slice over 30d (`SLOT_HOURS`), each ending at `asOf`; over 7d the web sums the
-`hourly` series by six, as the API sums its days: whether an hour is covered is the API's. The TVL stays
-the value of the last frozen hour; only its change follows the period. The selector (`period-selector.tsx`) is a set of
-links, in its own unkeyed `<Suspense>` so a period change keeps it; every block
+**The period** — `?period=1h|24h|7d|30d` (`lib/overview/period.ts`; missing,
+unknown or not offered by the page is 24h; the DAMM v2 page offers no `1h`) drives every label, section title, chart and ⓘ, which speak of
+"the chosen period". A bar is a 5-minute tranche over 1h, an hour over 24h, a 6-hour slice over 7d, a 24-hour
+slice over 30d (`SLOT_MS`), each ending at `asOf`; over 7d the web sums the
+`hourly` series by six, as the API sums its days: whether an hour is covered is the API's. 1h is the rolling
+hour through the last tranche written, read on `swaps/series?interval=5m`; it does not fall on the last bar of
+24h, and its coverage counts pool tranches, not pool-hours (`COVERAGE_UNIT`). The TVL stays
+the value of the last frozen hour; only its change follows the period, and over 1h it has none. The selector (`period-selector.tsx`) is a set of
+links over the page's periods, each judged on the span of its own reads — 1h on the tranches still held, the others on the
+frozen hours; in its own unkeyed `<Suspense>` so a period change keeps it; every block
 that reads the period has its `<Suspense key={period}>`, so the change shows
 their waiting slots only; the signals do not reload.
 
@@ -292,7 +295,7 @@ figure the facts do not cover whole is "—", never a smaller number:
   (`CLOSED_PERIODS`) until its times are measured on the prod: its URL falls
   back to 24h, so its reads never run;
 - the volume change is "—" when the previous window (`offset`) starts before
-  `coveredSince`;
+  `coveredSince`, or does not end where the current one starts (a tranche or a freeze between the two reads);
 - the TVL change is "—" when `tvl/totals` has no reading a window before the last,
   or no discovered part at it: the hours before the first complete TVL are deleted.
 Each "—" carries an ⓘ with its reason.

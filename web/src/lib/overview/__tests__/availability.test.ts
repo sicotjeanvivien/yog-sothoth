@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   periodState,
+  previousWindowAdjoins,
   previousWindowCovered,
 } from "../availability";
 
@@ -51,6 +52,16 @@ describe("periodState", () => {
     ).toEqual({ open: false, opensAt: null });
   });
 
+  // Mutation: the last hour judged on a day, or not judged — open before an hour of tranches is held.
+  it("opens 1h once an hour of tranches is held", () => {
+    const span = (asOf: string) => ({ from: null, asOf, coveredSince: "2026-10-21T00:00:00Z" });
+    expect(periodState("1h", span("2026-10-21T01:00:00Z"))).toEqual({ open: true });
+    expect(periodState("1h", span("2026-10-21T00:55:00Z"))).toEqual({
+      open: false,
+      opensAt: new Date("2026-10-21T01:00:00Z"),
+    });
+  });
+
   it("closes every period before the first freeze", () => {
     expect(
       periodState("24h", { from: null, asOf: null, coveredSince: null }),
@@ -84,6 +95,20 @@ describe("previousWindowCovered", () => {
   it("is not covered before the first freeze", () => {
     expect(
       previousWindowCovered({ from: null, asOf: null, coveredSince: null }),
+    ).toBe(false);
+  });
+});
+
+describe("previousWindowAdjoins", () => {
+  const current = { from: "2026-10-20T13:05:00Z", asOf: "2026-10-20T14:05:00Z", coveredSince: null };
+
+  // Mutation: the check dropped — a previous hour read after a tranche overlaps the current one.
+  it("holds a previous window that ends where the current one starts, and no other", () => {
+    expect(
+      previousWindowAdjoins({ from: null, asOf: "2026-10-20T13:05:00Z", coveredSince: null }, current),
+    ).toBe(true);
+    expect(
+      previousWindowAdjoins({ from: null, asOf: "2026-10-20T13:10:00Z", coveredSince: null }, current),
     ).toBe(false);
   });
 });

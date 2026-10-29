@@ -29,7 +29,7 @@ import { formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { axisOf, daysAgoOf, hourOf, roundTicks } from "@/lib/overview/chart";
-import type { Period } from "@/lib/overview/period";
+import type { FrozenPeriod } from "@/lib/overview/period";
 import {
   FEE_PARTS,
   feeSharesOf,
@@ -71,7 +71,7 @@ const FIELDS: Record<FeePart, string> = {
   referral: "referral_fee",
 };
 
-type TabProps = { period: Period; protocol: ProtocolResponse };
+type TabProps = { period: FrozenPeriod; protocol: ProtocolResponse };
 
 export async function FeesTab({ period, protocol }: TabProps) {
   const t = await getTranslations("Dashboard.Protocol.fees");

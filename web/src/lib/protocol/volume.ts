@@ -1,7 +1,7 @@
 /** The volume tab's chart, as data: each bar's volume split between the rotation runs and the rest. */
 
 import { slotsOf } from "@/lib/overview/chart";
-import type { Period } from "@/lib/overview/period";
+import type { FrozenPeriod } from "@/lib/overview/period";
 
 /**
  * One bar: `total` is `null` where no volume is valued; `inRuns` and `outside` are `null` where
@@ -23,7 +23,7 @@ type SplitBar = {
 };
 
 /** The protocol's volume in the period's slots, ending at `asOf`, as its runs split it. */
-export function splitSlotsOf(period: Period, asOf: string, bars: readonly SplitBar[]): SplitSlot[] {
+export function splitSlotsOf(period: FrozenPeriod, asOf: string, bars: readonly SplitBar[]): SplitSlot[] {
   const pick = (value: (bar: SplitBar) => string | null, strict: boolean) =>
     slotsOf(
       period,

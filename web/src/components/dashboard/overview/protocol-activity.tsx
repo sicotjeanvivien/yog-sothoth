@@ -13,7 +13,7 @@ import { volumeCoverage } from "@/lib/coverage/volume-coverage";
 import { formatCount } from "@/lib/format/format-count";
 import { formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
-import type { Period } from "@/lib/overview/period";
+import { COVERAGE_UNIT, type Period } from "@/lib/overview/period";
 import { sumUsd } from "@/lib/overview/totals";
 
 import { BlockHeading, closedReason, PeriodNotice } from "./overview-parts";
@@ -72,6 +72,7 @@ export async function ProtocolActivity({ period }: { period: Period }) {
   }
 
   const closed = await closedReason(period, activity);
+  const unit = COVERAGE_UNIT[period];
   const total = sumUsd(activity.items.map((i) => i.volumeUsd));
   const observed = new Set(catalogue.items.filter((p) => p.observed).map((p) => p.protocol));
 
@@ -138,14 +139,14 @@ export async function ProtocolActivity({ period }: { period: Period }) {
                   {formatUsdCompact(row?.volumeUsd ?? null)}
                   <VolumeCoverageMark
                     coverage={row ? volumeCoverage(row) : null}
-                    label={(priced, total) => t("coverage.mark", { priced, total })}
+                    label={(priced, total) => t(`coverage.${unit}.mark`, { priced, total })}
                   />
                 </div>
                 <div role="cell" className={`${ADVANCED_ONLY.block} ${NUM_CLASS}`}>
                   {formatUsdCompact(row?.feesUsd ?? null)}
                   <VolumeCoverageMark
                     coverage={row ? volumeCoverage(row) : null}
-                    label={(priced, total) => t("coverage.mark", { priced, total })}
+                    label={(priced, total) => t(`coverage.${unit}.mark`, { priced, total })}
                   />
                 </div>
                 <div role="cell" className={`${ADVANCED_ONLY.block} ${NUM_CLASS}`}>

@@ -8,7 +8,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { LiveRow } from "@/components/dashboard/live-status/live-indicator";
 import { ApiClientError } from "@/lib/api/errors";
 import { fetchSwapTotals } from "@/lib/api/server/protocols";
-import type { Period } from "@/lib/overview/period";
+import { COVERAGE_UNIT, type Period } from "@/lib/overview/period";
 import type { Scope } from "@/lib/api/server/scope";
 import { isStale } from "@/lib/overview/staleness";
 
@@ -40,7 +40,7 @@ export async function OverviewLiveRows({ period, scope }: { period: Period; scop
     <>
       <LiveRow
         label={t("liveStatus.priceCoverage")}
-        value={total === 0 ? "—" : t("Overview.coverage.value", { percent })}
+        value={total === 0 ? "—" : t(`Overview.coverage.${COVERAGE_UNIT[period]}.value`, { percent })}
       />
       <LiveRow
         label={t("liveStatus.measuredUntil")}

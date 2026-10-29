@@ -1,20 +1,26 @@
 import { describe, expect, it } from "vitest";
 
-import { pageQuery, parsePeriod } from "../period";
+import { OVERVIEW_PERIODS, pageQuery, parsePeriod, PROTOCOL_PERIODS } from "../period";
 
 describe("parsePeriod", () => {
   it("keeps an open period", () => {
-    expect(parsePeriod("7d")).toBe("7d");
+    expect(parsePeriod("7d", OVERVIEW_PERIODS)).toBe("7d");
+    expect(parsePeriod("1h", OVERVIEW_PERIODS)).toBe("1h");
+  });
+
+  // Mutation: the page's list not checked — the DAMM v2 page reads the last hour it has no bars for.
+  it("falls back to 24h on a period the page does not offer", () => {
+    expect(parsePeriod("1h", PROTOCOL_PERIODS)).toBe("24h");
   });
 
   // Mutation: the `CLOSED_PERIODS` guard dropped runs 30d's reads from its URL.
   it("falls back to 24h on a closed period", () => {
-    expect(parsePeriod("30d")).toBe("24h");
+    expect(parsePeriod("30d", OVERVIEW_PERIODS)).toBe("24h");
   });
 
   it("falls back to 24h on an unknown or repeated value", () => {
-    expect(parsePeriod("1h")).toBe("24h");
-    expect(parsePeriod(["7d", "24h"])).toBe("24h");
+    expect(parsePeriod("90d", OVERVIEW_PERIODS)).toBe("24h");
+    expect(parsePeriod(["7d", "24h"], OVERVIEW_PERIODS)).toBe("24h");
   });
 });
 

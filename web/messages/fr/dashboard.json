@@ -51,11 +51,13 @@
       "period": {
         "label": "Période",
         "short": {
-          "24h": "24 h",
-          "7d": "7 j",
-          "30d": "30 j"
+          "1h": "1 h",
+          "24h": "24 h",
+          "7d": "7 j",
+          "30d": "30 j"
         },
         "button": {
+          "1h": "1H",
           "24h": "24H",
           "7d": "7J",
           "30d": "30J"
@@ -69,7 +71,8 @@
         "label": "Pourquoi « — » ?",
         "previous": "La période précédente commence avant le {since}, première heure mesurée : pas de comparaison avec une somme incomplète.",
         "tvlStart": "La TVL n'a pas de mesure au début de la période : sa variation ne peut pas être calculée.",
-        "tvlDiscovered": "La part des pools découvertes pendant la période n'est pas mesurée : sans elle, la variation compterait une découverte comme un dépôt."
+        "tvlDiscovered": "La part des pools découvertes pendant la période n'est pas mesurée : sans elle, la variation compterait une découverte comme un dépôt.",
+        "previousMoved": "Une tranche de 5 minutes est arrivée entre la lecture de l'heure et celle de l'heure d'avant : rechargez la page pour les comparer."
       },
       "kpis": {
         "tvl": "TVL",
@@ -94,8 +97,11 @@
           "fees": "Ce que ces échanges ont payé en frais sur la période choisie : la part des déposants (LP) et celle du protocole.",
           "swaps": "Le nombre d'échanges sur la période choisie, et leur rythme moyen par seconde.",
           "pools": "Les pools qui ont eu au moins un échange sur la période choisie, parmi toutes celles que Yog-Scope a vues, et celles nées pendant la période.",
-          "rotation": "Le volume de la période choisie divisé par la TVL du dernier relevé : combien de fois la liquidité déposée a changé de mains."
-        }
+          "rotation": "Le volume de la période choisie divisé par la TVL du dernier relevé : combien de fois la liquidité déposée a changé de mains.",
+          "tvlLast": "La valeur de ce qui est déposé dans les pools que Yog-Scope a observées depuis le 1er octobre 2026, à sa dernière lecture, à la fin de la dernière heure complète : leurs réserves, chacune au prix Jupiter de son token s'il a moins de 15 minutes. Un token sans prix compte pour 0, comme un token coté plus de dix fois au-dessus du plus haut prix auquel nos pools l'ont échangé en 7 jours. La TVL est un stock : elle ne suit pas la période, et sur la dernière heure elle n'a pas de variation.",
+          "volumeLastHour": "Ce qui s'est échangé sur l'heure glissante qui finit à la dernière tranche de 5 minutes mesurée, valorisé au prix du moment de chaque échange. Une pool dont une tranche n'a pas pu être valorisée compte pour ses autres tranches. La variation compare à l'heure d'avant."
+        },
+        "tvlAt": "lue à {at}"
       },
       "protocols": {
         "title": "Activité par protocole · {period}",
@@ -138,7 +144,10 @@
         "feesSixHours": "Fees par tranche de 6 h",
         "feesTotal": "{total} au total",
         "feesChartLabel": "Fees sur la période choisie, tous protocoles",
-        "feesNoValue": "aucune fee valorisée"
+        "feesNoValue": "aucune fee valorisée",
+        "titleFiveMinutes": "Volume par 5 min · {period}",
+        "infoFiveMinutes": "Ce qui s'est échangé, par tranche de 5 minutes, sur l'heure glissante qui finit à la dernière tranche mesurée : elle ne tombe pas sur une heure pleine, et ne coïncide pas avec la dernière barre de 24H.",
+        "feesFiveMinutes": "Fees par 5 min"
       },
       "tokens": {
         "title": "Tokens les plus échangés · {period}",
@@ -150,8 +159,14 @@
         "empty": "Aucun token échangé sur la période."
       },
       "coverage": {
-        "value": "{percent} des pool-heures",
-        "mark": "{priced} pool-heures valorisées sur {total}"
+        "poolHours": {
+          "value": "{percent} des pool-heures",
+          "mark": "{priced} pool-heures valorisées sur {total}"
+        },
+        "poolTranches": {
+          "value": "{percent} des tranches de pool",
+          "mark": "{priced} tranches de pool valorisées sur {total}"
+        }
       },
       "stale": {
         "title": "Chiffres en retard.",

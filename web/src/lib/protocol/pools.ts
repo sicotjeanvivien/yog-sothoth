@@ -2,12 +2,12 @@
 
 import type { LiquidityMoveLockResponse } from "@/lib/api/schema/zod.gen";
 import { slotsOf, type Slot } from "@/lib/overview/chart";
-import type { Period } from "@/lib/overview/period";
+import type { FrozenPeriod } from "@/lib/overview/period";
 
 type BirthBar = { from: string; pools: number };
 
 /** The pools born in the period's slots; a slot without any bar is `null`, not 0. */
-export function birthSlotsOf(period: Period, asOf: string, bars: readonly BirthBar[]): Slot[] {
+export function birthSlotsOf(period: FrozenPeriod, asOf: string, bars: readonly BirthBar[]): Slot[] {
   return slotsOf(
     period,
     asOf,
