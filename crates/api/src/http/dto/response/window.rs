@@ -4,12 +4,14 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
-use yog_core::domain::{FrozenPeriod, Window};
+use yog_core::domain::Window;
 
-use crate::application::Measured;
+use crate::application::{Measured, PeriodBounds};
 
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub(in crate::http::dto::response) enum WindowResponse {
+    #[serde(rename = "1h")]
+    Hour,
     #[serde(rename = "24h")]
     Day,
     #[serde(rename = "7d")]
@@ -21,6 +23,7 @@ pub(in crate::http::dto::response) enum WindowResponse {
 impl From<Window> for WindowResponse {
     fn from(window: Window) -> Self {
         match window {
+            Window::Hour => Self::Hour,
             Window::Day => Self::Day,
             Window::Week => Self::Week,
             Window::Month => Self::Month,
@@ -34,7 +37,8 @@ impl From<Window> for WindowResponse {
 pub(crate) struct WindowedResponse<T> {
     window: WindowResponse,
     from: Option<DateTime<Utc>>,
-    /// The close of the last frozen hour: the instant the rows reflect.
+    /// The close of the last frozen hour, or for `1h` the end of the last tranche written: the
+    /// instant the rows reflect.
     as_of: Option<DateTime<Utc>>,
     /// The first hour the facts hold.
     covered_since: Option<DateTime<Utc>>,
@@ -42,16 +46,16 @@ pub(crate) struct WindowedResponse<T> {
 }
 
 impl<T> WindowedResponse<T> {
-    pub(crate) fn new<U>(window: Window, measured: Measured<Vec<U>>) -> Self
+    pub(crate) fn new<U, P: PeriodBounds>(window: Window, measured: Measured<Vec<U>, P>) -> Self
     where
         T: From<U>,
     {
-        let period: Option<FrozenPeriod> = measured.period;
+        let period = measured.period;
         Self {
             window: window.into(),
-            from: period.map(|s| s.from),
-            as_of: period.map(|s| s.as_of),
-            covered_since: period.map(|s| s.covered_since),
+            from: period.map(|s| s.from()),
+            as_of: period.map(|s| s.as_of()),
+            covered_since: period.map(|s| s.covered_since()),
             items: measured.items.into_iter().map(T::from).collect(),
         }
     }

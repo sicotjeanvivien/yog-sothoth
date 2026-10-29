@@ -3,7 +3,7 @@ use solana_pubkey::Pubkey;
 
 use super::{PoolSwapBucket, ProtocolSwapActivity, SwapActivity};
 use crate::RepositoryResult;
-use crate::domain::{FrozenPeriod, Protocol, ProtocolBucket, Window};
+use crate::domain::{FrozenPeriod, Protocol, ProtocolBucket, TranchePeriod, Window};
 
 /// The swaps' measures. `protocol` narrows a read to one protocol, `None` reads them all;
 /// none counts an hour of `period` before its `covered_since`.
@@ -30,6 +30,21 @@ pub trait SwapActivityLookup: Send + Sync {
     async fn list_protocol_daily(
         &self,
         period: &FrozenPeriod,
+        protocol: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolBucket<SwapActivity>>>;
+
+    /// One row per protocol measured over the tranches of `period`, 0 for one without any pool;
+    /// its pools counted distinct, its pool-hours being its pools × tranches.
+    async fn find_protocol_totals_in_tranches(
+        &self,
+        period: &TranchePeriod,
+        protocol: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolSwapActivity>>;
+
+    /// The tranches of `period`, oldest first, one per protocol measured, 0 without any pool.
+    async fn list_protocol_tranches(
+        &self,
+        period: &TranchePeriod,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBucket<SwapActivity>>>;
 

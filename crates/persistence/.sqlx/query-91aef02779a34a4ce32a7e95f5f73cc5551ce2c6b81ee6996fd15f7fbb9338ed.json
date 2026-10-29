@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            -- ⚠️ The first tranche still held: `analytic_pool_5min` keeps 7 days, the record all.\n            SELECT GREATEST(MIN(bucket), (SELECT MIN(bucket) FROM analytic_pool_5min))\n                       AS \"first?: DateTime<Utc>\",\n                   MAX(bucket) AS \"last?: DateTime<Utc>\"\n              FROM analytic_tranches\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "first?: DateTime<Utc>",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "last?: DateTime<Utc>",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "91aef02779a34a4ce32a7e95f5f73cc5551ce2c6b81ee6996fd15f7fbb9338ed"
+}

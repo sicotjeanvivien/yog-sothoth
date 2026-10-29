@@ -2,9 +2,12 @@
 
 import { zWindowResponse, type WindowResponse } from "@/lib/api/schema/zod.gen";
 
-export type Period = WindowResponse;
+/** ⚠️ Without the last hour: its reads and bars are not wired to the Overview yet. */
+export type Period = Exclude<WindowResponse, "1h">;
 
-export const PERIODS: readonly Period[] = zWindowResponse.options;
+export const PERIODS: readonly Period[] = zWindowResponse.options.filter(
+  (w): w is Period => w !== "1h",
+);
 
 export const DEFAULT_PERIOD: Period = "24h";
 
@@ -45,5 +48,7 @@ export function periodMs(period: Period): number {
  */
 export function parsePeriod(raw: string | string[] | undefined): Period {
   const parsed = zWindowResponse.safeParse(raw);
-  return parsed.success && !CLOSED_PERIODS.has(parsed.data) ? parsed.data : DEFAULT_PERIOD;
+  return parsed.success && parsed.data !== "1h" && !CLOSED_PERIODS.has(parsed.data)
+    ? parsed.data
+    : DEFAULT_PERIOD;
 }

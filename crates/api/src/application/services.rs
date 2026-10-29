@@ -33,7 +33,7 @@ pub(crate) use ingestion_service::{IngestionAggregate, IngestionService};
 pub(crate) use liquidity_change_event_service::LiquidityChangeEventService;
 pub(crate) use liquidity_move_service::{LiquidityMoveService, MovesError};
 pub(crate) use network_service::NetworkService;
-pub(crate) use period::{BucketPeriod, Measured, PeriodBounds};
+pub(crate) use period::{BucketPeriod, Measured, PeriodBounds, SeriesInterval};
 pub(crate) use pool_change_event_service::PoolChangeEventService;
 pub(crate) use pool_creation_event_service::PoolCreationEventService;
 pub(crate) use pool_creations_service::PoolCreationsService;

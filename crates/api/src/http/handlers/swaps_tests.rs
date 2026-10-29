@@ -53,13 +53,44 @@ async fn an_unknown_protocol_or_window_is_refused_in_problem_details() {
         "/api/protocols/meteora/tvl/totals",
         "/api/protocols/meteora/pool-discoveries/totals",
         "/api/protocols/meteora/signals",
-        "/api/swaps/totals?window=1h",
+        "/api/swaps/totals?window=90d",
         "/api/tvl/hourly?window=90d",
         "/api/tvl/totals?window=90d",
     ] {
         let (status, content_type, _) = get(uri).await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}");
         assert_eq!(content_type, "application/problem+json", "{uri}");
+    }
+}
+
+/// Mutation: `1h` taken by a route that does not read the last hour, or a series cut at a step
+/// that does not fit its window — 5 minutes over a day, an hour over the last one, or no step.
+#[tokio::test]
+async fn the_last_hour_and_its_step_are_refused_where_they_do_not_fit() {
+    for uri in [
+        "/api/protocols/meteora_damm_v2/liquidity-moves/totals?window=1h",
+        "/api/swaps/hourly?window=1h",
+        "/api/swaps/series?window=24h&interval=5m",
+        "/api/swaps/series?window=1h&interval=1h",
+        "/api/swaps/series?window=24h",
+        "/api/pool-creations/series?window=1h&interval=1d",
+    ] {
+        let (status, content_type, _) = get(uri).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}");
+        assert_eq!(content_type, "application/problem+json", "{uri}");
+    }
+    for uri in [
+        "/api/swaps/totals?window=1h&offset=1h",
+        "/api/swaps/series?window=1h&interval=5m",
+        "/api/swaps/series?window=7d&interval=1h",
+        "/api/protocols/meteora_damm_v2/swaps/series?window=30d&interval=1d",
+        "/api/pool-creations/totals?window=1h",
+        "/api/pool-creations/series?window=1h&interval=5m",
+        "/api/swaps/by-token?window=1h",
+        "/api/protocols/meteora_damm_v2/rotation-runs/totals?window=1h",
+    ] {
+        let (status, _, _) = get(uri).await;
+        assert_eq!(status, StatusCode::OK, "{uri}");
     }
 }
 

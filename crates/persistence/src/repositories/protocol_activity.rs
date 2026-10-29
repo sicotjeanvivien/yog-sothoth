@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
-    domain::{FrozenHours, ProtocolActivityLookup},
+    domain::{FrozenHours, ProtocolActivityLookup, TRANCHE, WrittenTranches},
 };
 
 use crate::repositories::helper::map_sqlx_error;
@@ -40,5 +40,27 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
             .first
             .zip(row.last_frozen)
             .map(|(first, last_frozen)| FrozenHours { first, last_frozen }))
+    }
+
+    async fn written_tranches(&self) -> RepositoryResult<Option<WrittenTranches>> {
+        let row = sqlx::query!(
+            r#"
+            -- ⚠️ The first tranche still held: `analytic_pool_5min` keeps 7 days, the record all.
+            SELECT GREATEST(MIN(bucket), (SELECT MIN(bucket) FROM analytic_pool_5min))
+                       AS "first?: DateTime<Utc>",
+                   MAX(bucket) AS "last?: DateTime<Utc>"
+              FROM analytic_tranches
+            "#
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(row
+            .first
+            .zip(row.last)
+            .map(|(first, last)| WrittenTranches {
+                first,
+                through: last + TRANCHE,
+            }))
     }
 }

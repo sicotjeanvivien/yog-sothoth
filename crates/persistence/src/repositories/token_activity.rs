@@ -8,7 +8,7 @@ use rows::TokenActivityRow;
 use sqlx::PgPool;
 use yog_core::{
     Cursor, Page, RepositoryResult,
-    domain::{TokenActivityCursor, TokenActivityFeed, TokenActivityPage, Window},
+    domain::{TokenActivityCursor, TokenActivityFeed, TokenActivityPage, TranchePeriod, Window},
 };
 
 use crate::repositories::helper::{
@@ -104,5 +104,93 @@ impl TokenActivityFeed for PgTokenActivityRepository {
                 ..page
             },
         }))
+    }
+
+    async fn list_in_tranches(
+        &self,
+        period: &TranchePeriod,
+        cursor: Option<TokenActivityCursor>,
+        limit: i64,
+    ) -> RepositoryResult<TokenActivityPage> {
+        let had_cursor = cursor.is_some();
+        let (after_volume, after_mint) = match cursor {
+            Some(c) => (
+                Some(convert_decimal_to_bigdecimal(
+                    c.volume_usd,
+                    "cursor volume_usd",
+                )?),
+                Some(c.mint.to_string()),
+            ),
+            None => (None, None),
+        };
+        // ⚠️ The rule of yog-analytic's frozen rankings, at the tranche: each pool summed first,
+        // its mints joined once, the volume rounded for the cursor's Decimal.
+        let rows = sqlx::query_as!(
+            TokenActivityRow,
+            r#"
+            WITH by_pool AS (
+                SELECT f.protocol, f.pool_address,
+                       SUM(f.volume_in_a_usd + f.volume_in_b_usd) FILTER (WHERE f.valued)
+                           AS volume_usd,
+                       COUNT(*) AS pool_hours, COUNT(*) FILTER (WHERE f.valued) AS pool_hours_valued
+                  FROM analytic_pool_5min f
+                 WHERE f.bucket >= $1 AND f.bucket < $2
+                 GROUP BY f.protocol, f.pool_address
+            ),
+            ranked AS (
+                SELECT m.mint, ROUND(COALESCE(SUM(b.volume_usd), 0), 6) AS volume_usd,
+                       COUNT(*) AS pools, SUM(b.pool_hours)::BIGINT AS pool_hours,
+                       SUM(b.pool_hours_valued)::BIGINT AS pool_hours_valued
+                  FROM by_pool b
+                  JOIN pools p ON p.pool_address = b.pool_address AND p.protocol = b.protocol
+                 CROSS JOIN LATERAL (VALUES (p.token_a_mint), (p.token_b_mint)) AS m (mint)
+                 WHERE m.mint IS NOT NULL
+                 GROUP BY m.mint
+            )
+            SELECT $2::TIMESTAMPTZ AS "last_hour?",
+                   t.mint AS "mint?", t.volume_usd AS "volume_usd?", t.pools AS "pools?",
+                   t.pool_hours AS "pool_hours?", t.pool_hours_valued AS "pool_hours_valued?",
+                   m.symbol AS "symbol?", m.name AS "name?",
+                   m.decimals AS "decimals?", m.logo_uri AS "logo_uri?",
+                   m.metadata_provider AS "metadata_provider?",
+                   m.fetched_at AS "fetched_at?", m.last_refresh_at AS "last_refresh_at?"
+              FROM ranked t
+              LEFT JOIN token_metadata m ON m.mint = t.mint
+             WHERE $3::NUMERIC IS NULL
+                OR t.volume_usd < $3
+                OR (t.volume_usd = $3 AND t.mint > $4)
+             ORDER BY t.volume_usd DESC, t.mint
+             LIMIT $5
+            "#,
+            period.from,
+            period.as_of,
+            after_volume,
+            after_mint,
+            limit + 1,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        let last_hour = period.as_of;
+        let items = rows
+            .into_iter()
+            .filter_map(|row| row.into_activity().transpose())
+            .collect::<RepositoryResult<Vec<_>>>()?;
+        let page =
+            PageBuilder::new(items, limit, QueryMode::Forward, had_cursor).finalize(|token| {
+                Cursor::TokenActivity(TokenActivityCursor {
+                    last_hour,
+                    volume_usd: token.volume_usd,
+                    mint: token.mint,
+                })
+            });
+        Ok(TokenActivityPage {
+            last_hour,
+            page: Page {
+                prev_cursor: None,
+                ..page
+            },
+        })
     }
 }

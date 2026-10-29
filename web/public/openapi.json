@@ -4729,6 +4729,7 @@
       },
       "WindowResponse": {
         "enum": [
+          "1h",
           "24h",
           "7d",
           "30d"
@@ -4979,7 +4980,7 @@
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
             "format": "date-time",
             "type": [
               "string",
@@ -5040,7 +5041,7 @@
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
             "format": "date-time",
             "type": [
               "string",
@@ -5110,7 +5111,7 @@
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
             "format": "date-time",
             "type": [
               "string",
@@ -5176,7 +5177,7 @@
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
             "format": "date-time",
             "type": [
               "string",
@@ -5241,7 +5242,7 @@
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
             "format": "date-time",
             "type": [
               "string",
@@ -5306,7 +5307,7 @@
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
             "format": "date-time",
             "type": [
               "string",
@@ -5368,7 +5369,7 @@
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
             "format": "date-time",
             "type": [
               "string",
@@ -5425,7 +5426,7 @@
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
             "format": "date-time",
             "type": [
               "string",
@@ -5498,7 +5499,7 @@
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
             "format": "date-time",
             "type": [
               "string",
@@ -5592,7 +5593,7 @@
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
             "format": "date-time",
             "type": [
               "string",
@@ -5657,7 +5658,7 @@
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
             "format": "date-time",
             "type": [
               "string",
@@ -5729,7 +5730,7 @@
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
             "format": "date-time",
             "type": [
               "string",
@@ -5823,7 +5824,7 @@
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
             "format": "date-time",
             "type": [
               "string",
@@ -5903,7 +5904,7 @@
         "description": "`from..asOf`, each `null` before the first hour is frozen.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour: the instant the rows reflect.",
+            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
             "format": "date-time",
             "type": [
               "string",
@@ -6431,6 +6432,64 @@
         }
       }
     },
+    "/api/pool-creations/series": {
+      "get": {
+        "operationId": "get_pool_creations_series",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "enum": [
+                "1h",
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "interval",
+            "required": true,
+            "schema": {
+              "description": "The step of a series.",
+              "enum": [
+                "5m",
+                "1h",
+                "1d"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPoolCreationsBucketResponse"
+                }
+              }
+            },
+            "description": "Each protocol's pools created by `interval`, under the rules of `/api/swaps/series`."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/pool-creations/totals": {
       "get": {
         "operationId": "get_pool_creation_totals",
@@ -6440,7 +6499,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -8488,6 +8549,72 @@
         }
       }
     },
+    "/api/protocols/{protocol}/pool-creations/series": {
+      "get": {
+        "operationId": "get_protocol_pool_creations_series",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "enum": [
+                "1h",
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "interval",
+            "required": true,
+            "schema": {
+              "description": "The step of a series.",
+              "enum": [
+                "5m",
+                "1h",
+                "1d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPoolCreationsBucketResponse"
+                }
+              }
+            },
+            "description": "The protocol's pools created by `interval`, under the rules of `/api/swaps/series`."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/protocols/{protocol}/pool-creations/totals": {
       "get": {
         "operationId": "get_protocol_pool_creation_totals",
@@ -8497,7 +8624,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -9358,7 +9487,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -9683,6 +9814,72 @@
         }
       }
     },
+    "/api/protocols/{protocol}/swaps/series": {
+      "get": {
+        "operationId": "get_protocol_swaps_series",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "enum": [
+                "1h",
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "interval",
+            "required": true,
+            "schema": {
+              "description": "The step of a series.",
+              "enum": [
+                "5m",
+                "1h",
+                "1d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapActivityBucketResponse"
+                }
+              }
+            },
+            "description": "The protocol's swaps by `interval`, under the rules of `/api/swaps/series`."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/protocols/{protocol}/swaps/totals": {
       "get": {
         "operationId": "get_protocol_swap_totals",
@@ -9692,7 +9889,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -9707,7 +9906,9 @@
             "schema": {
               "oneOf": [
                 {
+                  "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
                   "enum": [
+                    "1h",
                     "24h",
                     "7d",
                     "30d"
@@ -10226,7 +10427,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -10378,6 +10581,64 @@
         }
       }
     },
+    "/api/swaps/series": {
+      "get": {
+        "operationId": "get_swaps_series",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "enum": [
+                "1h",
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "interval",
+            "required": true,
+            "schema": {
+              "description": "The step of a series.",
+              "enum": [
+                "5m",
+                "1h",
+                "1d"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapActivityBucketResponse"
+                }
+              }
+            },
+            "description": "Each protocol's swaps by `interval`: 5 minutes over the last hour, an hour or 24 hours ending at `asOf` over the other windows."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/swaps/totals": {
       "get": {
         "operationId": "get_swap_totals",
@@ -10387,7 +10648,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -10402,7 +10665,9 @@
             "schema": {
               "oneOf": [
                 {
+                  "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
                   "enum": [
+                    "1h",
                     "24h",
                     "7d",
                     "30d"
