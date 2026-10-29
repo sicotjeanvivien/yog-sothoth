@@ -38,3 +38,12 @@ export function previousWindowCovered(span: MeasuredSpan): boolean {
     Date.parse(span.from) >= Date.parse(span.coveredSince)
   );
 }
+
+/** Whether the `offset` read ends where the current one starts: a tranche or a freeze between the two reads moves one. */
+export function previousWindowAdjoins(previous: MeasuredSpan, current: MeasuredSpan): boolean {
+  return (
+    previous.asOf !== null &&
+    current.from !== null &&
+    Date.parse(previous.asOf) === Date.parse(current.from)
+  );
+}

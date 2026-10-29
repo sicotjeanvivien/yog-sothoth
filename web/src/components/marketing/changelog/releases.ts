@@ -32,6 +32,26 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.6.0",
+    date: "2026-10-29",
+    summary: "The Overview shows the last hour, in 5-minute bars.",
+    sections: [
+      {
+        kind: "features",
+        items: [
+          {
+            text: "1H in the Overview's period selector: the rolling hour through the last 5-minute tranche measured, in twelve 5-minute bars, with its volume, fees, swaps, active and born pools, top tokens and the change on the hour before. The TVL shows its last reading, without a change: it is a stock, not a flow.",
+            technical: false,
+          },
+          {
+            text: "window=1h on swaps/totals (offset=1h), swaps/by-token, pool-creations/totals and rotation-runs/totals, refused (400) elsewhere; new …/swaps/series and …/pool-creations/series with interval=5m|1h|1d, 5m over window=1h only, 1h and 1d returning what hourly and daily return. Over the last hour, poolHours count pool tranches. Migration 047 grants analytic_pool_5min to yog_api.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.5.2",
     date: "2026-10-29",
     summary: "Volume and fees are no longer valued at a token's market price that our pools' trades contradict.",

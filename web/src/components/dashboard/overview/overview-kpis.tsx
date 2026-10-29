@@ -22,8 +22,8 @@ import { volumeCoverage } from "@/lib/coverage/volume-coverage";
 import { formatCount, formatCountCompact, formatRate } from "@/lib/format/format-count";
 import { formatTimes } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
-import { previousWindowCovered } from "@/lib/overview/availability";
-import type { Period } from "@/lib/overview/period";
+import { previousWindowAdjoins, previousWindowCovered } from "@/lib/overview/availability";
+import { coverageUnit, DEFAULT_PERIOD, type Period } from "@/lib/overview/period";
 import { changeRatio, rotation, shareOf, sumUsd, swapsPerSecond } from "@/lib/overview/totals";
 
 import { Change, closedReason, KpiCell, Unavailable, utcMoment } from "./overview-parts";
@@ -34,6 +34,9 @@ export const usd = (value: number | null) =>
   value === null ? "—" : formatUsdCompact(String(value));
 
 export async function TvlKpi({ period, scope }: { period: Period; scope: Scope }) {
+  if (period === "1h") {
+    return <LastTvlKpi scope={scope} />;
+  }
   const t = await getTranslations("Dashboard.Overview");
   const label = t("kpis.tvl");
   const info = t("kpis.info.tvl");
@@ -73,7 +76,33 @@ export async function TvlKpi({ period, scope }: { period: Period; scope: Scope }
       info={info}
       value={usd(current)}
       sub={sub}
-      stamp={await lateStamp(totals.asOf)}
+      stamp={await lateStamp(totals.asOf, period)}
+    />
+  );
+}
+
+/** The TVL is a stock: over the last hour, its last reading alone, without a change. */
+async function LastTvlKpi({ scope }: { scope: Scope }) {
+  const t = await getTranslations("Dashboard.Overview");
+  const label = t("kpis.tvl");
+  const info = t("kpis.info.tvlLast");
+
+  let reading;
+  try {
+    reading = await fetchTvl(scope);
+  } catch (err) {
+    return kpiError(err, label, info);
+  }
+  const at = reading.asOf;
+
+  return (
+    <KpiCell
+      label={label}
+      info={info}
+      value={usd(sumUsd(reading.items.map((i) => i.tvlUsd)))}
+      sub={at === null ? undefined : t("kpis.tvlAt", { at: await utcMoment(at) })}
+      // ⚠️ The TVL is read by the hour whatever the period: its lag is a frozen hour's.
+      stamp={await lateStamp(at, DEFAULT_PERIOD)}
     />
   );
 }
@@ -82,7 +111,7 @@ export async function VolumeKpi({ period, scope }: { period: Period; scope: Scop
   const t = await getTranslations("Dashboard.Overview");
   const short = t(`period.short.${period}`);
   const label = t("kpis.volume", { period: short });
-  const info = t("kpis.info.volume");
+  const info = t(period === "1h" ? "kpis.info.volumeLastHour" : "kpis.info.volume");
   const suffix = t("kpis.volumeChange", { period: short });
 
   const [now, before] = await Promise.allSettled([
@@ -108,6 +137,8 @@ export async function VolumeKpi({ period, scope }: { period: Period; scope: Scop
       since: since === null ? "—" : await utcMoment(since),
     });
     sub = <Withheld reason={reason} suffix={suffix} />;
+  } else if (!previousWindowAdjoins(before.value, now.value)) {
+    sub = <Withheld reason={t("unavailable.previousMoved")} suffix={suffix} />;
   } else {
     const ratio = changeRatio(current, sumUsd(before.value.items.map((i) => i.volumeUsd)));
     sub = ratio === null ? undefined : <Change ratio={ratio} suffix={suffix} />;
@@ -117,9 +148,9 @@ export async function VolumeKpi({ period, scope }: { period: Period; scope: Scop
     <KpiCell
       label={label}
       info={info}
-      value={await valued(usd(current), items)}
+      value={await valued(usd(current), items, period)}
       sub={sub}
-      stamp={await lateStamp(now.value.asOf)}
+      stamp={await lateStamp(now.value.asOf, period)}
     />
   );
 }
@@ -148,13 +179,13 @@ export async function FeesKpi({ period, scope }: { period: Period; scope: Scope 
     <KpiCell
       label={label}
       info={info}
-      value={await valued(usd(fees), items)}
+      value={await valued(usd(fees), items, period)}
       sub={
         protocolFees === null
           ? undefined
           : t("kpis.feesProtocol", { amount: usd(protocolFees) })
       }
-      stamp={await lateStamp(now.asOf)}
+      stamp={await lateStamp(now.asOf, period)}
     />
   );
 }
@@ -214,7 +245,7 @@ export async function PoolsKpi({ period, scope }: { period: Period; scope: Scope
           {born}
         </>
       }
-      stamp={await lateStamp(now.value.asOf)}
+      stamp={await lateStamp(now.value.asOf, period)}
     />
   );
 }
@@ -249,7 +280,7 @@ export async function SwapsKpi({ period, scope }: { period: Period; scope: Scope
           ? undefined
           : t("kpis.swapsRate", { rate: formatRate(swapsPerSecond(swaps, period)) })
       }
-      stamp={await lateStamp(now.asOf)}
+      stamp={await lateStamp(now.asOf, period)}
       advanced
     />
   );
@@ -284,9 +315,9 @@ export async function RotationKpi({ period, scope }: { period: Period; scope: Sc
     <KpiCell
       label={label}
       info={info}
-      value={await valued(ratio === null ? "—" : formatTimes(ratio, locale), items)}
+      value={await valued(ratio === null ? "—" : formatTimes(ratio, locale), items, period)}
       sub={t("kpis.rotationSub")}
-      stamp={await lateStamp(now.asOf)}
+      stamp={await lateStamp(now.asOf, period)}
       advanced
     />
   );
@@ -300,6 +331,7 @@ export async function KpiPlaceholder({ advanced = false }: { advanced?: boolean 
 export async function valued(
   figure: string,
   items: readonly { poolHours: number; poolHoursValued: number }[],
+  period: Period,
 ): Promise<ReactNode> {
   const t = await getTranslations("Dashboard.Overview.coverage");
   const coverage = volumeCoverage({
@@ -313,7 +345,7 @@ export async function valued(
       <wbr />
       <VolumeCoverageMark
         coverage={coverage}
-        label={(priced, total) => t("mark", { priced, total })}
+        label={(priced, total) => t(`${coverageUnit(period)}.mark`, { priced, total })}
       />
     </>
   );

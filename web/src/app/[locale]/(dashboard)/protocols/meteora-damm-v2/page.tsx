@@ -25,7 +25,7 @@ import { ProtocolHeader } from "@/components/dashboard/protocol/protocol-header"
 import { FeesRateKpi, ProtocolFeesKpi } from "@/components/dashboard/protocol/protocol-kpis";
 import { ProtocolTabs } from "@/components/dashboard/protocol/protocol-tabs";
 import { VolumeTab } from "@/components/dashboard/protocol/volume/volume-tab";
-import { parsePeriod } from "@/lib/overview/period";
+import { parsePeriod, PROTOCOL_PERIODS } from "@/lib/overview/period";
 import { parseTab, readyTabs } from "@/lib/protocol/tabs";
 import { pageMetadata } from "@/lib/seo/page-metadata";
 
@@ -55,7 +55,7 @@ export default async function DammV2Page({ params, searchParams }: ProtocolPageP
   const { locale } = await params;
   setRequestLocale(locale);
   const query = await searchParams;
-  const period = parsePeriod(query.period);
+  const period = parsePeriod(query.period, PROTOCOL_PERIODS);
   const tab = parseTab(query.tab);
   const initialAdvanced = (await cookies()).get(OVERVIEW_ADVANCED_COOKIE)?.value === "1";
   const t = await getTranslations("Dashboard.Protocol");

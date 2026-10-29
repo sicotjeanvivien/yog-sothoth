@@ -1,30 +1,48 @@
-/** The Overview's period: the `window` of every measure it reads, chosen by `?period=`. */
+/** A page's period: the `window` of every measure it reads, chosen by `?period=`. */
 
 import { zWindowResponse, type WindowResponse } from "@/lib/api/schema/zod.gen";
 
-/** ⚠️ Without the last hour: its reads and bars are not wired to the Overview yet. */
-export type Period = Exclude<WindowResponse, "1h">;
+export type Period = WindowResponse;
 
-export const PERIODS: readonly Period[] = zWindowResponse.options.filter(
-  (w): w is Period => w !== "1h",
-);
+/** A period of frozen hours: every one but the last hour, read from the 5-minute tranches. */
+export type FrozenPeriod = Exclude<Period, "1h">;
 
-export const DEFAULT_PERIOD: Period = "24h";
+export const OVERVIEW_PERIODS: readonly Period[] = ["1h", "24h", "7d", "30d"];
+
+export const PROTOCOL_PERIODS: readonly FrozenPeriod[] = ["24h", "7d", "30d"];
+
+export const DEFAULT_PERIOD = "24h" satisfies FrozenPeriod;
 
 export const HOUR_MS = 60 * 60 * 1000;
 
+const MINUTE_MS = 60 * 1000;
+
 export const PERIOD_HOURS: Record<Period, number> = {
+  "1h": 1,
   "24h": 24,
   "7d": 7 * 24,
   "30d": 30 * 24,
 };
 
-/** A bar's width over each period: hourly bars are summed into it below a day. */
-export const SLOT_HOURS: Record<Period, number> = { "24h": 1, "7d": 6, "30d": 24 };
+/** A slot's width over each period. */
+export const SLOT_MS: Record<Period, number> = {
+  "1h": 5 * MINUTE_MS,
+  "24h": HOUR_MS,
+  "7d": 6 * HOUR_MS,
+  "30d": 24 * HOUR_MS,
+};
 
-/** Whether the period's bars are summed from the API's hours rather than read as its days. */
-export function readsHours(period: Period): boolean {
-  return SLOT_HOURS[period] < 24;
+/** The width of a bar the API returns: 5-minute tranches, hours summed into slots, or days. */
+export const BAR_MS: Record<Period, number> = {
+  "1h": 5 * MINUTE_MS,
+  "24h": HOUR_MS,
+  "7d": HOUR_MS,
+  "30d": 24 * HOUR_MS,
+};
+
+/** What a period's coverage counts: pools × its bars, tranches under an hour. */
+export function coverageUnit(period: Period): "poolHours" | "poolTranches" {
+  return BAR_MS[period] < HOUR_MS ? "poolTranches" : "poolHours";
 }
 
 /** Closed whatever the facts hold, until its own times are measured on the prod. */
@@ -43,12 +61,17 @@ export function periodMs(period: Period): number {
 }
 
 /**
- * The default for a missing, repeated, unknown or closed value: a bad link still renders a
- * page, and a closed period's reads never run.
+ * The default for a missing, repeated, unknown or closed value, or one the page does not offer:
+ * a bad link still renders a page, and a closed period's reads never run.
  */
-export function parsePeriod(raw: string | string[] | undefined): Period {
+export function parsePeriod<P extends Period>(
+  raw: string | string[] | undefined,
+  periods: readonly P[],
+): P | typeof DEFAULT_PERIOD {
   const parsed = zWindowResponse.safeParse(raw);
-  return parsed.success && parsed.data !== "1h" && !CLOSED_PERIODS.has(parsed.data)
-    ? parsed.data
+  return parsed.success &&
+    (periods as readonly Period[]).includes(parsed.data) &&
+    !CLOSED_PERIODS.has(parsed.data)
+    ? (parsed.data as P)
     : DEFAULT_PERIOD;
 }

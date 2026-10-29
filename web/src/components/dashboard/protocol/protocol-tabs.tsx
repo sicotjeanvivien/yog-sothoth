@@ -9,7 +9,7 @@ import { useEffect } from "react";
 
 import type { PagePath } from "@/config/site";
 import { Link, useRouter } from "@/i18n/navigation";
-import { pageQuery, type Period } from "@/lib/overview/period";
+import { pageQuery, type FrozenPeriod } from "@/lib/overview/period";
 import { tabForKey, tabNumber, tabQuery, type ProtocolTab } from "@/lib/protocol/tabs";
 
 /**
@@ -35,7 +35,7 @@ export function ProtocolTabs({
   label,
 }: {
   pathname: PagePath;
-  period: Period;
+  period: FrozenPeriod;
   current: ProtocolTab;
   /** The ready tabs, in their row's order, with their label. */
   tabs: readonly { key: ProtocolTab; label: string }[];

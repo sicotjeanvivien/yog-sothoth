@@ -7,7 +7,7 @@
 
 import { cache } from "react";
 
-import { readsHours, type Period } from "@/lib/overview/period";
+import { BAR_MS, HOUR_MS, type FrozenPeriod, type Period } from "@/lib/overview/period";
 
 import { apiGet } from "../client/server";
 import {
@@ -26,6 +26,7 @@ import {
   zGetProtocolRotationRunTotalsResponse,
   zGetSwapsDailyResponse,
   zGetSwapsHourlyResponse,
+  zGetSwapsSeriesResponse,
   zGetSwapTotalsResponse,
   zGetTvlHourlyResponse,
   zGetTvlResponse,
@@ -61,11 +62,16 @@ export const fetchPreviousSwapTotals = cache((scope: Scope, window: WindowRespon
   ),
 );
 
-/** Hour by hour up to 7 days, by 24-hour slices ending at `asOf` beyond. */
+/** Whether a period's bars are summed from the API's hours rather than read as its days. */
+const readsHours = (window: FrozenPeriod) => BAR_MS[window] === HOUR_MS;
+
+/** By 5-minute tranche over 1 h, hour by hour up to 7 days, by 24-hour slices ending at `asOf` beyond. */
 export const fetchSwapsSeries = cache((scope: Scope, window: Period) =>
-  readsHours(window)
-    ? apiGet(scopedPath(scope, "swaps/hourly"), { window }, zGetSwapsHourlyResponse)
-    : apiGet(scopedPath(scope, "swaps/daily"), { window }, zGetSwapsDailyResponse),
+  window === "1h"
+    ? apiGet(scopedPath(scope, "swaps/series"), { window, interval: "5m" }, zGetSwapsSeriesResponse)
+    : readsHours(window)
+      ? apiGet(scopedPath(scope, "swaps/hourly"), { window }, zGetSwapsHourlyResponse)
+      : apiGet(scopedPath(scope, "swaps/daily"), { window }, zGetSwapsDailyResponse),
 );
 
 export const fetchPoolCreationTotals = cache((scope: Scope, window: WindowResponse) =>
@@ -77,18 +83,18 @@ export const fetchTvl = cache((scope: Scope) =>
   apiGet(scopedPath(scope, "tvl"), {}, zGetTvlResponse),
 );
 
-export const fetchTvlHourly = cache((scope: Scope, window: WindowResponse) =>
+export const fetchTvlHourly = cache((scope: Scope, window: FrozenPeriod) =>
   apiGet(scopedPath(scope, "tvl/hourly"), { window }, zGetTvlHourlyResponse),
 );
 
 /** The TVL a window before its last reading, and the change without the pools discovered. */
-export const fetchTvlTotals = cache((scope: Scope, window: WindowResponse) =>
+export const fetchTvlTotals = cache((scope: Scope, window: FrozenPeriod) =>
   apiGet(scopedPath(scope, "tvl/totals"), { window }, zGetTvlTotalsResponse),
 );
 
 /** No row while the protocol's liquidity does not cover the window whole. */
 export const fetchLiquidityMoveTotals = cache(
-  (protocol: ProtocolResponse, window: WindowResponse) =>
+  (protocol: ProtocolResponse, window: FrozenPeriod) =>
     apiGet(
       `/api/protocols/${protocol}/liquidity-moves/totals`,
       { window },
@@ -98,7 +104,7 @@ export const fetchLiquidityMoveTotals = cache(
 
 /** The fees the protocol's positions claimed over the window, valued. */
 export const fetchPositionFeeClaimTotals = cache(
-  (protocol: ProtocolResponse, window: WindowResponse) =>
+  (protocol: ProtocolResponse, window: FrozenPeriod) =>
     apiGet(
       `/api/protocols/${protocol}/position-fee-claims/totals`,
       { window },
@@ -107,7 +113,7 @@ export const fetchPositionFeeClaimTotals = cache(
 );
 
 /** The rewards the protocol's positions claimed over the window, valued. */
-export const fetchRewardClaimTotals = cache((protocol: ProtocolResponse, window: WindowResponse) =>
+export const fetchRewardClaimTotals = cache((protocol: ProtocolResponse, window: FrozenPeriod) =>
   apiGet(
     `/api/protocols/${protocol}/reward-claims/totals`,
     { window },
@@ -116,7 +122,7 @@ export const fetchRewardClaimTotals = cache((protocol: ProtocolResponse, window:
 );
 
 /** The protocol's liquidity flows, on the bars of `fetchSwapsSeries`. */
-export const fetchLiquiditySeries = cache((protocol: ProtocolResponse, window: Period) =>
+export const fetchLiquiditySeries = cache((protocol: ProtocolResponse, window: FrozenPeriod) =>
   readsHours(window)
     ? apiGet(
         `/api/protocols/${protocol}/liquidity-moves/hourly`,
@@ -132,7 +138,7 @@ export const fetchLiquiditySeries = cache((protocol: ProtocolResponse, window: P
 
 /** The protocol's largest valued liquidity moves over the window. */
 export const fetchLargestLiquidityMoves = cache(
-  (protocol: ProtocolResponse, window: WindowResponse, limit: number, kind?: LiquidityMoveKindResponse) =>
+  (protocol: ProtocolResponse, window: FrozenPeriod, limit: number, kind?: LiquidityMoveKindResponse) =>
     apiGet(
       `/api/protocols/${protocol}/liquidity-moves`,
       { window, sort: "amount", limit: String(limit), ...(kind === undefined ? {} : { kind }) },
@@ -142,7 +148,7 @@ export const fetchLargestLiquidityMoves = cache(
 
 /** The positions the protocol opened, locked, split and closed over the window. */
 export const fetchPositionChangeTotals = cache(
-  (protocol: ProtocolResponse, window: WindowResponse) =>
+  (protocol: ProtocolResponse, window: FrozenPeriod) =>
     apiGet(
       `/api/protocols/${protocol}/position-changes/totals`,
       { window },
@@ -151,7 +157,7 @@ export const fetchPositionChangeTotals = cache(
 );
 
 /** The pools the protocol saw born, hour by hour up to 7 days, by 24-hour slices beyond. */
-export const fetchPoolCreationsSeries = cache((protocol: ProtocolResponse, window: Period) =>
+export const fetchPoolCreationsSeries = cache((protocol: ProtocolResponse, window: FrozenPeriod) =>
   readsHours(window)
     ? apiGet(
         `/api/protocols/${protocol}/pool-creations/hourly`,
@@ -166,7 +172,7 @@ export const fetchPoolCreationsSeries = cache((protocol: ProtocolResponse, windo
 );
 
 /** The protocol's volume by bar, split by its rotation runs. */
-export const fetchRotationRunsSeries = cache((protocol: ProtocolResponse, window: Period) =>
+export const fetchRotationRunsSeries = cache((protocol: ProtocolResponse, window: FrozenPeriod) =>
   readsHours(window)
     ? apiGet(
         `/api/protocols/${protocol}/rotation-runs/hourly`,

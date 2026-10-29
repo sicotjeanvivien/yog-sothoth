@@ -11,7 +11,7 @@ import { volumeCoverage } from "@/lib/coverage/volume-coverage";
 import { formatCount } from "@/lib/format/format-count";
 import { formatShortAddress } from "@/lib/format/format-short-address";
 import { formatUsdCompact } from "@/lib/format/format-usd";
-import type { Period } from "@/lib/overview/period";
+import { coverageUnit, type Period } from "@/lib/overview/period";
 
 import { BlockHeading, closedReason, PeriodNotice } from "./overview-parts";
 import {
@@ -86,7 +86,7 @@ export async function TopTokens({ period }: { period: Period }) {
                 {formatUsdCompact(item.volumeUsd)}
                 <VolumeCoverageMark
                   coverage={volumeCoverage(item)}
-                  label={(priced, total) => t("coverage.mark", { priced, total })}
+                  label={(priced, total) => t(`coverage.${coverageUnit(period)}.mark`, { priced, total })}
                 />
               </div>
               <div role="cell" className={`${NUM_CLASS} text-dash-ink-2`}>

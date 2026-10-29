@@ -30,8 +30,8 @@ import { formatCount } from "@/lib/format/format-count";
 import { formatRelative, formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { pairLabel, shortenPubkey } from "@/lib/format/pubkey";
-import { axisOf, daysAgoOf, hourOf, roundTicks } from "@/lib/overview/chart";
-import type { Period } from "@/lib/overview/period";
+import { axisOf, daysAgoOf, hourOf, readsClock, roundTicks } from "@/lib/overview/chart";
+import type { FrozenPeriod } from "@/lib/overview/period";
 import { birthSlotsOf, birthTotalOf, lifeCountOf, lockKey } from "@/lib/protocol/pools";
 
 import { SplitBars, type SplitDetail } from "../split-bars";
@@ -77,7 +77,7 @@ const CHART_LABEL = {
   "30d": "chartLabelDaily",
 } as const;
 
-type TabProps = { period: Period; protocol: ProtocolResponse };
+type TabProps = { period: FrozenPeriod; protocol: ProtocolResponse };
 
 export async function PoolsTab({ period, protocol }: TabProps) {
   const t = await getTranslations("Dashboard.Protocol.pools");
@@ -160,7 +160,7 @@ async function Births({ period, protocol }: TabProps) {
 
   const bars = slots.map((slot, i) => {
     const when =
-      period !== "24h"
+      !readsClock(period)
         ? `${daysAgo(daysAgoOf(period, slots.length, i))} · ${moment(slot.from)} → ${moment(slot.to)}`
         : `${hourOf(slot.from)} UTC`;
     if (slot.value === null) {

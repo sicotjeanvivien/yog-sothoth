@@ -18,18 +18,21 @@ import { PeriodControl, PeriodSelect } from "./period-control";
 
 export async function HeaderControls({
   period,
+  periods,
   scope,
   pathname,
   keep,
 }: {
   period: Period;
+  /** The periods the page offers, in their order. */
+  periods: readonly Period[];
   scope: Scope;
   pathname: PagePath;
   /** The page's other query parameters, kept across a period change. */
   keep: Record<string, string>;
 }) {
   const t = await getTranslations("Dashboard.Overview.page");
-  const page = { pathname, keep };
+  const page = { periods, pathname, keep };
 
   return (
     <div className="flex flex-col items-start gap-2.5 rail:ml-auto rail:items-end">

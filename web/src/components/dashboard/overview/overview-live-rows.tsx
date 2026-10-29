@@ -1,5 +1,5 @@
 /**
- * The rows of the "Live" panel: the share of the period's pool-hours of `scope` that could be
+ * The rows of the "Live" panel: the share of the period's coverage of `scope` that could be
  * valued, and the hour every figure stops at. ⚠️ Rounded down: 99.6 % is not complete.
  */
 
@@ -8,7 +8,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { LiveRow } from "@/components/dashboard/live-status/live-indicator";
 import { ApiClientError } from "@/lib/api/errors";
 import { fetchSwapTotals } from "@/lib/api/server/protocols";
-import type { Period } from "@/lib/overview/period";
+import { coverageUnit, type Period } from "@/lib/overview/period";
 import type { Scope } from "@/lib/api/server/scope";
 import { isStale } from "@/lib/overview/staleness";
 
@@ -40,12 +40,12 @@ export async function OverviewLiveRows({ period, scope }: { period: Period; scop
     <>
       <LiveRow
         label={t("liveStatus.priceCoverage")}
-        value={total === 0 ? "—" : t("Overview.coverage.value", { percent })}
+        value={total === 0 ? "—" : t(`Overview.coverage.${coverageUnit(period)}.value`, { percent })}
       />
       <LiveRow
         label={t("liveStatus.measuredUntil")}
         value={activity.asOf === null ? "—" : await utcMoment(activity.asOf)}
-        late={isStale(activity.asOf, new Date())}
+        late={isStale(activity.asOf, new Date(), period)}
       />
     </>
   );

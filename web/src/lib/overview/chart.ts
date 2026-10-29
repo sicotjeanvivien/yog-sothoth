@@ -1,6 +1,6 @@
 /** The Overview's bar series: fixed slots ending at `asOf`, and the scale's two round marks. */
 
-import { HOUR_MS, periodMs, readsHours, SLOT_HOURS, type Period } from "./period";
+import { BAR_MS, HOUR_MS, periodMs, SLOT_MS, type Period } from "./period";
 
 /** Each chart's height, and its tallest bar a little under it so the top mark's label stays clear. */
 export const CHART_PX = {
@@ -14,8 +14,9 @@ export type Slot = { from: Date; to: Date; value: number | null };
 type Bar = { from: string; value: string | null };
 
 /**
- * Hours over 24 h, 6-hour slices over 7 days, 24-hour slices beyond: each slot sums the valued bars
- * it holds, across protocols, as the API's days do; `null` without any, or, `strict`, with one unknown.
+ * 5-minute tranches over 1 h, hours over 24 h, 6-hour slices over 7 days, 24-hour slices beyond: each
+ * slot sums the valued bars it holds, across protocols, as the API's days do; `null` without any,
+ * or, `strict`, with one unknown.
  */
 export function slotsOf(
   period: Period,
@@ -23,10 +24,10 @@ export function slotsOf(
   bars: readonly Bar[],
   { strict = false }: { strict?: boolean } = {},
 ): Slot[] {
-  const step = SLOT_HOURS[period] * HOUR_MS;
+  const step = SLOT_MS[period];
   const count = periodMs(period) / step;
   const start = Date.parse(asOf) - count * step;
-  const barStep = readsHours(period) ? HOUR_MS : step;
+  const barStep = BAR_MS[period];
 
   const sums = Array.from({ length: count }, (): number | null => null);
   const unknown = Array.from({ length: count }, () => false);
@@ -55,7 +56,7 @@ export function slotsOf(
 
 /** How many 24-hour slices before `asOf` slot `i` of `count` falls in. */
 export function daysAgoOf(period: Period, count: number, i: number): number {
-  return Math.floor(((count - 1 - i) * SLOT_HOURS[period]) / 24);
+  return Math.floor(((count - 1 - i) * SLOT_MS[period]) / (24 * HOUR_MS));
 }
 
 /**
@@ -75,14 +76,20 @@ export function roundTicks(max: number): number[] {
 }
 
 /** The step between axis labels; the last slot always has one. */
-const AXIS_EVERY: Record<Period, number> = { "24h": 6, "7d": 4, "30d": 7 };
+const AXIS_EVERY: Record<Period, number> = { "1h": 3, "24h": 6, "7d": 4, "30d": 7 };
 
-/** "14:00", the slot's hour in UTC. */
+/** "14:05", the slot's start in UTC. */
 export function hourOf(date: Date): string {
-  return `${String(date.getUTCHours()).padStart(2, "0")}:00`;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`;
 }
 
-/** The axis under a series: hours over 24 h, day labels beyond, the last one always shown. */
+/** Whether a period's slots are named by their time of day rather than by their day. */
+export function readsClock(period: Period): boolean {
+  return SLOT_MS[period] < 6 * HOUR_MS;
+}
+
+/** The axis under a series: times of day up to 24 h, day labels beyond, the last one always shown. */
 export function axisOf(
   period: Period,
   slots: readonly { from: Date }[],
@@ -98,7 +105,7 @@ export function axisOf(
   return slots.flatMap((slot, i) =>
     labelled(i)
       ? [
-          period !== "24h"
+          !readsClock(period)
             ? dayLabel(daysAgoOf(period, slots.length, i))
             : i === last
               ? `${hourOf(slot.from)} UTC`

@@ -51,11 +51,13 @@
       "period": {
         "label": "Period",
         "short": {
+          "1h": "1h",
           "24h": "24h",
           "7d": "7d",
           "30d": "30d"
         },
         "button": {
+          "1h": "1H",
           "24h": "24H",
           "7d": "7D",
           "30d": "30D"
@@ -63,13 +65,14 @@
         "closedLabel": "{period}: not available yet",
         "closedUntil": "Not enough data yet: Yog-Scope has measured it since {since}. This period will be complete on {opens}.",
         "closedSoon": "The 30-day period is not open yet: it will be once its reads are measured over 30 days of data.",
-        "closedEmpty": "No hour is measured yet."
+        "closedEmpty": "Nothing is measured yet over this period."
       },
       "unavailable": {
         "label": "Why \"—\"?",
-        "previous": "The previous period starts before {since}, the first hour measured: no comparison with an incomplete sum.",
+        "previous": "The previous period starts before {since}, when measuring began: no comparison with an incomplete sum.",
         "tvlStart": "The TVL has no measure at the start of the period: its change cannot be computed.",
-        "tvlDiscovered": "The share of the pools discovered during the period is not measured: without it, the change would count a discovery as a deposit."
+        "tvlDiscovered": "The share of the pools discovered during the period is not measured: without it, the change would count a discovery as a deposit.",
+        "previousMoved": "A 5-minute tranche or a frozen hour arrived between the reads of the period and of the one before: reload the page to compare them."
       },
       "kpis": {
         "tvl": "TVL",
@@ -94,8 +97,11 @@
           "fees": "What those trades paid in fees over the chosen period: the depositors' (LP) share and the protocol's.",
           "swaps": "The number of trades over the chosen period, and their average pace per second.",
           "pools": "The pools with at least one trade over the chosen period, among every pool Yog-Scope has seen, and those born during the period.",
-          "rotation": "The chosen period's volume divided by the TVL of the last reading: how many times the deposited liquidity changed hands."
-        }
+          "rotation": "The chosen period's volume divided by the TVL of the last reading: how many times the deposited liquidity changed hands.",
+          "tvlLast": "The value deposited in the pools Yog-Scope has observed since 1 October 2026, at its last reading, at the end of the last complete hour: their reserves, each at its token's Jupiter price when under 15 minutes old. A token without a price counts as 0, as does one quoted more than ten times the highest price our pools traded it at over 7 days. The TVL is a stock: it does not follow the period, and over the last hour it has no change.",
+          "volumeLastHour": "What was traded over the rolling hour ending at the last 5-minute tranche measured, valued at each trade's own price. A pool with a tranche that could not be valued counts for its other tranches. The change compares with the hour before."
+        },
+        "tvlAt": "read at {at}"
       },
       "protocols": {
         "title": "Activity by protocol · {period}",
@@ -138,11 +144,14 @@
         "feesSixHours": "Fees by 6-hour slice",
         "feesTotal": "{total} in total",
         "feesChartLabel": "Fees over the chosen period, all protocols",
-        "feesNoValue": "no valued fees"
+        "feesNoValue": "no valued fees",
+        "titleFiveMinutes": "Volume by 5 min · {period}",
+        "infoFiveMinutes": "What was traded, by 5-minute tranches, over the rolling hour ending at the last tranche measured: it does not fall on a full hour, and does not match the last bar of 24H.",
+        "feesFiveMinutes": "Fees by 5 min"
       },
       "tokens": {
         "title": "Most traded tokens · {period}",
-        "info": "The tokens that moved the most over the chosen period, all protocols together: a trade counts for both its tokens. A volume followed by a fraction covers only those pool-hours, the others could not be valued.",
+        "info": "The tokens that moved the most over the chosen period, all protocols together: a trade counts for both its tokens. A volume followed by a fraction covers only its valued share.",
         "tableLabel": "Most traded tokens over the chosen period",
         "token": "Token",
         "volume": "Volume {period}",
@@ -150,12 +159,18 @@
         "empty": "No token traded over the period."
       },
       "coverage": {
-        "value": "{percent} of pool-hours",
-        "mark": "{priced} of {total} pool-hours valued"
+        "poolHours": {
+          "value": "{percent} of pool-hours",
+          "mark": "{priced} of {total} pool-hours valued"
+        },
+        "poolTranches": {
+          "value": "{percent} of pool tranches",
+          "mark": "{priced} of {total} pool tranches valued"
+        }
       },
       "stale": {
         "title": "Figures running late.",
-        "body": "This page's figures stop at {at}, {ago}: the hourly computation has fallen behind. They stay shown, as of that hour.",
+        "body": "This page's figures stop at {at}, {ago}: the computation has fallen behind. They stay shown, as of that hour.",
         "stamp": "as of {at}"
       },
       "error": {

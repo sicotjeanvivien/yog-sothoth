@@ -12,10 +12,10 @@ import { lateStamp } from "@/components/dashboard/overview/overview-states";
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
 import { fetchSwapTotals } from "@/lib/api/server/protocols";
 import { formatFeeRate, formatPercent } from "@/lib/format/format-percent";
-import type { Period } from "@/lib/overview/period";
+import type { FrozenPeriod } from "@/lib/overview/period";
 import { shareOf, sumUsd } from "@/lib/overview/totals";
 
-type KpiProps = { period: Period; protocol: ProtocolResponse };
+type KpiProps = { period: FrozenPeriod; protocol: ProtocolResponse };
 
 export async function FeesRateKpi({ period, protocol }: KpiProps) {
   const t = await getTranslations("Dashboard.Protocol.kpis");
@@ -43,9 +43,9 @@ export async function FeesRateKpi({ period, protocol }: KpiProps) {
     <KpiCell
       label={label}
       info={info}
-      value={await valued(usd(fees), items)}
+      value={await valued(usd(fees), items, period)}
       sub={rate === null ? undefined : t("feesRate", { rate: formatFeeRate(rate, locale) })}
-      stamp={await lateStamp(now.asOf)}
+      stamp={await lateStamp(now.asOf, period)}
     />
   );
 }
@@ -78,13 +78,13 @@ export async function ProtocolFeesKpi({ period, protocol }: KpiProps) {
     <KpiCell
       label={label}
       info={info}
-      value={await valued(usd(protocolFees), items)}
+      value={await valued(usd(protocolFees), items, period)}
       sub={
         share === null
           ? undefined
           : t("protocolFeesShare", { share: formatPercent(String(share), locale) })
       }
-      stamp={await lateStamp(now.asOf)}
+      stamp={await lateStamp(now.asOf, period)}
       advanced
     />
   );

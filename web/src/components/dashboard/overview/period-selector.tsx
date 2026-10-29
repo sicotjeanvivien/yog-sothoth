@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * 24H / 7D / 30D, links that change `?period=` and keep the page's other parameters. A closed
+ * The page's periods, links that change `?period=` and keep the page's other parameters. A closed
  * period is a button that opens why, not `aria-disabled`. ⚠️ No `title`, never shown on touch.
  * Without `availability` (still loading), the other periods wait, inert.
  */
@@ -11,7 +11,7 @@ import { useCallback, useId, useRef, useState } from "react";
 import { useDismiss } from "@/components/shared/use-dismiss";
 import type { PagePath } from "@/config/site";
 import { Link } from "@/i18n/navigation";
-import { pageQuery, PERIODS, type Period } from "@/lib/overview/period";
+import { pageQuery, type Period } from "@/lib/overview/period";
 
 const SEGMENT_CLASS =
   "inline-flex min-h-9 min-w-11 items-center justify-center border-r border-dash-rule px-3 font-dash-mono text-[12px] last:border-r-0";
@@ -20,6 +20,7 @@ const SEGMENT_CLASS =
 export type PeriodAvailability = Record<Period, { open: true } | { open: false; reason: string }>;
 
 export function PeriodSelector({
+  periods,
   pathname,
   keep,
   current,
@@ -28,6 +29,7 @@ export function PeriodSelector({
   closedLabels,
   groupLabel,
 }: {
+  periods: readonly Period[];
   pathname: PagePath;
   /** The page's other query parameters, kept across a period change. */
   keep: Record<string, string>;
@@ -39,7 +41,7 @@ export function PeriodSelector({
 }) {
   return (
     <div role="group" aria-label={groupLabel} className="inline-flex border border-dash-rule">
-      {PERIODS.map((period) => {
+      {periods.map((period) => {
         if (period === current) {
           return (
             <span

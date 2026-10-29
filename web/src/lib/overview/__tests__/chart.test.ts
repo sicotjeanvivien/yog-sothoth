@@ -72,6 +72,23 @@ describe("slotsOf", () => {
     });
   });
 
+  // Mutation: the hours' step kept for the last hour — one slot of an hour, or its tranches off the grid.
+  it("lays 12 slots of 5 minutes ending at asOf over the last hour", () => {
+    const slots = slotsOf("1h", "2026-10-20T14:05:00Z", [
+      { from: "2026-10-20T13:05:00Z", value: "2" },
+      { from: "2026-10-20T14:00:00Z", value: "3" },
+      { from: "2026-10-20T13:07:00Z", value: "100" },
+    ]);
+    expect(slots).toHaveLength(12);
+    expect(slots[0]).toEqual({
+      from: new Date("2026-10-20T13:05:00Z"),
+      to: new Date("2026-10-20T13:10:00Z"),
+      value: 2,
+    });
+    expect(slots[11]?.value).toBe(3);
+    expect(slots.slice(1, 11).every((s) => s.value === null)).toBe(true);
+  });
+
   // Mutation: a slice missing an hour emptied — a coverage rule the API's days do not apply.
   it("sums the hours a slice holds, without judging whether it is whole", () => {
     const slots = slotsOf("7d", asOf, hoursOf("2026-10-20T09:00:00Z", 5));
@@ -102,6 +119,12 @@ describe("axisOf", () => {
   // Mutation: the last slot left to the step — the axis would end hours before `asOf`.
   it("labels every sixth hour, and always the last one in UTC", () => {
     expect(axisOf("24h", hours, String)).toEqual(["12:00", "18:00", "00:00", "06:00", "11:00 UTC"]);
+  });
+
+  // Mutation: the hour alone named — the last hour's labels all "13:00", or one per tranche.
+  it("labels the last hour every 15 minutes, to the minute, and its last tranche in UTC", () => {
+    const tranches = slotsOf("1h", "2026-10-20T14:05:00Z", []);
+    expect(axisOf("1h", tranches, String)).toEqual(["13:05", "13:20", "13:35", "13:50", "14:00 UTC"]);
   });
 
   // Mutation: the 30 days' rule over the 7 days' slices — today named twice.
