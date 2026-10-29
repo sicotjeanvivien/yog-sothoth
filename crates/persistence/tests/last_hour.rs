@@ -1,7 +1,7 @@
 //! The last hour under `yog_api`: the twelve tranches through the last one written, read from
 //! `analytic_pool_5min` and the creations themselves.
 
-use chrono::{DateTime, DurationRound, TimeDelta, Utc};
+use chrono::{DateTime, TimeDelta, TimeZone, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use sqlx::types::BigDecimal;
@@ -16,12 +16,9 @@ use yog_persistence::{
 
 use super::helpers::{pk, setup_roles_and_connect_as};
 
-/// The end of the last tranche written: a quarter past, two hours back.
+/// The end of the last tranche written.
 fn through() -> DateTime<Utc> {
-    (Utc::now() - TimeDelta::hours(2))
-        .duration_trunc(TimeDelta::hours(1))
-        .unwrap()
-        + TimeDelta::minutes(15)
+    Utc.with_ymd_and_hms(2026, 10, 20, 12, 15, 0).unwrap()
 }
 
 fn minutes_before(minutes: i64) -> DateTime<Utc> {
@@ -175,19 +172,20 @@ async fn the_last_hours_tokens_count_their_pools_once(pool: PgPool) {
     assert_eq!((first.pools, first.pool_hours), (2, 3));
 }
 
-/// Against the coverage taken from the tranches recorded rather than those still held: past the
-/// 5-minute retention, an hour is not covered.
+/// Against the coverage taken from the tranches recorded rather than those still held: past their
+/// retention, nothing is covered.
 #[sqlx::test(migrations = "./migrations")]
 async fn the_last_hour_is_covered_from_the_first_tranche_still_held(pool: PgPool) {
     write_tranches(&pool).await;
+    let repo =
+        PgProtocolActivityRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+    let none_held = repo.written_tranches().await.unwrap();
     let x = pk(1).to_string();
     seed_pool(&pool, &x, &pk(10).to_string(), &pk(11).to_string()).await;
     tranche(&pool, &x, minutes_before(65), 1, Some(10)).await;
-
-    let repo =
-        PgProtocolActivityRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
     let tranches = repo.written_tranches().await.unwrap().unwrap();
 
+    assert_eq!(none_held, None);
     assert_eq!(tranches.first, minutes_before(65));
     assert_eq!(tranches.through, through());
 }
@@ -215,6 +213,9 @@ async fn initialize(pool: &PgPool, address: &str, at: DateTime<Utc>) {
 #[sqlx::test(migrations = "./migrations")]
 async fn the_last_hours_creations_are_its_own(pool: PgPool) {
     write_tranches(&pool).await;
+    let held = pk(9).to_string();
+    seed_pool(&pool, &held, &pk(10).to_string(), &pk(11).to_string()).await;
+    tranche(&pool, &held, minutes_before(120), 1, Some(1)).await;
     initialize(&pool, &pk(1).to_string(), minutes_before(70)).await;
     initialize(&pool, &pk(2).to_string(), minutes_before(40)).await;
     initialize(&pool, &pk(3).to_string(), minutes_before(1)).await;

@@ -122,7 +122,7 @@ impl TranchePeriod {
     }
 }
 
-/// One protocol's measure over one bucket of a series, an hour or 24 hours from `from`.
+/// One protocol's measure over one bucket of a series, from `from`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolBucket<T> {
     pub protocol: Protocol,

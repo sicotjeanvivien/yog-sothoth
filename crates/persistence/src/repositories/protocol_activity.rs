@@ -46,8 +46,7 @@ impl ProtocolActivityLookup for PgProtocolActivityRepository {
         let row = sqlx::query!(
             r#"
             -- ⚠️ The first tranche still held: `analytic_pool_5min` keeps 7 days, the record all.
-            SELECT GREATEST(MIN(bucket), (SELECT MIN(bucket) FROM analytic_pool_5min))
-                       AS "first?: DateTime<Utc>",
+            SELECT (SELECT MIN(bucket) FROM analytic_pool_5min) AS "first?: DateTime<Utc>",
                    MAX(bucket) AS "last?: DateTime<Utc>"
               FROM analytic_tranches
             "#

@@ -9,7 +9,7 @@ use yog_core::{
     domain::{
         FrozenHours, FrozenPeriod, PoolSwapBucket, Protocol, ProtocolActivityLookup,
         ProtocolBucket, ProtocolSwapActivity, SwapActivity, SwapActivityLookup, TokenActivity,
-        TokenActivityCursor, TokenActivityFeed, TranchePeriod, Window,
+        TokenActivityCursor, TokenActivityFeed, Window,
     },
 };
 
@@ -92,13 +92,12 @@ impl SwapActivityService {
         cursor: Option<TokenActivityCursor>,
         limit: i64,
     ) -> RepositoryResult<TokenActivityRead> {
-        let Some(tranches) = self.hours.written_tranches().await? else {
+        let Some(period) = build_last_hour(self.hours.as_ref()).await? else {
             return Ok(TokenActivityRead::Page(Measured {
                 period: None,
                 items: Page::empty(),
             }));
         };
-        let period = TranchePeriod::hour_through(tranches, None);
         if cursor.as_ref().is_some_and(|c| c.last_hour != period.as_of) {
             return Ok(TokenActivityRead::CursorExpired);
         }
