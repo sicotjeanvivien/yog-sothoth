@@ -13,23 +13,23 @@ RETURNS TABLE (
 LANGUAGE sql STABLE
 BEGIN ATOMIC
 WITH counts AS (
-    SELECT time_bucket(width, timestamp) AS bucket, 'opened' AS kind, COUNT(*) AS n
+    SELECT time_bucket(width, timestamp, first) AS bucket, 'opened' AS kind, COUNT(*) AS n
       FROM meteora_damm_v2_create_position_events
      WHERE timestamp >= first AND timestamp < last + width GROUP BY 1
     UNION ALL
-    SELECT time_bucket(width, timestamp), 'vesting', COUNT(*)
+    SELECT time_bucket(width, timestamp, first), 'vesting', COUNT(*)
       FROM meteora_damm_v2_lock_position_events
      WHERE timestamp >= first AND timestamp < last + width GROUP BY 1
     UNION ALL
-    SELECT time_bucket(width, timestamp), 'permanent', COUNT(*)
+    SELECT time_bucket(width, timestamp, first), 'permanent', COUNT(*)
       FROM meteora_damm_v2_permanent_lock_position_events
      WHERE timestamp >= first AND timestamp < last + width GROUP BY 1
     UNION ALL
-    SELECT time_bucket(width, timestamp), 'split', COUNT(*)
+    SELECT time_bucket(width, timestamp, first), 'split', COUNT(*)
       FROM meteora_damm_v2_split_position_events
      WHERE timestamp >= first AND timestamp < last + width GROUP BY 1
     UNION ALL
-    SELECT time_bucket(width, timestamp), 'closed', COUNT(*)
+    SELECT time_bucket(width, timestamp, first), 'closed', COUNT(*)
       FROM meteora_damm_v2_close_position_events
      WHERE timestamp >= first AND timestamp < last + width GROUP BY 1
 )

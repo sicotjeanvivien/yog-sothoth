@@ -141,13 +141,13 @@ pub(crate) fn convert_bigdecimal_to_decimal(
 #[path = "tests/parser_tests.rs"]
 mod tests;
 
-/// A span of minutes as Postgres takes it.
+/// A span as Postgres takes it.
 pub(crate) fn interval_of(span: TimeDelta) -> PgInterval {
     PgInterval {
         months: 0,
         days: 0,
         microseconds: span
             .num_microseconds()
-            .expect("a span of minutes fits in microseconds"),
+            .expect("a span fits in microseconds"),
     }
 }

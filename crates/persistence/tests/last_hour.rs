@@ -517,8 +517,8 @@ async fn the_position_changes_are_counted_by_tranche_and_by_hour(pool: PgPool) {
     assert_eq!((hours[0].value.opened, hours[1].value.opened), (2, 3));
 }
 
-/// Against a pool's hour cut at 11 or 13 tranches: its swaps of the hour, and nothing for a pool
-/// that never swapped.
+/// Against a pool's hour cut at 11 or 13 tranches, or a pool seen and idle read as unknown: its
+/// swaps of the hour, 0 for a pool seen before it that did not swap, nothing for one never seen.
 #[sqlx::test(migrations = "./migrations")]
 async fn a_pools_last_hour_is_its_twelve_tranches(pool: PgPool) {
     write_tranches(&pool).await;
@@ -528,6 +528,17 @@ async fn a_pools_last_hour_is_its_twelve_tranches(pool: PgPool) {
     tranche(&pool, &x, minutes_before(60), 1, Some(10)).await;
     tranche(&pool, &x, minutes_before(5), 2, Some(20)).await;
     tranche(&pool, &x, through(), 100, Some(100)).await;
+    sqlx::query(
+        "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint, first_seen_at)
+         VALUES ($1, 'meteora_damm_v2', $2, $3, $4)",
+    )
+    .bind(pk(4).to_string())
+    .bind(pk(10).to_string())
+    .bind(pk(12).to_string())
+    .bind(minutes_before(120))
+    .execute(&pool)
+    .await
+    .unwrap();
 
     let period = last_hour(&pool).await;
     let repo = PgSwapActivityRepository::new(api(&pool).await);
@@ -537,6 +548,11 @@ async fn a_pools_last_hour_is_its_twelve_tranches(pool: PgPool) {
         .unwrap()
         .unwrap();
     let bars = repo.list_pool_tranches(&period, pk(1)).await.unwrap();
+    let idle = repo
+        .find_pool_totals_in_tranches(&period, pk(4))
+        .await
+        .unwrap()
+        .unwrap();
     let never = repo
         .find_pool_totals_in_tranches(&period, pk(3))
         .await
@@ -546,6 +562,7 @@ async fn a_pools_last_hour_is_its_twelve_tranches(pool: PgPool) {
     assert_eq!(totals.volume_usd, Some(Decimal::from(30)));
     assert_eq!(bars.len(), 12);
     assert_eq!((bars[0].activity.swaps, bars[11].activity.swaps), (1, 2));
+    assert_eq!((idle.swaps, idle.volume_usd), (0, Some(Decimal::ZERO)));
     assert!(never.is_none());
 }
 

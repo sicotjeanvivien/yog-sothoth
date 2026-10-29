@@ -125,13 +125,10 @@ impl PositionChangeCountsLookup for PgPositionChangeCountsRepository {
         period: &TranchePeriod,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<PositionChangeCounts>>> {
-        // ⚠️ DAMM v2's events are the only ones counted yet: another protocol adds its function here.
-        if protocol != Protocol::MeteoraDammV2 {
-            return Ok(Vec::new());
-        }
-        let rows = sqlx::query_as!(
-            PositionChangeBucketRow,
-            r#"
+        let rows = match protocol {
+            Protocol::MeteoraDammV2 => sqlx::query_as!(
+                PositionChangeBucketRow,
+                r#"
             SELECT bucket AS "bucket_from!", opened AS "opened!", vesting_locks AS "vesting_locks!",
                    permanent_locks AS "permanent_locks!", splits AS "splits!", closed AS "closed!"
               FROM meteora_damm_v2_position_changes_every(
@@ -139,13 +136,15 @@ impl PositionChangeCountsLookup for PgPositionChangeCountsRepository {
                        $2::TIMESTAMPTZ - INTERVAL '5 minutes', INTERVAL '5 minutes')
              ORDER BY bucket
             "#,
-            period.from,
-            period.as_of,
-            period.covered_since,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
+                period.from,
+                period.as_of,
+                period.covered_since,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(map_sqlx_error)?,
+            Protocol::MeteoraDlmm => Vec::new(),
+        };
 
         Ok(rows.into_iter().map(|r| r.into_bucket(protocol)).collect())
     }
