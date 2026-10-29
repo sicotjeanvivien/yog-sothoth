@@ -89,7 +89,7 @@
         "poolsObservedAfter": "observed",
         "poolsBorn": "+{births} born in {period}",
         "info": {
-          "tvl": "The value deposited in the pools Yog-Scope has observed since 1 October 2026, at the end of the last complete hour: their reserves, each at its token's Jupiter price when under 15 minutes old. A token without a price counts as 0. The TVL says what is deposited, not what can be traded. Its change compares with its level at the start of the chosen period, without the pools discovered during the period: a pool seen for the first time brings its whole stock, which is not a deposit.",
+          "tvl": "The value deposited in the pools Yog-Scope has observed since 1 October 2026, at the end of the last complete hour: their reserves, each at its token's Jupiter price when under 15 minutes old. A token without a price counts as 0, as does one quoted more than ten times the highest price our pools traded it at over 7 days. The TVL says what is deposited, not what can be traded. Its change compares with its level at the start of the chosen period, without the pools discovered during the period: a pool seen for the first time brings its whole stock, which is not a deposit.",
           "volume": "What was traded over the chosen period, valued at each trade's own price, up to the last complete hour. The change compares with the previous period of the same length.",
           "fees": "What those trades paid in fees over the chosen period: the depositors' (LP) share and the protocol's.",
           "swaps": "The number of trades over the chosen period, and their average pace per second.",

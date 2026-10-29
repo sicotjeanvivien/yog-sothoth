@@ -1195,3 +1195,146 @@ fn the_writer_reads_market_prices_in_the_price_table_alone() {
         "{readers:?}"
     );
 }
+
+/// `(pool_a_usd, pool_b_usd)` of the pool in the tranche.
+async fn implied(
+    pool: &PgPool,
+    address: &str,
+    tranche: DateTime<Utc>,
+) -> (Option<BigDecimal>, Option<BigDecimal>) {
+    sqlx::query_as(
+        "SELECT pool_a_usd, pool_b_usd FROM analytic_pool_prices_5min
+          WHERE pool_address = $1 AND bucket = $2",
+    )
+    .bind(address)
+    .bind(tranche)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+async fn ceiling_of(pool: &PgPool, mint: &str) -> Option<BigDecimal> {
+    sqlx::query_scalar("SELECT ceiling_usd FROM analytic_token_pool_ceilings WHERE mint = $1")
+        .bind(mint)
+        .fetch_optional(pool)
+        .await
+        .unwrap()
+}
+
+/// Against the trade's price written from the published one: a token without a market price has
+/// one there, $25, and none it was traded at would be lost. Against the minimum dropped: a dust
+/// trade, $0.0001 of B, would witness A.
+#[sqlx::test]
+async fn a_tranche_writes_what_its_trade_implies_for_each_token(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (a, b, c) = (pk(10).to_string(), pk(11).to_string(), pk(12).to_string());
+    let address = setup_pool(&pool, 1, (&a, 6), (&b, 6)).await;
+    let dust = setup_pool(&pool, 2, (&c, 6), (&b, 6)).await;
+    price_at(&pool, &b, "100", tranche).await;
+    insert_swap(
+        &pool,
+        &address,
+        "ab",
+        (4_000_000, 1_000_000),
+        sqrt_price_x64(4, 1),
+        tranche,
+    )
+    .await;
+    insert_swap(&pool, &dust, "cb", (4, 1), sqrt_price_x64(4, 1), tranche).await;
+
+    value(&pool, tranche).await;
+
+    // 0.25 B for an A at $100 the B; B's own needs A's market price, which there is none of.
+    assert_eq!(
+        implied(&pool, &address, tranche).await,
+        (Some(dec("25")), None)
+    );
+    assert_eq!(implied(&pool, &dust, tranche).await, (None, None));
+}
+
+/// The anchor, published at its market price, is witnessed at its trade's. Against the ceiling
+/// drawn from `price_*_usd`: X, quoted $1 000 and traded at $1, would vouch for itself.
+#[sqlx::test]
+async fn an_anchor_is_witnessed_at_its_trade_not_its_quote(pool: PgPool) {
+    let tranche = settled_tranche();
+    let x = pk(30).to_string();
+    price_at(&pool, &x, "1000", tranche).await;
+    let mut found = Vec::new();
+    for seed in [1u8, 2] {
+        let y = pk(seed + 30).to_string();
+        let address = setup_pool(&pool, seed, (&x, 6), (&y, 6)).await;
+        price_at(&pool, &y, "1", tranche).await;
+        insert_swap(
+            &pool,
+            &address,
+            &format!("xy{seed}"),
+            (5_000_000, 5_000_000),
+            sqrt_price_x64(1, 1),
+            tranche,
+        )
+        .await;
+        found.push(address);
+    }
+
+    value(&pool, tranche).await;
+
+    let (_, price_x, _, _) = prices(&pool, &found[0], tranche).await;
+    assert_eq!(price_x, Some(dec("1000")), "X is the anchor, at its quote");
+    assert_eq!(implied(&pool, &found[0], tranche).await.0, Some(dec("1")));
+    assert_eq!(ceiling_of(&pool, &x).await, Some(dec("1")));
+}
+
+/// Against the window dropped, a token gone from it kept, or a kept ceiling never updated: the
+/// ceiling is the highest of the token's pools within 7 days of the cycle, and a token without one
+/// there has none.
+#[sqlx::test]
+async fn the_cycle_keeps_each_tokens_ceiling_within_the_window(pool: PgPool) {
+    let tranche = settled_tranche();
+    let (a, b) = (pk(10).to_string(), pk(11).to_string());
+    let (old, gone) = (pk(12).to_string(), pk(13).to_string());
+    let low = setup_pool(&pool, 1, (&a, 6), (&b, 6)).await;
+    let high = setup_pool(&pool, 2, (&a, 6), (&b, 6)).await;
+    let stale = setup_pool(&pool, 3, (&old, 6), (&b, 6)).await;
+    price_at(&pool, &b, "100", tranche).await;
+    insert_swap(
+        &pool,
+        &low,
+        "low",
+        (4_000_000, 1_000_000),
+        sqrt_price_x64(4, 1),
+        tranche,
+    )
+    .await;
+    insert_swap(
+        &pool,
+        &high,
+        "high",
+        (1_000_000, 1_000_000),
+        sqrt_price_x64(1, 1),
+        tranche,
+    )
+    .await;
+    sqlx::query(
+        "INSERT INTO analytic_pool_prices_5min (pool_address, bucket, pool_a_usd)
+         VALUES ($1, $2, 5)",
+    )
+    .bind(&stale)
+    .bind(tranche - Duration::days(8))
+    .execute(&pool)
+    .await
+    .unwrap();
+    for kept in [&a, &gone] {
+        sqlx::query("INSERT INTO analytic_token_pool_ceilings (mint, ceiling_usd) VALUES ($1, 3)")
+            .bind(kept)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    value(&pool, tranche).await;
+
+    // A at $25 in the first pool, $100 in the second: the higher.
+    assert_eq!(ceiling_of(&pool, &a).await, Some(dec("100")));
+    assert_eq!(ceiling_of(&pool, &old).await, None);
+    assert_eq!(ceiling_of(&pool, &gone).await, None);
+}

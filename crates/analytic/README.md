@@ -158,8 +158,13 @@ in `persistence` (`repositories/analytic.rs`).
   valued, so its last write sees every swap that arrived within the margin.
 - **TVL**: measured into the hour of the cycle, as long as that hour is not
   frozen. It is the reserves of every pool observed since indexing began, each
-  side at its token's Jupiter price when under 15 minutes old; a side without one
-  counts 0, a pool with no side valued is counted apart (`pools_unvalued`). The
+  side at its token's stock price (`token_stock_price`, 045): its Jupiter price when
+  under 15 minutes old, unless more than ten times the highest price our pools'
+  trades gave the token over 7 days, its ceiling. A side without one counts 0, a
+  pool with no side valued is counted apart (`pools_unvalued`). Each cycle keeps
+  every token's ceiling (`analytic_token_pool_ceilings`) from what each tranche's
+  trade implied for it (`pool_a_usd`, `pool_b_usd` of the price table), a trade
+  that paid less than $1 for it witnessing nothing. The
   pools Meteora holds that never emitted an event since are out of it: a limit of
   observation, which grows the figure as dormant pools wake.
 - **Discovered part**: with each TVL, for every window — 24 h, 7 and 30 days — the
