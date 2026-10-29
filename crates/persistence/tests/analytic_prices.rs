@@ -1341,8 +1341,8 @@ async fn the_cycle_keeps_each_tokens_ceiling_within_the_window(pool: PgPool) {
 }
 
 /// The anchor whose quote our pools contradict has none (046): published at what its pool traded,
-/// its trades valued by the other token. Against the check dropped from `yog_price_asof`: X sold
-/// for $5 of Y would be $5 000 of volume.
+/// its trades valued by the other token. Against `yog_price_asof` in the tranche's `market`: X
+/// sold for $5 of Y would be $5 000 of volume.
 #[sqlx::test]
 async fn an_anchor_our_pools_contradict_is_valued_by_its_partner(pool: PgPool) {
     let tranche = settled_tranche();
@@ -1387,12 +1387,10 @@ async fn an_anchor_our_pools_contradict_is_valued_by_its_partner(pool: PgPool) {
     assert_eq!(volume, Some(dec("5")));
 }
 
-/// A pool that moved liquidity without swapping takes the same rule (046). X, the anchor of the two
-/// pools valued, quoted $1 000 and capped at $1 by our pools, has no market price: a move counts
-/// its side 0, as the TVL does. Against the rule dropped from `meteora_damm_v2_tranche_pool_prices`:
-/// a move of 1 X and 1 Y would be worth $1 001.
+/// X, anchor of two pools that did not swap, quoted $1 000 against a $1 ceiling, counts 0 in a move
+/// (046). Against the rule dropped from `meteora_damm_v2_tranche_pool_prices`: 1 X and 1 Y, $1 001.
 #[sqlx::test]
-async fn an_unswapped_anchor_our_pools_contradict_falls_to_its_last_price(pool: PgPool) {
+async fn an_unswapped_anchor_our_pools_contradict_counts_zero_in_a_move(pool: PgPool) {
     let tranche = settled_tranche();
     let x = pk(30).to_string();
     price_at(&pool, &x, "1000", tranche).await;

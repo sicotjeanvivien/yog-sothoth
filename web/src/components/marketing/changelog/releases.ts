@@ -40,7 +40,7 @@ export const RELEASES: readonly Release[] = [
         kind: "fixes",
         items: [
           {
-            text: "A token whose market price is more than ten times the highest price our pools traded it at over 7 days no longer values volume, fees, liquidity moves or claims either: its swaps are valued by the other token of the pool, and in a move or a claim it counts 0, as in the TVL since v0.5.1. Over the week before, it would have corrected about $28,000 of volume.",
+            text: "A token whose market price is more than ten times the highest price our pools traded it at over 7 days no longer values volume, fees, liquidity moves or claims either: its swaps are valued by the other token of the pool, and in a move or a claim it counts 0 beside a valued token, or leaves it unvalued alone. Over the week before, it would have corrected about $28,000 of volume.",
             technical: false,
           },
           {

@@ -32,7 +32,7 @@ the tranche — SOL almost always. It keeps its market price, the last one at or
 before the end of the tranche (`yog_price_asof`), unless our pools contradict it
 more than ten times over (`yog_market_believed`, 046): it then has none — its
 price falls to what its pool traded, its swaps are valued by the other token, and
-a move or a claim counts its side 0, as the TVL does. The other token takes the
+a move or a claim counts its side 0 beside a valued one, and is unvalued alone. The other token takes the
 lower of its market price and its price in the pool: what the tranche traded,
 `traded_b / traded_a` in token units, times the anchor's — never the pool's mid
 price, which one swap sends to the end of its range on an empty pool. When both
