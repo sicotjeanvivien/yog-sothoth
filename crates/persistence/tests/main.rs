@@ -65,6 +65,7 @@ mod signal_dedup;
 mod signal_list;
 mod split_position;
 mod statement_timeout;
+mod stock_price;
 mod swap_activity;
 mod swap_events;
 mod swap_flow;

@@ -314,7 +314,10 @@ Two consequences worth knowing before you touch a valuation view:
 - `pool_current_tvl` goes NULL when `yog-context` stops refreshing prices, so a
   dead enrichment loop makes the TVL *disappear* rather than freeze at a stale
   figure. Its two sides (`value_a_usd`, `value_b_usd`, migration 019) go NULL each
-  on its own price. `tvl_usd` sums the sides valued, a side without a price
+  on its own price, read from `token_stock_price` (045), which drops a market
+  price more than `yog_market_over_pool_max()` times its token's ceiling — the
+  highest price our pools' trades gave it over `yog_pool_witness_window()`.
+  `tvl_usd` sums the sides valued, a side without a price
   counting 0 (034), and goes NULL only when neither is; `tvl_complete_usd` is
   NULL as soon as one side is. `tvl_drain` reads the second: a drain over half a
   pool is not a drain, and the detector must not compute it against a quote from

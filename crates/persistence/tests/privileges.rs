@@ -131,6 +131,10 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
         ],
     ),
     (
+        "analytic_token_pool_ceilings",
+        &[("yog_analytic", &["DELETE", "INSERT", "SELECT", "UPDATE"])],
+    ),
+    (
         "analytic_tranches",
         &[
             ("yog_analytic", &["INSERT", "SELECT"]),

@@ -68,9 +68,11 @@ quoted AS (
 ),
 prices AS (
     INSERT INTO analytic_pool_prices_5min (
-        pool_address, bucket, market_a_usd, price_a_usd, market_b_usd, price_b_usd
+        pool_address, bucket, market_a_usd, price_a_usd, market_b_usd, price_b_usd,
+        pool_a_usd, pool_b_usd
     )
-    SELECT q.pool_address, $1, q.market_a, x.price_a, q.market_b, x.price_b
+    SELECT q.pool_address, $1, q.market_a, x.price_a, q.market_b, x.price_b,
+           q.rate * q.market_b, q.market_a / q.rate
       FROM quoted q
      -- ⚠️ LEAST skips NULL: a token without a market price takes its price in the pool.
      -- Without the tranche's rate there is nothing to bound by, and no price but the anchor's.

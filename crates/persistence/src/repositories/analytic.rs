@@ -86,6 +86,7 @@ impl AnalyticRepository for PgAnalyticRepository {
             }
             None => 0,
         };
+        refresh_token_pool_ceilings(&mut tx, cycle.at).await?;
         if let Some(hour) = cycle.tvl_hour {
             measure_tvl(&mut tx, hour, cycle.at).await?;
             meteora_damm_v2::measure_discovered_tvl(&mut tx, hour).await?;
@@ -414,6 +415,41 @@ async fn write_token_periods(
         last_hour,
         &periods,
         &hours,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(map_sqlx_error)?;
+    Ok(())
+}
+
+/// Each token's highest price our pools' trades gave it within the witness window up to `at`,
+/// which `token_stock_price` holds a market price against; a token out of the window is dropped.
+async fn refresh_token_pool_ceilings(
+    tx: &mut Transaction<'static, Postgres>,
+    at: DateTime<Utc>,
+) -> RepositoryResult<()> {
+    sqlx::query!(
+        r#"
+        WITH witnessed AS (
+            SELECT m.mint, max(m.price) AS ceiling_usd
+              FROM analytic_pool_prices_5min q
+              JOIN pools p ON p.pool_address = q.pool_address
+             CROSS JOIN LATERAL (VALUES (p.token_a_mint::TEXT, q.pool_a_usd),
+                                        (p.token_b_mint::TEXT, q.pool_b_usd)) m (mint, price)
+             WHERE q.bucket >= $1::TIMESTAMPTZ - yog_pool_witness_window()
+               AND m.mint IS NOT NULL AND m.price IS NOT NULL
+             GROUP BY m.mint
+        ),
+        kept AS (
+            INSERT INTO analytic_token_pool_ceilings (mint, ceiling_usd)
+            SELECT mint, ceiling_usd FROM witnessed
+            ON CONFLICT (mint) DO UPDATE SET ceiling_usd = EXCLUDED.ceiling_usd
+             WHERE analytic_token_pool_ceilings.ceiling_usd <> EXCLUDED.ceiling_usd
+        )
+        DELETE FROM analytic_token_pool_ceilings c
+         WHERE NOT EXISTS (SELECT 1 FROM witnessed w WHERE w.mint = c.mint)
+        "#,
+        at,
     )
     .execute(&mut **tx)
     .await

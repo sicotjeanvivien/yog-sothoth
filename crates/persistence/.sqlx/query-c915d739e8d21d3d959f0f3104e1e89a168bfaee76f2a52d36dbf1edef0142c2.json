@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH witnessed AS (\n            SELECT m.mint, max(m.price) AS ceiling_usd\n              FROM analytic_pool_prices_5min q\n              JOIN pools p ON p.pool_address = q.pool_address\n             CROSS JOIN LATERAL (VALUES (p.token_a_mint::TEXT, q.pool_a_usd),\n                                        (p.token_b_mint::TEXT, q.pool_b_usd)) m (mint, price)\n             WHERE q.bucket >= $1::TIMESTAMPTZ - yog_pool_witness_window()\n               AND m.mint IS NOT NULL AND m.price IS NOT NULL\n             GROUP BY m.mint\n        ),\n        kept AS (\n            INSERT INTO analytic_token_pool_ceilings (mint, ceiling_usd)\n            SELECT mint, ceiling_usd FROM witnessed\n            ON CONFLICT (mint) DO UPDATE SET ceiling_usd = EXCLUDED.ceiling_usd\n             WHERE analytic_token_pool_ceilings.ceiling_usd <> EXCLUDED.ceiling_usd\n        )\n        DELETE FROM analytic_token_pool_ceilings c\n         WHERE NOT EXISTS (SELECT 1 FROM witnessed w WHERE w.mint = c.mint)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c915d739e8d21d3d959f0f3104e1e89a168bfaee76f2a52d36dbf1edef0142c2"
+}

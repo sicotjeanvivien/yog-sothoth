@@ -359,7 +359,7 @@ fn policy_breaches(readers: &[(String, String)]) -> Vec<String> {
 async fn every_price_reader_follows_the_policy(pool: PgPool) {
     let readers = price_readers(&pool).await;
 
-    for known in [AS_OF, "pool_current_tvl", EXEMPT] {
+    for known in [AS_OF, "token_stock_price", EXEMPT] {
         assert!(
             readers.iter().any(|(name, _)| name == known),
             "{known} no longer reads a price — if that is deliberate, update this test \

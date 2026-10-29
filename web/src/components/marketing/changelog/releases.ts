@@ -32,6 +32,26 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.5.1",
+    date: "2026-10-29",
+    summary: "The TVL no longer believes a token's market price that our pools' trades contradict.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "The TVL of DAMM v2 read about $554 million instead of about $51 million from 06:55 UTC on 29 October: one token, quoted 177,000 times its price of the day before, counted its whole reserve in 14 pools at that price. A token now counts 0 in the TVL when its market price is more than ten times the highest price our pools traded it at over 7 days; a token none of our pools traded keeps its price. The hours measured under that price are removed from the series.",
+            technical: false,
+          },
+          {
+            text: "token_stock_price is the price a stock is valued at: the market price unless more than yog_market_over_pool_max() (10) times the token's ceiling, the highest price the trades of its pools implied over yog_pool_witness_window() (7 days). Each tranche writes what its trade implied for each token (pool_a_usd, pool_b_usd), each yog-analytic cycle keeps the ceilings (analytic_token_pool_ceilings); pool_current_tvl, and so the TVL, its discovered part, a pool's state and tvl_drain, read it. Migration 045.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.5.0",
     date: "2026-10-29",
     summary: "DAMM v2 has two new tabs: Fees, where its fees go and what the LPs take back, and Pools & positions, the pools being born and the positions' life cycle. The dashboard says it is in beta.",
