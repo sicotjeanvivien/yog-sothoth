@@ -13,7 +13,10 @@ use crate::http::{
     dto::{
         PageResponse, PoolCreationEventResponse, ProtocolPoolCreationsBucketResponse,
         ProtocolPoolCreationsResponse, WindowedResponse,
-        request::{EventsParams, ListEventsRequest, WindowParams, parse_protocol},
+        request::{
+            EventsParams, ListEventsRequest, MeasureWindowParams, SeriesParams, WindowParams,
+            parse_protocol,
+        },
     },
     error::ApiError,
 };
@@ -21,7 +24,7 @@ use crate::http::{
 #[utoipa::path(
     get,
     path = "/api/pool-creations/totals",
-    params(WindowParams),
+    params(MeasureWindowParams),
     responses((
         status = 200,
         description = "Each protocol's pools created over the window.",
@@ -30,7 +33,7 @@ use crate::http::{
 )]
 pub(crate) async fn get_pool_creation_totals(
     State(state): State<AppState>,
-    Query(params): Query<WindowParams>,
+    Query(params): Query<MeasureWindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolPoolCreationsResponse>>, ApiError> {
     get_totals(&state, params, None).await
 }
@@ -38,7 +41,7 @@ pub(crate) async fn get_pool_creation_totals(
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/pool-creations/totals",
-    params(WindowParams),
+    params(MeasureWindowParams),
     responses((
         status = 200,
         description = "The protocol's pools created over the window.",
@@ -48,7 +51,7 @@ pub(crate) async fn get_pool_creation_totals(
 pub(crate) async fn get_protocol_pool_creation_totals(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(params): Query<WindowParams>,
+    Query(params): Query<MeasureWindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolPoolCreationsResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
     get_totals(&state, params, Some(protocol)).await
@@ -56,7 +59,7 @@ pub(crate) async fn get_protocol_pool_creation_totals(
 
 async fn get_totals(
     state: &AppState,
-    params: WindowParams,
+    params: MeasureWindowParams,
     protocol: Option<Protocol>,
 ) -> Result<Json<WindowedResponse<ProtocolPoolCreationsResponse>>, ApiError> {
     let window = params.window.into();
@@ -137,6 +140,55 @@ pub(crate) async fn get_protocol_pool_creations_daily(
 ) -> Result<Json<WindowedResponse<ProtocolPoolCreationsBucketResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
     list_buckets(&state, params, BucketPeriod::Day, Some(protocol)).await
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/pool-creations/series",
+    params(SeriesParams),
+    responses((
+        status = 200,
+        description = "Each protocol's pools created by `interval`, under the rules of `/api/swaps/series`.",
+        body = WindowedResponse<ProtocolPoolCreationsBucketResponse>
+    ))
+)]
+pub(crate) async fn get_pool_creations_series(
+    State(state): State<AppState>,
+    Query(params): Query<SeriesParams>,
+) -> Result<Json<WindowedResponse<ProtocolPoolCreationsBucketResponse>>, ApiError> {
+    list_series(&state, params, None).await
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/protocols/{protocol}/pool-creations/series",
+    params(SeriesParams),
+    responses((
+        status = 200,
+        description = "The protocol's pools created by `interval`, under the rules of `/api/swaps/series`.",
+        body = WindowedResponse<ProtocolPoolCreationsBucketResponse>
+    ))
+)]
+pub(crate) async fn get_protocol_pool_creations_series(
+    State(state): State<AppState>,
+    Path(protocol): Path<String>,
+    Query(params): Query<SeriesParams>,
+) -> Result<Json<WindowedResponse<ProtocolPoolCreationsBucketResponse>>, ApiError> {
+    let protocol = parse_protocol(&protocol)?;
+    list_series(&state, params, Some(protocol)).await
+}
+
+async fn list_series(
+    state: &AppState,
+    params: SeriesParams,
+    protocol: Option<Protocol>,
+) -> Result<Json<WindowedResponse<ProtocolPoolCreationsBucketResponse>>, ApiError> {
+    let (window, interval) = params.parse()?;
+    let measured = state
+        .pool_creations_service
+        .list_pool_creation_series(window, interval, protocol)
+        .await?;
+    Ok(Json(WindowedResponse::new(window, measured)))
 }
 
 async fn list_buckets(

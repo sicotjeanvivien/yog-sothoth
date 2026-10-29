@@ -1,0 +1,90 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT pr.protocol AS \"protocol!\", t.bucket AS \"bucket_from!\",\n                   COALESCE(a.swaps, 0)::BIGINT AS \"swaps!\",\n                   CASE WHEN a.bucket IS NULL THEN 0 ELSE a.volume_usd END AS volume_usd,\n                   CASE WHEN a.bucket IS NULL THEN 0 ELSE a.fees_usd END AS fees_usd,\n                   CASE WHEN a.bucket IS NULL THEN 0 ELSE a.lp_fees_usd END AS lp_fees_usd,\n                   CASE WHEN a.bucket IS NULL THEN 0 ELSE a.protocol_fees_usd END\n                       AS protocol_fees_usd,\n                   CASE WHEN a.bucket IS NULL THEN 0 ELSE a.referral_fees_usd END\n                       AS referral_fees_usd,\n                   COALESCE(a.pools, 0)::BIGINT AS \"pool_hours!\",\n                   COALESCE(a.pools_valued, 0)::BIGINT AS \"pool_hours_valued!\"\n              FROM generate_series(GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ),\n                                   $2::TIMESTAMPTZ - INTERVAL '5 minutes',\n                                   INTERVAL '5 minutes') AS t (bucket)\n             CROSS JOIN UNNEST($4::TEXT[]) AS pr (protocol)\n              LEFT JOIN (\n                  SELECT protocol, bucket, SUM(swap_count) AS swaps,\n                         SUM(volume_in_a_usd + volume_in_b_usd) AS volume_usd,\n                         SUM(fees_usd) AS fees_usd, SUM(lp_fees_usd) AS lp_fees_usd,\n                         SUM(protocol_fees_usd) AS protocol_fees_usd,\n                         SUM(referral_fees_usd) AS referral_fees_usd,\n                         COUNT(*) AS pools, COUNT(*) FILTER (WHERE valued) AS pools_valued\n                    FROM analytic_pool_5min\n                   WHERE bucket >= $1 AND bucket < $2\n                   GROUP BY protocol, bucket\n              ) a ON a.protocol = pr.protocol AND a.bucket = t.bucket\n             WHERE $5::TEXT IS NULL OR pr.protocol = $5\n             ORDER BY t.bucket, pr.protocol\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "bucket_from!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "swaps!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "volume_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "lp_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "protocol_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "referral_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "pool_hours!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
+        "name": "pool_hours_valued!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "e1fa2297aed22c6cfbfe3d317cd17f1ca5dd18d22190544d03920c87a00986fd"
+}

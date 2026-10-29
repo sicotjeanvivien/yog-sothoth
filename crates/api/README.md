@@ -132,11 +132,11 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/tokens/{mint}/prices` | A page of the token's prices over `?window=`, the most recent first; the window ends at the first page, whose start the cursor carries, refused (400) for another mint; 404 for a mint without metadata |
 | `GET` | `/api/tokens/{mint}` | Token metadata + latest price (200 with `price: null` if no price yet) |
 | `GET` | `/api/announcements` | A page of every announcement, the latest start first, ties by id: kind, severity, message, link, window, and `status` — `upcoming`, `open` or `closed` at the request; `?status=` keeps one; forward-only cursor, refused (400) under another status |
-| `GET` | `/api/swaps/totals` (`?offset=`), `/hourly`, `/daily` | Per protocol, the swaps over `?window=`, then per bucket: swaps, volume, fees and their shares — LP, protocol and referral sum to the fees, all known or all null — pool-hours and the valued ones; the totals with the distinct pools that swapped |
-| `GET` | `/api/protocols/{protocol}/swaps/totals`, `/hourly`, `/daily` | The same, the protocol's own |
+| `GET` | `/api/swaps/totals` (`?offset=`), `/hourly`, `/daily`, `/series` | Per protocol, the swaps over `?window=`, then per bucket: swaps, volume, fees and their shares — LP, protocol and referral sum to the fees, all known or all null — pool-hours and the valued ones; the totals with the distinct pools that swapped |
+| `GET` | `/api/protocols/{protocol}/swaps/totals`, `/hourly`, `/daily`, `/series` | The same, the protocol's own |
 | `GET` | `/api/pools/{pool}/swaps/totals`, `/hourly`, `/daily` | The same for one pool, without the protocol nor the distinct pools; 404 for a pool unknown |
 | `GET` | `/api/swaps/by-token` | Tokens by volume over `?window=`, every protocol summed, identity embedded, forward-only cursor; a swap counts for both its tokens |
-| `GET` | `/api/pool-creations/totals`, `/hourly`, `/daily`, and under `/api/protocols/{protocol}/` | Per protocol, the pools created over the window, then per bucket |
+| `GET` | `/api/pool-creations/totals`, `/hourly`, `/daily`, `/series`, and under `/api/protocols/{protocol}/` | Per protocol, the pools created over the window, then per bucket |
 | `GET` | `/api/protocols/{protocol}/liquidity-moves/totals`, `/hourly`, `/daily` | The protocol's liquidity created, added and removed, valued, with its moves valued, and on `totals` the distinct owners of its moves; its `coveredSince` is the liquidity's |
 | `GET` | `/api/protocols/{protocol}/position-changes/totals` | The positions the protocol opened, locked (vesting or permanent), split and closed over the window, one count per event |
 | `GET` | `/api/protocols/{protocol}/position-fee-claims/totals`, `/api/protocols/{protocol}/reward-claims/totals` | The fees, or the rewards, the positions claimed over the window: claims, the valued ones, their value and the distinct owners; its `coveredSince` is the first whole hour whose claims were valued |
@@ -171,6 +171,9 @@ before it, rather than a partial sum.
 The tokens are the exception to one read of the frozen hours: their span ends at
 the hour of the ranking read with them, which each freeze rewrites whole — a
 cursor carries that hour, and one taken before a freeze is refused (400).
+The last hour (`window=1h`) is the other: it ends at the last tranche written, read from the
+pools' 5-minute tranches, and its `poolHours` count pools × tranches; a cursor of its tokens
+carries that end, refused (400) once the hour has moved.
 
 ## What a route may return
 
@@ -214,6 +217,8 @@ at the end of this section.
    - `totals`, the whole window: one row per protocol at the root, under an entity its own;
    - `hourly`, `daily`: the same rows, one per bucket, a day being the 24 hours ending at
      `asOf`, unpaginated, the window bounding them;
+   - `series?interval=5m|1h|1d`: the same, the bucket as a parameter — `1h` and `1d` return
+     what `hourly` and `daily` return, `5m` cuts `window=1h` only, which is cut at `5m` only;
    - `by-token`, `by-pool`, `by-owner`: one row per token, pool or owner address, summed over
      the path's scope (every protocol at the root), a ranking paginated as a collection.
 
@@ -267,7 +272,8 @@ at the end of this section.
     can carry it under rule 6, and its ⓘ says the TVL is the last reading.
 
 **Parameters and fields.** `window=24h|7d|30d`, a closed list, 400 otherwise; `offset` for the
-previous window. For a collection of future events (`vesting-unlocks`), `window` covers the
+previous window. `1h` is served by `swaps/totals`, `swaps/by-token`, `pool-creations/totals`,
+`rotation-runs/totals` and the `series`, and refused (400) elsewhere. For a collection of future events (`vesting-unlocks`), `window` covers the
 period after `asOf`, and takes no `offset`. An on-chain collection read live ends its window
 at its first page, whose start the cursor carries. The swaps of every pool, at the root and
 under a protocol, are served over `24h` only: past a day they are compressed by pool, and

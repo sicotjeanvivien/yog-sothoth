@@ -28,6 +28,7 @@ mod fund_reward;
 mod implied_price_coverage;
 mod initialize_pool;
 mod initialize_reward;
+mod last_hour;
 mod liquidity_cagg;
 mod liquidity_change_events;
 mod liquidity_flow;

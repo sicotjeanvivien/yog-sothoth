@@ -143,6 +143,8 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         ))
         .routes(routes!(handlers::swaps::get_swap_totals))
         .routes(routes!(handlers::swaps::get_protocol_swap_totals))
+        .routes(routes!(handlers::swaps::get_swaps_series))
+        .routes(routes!(handlers::swaps::get_protocol_swaps_series))
         .routes(routes!(handlers::swaps::get_swaps_hourly))
         .routes(routes!(handlers::swaps::get_swaps_daily))
         .routes(routes!(handlers::swaps::get_protocol_swaps_hourly))
@@ -206,6 +208,10 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         .routes(routes!(handlers::pool_creations::get_pool_creation_totals))
         .routes(routes!(
             handlers::pool_creations::get_protocol_pool_creation_totals
+        ))
+        .routes(routes!(handlers::pool_creations::get_pool_creations_series))
+        .routes(routes!(
+            handlers::pool_creations::get_protocol_pool_creations_series
         ))
         .routes(routes!(handlers::pool_creations::get_pool_creations_hourly))
         .routes(routes!(handlers::pool_creations::get_pool_creations_daily))

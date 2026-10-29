@@ -6,16 +6,20 @@ use crate::domain::Protocol;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Window {
+    /// The last hour, through the last tranche written: never a frozen period.
+    Hour,
     Day,
     Week,
     Month,
 }
 
 impl Window {
+    /// The windows frozen periods are written for; [`Window::Hour`] is read from the tranches.
     pub const ALL: [Window; 3] = [Window::Day, Window::Week, Window::Month];
 
     pub const fn hours(self) -> i32 {
         match self {
+            Window::Hour => 1,
             Window::Day => 24,
             Window::Week => 168,
             Window::Month => 720,
@@ -29,6 +33,7 @@ impl Window {
     /// ⚠️ Also the `period` CHECKs of migrations 029 and 034: a new label fails their inserts.
     pub const fn as_str(self) -> &'static str {
         match self {
+            Window::Hour => "1h",
             Window::Day => "24h",
             Window::Week => "7d",
             Window::Month => "30d",
@@ -41,6 +46,13 @@ impl Window {
 pub struct FrozenHours {
     pub first: DateTime<Utc>,
     pub last_frozen: DateTime<Utc>,
+}
+
+/// The first tranche whose pools' facts are still held, and the end of the last one written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WrittenTranches {
+    pub first: DateTime<Utc>,
+    pub through: DateTime<Utc>,
 }
 
 /// The hours `from..as_of` one read covers.
@@ -99,9 +111,18 @@ impl TranchePeriod {
     pub fn is_covered(&self) -> bool {
         self.from >= self.covered_since
     }
+
+    /// The last hour through the last tranche written, moved `offset` back.
+    pub fn hour_through(tranches: WrittenTranches, offset: Option<Window>) -> Self {
+        Self::of(
+            tranches.through - offset.map_or(TimeDelta::zero(), Window::duration),
+            Window::Hour,
+            Some(tranches.first),
+        )
+    }
 }
 
-/// One protocol's measure over one bucket of a series, an hour or 24 hours from `from`.
+/// One protocol's measure over one bucket of a series, from `from`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolBucket<T> {
     pub protocol: Protocol,

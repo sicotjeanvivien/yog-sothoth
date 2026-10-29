@@ -36,7 +36,9 @@ pub(crate) use list_token_activity::{ListTokenActivityRequest, TokenActivityPara
 pub(crate) use list_token_prices::{ListTokenPricesRequest, TokenPricesParams};
 pub(crate) use list_tokens::{ListTokensRequest, TokensParams};
 pub(crate) use no_query::NoQuery;
-pub(crate) use window_param::{ActivityParams, WindowParams};
+pub(crate) use window_param::{
+    MeasureActivityParams, MeasureWindowParams, SeriesParams, WindowParams,
+};
 
 const DEFAULT_LIMIT: i64 = 50;
 pub(crate) const MAX_LIMIT: i64 = 200;

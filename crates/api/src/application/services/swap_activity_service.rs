@@ -13,12 +13,15 @@ use yog_core::{
     },
 };
 
-use super::period::{BucketPeriod, Measured, build_frozen_period};
+use super::period::{
+    BucketPeriod, Measured, ReadPeriod, SeriesInterval, build_frozen_period, build_last_hour,
+    build_read_period,
+};
 
 /// A page of tokens, or the refusal of a cursor taken in a ranking since rewritten.
 #[derive(Debug)]
 pub(crate) enum TokenActivityRead {
-    Page(Measured<Page<TokenActivity>>),
+    Page(Measured<Page<TokenActivity>, ReadPeriod>),
     CursorExpired,
 }
 
@@ -49,6 +52,9 @@ impl SwapActivityService {
         cursor: Option<TokenActivityCursor>,
         limit: i64,
     ) -> RepositoryResult<TokenActivityRead> {
+        if window == Window::Hour {
+            return self.list_token_activity_in_hour(cursor, limit).await;
+        }
         let ranked_at = cursor.as_ref().map(|c| c.last_hour);
         let Some(read) = self.tokens.list(window, cursor, limit).await? else {
             return Ok(TokenActivityRead::Page(Measured {
@@ -73,7 +79,40 @@ impl SwapActivityService {
             Some(period) if period.is_covered() => read.page,
             _ => Page::empty(),
         };
-        Ok(TokenActivityRead::Page(Measured { period, items }))
+        Ok(TokenActivityRead::Page(Measured {
+            period: period.map(ReadPeriod::Frozen),
+            items,
+        }))
+    }
+
+    /// The ranking of the last hour, read live: a cursor taken before a tranche was written is
+    /// refused, its ranking having moved.
+    async fn list_token_activity_in_hour(
+        &self,
+        cursor: Option<TokenActivityCursor>,
+        limit: i64,
+    ) -> RepositoryResult<TokenActivityRead> {
+        let Some(period) = build_last_hour(self.hours.as_ref()).await? else {
+            return Ok(TokenActivityRead::Page(Measured {
+                period: None,
+                items: Page::empty(),
+            }));
+        };
+        if cursor.as_ref().is_some_and(|c| c.last_hour != period.as_of) {
+            return Ok(TokenActivityRead::CursorExpired);
+        }
+        let items = if period.is_covered() {
+            self.tokens
+                .list_in_tranches(&period, cursor, limit)
+                .await?
+                .page
+        } else {
+            Page::empty()
+        };
+        Ok(TokenActivityRead::Page(Measured {
+            period: Some(ReadPeriod::Tranche(period)),
+            items,
+        }))
     }
 
     /// Totals: nothing for a period the facts do not cover whole.
@@ -82,17 +121,50 @@ impl SwapActivityService {
         window: Window,
         offset: Option<Window>,
         protocol: Option<Protocol>,
-    ) -> RepositoryResult<Measured<Vec<ProtocolSwapActivity>>> {
-        let period = build_frozen_period(self.hours.as_ref(), window, offset).await?;
+    ) -> RepositoryResult<Measured<Vec<ProtocolSwapActivity>, ReadPeriod>> {
+        let period = build_read_period(self.hours.as_ref(), window, offset).await?;
         let items = match &period {
-            Some(period) if period.is_covered() => {
+            Some(ReadPeriod::Frozen(p)) if p.is_covered() => {
                 self.swap_activity
-                    .find_protocol_totals(period, window, protocol)
+                    .find_protocol_totals(p, window, protocol)
+                    .await?
+            }
+            Some(ReadPeriod::Tranche(p)) if p.is_covered() => {
+                self.swap_activity
+                    .find_protocol_totals_in_tranches(p, protocol)
                     .await?
             }
             _ => Vec::new(),
         };
         Ok(Measured { period, items })
+    }
+
+    /// The series of `window` at `interval`: 5 minutes over the last hour, else by frozen hour or
+    /// 24 hours.
+    pub(crate) async fn list_swap_series(
+        &self,
+        window: Window,
+        interval: SeriesInterval,
+        protocol: Option<Protocol>,
+    ) -> RepositoryResult<Measured<Vec<ProtocolBucket<SwapActivity>>, ReadPeriod>> {
+        let Some(bucket) = interval.frozen_bucket() else {
+            let period = build_last_hour(self.hours.as_ref()).await?;
+            let items = match &period {
+                Some(p) => {
+                    self.swap_activity
+                        .list_protocol_tranches(p, protocol)
+                        .await?
+                }
+                None => Vec::new(),
+            };
+            let period = period.map(ReadPeriod::Tranche);
+            return Ok(Measured { period, items });
+        };
+        let measured = self.list_swap_buckets(window, bucket, protocol).await?;
+        Ok(Measured {
+            period: measured.period.map(ReadPeriod::Frozen),
+            items: measured.items,
+        })
     }
 
     pub(crate) async fn list_swap_buckets(

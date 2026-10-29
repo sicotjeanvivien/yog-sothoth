@@ -7,7 +7,7 @@
 
 import { cache } from "react";
 
-import { readsHours } from "@/lib/overview/period";
+import { readsHours, type Period } from "@/lib/overview/period";
 
 import { apiGet } from "../client/server";
 import {
@@ -62,7 +62,7 @@ export const fetchPreviousSwapTotals = cache((scope: Scope, window: WindowRespon
 );
 
 /** Hour by hour up to 7 days, by 24-hour slices ending at `asOf` beyond. */
-export const fetchSwapsSeries = cache((scope: Scope, window: WindowResponse) =>
+export const fetchSwapsSeries = cache((scope: Scope, window: Period) =>
   readsHours(window)
     ? apiGet(scopedPath(scope, "swaps/hourly"), { window }, zGetSwapsHourlyResponse)
     : apiGet(scopedPath(scope, "swaps/daily"), { window }, zGetSwapsDailyResponse),
@@ -116,7 +116,7 @@ export const fetchRewardClaimTotals = cache((protocol: ProtocolResponse, window:
 );
 
 /** The protocol's liquidity flows, on the bars of `fetchSwapsSeries`. */
-export const fetchLiquiditySeries = cache((protocol: ProtocolResponse, window: WindowResponse) =>
+export const fetchLiquiditySeries = cache((protocol: ProtocolResponse, window: Period) =>
   readsHours(window)
     ? apiGet(
         `/api/protocols/${protocol}/liquidity-moves/hourly`,
@@ -151,7 +151,7 @@ export const fetchPositionChangeTotals = cache(
 );
 
 /** The pools the protocol saw born, hour by hour up to 7 days, by 24-hour slices beyond. */
-export const fetchPoolCreationsSeries = cache((protocol: ProtocolResponse, window: WindowResponse) =>
+export const fetchPoolCreationsSeries = cache((protocol: ProtocolResponse, window: Period) =>
   readsHours(window)
     ? apiGet(
         `/api/protocols/${protocol}/pool-creations/hourly`,
@@ -166,7 +166,7 @@ export const fetchPoolCreationsSeries = cache((protocol: ProtocolResponse, windo
 );
 
 /** The protocol's volume by bar, split by its rotation runs. */
-export const fetchRotationRunsSeries = cache((protocol: ProtocolResponse, window: WindowResponse) =>
+export const fetchRotationRunsSeries = cache((protocol: ProtocolResponse, window: Period) =>
   readsHours(window)
     ? apiGet(
         `/api/protocols/${protocol}/rotation-runs/hourly`,

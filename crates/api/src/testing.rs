@@ -35,7 +35,7 @@ use yog_core::{
         SignalRecord, SwapActivity, SwapActivityLookup, SwapEvent, SwapEventLookup,
         TokenActivityCursor, TokenActivityFeed, TokenActivityPage, TokenCursor, TokenEntry,
         TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceCursor, TokenPriceLookup,
-        TranchePeriod, Window,
+        TranchePeriod, Window, WrittenTranches,
     },
 };
 
@@ -375,14 +375,25 @@ impl PoolCatalog for PoolCountsRepo {
     }
 }
 
-/// A `ProtocolActivityLookup` that answers `frozen` every time.
+/// A `ProtocolActivityLookup` that answers `frozen` and `tranches` every time.
 pub(crate) struct MockProtocolActivityRepo {
     frozen: Option<FrozenHours>,
+    tranches: Option<WrittenTranches>,
 }
 
 impl MockProtocolActivityRepo {
     pub(crate) fn new(frozen: Option<FrozenHours>) -> Self {
-        Self { frozen }
+        Self {
+            frozen,
+            tranches: None,
+        }
+    }
+
+    pub(crate) fn with_tranches(tranches: WrittenTranches) -> Self {
+        Self {
+            frozen: None,
+            tranches: Some(tranches),
+        }
     }
 }
 
@@ -390,6 +401,9 @@ impl MockProtocolActivityRepo {
 impl ProtocolActivityLookup for MockProtocolActivityRepo {
     async fn frozen_hours(&self) -> RepositoryResult<Option<FrozenHours>> {
         Ok(self.frozen)
+    }
+    async fn written_tranches(&self) -> RepositoryResult<Option<WrittenTranches>> {
+        Ok(self.tranches)
     }
 }
 
@@ -399,6 +413,7 @@ impl ProtocolActivityLookup for MockProtocolActivityRepo {
 pub(crate) struct MockTokenActivityRepo {
     pub(crate) ranked_at: Option<DateTime<Utc>>,
     pub(crate) reads: Mutex<Vec<Window>>,
+    pub(crate) tranche_reads: Mutex<Vec<TranchePeriod>>,
 }
 
 #[async_trait]
@@ -414,6 +429,18 @@ impl TokenActivityFeed for MockTokenActivityRepo {
             last_hour,
             page: Page::empty(),
         }))
+    }
+    async fn list_in_tranches(
+        &self,
+        period: &TranchePeriod,
+        _cursor: Option<TokenActivityCursor>,
+        _limit: i64,
+    ) -> RepositoryResult<TokenActivityPage> {
+        self.tranche_reads.lock().unwrap().push(*period);
+        Ok(TokenActivityPage {
+            last_hour: period.as_of,
+            page: Page::empty(),
+        })
     }
 }
 
@@ -745,6 +772,7 @@ pub(crate) fn frozen_hours_repo(frozen: Option<FrozenHours>) -> Arc<MockProtocol
 #[derive(Default)]
 pub(crate) struct MockSwapActivityRepo {
     pub(crate) reads: Mutex<Vec<PeriodRead>>,
+    pub(crate) tranche_reads: Mutex<Vec<(&'static str, TranchePeriod, Option<Protocol>)>>,
 }
 
 impl MockSwapActivityRepo {
@@ -778,6 +806,24 @@ impl SwapActivityLookup for MockSwapActivityRepo {
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBucket<SwapActivity>>> {
         self.record("swap_daily", period, protocol);
+        Ok(vec![])
+    }
+    async fn find_protocol_totals_in_tranches(
+        &self,
+        period: &TranchePeriod,
+        protocol: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolSwapActivity>> {
+        let read = ("swap_totals", *period, protocol);
+        self.tranche_reads.lock().unwrap().push(read);
+        Ok(vec![])
+    }
+    async fn list_protocol_tranches(
+        &self,
+        period: &TranchePeriod,
+        protocol: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolBucket<SwapActivity>>> {
+        let read = ("swap_tranches", *period, protocol);
+        self.tranche_reads.lock().unwrap().push(read);
         Ok(vec![])
     }
     async fn find_pool_totals(
@@ -829,6 +875,20 @@ impl PoolCreationsLookup for MockPoolCreationsRepo {
     async fn list_daily(
         &self,
         _: &FrozenPeriod,
+        _: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolBucket<PoolCreations>>> {
+        Ok(vec![])
+    }
+    async fn list_totals_in_tranches(
+        &self,
+        _: &TranchePeriod,
+        _: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolPoolCreations>> {
+        Ok(vec![])
+    }
+    async fn list_tranches(
+        &self,
+        _: &TranchePeriod,
         _: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBucket<PoolCreations>>> {
         Ok(vec![])

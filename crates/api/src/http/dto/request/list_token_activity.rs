@@ -4,7 +4,7 @@ use serde::Deserialize;
 use utoipa::{IntoParams, ToSchema};
 use yog_core::domain::{TokenActivityCursor, Window};
 
-use super::window_param::WindowParam;
+use super::window_param::MeasureWindowParam;
 use crate::http::{cursor::decode_token_activity_cursor, error::ApiError};
 
 /// The only order: the tokens most traded first.
@@ -22,7 +22,7 @@ pub(crate) enum SortParam {
 pub(crate) struct TokenActivityParams {
     #[serde(default)]
     #[param(inline)]
-    window: WindowParam,
+    window: MeasureWindowParam,
     #[serde(default)]
     #[param(inline)]
     sort: SortParam,

@@ -1,0 +1,89 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT pr.protocol AS \"protocol!\",\n                   COALESCE(SUM(f.swap_count), 0)::BIGINT AS \"swaps!\",\n                   CASE WHEN COUNT(f.pool_address) = 0 THEN 0\n                        ELSE SUM(f.volume_in_a_usd + f.volume_in_b_usd) END AS volume_usd,\n                   CASE WHEN COUNT(f.pool_address) = 0 THEN 0 ELSE SUM(f.fees_usd) END AS fees_usd,\n                   CASE WHEN COUNT(f.pool_address) = 0 THEN 0 ELSE SUM(f.lp_fees_usd) END\n                       AS lp_fees_usd,\n                   CASE WHEN COUNT(f.pool_address) = 0 THEN 0 ELSE SUM(f.protocol_fees_usd) END\n                       AS protocol_fees_usd,\n                   CASE WHEN COUNT(f.pool_address) = 0 THEN 0 ELSE SUM(f.referral_fees_usd) END\n                       AS referral_fees_usd,\n                   COUNT(f.pool_address) AS \"pool_hours!\",\n                   COUNT(f.pool_address) FILTER (WHERE f.valued) AS \"pool_hours_valued!\",\n                   COUNT(DISTINCT f.pool_address) AS pools\n              FROM UNNEST($3::TEXT[]) AS pr (protocol)\n              LEFT JOIN analytic_pool_5min f\n                     ON f.protocol = pr.protocol AND f.bucket >= $1 AND f.bucket < $2\n             WHERE $4::TEXT IS NULL OR pr.protocol = $4\n             GROUP BY pr.protocol\n             ORDER BY pr.protocol\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "swaps!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "volume_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "lp_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "protocol_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "referral_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "pool_hours!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "pool_hours_valued!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
+        "name": "pools",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "da60157bee17388bbf5feba8a45fd62cd0d4971dcb637ddcdcd5b5c99e103a81"
+}

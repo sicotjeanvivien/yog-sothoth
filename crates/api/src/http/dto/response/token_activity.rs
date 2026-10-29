@@ -8,7 +8,7 @@ use yog_core::domain::{TokenActivity, Window};
 
 use super::token::EmbeddedTokenResponse;
 use super::window::WindowResponse;
-use crate::application::Measured;
+use crate::application::{Measured, PeriodBounds};
 use crate::http::cursor::encode_cursor_opt;
 use crate::http::dto::schema::{Count, UnsignedDecimal};
 use crate::http::error::ApiError;
@@ -46,17 +46,17 @@ pub(crate) struct TokenActivityPageResponse {
 }
 
 impl TokenActivityPageResponse {
-    pub(crate) fn new(
+    pub(crate) fn new<P: PeriodBounds>(
         window: Window,
-        measured: Measured<yog_core::Page<TokenActivity>>,
+        measured: Measured<yog_core::Page<TokenActivity>, P>,
     ) -> Result<Self, ApiError> {
         let period = measured.period;
         let page = measured.items;
         Ok(Self {
             window: window.into(),
-            from: period.map(|s| s.from),
-            as_of: period.map(|s| s.as_of),
-            covered_since: period.map(|s| s.covered_since),
+            from: period.map(|s| s.from()),
+            as_of: period.map(|s| s.as_of()),
+            covered_since: period.map(|s| s.covered_since()),
             next_cursor: encode_cursor_opt(page.next_cursor.as_ref())?,
             prev_cursor: encode_cursor_opt(page.prev_cursor.as_ref())?,
             is_first: page.is_first,

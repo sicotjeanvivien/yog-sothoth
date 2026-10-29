@@ -11,7 +11,7 @@ use yog_core::{
     RepositoryResult,
     domain::{
         FrozenPeriod, PoolSwapBucket, Protocol, ProtocolBucket, ProtocolSwapActivity, SwapActivity,
-        SwapActivityLookup, Window,
+        SwapActivityLookup, TranchePeriod, Window,
     },
 };
 
@@ -130,6 +130,100 @@ impl SwapActivityLookup for PgSwapActivityRepository {
             period.from,
             period.as_of,
             period.covered_since,
+            bind_protocol_filter(protocol),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter().map(ProtocolBucket::try_from).collect()
+    }
+
+    async fn find_protocol_totals_in_tranches(
+        &self,
+        period: &TranchePeriod,
+        protocol: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolSwapActivity>> {
+        // ⚠️ 0 only for a protocol without any pool: one whose pools are all unvalued sums to NULL.
+        let rows = sqlx::query_as!(
+            ProtocolSwapActivityRow,
+            r#"
+            SELECT pr.protocol AS "protocol!",
+                   COALESCE(SUM(f.swap_count), 0)::BIGINT AS "swaps!",
+                   CASE WHEN COUNT(f.pool_address) = 0 THEN 0
+                        ELSE SUM(f.volume_in_a_usd + f.volume_in_b_usd) END AS volume_usd,
+                   CASE WHEN COUNT(f.pool_address) = 0 THEN 0 ELSE SUM(f.fees_usd) END AS fees_usd,
+                   CASE WHEN COUNT(f.pool_address) = 0 THEN 0 ELSE SUM(f.lp_fees_usd) END
+                       AS lp_fees_usd,
+                   CASE WHEN COUNT(f.pool_address) = 0 THEN 0 ELSE SUM(f.protocol_fees_usd) END
+                       AS protocol_fees_usd,
+                   CASE WHEN COUNT(f.pool_address) = 0 THEN 0 ELSE SUM(f.referral_fees_usd) END
+                       AS referral_fees_usd,
+                   COUNT(f.pool_address) AS "pool_hours!",
+                   COUNT(f.pool_address) FILTER (WHERE f.valued) AS "pool_hours_valued!",
+                   COUNT(DISTINCT f.pool_address) AS pools
+              FROM UNNEST($3::TEXT[]) AS pr (protocol)
+              LEFT JOIN analytic_pool_5min f
+                     ON f.protocol = pr.protocol AND f.bucket >= $1 AND f.bucket < $2
+             WHERE $4::TEXT IS NULL OR pr.protocol = $4
+             GROUP BY pr.protocol
+             ORDER BY pr.protocol
+            "#,
+            period.from,
+            period.as_of,
+            &measured() as &[&str],
+            bind_protocol_filter(protocol),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter()
+            .map(ProtocolSwapActivity::try_from)
+            .collect()
+    }
+
+    async fn list_protocol_tranches(
+        &self,
+        period: &TranchePeriod,
+        protocol: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolBucket<SwapActivity>>> {
+        let rows = sqlx::query_as!(
+            ProtocolSwapBucketRow,
+            r#"
+            SELECT pr.protocol AS "protocol!", t.bucket AS "bucket_from!",
+                   COALESCE(a.swaps, 0)::BIGINT AS "swaps!",
+                   CASE WHEN a.bucket IS NULL THEN 0 ELSE a.volume_usd END AS volume_usd,
+                   CASE WHEN a.bucket IS NULL THEN 0 ELSE a.fees_usd END AS fees_usd,
+                   CASE WHEN a.bucket IS NULL THEN 0 ELSE a.lp_fees_usd END AS lp_fees_usd,
+                   CASE WHEN a.bucket IS NULL THEN 0 ELSE a.protocol_fees_usd END
+                       AS protocol_fees_usd,
+                   CASE WHEN a.bucket IS NULL THEN 0 ELSE a.referral_fees_usd END
+                       AS referral_fees_usd,
+                   COALESCE(a.pools, 0)::BIGINT AS "pool_hours!",
+                   COALESCE(a.pools_valued, 0)::BIGINT AS "pool_hours_valued!"
+              FROM generate_series(GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ),
+                                   $2::TIMESTAMPTZ - INTERVAL '5 minutes',
+                                   INTERVAL '5 minutes') AS t (bucket)
+             CROSS JOIN UNNEST($4::TEXT[]) AS pr (protocol)
+              LEFT JOIN (
+                  SELECT protocol, bucket, SUM(swap_count) AS swaps,
+                         SUM(volume_in_a_usd + volume_in_b_usd) AS volume_usd,
+                         SUM(fees_usd) AS fees_usd, SUM(lp_fees_usd) AS lp_fees_usd,
+                         SUM(protocol_fees_usd) AS protocol_fees_usd,
+                         SUM(referral_fees_usd) AS referral_fees_usd,
+                         COUNT(*) AS pools, COUNT(*) FILTER (WHERE valued) AS pools_valued
+                    FROM analytic_pool_5min
+                   WHERE bucket >= $1 AND bucket < $2
+                   GROUP BY protocol, bucket
+              ) a ON a.protocol = pr.protocol AND a.bucket = t.bucket
+             WHERE $5::TEXT IS NULL OR pr.protocol = $5
+             ORDER BY t.bucket, pr.protocol
+            "#,
+            period.from,
+            period.as_of,
+            period.covered_since,
+            &measured() as &[&str],
             bind_protocol_filter(protocol),
         )
         .fetch_all(&self.pool)

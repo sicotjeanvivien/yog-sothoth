@@ -14,7 +14,8 @@ use crate::http::{
         ProtocolRotationRunBucketResponse, ProtocolRotationRunTotalsResponse, RotationRunResponse,
         TrancheWindowedResponse, WindowedPageResponse, WindowedResponse,
         request::{
-            ListRotationRunsRequest, RotationRunsParams, WindowParams, parse_pool, parse_protocol,
+            ListRotationRunsRequest, MeasureWindowParams, RotationRunsParams, WindowParams,
+            parse_pool, parse_protocol,
         },
     },
     error::ApiError,
@@ -102,7 +103,7 @@ async fn read_runs(
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/rotation-runs/totals",
-    params(WindowParams),
+    params(MeasureWindowParams),
     responses((
         status = 200,
         description = "The protocol's rotation runs started in the window, through the last \
@@ -113,7 +114,7 @@ async fn read_runs(
 pub(crate) async fn get_protocol_rotation_run_totals(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(params): Query<WindowParams>,
+    Query(params): Query<MeasureWindowParams>,
 ) -> Result<Json<TrancheWindowedResponse<ProtocolRotationRunTotalsResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
     let window = params.window.into();
