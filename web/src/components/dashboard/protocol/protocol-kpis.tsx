@@ -45,7 +45,7 @@ export async function FeesRateKpi({ period, protocol }: KpiProps) {
       info={info}
       value={await valued(usd(fees), items, period)}
       sub={rate === null ? undefined : t("feesRate", { rate: formatFeeRate(rate, locale) })}
-      stamp={await lateStamp(now.asOf)}
+      stamp={await lateStamp(now.asOf, period)}
     />
   );
 }
@@ -84,7 +84,7 @@ export async function ProtocolFeesKpi({ period, protocol }: KpiProps) {
           ? undefined
           : t("protocolFeesShare", { share: formatPercent(String(share), locale) })
       }
-      stamp={await lateStamp(now.asOf)}
+      stamp={await lateStamp(now.asOf, period)}
       advanced
     />
   );

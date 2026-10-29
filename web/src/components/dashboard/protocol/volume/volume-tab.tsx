@@ -34,7 +34,7 @@ import { formatCount } from "@/lib/format/format-count";
 import { formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { pairLabel } from "@/lib/format/pubkey";
-import { axisOf, daysAgoOf, hourOf, roundTicks } from "@/lib/overview/chart";
+import { axisOf, daysAgoOf, hourOf, readsClock, roundTicks } from "@/lib/overview/chart";
 import type { FrozenPeriod } from "@/lib/overview/period";
 import {
   durationOf,
@@ -182,7 +182,7 @@ async function VolumeSources({ period, protocol }: TabProps) {
 
   const bars = slots.map((slot, i) => {
     const when =
-      period !== "24h"
+      !readsClock(period)
         ? `${daysAgo(daysAgoOf(period, slots.length, i))} · ${moment(slot.from)} → ${moment(slot.to)}`
       : `${hourOf(slot.from)} UTC`;
     if (slot.total === null) {

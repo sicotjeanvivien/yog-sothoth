@@ -69,10 +69,10 @@
       },
       "unavailable": {
         "label": "Why \"—\"?",
-        "previous": "The previous period starts before {since}, the first hour measured: no comparison with an incomplete sum.",
+        "previous": "The previous period starts before {since}, when measuring began: no comparison with an incomplete sum.",
         "tvlStart": "The TVL has no measure at the start of the period: its change cannot be computed.",
         "tvlDiscovered": "The share of the pools discovered during the period is not measured: without it, the change would count a discovery as a deposit.",
-        "previousMoved": "A 5-minute tranche arrived between the reads of the hour and of the hour before: reload the page to compare them."
+        "previousMoved": "A 5-minute tranche or a frozen hour arrived between the reads of the period and of the one before: reload the page to compare them."
       },
       "kpis": {
         "tvl": "TVL",
@@ -151,7 +151,7 @@
       },
       "tokens": {
         "title": "Most traded tokens · {period}",
-        "info": "The tokens that moved the most over the chosen period, all protocols together: a trade counts for both its tokens. A volume followed by a fraction covers only those pool-hours, the others could not be valued.",
+        "info": "The tokens that moved the most over the chosen period, all protocols together: a trade counts for both its tokens. A volume followed by a fraction covers only its valued share.",
         "tableLabel": "Most traded tokens over the chosen period",
         "token": "Token",
         "volume": "Volume {period}",
@@ -170,7 +170,7 @@
       },
       "stale": {
         "title": "Figures running late.",
-        "body": "This page's figures stop at {at}, {ago}: the hourly computation has fallen behind. They stay shown, as of that hour.",
+        "body": "This page's figures stop at {at}, {ago}: the computation has fallen behind. They stay shown, as of that hour.",
         "stamp": "as of {at}"
       },
       "error": {

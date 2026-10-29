@@ -34,7 +34,7 @@ import {
 import { formatRelative, formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { pairLabel, shortenPubkey } from "@/lib/format/pubkey";
-import { axisOf, daysAgoOf, hourOf, roundTicks } from "@/lib/overview/chart";
+import { axisOf, daysAgoOf, hourOf, readsClock, roundTicks } from "@/lib/overview/chart";
 import type { FrozenPeriod } from "@/lib/overview/period";
 import { CURVE_BOX, curveOf, flowSlotsOf } from "@/lib/protocol/liquidity";
 
@@ -225,7 +225,7 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
   const daysAgo = (days: number) => (days === 0 ? tVolume("today") : tVolume("daysAgo", { days }));
   const bars = slots.map((slot, i) => {
     const name =
-      period !== "24h"
+      !readsClock(period)
         ? `${daysAgo(daysAgoOf(period, slots.length, i))} · ${moment(slot.from)} → ${moment(slot.to)}`
       : `${hourOf(slot.from)} UTC`;
     const reading =

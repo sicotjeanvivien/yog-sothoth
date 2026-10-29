@@ -279,7 +279,7 @@ unknown or not offered by the page is 24h; the DAMM v2 page offers no `1h`) driv
 slice over 30d (`SLOT_MS`), each ending at `asOf`; over 7d the web sums the
 `hourly` series by six, as the API sums its days: whether an hour is covered is the API's. 1h is the rolling
 hour through the last tranche written, read on `swaps/series?interval=5m`; it does not fall on the last bar of
-24h, and its coverage counts pool tranches, not pool-hours (`COVERAGE_UNIT`). The TVL stays
+24h, and its coverage counts pool tranches, not pool-hours (`coverageUnit`). The TVL stays
 the value of the last frozen hour; only its change follows the period, and over 1h it has none. The selector (`period-selector.tsx`) is a set of
 links over the page's periods, each judged on the span of its own reads — 1h on the tranches still held, the others on the
 frozen hours; in its own unkeyed `<Suspense>` so a period change keeps it; every block
@@ -309,7 +309,7 @@ for less motion), and fails on its own: the cause in words and a retry of the
 page, or a "—" KPI.
 
 **Late figures** (`lib/overview/staleness.ts`) — a frozen hour normally lags up
-to ~70 min. When `asOf` is over two hours back, the computation has stalled: a
+to ~70 min, a tranche far less. When `asOf` is over two hours back, or over half an hour on 1h, the computation has stalled: a
 band over the page says until when the figures run, each KPI shows that hour,
 and the "Live" panel colours it. "Live" itself keeps speaking of ingestion,
 which can be fine while the figures stall. The reads several blocks share are fetched

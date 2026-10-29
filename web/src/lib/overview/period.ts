@@ -40,13 +40,10 @@ export const BAR_MS: Record<Period, number> = {
   "30d": 24 * HOUR_MS,
 };
 
-/** What a period's coverage counts: pools × hours, or over the last hour pools × 5-minute tranches. */
-export const COVERAGE_UNIT: Record<Period, "poolHours" | "poolTranches"> = {
-  "1h": "poolTranches",
-  "24h": "poolHours",
-  "7d": "poolHours",
-  "30d": "poolHours",
-};
+/** What a period's coverage counts: pools × its bars, tranches under an hour. */
+export function coverageUnit(period: Period): "poolHours" | "poolTranches" {
+  return BAR_MS[period] < HOUR_MS ? "poolTranches" : "poolHours";
+}
 
 /** Closed whatever the facts hold, until its own times are measured on the prod. */
 export const CLOSED_PERIODS: ReadonlySet<Period> = new Set<Period>(["30d"]);

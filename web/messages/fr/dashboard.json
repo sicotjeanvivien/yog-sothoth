@@ -69,10 +69,10 @@
       },
       "unavailable": {
         "label": "Pourquoi « — » ?",
-        "previous": "La période précédente commence avant le {since}, première heure mesurée : pas de comparaison avec une somme incomplète.",
+        "previous": "La période précédente commence avant le {since}, début des mesures : pas de comparaison avec une somme incomplète.",
         "tvlStart": "La TVL n'a pas de mesure au début de la période : sa variation ne peut pas être calculée.",
         "tvlDiscovered": "La part des pools découvertes pendant la période n'est pas mesurée : sans elle, la variation compterait une découverte comme un dépôt.",
-        "previousMoved": "Une tranche de 5 minutes est arrivée entre la lecture de l'heure et celle de l'heure d'avant : rechargez la page pour les comparer."
+        "previousMoved": "Une tranche de 5 minutes ou une heure figée est arrivée entre la lecture de la période et celle de la précédente : rechargez la page pour les comparer."
       },
       "kpis": {
         "tvl": "TVL",
@@ -151,7 +151,7 @@
       },
       "tokens": {
         "title": "Tokens les plus échangés · {period}",
-        "info": "Les tokens qui ont le plus circulé sur la période choisie, tous protocoles confondus : un échange compte pour ses deux tokens. Un volume suivi d'une fraction ne couvre que ces pool-heures, les autres n'ayant pas pu être valorisées.",
+        "info": "Les tokens qui ont le plus circulé sur la période choisie, tous protocoles confondus : un échange compte pour ses deux tokens. Un volume suivi d'une fraction n'en couvre que la part valorisée.",
         "tableLabel": "Tokens les plus échangés sur la période choisie",
         "token": "Token",
         "volume": "Volume {period}",
@@ -170,7 +170,7 @@
       },
       "stale": {
         "title": "Chiffres en retard.",
-        "body": "Les chiffres de cette page s'arrêtent au {at}, {ago} : le calcul horaire a pris du retard. Ils restent affichés, à cette heure-là.",
+        "body": "Les chiffres de cette page s'arrêtent au {at}, {ago} : le calcul a pris du retard. Ils restent affichés, à cette heure-là.",
         "stamp": "au {at}"
       },
       "error": {

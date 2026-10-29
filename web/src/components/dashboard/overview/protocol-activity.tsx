@@ -13,7 +13,7 @@ import { volumeCoverage } from "@/lib/coverage/volume-coverage";
 import { formatCount } from "@/lib/format/format-count";
 import { formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
-import { COVERAGE_UNIT, type Period } from "@/lib/overview/period";
+import { coverageUnit, type Period } from "@/lib/overview/period";
 import { sumUsd } from "@/lib/overview/totals";
 
 import { BlockHeading, closedReason, PeriodNotice } from "./overview-parts";
@@ -72,7 +72,7 @@ export async function ProtocolActivity({ period }: { period: Period }) {
   }
 
   const closed = await closedReason(period, activity);
-  const unit = COVERAGE_UNIT[period];
+  const unit = coverageUnit(period);
   const total = sumUsd(activity.items.map((i) => i.volumeUsd));
   const observed = new Set(catalogue.items.filter((p) => p.observed).map((p) => p.protocol));
 

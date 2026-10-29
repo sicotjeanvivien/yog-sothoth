@@ -46,8 +46,11 @@ export async function BlockFailed({ kind }: { kind: ApiClientErrorKind }) {
 }
 
 /** "as of 20 Oct, 14:00 UTC" under a figure, only while the figures run late. */
-export async function lateStamp(asOf: string | null): Promise<string | undefined> {
-  if (asOf === null || !isStale(asOf, new Date())) {
+export async function lateStamp(
+  asOf: string | null,
+  period: Period,
+): Promise<string | undefined> {
+  if (asOf === null || !isStale(asOf, new Date(), period)) {
     return undefined;
   }
   const t = await getTranslations("Dashboard.Overview.stale");
@@ -72,7 +75,7 @@ export async function StaleBanner({ period, scope }: { period: Period; scope: Sc
     throw err;
   }
   const now = new Date();
-  if (asOf === null || !isStale(asOf, now)) {
+  if (asOf === null || !isStale(asOf, now, period)) {
     return null;
   }
 

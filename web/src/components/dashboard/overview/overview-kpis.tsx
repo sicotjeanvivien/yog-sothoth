@@ -23,7 +23,7 @@ import { formatCount, formatCountCompact, formatRate } from "@/lib/format/format
 import { formatTimes } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { previousWindowAdjoins, previousWindowCovered } from "@/lib/overview/availability";
-import { COVERAGE_UNIT, type Period } from "@/lib/overview/period";
+import { coverageUnit, DEFAULT_PERIOD, type Period } from "@/lib/overview/period";
 import { changeRatio, rotation, shareOf, sumUsd, swapsPerSecond } from "@/lib/overview/totals";
 
 import { Change, closedReason, KpiCell, Unavailable, utcMoment } from "./overview-parts";
@@ -76,7 +76,7 @@ export async function TvlKpi({ period, scope }: { period: Period; scope: Scope }
       info={info}
       value={usd(current)}
       sub={sub}
-      stamp={await lateStamp(totals.asOf)}
+      stamp={await lateStamp(totals.asOf, period)}
     />
   );
 }
@@ -93,7 +93,8 @@ async function LastTvlKpi({ scope }: { scope: Scope }) {
   } catch (err) {
     return kpiError(err, label, info);
   }
-  const at = reading.items.map((i) => i.at).sort()[0] ?? null;
+  const times = reading.items.map((i) => Date.parse(i.at));
+  const at = times.length === 0 ? null : new Date(Math.min(...times)).toISOString();
 
   return (
     <KpiCell
@@ -101,7 +102,8 @@ async function LastTvlKpi({ scope }: { scope: Scope }) {
       info={info}
       value={usd(sumUsd(reading.items.map((i) => i.tvlUsd)))}
       sub={at === null ? undefined : t("kpis.tvlAt", { at: await utcMoment(at) })}
-      stamp={await lateStamp(at)}
+      // ⚠️ The TVL is read by the hour whatever the period: its lag is a frozen hour's.
+      stamp={await lateStamp(at, DEFAULT_PERIOD)}
     />
   );
 }
@@ -149,7 +151,7 @@ export async function VolumeKpi({ period, scope }: { period: Period; scope: Scop
       info={info}
       value={await valued(usd(current), items, period)}
       sub={sub}
-      stamp={await lateStamp(now.value.asOf)}
+      stamp={await lateStamp(now.value.asOf, period)}
     />
   );
 }
@@ -184,7 +186,7 @@ export async function FeesKpi({ period, scope }: { period: Period; scope: Scope 
           ? undefined
           : t("kpis.feesProtocol", { amount: usd(protocolFees) })
       }
-      stamp={await lateStamp(now.asOf)}
+      stamp={await lateStamp(now.asOf, period)}
     />
   );
 }
@@ -244,7 +246,7 @@ export async function PoolsKpi({ period, scope }: { period: Period; scope: Scope
           {born}
         </>
       }
-      stamp={await lateStamp(now.value.asOf)}
+      stamp={await lateStamp(now.value.asOf, period)}
     />
   );
 }
@@ -279,7 +281,7 @@ export async function SwapsKpi({ period, scope }: { period: Period; scope: Scope
           ? undefined
           : t("kpis.swapsRate", { rate: formatRate(swapsPerSecond(swaps, period)) })
       }
-      stamp={await lateStamp(now.asOf)}
+      stamp={await lateStamp(now.asOf, period)}
       advanced
     />
   );
@@ -316,7 +318,7 @@ export async function RotationKpi({ period, scope }: { period: Period; scope: Sc
       info={info}
       value={await valued(ratio === null ? "—" : formatTimes(ratio, locale), items, period)}
       sub={t("kpis.rotationSub")}
-      stamp={await lateStamp(now.asOf)}
+      stamp={await lateStamp(now.asOf, period)}
       advanced
     />
   );
@@ -344,7 +346,7 @@ export async function valued(
       <wbr />
       <VolumeCoverageMark
         coverage={coverage}
-        label={(priced, total) => t(`${COVERAGE_UNIT[period]}.mark`, { priced, total })}
+        label={(priced, total) => t(`${coverageUnit(period)}.mark`, { priced, total })}
       />
     </>
   );
