@@ -32,6 +32,26 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.5.2",
+    date: "2026-10-29",
+    summary: "Volume and fees are no longer valued at a token's market price that our pools' trades contradict.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "A token whose market price is more than ten times the highest price our pools traded it at over 7 days no longer values volume, fees, liquidity moves or claims either: its trades are valued by the other token of the pool, as the TVL has been since v0.5.1. Over the week before, it would have corrected about $28,000 of volume.",
+            technical: false,
+          },
+          {
+            text: "yog_price_asof gives no price where its latest observation is more than yog_market_over_pool_max() times the token's ceiling, so every flow valued as of an instant — the tranches of yog-analytic, the moves and claims, the hourly views the signals read — follows the rule token_stock_price holds a stock to; an anchor so contradicted falls to what its pool traded. The readers of valued views can read the ceilings. Migration 046.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.5.1",
     date: "2026-10-29",
     summary: "The TVL no longer believes a token's market price that our pools' trades contradict.",

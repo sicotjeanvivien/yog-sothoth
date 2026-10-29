@@ -265,9 +265,11 @@ only place a raw amount is divided by `10^decimals`. `yog_amount_usd` values it
 at a price. `yog_moved_amount_usd` adds the **empty leg** for an
 amount that moved: zero moved is worth zero without a price or a scale.
 `yog_price_asof(mint, at)` is the schema's only reader of `token_prices`: the last
-observation at or before `at`, within the as-of bound below. ⚠️ It reads the
-table as its caller, not as the owner of the view that calls it: a role reading
-a valued view needs its own `SELECT` on `token_prices`.
+observation at or before `at`, within the as-of bound below, unless it is more
+than `yog_market_over_pool_max()` times the token's ceiling (046), the rule a
+stock is held to. ⚠️ It reads its tables as its caller, not as the owner of the
+view that calls it: a role reading a valued view needs its own `SELECT` on
+`token_prices` and `analytic_token_pool_ceilings`.
 Postgres inlines all four. `tests/amount_usd.rs` reads every view and
 function of `public` and every `.rs` and `.sql` of `src/`, and fails on any
 other scaling by ten (`POWER(10`, `pow(10`, `10 ^`), on the empty leg written

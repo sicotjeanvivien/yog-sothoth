@@ -1338,3 +1338,48 @@ async fn the_cycle_keeps_each_tokens_ceiling_within_the_window(pool: PgPool) {
     assert_eq!(ceiling_of(&pool, &old).await, None);
     assert_eq!(ceiling_of(&pool, &gone).await, None);
 }
+
+/// The anchor whose quote our pools contradict has none (046): published at what its pool traded,
+/// its trades valued by the other token. Against the check dropped from `yog_price_asof`: X sold
+/// for $5 of Y would be $5 000 of volume.
+#[sqlx::test]
+async fn an_anchor_our_pools_contradict_is_valued_by_its_partner(pool: PgPool) {
+    let tranche = settled_tranche();
+    let x = pk(30).to_string();
+    price_at(&pool, &x, "1000", tranche).await;
+    sqlx::query("INSERT INTO analytic_token_pool_ceilings (mint, ceiling_usd) VALUES ($1, 1)")
+        .bind(&x)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut found = Vec::new();
+    for seed in [1u8, 2] {
+        let y = pk(seed + 30).to_string();
+        let address = setup_pool(&pool, seed, (&x, 6), (&y, 6)).await;
+        price_at(&pool, &y, "1", tranche).await;
+        insert_swap(
+            &pool,
+            &address,
+            &format!("xy{seed}"),
+            (5_000_000, 5_000_000),
+            sqrt_price_x64(1, 1),
+            tranche,
+        )
+        .await;
+        found.push(address);
+    }
+
+    value(&pool, tranche).await;
+
+    let (market_x, price_x, _, price_y) = prices(&pool, &found[0], tranche).await;
+    assert_eq!(market_x, None, "a contradicted quote is no quote");
+    assert_eq!((price_x, price_y), (Some(dec("1")), Some(dec("1"))));
+    let volume: Option<BigDecimal> = sqlx::query_scalar(
+        "SELECT volume_in_a_usd FROM analytic_pool_5min WHERE pool_address = $1",
+    )
+    .bind(&found[0])
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(volume, Some(dec("5")));
+}
