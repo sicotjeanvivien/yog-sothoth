@@ -93,8 +93,7 @@ async function LastTvlKpi({ scope }: { scope: Scope }) {
   } catch (err) {
     return kpiError(err, label, info);
   }
-  const times = reading.items.map((i) => Date.parse(i.at));
-  const at = times.length === 0 ? null : new Date(Math.min(...times)).toISOString();
+  const at = reading.asOf;
 
   return (
     <KpiCell

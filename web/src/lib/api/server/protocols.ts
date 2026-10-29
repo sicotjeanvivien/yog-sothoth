@@ -83,18 +83,18 @@ export const fetchTvl = cache((scope: Scope) =>
   apiGet(scopedPath(scope, "tvl"), {}, zGetTvlResponse),
 );
 
-export const fetchTvlHourly = cache((scope: Scope, window: WindowResponse) =>
+export const fetchTvlHourly = cache((scope: Scope, window: FrozenPeriod) =>
   apiGet(scopedPath(scope, "tvl/hourly"), { window }, zGetTvlHourlyResponse),
 );
 
 /** The TVL a window before its last reading, and the change without the pools discovered. */
-export const fetchTvlTotals = cache((scope: Scope, window: WindowResponse) =>
+export const fetchTvlTotals = cache((scope: Scope, window: FrozenPeriod) =>
   apiGet(scopedPath(scope, "tvl/totals"), { window }, zGetTvlTotalsResponse),
 );
 
 /** No row while the protocol's liquidity does not cover the window whole. */
 export const fetchLiquidityMoveTotals = cache(
-  (protocol: ProtocolResponse, window: WindowResponse) =>
+  (protocol: ProtocolResponse, window: FrozenPeriod) =>
     apiGet(
       `/api/protocols/${protocol}/liquidity-moves/totals`,
       { window },
@@ -104,7 +104,7 @@ export const fetchLiquidityMoveTotals = cache(
 
 /** The fees the protocol's positions claimed over the window, valued. */
 export const fetchPositionFeeClaimTotals = cache(
-  (protocol: ProtocolResponse, window: WindowResponse) =>
+  (protocol: ProtocolResponse, window: FrozenPeriod) =>
     apiGet(
       `/api/protocols/${protocol}/position-fee-claims/totals`,
       { window },
@@ -113,7 +113,7 @@ export const fetchPositionFeeClaimTotals = cache(
 );
 
 /** The rewards the protocol's positions claimed over the window, valued. */
-export const fetchRewardClaimTotals = cache((protocol: ProtocolResponse, window: WindowResponse) =>
+export const fetchRewardClaimTotals = cache((protocol: ProtocolResponse, window: FrozenPeriod) =>
   apiGet(
     `/api/protocols/${protocol}/reward-claims/totals`,
     { window },
@@ -138,7 +138,7 @@ export const fetchLiquiditySeries = cache((protocol: ProtocolResponse, window: F
 
 /** The protocol's largest valued liquidity moves over the window. */
 export const fetchLargestLiquidityMoves = cache(
-  (protocol: ProtocolResponse, window: WindowResponse, limit: number, kind?: LiquidityMoveKindResponse) =>
+  (protocol: ProtocolResponse, window: FrozenPeriod, limit: number, kind?: LiquidityMoveKindResponse) =>
     apiGet(
       `/api/protocols/${protocol}/liquidity-moves`,
       { window, sort: "amount", limit: String(limit), ...(kind === undefined ? {} : { kind }) },
@@ -148,7 +148,7 @@ export const fetchLargestLiquidityMoves = cache(
 
 /** The positions the protocol opened, locked, split and closed over the window. */
 export const fetchPositionChangeTotals = cache(
-  (protocol: ProtocolResponse, window: WindowResponse) =>
+  (protocol: ProtocolResponse, window: FrozenPeriod) =>
     apiGet(
       `/api/protocols/${protocol}/position-changes/totals`,
       { window },

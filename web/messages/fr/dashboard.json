@@ -65,7 +65,7 @@
         "closedLabel": "{period} : pas encore disponible",
         "closedUntil": "Pas encore assez de données : Yog-Scope les mesure depuis le {since}. Cette période sera complète le {opens}.",
         "closedSoon": "La période de 30 jours n'est pas encore ouverte : elle le sera une fois ses lectures mesurées sur 30 jours de données.",
-        "closedEmpty": "Aucune heure n'est encore mesurée."
+        "closedEmpty": "Rien n'est encore mesuré sur cette période."
       },
       "unavailable": {
         "label": "Pourquoi « — » ?",
@@ -101,7 +101,7 @@
           "tvlLast": "La valeur de ce qui est déposé dans les pools que Yog-Scope a observées depuis le 1er octobre 2026, à sa dernière lecture, à la fin de la dernière heure complète : leurs réserves, chacune au prix Jupiter de son token s'il a moins de 15 minutes. Un token sans prix compte pour 0, comme un token coté plus de dix fois au-dessus du plus haut prix auquel nos pools l'ont échangé en 7 jours. La TVL est un stock : elle ne suit pas la période, et sur la dernière heure elle n'a pas de variation.",
           "volumeLastHour": "Ce qui s'est échangé sur l'heure glissante qui finit à la dernière tranche de 5 minutes mesurée, valorisé au prix du moment de chaque échange. Une pool dont une tranche n'a pas pu être valorisée compte pour ses autres tranches. La variation compare à l'heure d'avant."
         },
-        "tvlAt": "lue à {at}"
+        "tvlAt": "lue au {at}"
       },
       "protocols": {
         "title": "Activité par protocole · {period}",

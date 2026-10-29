@@ -58,7 +58,7 @@ export async function lateStamp(
 }
 
 /**
- * The band over the page when its figures stop over two hours back. ⚠️ Read on `asOf`, not
+ * The band over the page when its figures are late. ⚠️ Read on `asOf`, not
  * on the indexer: "Live" speaks of ingestion, which can be fine while the figures stall.
  */
 export async function StaleBanner({ period, scope }: { period: Period; scope: Scope }) {

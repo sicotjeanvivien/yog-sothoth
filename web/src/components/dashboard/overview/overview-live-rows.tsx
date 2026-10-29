@@ -1,5 +1,5 @@
 /**
- * The rows of the "Live" panel: the share of the period's pool-hours of `scope` that could be
+ * The rows of the "Live" panel: the share of the period's coverage of `scope` that could be
  * valued, and the hour every figure stops at. ⚠️ Rounded down: 99.6 % is not complete.
  */
 
