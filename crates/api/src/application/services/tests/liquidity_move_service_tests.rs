@@ -6,12 +6,14 @@ use std::sync::Arc;
 use rust_decimal::Decimal;
 use yog_core::domain::{
     LiquidityMoveCursor, LiquidityMoveList, LiquidityMoveOrder, LiquidityMoveScope, Protocol,
-    Window,
+    Window, WrittenTranches,
 };
 
 use super::{LiquidityMoveService, MovesError};
+use crate::application::services::period::PeriodBounds;
 use crate::testing::{
-    MockLiquidityMoveRepo, at_october, frozen_hours_repo, make_frozen_hours, make_pool, pk,
+    MockLiquidityMoveRepo, MockProtocolActivityRepo, at_october, frozen_hours_repo,
+    make_frozen_hours, make_pool, pk,
 };
 
 fn service(repo: &Arc<MockLiquidityMoveRepo>) -> LiquidityMoveService {
@@ -41,11 +43,11 @@ async fn the_liquidity_is_covered_from_its_own_first_hour() {
         .await
         .unwrap();
 
-    assert_eq!(day.period.unwrap().covered_since, at_october(20, 0));
+    assert_eq!(day.period.unwrap().covered_since(), at_october(20, 0));
     assert!(reads(&measured).is_empty(), "{:?}", reads(&measured));
     assert_eq!(
-        not_yet.period.unwrap().covered_since,
-        not_yet.period.unwrap().as_of
+        not_yet.period.unwrap().covered_since(),
+        not_yet.period.unwrap().as_of()
     );
     assert!(reads(&unmeasured).is_empty());
 }
@@ -126,4 +128,40 @@ async fn a_cursor_of_another_list_or_before_the_last_freeze_is_refused() {
     assert!(matches!(other_window, Err(MovesError::CursorRefused)));
     assert!(current.is_ok());
     assert_eq!(reads(&repo), vec!["moves"]);
+}
+
+/// Mutation: the last hour covered from the tranches held alone — read while the liquidity is
+/// measured from inside it.
+#[tokio::test]
+async fn the_last_hour_is_covered_from_the_later_of_the_tranches_and_the_liquidity() {
+    let tranches = WrittenTranches {
+        first: at_october(13, 13),
+        through: at_october(20, 12) + chrono::TimeDelta::minutes(40),
+    };
+    let in_hour = |since| {
+        let repo = Arc::new(MockLiquidityMoveRepo {
+            since: Some(since),
+            ..MockLiquidityMoveRepo::default()
+        });
+        let hours = Arc::new(MockProtocolActivityRepo::with_tranches(tranches));
+        (LiquidityMoveService::new(hours, repo.clone()), repo)
+    };
+    let (late, late_repo) = in_hour(tranches.through - chrono::TimeDelta::minutes(30));
+    let (early, early_repo) = in_hour(at_october(14, 0));
+
+    let late = late
+        .get_liquidity_totals(Window::Hour, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+    early
+        .get_liquidity_totals(Window::Hour, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        late.period.unwrap().covered_since(),
+        tranches.through - chrono::TimeDelta::minutes(30)
+    );
+    assert!(late.items.is_empty() && late_repo.tranche_reads.lock().unwrap().is_empty());
+    assert_eq!(early_repo.tranche_reads.lock().unwrap().len(), 1);
 }

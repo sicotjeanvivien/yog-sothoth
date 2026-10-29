@@ -13,7 +13,10 @@ use yog_core::{
     },
 };
 
-use super::period::{BucketPeriod, Measured, build_frozen_period, first_whole_hour};
+use super::period::{
+    BucketPeriod, Measured, ReadPeriod, SeriesInterval, build_frozen_period, build_last_hour,
+    first_whole_hour,
+};
 
 /// How far behind the last tranche written a cursor's end stays accepted, for pages read slowly.
 const CURSOR_END_MARGIN: TimeDelta = TimeDelta::hours(1);
@@ -151,6 +154,35 @@ impl RotationRunService {
         Ok(Measured {
             period: Some(period),
             items,
+        })
+    }
+
+    /// The volume of `window` by `interval`, split by the runs; the last hour by tranche, split
+    /// from a gap after the first tranche measured.
+    pub(crate) async fn list_series(
+        &self,
+        window: Window,
+        interval: SeriesInterval,
+        protocol: Protocol,
+    ) -> RepositoryResult<Measured<Vec<ProtocolBucket<RunSplit>>, ReadPeriod>> {
+        let Some(bucket) = interval.frozen_bucket() else {
+            let period = build_last_hour(self.hours.as_ref()).await?;
+            let since = self.runs.find_measured_since(protocol).await?;
+            let items = match &period {
+                Some(p) => {
+                    self.runs
+                        .list_tranches(p, since.map(|since| since + RUN_GAP), protocol)
+                        .await?
+                }
+                None => Vec::new(),
+            };
+            let period = period.map(ReadPeriod::Tranche);
+            return Ok(Measured { period, items });
+        };
+        let measured = self.list_buckets(window, bucket, protocol).await?;
+        Ok(Measured {
+            period: measured.period.map(ReadPeriod::Frozen),
+            items: measured.items,
         })
     }
 }

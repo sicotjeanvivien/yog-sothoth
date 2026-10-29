@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE(SUM(amount_usd) FILTER (WHERE kind = 'create'), 0) AS \"created_usd!\",\n                   COALESCE(SUM(amount_usd) FILTER (WHERE kind = 'add'), 0) AS \"added_usd!\",\n                   COALESCE(SUM(amount_usd) FILTER (WHERE kind = 'remove'), 0) AS \"removed_usd!\",\n                   COUNT(*) AS \"moves!\", COUNT(amount_usd) AS \"moves_valued!\",\n                   COUNT(DISTINCT owner) AS \"owners!\"\n              FROM analytic_liquidity_moves\n             WHERE protocol = $3 AND timestamp >= $1 AND timestamp < $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "created_usd!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "added_usd!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "removed_usd!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "moves!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "moves_valued!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "owners!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "e372001e7325fdcc227dbc334a153634104a520a77d03323cfb286ed8aeea513"
+}

@@ -4,7 +4,7 @@ use serde::Deserialize;
 use utoipa::{IntoParams, ToSchema};
 use yog_core::domain::Window;
 
-use crate::application::{BucketPeriod, SeriesInterval};
+use crate::application::SeriesInterval;
 use crate::http::error::ApiError;
 
 #[derive(Debug, Default, Deserialize, Clone, Copy, ToSchema)]
@@ -131,35 +131,6 @@ impl SeriesParams {
     }
 }
 
-/// The step of a series of frozen hours: an hour, or 24 hours ending at `asOf`.
-#[derive(Debug, Deserialize, Clone, Copy, ToSchema)]
-pub(crate) enum FrozenIntervalParam {
-    #[serde(rename = "1h")]
-    Hour,
-    #[serde(rename = "1d")]
-    Day,
-}
-
-impl From<FrozenIntervalParam> for BucketPeriod {
-    fn from(value: FrozenIntervalParam) -> Self {
-        match value {
-            FrozenIntervalParam::Hour => BucketPeriod::Hour,
-            FrozenIntervalParam::Day => BucketPeriod::Day,
-        }
-    }
-}
-
-/// A series of frozen hours over `window` at `interval`.
-#[derive(Debug, Deserialize, IntoParams)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct FrozenSeriesParams {
-    #[serde(default)]
-    #[param(inline)]
-    pub(crate) window: WindowParam,
-    #[param(inline)]
-    pub(crate) interval: FrozenIntervalParam,
-}
-
 /// The step of a series of readings: one per hour measured.
 #[derive(Debug, Deserialize, Clone, Copy, ToSchema)]
 pub(crate) enum ReadingIntervalParam {
@@ -177,7 +148,3 @@ pub(crate) struct ReadingSeriesParams {
     #[param(inline)]
     pub(crate) interval: ReadingIntervalParam,
 }
-
-#[cfg(test)]
-#[path = "window_param_tests.rs"]
-mod tests;

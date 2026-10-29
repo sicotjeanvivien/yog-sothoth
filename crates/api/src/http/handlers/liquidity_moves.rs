@@ -14,7 +14,7 @@ use crate::http::{
         LiquidityMoveResponse, ProtocolLiquidityFlowsBucketResponse,
         ProtocolLiquidityFlowsResponse, WindowedPageResponse, WindowedResponse,
         request::{
-            FrozenSeriesParams, LiquidityMovesParams, ListLiquidityMovesRequest, WindowParams,
+            LiquidityMovesParams, ListLiquidityMovesRequest, MeasureWindowParams, SeriesParams,
             parse_pool, parse_protocol,
         },
     },
@@ -24,7 +24,7 @@ use crate::http::{
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/liquidity-moves/totals",
-    params(WindowParams),
+    params(MeasureWindowParams),
     responses((
         status = 200,
         description = "The protocol's liquidity created, added and removed over the window; \
@@ -35,7 +35,7 @@ use crate::http::{
 pub(crate) async fn get_protocol_liquidity_move_totals(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(params): Query<WindowParams>,
+    Query(params): Query<MeasureWindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolLiquidityFlowsResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
     let window = params.window.into();
@@ -57,24 +57,25 @@ pub(crate) async fn get_protocol_liquidity_move_totals(
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/liquidity-moves/series",
-    params(FrozenSeriesParams),
+    params(SeriesParams),
     responses((
         status = 200,
-        description = "The protocol's liquidity created, added and removed, by `interval`: an hour, \
-                       or 24 hours ending at `asOf`.",
+        description = "The protocol's liquidity created, added and removed, by `interval`: 5 \
+                       minutes over the last hour, an hour or 24 hours ending at `asOf` over the \
+                       other windows.",
         body = WindowedResponse<ProtocolLiquidityFlowsBucketResponse>
     ))
 )]
 pub(crate) async fn get_protocol_liquidity_moves_series(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(params): Query<FrozenSeriesParams>,
+    Query(params): Query<SeriesParams>,
 ) -> Result<Json<WindowedResponse<ProtocolLiquidityFlowsBucketResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
-    let window = params.window.into();
+    let (window, interval) = params.parse()?;
     let measured = state
         .liquidity_move_service
-        .list_liquidity_buckets(window, params.interval.into(), protocol)
+        .list_liquidity_series(window, interval, protocol)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }

@@ -11,7 +11,7 @@ pub(super) use parser::{
     bind_protocol_filter, convert_bigdecimal_to_decimal, convert_bigdecimal_to_u128,
     convert_decimal_to_bigdecimal, convert_i16_to_u8, convert_i32_to_u16, convert_i64_to_u32,
     convert_i64_to_u64, convert_optional, convert_string_to_pubkey, convert_string_to_signature,
-    convert_u64_to_i64, convert_u128_to_bigdecimal, map_sqlx_error, parse_bucket_from,
+    convert_u64_to_i64, convert_u128_to_bigdecimal, interval_of, map_sqlx_error, parse_bucket_from,
     parse_protocol,
 };
 pub(super) use query_mod::{QueryMode, resolve_query_mode};

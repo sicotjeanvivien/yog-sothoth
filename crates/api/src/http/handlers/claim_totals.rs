@@ -1,19 +1,19 @@
-//! The claims of positions' fees and rewards, valued by yog-analytic: a protocol's totals. Their
-//! coverage starts at the first whole hour their writer valued.
+//! The claims of positions' fees and rewards, valued by yog-analytic: a protocol's totals and
+//! series. Their coverage starts at the first tranche their writer valued.
 
 use axum::{
     Json,
     extract::{Path, Query, State},
 };
 
-use yog_core::domain::{ClaimTotals, Protocol, Window};
+use yog_core::domain::ClaimKind;
 
 use crate::application::Measured;
 use crate::http::{
     AppState,
     dto::{
-        ProtocolClaimTotalsResponse, WindowedResponse, request::WindowParams,
-        request::parse_protocol,
+        ProtocolClaimBucketResponse, ProtocolClaimTotalsResponse, WindowedResponse,
+        request::{MeasureWindowParams, SeriesParams, parse_protocol},
     },
     error::ApiError,
 };
@@ -21,7 +21,7 @@ use crate::http::{
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/position-fee-claims/totals",
-    params(WindowParams),
+    params(MeasureWindowParams),
     responses((
         status = 200,
         description = "The fees the protocol's positions claimed over the window, valued; no row \
@@ -32,21 +32,34 @@ use crate::http::{
 pub(crate) async fn get_protocol_position_fee_claim_totals(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(params): Query<WindowParams>,
+    Query(params): Query<MeasureWindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolClaimTotalsResponse>>, ApiError> {
-    let protocol = parse_protocol(&protocol)?;
-    let window = params.window.into();
-    let measured = state
-        .claim_totals_service
-        .get_position_fee_claim_totals(window, protocol)
-        .await?;
-    Ok(respond(protocol, window, measured))
+    get_totals(&state, &protocol, params, ClaimKind::PositionFee).await
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/protocols/{protocol}/position-fee-claims/series",
+    params(SeriesParams),
+    responses((
+        status = 200,
+        description = "The fees the protocol's positions claimed by `interval`, valued, from the \
+                       claims' coverage.",
+        body = WindowedResponse<ProtocolClaimBucketResponse>
+    ))
+)]
+pub(crate) async fn get_protocol_position_fee_claim_series(
+    State(state): State<AppState>,
+    Path(protocol): Path<String>,
+    Query(params): Query<SeriesParams>,
+) -> Result<Json<WindowedResponse<ProtocolClaimBucketResponse>>, ApiError> {
+    list_series(&state, &protocol, params, ClaimKind::PositionFee).await
 }
 
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/reward-claims/totals",
-    params(WindowParams),
+    params(MeasureWindowParams),
     responses((
         status = 200,
         description = "The rewards the protocol's positions claimed over the window, valued; no \
@@ -57,22 +70,42 @@ pub(crate) async fn get_protocol_position_fee_claim_totals(
 pub(crate) async fn get_protocol_reward_claim_totals(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(params): Query<WindowParams>,
+    Query(params): Query<MeasureWindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolClaimTotalsResponse>>, ApiError> {
-    let protocol = parse_protocol(&protocol)?;
+    get_totals(&state, &protocol, params, ClaimKind::Reward).await
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/protocols/{protocol}/reward-claims/series",
+    params(SeriesParams),
+    responses((
+        status = 200,
+        description = "The rewards the protocol's positions claimed by `interval`, valued, from \
+                       the claims' coverage.",
+        body = WindowedResponse<ProtocolClaimBucketResponse>
+    ))
+)]
+pub(crate) async fn get_protocol_reward_claim_series(
+    State(state): State<AppState>,
+    Path(protocol): Path<String>,
+    Query(params): Query<SeriesParams>,
+) -> Result<Json<WindowedResponse<ProtocolClaimBucketResponse>>, ApiError> {
+    list_series(&state, &protocol, params, ClaimKind::Reward).await
+}
+
+async fn get_totals(
+    state: &AppState,
+    protocol: &str,
+    params: MeasureWindowParams,
+    kind: ClaimKind,
+) -> Result<Json<WindowedResponse<ProtocolClaimTotalsResponse>>, ApiError> {
+    let protocol = parse_protocol(protocol)?;
     let window = params.window.into();
     let measured = state
         .claim_totals_service
-        .get_reward_claim_totals(window, protocol)
+        .get_claim_totals(kind, window, protocol)
         .await?;
-    Ok(respond(protocol, window, measured))
-}
-
-fn respond(
-    protocol: Protocol,
-    window: Window,
-    measured: Measured<Vec<ClaimTotals>>,
-) -> Json<WindowedResponse<ProtocolClaimTotalsResponse>> {
     let measured = Measured {
         period: measured.period,
         items: measured
@@ -81,5 +114,20 @@ fn respond(
             .map(|totals| ProtocolClaimTotalsResponse::new(protocol, totals))
             .collect::<Vec<_>>(),
     };
-    Json(WindowedResponse::new(window, measured))
+    Ok(Json(WindowedResponse::new(window, measured)))
+}
+
+async fn list_series(
+    state: &AppState,
+    protocol: &str,
+    params: SeriesParams,
+    kind: ClaimKind,
+) -> Result<Json<WindowedResponse<ProtocolClaimBucketResponse>>, ApiError> {
+    let protocol = parse_protocol(protocol)?;
+    let (window, interval) = params.parse()?;
+    let measured = state
+        .claim_totals_service
+        .list_claim_series(kind, window, interval, protocol)
+        .await?;
+    Ok(Json(WindowedResponse::new(window, measured)))
 }

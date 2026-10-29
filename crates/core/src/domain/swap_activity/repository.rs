@@ -61,6 +61,20 @@ pub trait SwapActivityLookup: Send + Sync {
         pool: Pubkey,
     ) -> RepositoryResult<Vec<PoolSwapBucket>>;
 
+    /// The pool's swaps over the tranches of `period`; `None` when it did not swap.
+    async fn find_pool_totals_in_tranches(
+        &self,
+        period: &TranchePeriod,
+        pool: Pubkey,
+    ) -> RepositoryResult<Option<SwapActivity>>;
+
+    /// The pool's swaps by tranche of `period`, 0 in a tranche without.
+    async fn list_pool_tranches(
+        &self,
+        period: &TranchePeriod,
+        pool: Pubkey,
+    ) -> RepositoryResult<Vec<PoolSwapBucket>>;
+
     async fn list_pool_daily(
         &self,
         period: &FrozenPeriod,

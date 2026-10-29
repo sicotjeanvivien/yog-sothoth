@@ -75,6 +75,20 @@ impl PeriodBounds for ReadPeriod {
     }
 }
 
+impl ReadPeriod {
+    /// Covered from `since` on, a frozen period from its first whole hour; before a measure starts,
+    /// covered from `as_of`, so nothing reads as covered.
+    pub(crate) fn measured_from(self, since: Option<DateTime<Utc>>) -> Self {
+        match self {
+            Self::Frozen(p) => Self::Frozen(measured_from(p, since.map(first_whole_hour))),
+            Self::Tranche(p) => Self::Tranche(TranchePeriod {
+                covered_since: since.map_or(p.as_of, |since| since.max(p.covered_since)),
+                ..p
+            }),
+        }
+    }
+}
+
 /// `window` moved `offset` back, read as [`ReadPeriod`]; `None` before the first freeze, or the
 /// first tranche for [`Window::Hour`].
 pub(crate) async fn build_read_period(

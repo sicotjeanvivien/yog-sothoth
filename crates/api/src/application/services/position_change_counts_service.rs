@@ -1,15 +1,17 @@
-//! The life cycle of a protocol's positions over a frozen period: the changes yog-analytic counted.
+//! The life cycle of a protocol's positions over a period: the changes yog-analytic counted, the
+//! last hour counted on the events themselves.
 
 use std::sync::Arc;
 
 use yog_core::{
     RepositoryResult,
     domain::{
-        PositionChangeCounts, PositionChangeCountsLookup, Protocol, ProtocolActivityLookup, Window,
+        PositionChangeCounts, PositionChangeCountsLookup, Protocol, ProtocolActivityLookup,
+        ProtocolBucket, Window,
     },
 };
 
-use super::period::{Measured, build_frozen_period};
+use super::period::{BucketPeriod, Measured, ReadPeriod, SeriesInterval, build_read_period};
 
 pub(crate) struct PositionChangeCountsService {
     hours: Arc<dyn ProtocolActivityLookup>,
@@ -29,15 +31,39 @@ impl PositionChangeCountsService {
         &self,
         window: Window,
         protocol: Protocol,
-    ) -> RepositoryResult<Measured<Vec<PositionChangeCounts>>> {
-        let period = build_frozen_period(self.hours.as_ref(), window, None).await?;
+    ) -> RepositoryResult<Measured<Vec<PositionChangeCounts>, ReadPeriod>> {
+        let period = build_read_period(self.hours.as_ref(), window, None).await?;
         let items = match &period {
-            Some(period) if period.is_covered() => self
-                .counts
-                .find_totals(period, protocol)
-                .await?
-                .into_iter()
-                .collect(),
+            Some(ReadPeriod::Frozen(p)) if p.is_covered() => {
+                self.counts.find_totals(p, protocol).await?
+            }
+            Some(ReadPeriod::Tranche(p)) if p.is_covered() => {
+                self.counts.find_totals_in_tranches(p, protocol).await?
+            }
+            _ => None,
+        };
+        Ok(Measured {
+            period,
+            items: items.into_iter().collect(),
+        })
+    }
+
+    /// `protocol`'s position changes of `window` by `interval`, from the facts' coverage.
+    pub(crate) async fn list_position_change_series(
+        &self,
+        window: Window,
+        interval: SeriesInterval,
+        protocol: Protocol,
+    ) -> RepositoryResult<Measured<Vec<ProtocolBucket<PositionChangeCounts>>, ReadPeriod>> {
+        let period = build_read_period(self.hours.as_ref(), window, None).await?;
+        let items = match (&period, interval.frozen_bucket()) {
+            (Some(ReadPeriod::Tranche(p)), None) => self.counts.list_tranches(p, protocol).await?,
+            (Some(ReadPeriod::Frozen(p)), Some(BucketPeriod::Hour)) => {
+                self.counts.list_hourly(p, protocol).await?
+            }
+            (Some(ReadPeriod::Frozen(p)), Some(BucketPeriod::Day)) => {
+                self.counts.list_daily(p, protocol).await?
+            }
             _ => Vec::new(),
         };
         Ok(Measured { period, items })

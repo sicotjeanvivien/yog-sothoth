@@ -59,14 +59,16 @@ pub(crate) use position_change_event::PositionChangeEventResponse;
 pub(crate) use position_fee_claim_event::PositionFeeClaimEventResponse;
 pub(crate) use problem::{PROBLEM_CONTENT_TYPE, ProblemDetailsResponse};
 pub(crate) use protocol_catalog::ProtocolCatalogResponse;
-pub(crate) use protocol_claim_totals::ProtocolClaimTotalsResponse;
+pub(crate) use protocol_claim_totals::{ProtocolClaimBucketResponse, ProtocolClaimTotalsResponse};
 pub(crate) use protocol_discovered_tvl::ProtocolDiscoveredTvlResponse;
 pub(crate) use protocol_fee_claim_event::ProtocolFeeClaimEventResponse;
 pub(crate) use protocol_liquidity_flows::ProtocolLiquidityFlowsResponse;
 pub(crate) use protocol_liquidity_flows_bucket::ProtocolLiquidityFlowsBucketResponse;
 pub(crate) use protocol_pool_creations::ProtocolPoolCreationsResponse;
 pub(crate) use protocol_pool_creations_bucket::ProtocolPoolCreationsBucketResponse;
-pub(crate) use protocol_position_change_totals::ProtocolPositionChangeTotalsResponse;
+pub(crate) use protocol_position_change_totals::{
+    ProtocolPositionChangeBucketResponse, ProtocolPositionChangeTotalsResponse,
+};
 pub(crate) use protocol_rotation_run_bucket::ProtocolRotationRunBucketResponse;
 pub(crate) use protocol_rotation_run_totals::ProtocolRotationRunTotalsResponse;
 pub(crate) use protocol_swap_activity::ProtocolSwapActivityResponse;

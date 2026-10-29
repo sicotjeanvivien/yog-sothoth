@@ -3324,6 +3324,26 @@
         ],
         "type": "object"
       },
+      "ProtocolClaimBucketResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ProtocolClaimTotalsResponse"
+          },
+          {
+            "properties": {
+              "from": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "from"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "A bucket of the series; `owners` is distinct over the bucket."
+      },
       "ProtocolClaimTotalsResponse": {
         "description": "The sum skips the claims not valued; `owners` is distinct over the window.",
         "properties": {
@@ -3501,6 +3521,25 @@
           "pools"
         ],
         "type": "object"
+      },
+      "ProtocolPositionChangeBucketResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ProtocolPositionChangeTotalsResponse"
+          },
+          {
+            "properties": {
+              "from": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "from"
+            ],
+            "type": "object"
+          }
+        ]
       },
       "ProtocolPositionChangeTotalsResponse": {
         "properties": {
@@ -5037,6 +5076,68 @@
         ],
         "type": "object"
       },
+      "WindowedResponse_ProtocolClaimBucketResponse": {
+        "description": "`from..asOf`, each `null` before any fact.",
+        "properties": {
+          "asOf": {
+            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "description": "Where the facts start.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ProtocolClaimTotalsResponse"
+                },
+                {
+                  "properties": {
+                    "from": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "from"
+                  ],
+                  "type": "object"
+                }
+              ],
+              "description": "A bucket of the series; `owners` is distinct over the bucket."
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
       "WindowedResponse_ProtocolClaimTotalsResponse": {
         "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
@@ -5406,6 +5507,67 @@
                 "pools"
               ],
               "type": "object"
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
+      "WindowedResponse_ProtocolPositionChangeBucketResponse": {
+        "description": "`from..asOf`, each `null` before any fact.",
+        "properties": {
+          "asOf": {
+            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "description": "Where the facts start.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ProtocolPositionChangeTotalsResponse"
+                },
+                {
+                  "properties": {
+                    "from": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "from"
+                  ],
+                  "type": "object"
+                }
+              ]
             },
             "type": "array"
           },
@@ -7471,7 +7633,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -7484,8 +7648,9 @@
             "name": "interval",
             "required": true,
             "schema": {
-              "description": "The step of a series of frozen hours: an hour, or 24 hours ending at `asOf`.",
+              "description": "The step of a series.",
               "enum": [
+                "5m",
                 "1h",
                 "1d"
               ],
@@ -7510,7 +7675,7 @@
                 }
               }
             },
-            "description": "The pool's swaps by `interval`: an hour, or 24 hours ending at `asOf`."
+            "description": "The pool's swaps by `interval`, under the rules of `/api/swaps/series`."
           },
           "default": {
             "content": {
@@ -7534,7 +7699,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -8041,7 +8208,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -8054,8 +8223,9 @@
             "name": "interval",
             "required": true,
             "schema": {
-              "description": "The step of a series of frozen hours: an hour, or 24 hours ending at `asOf`.",
+              "description": "The step of a series.",
               "enum": [
+                "5m",
                 "1h",
                 "1d"
               ],
@@ -8080,7 +8250,7 @@
                 }
               }
             },
-            "description": "The protocol's liquidity created, added and removed, by `interval`: an hour, or 24 hours ending at `asOf`."
+            "description": "The protocol's liquidity created, added and removed, by `interval`: 5 minutes over the last hour, an hour or 24 hours ending at `asOf` over the other windows."
           },
           "default": {
             "content": {
@@ -8104,7 +8274,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -8592,6 +8764,72 @@
         }
       }
     },
+    "/api/protocols/{protocol}/position-changes/series": {
+      "get": {
+        "operationId": "get_protocol_position_change_series",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "enum": [
+                "1h",
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "interval",
+            "required": true,
+            "schema": {
+              "description": "The step of a series.",
+              "enum": [
+                "5m",
+                "1h",
+                "1d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPositionChangeBucketResponse"
+                }
+              }
+            },
+            "description": "The positions the protocol opened, locked, split and closed by `interval`, from the facts' coverage."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/protocols/{protocol}/position-changes/totals": {
       "get": {
         "operationId": "get_protocol_position_change_totals",
@@ -8601,7 +8839,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -8715,6 +8955,72 @@
         }
       }
     },
+    "/api/protocols/{protocol}/position-fee-claims/series": {
+      "get": {
+        "operationId": "get_protocol_position_fee_claim_series",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "enum": [
+                "1h",
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "interval",
+            "required": true,
+            "schema": {
+              "description": "The step of a series.",
+              "enum": [
+                "5m",
+                "1h",
+                "1d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolClaimBucketResponse"
+                }
+              }
+            },
+            "description": "The fees the protocol's positions claimed by `interval`, valued, from the claims' coverage."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/protocols/{protocol}/position-fee-claims/totals": {
       "get": {
         "operationId": "get_protocol_position_fee_claim_totals",
@@ -8724,7 +9030,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -8984,6 +9292,72 @@
         }
       }
     },
+    "/api/protocols/{protocol}/reward-claims/series": {
+      "get": {
+        "operationId": "get_protocol_reward_claim_series",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "enum": [
+                "1h",
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "interval",
+            "required": true,
+            "schema": {
+              "description": "The step of a series.",
+              "enum": [
+                "5m",
+                "1h",
+                "1d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowedResponse_ProtocolClaimBucketResponse"
+                }
+              }
+            },
+            "description": "The rewards the protocol's positions claimed by `interval`, valued, from the claims' coverage."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/protocols/{protocol}/reward-claims/totals": {
       "get": {
         "operationId": "get_protocol_reward_claim_totals",
@@ -8993,7 +9367,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -9129,7 +9505,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -9142,8 +9520,9 @@
             "name": "interval",
             "required": true,
             "schema": {
-              "description": "The step of a series of frozen hours: an hour, or 24 hours ending at `asOf`.",
+              "description": "The step of a series.",
               "enum": [
+                "5m",
                 "1h",
                 "1d"
               ],
@@ -9168,7 +9547,7 @@
                 }
               }
             },
-            "description": "The protocol's volume by `interval`, an hour or 24 hours ending at `asOf`, split by its rotation runs."
+            "description": "The protocol's volume by `interval`, 5 minutes over the last hour, an hour or 24 hours ending at `asOf` over the other windows, split by its rotation runs."
           },
           "default": {
             "content": {

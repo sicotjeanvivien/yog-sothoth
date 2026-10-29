@@ -80,6 +80,31 @@ async fn a_series_is_cut_by_its_interval_only() {
     }
 }
 
+/// Mutation: a series refusing a step that does not fit its window in words of its own.
+#[tokio::test]
+async fn one_error_is_one_message_on_every_series() {
+    let pool = pk(1);
+    let mut details = Vec::new();
+    for path in [
+        "/api/swaps/series".to_owned(),
+        "/api/protocols/meteora_damm_v2/swaps/series".to_owned(),
+        format!("/api/pools/{pool}/swaps/series"),
+        "/api/pool-creations/series".to_owned(),
+        "/api/protocols/meteora_damm_v2/pool-creations/series".to_owned(),
+        "/api/protocols/meteora_damm_v2/liquidity-moves/series".to_owned(),
+        "/api/protocols/meteora_damm_v2/rotation-runs/series".to_owned(),
+        "/api/protocols/meteora_damm_v2/position-changes/series".to_owned(),
+        "/api/protocols/meteora_damm_v2/position-fee-claims/series".to_owned(),
+        "/api/protocols/meteora_damm_v2/reward-claims/series".to_owned(),
+    ] {
+        let (status, _, detail) = get(&format!("{path}?window=24h&interval=5m")).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}");
+        details.push(detail);
+    }
+    details.dedup();
+    assert_eq!(details.len(), 1, "{details:?}");
+}
+
 /// Mutation: the protocol of the path read as a free string, or a window outside its list
 /// taken — an unknown one answered empty.
 #[tokio::test]
@@ -105,12 +130,15 @@ async fn an_unknown_protocol_or_window_is_refused_in_problem_details() {
     }
 }
 
-/// Mutation: `1h` taken by a route that does not read the last hour, or a series cut at a step
-/// that does not fit its window — 5 minutes over a day, an hour over the last one, or no step.
+/// Mutation: `1h` taken by a route the data does not serve it on — the TVL, the pools discovered, a
+/// list — or a series cut at a step that does not fit its window: 5 minutes over a day, an hour
+/// over the last one, or no step.
 #[tokio::test]
 async fn the_last_hour_and_its_step_are_refused_where_they_do_not_fit() {
     for uri in [
-        "/api/protocols/meteora_damm_v2/liquidity-moves/totals?window=1h",
+        "/api/tvl/totals?window=1h",
+        "/api/protocols/meteora_damm_v2/pool-discoveries/totals?window=1h",
+        "/api/protocols/meteora_damm_v2/liquidity-moves?window=1h",
         "/api/protocols/meteora_damm_v2/liquidity-moves/series?window=1h&interval=1h",
         "/api/swaps/series?window=24h&interval=5m",
         "/api/swaps/series?window=1h&interval=1h",
@@ -130,9 +158,19 @@ async fn the_last_hour_and_its_step_are_refused_where_they_do_not_fit() {
         "/api/pool-creations/series?window=1h&interval=5m",
         "/api/swaps/by-token?window=1h",
         "/api/protocols/meteora_damm_v2/rotation-runs/totals?window=1h",
+        "/api/protocols/meteora_damm_v2/rotation-runs/series?window=1h&interval=5m",
+        "/api/protocols/meteora_damm_v2/liquidity-moves/totals?window=1h",
+        "/api/protocols/meteora_damm_v2/liquidity-moves/series?window=1h&interval=5m",
+        "/api/protocols/meteora_damm_v2/position-changes/totals?window=1h",
+        "/api/protocols/meteora_damm_v2/position-changes/series?window=1h&interval=5m",
+        "/api/protocols/meteora_damm_v2/position-fee-claims/totals?window=1h",
+        "/api/protocols/meteora_damm_v2/position-fee-claims/series?window=1h&interval=5m",
+        "/api/protocols/meteora_damm_v2/reward-claims/totals?window=1h",
+        "/api/protocols/meteora_damm_v2/reward-claims/series?window=7d&interval=1h",
+        "/api/protocols/meteora_damm_v2/position-changes/series?window=30d&interval=1d",
     ] {
-        let (status, _, _) = get(uri).await;
-        assert_eq!(status, StatusCode::OK, "{uri}");
+        let (status, _, body) = get(uri).await;
+        assert_eq!(status, StatusCode::OK, "{uri}: {body}");
     }
 }
 

@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT $4::TEXT AS \"protocol!\", t.bucket AS \"bucket_from!\",\n                   CASE WHEN v.bucket IS NULL THEN 0 ELSE v.volume_usd END AS volume_usd,\n                   CASE WHEN t.bucket >= $5 AND (v.bucket IS NULL OR v.volume_usd IS NOT NULL)\n                        THEN COALESCE(r.volume_usd, 0) END AS in_runs_usd\n              FROM generate_series(GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ),\n                                   $2::TIMESTAMPTZ - INTERVAL '5 minutes',\n                                   INTERVAL '5 minutes') AS t (bucket)\n              LEFT JOIN (\n                  SELECT bucket, SUM(volume_in_a_usd + volume_in_b_usd) AS volume_usd\n                    FROM analytic_pool_5min\n                   WHERE protocol = $4 AND bucket >= $1 AND bucket < $2\n                   GROUP BY bucket\n              ) v ON v.bucket = t.bucket\n              LEFT JOIN (\n                  SELECT f.bucket, SUM(f.volume_in_a_usd + f.volume_in_b_usd) AS volume_usd\n                    FROM analytic_rotation_runs run\n                   CROSS JOIN LATERAL (\n                       SELECT bucket, volume_in_a_usd, volume_in_b_usd\n                         FROM analytic_pool_5min\n                        WHERE pool_address = run.pool_address AND valued\n                          AND bucket >= GREATEST(run.started_at, $1::TIMESTAMPTZ)\n                          AND bucket < LEAST(run.ended_at, $2::TIMESTAMPTZ)\n                   ) f\n                   WHERE run.protocol = $4 AND run.started_at < $2 AND run.ended_at > $1\n                   GROUP BY f.bucket\n              ) r ON r.bucket = t.bucket\n             ORDER BY t.bucket\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "bucket_from!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "volume_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "in_runs_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "6620faa4ead34a92e9ebf39e86652cfc62e00724c6086e2fecc8e05a5ba43b3c"
+}

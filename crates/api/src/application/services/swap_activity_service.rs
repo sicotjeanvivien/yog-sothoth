@@ -194,35 +194,43 @@ impl SwapActivityService {
         &self,
         window: Window,
         pool: Pubkey,
-    ) -> RepositoryResult<Measured<Vec<SwapActivity>>> {
-        let period = build_frozen_period(self.hours.as_ref(), window, None).await?;
+    ) -> RepositoryResult<Measured<Vec<SwapActivity>, ReadPeriod>> {
+        let period = build_read_period(self.hours.as_ref(), window, None).await?;
         let items = match &period {
-            Some(period) if period.is_covered() => self
-                .swap_activity
-                .find_pool_totals(period, pool)
-                .await?
-                .into_iter()
-                .collect(),
-            _ => Vec::new(),
+            Some(ReadPeriod::Frozen(p)) if p.is_covered() => {
+                self.swap_activity.find_pool_totals(p, pool).await?
+            }
+            Some(ReadPeriod::Tranche(p)) if p.is_covered() => {
+                self.swap_activity
+                    .find_pool_totals_in_tranches(p, pool)
+                    .await?
+            }
+            _ => None,
         };
-        Ok(Measured { period, items })
+        Ok(Measured {
+            period,
+            items: items.into_iter().collect(),
+        })
     }
 
-    pub(crate) async fn list_pool_swap_buckets(
+    pub(crate) async fn list_pool_swap_series(
         &self,
         window: Window,
-        bucket: BucketPeriod,
+        interval: SeriesInterval,
         pool: Pubkey,
-    ) -> RepositoryResult<Measured<Vec<PoolSwapBucket>>> {
-        let period = build_frozen_period(self.hours.as_ref(), window, None).await?;
-        let items = match (&period, bucket) {
-            (Some(period), BucketPeriod::Hour) => {
-                self.swap_activity.list_pool_hourly(period, pool).await?
+    ) -> RepositoryResult<Measured<Vec<PoolSwapBucket>, ReadPeriod>> {
+        let period = build_read_period(self.hours.as_ref(), window, None).await?;
+        let items = match (&period, interval.frozen_bucket()) {
+            (Some(ReadPeriod::Tranche(p)), None) => {
+                self.swap_activity.list_pool_tranches(p, pool).await?
             }
-            (Some(period), BucketPeriod::Day) => {
-                self.swap_activity.list_pool_daily(period, pool).await?
+            (Some(ReadPeriod::Frozen(p)), Some(BucketPeriod::Hour)) => {
+                self.swap_activity.list_pool_hourly(p, pool).await?
             }
-            (None, _) => Vec::new(),
+            (Some(ReadPeriod::Frozen(p)), Some(BucketPeriod::Day)) => {
+                self.swap_activity.list_pool_daily(p, pool).await?
+            }
+            _ => Vec::new(),
         };
         Ok(Measured { period, items })
     }

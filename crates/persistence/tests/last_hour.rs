@@ -1,17 +1,20 @@
 //! The last hour under `yog_api`: the twelve tranches through the last one written, read from
-//! `analytic_pool_5min` and the creations themselves.
+//! each measure's facts — the pools' tranches, the moves, the claims, the creations and the
+//! position events themselves — and the new series of the frozen hours.
 
 use chrono::{DateTime, TimeDelta, TimeZone, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use sqlx::types::BigDecimal;
 use yog_core::domain::{
-    PoolCreationsLookup, Protocol, ProtocolActivityLookup, SwapActivityLookup, TokenActivityFeed,
-    TranchePeriod, Window,
+    ClaimKind, ClaimTotalsLookup, FrozenPeriod, LiquidityMoveLookup, PoolCreationsLookup,
+    PositionChangeCountsLookup, Protocol, ProtocolActivityLookup, RotationRunLookup,
+    SwapActivityLookup, TokenActivityFeed, TranchePeriod, Window,
 };
 use yog_persistence::{
-    PgPoolCreationsRepository, PgProtocolActivityRepository, PgSwapActivityRepository,
-    PgTokenActivityRepository,
+    PgClaimTotalsRepository, PgLiquidityMoveRepository, PgPoolCreationsRepository,
+    PgPositionChangeCountsRepository, PgProtocolActivityRepository, PgRotationRunRepository,
+    PgSwapActivityRepository, PgTokenActivityRepository,
 };
 
 use super::helpers::{pk, setup_roles_and_connect_as};
@@ -234,4 +237,354 @@ async fn the_last_hours_creations_are_its_own(pool: PgPool) {
     assert!(dlmm.is_empty());
     assert_eq!(bars.len(), 12);
     assert_eq!(bars.iter().map(|b| b.value.pools).sum::<i64>(), 2);
+}
+
+/// A tranche held two hours back: the last hour has a coverage to read from.
+async fn hold_a_tranche(pool: &PgPool) {
+    let held = pk(9).to_string();
+    seed_pool(pool, &held, &pk(10).to_string(), &pk(11).to_string()).await;
+    tranche(pool, &held, minutes_before(120), 1, Some(1)).await;
+}
+
+async fn api(pool: &PgPool) -> PgPool {
+    setup_roles_and_connect_as(pool, "yog_api").await
+}
+
+async fn liquidity_move(
+    pool: &PgPool,
+    sig: &str,
+    at: DateTime<Utc>,
+    owner: u8,
+    kind: &str,
+    usd: Option<i64>,
+) {
+    sqlx::query(
+        "INSERT INTO analytic_liquidity_moves
+           (signature, event_index, timestamp, bucket, pool_address, protocol, owner, kind,
+            amount_usd)
+         VALUES ($1, 0, $2, time_bucket('5 minutes', $2), 'pool', 'meteora_damm_v2', $3, $4, $5)",
+    )
+    .bind(sig)
+    .bind(at)
+    .bind(pk(owner).to_string())
+    .bind(kind)
+    .bind(usd.map(BigDecimal::from))
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// Against the moves' hour cut at 11 or 13 tranches, or their owners counted per move: the move
+/// just before the hour and the one at its end stay out, an owner of two moves counts once.
+#[sqlx::test(migrations = "./migrations")]
+async fn the_last_hours_moves_are_its_own_and_their_owners_distinct(pool: PgPool) {
+    write_tranches(&pool).await;
+    hold_a_tranche(&pool).await;
+    liquidity_move(&pool, "before", minutes_before(65), 1, "add", Some(1000)).await;
+    liquidity_move(&pool, "first", minutes_before(60), 1, "add", Some(10)).await;
+    liquidity_move(&pool, "mid", minutes_before(30), 1, "create", Some(5)).await;
+    liquidity_move(&pool, "unvalued", minutes_before(10), 2, "remove", None).await;
+    liquidity_move(&pool, "after", through(), 3, "add", Some(1000)).await;
+
+    let period = last_hour(&pool).await;
+    let repo = PgLiquidityMoveRepository::new(api(&pool).await);
+    let totals = repo
+        .find_totals_in_tranches(&period, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+    let bars = repo
+        .list_tranches(&period, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        (
+            totals.flows.added_usd,
+            totals.flows.created_usd,
+            totals.flows.removed_usd
+        ),
+        (Decimal::from(10), Decimal::from(5), Decimal::ZERO)
+    );
+    assert_eq!(
+        (totals.flows.moves, totals.flows.moves_valued, totals.owners),
+        (3, 2, 2)
+    );
+    assert_eq!(bars.len(), 12);
+    assert_eq!(bars[0].value.added_usd, Decimal::from(10));
+    assert_eq!(bars[6].value.created_usd, Decimal::from(5));
+    assert_eq!(bars.iter().map(|b| b.value.moves).sum::<i64>(), 3);
+}
+
+async fn claim(
+    pool: &PgPool,
+    kind: ClaimKind,
+    sig: &str,
+    at: DateTime<Utc>,
+    owner: u8,
+    usd: Option<i64>,
+) {
+    let sql = match kind {
+        ClaimKind::Reward => {
+            "INSERT INTO analytic_reward_claims (signature, event_index, timestamp, bucket,
+               pool_address, protocol, owner, amount_usd, mint_reward)
+             VALUES ($1, 0, $2, time_bucket('5 minutes', $2), 'pool', 'meteora_damm_v2', $3, $4, 'mint')"
+        }
+        ClaimKind::PositionFee => {
+            "INSERT INTO analytic_position_fee_claims (signature, event_index, timestamp, bucket,
+               pool_address, protocol, owner, amount_usd)
+             VALUES ($1, 0, $2, time_bucket('5 minutes', $2), 'pool', 'meteora_damm_v2', $3, $4)"
+        }
+    };
+    sqlx::query(sql)
+        .bind(sig)
+        .bind(at)
+        .bind(pk(owner).to_string())
+        .bind(usd.map(BigDecimal::from))
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+fn frozen(from: DateTime<Utc>, as_of: DateTime<Utc>, covered_since: DateTime<Utc>) -> FrozenPeriod {
+    FrozenPeriod {
+        from,
+        as_of,
+        covered_since,
+    }
+}
+
+/// Against the claims' kinds crossed, their hour cut at 11 or 13 tranches, or a bucket summed
+/// partial before the coverage: each series and total reads its own claims within its bounds.
+#[sqlx::test(migrations = "./migrations")]
+async fn the_claims_are_read_by_tranche_by_hour_and_by_day(pool: PgPool) {
+    write_tranches(&pool).await;
+    hold_a_tranche(&pool).await;
+    claim(
+        &pool,
+        ClaimKind::PositionFee,
+        "a",
+        minutes_before(65),
+        1,
+        Some(1),
+    )
+    .await;
+    claim(
+        &pool,
+        ClaimKind::PositionFee,
+        "b",
+        minutes_before(55),
+        1,
+        Some(3),
+    )
+    .await;
+    claim(
+        &pool,
+        ClaimKind::PositionFee,
+        "c",
+        minutes_before(20),
+        1,
+        None,
+    )
+    .await;
+    claim(&pool, ClaimKind::PositionFee, "d", through(), 2, Some(1000)).await;
+    claim(
+        &pool,
+        ClaimKind::Reward,
+        "r",
+        minutes_before(40),
+        3,
+        Some(7),
+    )
+    .await;
+
+    let period = last_hour(&pool).await;
+    let repo = PgClaimTotalsRepository::new(api(&pool).await);
+    let damm = Protocol::MeteoraDammV2;
+    let fees = repo
+        .find_totals_in_tranches(ClaimKind::PositionFee, &period, damm)
+        .await
+        .unwrap();
+    let rewards = repo
+        .find_totals_in_tranches(ClaimKind::Reward, &period, damm)
+        .await
+        .unwrap();
+    let bars = repo
+        .list_tranches(ClaimKind::PositionFee, &period, damm)
+        .await
+        .unwrap();
+    let noon = Utc.with_ymd_and_hms(2026, 10, 20, 12, 0, 0).unwrap();
+    let hours = repo
+        .list_hourly(
+            ClaimKind::PositionFee,
+            &frozen(noon - TimeDelta::hours(3), noon, noon - TimeDelta::hours(3)),
+            damm,
+        )
+        .await
+        .unwrap();
+    let day = |covered| frozen(noon - TimeDelta::days(7), noon, covered);
+    let whole = repo
+        .list_daily(
+            ClaimKind::PositionFee,
+            &day(noon - TimeDelta::days(1)),
+            damm,
+        )
+        .await
+        .unwrap();
+    let partial = repo
+        .list_daily(
+            ClaimKind::PositionFee,
+            &day(noon - TimeDelta::hours(23)),
+            damm,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!((fees.claims, fees.claims_valued, fees.owners), (2, 1, 1));
+    assert_eq!(fees.amount_usd, Decimal::from(3));
+    assert_eq!((rewards.claims, rewards.amount_usd), (1, Decimal::from(7)));
+    assert_eq!(bars.len(), 12);
+    assert_eq!(bars.iter().map(|b| b.value.claims).sum::<i64>(), 2);
+    assert_eq!(hours.len(), 3);
+    assert_eq!((hours[2].value.claims, hours[2].value.owners), (3, 1));
+    assert_eq!(whole.len(), 1);
+    assert_eq!(whole[0].value.claims, 3);
+    assert!(partial.is_empty());
+}
+
+/// A position opened, or closed, at `at`.
+async fn position_event(pool: &PgPool, opened: bool, sig: &str, at: DateTime<Utc>) {
+    let sql = if opened {
+        "INSERT INTO meteora_damm_v2_create_position_events
+           (pool_address, signature, owner, position, position_nft_mint, timestamp, slot,
+            event_index)
+         VALUES ('x', $1, 'x', 'x', 'x', $2, 0, 0)"
+    } else {
+        "INSERT INTO meteora_damm_v2_close_position_events
+           (pool_address, signature, owner, position, position_nft_mint, timestamp, slot,
+            event_index)
+         VALUES ('x', $1, 'x', 'x', 'x', $2, 0, 0)"
+    };
+    sqlx::query(sql)
+        .bind(sig)
+        .bind(at)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+/// Against the hour's changes counted outside it, or a frozen bucket without any hour written read
+/// as 0: the last hour counts its events, the hours their own rows only.
+#[sqlx::test(migrations = "./migrations")]
+async fn the_position_changes_are_counted_by_tranche_and_by_hour(pool: PgPool) {
+    write_tranches(&pool).await;
+    hold_a_tranche(&pool).await;
+    position_event(&pool, true, "before", minutes_before(65)).await;
+    position_event(&pool, true, "in", minutes_before(50)).await;
+    position_event(&pool, false, "out", minutes_before(10)).await;
+    position_event(&pool, true, "after", through()).await;
+    sqlx::query(
+        "INSERT INTO analytic_protocol_position_changes_hourly
+           (protocol, bucket, opened, vesting_locks, permanent_locks, splits, closed)
+         VALUES ('meteora_damm_v2', $1, 2, 0, 0, 0, 1), ('meteora_damm_v2', $2, 3, 0, 0, 0, 0)",
+    )
+    .bind(Utc.with_ymd_and_hms(2026, 10, 20, 10, 0, 0).unwrap())
+    .bind(Utc.with_ymd_and_hms(2026, 10, 20, 11, 0, 0).unwrap())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let period = last_hour(&pool).await;
+    let repo = PgPositionChangeCountsRepository::new(api(&pool).await);
+    let totals = repo
+        .find_totals_in_tranches(&period, Protocol::MeteoraDammV2)
+        .await
+        .unwrap()
+        .unwrap();
+    let bars = repo
+        .list_tranches(&period, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+    let noon = Utc.with_ymd_and_hms(2026, 10, 20, 12, 0, 0).unwrap();
+    let three = noon - TimeDelta::hours(3);
+    let hours = repo
+        .list_hourly(&frozen(three, noon, three), Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+
+    assert_eq!((totals.opened, totals.closed), (1, 1));
+    assert_eq!(bars.len(), 12);
+    assert_eq!(hours.len(), 2);
+    assert_eq!((hours[0].value.opened, hours[1].value.opened), (2, 3));
+}
+
+/// Against a pool's hour cut at 11 or 13 tranches: its swaps of the hour, and nothing for a pool
+/// that never swapped.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_pools_last_hour_is_its_twelve_tranches(pool: PgPool) {
+    write_tranches(&pool).await;
+    let x = pk(1).to_string();
+    seed_pool(&pool, &x, &pk(10).to_string(), &pk(11).to_string()).await;
+    tranche(&pool, &x, minutes_before(65), 100, Some(100)).await;
+    tranche(&pool, &x, minutes_before(60), 1, Some(10)).await;
+    tranche(&pool, &x, minutes_before(5), 2, Some(20)).await;
+    tranche(&pool, &x, through(), 100, Some(100)).await;
+
+    let period = last_hour(&pool).await;
+    let repo = PgSwapActivityRepository::new(api(&pool).await);
+    let totals = repo
+        .find_pool_totals_in_tranches(&period, pk(1))
+        .await
+        .unwrap()
+        .unwrap();
+    let bars = repo.list_pool_tranches(&period, pk(1)).await.unwrap();
+    let never = repo
+        .find_pool_totals_in_tranches(&period, pk(3))
+        .await
+        .unwrap();
+
+    assert_eq!(totals.swaps, 3);
+    assert_eq!(totals.volume_usd, Some(Decimal::from(30)));
+    assert_eq!(bars.len(), 12);
+    assert_eq!((bars[0].activity.swaps, bars[11].activity.swaps), (1, 2));
+    assert!(never.is_none());
+}
+
+/// Against a run's bounds read inclusive at its end, or another pool's tranches counted in it:
+/// a tranche is in a run from its start to its end, of its own pool only.
+#[sqlx::test(migrations = "./migrations")]
+async fn the_last_hours_volume_is_split_by_the_runs_tranche_by_tranche(pool: PgPool) {
+    write_tranches(&pool).await;
+    let (x, y) = (pk(1).to_string(), pk(2).to_string());
+    seed_pool(&pool, &x, &pk(10).to_string(), &pk(11).to_string()).await;
+    seed_pool(&pool, &y, &pk(10).to_string(), &pk(12).to_string()).await;
+    for minutes in [60, 55, 50, 45] {
+        tranche(&pool, &x, minutes_before(minutes), 1, Some(10)).await;
+    }
+    tranche(&pool, &y, minutes_before(55), 1, Some(5)).await;
+    sqlx::query(
+        "INSERT INTO analytic_rotation_runs (pool_address, started_at, protocol, ended_at,
+           volume_usd, first_hour_volume_usd, extinct, settled)
+         VALUES ($1, $2, 'meteora_damm_v2', $3, 20, 20, false, false)",
+    )
+    .bind(&x)
+    .bind(minutes_before(55))
+    .bind(minutes_before(45))
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let period = last_hour(&pool).await;
+    let repo = PgRotationRunRepository::new(api(&pool).await);
+    let bars = repo
+        .list_tranches(&period, Some(minutes_before(120)), Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+    let split = |i: usize| (bars[i].value.volume_usd, bars[i].value.in_runs_usd);
+
+    assert_eq!(bars.len(), 12);
+    assert_eq!(split(0), (Some(Decimal::from(10)), Some(Decimal::ZERO)));
+    assert_eq!(split(1), (Some(Decimal::from(15)), Some(Decimal::from(10))));
+    assert_eq!(split(2), (Some(Decimal::from(10)), Some(Decimal::from(10))));
+    assert_eq!(split(3), (Some(Decimal::from(10)), Some(Decimal::ZERO)));
+    assert_eq!(split(4), (Some(Decimal::ZERO), Some(Decimal::ZERO)));
 }

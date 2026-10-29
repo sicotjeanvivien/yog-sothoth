@@ -16,7 +16,7 @@ use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
         Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementKind, AnnouncementLookup,
-        AnnouncementSeverity, AnnouncementStatus, ClaimTotals, ClaimTotalsLookup,
+        AnnouncementSeverity, AnnouncementStatus, ClaimKind, ClaimTotals, ClaimTotalsLookup,
         DiscoveredTvlLookup, EventCursor, EventFreshnessRepository, EventScope, FrozenHours,
         FrozenPeriod, LiquidityChangeEvent, LiquidityChangeEventLookup, LiquidityFlows,
         LiquidityMove, LiquidityMoveCursor, LiquidityMoveList, LiquidityMoveLookup,
@@ -392,6 +392,14 @@ impl MockProtocolActivityRepo {
     pub(crate) fn with_tranches(tranches: WrittenTranches) -> Self {
         Self {
             frozen: None,
+            tranches: Some(tranches),
+        }
+    }
+
+    /// Frozen hours and written tranches both: the frozen windows and the last hour.
+    pub(crate) fn with_hours_and_tranches(frozen: FrozenHours, tranches: WrittenTranches) -> Self {
+        Self {
+            frozen: Some(frozen),
             tranches: Some(tranches),
         }
     }
@@ -850,6 +858,24 @@ impl SwapActivityLookup for MockSwapActivityRepo {
         self.record("pool_swap_daily", period, None);
         Ok(vec![])
     }
+    async fn find_pool_totals_in_tranches(
+        &self,
+        period: &TranchePeriod,
+        _: Pubkey,
+    ) -> RepositoryResult<Option<SwapActivity>> {
+        let read = ("pool_swap_totals", *period, None);
+        self.tranche_reads.lock().unwrap().push(read);
+        Ok(None)
+    }
+    async fn list_pool_tranches(
+        &self,
+        period: &TranchePeriod,
+        _: Pubkey,
+    ) -> RepositoryResult<Vec<PoolSwapBucket>> {
+        let read = ("pool_swap_tranches", *period, None);
+        self.tranche_reads.lock().unwrap().push(read);
+        Ok(vec![])
+    }
 }
 
 /// A `PoolCreationsLookup` that answers nothing.
@@ -899,6 +925,8 @@ impl PoolCreationsLookup for MockPoolCreationsRepo {
 #[derive(Default)]
 pub(crate) struct MockPositionChangeCountsRepo {
     pub(crate) reads: Mutex<Vec<FrozenPeriod>>,
+    pub(crate) series_reads: Mutex<Vec<&'static str>>,
+    pub(crate) tranche_reads: Mutex<Vec<TranchePeriod>>,
 }
 
 #[async_trait]
@@ -917,6 +945,39 @@ impl PositionChangeCountsLookup for MockPositionChangeCountsRepo {
             closed: 0,
         }))
     }
+    async fn find_totals_in_tranches(
+        &self,
+        period: &TranchePeriod,
+        _: Protocol,
+    ) -> RepositoryResult<Option<PositionChangeCounts>> {
+        self.tranche_reads.lock().unwrap().push(*period);
+        Ok(None)
+    }
+    async fn list_hourly(
+        &self,
+        _: &FrozenPeriod,
+        _: Protocol,
+    ) -> RepositoryResult<Vec<ProtocolBucket<PositionChangeCounts>>> {
+        self.series_reads.lock().unwrap().push("position_hourly");
+        Ok(vec![])
+    }
+    async fn list_daily(
+        &self,
+        _: &FrozenPeriod,
+        _: Protocol,
+    ) -> RepositoryResult<Vec<ProtocolBucket<PositionChangeCounts>>> {
+        self.series_reads.lock().unwrap().push("position_daily");
+        Ok(vec![])
+    }
+    async fn list_tranches(
+        &self,
+        period: &TranchePeriod,
+        _: Protocol,
+    ) -> RepositoryResult<Vec<ProtocolBucket<PositionChangeCounts>>> {
+        self.series_reads.lock().unwrap().push("position_tranches");
+        self.tranche_reads.lock().unwrap().push(*period);
+        Ok(vec![])
+    }
 }
 
 /// A `ClaimTotalsLookup` measured from `since`, answering zero claims, which records the period
@@ -925,6 +986,7 @@ impl PositionChangeCountsLookup for MockPositionChangeCountsRepo {
 pub(crate) struct MockClaimTotalsRepo {
     pub(crate) since: Option<DateTime<Utc>>,
     pub(crate) reads: Mutex<Vec<PeriodRead>>,
+    pub(crate) tranche_reads: Mutex<Vec<(&'static str, ClaimKind, TranchePeriod)>>,
 }
 
 impl MockClaimTotalsRepo {
@@ -961,6 +1023,63 @@ impl ClaimTotalsLookup for MockClaimTotalsRepo {
     ) -> RepositoryResult<ClaimTotals> {
         Ok(self.totals("reward_claim_totals", period, protocol))
     }
+    async fn find_totals_in_tranches(
+        &self,
+        kind: ClaimKind,
+        period: &TranchePeriod,
+        _: Protocol,
+    ) -> RepositoryResult<ClaimTotals> {
+        let read = ("claim_totals", kind, *period);
+        self.tranche_reads.lock().unwrap().push(read);
+        Ok(ClaimTotals {
+            claims: 0,
+            claims_valued: 0,
+            amount_usd: rust_decimal::Decimal::ZERO,
+            owners: 0,
+        })
+    }
+    async fn list_hourly(
+        &self,
+        kind: ClaimKind,
+        period: &FrozenPeriod,
+        protocol: Protocol,
+    ) -> RepositoryResult<Vec<ProtocolBucket<ClaimTotals>>> {
+        let name = match kind {
+            ClaimKind::PositionFee => "position_fee_claim_hourly",
+            ClaimKind::Reward => "reward_claim_hourly",
+        };
+        self.reads
+            .lock()
+            .unwrap()
+            .push((name, *period, Some(protocol)));
+        Ok(vec![])
+    }
+    async fn list_daily(
+        &self,
+        kind: ClaimKind,
+        period: &FrozenPeriod,
+        protocol: Protocol,
+    ) -> RepositoryResult<Vec<ProtocolBucket<ClaimTotals>>> {
+        let name = match kind {
+            ClaimKind::PositionFee => "position_fee_claim_daily",
+            ClaimKind::Reward => "reward_claim_daily",
+        };
+        self.reads
+            .lock()
+            .unwrap()
+            .push((name, *period, Some(protocol)));
+        Ok(vec![])
+    }
+    async fn list_tranches(
+        &self,
+        kind: ClaimKind,
+        period: &TranchePeriod,
+        _: Protocol,
+    ) -> RepositoryResult<Vec<ProtocolBucket<ClaimTotals>>> {
+        let read = ("claim_tranches", kind, *period);
+        self.tranche_reads.lock().unwrap().push(read);
+        Ok(vec![])
+    }
 }
 
 /// A `LiquidityMoveLookup` measured from `since`, answering nothing, which records the period
@@ -969,6 +1088,7 @@ impl ClaimTotalsLookup for MockClaimTotalsRepo {
 pub(crate) struct MockLiquidityMoveRepo {
     pub(crate) since: Option<DateTime<Utc>>,
     pub(crate) reads: Mutex<Vec<PeriodRead>>,
+    pub(crate) tranche_reads: Mutex<Vec<(&'static str, TranchePeriod)>>,
 }
 
 impl MockLiquidityMoveRepo {
@@ -1004,6 +1124,37 @@ impl LiquidityMoveLookup for MockLiquidityMoveRepo {
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<LiquidityFlows>>> {
         self.record("liquidity_daily", period, Some(protocol));
+        Ok(vec![])
+    }
+    async fn find_totals_in_tranches(
+        &self,
+        period: &TranchePeriod,
+        _: Protocol,
+    ) -> RepositoryResult<LiquidityTotals> {
+        self.tranche_reads
+            .lock()
+            .unwrap()
+            .push(("liquidity_totals", *period));
+        Ok(LiquidityTotals {
+            flows: LiquidityFlows {
+                created_usd: rust_decimal::Decimal::ZERO,
+                added_usd: rust_decimal::Decimal::ZERO,
+                removed_usd: rust_decimal::Decimal::ZERO,
+                moves: 0,
+                moves_valued: 0,
+            },
+            owners: 0,
+        })
+    }
+    async fn list_tranches(
+        &self,
+        period: &TranchePeriod,
+        _: Protocol,
+    ) -> RepositoryResult<Vec<ProtocolBucket<LiquidityFlows>>> {
+        self.tranche_reads
+            .lock()
+            .unwrap()
+            .push(("liquidity_tranches", *period));
         Ok(vec![])
     }
     async fn list_moves(
@@ -1284,6 +1435,7 @@ pub(crate) struct MockRotationRunRepo {
     pub(crate) measured_since: Option<DateTime<Utc>>,
     pub(crate) lists: Mutex<Vec<(RotationRunScope, TranchePeriod)>>,
     pub(crate) splits_since: Mutex<Vec<Option<DateTime<Utc>>>>,
+    pub(crate) tranche_splits: Mutex<Vec<(TranchePeriod, Option<DateTime<Utc>>)>>,
 }
 
 #[async_trait]
@@ -1342,6 +1494,18 @@ impl RotationRunLookup for MockRotationRunRepo {
         _: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<RunSplit>>> {
         self.splits_since.lock().unwrap().push(runs_since);
+        Ok(Vec::new())
+    }
+    async fn list_tranches(
+        &self,
+        period: &TranchePeriod,
+        runs_since: Option<DateTime<Utc>>,
+        _: Protocol,
+    ) -> RepositoryResult<Vec<ProtocolBucket<RunSplit>>> {
+        self.tranche_splits
+            .lock()
+            .unwrap()
+            .push((*period, runs_since));
         Ok(Vec::new())
     }
 }

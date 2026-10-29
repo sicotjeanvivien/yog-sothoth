@@ -1,16 +1,17 @@
-//! The claims of positions' fees and rewards over a frozen period, valued by yog-analytic: a
-//! protocol's totals. Their coverage starts at the first whole hour their writer valued.
+//! The claims of positions' fees and rewards valued by yog-analytic: a protocol's totals and series
+//! over a period. Their coverage starts at the first tranche their writer valued.
 
 use std::sync::Arc;
 
 use yog_core::{
     RepositoryResult,
     domain::{
-        ClaimTotals, ClaimTotalsLookup, FrozenPeriod, Protocol, ProtocolActivityLookup, Window,
+        ClaimKind, ClaimTotals, ClaimTotalsLookup, Protocol, ProtocolActivityLookup,
+        ProtocolBucket, Window,
     },
 };
 
-use super::period::{Measured, build_frozen_period, first_whole_hour, measured_from};
+use super::period::{BucketPeriod, Measured, ReadPeriod, SeriesInterval, build_read_period};
 
 pub(crate) struct ClaimTotalsService {
     hours: Arc<dyn ProtocolActivityLookup>,
@@ -25,63 +26,69 @@ impl ClaimTotalsService {
         Self { hours, claims }
     }
 
-    /// The frozen period of `protocol`'s claims, covered from the first whole hour valued.
+    /// The period of `protocol`'s claims over `window`, covered from the first tranche valued.
     async fn build_claims_period(
         &self,
         window: Window,
         protocol: Protocol,
-    ) -> RepositoryResult<Option<FrozenPeriod>> {
-        let Some(period) = build_frozen_period(self.hours.as_ref(), window, None).await? else {
+    ) -> RepositoryResult<Option<ReadPeriod>> {
+        let Some(period) = build_read_period(self.hours.as_ref(), window, None).await? else {
             return Ok(None);
         };
-        let since = self
-            .claims
-            .find_measured_since(protocol)
-            .await?
-            .map(first_whole_hour);
-        Ok(Some(measured_from(period, since)))
+        let since = self.claims.find_measured_since(protocol).await?;
+        Ok(Some(period.measured_from(since)))
     }
 
-    /// `protocol`'s fees claimed over `window`; no row while the claims do not cover it whole.
-    pub(crate) async fn get_position_fee_claim_totals(
+    /// `protocol`'s `kind` claims over `window`; no row while the claims do not cover it whole.
+    pub(crate) async fn get_claim_totals(
         &self,
+        kind: ClaimKind,
         window: Window,
         protocol: Protocol,
-    ) -> RepositoryResult<Measured<Vec<ClaimTotals>>> {
+    ) -> RepositoryResult<Measured<Vec<ClaimTotals>, ReadPeriod>> {
         let period = self.build_claims_period(window, protocol).await?;
-        let items = match covered(period.as_ref()) {
-            Some(period) => vec![
+        let items = match &period {
+            Some(ReadPeriod::Frozen(p)) if p.is_covered() => vec![match kind {
+                ClaimKind::PositionFee => {
+                    self.claims
+                        .find_position_fee_claim_totals(p, protocol)
+                        .await?
+                }
+                ClaimKind::Reward => self.claims.find_reward_claim_totals(p, protocol).await?,
+            }],
+            Some(ReadPeriod::Tranche(p)) if p.is_covered() => vec![
                 self.claims
-                    .find_position_fee_claim_totals(period, protocol)
+                    .find_totals_in_tranches(kind, p, protocol)
                     .await?,
             ],
-            None => Vec::new(),
+            _ => Vec::new(),
         };
         Ok(Measured { period, items })
     }
 
-    /// `protocol`'s rewards claimed over `window`; no row while the claims do not cover it whole.
-    pub(crate) async fn get_reward_claim_totals(
+    /// `protocol`'s `kind` claims of `window` by `interval`, from their coverage.
+    pub(crate) async fn list_claim_series(
         &self,
+        kind: ClaimKind,
         window: Window,
+        interval: SeriesInterval,
         protocol: Protocol,
-    ) -> RepositoryResult<Measured<Vec<ClaimTotals>>> {
+    ) -> RepositoryResult<Measured<Vec<ProtocolBucket<ClaimTotals>>, ReadPeriod>> {
         let period = self.build_claims_period(window, protocol).await?;
-        let items = match covered(period.as_ref()) {
-            Some(period) => vec![
-                self.claims
-                    .find_reward_claim_totals(period, protocol)
-                    .await?,
-            ],
-            None => Vec::new(),
+        let items = match (&period, interval.frozen_bucket()) {
+            (Some(ReadPeriod::Tranche(p)), None) => {
+                self.claims.list_tranches(kind, p, protocol).await?
+            }
+            (Some(ReadPeriod::Frozen(p)), Some(BucketPeriod::Hour)) => {
+                self.claims.list_hourly(kind, p, protocol).await?
+            }
+            (Some(ReadPeriod::Frozen(p)), Some(BucketPeriod::Day)) => {
+                self.claims.list_daily(kind, p, protocol).await?
+            }
+            _ => Vec::new(),
         };
         Ok(Measured { period, items })
     }
-}
-
-/// The period, if the claims cover it whole.
-fn covered(period: Option<&FrozenPeriod>) -> Option<&FrozenPeriod> {
-    period.filter(|period| period.is_covered())
 }
 
 #[cfg(test)]

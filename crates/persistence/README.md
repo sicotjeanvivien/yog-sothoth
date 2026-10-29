@@ -615,9 +615,14 @@ tokens are read with the hour of their ranking in one statement, which a freeze
 cannot split.
 `repositories/protocol_activity.rs` reads the frozen hours every measure is read over, and
 `token_activity.rs` the tokens; `tests/overview_periods.rs` and `tests/protocol_activity.rs`
-hold the rules. The last hour has no aggregate: its swaps, tokens and distinct pools are read
-from the twelve rows of `analytic_pool_5min` through the last tranche written (047 opens it to
-`yog_api`), its births from the raw `initialize_pool` events; `tests/last_hour.rs` holds them. 030
+hold the rules. The last hour has no aggregate: through the last tranche written, its swaps,
+tokens, distinct pools and rotation-run split are read from `analytic_pool_5min` (047 opens it
+to `yog_api`), its moves and claims from their facts by `timestamp`, its births from the raw
+`initialize_pool` events, its position changes from the raw position events through
+`meteora_damm_v2_position_changes_every` (048), which counts them by any step — the hour
+yog-analytic writes calls it at an hour. `tests/last_hour.rs` holds them, and the new series of
+the frozen hours (claims summed by bucket of their facts, position changes by bucket of their
+hours, a bucket without any hour written left out). 030
 deletes the protocol TVL of the hours before the first complete one, so its first
 row is the floor a TVL variation starts from; 034 deletes the whole series measured
 before a side without a price counted 0, which the past reserves it lacks could not

@@ -5,11 +5,16 @@ use std::sync::Arc;
 
 use chrono::{DateTime, TimeDelta, Utc};
 use rust_decimal::Decimal;
-use yog_core::domain::{Protocol, RotationRunCursor, RotationRunOrder, RotationRunScope, Window};
+use yog_core::domain::{
+    Protocol, RUN_GAP, RotationRunCursor, RotationRunOrder, RotationRunScope, Window,
+    WrittenTranches,
+};
 
 use super::{RotationRunService, RotationRunsError};
-use crate::application::BucketPeriod;
-use crate::testing::{MockRotationRunRepo, at_october, frozen_hours_repo, make_frozen_hours};
+use crate::application::services::period::{BucketPeriod, SeriesInterval};
+use crate::testing::{
+    MockProtocolActivityRepo, MockRotationRunRepo, at_october, frozen_hours_repo, make_frozen_hours,
+};
 
 fn service(repo: &Arc<MockRotationRunRepo>) -> RotationRunService {
     RotationRunService::new(frozen_hours_repo(Some(make_frozen_hours())), repo.clone())
@@ -174,4 +179,32 @@ async fn the_bars_split_from_the_first_whole_hour_measured() {
         *on_the_hour.splits_since.lock().unwrap(),
         [Some(at_october(19, 10))]
     );
+}
+
+/// Mutation: the last hour's bars split from the first tranche measured rather than a gap after
+/// it — a run drawn sooner, maybe begun unmeasured, counted.
+#[tokio::test]
+async fn the_last_hour_is_split_by_tranche_a_gap_after_the_runs_were_measured() {
+    let since = at_october(20, 11);
+    let repo = Arc::new(MockRotationRunRepo {
+        measured_since: Some(since),
+        ..MockRotationRunRepo::default()
+    });
+    let hours = MockProtocolActivityRepo::with_tranches(WrittenTranches {
+        first: at_october(13, 13),
+        through: at_october(20, 12) + chrono::TimeDelta::minutes(40),
+    });
+    let svc = RotationRunService::new(Arc::new(hours), repo.clone());
+
+    svc.list_series(
+        Window::Hour,
+        SeriesInterval::FiveMinutes,
+        Protocol::MeteoraDammV2,
+    )
+    .await
+    .unwrap();
+
+    let reads = repo.tranche_splits.lock().unwrap();
+    assert_eq!(reads.len(), 1);
+    assert_eq!(reads[0].1, Some(since + RUN_GAP));
 }

@@ -12,3 +12,10 @@ pub struct ClaimTotals {
     /// Distinct over the period: it does not add up across periods.
     pub owners: i64,
 }
+
+/// Which claims: a position's fees, or its rewards.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClaimKind {
+    PositionFee,
+    Reward,
+}

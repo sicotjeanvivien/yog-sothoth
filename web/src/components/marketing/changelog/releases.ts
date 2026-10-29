@@ -51,6 +51,10 @@ export const RELEASES: readonly Release[] = [
             text: "Removed: every …/hourly and …/daily route. A series is now …/series?interval=, the same rows by bucket — 1h an hour, 1d the 24 hours ending at asOf — on the swaps (root, protocol, pool), the pool creations, the liquidity moves and the rotation runs; the TVL's readings are …/tvl/series?interval=1h.",
             technical: false,
           },
+          {
+            text: "Every measure is read in …/totals and …/series over window=1h|24h|7d|30d, interval=5m over 1h only: the swaps of a pool, the liquidity moves, the rotation runs, the position changes and both claims join the swaps and the pool creations; position-changes, position-fee-claims and reward-claims gain their series. The TVL (read once an hour) and the pools discovered (measured over a day, a week and a month) are the two exceptions. The same error gives the same 400 message on every route.",
+            technical: true,
+          },
         ],
       },
     ],

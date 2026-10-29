@@ -67,7 +67,7 @@ async fn answer(uri: &str) -> Option<(StatusCode, String, String)> {
 #[tokio::test]
 async fn every_route_refuses_a_key_it_does_not_take() {
     let routes = routes();
-    assert_eq!(routes.len(), 72, "one path per /api route");
+    assert_eq!(routes.len(), 75, "one path per /api route");
 
     let mut served = Vec::new();
     for (uri, _) in &routes {

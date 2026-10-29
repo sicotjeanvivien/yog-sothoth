@@ -1,4 +1,4 @@
-//! The life cycle of a protocol's positions, counted by yog-analytic: its totals over a window.
+//! The life cycle of a protocol's positions, counted by yog-analytic: its totals and series.
 
 use axum::{
     Json,
@@ -9,8 +9,9 @@ use crate::application::Measured;
 use crate::http::{
     AppState,
     dto::{
-        ProtocolPositionChangeTotalsResponse, WindowedResponse, request::WindowParams,
-        request::parse_protocol,
+        ProtocolPositionChangeBucketResponse, ProtocolPositionChangeTotalsResponse,
+        WindowedResponse,
+        request::{MeasureWindowParams, SeriesParams, parse_protocol},
     },
     error::ApiError,
 };
@@ -18,7 +19,7 @@ use crate::http::{
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/position-changes/totals",
-    params(WindowParams),
+    params(MeasureWindowParams),
     responses((
         status = 200,
         description = "The positions the protocol opened, locked, split and closed over the \
@@ -29,7 +30,7 @@ use crate::http::{
 pub(crate) async fn get_protocol_position_change_totals(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(params): Query<WindowParams>,
+    Query(params): Query<MeasureWindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolPositionChangeTotalsResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
     let window = params.window.into();
@@ -45,5 +46,30 @@ pub(crate) async fn get_protocol_position_change_totals(
             .map(|counts| ProtocolPositionChangeTotalsResponse::new(protocol, counts))
             .collect::<Vec<_>>(),
     };
+    Ok(Json(WindowedResponse::new(window, measured)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/protocols/{protocol}/position-changes/series",
+    params(SeriesParams),
+    responses((
+        status = 200,
+        description = "The positions the protocol opened, locked, split and closed by `interval`, \
+                       from the facts' coverage.",
+        body = WindowedResponse<ProtocolPositionChangeBucketResponse>
+    ))
+)]
+pub(crate) async fn get_protocol_position_change_series(
+    State(state): State<AppState>,
+    Path(protocol): Path<String>,
+    Query(params): Query<SeriesParams>,
+) -> Result<Json<WindowedResponse<ProtocolPositionChangeBucketResponse>>, ApiError> {
+    let protocol = parse_protocol(&protocol)?;
+    let (window, interval) = params.parse()?;
+    let measured = state
+        .position_change_counts_service
+        .list_position_change_series(window, interval, protocol)
+        .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }

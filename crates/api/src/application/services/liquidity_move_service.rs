@@ -1,5 +1,5 @@
-//! The valued liquidity moves over a frozen period: a protocol's totals and series, and the
-//! moves of a protocol or a pool. Their coverage is the liquidity's, measured from a later hour
+//! The valued liquidity moves: a protocol's totals and series over a period, and the moves of a
+//! protocol or a pool over a frozen one. Their coverage is the liquidity's, measured from a later hour
 //! than the swaps.
 
 use std::sync::Arc;
@@ -13,7 +13,10 @@ use yog_core::{
     },
 };
 
-use super::period::{BucketPeriod, Measured, build_frozen_period, measured_from};
+use super::period::{
+    BucketPeriod, Measured, ReadPeriod, SeriesInterval, build_frozen_period, build_read_period,
+    measured_from,
+};
 
 /// Why a page of moves is not read.
 #[derive(Debug)]
@@ -59,39 +62,60 @@ impl LiquidityMoveService {
         Ok(Some(measured_from(period, since)))
     }
 
+    /// The same as [`Self::build_liquidity_period`] over `window`, the last hour included.
+    async fn build_liquidity_read_period(
+        &self,
+        window: Window,
+        protocol: Protocol,
+    ) -> RepositoryResult<Option<ReadPeriod>> {
+        let Some(period) = build_read_period(self.hours.as_ref(), window, None).await? else {
+            return Ok(None);
+        };
+        let since = self.liquidity_moves.find_measured_since(protocol).await?;
+        Ok(Some(period.measured_from(since)))
+    }
+
     pub(crate) async fn get_liquidity_totals(
         &self,
         window: Window,
         protocol: Protocol,
-    ) -> RepositoryResult<Measured<Vec<LiquidityTotals>>> {
-        let period = self.build_liquidity_period(window, protocol).await?;
+    ) -> RepositoryResult<Measured<Vec<LiquidityTotals>, ReadPeriod>> {
+        let period = self.build_liquidity_read_period(window, protocol).await?;
         let items = match &period {
-            Some(period) if period.is_covered() => self
+            Some(ReadPeriod::Frozen(p)) if p.is_covered() => self
                 .liquidity_moves
-                .find_totals(period, protocol)
+                .find_totals(p, protocol)
                 .await?
                 .into_iter()
                 .collect(),
+            Some(ReadPeriod::Tranche(p)) if p.is_covered() => vec![
+                self.liquidity_moves
+                    .find_totals_in_tranches(p, protocol)
+                    .await?,
+            ],
             _ => Vec::new(),
         };
         Ok(Measured { period, items })
     }
 
-    pub(crate) async fn list_liquidity_buckets(
+    pub(crate) async fn list_liquidity_series(
         &self,
         window: Window,
-        bucket: BucketPeriod,
+        interval: SeriesInterval,
         protocol: Protocol,
-    ) -> RepositoryResult<Measured<Vec<ProtocolBucket<LiquidityFlows>>>> {
-        let period = self.build_liquidity_period(window, protocol).await?;
-        let items = match (&period, bucket) {
-            (Some(period), BucketPeriod::Hour) => {
-                self.liquidity_moves.list_hourly(period, protocol).await?
+    ) -> RepositoryResult<Measured<Vec<ProtocolBucket<LiquidityFlows>>, ReadPeriod>> {
+        let period = self.build_liquidity_read_period(window, protocol).await?;
+        let items = match (&period, interval.frozen_bucket()) {
+            (Some(ReadPeriod::Tranche(p)), None) => {
+                self.liquidity_moves.list_tranches(p, protocol).await?
             }
-            (Some(period), BucketPeriod::Day) => {
-                self.liquidity_moves.list_daily(period, protocol).await?
+            (Some(ReadPeriod::Frozen(p)), Some(BucketPeriod::Hour)) => {
+                self.liquidity_moves.list_hourly(p, protocol).await?
             }
-            (None, _) => Vec::new(),
+            (Some(ReadPeriod::Frozen(p)), Some(BucketPeriod::Day)) => {
+                self.liquidity_moves.list_daily(p, protocol).await?
+            }
+            _ => Vec::new(),
         };
         Ok(Measured { period, items })
     }
