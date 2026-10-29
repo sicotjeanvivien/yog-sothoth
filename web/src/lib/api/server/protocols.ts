@@ -7,7 +7,7 @@
 
 import { cache } from "react";
 
-import { BAR_MS, HOUR_MS, type FrozenPeriod, type Period } from "@/lib/overview/period";
+import { SERIES_INTERVAL, type FrozenPeriod, type Period } from "@/lib/overview/period";
 
 import { apiGet } from "../client/server";
 import {
@@ -57,14 +57,10 @@ export const fetchPreviousSwapTotals = cache((scope: Scope, window: WindowRespon
   ),
 );
 
-/** The step a period's series is read at: 5 minutes over 1 h, hours summed up to 7 days, days beyond. */
-const intervalOf = (window: Period) =>
-  BAR_MS[window] < HOUR_MS ? "5m" : BAR_MS[window] === HOUR_MS ? "1h" : "1d";
-
 export const fetchSwapsSeries = cache((scope: Scope, window: Period) =>
   apiGet(
     scopedPath(scope, "swaps/series"),
-    { window, interval: intervalOf(window) },
+    { window, interval: SERIES_INTERVAL[window] },
     zGetSwapsSeriesResponse,
   ),
 );
@@ -120,7 +116,7 @@ export const fetchRewardClaimTotals = cache((protocol: ProtocolResponse, window:
 export const fetchLiquiditySeries = cache((protocol: ProtocolResponse, window: FrozenPeriod) =>
   apiGet(
     `/api/protocols/${protocol}/liquidity-moves/series`,
-    { window, interval: intervalOf(window) },
+    { window, interval: SERIES_INTERVAL[window] },
     zGetProtocolLiquidityMovesSeriesResponse,
   ),
 );
@@ -149,7 +145,7 @@ export const fetchPositionChangeTotals = cache(
 export const fetchPoolCreationsSeries = cache((protocol: ProtocolResponse, window: FrozenPeriod) =>
   apiGet(
     `/api/protocols/${protocol}/pool-creations/series`,
-    { window, interval: intervalOf(window) },
+    { window, interval: SERIES_INTERVAL[window] },
     zGetProtocolPoolCreationsSeriesResponse,
   ),
 );
@@ -158,7 +154,7 @@ export const fetchPoolCreationsSeries = cache((protocol: ProtocolResponse, windo
 export const fetchRotationRunsSeries = cache((protocol: ProtocolResponse, window: FrozenPeriod) =>
   apiGet(
     `/api/protocols/${protocol}/rotation-runs/series`,
-    { window, interval: intervalOf(window) },
+    { window, interval: SERIES_INTERVAL[window] },
     zGetProtocolRotationRunsSeriesResponse,
   ),
 );

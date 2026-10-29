@@ -45,6 +45,14 @@ export function coverageUnit(period: Period): "poolHours" | "poolTranches" {
   return BAR_MS[period] < HOUR_MS ? "poolTranches" : "poolHours";
 }
 
+/** The `interval` a period's series is read at, one per bar of `BAR_MS`. */
+export const SERIES_INTERVAL: Record<Period, "5m" | "1h" | "1d"> = {
+  "1h": "5m",
+  "24h": "1h",
+  "7d": "1h",
+  "30d": "1d",
+};
+
 /** Closed whatever the facts hold, until its own times are measured on the prod. */
 export const CLOSED_PERIODS: ReadonlySet<Period> = new Set<Period>(["30d"]);
 

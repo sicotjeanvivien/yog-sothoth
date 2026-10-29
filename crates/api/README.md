@@ -272,8 +272,8 @@ at the end of this section.
 
 **Parameters and fields.** `window=24h|7d|30d`, a closed list, 400 otherwise; `offset` for the
 previous window. `1h` is served by `swaps/totals`, `swaps/by-token`, `pool-creations/totals`,
-`rotation-runs/totals` and the `series` of the swaps and of the pool creations, and refused (400)
-elsewhere. For a collection of future events (`vesting-unlocks`), `window` covers the
+`rotation-runs/totals` and the `series` of the swaps (root, protocol) and of the pool creations,
+and refused (400) elsewhere. For a collection of future events (`vesting-unlocks`), `window` covers the
 period after `asOf`, and takes no `offset`. An on-chain collection read live ends its window
 at its first page, whose start the cursor carries. The swaps of every pool, at the root and
 under a protocol, are served over `24h` only: past a day they are compressed by pool, and

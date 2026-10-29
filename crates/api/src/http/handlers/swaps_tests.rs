@@ -55,14 +55,17 @@ async fn a_series_is_cut_by_its_interval_only() {
         let (status, _, _) = get(uri).await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{uri}");
     }
+    let pool_series = |query: &str| format!("/api/pools/{}/swaps/series?{query}", pk(1));
     for uri in [
-        "/api/protocols/meteora_damm_v2/liquidity-moves/series?interval=5m",
-        "/api/protocols/meteora_damm_v2/rotation-runs/series?interval=5m",
-        "/api/tvl/series?interval=1d",
-        "/api/tvl/series",
-        "/api/protocols/meteora_damm_v2/liquidity-moves/series",
+        pool_series("interval=5m"),
+        pool_series("window=1h&interval=1h"),
+        "/api/protocols/meteora_damm_v2/liquidity-moves/series?interval=5m".to_owned(),
+        "/api/protocols/meteora_damm_v2/rotation-runs/series?interval=5m".to_owned(),
+        "/api/tvl/series?interval=1d".to_owned(),
+        "/api/tvl/series".to_owned(),
+        "/api/protocols/meteora_damm_v2/liquidity-moves/series".to_owned(),
     ] {
-        let (status, content_type, _) = get(uri).await;
+        let (status, content_type, _) = get(&uri).await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}");
         assert_eq!(content_type, "application/problem+json", "{uri}");
     }
@@ -139,11 +142,11 @@ async fn a_pool_is_refused_malformed_and_not_found_unknown() {
             StatusCode::NOT_FOUND,
         ),
         (
-            format!("/api/pools/{unknown}/swaps/hourly"),
+            format!("/api/pools/{unknown}/swaps/series?interval=1h"),
             StatusCode::NOT_FOUND,
         ),
         (
-            format!("/api/pools/{unknown}/swaps/daily"),
+            format!("/api/pools/{unknown}/swaps/series?window=30d&interval=1d"),
             StatusCode::NOT_FOUND,
         ),
         (
