@@ -505,7 +505,6 @@ async fn the_guard_catches_a_price_read_that_is_not_a_lateral(pool: PgPool) {
     );
 }
 
-/// `yog_price_asof(mint, at)`, or `None`.
 async fn as_of(pool: &PgPool, mint: &str, at: DateTime<Utc>) -> Option<Decimal> {
     sqlx::query_scalar("SELECT price_usd FROM yog_price_asof($1, $2)")
         .bind(mint)
@@ -526,59 +525,32 @@ async fn ceiling(pool: &PgPool, mint: &str, usd: &str) {
     .unwrap();
 }
 
-/// A flow is held to the ceiling a stock is (046). Against the check dropped from
-/// `yog_price_asof`, or its threshold moved to 1 (9 times refused) or 100 (11 times believed).
+/// Against the ceiling checked in `yog_price_asof`: today's ceiling, $2, would erase a quote of
+/// three hours ago, $22, and with it what every valued view shows of that past.
 #[sqlx::test]
-async fn an_as_of_price_our_pools_contradict_is_no_price(pool: PgPool) {
-    let (_, mint_a, mint_b) = seed_pool(&pool).await;
-    let at = settled_bucket();
-    ceiling(&pool, &mint_a, "2").await;
-    price_at(&pool, &mint_b, "200000", at - Duration::minutes(5)).await;
-
-    price_at(&pool, &mint_a, "18", at - Duration::minutes(10)).await;
-    assert_eq!(as_of(&pool, &mint_a, at).await, Some(Decimal::from(18)));
-
-    price_at(&pool, &mint_a, "22", at - Duration::minutes(5)).await;
-    assert_eq!(
-        as_of(&pool, &mint_a, at).await,
-        None,
-        "22 is 11 times its ceiling"
-    );
-
-    // Without a ceiling, the quote stands, whatever it is.
-    assert_eq!(as_of(&pool, &mint_b, at).await, Some(Decimal::from(200000)));
-}
-
-/// Against the check made before the latest is taken: the earlier $18 would stand in for the
-/// refused $22, and a flow be valued at a price the market has already left.
-#[sqlx::test]
-async fn an_earlier_price_never_stands_in_for_a_refused_one(pool: PgPool) {
+async fn an_as_of_price_is_never_held_to_todays_ceiling(pool: PgPool) {
     let (_, mint_a, _) = seed_pool(&pool).await;
     let at = settled_bucket();
     ceiling(&pool, &mint_a, "2").await;
-    price_at(&pool, &mint_a, "18", at - Duration::minutes(10)).await;
     price_at(&pool, &mint_a, "22", at - Duration::minutes(5)).await;
 
-    assert_eq!(as_of(&pool, &mint_a, at).await, None);
+    assert_eq!(as_of(&pool, &mint_a, at).await, Some(Decimal::from(22)));
 }
 
-/// `yog_price_asof` reads the ceilings as its caller. Against the grant dropped from 046: the
-/// signals and the API, reading a valued view under their own role, would be refused.
+/// `yog_market_believed` reads the ceilings as its caller. Against the grant dropped from 046:
+/// the API and the signals, reading `pool_current_tvl` under their own role, would be refused.
 #[sqlx::test]
-async fn the_readers_of_valued_views_read_the_ceilings(pool: PgPool) {
+async fn the_readers_of_the_tvl_read_the_ceilings(pool: PgPool) {
     let (pool_addr, mint_a, _) = seed_pool(&pool).await;
+    seed_current_state(&pool, &pool_addr).await;
     ceiling(&pool, &mint_a, "2").await;
     price_at(&pool, &mint_a, "1.0", Utc::now()).await;
-    insert_liquidity_event(&pool, &pool_addr, Utc::now()).await;
 
-    for (role, view) in [
-        ("yog_signals", "meteora_damm_v2_pool_hourly_liquidity_flow"),
-        ("yog_api", "meteora_damm_v2_liquidity_events_valued"),
-    ] {
+    for role in ["yog_api", "yog_signals"] {
         let scoped = setup_roles_and_connect_as(&pool, role).await;
-        sqlx::query(AssertSqlSafe(format!("SELECT * FROM {view}")))
+        sqlx::query("SELECT * FROM pool_current_tvl")
             .fetch_all(&scoped)
             .await
-            .unwrap_or_else(|e| panic!("{role} reads {view}: {e}"));
+            .unwrap_or_else(|e| panic!("{role} reads pool_current_tvl: {e}"));
     }
 }

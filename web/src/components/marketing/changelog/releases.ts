@@ -44,7 +44,7 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "yog_price_asof gives no price where its latest observation is more than yog_market_over_pool_max() times the token's ceiling, so every flow valued as of an instant — the tranches of yog-analytic, the moves and claims, the hourly views the signals read — follows the rule token_stock_price holds a stock to; an anchor so contradicted falls to what its pool traded. The readers of valued views can read the ceilings. Migration 046.",
+            text: "yog_market_believed is the one rule for a quote our pools contradict: token_stock_price holds a stock to it, and yog-analytic a flow when it writes it — the tranches, the moves of pools that did not swap, the rewards outside their pool. An anchor so contradicted falls to what its pool traded; yog_price_asof stays the raw quote, so history never moves with a ceiling. Migration 046.",
             technical: true,
           },
         ],

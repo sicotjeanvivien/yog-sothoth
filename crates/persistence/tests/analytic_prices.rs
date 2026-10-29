@@ -1374,6 +1374,11 @@ async fn an_anchor_our_pools_contradict_is_valued_by_its_partner(pool: PgPool) {
     let (market_x, price_x, _, price_y) = prices(&pool, &found[0], tranche).await;
     assert_eq!(market_x, None, "a contradicted quote is no quote");
     assert_eq!((price_x, price_y), (Some(dec("1")), Some(dec("1"))));
+    // Against the witness drawn from the believed price: Y would lose it with X.
+    assert_eq!(
+        implied(&pool, &found[0], tranche).await.1,
+        Some(dec("1000"))
+    );
     let volume: Option<BigDecimal> = sqlx::query_scalar(
         "SELECT volume_in_a_usd FROM analytic_pool_5min WHERE pool_address = $1",
     )
@@ -1382,4 +1387,46 @@ async fn an_anchor_our_pools_contradict_is_valued_by_its_partner(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(volume, Some(dec("5")));
+}
+
+/// A pool that moved liquidity without swapping takes the same rule (046). X, the anchor of the two
+/// pools valued, quoted $1 000 and capped at $1 by our pools, falls to its pool's last price.
+/// Against `yog_market_believed` dropped from `meteora_damm_v2_tranche_pool_prices`: $1 000.
+#[sqlx::test]
+async fn an_unswapped_anchor_our_pools_contradict_falls_to_its_last_price(pool: PgPool) {
+    let tranche = settled_tranche();
+    let x = pk(30).to_string();
+    price_at(&pool, &x, "1000", tranche).await;
+    sqlx::query("INSERT INTO analytic_token_pool_ceilings (mint, ceiling_usd) VALUES ($1, 1)")
+        .bind(&x)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut pools = Vec::new();
+    for seed in [1u8, 2] {
+        let y = pk(seed + 30).to_string();
+        let address = setup_pool(&pool, seed, (&x, 6), (&y, 6)).await;
+        sqlx::query(
+            "INSERT INTO analytic_pool_prices_5min (pool_address, bucket, price_a_usd, price_b_usd)
+             VALUES ($1, $2, 1, 1)",
+        )
+        .bind(&address)
+        .bind(tranche - Duration::minutes(5))
+        .execute(&pool)
+        .await
+        .unwrap();
+        pools.push(address);
+    }
+
+    let price_x: Option<BigDecimal> = sqlx::query_scalar(
+        "SELECT price_a_usd FROM meteora_damm_v2_tranche_pool_prices($1, INTERVAL '5 minutes', $2)
+          WHERE pool_address = $3",
+    )
+    .bind(tranche)
+    .bind(&pools)
+    .bind(&pools[0])
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(price_x, Some(dec("1")));
 }

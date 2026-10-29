@@ -168,6 +168,27 @@ async fn a_reward_takes_its_pools_price_and_one_outside_the_pool_its_market(pool
     assert_eq!(reward_claim_usd(&pool, "unresolved").await, None);
 }
 
+/// A reward outside its pool takes the rule a flow takes (046). Against `yog_market_believed`
+/// dropped from the claims: the reward quoted $2 against a ceiling of $0.10 would be worth $6.
+#[sqlx::test]
+async fn a_reward_quoted_above_what_our_pools_paid_is_not_valued(pool: PgPool) {
+    let tranche = settled_hour() + Duration::minutes(10);
+    let pool_x = setup_inflated_token(&pool, tranche).await;
+    let outside = pk(30).to_string();
+    known_token(&pool, &outside).await;
+    price_at(&pool, &outside, "2", tranche - Duration::minutes(1)).await;
+    sqlx::query("INSERT INTO analytic_token_pool_ceilings (mint, ceiling_usd) VALUES ($1, 0.1)")
+        .bind(&outside)
+        .execute(&pool)
+        .await
+        .unwrap();
+    insert_reward_claim(&pool, &pool_x, "outside", &outside, 3_000_000, tranche).await;
+
+    value(&pool, tranche, tranche).await;
+
+    assert_eq!(reward_claim_usd(&pool, "outside").await, None);
+}
+
 fn at(hours: i64) -> DateTime<Utc> {
     settled_hour() - Duration::hours(hours)
 }

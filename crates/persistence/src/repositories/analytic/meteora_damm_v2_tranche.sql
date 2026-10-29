@@ -28,8 +28,9 @@ pools_per_mint AS (
      WHERE m.mint IS NOT NULL
      GROUP BY m.mint
 ),
+-- ⚠️ The believed price values the flows; the quote witnesses the partner, as it did in 045.
 market AS (
-    SELECT n.mint, pr.price_usd
+    SELECT n.mint, yog_market_believed(n.mint, pr.price_usd) AS price_usd, pr.price_usd AS quote_usd
       FROM pools_per_mint n
       LEFT JOIN LATERAL yog_price_asof(n.mint, $1::TIMESTAMPTZ + $3::INTERVAL) pr ON true
 ),
@@ -37,6 +38,8 @@ quoted AS (
     SELECT t.pool_address, t.traded_a, t.traded_b, t.dec_a, t.dec_b,
            ma.price_usd AS market_a,
            mb.price_usd AS market_b,
+           ma.quote_usd AS quote_a,
+           mb.quote_usd AS quote_b,
            n.anchor,
            -- ⚠️ What the tranche traded, not the pool's mid price: on an empty pool one
            -- swap sends that to the end of its range.
@@ -72,10 +75,10 @@ prices AS (
         pool_a_usd, pool_b_usd
     )
     SELECT q.pool_address, $1, q.market_a, x.price_a, q.market_b, x.price_b,
-           CASE WHEN yog_amount_usd(q.traded_b, q.dec_b, q.market_b) >= yog_pool_witness_min_usd()
-                THEN q.rate * q.market_b END,
-           CASE WHEN yog_amount_usd(q.traded_a, q.dec_a, q.market_a) >= yog_pool_witness_min_usd()
-                THEN q.market_a / q.rate END
+           CASE WHEN yog_amount_usd(q.traded_b, q.dec_b, q.quote_b) >= yog_pool_witness_min_usd()
+                THEN q.rate * q.quote_b END,
+           CASE WHEN yog_amount_usd(q.traded_a, q.dec_a, q.quote_a) >= yog_pool_witness_min_usd()
+                THEN q.quote_a / q.rate END
       FROM quoted q
      -- ⚠️ LEAST skips NULL: a token without a market price takes its price in the pool.
      -- Without the tranche's rate there is nothing to bound by, and no price but the anchor's.

@@ -47,7 +47,8 @@ SELECT r.signature, r.event_index, r.timestamp, $1, r.pool_address, $2, r.owner,
             THEN yog_token_amount(r.amount::NUMERIC, r.dec) * v.price END
   FROM reward_claims r
   LEFT JOIN prices pr ON pr.pool_address = r.pool_address
-  LEFT JOIN LATERAL yog_price_asof(r.mint_reward, $1::TIMESTAMPTZ + $3::INTERVAL) market
+  LEFT JOIN LATERAL (SELECT yog_market_believed(r.mint_reward, q.price_usd) AS price_usd
+                       FROM yog_price_asof(r.mint_reward, $1::TIMESTAMPTZ + $3::INTERVAL) q) market
          ON r.side IS NULL AND r.resolved
  -- A token of the pool at the pool's bounded price, only with a market price as a move's side;
  -- any other at its market price. ⚠️ A pool's mints unresolved: the reward may be one, unvalued.
