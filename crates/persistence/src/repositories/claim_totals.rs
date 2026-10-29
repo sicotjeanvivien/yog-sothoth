@@ -220,19 +220,24 @@ impl PgClaimTotalsRepository {
                 sqlx::query_as!(
                     ClaimBucketRow,
                     r#"
-                    SELECT b.bucket AS "bucket_from!", COUNT(c.signature) AS "claims!",
-                           COUNT(c.amount_usd) AS "claims_valued!",
-                           COALESCE(SUM(c.amount_usd), 0) AS "amount_usd!",
-                           COUNT(DISTINCT c.owner) AS "owners!"
+                    SELECT b.bucket AS "bucket_from!", COALESCE(c.claims, 0) AS "claims!",
+                           COALESCE(c.claims_valued, 0) AS "claims_valued!",
+                           COALESCE(c.amount_usd, 0) AS "amount_usd!",
+                           COALESCE(c.owners, 0) AS "owners!"
                       FROM generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ - $4::INTERVAL,
                                            $4::INTERVAL) AS b (bucket)
-                      LEFT JOIN analytic_position_fee_claims c
-                             ON c.protocol = $5
-                            AND c.timestamp >= b.bucket AND c.timestamp < b.bucket + $4::INTERVAL
-                            -- ⚠️ Constant bounds too: the planner excludes chunks on them only.
-                            AND c.timestamp >= $1 AND c.timestamp < $2
+                      -- ⚠️ Grouped, then joined: joined per bucket, the claims are read once a bucket.
+                      LEFT JOIN (
+                          SELECT time_bucket($4::INTERVAL, timestamp, $1::TIMESTAMPTZ) AS bucket,
+                                 COUNT(*) AS claims, COUNT(amount_usd) AS claims_valued,
+                                 SUM(amount_usd) AS amount_usd, COUNT(DISTINCT owner) AS owners
+                            FROM analytic_position_fee_claims
+                           WHERE protocol = $5
+                             AND timestamp >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ)
+                             AND timestamp < $2
+                           GROUP BY 1
+                      ) c ON c.bucket = b.bucket
                      WHERE b.bucket >= $3
-                     GROUP BY b.bucket
                      ORDER BY b.bucket
                     "#,
                     bounds.from,
@@ -248,18 +253,23 @@ impl PgClaimTotalsRepository {
                 sqlx::query_as!(
                     ClaimBucketRow,
                     r#"
-                    SELECT b.bucket AS "bucket_from!", COUNT(c.signature) AS "claims!",
-                           COUNT(c.amount_usd) AS "claims_valued!",
-                           COALESCE(SUM(c.amount_usd), 0) AS "amount_usd!",
-                           COUNT(DISTINCT c.owner) AS "owners!"
+                    SELECT b.bucket AS "bucket_from!", COALESCE(c.claims, 0) AS "claims!",
+                           COALESCE(c.claims_valued, 0) AS "claims_valued!",
+                           COALESCE(c.amount_usd, 0) AS "amount_usd!",
+                           COALESCE(c.owners, 0) AS "owners!"
                       FROM generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ - $4::INTERVAL,
                                            $4::INTERVAL) AS b (bucket)
-                      LEFT JOIN analytic_reward_claims c
-                             ON c.protocol = $5
-                            AND c.timestamp >= b.bucket AND c.timestamp < b.bucket + $4::INTERVAL
-                            AND c.timestamp >= $1 AND c.timestamp < $2
+                      LEFT JOIN (
+                          SELECT time_bucket($4::INTERVAL, timestamp, $1::TIMESTAMPTZ) AS bucket,
+                                 COUNT(*) AS claims, COUNT(amount_usd) AS claims_valued,
+                                 SUM(amount_usd) AS amount_usd, COUNT(DISTINCT owner) AS owners
+                            FROM analytic_reward_claims
+                           WHERE protocol = $5
+                             AND timestamp >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ)
+                             AND timestamp < $2
+                           GROUP BY 1
+                      ) c ON c.bucket = b.bucket
                      WHERE b.bucket >= $3
-                     GROUP BY b.bucket
                      ORDER BY b.bucket
                     "#,
                     bounds.from,
