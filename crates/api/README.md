@@ -132,20 +132,20 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/tokens/{mint}/prices` | A page of the token's prices over `?window=`, the most recent first; the window ends at the first page, whose start the cursor carries, refused (400) for another mint; 404 for a mint without metadata |
 | `GET` | `/api/tokens/{mint}` | Token metadata + latest price (200 with `price: null` if no price yet) |
 | `GET` | `/api/announcements` | A page of every announcement, the latest start first, ties by id: kind, severity, message, link, window, and `status` — `upcoming`, `open` or `closed` at the request; `?status=` keeps one; forward-only cursor, refused (400) under another status |
-| `GET` | `/api/swaps/totals` (`?offset=`), `/hourly`, `/daily`, `/series` | Per protocol, the swaps over `?window=`, then per bucket: swaps, volume, fees and their shares — LP, protocol and referral sum to the fees, all known or all null — pool-hours and the valued ones; the totals with the distinct pools that swapped |
-| `GET` | `/api/protocols/{protocol}/swaps/totals`, `/hourly`, `/daily`, `/series` | The same, the protocol's own |
-| `GET` | `/api/pools/{pool}/swaps/totals`, `/hourly`, `/daily` | The same for one pool, without the protocol nor the distinct pools; 404 for a pool unknown |
+| `GET` | `/api/swaps/totals` (`?offset=`), `/series` | Per protocol, the swaps over `?window=`, then per bucket: swaps, volume, fees and their shares — LP, protocol and referral sum to the fees, all known or all null — pool-hours and the valued ones; the totals with the distinct pools that swapped |
+| `GET` | `/api/protocols/{protocol}/swaps/totals`, `/series` | The same, the protocol's own |
+| `GET` | `/api/pools/{pool}/swaps/totals`, `/series` (`interval=1h\|1d`) | The same for one pool, without the protocol nor the distinct pools; 404 for a pool unknown |
 | `GET` | `/api/swaps/by-token` | Tokens by volume over `?window=`, every protocol summed, identity embedded, forward-only cursor; a swap counts for both its tokens |
-| `GET` | `/api/pool-creations/totals`, `/hourly`, `/daily`, `/series`, and under `/api/protocols/{protocol}/` | Per protocol, the pools created over the window, then per bucket |
-| `GET` | `/api/protocols/{protocol}/liquidity-moves/totals`, `/hourly`, `/daily` | The protocol's liquidity created, added and removed, valued, with its moves valued, and on `totals` the distinct owners of its moves; its `coveredSince` is the liquidity's |
+| `GET` | `/api/pool-creations/totals`, `/series`, and under `/api/protocols/{protocol}/` | Per protocol, the pools created over the window, then per bucket |
+| `GET` | `/api/protocols/{protocol}/liquidity-moves/totals`, `/series` (`interval=1h\|1d`) | The protocol's liquidity created, added and removed, valued, with its moves valued, and on `totals` the distinct owners of its moves; its `coveredSince` is the liquidity's |
 | `GET` | `/api/protocols/{protocol}/position-changes/totals` | The positions the protocol opened, locked (vesting or permanent), split and closed over the window, one count per event |
 | `GET` | `/api/protocols/{protocol}/position-fee-claims/totals`, `/api/protocols/{protocol}/reward-claims/totals` | The fees, or the rewards, the positions claimed over the window: claims, the valued ones, their value and the distinct owners; its `coveredSince` is the first whole hour whose claims were valued |
 | `GET` | `/api/protocols/{protocol}/rotation-runs`, `/api/pools/{pool}/rotation-runs` | A page of the rotation runs started in the window, through the last tranche written: pool and its tokens' symbols, start, end, volume, first hour's volume, extinct; `?sort=volume` (default) or `at`, forward-only cursor that keeps its first page's end, refused (400) under another list; empty while the rotation does not cover the window |
 | `GET` | `/api/protocols/{protocol}/rotation-runs/totals` | The runs started in the window, their distinct pools, those still in progress, their median and p90 duration, their volume and first hour's volume, through the last tranche written; its `coveredSince` is the first tranche whose rotation was measured |
-| `GET` | `/api/protocols/{protocol}/rotation-runs/hourly`, `/daily` | The protocol's volume by frozen hour, or by 24 hours ending at `asOf`, split by its runs: in them and outside them (never under 0), both `null` on a bar the runs do not cover whole or with an hour not valued |
+| `GET` | `/api/protocols/{protocol}/rotation-runs/series` (`interval=1h\|1d`) | The protocol's volume by frozen hour, or by 24 hours ending at `asOf`, split by its runs: in them and outside them (never under 0), both `null` on a bar the runs do not cover whole or with an hour not valued |
 | `GET` | `/api/protocols/{protocol}/liquidity-moves`, `/api/pools/{pool}/liquidity-moves` | A page of the valued moves (creations, additions, removals), their pool's token symbols embedded, the lock their transaction puts on a position (`none`, `vesting`, `permanent`, `null` before measured), `?kind=create|add|remove` to keep one kind, `?sort=amount` (default) or `at`, forward-only cursor, refused (400) under another list, kind or window or after a freeze; empty while the protocol's liquidity does not cover the window |
 | `GET` | `/api/tvl`, `/api/protocols/{protocol}/tvl` | Per protocol, the last TVL reading at or before `asOf`, its `at` said |
-| `GET` | `/api/tvl/hourly`, `/api/protocols/{protocol}/tvl/hourly` | Per protocol, the reading of every hour measured from the window's start |
+| `GET` | `/api/tvl/series`, `/api/protocols/{protocol}/tvl/series` (`interval=1h`) | Per protocol, the reading of every hour measured from the window's start |
 | `GET` | `/api/tvl/totals`, `/api/protocols/{protocol}/tvl/totals` | Per protocol, the last reading, the one exactly a window before it (`null` when not measured, or when the last is not at `asOf`), the part the pools discovered in the window hold at the last, and the change without it, `null` as soon as one term is |
 | `GET` | `/api/pool-discoveries/totals`, and under `/api/protocols/{protocol}/` | Per protocol, the pools first seen in the window without their birth observed, and what they hold at the last reading |
 | `GET` | `/api/protocols/{protocol}/signals`, `/api/pools/{pool}/signals` | The signals of one protocol or one pool, paginated as `/api/signals`, `?severity=` |
@@ -215,10 +215,9 @@ at the end of this section.
    protocol.
 4. **A measure is a collection followed by a cut**, a reserved word that ends the path:
    - `totals`, the whole window: one row per protocol at the root, under an entity its own;
-   - `hourly`, `daily`: the same rows, one per bucket, a day being the 24 hours ending at
-     `asOf`, unpaginated, the window bounding them;
-   - `series?interval=5m|1h|1d`: the same, the bucket as a parameter — `1h` and `1d` return
-     what `hourly` and `daily` return, `5m` cuts `window=1h` only, which is cut at `5m` only;
+   - `series?interval=`: the same rows, one per bucket — `1h` an hour, `1d` the 24 hours ending
+     at `asOf`, `5m` a tranche — unpaginated, the window bounding them; a closed list per
+     resource (`5m` where `window=1h` is served, and only over it), 400 otherwise;
    - `by-token`, `by-pool`, `by-owner`: one row per token, pool or owner address, summed over
      the path's scope (every protocol at the root), a ranking paginated as a collection.
 
@@ -228,8 +227,8 @@ at the end of this section.
 
    `tvl` is a reading at an instant, never a sum over a period, read at the root (one per
    protocol) and under a protocol (its own), with four forms only: `/tvl`, the last reading
-   at or before `asOf`, its instant (`at`) said, without a window; `hourly`, the readings of
-   the window, one per hour measured, each at its hour's close; `totals`, from the reading a
+   at or before `asOf`, its instant (`at`) said, without a window; `series?interval=1h`, the
+   readings of the window, one per hour measured, each at its hour's close; `totals`, from the reading a
    window before the last to the last, with the change between them — a change is not a sum;
    `by-token` and `by-pool`, ranked at that last reading, without a window. Every response of what `yog-analytic`
    computes carries the instant it reflects (`asOf`), its coverage (`coveredSince`), and its
@@ -273,7 +272,8 @@ at the end of this section.
 
 **Parameters and fields.** `window=24h|7d|30d`, a closed list, 400 otherwise; `offset` for the
 previous window. `1h` is served by `swaps/totals`, `swaps/by-token`, `pool-creations/totals`,
-`rotation-runs/totals` and the `series`, and refused (400) elsewhere. For a collection of future events (`vesting-unlocks`), `window` covers the
+`rotation-runs/totals` and the `series` of the swaps (root, protocol) and of the pool creations,
+and refused (400) elsewhere. For a collection of future events (`vesting-unlocks`), `window` covers the
 period after `asOf`, and takes no `offset`. An on-chain collection read live ends its window
 at its first page, whose start the cursor carries. The swaps of every pool, at the root and
 under a protocol, are served over `24h` only: past a day they are compressed by pool, and
@@ -281,7 +281,7 @@ reading every pool in time order decompresses all of them; under a pool, `24h` a
 raw swaps' retention. The other on-chain lists, compressed by pool after a week but
 hundreds of times fewer, are served over `30d` everywhere: a page past the week
 decompresses one chunk of them. `rotation-runs` and its `totals` end at the last tranche
-written, its `hourly` and `daily` at `asOf`, on the swaps' hours: a run open in an hour not
+written, its `series` at `asOf`, on the swaps' hours: a run open in an hour not
 yet frozen is in the list and not in the bars. A cursor whose window starts past the widest its list serves (an hour of
 margin) or after its own key is refused (400). A parameter never changes the shape of a response;
 `topics` (rule 5) chooses which messages come, not their shape. `asOf` is the field of the

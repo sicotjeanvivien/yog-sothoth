@@ -7,14 +7,13 @@ use axum::{
 };
 use yog_core::domain::{Protocol, RotationRunScope};
 
-use crate::application::BucketPeriod;
 use crate::http::{
     AppState,
     dto::{
         ProtocolRotationRunBucketResponse, ProtocolRotationRunTotalsResponse, RotationRunResponse,
         TrancheWindowedResponse, WindowedPageResponse, WindowedResponse,
         request::{
-            ListRotationRunsRequest, MeasureWindowParams, RotationRunsParams, WindowParams,
+            FrozenSeriesParams, ListRotationRunsRequest, MeasureWindowParams, RotationRunsParams,
             parse_pool, parse_protocol,
         },
     },
@@ -135,51 +134,25 @@ pub(crate) async fn get_protocol_rotation_run_totals(
 
 #[utoipa::path(
     get,
-    path = "/api/protocols/{protocol}/rotation-runs/hourly",
-    params(WindowParams),
+    path = "/api/protocols/{protocol}/rotation-runs/series",
+    params(FrozenSeriesParams),
     responses((
         status = 200,
-        description = "The protocol's volume hour by hour, split by its rotation runs.",
+        description = "The protocol's volume by `interval`, an hour or 24 hours ending at `asOf`, \
+                       split by its rotation runs.",
         body = WindowedResponse<ProtocolRotationRunBucketResponse>
     ))
 )]
-pub(crate) async fn get_protocol_rotation_runs_hourly(
+pub(crate) async fn get_protocol_rotation_runs_series(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(params): Query<WindowParams>,
+    Query(params): Query<FrozenSeriesParams>,
 ) -> Result<Json<WindowedResponse<ProtocolRotationRunBucketResponse>>, ApiError> {
-    list_buckets(&state, &protocol, params, BucketPeriod::Hour).await
-}
-
-#[utoipa::path(
-    get,
-    path = "/api/protocols/{protocol}/rotation-runs/daily",
-    params(WindowParams),
-    responses((
-        status = 200,
-        description = "The protocol's volume by 24 hours ending at `asOf`, split by its rotation runs.",
-        body = WindowedResponse<ProtocolRotationRunBucketResponse>
-    ))
-)]
-pub(crate) async fn get_protocol_rotation_runs_daily(
-    State(state): State<AppState>,
-    Path(protocol): Path<String>,
-    Query(params): Query<WindowParams>,
-) -> Result<Json<WindowedResponse<ProtocolRotationRunBucketResponse>>, ApiError> {
-    list_buckets(&state, &protocol, params, BucketPeriod::Day).await
-}
-
-async fn list_buckets(
-    state: &AppState,
-    protocol: &str,
-    params: WindowParams,
-    bucket: BucketPeriod,
-) -> Result<Json<WindowedResponse<ProtocolRotationRunBucketResponse>>, ApiError> {
-    let protocol = parse_protocol(protocol)?;
+    let protocol = parse_protocol(&protocol)?;
     let window = params.window.into();
     let measured = state
         .rotation_run_service
-        .list_buckets(window, bucket, protocol)
+        .list_buckets(window, params.interval.into(), protocol)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }

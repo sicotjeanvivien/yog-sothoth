@@ -1,4 +1,4 @@
-//! A bucket of a protocol's `rotation-runs/hourly` or `/daily`: its volume, split by the runs.
+//! A bucket of a protocol's `rotation-runs/series`: its volume, split by the runs.
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
@@ -14,7 +14,7 @@ use crate::http::dto::schema::UnsignedDecimal;
 pub(crate) struct ProtocolRotationRunBucketResponse {
     protocol: ProtocolResponse,
     from: DateTime<Utc>,
-    /// Every swap of the bucket, as `swaps/hourly|daily`; `null` where none is valued.
+    /// Every swap of the bucket, as `swaps/series`; `null` where none is valued.
     #[schema(value_type = Option<UnsignedDecimal>)]
     volume_usd: Option<Decimal>,
     /// `null` where the runs do not cover the bucket whole, or an hour of it is not valued.

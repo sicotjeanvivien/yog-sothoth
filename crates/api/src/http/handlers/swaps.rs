@@ -1,7 +1,7 @@
 //! The swaps, read live, and their measures: their totals, their series, by token — for every
 //! protocol, one protocol, or one pool.
 
-use crate::application::{BucketPeriod, TokenActivityRead};
+use crate::application::TokenActivityRead;
 use crate::http::cursor::EventCollection;
 use crate::http::{
     AppState,
@@ -10,8 +10,9 @@ use crate::http::{
         ProtocolSwapActivityResponse, SwapActivityResponse, SwapEventResponse,
         TokenActivityPageResponse, WindowedResponse,
         request::{
-            EventsParams, ListEventsRequest, ListTokenActivityRequest, MeasureActivityParams,
-            SeriesParams, TokenActivityParams, WindowParams, parse_pool, parse_protocol,
+            EventsParams, FrozenSeriesParams, ListEventsRequest, ListTokenActivityRequest,
+            MeasureActivityParams, SeriesParams, TokenActivityParams, WindowParams, parse_pool,
+            parse_protocol,
         },
     },
     error::ApiError,
@@ -122,92 +123,6 @@ async fn list_series(
 
 #[utoipa::path(
     get,
-    path = "/api/swaps/hourly",
-    params(WindowParams),
-    responses((
-        status = 200,
-        description = "Each protocol's swaps, hour by hour.",
-        body = WindowedResponse<ProtocolSwapActivityBucketResponse>
-    ))
-)]
-pub(crate) async fn get_swaps_hourly(
-    State(state): State<AppState>,
-    Query(params): Query<WindowParams>,
-) -> Result<Json<WindowedResponse<ProtocolSwapActivityBucketResponse>>, ApiError> {
-    list_buckets(&state, params, BucketPeriod::Hour, None).await
-}
-
-#[utoipa::path(
-    get,
-    path = "/api/swaps/daily",
-    params(WindowParams),
-    responses((
-        status = 200,
-        description = "Each protocol's swaps, by 24 hours ending at `asOf`.",
-        body = WindowedResponse<ProtocolSwapActivityBucketResponse>
-    ))
-)]
-pub(crate) async fn get_swaps_daily(
-    State(state): State<AppState>,
-    Query(params): Query<WindowParams>,
-) -> Result<Json<WindowedResponse<ProtocolSwapActivityBucketResponse>>, ApiError> {
-    list_buckets(&state, params, BucketPeriod::Day, None).await
-}
-
-#[utoipa::path(
-    get,
-    path = "/api/protocols/{protocol}/swaps/hourly",
-    params(WindowParams),
-    responses((
-        status = 200,
-        description = "The protocol's swaps, hour by hour.",
-        body = WindowedResponse<ProtocolSwapActivityBucketResponse>
-    ))
-)]
-pub(crate) async fn get_protocol_swaps_hourly(
-    State(state): State<AppState>,
-    Path(protocol): Path<String>,
-    Query(params): Query<WindowParams>,
-) -> Result<Json<WindowedResponse<ProtocolSwapActivityBucketResponse>>, ApiError> {
-    let protocol = parse_protocol(&protocol)?;
-    list_buckets(&state, params, BucketPeriod::Hour, Some(protocol)).await
-}
-
-#[utoipa::path(
-    get,
-    path = "/api/protocols/{protocol}/swaps/daily",
-    params(WindowParams),
-    responses((
-        status = 200,
-        description = "The protocol's swaps, by 24 hours ending at `asOf`.",
-        body = WindowedResponse<ProtocolSwapActivityBucketResponse>
-    ))
-)]
-pub(crate) async fn get_protocol_swaps_daily(
-    State(state): State<AppState>,
-    Path(protocol): Path<String>,
-    Query(params): Query<WindowParams>,
-) -> Result<Json<WindowedResponse<ProtocolSwapActivityBucketResponse>>, ApiError> {
-    let protocol = parse_protocol(&protocol)?;
-    list_buckets(&state, params, BucketPeriod::Day, Some(protocol)).await
-}
-
-async fn list_buckets(
-    state: &AppState,
-    params: WindowParams,
-    bucket: BucketPeriod,
-    protocol: Option<yog_core::domain::Protocol>,
-) -> Result<Json<WindowedResponse<ProtocolSwapActivityBucketResponse>>, ApiError> {
-    let window = params.window.into();
-    let measured = state
-        .swap_activity_service
-        .list_swap_buckets(window, bucket, protocol)
-        .await?;
-    Ok(Json(WindowedResponse::new(window, measured)))
-}
-
-#[utoipa::path(
-    get,
     path = "/api/pools/{pool}/swaps/totals",
     params(WindowParams),
     responses((
@@ -232,51 +147,24 @@ pub(crate) async fn get_pool_swap_totals(
 
 #[utoipa::path(
     get,
-    path = "/api/pools/{pool}/swaps/hourly",
-    params(WindowParams),
+    path = "/api/pools/{pool}/swaps/series",
+    params(FrozenSeriesParams),
     responses((
         status = 200,
-        description = "The pool's swaps, hour by hour.",
+        description = "The pool's swaps by `interval`: an hour, or 24 hours ending at `asOf`.",
         body = WindowedResponse<PoolSwapBucketResponse>
     ))
 )]
-pub(crate) async fn get_pool_swaps_hourly(
+pub(crate) async fn get_pool_swaps_series(
     State(state): State<AppState>,
     Path(pool): Path<String>,
-    Query(params): Query<WindowParams>,
+    Query(params): Query<FrozenSeriesParams>,
 ) -> Result<Json<WindowedResponse<PoolSwapBucketResponse>>, ApiError> {
-    list_pool_buckets(&state, &pool, params, BucketPeriod::Hour).await
-}
-
-#[utoipa::path(
-    get,
-    path = "/api/pools/{pool}/swaps/daily",
-    params(WindowParams),
-    responses((
-        status = 200,
-        description = "The pool's swaps, by 24 hours ending at `asOf`.",
-        body = WindowedResponse<PoolSwapBucketResponse>
-    ))
-)]
-pub(crate) async fn get_pool_swaps_daily(
-    State(state): State<AppState>,
-    Path(pool): Path<String>,
-    Query(params): Query<WindowParams>,
-) -> Result<Json<WindowedResponse<PoolSwapBucketResponse>>, ApiError> {
-    list_pool_buckets(&state, &pool, params, BucketPeriod::Day).await
-}
-
-async fn list_pool_buckets(
-    state: &AppState,
-    pool: &str,
-    params: WindowParams,
-    bucket: BucketPeriod,
-) -> Result<Json<WindowedResponse<PoolSwapBucketResponse>>, ApiError> {
-    let pool = super::known_pool(state, pool).await?;
+    let pool = super::known_pool(&state, &pool).await?;
     let window = params.window.into();
     let measured = state
         .swap_activity_service
-        .list_pool_swap_buckets(window, bucket, pool.pool_address)
+        .list_pool_swap_buckets(window, params.interval.into(), pool.pool_address)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }

@@ -29,7 +29,7 @@ import {
   fetchLiquidityMoveTotals,
   fetchLiquiditySeries,
   fetchSwapTotals,
-  fetchTvlHourly,
+  fetchTvlSeries,
 } from "@/lib/api/server/protocols";
 import { formatRelative, formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatUsdCompact } from "@/lib/format/format-usd";
@@ -120,7 +120,7 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
   let tvl, series, totals, swaps;
   try {
     [tvl, series, totals, swaps] = await Promise.all([
-      fetchTvlHourly(protocol, period),
+      fetchTvlSeries(protocol, period),
       fetchLiquiditySeries(protocol, period),
       fetchLiquidityMoveTotals(protocol, period),
       swapsRead,

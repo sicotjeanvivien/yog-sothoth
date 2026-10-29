@@ -737,7 +737,7 @@ tranche written (`analytic_tranches`), listed by volume — rounded as the curso
 by start, each named by its pool's token symbols (`LEFT JOIN`: a pool without metadata stays
 listed), and summed with their distinct pools, those in progress and their median and p90
 duration (`percentile_cont`); the protocol's volume by frozen hour, the hours of
-`analytic_protocol_hourly` as `swaps/hourly`, split by `analytic_rotation_run_hours` summed per
+`analytic_protocol_hourly` as `swaps/series?interval=1h`, split by `analytic_rotation_run_hours` summed per
 hour from the runs' first whole hour: an hour without a run is 0 in runs, one before it unsplit;
 by 24 hours the same, a day split only whole.
 `tests/rotation_runs.rs` holds the period, both orders, the symbols, the totals, the split bars

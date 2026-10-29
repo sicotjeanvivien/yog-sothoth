@@ -8,15 +8,14 @@ use axum::{
 
 use yog_core::domain::{LiquidityMoveScope, Protocol};
 
-use crate::application::BucketPeriod;
 use crate::http::{
     AppState,
     dto::{
         LiquidityMoveResponse, ProtocolLiquidityFlowsBucketResponse,
         ProtocolLiquidityFlowsResponse, WindowedPageResponse, WindowedResponse,
         request::{
-            LiquidityMovesParams, ListLiquidityMovesRequest, WindowParams, parse_pool,
-            parse_protocol,
+            FrozenSeriesParams, LiquidityMovesParams, ListLiquidityMovesRequest, WindowParams,
+            parse_pool, parse_protocol,
         },
     },
     error::ApiError,
@@ -57,52 +56,25 @@ pub(crate) async fn get_protocol_liquidity_move_totals(
 
 #[utoipa::path(
     get,
-    path = "/api/protocols/{protocol}/liquidity-moves/hourly",
-    params(WindowParams),
+    path = "/api/protocols/{protocol}/liquidity-moves/series",
+    params(FrozenSeriesParams),
     responses((
         status = 200,
-        description = "The protocol's liquidity created, added and removed, hour by hour.",
+        description = "The protocol's liquidity created, added and removed, by `interval`: an hour, \
+                       or 24 hours ending at `asOf`.",
         body = WindowedResponse<ProtocolLiquidityFlowsBucketResponse>
     ))
 )]
-pub(crate) async fn get_protocol_liquidity_moves_hourly(
+pub(crate) async fn get_protocol_liquidity_moves_series(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(params): Query<WindowParams>,
+    Query(params): Query<FrozenSeriesParams>,
 ) -> Result<Json<WindowedResponse<ProtocolLiquidityFlowsBucketResponse>>, ApiError> {
-    list_buckets(&state, &protocol, params, BucketPeriod::Hour).await
-}
-
-#[utoipa::path(
-    get,
-    path = "/api/protocols/{protocol}/liquidity-moves/daily",
-    params(WindowParams),
-    responses((
-        status = 200,
-        description = "The protocol's liquidity created, added and removed, by 24 hours \
-                       ending at `asOf`.",
-        body = WindowedResponse<ProtocolLiquidityFlowsBucketResponse>
-    ))
-)]
-pub(crate) async fn get_protocol_liquidity_moves_daily(
-    State(state): State<AppState>,
-    Path(protocol): Path<String>,
-    Query(params): Query<WindowParams>,
-) -> Result<Json<WindowedResponse<ProtocolLiquidityFlowsBucketResponse>>, ApiError> {
-    list_buckets(&state, &protocol, params, BucketPeriod::Day).await
-}
-
-async fn list_buckets(
-    state: &AppState,
-    protocol: &str,
-    params: WindowParams,
-    bucket: BucketPeriod,
-) -> Result<Json<WindowedResponse<ProtocolLiquidityFlowsBucketResponse>>, ApiError> {
-    let protocol = parse_protocol(protocol)?;
+    let protocol = parse_protocol(&protocol)?;
     let window = params.window.into();
     let measured = state
         .liquidity_move_service
-        .list_liquidity_buckets(window, bucket, protocol)
+        .list_liquidity_buckets(window, params.interval.into(), protocol)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }

@@ -1,4 +1,4 @@
-//! A bucket of `pool-creations/hourly` or `/daily`.
+//! A bucket of `pool-creations/series`.
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
