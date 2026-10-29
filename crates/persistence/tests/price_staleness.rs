@@ -473,6 +473,21 @@ async fn the_price_lookup_is_inlined(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn the_stock_rule_is_inlined(pool: PgPool) {
+    // Mutation: `yog_market_believed` as a scalar function with an EXISTS — Postgres cannot inline
+    // it, and every side of `pool_current_tvl` becomes a call outside the plan.
+    let plan: Vec<String> =
+        sqlx::query_scalar("EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM pool_current_tvl")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    let plan = plan.join("\n");
+
+    assert!(!plan.contains("yog_market_believed"), "{plan}");
+    assert!(plan.contains("analytic_token_pool_ceilings"), "{plan}");
+}
+
+#[sqlx::test]
 async fn the_guard_catches_a_price_read_that_is_not_a_lateral(pool: PgPool) {
     // The guard must bite on the likeliest next shape: a plain join, no `FROM token_prices`.
     sqlx::query(

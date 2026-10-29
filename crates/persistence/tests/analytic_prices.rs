@@ -1170,6 +1170,7 @@ fn the_writer_reads_market_prices_in_the_price_table_alone() {
             [
                 "token_prices",
                 "yog_price_asof",
+                "yog_market_believed",
                 "swap_hour_prices",
                 "hourly_priced",
                 "tranche_pool_prices",
@@ -1374,11 +1375,8 @@ async fn an_anchor_our_pools_contradict_is_valued_by_its_partner(pool: PgPool) {
     let (market_x, price_x, _, price_y) = prices(&pool, &found[0], tranche).await;
     assert_eq!(market_x, None, "a contradicted quote is no quote");
     assert_eq!((price_x, price_y), (Some(dec("1")), Some(dec("1"))));
-    // Against the witness drawn from the believed price: Y would lose it with X.
-    assert_eq!(
-        implied(&pool, &found[0], tranche).await.1,
-        Some(dec("1000"))
-    );
+    // Against the witness drawn from X's quote: Y's ceiling would be $1 000 for a week.
+    assert_eq!(implied(&pool, &found[0], tranche).await.1, None);
     let volume: Option<BigDecimal> = sqlx::query_scalar(
         "SELECT volume_in_a_usd FROM analytic_pool_5min WHERE pool_address = $1",
     )
@@ -1390,8 +1388,9 @@ async fn an_anchor_our_pools_contradict_is_valued_by_its_partner(pool: PgPool) {
 }
 
 /// A pool that moved liquidity without swapping takes the same rule (046). X, the anchor of the two
-/// pools valued, quoted $1 000 and capped at $1 by our pools, falls to its pool's last price.
-/// Against `yog_market_believed` dropped from `meteora_damm_v2_tranche_pool_prices`: $1 000.
+/// pools valued, quoted $1 000 and capped at $1 by our pools, has no market price: a move counts
+/// its side 0, as the TVL does. Against the rule dropped from `meteora_damm_v2_tranche_pool_prices`:
+/// a move of 1 X and 1 Y would be worth $1 001.
 #[sqlx::test]
 async fn an_unswapped_anchor_our_pools_contradict_falls_to_its_last_price(pool: PgPool) {
     let tranche = settled_tranche();
@@ -1418,9 +1417,12 @@ async fn an_unswapped_anchor_our_pools_contradict_falls_to_its_last_price(pool: 
         pools.push(address);
     }
 
-    let price_x: Option<BigDecimal> = sqlx::query_scalar(
-        "SELECT price_a_usd FROM meteora_damm_v2_tranche_pool_prices($1, INTERVAL '5 minutes', $2)
-          WHERE pool_address = $3",
+    price_at(&pool, &pk(31).to_string(), "1", tranche).await;
+    let move_usd: Option<BigDecimal> = sqlx::query_scalar(
+        "SELECT yog_pool_amounts_usd(1000000, 1000000, 6, 6,
+                                     p.price_a_usd, p.price_b_usd, p.market_a_usd, p.market_b_usd)
+           FROM meteora_damm_v2_tranche_pool_prices($1, INTERVAL '5 minutes', $2) p
+          WHERE p.pool_address = $3",
     )
     .bind(tranche)
     .bind(&pools)
@@ -1428,5 +1430,5 @@ async fn an_unswapped_anchor_our_pools_contradict_falls_to_its_last_price(pool: 
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(price_x, Some(dec("1")));
+    assert_eq!(move_usd, Some(dec("1")));
 }

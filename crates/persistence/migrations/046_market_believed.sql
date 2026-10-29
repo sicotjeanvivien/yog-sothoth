@@ -3,24 +3,37 @@
 -- `token_stock_price` holds a stock to it; yog-analytic holds a flow to it when it writes the flow,
 -- once — yog_price_asof stays the raw quote, so what history shows never moves with a ceiling.
 
-CREATE FUNCTION yog_market_believed(mint TEXT, price_usd NUMERIC)
-RETURNS NUMERIC
+-- ⚠️ A set-returning BEGIN ATOMIC body: Postgres inlines it; a scalar one with EXISTS it does not.
+CREATE FUNCTION yog_market_believed(mint TEXT, quote_usd NUMERIC)
+RETURNS TABLE (price_usd NUMERIC)
 LANGUAGE sql STABLE PARALLEL SAFE
-RETURN CASE WHEN EXISTS (SELECT 1 FROM analytic_token_pool_ceilings c
-                          WHERE c.mint = yog_market_believed.mint
-                            AND yog_market_believed.price_usd > yog_market_over_pool_max() * c.ceiling_usd)
-            THEN NULL ELSE yog_market_believed.price_usd END;
+BEGIN ATOMIC
+    SELECT yog_market_believed.quote_usd
+     WHERE NOT EXISTS (SELECT 1 FROM analytic_token_pool_ceilings c
+                        WHERE c.mint = yog_market_believed.mint
+                          AND yog_market_believed.quote_usd > yog_market_over_pool_max() * c.ceiling_usd);
+END;
 
--- ⚠️ Called as its caller: every role reading `pool_current_tvl` reads the ceilings too.
+CREATE FUNCTION yog_market_believed_asof(mint TEXT, at TIMESTAMPTZ)
+RETURNS TABLE (price_usd NUMERIC)
+LANGUAGE sql STABLE PARALLEL SAFE
+BEGIN ATOMIC
+    SELECT b.price_usd
+      FROM yog_price_asof(yog_market_believed_asof.mint, yog_market_believed_asof.at) q
+     CROSS JOIN LATERAL yog_market_believed(yog_market_believed_asof.mint, q.price_usd) b;
+END;
+
+-- ⚠️ Read as their caller: every role reading `pool_current_tvl` reads the ceilings too.
 GRANT SELECT ON analytic_token_pool_ceilings TO yog_api, yog_signals;
 
 CREATE OR REPLACE VIEW token_stock_price AS
 SELECT tp.mint, tp.price_usd, tp.fetched_at
   FROM token_last_price tp
  WHERE tp.fetched_at >= now() - yog_price_max_age_latest()
-   AND yog_market_believed(tp.mint, tp.price_usd) IS NOT NULL;
+   AND EXISTS (SELECT 1 FROM yog_market_believed(tp.mint, tp.price_usd));
 
--- A move in a pool that did not swap: its anchor held to the rule its tranche's swaps are.
+-- The price in the tranche of each of `pool_addresses`, at which a move or a claim is valued:
+-- each passes its own pools, the anchor counting them with the tranche's swaps.
 CREATE OR REPLACE FUNCTION meteora_damm_v2_tranche_pool_prices(
     tranche        TIMESTAMPTZ,
     width          INTERVAL,
@@ -92,10 +105,8 @@ unswapped AS (
          SELECT CASE WHEN na.pools > nb.pools THEN 'a' WHEN nb.pools > na.pools THEN 'b' END
                     AS anchor
      ) n
-      LEFT JOIN LATERAL (SELECT yog_market_believed(mp.mint_a, q.price_usd) AS price_usd
-                           FROM yog_price_asof(mp.mint_a, tranche + width) q) ma ON true
-      LEFT JOIN LATERAL (SELECT yog_market_believed(mp.mint_b, q.price_usd) AS price_usd
-                           FROM yog_price_asof(mp.mint_b, tranche + width) q) mb ON true
+      LEFT JOIN LATERAL yog_market_believed_asof(mp.mint_a, tranche + width) ma ON true
+      LEFT JOIN LATERAL yog_market_believed_asof(mp.mint_b, tranche + width) mb ON true
      WHERE NOT EXISTS (SELECT 1 FROM swapped s WHERE s.pool_address = mp.pool_address)
        -- A pool never priced has no bound at all: what it moved or paid stays unvalued.
        AND (last_a.price IS NOT NULL OR last_b.price IS NOT NULL)

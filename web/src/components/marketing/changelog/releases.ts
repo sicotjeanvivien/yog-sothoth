@@ -40,11 +40,11 @@ export const RELEASES: readonly Release[] = [
         kind: "fixes",
         items: [
           {
-            text: "A token whose market price is more than ten times the highest price our pools traded it at over 7 days no longer values volume, fees, liquidity moves or claims either: its trades are valued by the other token of the pool, as the TVL has been since v0.5.1. Over the week before, it would have corrected about $28,000 of volume.",
+            text: "A token whose market price is more than ten times the highest price our pools traded it at over 7 days no longer values volume, fees, liquidity moves or claims either: its swaps are valued by the other token of the pool, and in a move or a claim it counts 0, as in the TVL since v0.5.1. Over the week before, it would have corrected about $28,000 of volume.",
             technical: false,
           },
           {
-            text: "yog_market_believed is the one rule for a quote our pools contradict: token_stock_price holds a stock to it, and yog-analytic a flow when it writes it — the tranches, the moves of pools that did not swap, the rewards outside their pool. An anchor so contradicted falls to what its pool traded; yog_price_asof stays the raw quote, so history never moves with a ceiling. Migration 046.",
+            text: "yog_market_believed is the one rule for a quote our pools contradict: token_stock_price holds a stock to it, and yog-analytic a flow when it writes it — the tranches, the moves of pools that did not swap, the rewards outside their pool. An anchor so contradicted falls to what its pool traded and its partner values the swaps; it witnesses no ceiling. yog_price_asof stays the raw quote, so history never moves with a ceiling. Migration 046.",
             technical: true,
           },
         ],
