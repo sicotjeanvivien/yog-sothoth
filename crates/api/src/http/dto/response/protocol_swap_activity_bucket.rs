@@ -1,4 +1,4 @@
-//! A bucket of `swaps/hourly` or `/daily`, at the root or under a protocol.
+//! A bucket of `swaps/series`, at the root or under a protocol.
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;

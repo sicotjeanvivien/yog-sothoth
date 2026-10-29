@@ -1,4 +1,4 @@
-//! A bucket of a pool's `swaps/hourly` or `/daily`.
+//! A bucket of a pool's `swaps/series`.
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;

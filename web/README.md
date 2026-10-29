@@ -277,7 +277,7 @@ hour — over the last hour, the end of the last 5-minute tranche written.
 unknown or not offered by the page is 24h; the DAMM v2 page offers no `1h`) drives every label, section title, chart and ⓘ, which speak of
 "the chosen period". A bar is a 5-minute tranche over 1h, an hour over 24h, a 6-hour slice over 7d, a 24-hour
 slice over 30d (`SLOT_MS`), each ending at `asOf`; over 7d the web sums the
-`hourly` series by six, as the API sums its days: whether an hour is covered is the API's. 1h is the rolling
+hourly series (`interval=1h`) by six, as the API sums its days: whether an hour is covered is the API's. 1h is the rolling
 hour through the last tranche written, read on `swaps/series?interval=5m`; it does not fall on the last bar of
 24h, and its coverage counts pool tranches, not pool-hours (`coverageUnit`). The TVL stays
 the value of the last frozen hour; only its change follows the period, and over 1h it has none. The selector (`period-selector.tsx`) is a set of
@@ -367,7 +367,7 @@ with a green dot beside it while the ingestion is live
 
 **02 Volume** — `protocol/volume/volume-tab.tsx`: where the volume comes from,
 each bar of the protocol's swaps split between its rotation runs
-(`dash-run`) and the rest (`dash-run-out`), as `rotation-runs/hourly|daily` serves
+(`dash-run`) and the rest (`dash-run-out`), as `rotation-runs/series` serves
 it; `lib/protocol/volume.ts` sums the hours of a 7-day slice, split only when each
 of them is. The runs are measured from a later hour than the swaps: a bar they do
 not split keeps its volume, unsplit, in a neutral tint, and the legend says since
@@ -383,7 +383,7 @@ covered, they say so instead of a partial count. The words are "rafale" and
 
 **03 Fees** — `protocol/fees/fees-tab.tsx`: where the protocol's fees go, the
 LPs' part (`claiming_fee + compounding_fee`), the protocol's and the referral's,
-read on `swaps/hourly|daily` of the protocol and summed per bar by
+read on `swaps/series` of the protocol and summed per bar by
 `lib/protocol/fees.ts`: per destination over the period, amount and share, and
 per bar stacked in the three tints (`dash-fee-*`), the bar under the pointer
 detailed under the chart. The three parts make the fees whole. Beside it, what the
@@ -394,7 +394,7 @@ than the swaps: until a window is covered, the block says so. The LPs' split bet
 claiming and compounding is not drawn yet.
 
 **04 Pools & positions** — `protocol/pools/pools-tab.tsx`: the pools born over the
-period, bar by bar, from `pool-creations/hourly|daily` of the protocol
+period, bar by bar, from `pool-creations/series` of the protocol
 (`lib/protocol/pools.ts`), and the five whose first deposit is worth the most, from
 `liquidity-moves?kind=create&sort=amount`: pair, creator, lock, deposit, age; a lock not measured
 yet reads "—", apart from "none" (`lockKey`). A pool whose deposit

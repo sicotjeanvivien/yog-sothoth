@@ -1576,26 +1576,6 @@ export const zListPoolCreationsQuery = z.object({
 
 export const zListPoolCreationsResponse = zPageResponsePoolCreationEventResponse;
 
-export const zGetPoolCreationsDailyQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional()
-});
-
-export const zGetPoolCreationsDailyResponse = zWindowedResponseProtocolPoolCreationsBucketResponse;
-
-export const zGetPoolCreationsHourlyQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional()
-});
-
-export const zGetPoolCreationsHourlyResponse = zWindowedResponseProtocolPoolCreationsBucketResponse;
-
 export const zGetPoolCreationsSeriesQuery = z.object({
     window: z.enum([
         '1h',
@@ -1834,33 +1814,20 @@ export const zListPoolSwapsQuery = z.object({
 
 export const zListPoolSwapsResponse = zPageResponseSwapEventResponse;
 
-export const zGetPoolSwapsDailyPath = z.object({
+export const zGetPoolSwapsSeriesPath = z.object({
     pool: z.string()
 });
 
-export const zGetPoolSwapsDailyQuery = z.object({
+export const zGetPoolSwapsSeriesQuery = z.object({
     window: z.enum([
         '24h',
         '7d',
         '30d'
-    ]).optional()
+    ]).optional(),
+    interval: z.enum(['1h', '1d'])
 });
 
-export const zGetPoolSwapsDailyResponse = zWindowedResponsePoolSwapBucketResponse;
-
-export const zGetPoolSwapsHourlyPath = z.object({
-    pool: z.string()
-});
-
-export const zGetPoolSwapsHourlyQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional()
-});
-
-export const zGetPoolSwapsHourlyResponse = zWindowedResponsePoolSwapBucketResponse;
+export const zGetPoolSwapsSeriesResponse = zWindowedResponsePoolSwapBucketResponse;
 
 export const zGetPoolSwapTotalsPath = z.object({
     pool: z.string()
@@ -1963,33 +1930,20 @@ export const zListProtocolLiquidityMovesQuery = z.object({
 
 export const zListProtocolLiquidityMovesResponse = zWindowedPageResponseLiquidityMoveResponse;
 
-export const zGetProtocolLiquidityMovesDailyPath = z.object({
+export const zGetProtocolLiquidityMovesSeriesPath = z.object({
     protocol: z.string()
 });
 
-export const zGetProtocolLiquidityMovesDailyQuery = z.object({
+export const zGetProtocolLiquidityMovesSeriesQuery = z.object({
     window: z.enum([
         '24h',
         '7d',
         '30d'
-    ]).optional()
+    ]).optional(),
+    interval: z.enum(['1h', '1d'])
 });
 
-export const zGetProtocolLiquidityMovesDailyResponse = zWindowedResponseProtocolLiquidityFlowsBucketResponse;
-
-export const zGetProtocolLiquidityMovesHourlyPath = z.object({
-    protocol: z.string()
-});
-
-export const zGetProtocolLiquidityMovesHourlyQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional()
-});
-
-export const zGetProtocolLiquidityMovesHourlyResponse = zWindowedResponseProtocolLiquidityFlowsBucketResponse;
+export const zGetProtocolLiquidityMovesSeriesResponse = zWindowedResponseProtocolLiquidityFlowsBucketResponse;
 
 export const zGetProtocolLiquidityMoveTotalsPath = z.object({
     protocol: z.string()
@@ -2036,34 +1990,6 @@ export const zListProtocolPoolCreationsQuery = z.object({
 });
 
 export const zListProtocolPoolCreationsResponse = zPageResponsePoolCreationEventResponse;
-
-export const zGetProtocolPoolCreationsDailyPath = z.object({
-    protocol: z.string()
-});
-
-export const zGetProtocolPoolCreationsDailyQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional()
-});
-
-export const zGetProtocolPoolCreationsDailyResponse = zWindowedResponseProtocolPoolCreationsBucketResponse;
-
-export const zGetProtocolPoolCreationsHourlyPath = z.object({
-    protocol: z.string()
-});
-
-export const zGetProtocolPoolCreationsHourlyQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional()
-});
-
-export const zGetProtocolPoolCreationsHourlyResponse = zWindowedResponseProtocolPoolCreationsBucketResponse;
 
 export const zGetProtocolPoolCreationsSeriesPath = z.object({
     protocol: z.string()
@@ -2264,33 +2190,20 @@ export const zListProtocolRotationRunsQuery = z.object({
 
 export const zListProtocolRotationRunsResponse = zWindowedPageResponseRotationRunResponse;
 
-export const zGetProtocolRotationRunsDailyPath = z.object({
+export const zGetProtocolRotationRunsSeriesPath = z.object({
     protocol: z.string()
 });
 
-export const zGetProtocolRotationRunsDailyQuery = z.object({
+export const zGetProtocolRotationRunsSeriesQuery = z.object({
     window: z.enum([
         '24h',
         '7d',
         '30d'
-    ]).optional()
+    ]).optional(),
+    interval: z.enum(['1h', '1d'])
 });
 
-export const zGetProtocolRotationRunsDailyResponse = zWindowedResponseProtocolRotationRunBucketResponse;
-
-export const zGetProtocolRotationRunsHourlyPath = z.object({
-    protocol: z.string()
-});
-
-export const zGetProtocolRotationRunsHourlyQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional()
-});
-
-export const zGetProtocolRotationRunsHourlyResponse = zWindowedResponseProtocolRotationRunBucketResponse;
+export const zGetProtocolRotationRunsSeriesResponse = zWindowedResponseProtocolRotationRunBucketResponse;
 
 export const zGetProtocolRotationRunTotalsPath = z.object({
     protocol: z.string()
@@ -2344,34 +2257,6 @@ export const zListProtocolSwapsQuery = z.object({
 
 export const zListProtocolSwapsResponse = zPageResponseSwapEventResponse;
 
-export const zGetProtocolSwapsDailyPath = z.object({
-    protocol: z.string()
-});
-
-export const zGetProtocolSwapsDailyQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional()
-});
-
-export const zGetProtocolSwapsDailyResponse = zWindowedResponseProtocolSwapActivityBucketResponse;
-
-export const zGetProtocolSwapsHourlyPath = z.object({
-    protocol: z.string()
-});
-
-export const zGetProtocolSwapsHourlyQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional()
-});
-
-export const zGetProtocolSwapsHourlyResponse = zWindowedResponseProtocolSwapActivityBucketResponse;
-
 export const zGetProtocolSwapsSeriesPath = z.object({
     protocol: z.string()
 });
@@ -2419,19 +2304,20 @@ export const zGetProtocolTvlReadingPath = z.object({
 
 export const zGetProtocolTvlReadingResponse = zReadingResponseProtocolTvlResponse;
 
-export const zGetProtocolTvlReadingsHourlyPath = z.object({
+export const zGetProtocolTvlSeriesPath = z.object({
     protocol: z.string()
 });
 
-export const zGetProtocolTvlReadingsHourlyQuery = z.object({
+export const zGetProtocolTvlSeriesQuery = z.object({
     window: z.enum([
         '24h',
         '7d',
         '30d'
-    ]).optional()
+    ]).optional(),
+    interval: z.enum(['1h'])
 });
 
-export const zGetProtocolTvlReadingsHourlyResponse = zWindowedResponseProtocolTvlResponse;
+export const zGetProtocolTvlSeriesResponse = zWindowedResponseProtocolTvlResponse;
 
 export const zGetProtocolTvlTotalsPath = z.object({
     protocol: z.string()
@@ -2516,26 +2402,6 @@ export const zListSwapsByTokenQuery = z.object({
 
 export const zListSwapsByTokenResponse = zTokenActivityPageResponse;
 
-export const zGetSwapsDailyQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional()
-});
-
-export const zGetSwapsDailyResponse = zWindowedResponseProtocolSwapActivityBucketResponse;
-
-export const zGetSwapsHourlyQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional()
-});
-
-export const zGetSwapsHourlyResponse = zWindowedResponseProtocolSwapActivityBucketResponse;
-
 export const zGetSwapsSeriesQuery = z.object({
     window: z.enum([
         '1h',
@@ -2611,15 +2477,16 @@ export const zListTokenPricesResponse = zPageResponseTokenPriceResponse;
 
 export const zGetTvlResponse = zReadingResponseProtocolTvlResponse;
 
-export const zGetTvlHourlyQuery = z.object({
+export const zGetTvlSeriesQuery = z.object({
     window: z.enum([
         '24h',
         '7d',
         '30d'
-    ]).optional()
+    ]).optional(),
+    interval: z.enum(['1h'])
 });
 
-export const zGetTvlHourlyResponse = zWindowedResponseProtocolTvlResponse;
+export const zGetTvlSeriesResponse = zWindowedResponseProtocolTvlResponse;
 
 export const zGetTvlTotalsQuery = z.object({
     window: z.enum([

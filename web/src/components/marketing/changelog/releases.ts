@@ -44,7 +44,11 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "window=1h on swaps/totals (offset=1h), swaps/by-token, pool-creations/totals and rotation-runs/totals, refused (400) elsewhere; new …/swaps/series and …/pool-creations/series with interval=5m|1h|1d, 5m over window=1h only, 1h and 1d returning what hourly and daily return. Over the last hour, poolHours count pool tranches. Migration 047 grants analytic_pool_5min to yog_api.",
+            text: "window=1h on swaps/totals (offset=1h), swaps/by-token, pool-creations/totals and rotation-runs/totals, refused (400) elsewhere; new …/swaps/series and …/pool-creations/series with interval=5m|1h|1d, 5m over window=1h only. Over the last hour, poolHours count pool tranches. Migration 047 grants analytic_pool_5min to yog_api.",
+            technical: true,
+          },
+          {
+            text: "Removed: every …/hourly and …/daily route. A series is now …/series?interval=, the same rows by bucket — 1h an hour, 1d the 24 hours ending at asOf — on the swaps (root, protocol, pool), the pool creations, the liquidity moves and the rotation runs; the TVL's readings are …/tvl/series?interval=1h.",
             technical: true,
           },
         ],

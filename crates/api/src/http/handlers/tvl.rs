@@ -11,7 +11,9 @@ use crate::http::{
     AppState,
     dto::{
         ProtocolTvlChangeResponse, ProtocolTvlResponse, ReadingResponse, WindowedResponse,
-        request::{NoQuery, WindowParams, parse_protocol},
+        request::{
+            NoQuery, ReadingIntervalParam, ReadingSeriesParams, WindowParams, parse_protocol,
+        },
     },
     error::ApiError,
 };
@@ -60,46 +62,50 @@ async fn get_latest(
 
 #[utoipa::path(
     get,
-    path = "/api/tvl/hourly",
-    params(WindowParams),
+    path = "/api/tvl/series",
+    params(ReadingSeriesParams),
     responses((
         status = 200,
         description = "Each protocol's TVL reading of every hour measured, from the window's start.",
         body = WindowedResponse<ProtocolTvlResponse>
     ))
 )]
-pub(crate) async fn get_tvl_hourly(
+pub(crate) async fn get_tvl_series(
     State(state): State<AppState>,
-    Query(params): Query<WindowParams>,
+    Query(params): Query<ReadingSeriesParams>,
 ) -> Result<Json<WindowedResponse<ProtocolTvlResponse>>, ApiError> {
-    list_hourly(&state, params, None).await
+    list_readings(&state, params, None).await
 }
 
 #[utoipa::path(
     get,
-    path = "/api/protocols/{protocol}/tvl/hourly",
-    params(WindowParams),
+    path = "/api/protocols/{protocol}/tvl/series",
+    params(ReadingSeriesParams),
     responses((
         status = 200,
         description = "The protocol's TVL reading of every hour measured, from the window's start.",
         body = WindowedResponse<ProtocolTvlResponse>
     ))
 )]
-pub(crate) async fn get_protocol_tvl_readings_hourly(
+pub(crate) async fn get_protocol_tvl_series(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(params): Query<WindowParams>,
+    Query(params): Query<ReadingSeriesParams>,
 ) -> Result<Json<WindowedResponse<ProtocolTvlResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
-    list_hourly(&state, params, Some(protocol)).await
+    list_readings(&state, params, Some(protocol)).await
 }
 
-async fn list_hourly(
+async fn list_readings(
     state: &AppState,
-    params: WindowParams,
+    params: ReadingSeriesParams,
     protocol: Option<Protocol>,
 ) -> Result<Json<WindowedResponse<ProtocolTvlResponse>>, ApiError> {
-    let window = params.window.into();
+    let ReadingSeriesParams {
+        window,
+        interval: ReadingIntervalParam::Hour,
+    } = params;
+    let window = window.into();
     let measured = state
         .protocol_tvl_service
         .list_tvl_hourly(window, protocol)

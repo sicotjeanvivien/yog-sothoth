@@ -1,4 +1,4 @@
-//! A bucket of a protocol's `liquidity-moves/hourly` or `/daily`.
+//! A bucket of a protocol's `liquidity-moves/series`.
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;

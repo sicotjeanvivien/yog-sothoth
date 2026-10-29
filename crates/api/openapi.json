@@ -3576,7 +3576,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/UnsignedDecimal",
-                "description": "Every swap of the bucket, as `swaps/hourly|daily`; `null` where none is valued."
+                "description": "Every swap of the bucket, as `swaps/series`; `null` where none is valued."
               },
               {
                 "type": "null"
@@ -5557,7 +5557,7 @@
                   "oneOf": [
                     {
                       "$ref": "#/components/schemas/UnsignedDecimal",
-                      "description": "Every swap of the bucket, as `swaps/hourly|daily`; `null` where none is valued."
+                      "description": "Every swap of the bucket, as `swaps/series`; `null` where none is valued."
                     },
                     {
                       "type": "null"
@@ -6334,90 +6334,6 @@
               }
             },
             "description": "A page of every protocol's pool creations, the most recent first; the window ends at the first page."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        }
-      }
-    },
-    "/api/pool-creations/daily": {
-      "get": {
-        "operationId": "get_pool_creations_daily",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "window",
-            "required": false,
-            "schema": {
-              "enum": [
-                "24h",
-                "7d",
-                "30d"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPoolCreationsBucketResponse"
-                }
-              }
-            },
-            "description": "Each protocol's pools created, by 24 hours ending at `asOf`."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        }
-      }
-    },
-    "/api/pool-creations/hourly": {
-      "get": {
-        "operationId": "get_pool_creations_hourly",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "window",
-            "required": false,
-            "schema": {
-              "enum": [
-                "24h",
-                "7d",
-                "30d"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPoolCreationsBucketResponse"
-                }
-              }
-            },
-            "description": "Each protocol's pools created, hour by hour."
           },
           "default": {
             "content": {
@@ -7546,9 +7462,9 @@
         }
       }
     },
-    "/api/pools/{pool}/swaps/daily": {
+    "/api/pools/{pool}/swaps/series": {
       "get": {
-        "operationId": "get_pool_swaps_daily",
+        "operationId": "get_pool_swaps_series",
         "parameters": [
           {
             "in": "query",
@@ -7559,6 +7475,19 @@
                 "24h",
                 "7d",
                 "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "interval",
+            "required": true,
+            "schema": {
+              "description": "The step of a series of frozen hours: an hour, or 24 hours ending at `asOf`.",
+              "enum": [
+                "1h",
+                "1d"
               ],
               "type": "string"
             }
@@ -7581,57 +7510,7 @@
                 }
               }
             },
-            "description": "The pool's swaps, by 24 hours ending at `asOf`."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        }
-      }
-    },
-    "/api/pools/{pool}/swaps/hourly": {
-      "get": {
-        "operationId": "get_pool_swaps_hourly",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "window",
-            "required": false,
-            "schema": {
-              "enum": [
-                "24h",
-                "7d",
-                "30d"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "pool",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_PoolSwapBucketResponse"
-                }
-              }
-            },
-            "description": "The pool's swaps, hour by hour."
+            "description": "The pool's swaps by `interval`: an hour, or 24 hours ending at `asOf`."
           },
           "default": {
             "content": {
@@ -8153,9 +8032,9 @@
         }
       }
     },
-    "/api/protocols/{protocol}/liquidity-moves/daily": {
+    "/api/protocols/{protocol}/liquidity-moves/series": {
       "get": {
-        "operationId": "get_protocol_liquidity_moves_daily",
+        "operationId": "get_protocol_liquidity_moves_series",
         "parameters": [
           {
             "in": "query",
@@ -8166,6 +8045,19 @@
                 "24h",
                 "7d",
                 "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "interval",
+            "required": true,
+            "schema": {
+              "description": "The step of a series of frozen hours: an hour, or 24 hours ending at `asOf`.",
+              "enum": [
+                "1h",
+                "1d"
               ],
               "type": "string"
             }
@@ -8188,57 +8080,7 @@
                 }
               }
             },
-            "description": "The protocol's liquidity created, added and removed, by 24 hours ending at `asOf`."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        }
-      }
-    },
-    "/api/protocols/{protocol}/liquidity-moves/hourly": {
-      "get": {
-        "operationId": "get_protocol_liquidity_moves_hourly",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "window",
-            "required": false,
-            "schema": {
-              "enum": [
-                "24h",
-                "7d",
-                "30d"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "protocol",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolLiquidityFlowsBucketResponse"
-                }
-              }
-            },
-            "description": "The protocol's liquidity created, added and removed, hour by hour."
+            "description": "The protocol's liquidity created, added and removed, by `interval`: an hour, or 24 hours ending at `asOf`."
           },
           "default": {
             "content": {
@@ -8435,106 +8277,6 @@
               }
             },
             "description": "A page of the protocol's pool creations, the most recent first; the window ends at the first page."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        }
-      }
-    },
-    "/api/protocols/{protocol}/pool-creations/daily": {
-      "get": {
-        "operationId": "get_protocol_pool_creations_daily",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "window",
-            "required": false,
-            "schema": {
-              "enum": [
-                "24h",
-                "7d",
-                "30d"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "protocol",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPoolCreationsBucketResponse"
-                }
-              }
-            },
-            "description": "The protocol's pools created, by 24 hours ending at `asOf`."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        }
-      }
-    },
-    "/api/protocols/{protocol}/pool-creations/hourly": {
-      "get": {
-        "operationId": "get_protocol_pool_creations_hourly",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "window",
-            "required": false,
-            "schema": {
-              "enum": [
-                "24h",
-                "7d",
-                "30d"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "protocol",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPoolCreationsBucketResponse"
-                }
-              }
-            },
-            "description": "The protocol's pools created, hour by hour."
           },
           "default": {
             "content": {
@@ -9378,9 +9120,9 @@
         }
       }
     },
-    "/api/protocols/{protocol}/rotation-runs/daily": {
+    "/api/protocols/{protocol}/rotation-runs/series": {
       "get": {
-        "operationId": "get_protocol_rotation_runs_daily",
+        "operationId": "get_protocol_rotation_runs_series",
         "parameters": [
           {
             "in": "query",
@@ -9391,6 +9133,19 @@
                 "24h",
                 "7d",
                 "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "interval",
+            "required": true,
+            "schema": {
+              "description": "The step of a series of frozen hours: an hour, or 24 hours ending at `asOf`.",
+              "enum": [
+                "1h",
+                "1d"
               ],
               "type": "string"
             }
@@ -9413,57 +9168,7 @@
                 }
               }
             },
-            "description": "The protocol's volume by 24 hours ending at `asOf`, split by its rotation runs."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        }
-      }
-    },
-    "/api/protocols/{protocol}/rotation-runs/hourly": {
-      "get": {
-        "operationId": "get_protocol_rotation_runs_hourly",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "window",
-            "required": false,
-            "schema": {
-              "enum": [
-                "24h",
-                "7d",
-                "30d"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "protocol",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolRotationRunBucketResponse"
-                }
-              }
-            },
-            "description": "The protocol's volume hour by hour, split by its rotation runs."
+            "description": "The protocol's volume by `interval`, an hour or 24 hours ending at `asOf`, split by its rotation runs."
           },
           "default": {
             "content": {
@@ -9714,106 +9419,6 @@
         }
       }
     },
-    "/api/protocols/{protocol}/swaps/daily": {
-      "get": {
-        "operationId": "get_protocol_swaps_daily",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "window",
-            "required": false,
-            "schema": {
-              "enum": [
-                "24h",
-                "7d",
-                "30d"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "protocol",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapActivityBucketResponse"
-                }
-              }
-            },
-            "description": "The protocol's swaps, by 24 hours ending at `asOf`."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        }
-      }
-    },
-    "/api/protocols/{protocol}/swaps/hourly": {
-      "get": {
-        "operationId": "get_protocol_swaps_hourly",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "window",
-            "required": false,
-            "schema": {
-              "enum": [
-                "24h",
-                "7d",
-                "30d"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "protocol",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapActivityBucketResponse"
-                }
-              }
-            },
-            "description": "The protocol's swaps, hour by hour."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        }
-      }
-    },
     "/api/protocols/{protocol}/swaps/series": {
       "get": {
         "operationId": "get_protocol_swaps_series",
@@ -9991,9 +9596,9 @@
         }
       }
     },
-    "/api/protocols/{protocol}/tvl/hourly": {
+    "/api/protocols/{protocol}/tvl/series": {
       "get": {
-        "operationId": "get_protocol_tvl_readings_hourly",
+        "operationId": "get_protocol_tvl_series",
         "parameters": [
           {
             "in": "query",
@@ -10004,6 +9609,18 @@
                 "24h",
                 "7d",
                 "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "interval",
+            "required": true,
+            "schema": {
+              "description": "The step of a series of readings: one per hour measured.",
+              "enum": [
+                "1h"
               ],
               "type": "string"
             }
@@ -10497,90 +10114,6 @@
         }
       }
     },
-    "/api/swaps/daily": {
-      "get": {
-        "operationId": "get_swaps_daily",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "window",
-            "required": false,
-            "schema": {
-              "enum": [
-                "24h",
-                "7d",
-                "30d"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapActivityBucketResponse"
-                }
-              }
-            },
-            "description": "Each protocol's swaps, by 24 hours ending at `asOf`."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        }
-      }
-    },
-    "/api/swaps/hourly": {
-      "get": {
-        "operationId": "get_swaps_hourly",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "window",
-            "required": false,
-            "schema": {
-              "enum": [
-                "24h",
-                "7d",
-                "30d"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapActivityBucketResponse"
-                }
-              }
-            },
-            "description": "Each protocol's swaps, hour by hour."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        }
-      }
-    },
     "/api/swaps/series": {
       "get": {
         "operationId": "get_swaps_series",
@@ -10954,9 +10487,9 @@
         }
       }
     },
-    "/api/tvl/hourly": {
+    "/api/tvl/series": {
       "get": {
-        "operationId": "get_tvl_hourly",
+        "operationId": "get_tvl_series",
         "parameters": [
           {
             "in": "query",
@@ -10967,6 +10500,18 @@
                 "24h",
                 "7d",
                 "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "interval",
+            "required": true,
+            "schema": {
+              "description": "The step of a series of readings: one per hour measured.",
+              "enum": [
+                "1h"
               ],
               "type": "string"
             }

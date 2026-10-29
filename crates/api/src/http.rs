@@ -119,10 +119,7 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
             handlers::rotation_runs::get_protocol_rotation_run_totals
         ))
         .routes(routes!(
-            handlers::rotation_runs::get_protocol_rotation_runs_hourly
-        ))
-        .routes(routes!(
-            handlers::rotation_runs::get_protocol_rotation_runs_daily
+            handlers::rotation_runs::get_protocol_rotation_runs_series
         ))
         .routes(routes!(handlers::announcements::list_announcements))
         .routes(routes!(handlers::network::get_network))
@@ -145,13 +142,8 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         .routes(routes!(handlers::swaps::get_protocol_swap_totals))
         .routes(routes!(handlers::swaps::get_swaps_series))
         .routes(routes!(handlers::swaps::get_protocol_swaps_series))
-        .routes(routes!(handlers::swaps::get_swaps_hourly))
-        .routes(routes!(handlers::swaps::get_swaps_daily))
-        .routes(routes!(handlers::swaps::get_protocol_swaps_hourly))
-        .routes(routes!(handlers::swaps::get_protocol_swaps_daily))
         .routes(routes!(handlers::swaps::get_pool_swap_totals))
-        .routes(routes!(handlers::swaps::get_pool_swaps_hourly))
-        .routes(routes!(handlers::swaps::get_pool_swaps_daily))
+        .routes(routes!(handlers::swaps::get_pool_swaps_series))
         .routes(routes!(handlers::swaps::list_swaps_by_token))
         .routes(routes!(handlers::swaps::list_swaps))
         .routes(routes!(handlers::swaps::list_protocol_swaps))
@@ -213,14 +205,6 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         .routes(routes!(
             handlers::pool_creations::get_protocol_pool_creations_series
         ))
-        .routes(routes!(handlers::pool_creations::get_pool_creations_hourly))
-        .routes(routes!(handlers::pool_creations::get_pool_creations_daily))
-        .routes(routes!(
-            handlers::pool_creations::get_protocol_pool_creations_hourly
-        ))
-        .routes(routes!(
-            handlers::pool_creations::get_protocol_pool_creations_daily
-        ))
         .routes(routes!(
             handlers::liquidity_moves::get_protocol_liquidity_move_totals
         ))
@@ -234,18 +218,15 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
             handlers::position_change_counts::get_protocol_position_change_totals
         ))
         .routes(routes!(
-            handlers::liquidity_moves::get_protocol_liquidity_moves_hourly
-        ))
-        .routes(routes!(
-            handlers::liquidity_moves::get_protocol_liquidity_moves_daily
+            handlers::liquidity_moves::get_protocol_liquidity_moves_series
         ))
         .routes(routes!(
             handlers::liquidity_moves::list_pool_liquidity_moves
         ))
         .routes(routes!(handlers::tvl::get_tvl))
         .routes(routes!(handlers::tvl::get_protocol_tvl_reading))
-        .routes(routes!(handlers::tvl::get_tvl_hourly))
-        .routes(routes!(handlers::tvl::get_protocol_tvl_readings_hourly))
+        .routes(routes!(handlers::tvl::get_tvl_series))
+        .routes(routes!(handlers::tvl::get_protocol_tvl_series))
         .routes(routes!(handlers::tvl::get_tvl_totals))
         .routes(routes!(handlers::tvl::get_protocol_tvl_totals))
         .routes(routes!(

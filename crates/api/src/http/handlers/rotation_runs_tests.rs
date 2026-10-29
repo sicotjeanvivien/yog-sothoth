@@ -9,8 +9,8 @@ async fn the_rotation_run_routes_are_mounted() {
         "/api/protocols/meteora_damm_v2/rotation-runs",
         "/api/protocols/meteora_damm_v2/rotation-runs?window=30d&sort=at&limit=200",
         "/api/protocols/meteora_damm_v2/rotation-runs/totals?window=7d",
-        "/api/protocols/meteora_damm_v2/rotation-runs/hourly",
-        "/api/protocols/meteora_damm_v2/rotation-runs/daily?window=30d",
+        "/api/protocols/meteora_damm_v2/rotation-runs/series?interval=1h",
+        "/api/protocols/meteora_damm_v2/rotation-runs/series?window=30d&interval=1d",
     ] {
         let (status, _, body) = get(uri).await;
         assert_eq!(status, StatusCode::OK, "{uri}: {body}");

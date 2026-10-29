@@ -7,26 +7,26 @@ use crate::testing::{get, pk};
 async fn the_produced_routes_are_mounted() {
     for uri in [
         "/api/swaps/totals?window=7d&offset=7d",
-        "/api/swaps/hourly",
-        "/api/swaps/daily?window=30d",
+        "/api/swaps/series?interval=1h",
+        "/api/swaps/series?window=30d&interval=1d",
         "/api/swaps/by-token?window=7d&limit=10",
         "/api/protocols/meteora_damm_v2/swaps/totals",
-        "/api/protocols/meteora_damm_v2/swaps/hourly",
-        "/api/protocols/meteora_damm_v2/swaps/daily",
+        "/api/protocols/meteora_damm_v2/swaps/series?interval=1h",
+        "/api/protocols/meteora_damm_v2/swaps/series?interval=1d",
         "/api/pool-creations/totals",
-        "/api/pool-creations/hourly",
-        "/api/pool-creations/daily",
+        "/api/pool-creations/series?interval=1h",
+        "/api/pool-creations/series?interval=1d",
         "/api/protocols/meteora_damm_v2/pool-creations/totals",
-        "/api/protocols/meteora_damm_v2/pool-creations/hourly",
-        "/api/protocols/meteora_damm_v2/pool-creations/daily",
+        "/api/protocols/meteora_damm_v2/pool-creations/series?interval=1h",
+        "/api/protocols/meteora_damm_v2/pool-creations/series?interval=1d",
         "/api/protocols/meteora_damm_v2/liquidity-moves/totals",
-        "/api/protocols/meteora_damm_v2/liquidity-moves/hourly",
-        "/api/protocols/meteora_damm_v2/liquidity-moves/daily",
+        "/api/protocols/meteora_damm_v2/liquidity-moves/series?interval=1h",
+        "/api/protocols/meteora_damm_v2/liquidity-moves/series?window=30d&interval=1d",
         "/api/protocols/meteora_damm_v2/position-changes/totals?window=7d",
         "/api/tvl",
-        "/api/tvl/hourly?window=7d",
+        "/api/tvl/series?window=7d&interval=1h",
         "/api/protocols/meteora_damm_v2/tvl",
-        "/api/protocols/meteora_damm_v2/tvl/hourly",
+        "/api/protocols/meteora_damm_v2/tvl/series?interval=1h",
         "/api/tvl/totals?window=7d",
         "/api/protocols/meteora_damm_v2/tvl/totals",
         "/api/pool-discoveries/totals?window=30d",
@@ -38,23 +38,53 @@ async fn the_produced_routes_are_mounted() {
     }
 }
 
+/// Mutation: an `hourly` or `daily` route kept, or a series taking a step it does not serve — 5
+/// minutes over the frozen hours, a day over the TVL's hourly readings, or no step.
+#[tokio::test]
+async fn a_series_is_cut_by_its_interval_only() {
+    for uri in [
+        "/api/swaps/hourly",
+        "/api/swaps/daily",
+        "/api/protocols/meteora_damm_v2/swaps/hourly",
+        "/api/pool-creations/daily",
+        "/api/protocols/meteora_damm_v2/liquidity-moves/hourly",
+        "/api/protocols/meteora_damm_v2/rotation-runs/daily",
+        "/api/tvl/hourly",
+        "/api/protocols/meteora_damm_v2/tvl/hourly",
+    ] {
+        let (status, _, _) = get(uri).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{uri}");
+    }
+    for uri in [
+        "/api/protocols/meteora_damm_v2/liquidity-moves/series?interval=5m",
+        "/api/protocols/meteora_damm_v2/rotation-runs/series?interval=5m",
+        "/api/tvl/series?interval=1d",
+        "/api/tvl/series",
+        "/api/protocols/meteora_damm_v2/liquidity-moves/series",
+    ] {
+        let (status, content_type, _) = get(uri).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}");
+        assert_eq!(content_type, "application/problem+json", "{uri}");
+    }
+}
+
 /// Mutation: the protocol of the path read as a free string, or a window outside its list
 /// taken — an unknown one answered empty.
 #[tokio::test]
 async fn an_unknown_protocol_or_window_is_refused_in_problem_details() {
     for uri in [
         "/api/protocols/meteora/swaps/totals",
-        "/api/protocols/meteora/swaps/daily",
+        "/api/protocols/meteora/swaps/series?interval=1d",
         "/api/protocols/meteora/pool-creations/totals",
-        "/api/protocols/meteora/liquidity-moves/hourly",
+        "/api/protocols/meteora/liquidity-moves/series?interval=1h",
         "/api/protocols/meteora/position-changes/totals",
         "/api/protocols/meteora/tvl",
-        "/api/protocols/meteora/tvl/hourly",
+        "/api/protocols/meteora/tvl/series?interval=1h",
         "/api/protocols/meteora/tvl/totals",
         "/api/protocols/meteora/pool-discoveries/totals",
         "/api/protocols/meteora/signals",
         "/api/swaps/totals?window=90d",
-        "/api/tvl/hourly?window=90d",
+        "/api/tvl/series?window=90d&interval=1h",
         "/api/tvl/totals?window=90d",
     ] {
         let (status, content_type, _) = get(uri).await;
@@ -69,7 +99,7 @@ async fn an_unknown_protocol_or_window_is_refused_in_problem_details() {
 async fn the_last_hour_and_its_step_are_refused_where_they_do_not_fit() {
     for uri in [
         "/api/protocols/meteora_damm_v2/liquidity-moves/totals?window=1h",
-        "/api/swaps/hourly?window=1h",
+        "/api/protocols/meteora_damm_v2/liquidity-moves/series?window=1h&interval=1h",
         "/api/swaps/series?window=24h&interval=5m",
         "/api/swaps/series?window=1h&interval=1h",
         "/api/swaps/series?window=24h",
