@@ -42,17 +42,26 @@ async fn the_produced_routes_are_mounted() {
 /// minutes over the frozen hours, a day over the TVL's hourly readings, or no step.
 #[tokio::test]
 async fn a_series_is_cut_by_its_interval_only() {
+    let pool = pk(1);
     for uri in [
-        "/api/swaps/hourly",
-        "/api/swaps/daily",
-        "/api/protocols/meteora_damm_v2/swaps/hourly",
-        "/api/pool-creations/daily",
-        "/api/protocols/meteora_damm_v2/liquidity-moves/hourly",
-        "/api/protocols/meteora_damm_v2/rotation-runs/daily",
-        "/api/tvl/hourly",
-        "/api/protocols/meteora_damm_v2/tvl/hourly",
+        "/api/swaps/hourly".to_owned(),
+        "/api/swaps/daily".to_owned(),
+        "/api/protocols/meteora_damm_v2/swaps/hourly".to_owned(),
+        "/api/protocols/meteora_damm_v2/swaps/daily".to_owned(),
+        format!("/api/pools/{pool}/swaps/hourly"),
+        format!("/api/pools/{pool}/swaps/daily"),
+        "/api/pool-creations/hourly".to_owned(),
+        "/api/pool-creations/daily".to_owned(),
+        "/api/protocols/meteora_damm_v2/pool-creations/hourly".to_owned(),
+        "/api/protocols/meteora_damm_v2/pool-creations/daily".to_owned(),
+        "/api/protocols/meteora_damm_v2/liquidity-moves/hourly".to_owned(),
+        "/api/protocols/meteora_damm_v2/liquidity-moves/daily".to_owned(),
+        "/api/protocols/meteora_damm_v2/rotation-runs/hourly".to_owned(),
+        "/api/protocols/meteora_damm_v2/rotation-runs/daily".to_owned(),
+        "/api/tvl/hourly".to_owned(),
+        "/api/protocols/meteora_damm_v2/tvl/hourly".to_owned(),
     ] {
-        let (status, _, _) = get(uri).await;
+        let (status, _, _) = get(&uri).await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{uri}");
     }
     let pool_series = |query: &str| format!("/api/pools/{}/swaps/series?{query}", pk(1));

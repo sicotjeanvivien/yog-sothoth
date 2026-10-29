@@ -49,7 +49,7 @@ export const RELEASES: readonly Release[] = [
           },
           {
             text: "Removed: every …/hourly and …/daily route. A series is now …/series?interval=, the same rows by bucket — 1h an hour, 1d the 24 hours ending at asOf — on the swaps (root, protocol, pool), the pool creations, the liquidity moves and the rotation runs; the TVL's readings are …/tvl/series?interval=1h.",
-            technical: true,
+            technical: false,
           },
         ],
       },
