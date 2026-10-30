@@ -25,7 +25,8 @@ import { ProtocolHeader } from "@/components/dashboard/protocol/protocol-header"
 import { FeesRateKpi, ProtocolFeesKpi } from "@/components/dashboard/protocol/protocol-kpis";
 import { ProtocolTabs } from "@/components/dashboard/protocol/protocol-tabs";
 import { VolumeTab } from "@/components/dashboard/protocol/volume/volume-tab";
-import { OVERVIEW_PERIODS, parsePeriod } from "@/lib/overview/period";
+import { OVERVIEW_PERIODS } from "@/lib/overview/period";
+import { readPeriod } from "@/lib/api/server/protocols";
 import { parseTab, readyTabs } from "@/lib/protocol/tabs";
 import { pageMetadata } from "@/lib/seo/page-metadata";
 
@@ -55,7 +56,7 @@ export default async function DammV2Page({ params, searchParams }: ProtocolPageP
   const { locale } = await params;
   setRequestLocale(locale);
   const query = await searchParams;
-  const period = parsePeriod(query.period, OVERVIEW_PERIODS);
+  const period = await readPeriod(query.period, OVERVIEW_PERIODS);
   const tab = parseTab(query.tab);
   const initialAdvanced = (await cookies()).get(OVERVIEW_ADVANCED_COOKIE)?.value === "1";
   const t = await getTranslations("Dashboard.Protocol");
@@ -70,7 +71,7 @@ export default async function DammV2Page({ params, searchParams }: ProtocolPageP
         programId={PROGRAM_ID}
       />
       <Suspense fallback={null}>
-        <StaleBanner period={period} scope={PROTOCOL} />
+        <StaleBanner period={period} />
       </Suspense>
 
       <div className={GRID_CLASS}>

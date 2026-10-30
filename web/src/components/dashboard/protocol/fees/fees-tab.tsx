@@ -130,7 +130,7 @@ async function FeeSplit({ period, protocol }: TabProps) {
     throw err;
   }
 
-  const closed = await closedReason(period, swaps);
+  const closed = await closedReason(swaps);
   const usd = (value: number | null) => formatUsdCompact(value === null ? null : String(value));
   const percent = (ratio: number | null | undefined) =>
     ratio === null || ratio === undefined ? "—" : formatPercent(String(ratio), locale);
@@ -278,7 +278,7 @@ async function LpClaims({ period, protocol }: TabProps) {
     throw err;
   }
 
-  const closed = await closedReason(period, fees);
+  const closed = await closedReason(fees);
   const feeClaims = fees.items.find((i) => i.protocol === protocol);
   const rewardClaims = rewards.items.find((i) => i.protocol === protocol);
 

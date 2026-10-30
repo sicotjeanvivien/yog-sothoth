@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { OVERVIEW_PERIODS, pageQuery, parsePeriod } from "../period";
+import { OVERVIEW_PERIODS, pageQuery, parsePeriod, periodHeldClosed } from "../period";
 
 describe("parsePeriod", () => {
   it("keeps an open period", () => {
@@ -13,14 +13,24 @@ describe("parsePeriod", () => {
     expect(parsePeriod("1h", ["24h", "7d", "30d"])).toBe("24h");
   });
 
-  // Mutation: the `CLOSED_PERIODS` guard dropped runs 30d's reads from its URL.
-  it("falls back to 24h on a closed period", () => {
-    expect(parsePeriod("30d", OVERVIEW_PERIODS)).toBe("24h");
-  });
-
   it("falls back to 24h on an unknown or repeated value", () => {
     expect(parsePeriod("90d", OVERVIEW_PERIODS)).toBe("24h");
     expect(parsePeriod(["7d", "24h"], OVERVIEW_PERIODS)).toBe("24h");
+  });
+});
+
+describe("periodHeldClosed", () => {
+  const windows = [
+    { window: "24h", open: true, opensAt: null },
+    { window: "7d", open: false, opensAt: "2026-11-02T09:00:00Z" },
+    { window: "30d", open: false, opensAt: null },
+  ] as const;
+
+  // Mutation: the date not read — a period opening soon sent to 24h, its blocks never saying when.
+  it("holds a closed period with no date, not one that opens at a date, nor an open one", () => {
+    expect(periodHeldClosed("30d", windows)).toBe(true);
+    expect(periodHeldClosed("7d", windows)).toBe(false);
+    expect(periodHeldClosed("24h", windows)).toBe(false);
   });
 });
 

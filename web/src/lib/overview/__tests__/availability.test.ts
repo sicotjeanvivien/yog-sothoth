@@ -1,73 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  periodState,
   previousWindowAdjoins,
   previousWindowCovered,
 } from "../availability";
 
 const FIRST_HOUR = "2026-10-13T13:00:00Z";
-
-describe("periodState", () => {
-  // Mutation: `>=` turned `>` closes 7d on the very hour its facts become whole.
-  it("opens 7d once the facts span exactly seven days", () => {
-    expect(
-      periodState("7d", {
-        from: null,
-        asOf: "2026-10-20T13:00:00Z",
-        coveredSince: FIRST_HOUR,
-      }),
-    ).toEqual({ open: true });
-  });
-
-  // Mutation: the comparison dropped, every period opens on a partial sum.
-  it("closes 7d an hour short, and says when it opens", () => {
-    expect(
-      periodState("7d", {
-        from: null,
-        asOf: "2026-10-20T12:00:00Z",
-        coveredSince: FIRST_HOUR,
-      }),
-    ).toEqual({ open: false, opensAt: new Date("2026-10-20T13:00:00Z") });
-  });
-
-  it("opens 24h on a day of facts", () => {
-    expect(
-      periodState("24h", {
-        from: null,
-        asOf: "2026-10-14T13:00:00Z",
-        coveredSince: FIRST_HOUR,
-      }),
-    ).toEqual({ open: true });
-  });
-
-  // Mutation: `CLOSED_PERIODS` emptied opens 30d on thirty days of facts.
-  it("keeps 30d closed even when its facts are whole", () => {
-    expect(
-      periodState("30d", {
-        from: null,
-        asOf: "2026-12-01T00:00:00Z",
-        coveredSince: FIRST_HOUR,
-      }),
-    ).toEqual({ open: false, opensAt: null });
-  });
-
-  // Mutation: the last hour judged on a day, or not judged — open before an hour of tranches is held.
-  it("opens 1h once an hour of tranches is held", () => {
-    const span = (asOf: string) => ({ from: null, asOf, coveredSince: "2026-10-21T00:00:00Z" });
-    expect(periodState("1h", span("2026-10-21T01:00:00Z"))).toEqual({ open: true });
-    expect(periodState("1h", span("2026-10-21T00:55:00Z"))).toEqual({
-      open: false,
-      opensAt: new Date("2026-10-21T01:00:00Z"),
-    });
-  });
-
-  it("closes every period before the first freeze", () => {
-    expect(
-      periodState("24h", { from: null, asOf: null, coveredSince: null }),
-    ).toEqual({ open: false, opensAt: null });
-  });
-});
 
 describe("previousWindowCovered", () => {
   // Mutation: `>=` turned `>` hides the variation of a window starting on the first hour.

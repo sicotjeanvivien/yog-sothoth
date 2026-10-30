@@ -9,11 +9,10 @@ import { AlertTriangleIcon } from "@/components/shared/icon";
 import { RetryButton } from "@/components/shared/retry-button";
 import type { ApiClientErrorKind } from "@/lib/api/errors";
 import { ApiClientError } from "@/lib/api/errors";
-import { fetchSwapTotals } from "@/lib/api/server/protocols";
-import type { Scope } from "@/lib/api/server/scope";
+import type { WindowPeriodResponse } from "@/lib/api/schema/zod.gen";
+import { fetchWindows } from "@/lib/api/server/protocols";
 import { formatRelative, type FormatLocale } from "@/lib/format/date";
 import type { Period } from "@/lib/overview/period";
-import { isStale } from "@/lib/overview/staleness";
 
 import {
   BLOCK_HEAD_CLASS,
@@ -46,11 +45,11 @@ export async function BlockFailed({ kind }: { kind: ApiClientErrorKind }) {
 }
 
 /** "as of 20 Oct, 14:00 UTC" under a figure, only while the figures run late. */
-export async function lateStamp(
-  asOf: string | null,
-  period: Period,
-): Promise<string | undefined> {
-  if (asOf === null || !isStale(asOf, new Date(), period)) {
+export async function lateStamp({
+  asOf,
+  late,
+}: Pick<WindowPeriodResponse, "asOf" | "late">): Promise<string | undefined> {
+  if (asOf === null || !late) {
     return undefined;
   }
   const t = await getTranslations("Dashboard.Overview.stale");
@@ -61,23 +60,24 @@ export async function lateStamp(
  * The band over the page when its figures are late. ⚠️ Read on `asOf`, not
  * on the indexer: "Live" speaks of ingestion, which can be fine while the figures stall.
  */
-export async function StaleBanner({ period, scope }: { period: Period; scope: Scope }) {
+export async function StaleBanner({ period }: { period: Period }) {
   const t = await getTranslations("Dashboard.Overview.stale");
   const locale = (await getLocale()) as FormatLocale;
 
-  let asOf;
+  let row;
   try {
-    asOf = (await fetchSwapTotals(scope, period)).asOf;
+    row = (await fetchWindows()).items.find((w) => w.window === period);
   } catch (err) {
     if (err instanceof ApiClientError) {
       return null;
     }
     throw err;
   }
-  const now = new Date();
-  if (asOf === null || !isStale(asOf, now, period)) {
+  const asOf = row?.asOf ?? null;
+  if (asOf === null || !row?.late) {
     return null;
   }
+  const now = new Date();
 
   return (
     <div

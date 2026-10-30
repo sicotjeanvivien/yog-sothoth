@@ -5,10 +5,16 @@
  * @throws ApiClientError on any transport, HTTP, or schema failure.
  */
 
+import { ApiClientError } from "@/lib/api/errors";
 import { cache } from "react";
 import type { z } from "zod";
 
-import type { Period } from "@/lib/overview/period";
+import {
+  DEFAULT_PERIOD,
+  parsePeriod,
+  periodHeldClosed,
+  type Period,
+} from "@/lib/overview/period";
 
 import { apiGet } from "../client/server";
 import {
@@ -29,6 +35,7 @@ import {
   zGetTvlSeriesQuery,
   zGetTvlSeriesResponse,
   zGetTvlTotalsResponse,
+  zGetWindowsResponse,
   zListProtocolLiquidityMovesResponse,
   zListProtocolRotationRunsResponse,
   zListProtocolsResponse,
@@ -46,6 +53,9 @@ export const fetchProtocols = cache(() =>
 export const fetchProtocol = cache((protocol: ProtocolResponse) =>
   apiGet(`/api/protocols/${protocol}`, {}, zGetProtocolResponse),
 );
+
+/** Every window: its bounds, whether it is open, and whether it runs late. */
+export const fetchWindows = cache(() => apiGet("/api/windows", {}, zGetWindowsResponse));
 
 export const fetchSwapTotals = cache((scope: Scope, window: WindowResponse) =>
   apiGet(scopedPath(scope, "swaps/totals"), { window }, zGetSwapTotalsResponse),
@@ -188,3 +198,22 @@ export const fetchLargestRotationRuns = cache(
       zListProtocolRotationRunsResponse,
     ),
 );
+
+/** The page's period: 24h when a period is held closed, or when the windows cannot be read. */
+export async function readPeriod<P extends Period>(
+  raw: string | string[] | undefined,
+  periods: readonly P[],
+): Promise<P | typeof DEFAULT_PERIOD> {
+  const period = parsePeriod(raw, periods);
+  if (period === DEFAULT_PERIOD) {
+    return period;
+  }
+  try {
+    return periodHeldClosed(period, (await fetchWindows()).items) ? DEFAULT_PERIOD : period;
+  } catch (err) {
+    if (err instanceof ApiClientError) {
+      return DEFAULT_PERIOD;
+    }
+    throw err;
+  }
+}

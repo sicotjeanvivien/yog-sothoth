@@ -281,19 +281,17 @@ hour through the last tranche written; it does not fall on the last bar of
 24h, and what its coverage counts, the response says (`coverageUnit`). The TVL stays
 the value of the last frozen hour; only its change follows the period, and over 1h it has none.
 A block reads the chosen period or says why it cannot, never another period on the same page. The selector (`period-selector.tsx`) is a set of
-links over the page's periods, each judged on the span of its own reads — 1h on the tranches still held, the others on the
-frozen hours; in its own unkeyed `<Suspense>` so a period change keeps it; every block
+links over the page's periods, each as `/api/windows` says; in its own unkeyed `<Suspense>` so a period change keeps it; every block
 that reads the period has its `<Suspense key={period}>`, so the change shows
 their waiting slots only; the signals do not reload.
 
-**What may not be shown** (`lib/overview/availability.ts`, pure and tested) — a
-figure the facts do not cover whole is "—", never a smaller number:
+**What may not be shown** — a figure the facts do not cover whole is "—", never a smaller number. The API says it (`open`, `opensAt`); the variation is still judged here (`lib/overview/availability.ts`):
 - a period whose window starts before `coveredSince` (the first frozen hour) is
   closed: a button whose panel says when it opens; reached by its URL anyway,
   every block that sums over it shows "—" and the same reason (the TVL stays,
-  with the time it was read). 30d stays closed in the web
-  (`CLOSED_PERIODS`) until its times are measured on the prod: its URL falls
-  back to 24h, so its reads never run;
+  with the time it was read). 30d stays closed by the API until
+  its times are measured on the prod: a period closed with no date falls back to 24h,
+  by its URL too, so its reads never run;
 - the volume change is "—" when the previous window (`offset`) starts before
   `coveredSince`, or does not end where the current one starts (a tranche or a freeze between the two reads);
 - the TVL has no change when `tvl/totals` has no reading a window before the last,
@@ -308,8 +306,8 @@ of its final shape and size (`overview-states.tsx`, still when the reader asks
 for less motion), and fails on its own: the cause in words and a retry of the
 page, or a "—" KPI.
 
-**Late figures** (`lib/overview/staleness.ts`) — a frozen hour normally lags up
-to ~70 min, a tranche far less. When `asOf` is over two hours back, or over half an hour on 1h, the computation has stalled: a
+**Late figures** — a frozen hour normally lags up
+to ~70 min, a tranche far less. When a response says `late`, the computation has stalled: a
 band over the page says until when the figures run, each KPI shows that hour,
 and the "Live" panel colours it. "Live" itself keeps speaking of ingestion,
 which can be fine while the figures stall. The reads several blocks share are fetched

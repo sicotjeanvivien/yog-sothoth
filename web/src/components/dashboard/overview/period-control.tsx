@@ -1,15 +1,14 @@
 /**
- * The period selector of a page's header, each period open or closed on the span its family
- * carries. ⚠️ A failed read keeps them links: each block then says what its period lacks.
+ * The period selector of a page's header, each period open or closed as `/api/windows` says.
+ * ⚠️ A failed read keeps them links: each block then says what its period lacks.
  */
 
 import { getTranslations } from "next-intl/server";
 
 import type { PagePath } from "@/config/site";
 import { ApiClientError } from "@/lib/api/errors";
-import { fetchSwapTotals } from "@/lib/api/server/protocols";
-import type { Scope } from "@/lib/api/server/scope";
-import { CLOSED_PERIODS, DEFAULT_PERIOD, type Period } from "@/lib/overview/period";
+import { fetchWindows } from "@/lib/api/server/protocols";
+import type { Period } from "@/lib/overview/period";
 
 import { closedReason } from "./overview-parts";
 import { PeriodSelector, type PeriodAvailability } from "./period-selector";
@@ -23,31 +22,20 @@ type ControlProps = {
   keep: Record<string, string>;
 };
 
-export async function PeriodControl({
-  period,
-  periods,
-  scope,
-  pathname,
-  keep,
-}: ControlProps & { scope: Scope }) {
-  const t = await getTranslations("Dashboard.Overview.period");
-
-  // ⚠️ The last hour has its own span, from the tranches still held: 30d judged on it would close.
-  const [frozen, hour] = await Promise.allSettled([
-    fetchSwapTotals(scope, period === "1h" ? DEFAULT_PERIOD : period),
-    periods.includes("1h") ? fetchSwapTotals(scope, "1h") : null,
-  ]);
+export async function PeriodControl({ period, periods, pathname, keep }: ControlProps) {
+  let windows;
+  try {
+    ({ items: windows } = await fetchWindows());
+  } catch (err) {
+    if (!(err instanceof ApiClientError)) {
+      throw err;
+    }
+    windows = null;
+  }
   const entries = await Promise.all(
     periods.map(async (p) => {
-      const span = p === "1h" ? hour : frozen;
-      if (span.status === "rejected") {
-        if (!(span.reason instanceof ApiClientError)) {
-          throw span.reason;
-        }
-        const open = !CLOSED_PERIODS.has(p);
-        return [p, open ? { open } : { open, reason: t("closedSoon") }] as const;
-      }
-      const reason = span.value === null ? null : await closedReason(p, span.value);
+      const row = windows?.find((w) => w.window === p);
+      const reason = row === undefined ? null : await closedReason(row);
       return [p, reason === null ? { open: true } : { open: false, reason }] as const;
     }),
   );

@@ -47,7 +47,7 @@ export async function HeaderControls({
       </span>
       <div className="flex flex-wrap items-center gap-3 rail:justify-end">
         <Suspense fallback={<PeriodSelect period={period} {...page} availability={null} />}>
-          <PeriodControl period={period} scope={scope} {...page} />
+          <PeriodControl period={period} {...page} />
         </Suspense>
         <AdvancedSwitch label={t("advanced")} />
       </div>

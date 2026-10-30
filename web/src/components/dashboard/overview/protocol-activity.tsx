@@ -71,7 +71,7 @@ export async function ProtocolActivity({ period }: { period: Period }) {
     throw err;
   }
 
-  const closed = await closedReason(period, activity);
+  const closed = await closedReason(activity);
   const unit = activity.coverageUnit;
   const total = sumUsd(activity.items.map((i) => i.volumeUsd));
   const observed = new Set(catalogue.items.filter((p) => p.observed).map((p) => p.protocol));

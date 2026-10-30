@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { seriesOf } from "@/lib/overview/__tests__/series";
 import {
   durationOf,
-  splitSinceOf,
   splitSlotsOf,
   splitTotalsOf,
   type SplitSlot,
@@ -45,15 +44,6 @@ describe("splitSlotsOf", () => {
     const slices = splitSlotsOf(seriesOf("6h", AS_OF, [bar("2026-10-24T21:00:00Z", "60", null, null)]));
 
     expect(slices.at(-1)).toMatchObject({ total: 60, inRuns: null, outside: null });
-  });
-});
-
-describe("splitSinceOf", () => {
-  // Mutation: the first bar taken whatever its split — runs never measured said measured since
-  // the window's start.
-  it("is the first bar the runs split, nothing before any is", () => {
-    expect(splitSinceOf([bar(hour(21), "1", null, null), bar(hour(22), "1", "0", "1")])).toBe(hour(22));
-    expect(splitSinceOf([bar(hour(21), "1", null, null)])).toBeNull();
   });
 });
 

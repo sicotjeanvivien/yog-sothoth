@@ -20,9 +20,6 @@ export const PERIOD_HOURS: Record<Period, number> = {
   "30d": 30 * 24,
 };
 
-/** Closed whatever the facts hold, until its own times are measured on the prod. */
-export const CLOSED_PERIODS: ReadonlySet<Period> = new Set<Period>(["30d"]);
-
 /** A page's query: `period` left out at its default, the page's other parameters kept. */
 export function pageQuery(
   period: Period,
@@ -35,18 +32,25 @@ export function periodMs(period: Period): number {
   return PERIOD_HOURS[period] * HOUR_MS;
 }
 
-/**
- * The default for a missing, repeated, unknown or closed value, or one the page does not offer:
- * a bad link still renders a page, and a closed period's reads never run.
- */
+/** The default for a missing, repeated or unknown value, or one the page does not offer. */
 export function parsePeriod<P extends Period>(
   raw: string | string[] | undefined,
   periods: readonly P[],
 ): P | typeof DEFAULT_PERIOD {
   const parsed = zWindowResponse.safeParse(raw);
-  return parsed.success &&
-    (periods as readonly Period[]).includes(parsed.data) &&
-    !CLOSED_PERIODS.has(parsed.data)
+  return parsed.success && (periods as readonly Period[]).includes(parsed.data)
     ? (parsed.data as P)
     : DEFAULT_PERIOD;
+}
+
+/**
+ * Closed with no date to open at: its reads never run. ⚠️ A period closed until a date stays
+ * reachable by its URL: each block then says when it opens.
+ */
+export function periodHeldClosed(
+  period: Period,
+  windows: readonly { window: Period; open: boolean; opensAt: string | null }[],
+): boolean {
+  const row = windows.find((w) => w.window === period);
+  return row !== undefined && !row.open && row.opensAt === null;
 }

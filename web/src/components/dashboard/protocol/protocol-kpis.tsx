@@ -30,7 +30,7 @@ export async function FeesRateKpi({ period, protocol }: KpiProps) {
   } catch (err) {
     return kpiError(err, label, info);
   }
-  const closed = await closedReason(period, now);
+  const closed = await closedReason(now);
   if (closed !== null) {
     return <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} />;
   }
@@ -45,7 +45,7 @@ export async function FeesRateKpi({ period, protocol }: KpiProps) {
       info={info}
       value={await valued(usd(fees), items, now.coverageUnit)}
       sub={rate === null ? undefined : t("feesRate", { rate: formatFeeRate(rate, locale) })}
-      stamp={await lateStamp(now.asOf, period)}
+      stamp={await lateStamp(now)}
     />
   );
 }
@@ -63,7 +63,7 @@ export async function ProtocolFeesKpi({ period, protocol }: KpiProps) {
   } catch (err) {
     return kpiError(err, label, info, true);
   }
-  const closed = await closedReason(period, now);
+  const closed = await closedReason(now);
   if (closed !== null) {
     return (
       <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} advanced />
@@ -84,7 +84,7 @@ export async function ProtocolFeesKpi({ period, protocol }: KpiProps) {
           ? undefined
           : t("protocolFeesShare", { share: formatPercent(String(share), locale) })
       }
-      stamp={await lateStamp(now.asOf, period)}
+      stamp={await lateStamp(now)}
       advanced
     />
   );
