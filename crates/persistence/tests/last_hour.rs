@@ -6,10 +6,12 @@ use chrono::{DateTime, TimeDelta, TimeZone, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use sqlx::types::BigDecimal;
+use yog_core::Cursor;
 use yog_core::domain::{
-    ClaimKind, ClaimTotalsLookup, FrozenPeriod, LiquidityMoveLookup, PoolCreationsLookup,
-    PositionChangeCountsLookup, Protocol, ProtocolActivityLookup, RotationRunLookup,
-    SwapActivityLookup, TokenActivityFeed, TranchePeriod, Window,
+    ClaimKind, ClaimTotalsLookup, FrozenPeriod, LiquidityMoveList, LiquidityMoveLookup,
+    LiquidityMoveOrder, LiquidityMoveScope, PoolCreationsLookup, PositionChangeCountsLookup,
+    Protocol, ProtocolActivityLookup, RotationRunLookup, SwapActivityLookup, TokenActivityFeed,
+    TranchePeriod, Window,
 };
 use yog_persistence::{
     PgClaimTotalsRepository, PgLiquidityMoveRepository, PgPoolCreationsRepository,
@@ -262,13 +264,14 @@ async fn liquidity_move(
         "INSERT INTO analytic_liquidity_moves
            (signature, event_index, timestamp, bucket, pool_address, protocol, owner, kind,
             amount_usd)
-         VALUES ($1, 0, $2, time_bucket('5 minutes', $2), 'pool', 'meteora_damm_v2', $3, $4, $5)",
+         VALUES ($1, 0, $2, time_bucket('5 minutes', $2), $6, 'meteora_damm_v2', $3, $4, $5)",
     )
     .bind(sig)
     .bind(at)
     .bind(pk(owner).to_string())
     .bind(kind)
     .bind(usd.map(BigDecimal::from))
+    .bind(pk(20).to_string())
     .execute(pool)
     .await
     .unwrap();
@@ -313,6 +316,46 @@ async fn the_last_hours_moves_are_its_own_and_their_owners_distinct(pool: PgPool
     assert_eq!(bars[0].value.added_usd, Decimal::from(10));
     assert_eq!(bars[6].value.created_usd, Decimal::from(5));
     assert_eq!(bars.iter().map(|b| b.value.moves).sum::<i64>(), 3);
+}
+
+/// Against the list of the hour read past its ends or paged with a repeat: the move just before
+/// the hour and the one at its end stay out, the unvalued too, each other move listed once.
+#[sqlx::test(migrations = "./migrations")]
+async fn the_last_hours_list_of_moves_is_its_own(pool: PgPool) {
+    write_tranches(&pool).await;
+    hold_a_tranche(&pool).await;
+    liquidity_move(&pool, "before", minutes_before(65), 1, "add", Some(1000)).await;
+    liquidity_move(&pool, "first", minutes_before(60), 1, "add", Some(10)).await;
+    liquidity_move(&pool, "mid", minutes_before(30), 1, "create", Some(5)).await;
+    liquidity_move(&pool, "unvalued", minutes_before(10), 2, "remove", None).await;
+    liquidity_move(&pool, "after", through(), 3, "add", Some(1000)).await;
+
+    let period = last_hour(&pool).await;
+    let repo = PgLiquidityMoveRepository::new(api(&pool).await);
+    let list = LiquidityMoveList::every_kind(LiquidityMoveScope::Protocol(Protocol::MeteoraDammV2));
+    let mut seen = Vec::new();
+    let mut cursor = None;
+    for _ in 0..5 {
+        let page = repo
+            .list_moves_in_tranches(
+                &period,
+                Window::Hour,
+                list,
+                LiquidityMoveOrder::Amount,
+                cursor.take(),
+                1,
+            )
+            .await
+            .unwrap();
+        seen.extend(page.items.iter().map(|m| m.signature.clone()));
+        match page.next_cursor {
+            Some(Cursor::LiquidityMove(next)) => cursor = Some(*next),
+            Some(other) => panic!("{other:?}"),
+            None => break,
+        }
+    }
+
+    assert_eq!(seen, ["first", "mid"]);
 }
 
 async fn claim(

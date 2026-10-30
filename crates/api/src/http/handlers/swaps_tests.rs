@@ -130,15 +130,14 @@ async fn an_unknown_protocol_or_window_is_refused_in_problem_details() {
     }
 }
 
-/// Mutation: `1h` taken by a route the data does not serve it on — the TVL, the pools discovered, a
-/// list — or a series cut at a step that does not fit its window: 5 minutes over a day, an hour
-/// over the last one, or no step.
+/// Mutation: `1h` taken where it is not served — the TVL, the pools discovered, a list of events —
+/// or refused by the moves or the runs; or a series cut at a step that does not fit its window.
 #[tokio::test]
 async fn the_last_hour_and_its_step_are_refused_where_they_do_not_fit() {
     for uri in [
         "/api/tvl/totals?window=1h",
         "/api/protocols/meteora_damm_v2/pool-discoveries/totals?window=1h",
-        "/api/protocols/meteora_damm_v2/liquidity-moves?window=1h",
+        "/api/protocols/meteora_damm_v2/swaps?window=1h",
         "/api/protocols/meteora_damm_v2/liquidity-moves/series?window=1h&interval=1h",
         "/api/swaps/series?window=24h&interval=5m",
         "/api/swaps/series?window=1h&interval=1h",
@@ -161,6 +160,8 @@ async fn the_last_hour_and_its_step_are_refused_where_they_do_not_fit() {
         "/api/protocols/meteora_damm_v2/rotation-runs/series?window=1h&interval=5m",
         "/api/protocols/meteora_damm_v2/liquidity-moves/totals?window=1h",
         "/api/protocols/meteora_damm_v2/liquidity-moves/series?window=1h&interval=5m",
+        "/api/protocols/meteora_damm_v2/liquidity-moves?window=1h",
+        "/api/protocols/meteora_damm_v2/rotation-runs?window=1h",
         "/api/protocols/meteora_damm_v2/position-changes/totals?window=1h",
         "/api/protocols/meteora_damm_v2/position-changes/series?window=1h&interval=5m",
         "/api/protocols/meteora_damm_v2/position-fee-claims/totals?window=1h",

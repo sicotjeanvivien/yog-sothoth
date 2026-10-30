@@ -6,7 +6,7 @@ use yog_core::domain::{
     LiquidityMoveCursor, LiquidityMoveList, LiquidityMoveOrder, LiquidityMoveScope, Window,
 };
 
-use super::window_param::WindowParam;
+use super::window_param::MeasureWindowParam;
 use crate::http::{cursor::decode_liquidity_move_cursor, error::ApiError};
 
 mod kind_param;
@@ -21,7 +21,7 @@ use sort_param::SortParam;
 pub(crate) struct LiquidityMovesParams {
     #[serde(default)]
     #[param(inline)]
-    window: WindowParam,
+    window: MeasureWindowParam,
     #[param(inline, nullable = false)]
     kind: Option<KindParam>,
     #[serde(default)]

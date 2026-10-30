@@ -62,4 +62,15 @@ pub trait LiquidityMoveLookup: Send + Sync {
         cursor: Option<LiquidityMoveCursor>,
         limit: i64,
     ) -> RepositoryResult<Page<LiquidityMove>>;
+
+    /// [`Self::list_moves`] over the tranches of `period`.
+    async fn list_moves_in_tranches(
+        &self,
+        period: &TranchePeriod,
+        window: Window,
+        list: LiquidityMoveList,
+        order: LiquidityMoveOrder,
+        cursor: Option<LiquidityMoveCursor>,
+        limit: i64,
+    ) -> RepositoryResult<Page<LiquidityMove>>;
 }

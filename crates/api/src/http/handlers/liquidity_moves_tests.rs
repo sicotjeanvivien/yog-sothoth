@@ -8,6 +8,7 @@ async fn the_protocol_moves_take_a_protocol_of_the_domain() {
     for uri in [
         "/api/protocols/meteora_damm_v2/liquidity-moves",
         "/api/protocols/meteora_damm_v2/liquidity-moves?window=7d&sort=at&limit=5",
+        "/api/protocols/meteora_damm_v2/liquidity-moves?window=1h&kind=create",
     ] {
         let (status, _, body) = get(uri).await;
         assert_eq!(status, StatusCode::OK, "{uri}: {body}");
@@ -42,7 +43,7 @@ async fn an_unknown_protocol_order_or_a_cursor_of_another_list_is_refused() {
         "/api/protocols/meteora/liquidity-moves".to_owned(),
         "/api/protocols/meteora_damm_v2/liquidity-moves?limit=0".to_owned(),
         "/api/protocols/meteora_damm_v2/liquidity-moves?limit=201".to_owned(),
-        "/api/protocols/meteora_damm_v2/liquidity-moves?window=1h".to_owned(),
+        "/api/protocols/meteora_damm_v2/liquidity-moves?window=2h".to_owned(),
         "/api/protocols/meteora_damm_v2/liquidity-moves?sort=volume".to_owned(),
         "/api/protocols/meteora_damm_v2/liquidity-moves?kind=burn".to_owned(),
         format!("/api/protocols/meteora_damm_v2/liquidity-moves?cursor={pool_cursor}"),

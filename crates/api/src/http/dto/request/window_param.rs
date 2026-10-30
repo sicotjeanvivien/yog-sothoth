@@ -37,8 +37,8 @@ pub(crate) struct WindowParams {
     pub(crate) window: WindowParam,
 }
 
-/// The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through
-/// the last tranche written.
+/// The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour
+/// through the last tranche written.
 #[derive(Debug, Default, Deserialize, Clone, Copy, ToSchema)]
 pub(crate) enum MeasureWindowParam {
     #[serde(rename = "1h")]

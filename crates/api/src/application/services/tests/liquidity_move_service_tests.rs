@@ -165,3 +165,70 @@ async fn the_last_hour_is_covered_from_the_later_of_the_tranches_and_the_liquidi
     assert!(late.items.is_empty() && late_repo.tranche_reads.lock().unwrap().is_empty());
     assert_eq!(early_repo.tranche_reads.lock().unwrap().len(), 1);
 }
+
+/// Mutation: the last hour's moves read as a frozen period, or its cursor kept once a tranche is
+/// written — a page of the hour read on the hours, or followed past a moved end.
+#[tokio::test]
+async fn the_last_hours_moves_are_read_on_its_tranches() {
+    let tranches = WrittenTranches {
+        first: at_october(13, 13),
+        through: at_october(20, 12) + chrono::TimeDelta::minutes(40),
+    };
+    let repo = Arc::new(MockLiquidityMoveRepo {
+        since: Some(at_october(14, 0)),
+        ..MockLiquidityMoveRepo::default()
+    });
+    let hours = Arc::new(MockProtocolActivityRepo::with_tranches(tranches));
+    let svc = LiquidityMoveService::new(hours, repo.clone());
+    let list = LiquidityMoveList::every_kind(LiquidityMoveScope::Protocol(Protocol::MeteoraDammV2));
+    let read = |cursor| {
+        svc.list_liquidity_moves(
+            Window::Hour,
+            list,
+            Protocol::MeteoraDammV2,
+            LiquidityMoveOrder::Amount,
+            cursor,
+            5,
+        )
+    };
+    let cursor = |as_of| LiquidityMoveCursor {
+        list,
+        window: Window::Hour,
+        as_of,
+        order: LiquidityMoveOrder::Amount,
+        amount_usd: Decimal::ONE,
+        at: tranches.through - chrono::TimeDelta::minutes(10),
+        signature: "sig".to_owned(),
+        event_index: 0,
+    };
+
+    let first = read(None).await.unwrap();
+    let moved = read(Some(cursor(
+        tranches.through - chrono::TimeDelta::minutes(5),
+    )))
+    .await;
+    let current = read(Some(cursor(tranches.through))).await;
+
+    let period = first.period.unwrap();
+    assert_eq!(
+        (period.from(), period.as_of()),
+        (
+            tranches.through - chrono::TimeDelta::hours(1),
+            tranches.through
+        )
+    );
+    assert!(matches!(moved, Err(MovesError::CursorRefused)));
+    assert!(current.is_ok());
+    let tranche_reads: Vec<_> = repo
+        .tranche_reads
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|r| r.0)
+        .collect();
+    assert_eq!(
+        tranche_reads,
+        vec!["moves_in_tranches", "moves_in_tranches"]
+    );
+    assert!(reads(&repo).is_empty(), "{:?}", reads(&repo));
+}

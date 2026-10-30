@@ -1,28 +1,27 @@
 //! The valued liquidity moves: a protocol's totals and series over a period, and the moves of a
-//! protocol or a pool over a frozen one. Their coverage is the liquidity's, measured from a later hour
-//! than the swaps.
+//! protocol or a pool over one. Their coverage is the liquidity's, measured from a later hour than
+//! the swaps.
 
 use std::sync::Arc;
 
 use yog_core::{
     Page, RepositoryError, RepositoryResult,
     domain::{
-        FrozenPeriod, LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveList,
-        LiquidityMoveLookup, LiquidityMoveOrder, LiquidityTotals, Protocol, ProtocolActivityLookup,
-        ProtocolBucket, Window,
+        LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveList, LiquidityMoveLookup,
+        LiquidityMoveOrder, LiquidityTotals, Protocol, ProtocolActivityLookup, ProtocolBucket,
+        Window,
     },
 };
 
 use super::period::{
-    BucketPeriod, Measured, ReadPeriod, SeriesInterval, build_frozen_period, build_read_period,
-    measured_from,
+    BucketPeriod, Measured, PeriodBounds, ReadPeriod, SeriesInterval, build_read_period,
 };
 
 /// Why a page of moves is not read.
 #[derive(Debug)]
 pub(crate) enum MovesError {
     Repository(RepositoryError),
-    /// The cursor was taken from another list, or before the last freeze.
+    /// The cursor was taken from another list, or before the period's end last moved.
     CursorRefused,
 }
 
@@ -48,21 +47,8 @@ impl LiquidityMoveService {
         }
     }
 
-    /// The period of `protocol`'s liquidity: its coverage starts at the first hour the liquidity
-    /// was measured, not at the facts'.
-    async fn build_liquidity_period(
-        &self,
-        window: Window,
-        protocol: Protocol,
-    ) -> RepositoryResult<Option<FrozenPeriod>> {
-        let Some(period) = build_frozen_period(self.hours.as_ref(), window, None).await? else {
-            return Ok(None);
-        };
-        let since = self.liquidity_moves.find_measured_since(protocol).await?;
-        Ok(Some(measured_from(period, since)))
-    }
-
-    /// The same as [`Self::build_liquidity_period`] over `window`, the last hour included.
+    /// The period of `protocol`'s liquidity, the last hour included: its coverage starts at the
+    /// first hour the liquidity was measured, not at the facts'.
     async fn build_liquidity_read_period(
         &self,
         window: Window,
@@ -130,17 +116,22 @@ impl LiquidityMoveService {
         order: LiquidityMoveOrder,
         cursor: Option<LiquidityMoveCursor>,
         limit: i64,
-    ) -> Result<Measured<Page<LiquidityMove>>, MovesError> {
-        let period = self.build_liquidity_period(window, protocol).await?;
+    ) -> Result<Measured<Page<LiquidityMove>, ReadPeriod>, MovesError> {
+        let period = self.build_liquidity_read_period(window, protocol).await?;
         if let (Some(period), Some(cursor)) = (&period, &cursor)
-            && (cursor.as_of != period.as_of || cursor.window != window)
+            && (cursor.as_of != period.as_of() || cursor.window != window)
         {
             return Err(MovesError::CursorRefused);
         }
         let items = match &period {
-            Some(period) if period.is_covered() => {
+            Some(ReadPeriod::Frozen(p)) if p.is_covered() => {
                 self.liquidity_moves
-                    .list_moves(period, window, list, order, cursor, limit)
+                    .list_moves(p, window, list, order, cursor, limit)
+                    .await?
+            }
+            Some(ReadPeriod::Tranche(p)) if p.is_covered() => {
+                self.liquidity_moves
+                    .list_moves_in_tranches(p, window, list, order, cursor, limit)
                     .await?
             }
             _ => Page::empty(),
