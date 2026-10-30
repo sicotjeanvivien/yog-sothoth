@@ -111,11 +111,12 @@ async fn read_all(
     seen
 }
 
-/// Mutation: a pool's list ranked backwards before its page is cut — its smallest run or its oldest
-/// listed first; or another pool's runs read.
+/// Mutation: a pool's list ranked backwards before its page is cut, or a tie on the volume not
+/// broken by the start — its smallest or oldest run first, or a run lost at a page's edge.
 #[sqlx::test(migrations = "./migrations")]
 async fn the_runs_of_a_pool_page_in_each_order(pool: PgPool) {
     insert_run(&pool, "meteora_damm_v2", 1, -50, "5", &[]).await;
+    insert_run(&pool, "meteora_damm_v2", 1, -45, "5", &[]).await;
     insert_run(&pool, "meteora_damm_v2", 1, -40, "1", &[]).await;
     insert_run(&pool, "meteora_damm_v2", 1, -30, "3", &[]).await;
     insert_run(&pool, "meteora_damm_v2", 2, -20, "9", &[]).await;
@@ -135,11 +136,11 @@ async fn the_runs_of_a_pool_page_in_each_order(pool: PgPool) {
 
     assert_eq!(
         by_volume.iter().map(|r| r.1).collect::<Vec<_>>(),
-        [at(-50), at(-30), at(-40)]
+        [at(-50), at(-45), at(-30), at(-40)]
     );
     assert_eq!(
         by_date.iter().map(|r| r.1).collect::<Vec<_>>(),
-        [at(-30), at(-40), at(-50)]
+        [at(-30), at(-40), at(-45), at(-50)]
     );
 }
 

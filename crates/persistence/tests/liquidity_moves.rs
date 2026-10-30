@@ -147,6 +147,8 @@ async fn the_moves_page_without_repeat_nor_gap_in_each_scope_and_order(pool: PgP
                     .await
                     .unwrap();
                 seen.extend(page.items.iter().map(|m| m.signature.clone()));
+                // ⚠️ A cursor that rereads its own row would page forever: fail instead of hanging.
+                assert!(seen.len() <= 100, "paging does not end: {seen:?}");
                 match page.next_cursor {
                     Some(Cursor::LiquidityMove(next)) => cursor = Some(*next),
                     Some(other) => panic!("{other:?}"),

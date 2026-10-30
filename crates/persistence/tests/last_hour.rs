@@ -152,9 +152,9 @@ async fn the_last_hour_has_twelve_bars_and_the_hour_before_its_own(pool: PgPool)
     assert_eq!(previous[0].activity.swaps, 3);
 }
 
-/// Against a token's pools counted per tranche, its hour cut at 11 or 13 tranches, or a page cut
-/// before it is ranked: the token of two pools, one active twice, has two pools and their volume
-/// within the hour, and comes first on a page of one.
+/// Against a token's pools counted per tranche, its hour cut at 11 or 13 tranches, a page cut
+/// before it is ranked, or a cursor not followed: the token of two pools has two pools and their
+/// volume within the hour, and pages of one list every token once, in order, ties included.
 #[sqlx::test(migrations = "./migrations")]
 async fn the_last_hours_tokens_count_their_pools_once(pool: PgPool) {
     write_tranches(&pool).await;
@@ -167,6 +167,12 @@ async fn the_last_hours_tokens_count_their_pools_once(pool: PgPool) {
     tranche(&pool, &y, minutes_before(20), 1, Some(5)).await;
     tranche(&pool, &y, minutes_before(65), 1, Some(1000)).await;
     tranche(&pool, &y, through(), 1, Some(1000)).await;
+    // Two tokens of one pool tie on its volume: only the mint orders them.
+    let z = pk(3).to_string();
+    let mut tied = [pk(13).to_string(), pk(14).to_string()];
+    seed_pool(&pool, &z, &tied[0], &tied[1]).await;
+    tranche(&pool, &z, minutes_before(15), 1, Some(7)).await;
+    tied.sort();
 
     let period = last_hour(&pool).await;
     let repo = PgTokenActivityRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
@@ -177,9 +183,32 @@ async fn the_last_hours_tokens_count_their_pools_once(pool: PgPool) {
     assert_eq!(first.mint.to_string(), shared);
     assert_eq!(first.volume_usd, Decimal::from(25));
     assert_eq!((first.pools, first.pool_hours), (2, 3));
-    let top = repo.list_in_tranches(&period, None, 1).await.unwrap();
-    assert_eq!(top.page.items[0].mint.to_string(), shared);
-    assert!(top.page.next_cursor.is_some());
+    let mut seen = Vec::new();
+    let mut cursor = None;
+    loop {
+        let page = repo
+            .list_in_tranches(&period, cursor.take(), 1)
+            .await
+            .unwrap();
+        seen.extend(page.page.items.iter().map(|t| t.mint.to_string()));
+        // ⚠️ A cursor that rereads its own row would page forever: fail instead of hanging.
+        assert!(seen.len() <= 10, "paging does not end: {seen:?}");
+        match page.page.next_cursor {
+            Some(Cursor::TokenActivity(next)) => cursor = Some(next),
+            Some(other) => panic!("{other:?}"),
+            None => break,
+        }
+    }
+    assert_eq!(
+        seen,
+        [
+            shared,
+            pk(10).to_string(),
+            tied[0].clone(),
+            tied[1].clone(),
+            pk(11).to_string()
+        ]
+    );
 }
 
 /// Against the coverage taken from the tranches recorded rather than those still held: past their
