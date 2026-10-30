@@ -33,7 +33,7 @@ export type Release = {
 export const RELEASES: readonly Release[] = [
   {
     version: "v0.6.0",
-    date: "2026-10-29",
+    date: "2026-10-30",
     summary: "The Overview and the DAMM v2 page show the last hour, in 5-minute bars.",
     sections: [
       {
