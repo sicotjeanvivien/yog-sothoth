@@ -33,11 +33,8 @@ describe("slotsOf", () => {
     expect(slotsOf({ from: null, asOf: null, interval: "1h" }, [])).toEqual([]);
   });
 
-  it("sums a slot's bars across protocols", () => {
-    const slots = slotsOf(seriesOf("1h", asOf, []), [
-      { from: "2026-10-20T13:00:00Z", value: "10" },
-      { from: "2026-10-20T13:00:00Z", value: "5.5" },
-    ]);
+  it("puts a bar in the slot of its `from`", () => {
+    const slots = slotsOf(seriesOf("1h", asOf, []), [{ from: "2026-10-20T13:00:00Z", value: "15.5" }]);
     expect(slots[23]).toEqual({
       from: new Date("2026-10-20T13:00:00Z"),
       to: new Date(asOf),
@@ -58,11 +55,10 @@ describe("slotsOf", () => {
     expect(slots.every((s) => s.value === null)).toBe(true);
   });
 
-  // Mutation: a null summed as 0 — a bar nothing valued drawn as one at zero.
-  it("sums the valued bars of a slot, an unvalued one left out", () => {
+  // Mutation: a null read as 0 — a bar nothing valued drawn as one at zero.
+  it("leaves the slot of an unvalued bar empty", () => {
     const slots = slotsOf(seriesOf("1h", asOf, []), [
       { from: "2026-10-20T13:00:00Z", value: "2" },
-      { from: "2026-10-20T13:00:00Z", value: null },
       { from: "2026-10-20T12:00:00Z", value: null },
     ]);
     expect(slots[23]?.value).toBe(2);

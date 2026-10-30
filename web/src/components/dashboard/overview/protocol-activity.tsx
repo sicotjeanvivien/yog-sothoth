@@ -14,7 +14,7 @@ import { formatCount } from "@/lib/format/format-count";
 import { formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import type { Period } from "@/lib/overview/period";
-import { sumUsd } from "@/lib/overview/totals";
+import { amountOf, shareOf } from "@/lib/overview/totals";
 
 import { BlockHeading, closedReason, PeriodNotice } from "./overview-parts";
 import { BlockFailed, BlockSkeleton } from "./overview-states";
@@ -73,7 +73,6 @@ export async function ProtocolActivity({ period }: { period: Period }) {
 
   const closed = await closedReason(activity);
   const unit = activity.coverageUnit;
-  const total = sumUsd(activity.items.map((i) => i.volumeUsd));
   const observed = new Set(catalogue.items.filter((p) => p.observed).map((p) => p.protocol));
 
   return (
@@ -121,8 +120,7 @@ export async function ProtocolActivity({ period }: { period: Period }) {
               );
             }
             const row = activity.items.find((i) => i.protocol === protocol);
-            const volume = row ? sumUsd([row.volumeUsd]) : null;
-            const share = volume !== null && total !== null && total > 0 ? volume / total : null;
+            const share = shareOf(amountOf(row?.volumeUsd), amountOf(activity.total?.volumeUsd));
             const protocolTvl = tvl.items.find((i) => i.protocol === protocol)?.tvlUsd ?? null;
             return (
               <div key={line.key} role="row" className={`${ROW_CLASS} ${COLUMNS}`}>

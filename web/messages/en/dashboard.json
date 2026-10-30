@@ -69,8 +69,7 @@
       },
       "unavailable": {
         "label": "Why \"—\"?",
-        "previous": "The previous period starts before {since}, when measuring began: no comparison with an incomplete sum.",
-        "previousMoved": "A 5-minute tranche or a frozen hour arrived between the reads of the period and of the one before: reload the page to compare them."
+        "previous": "The previous period starts before {since}, when measuring began: no comparison with an incomplete sum."
       },
       "kpis": {
         "tvl": "TVL",

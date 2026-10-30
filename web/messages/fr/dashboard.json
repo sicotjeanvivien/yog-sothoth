@@ -69,8 +69,7 @@
       },
       "unavailable": {
         "label": "Pourquoi « — » ?",
-        "previous": "La période précédente commence avant le {since}, début des mesures : pas de comparaison avec une somme incomplète.",
-        "previousMoved": "Une tranche de 5 minutes ou une heure figée est arrivée entre la lecture de la période et celle de la précédente : rechargez la page pour les comparer."
+        "previous": "La période précédente commence avant le {since}, début des mesures : pas de comparaison avec une somme incomplète."
       },
       "kpis": {
         "tvl": "TVL",

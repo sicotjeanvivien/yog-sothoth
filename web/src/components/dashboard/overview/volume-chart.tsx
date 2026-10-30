@@ -1,5 +1,5 @@
 /**
- * Volume by 5-minute tranche (1H), by hour (24H) or by 6- or 24-hour slice (7D, 30D), all protocols summed: the page's main
+ * Volume by 5-minute tranche (1H), by hour (24H) or by 6- or 24-hour slice (7D, 30D), the API's total of each bar: the page's main
  * chart, and the fees under it in the advanced mode. The server lays the slots and words every
  * reading; `VolumeBars` only tracks the bar under the pointer.
  */
@@ -7,7 +7,7 @@
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { ApiClientError } from "@/lib/api/errors";
-import type { ProtocolSwapActivityBucketResponse } from "@/lib/api/schema/zod.gen";
+import type { SwapBucketTotalResponse } from "@/lib/api/schema/zod.gen";
 import { fetchSwapsSeries } from "@/lib/api/server/protocols";
 import { formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
@@ -62,10 +62,10 @@ export async function VolumeChart({ period }: { period: Period }) {
   }
 
   const closed = await closedReason(series);
-  const slotsFor = (pick: (bar: ProtocolSwapActivityBucketResponse) => string | null) =>
+  const slotsFor = (pick: (bar: SwapBucketTotalResponse) => string | null) =>
     slotsOf(
       series,
-      series.items.map((bar) => ({ from: bar.from, value: pick(bar) })),
+      series.total.map((bar) => ({ from: bar.from, value: pick(bar) })),
     );
   const slots = slotsFor((bar) => bar.volumeUsd);
   const feeSlots = slotsFor((bar) => bar.feesUsd);

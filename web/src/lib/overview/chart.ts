@@ -32,7 +32,7 @@ const INTERVAL_MS: Record<IntervalResponse, number> = {
   "1d": 24 * HOUR_MS,
 };
 
-/** The grid's slots: each sums the valued bars it holds, across protocols; `null` without any. */
+/** The grid's slots, each holding its bar's value; `null` without a valued bar. */
 export function slotsOf(grid: SeriesGrid, bars: readonly Bar[]): Slot[] {
   if (grid.from === null || grid.asOf === null) {
     return [];
@@ -41,18 +41,18 @@ export function slotsOf(grid: SeriesGrid, bars: readonly Bar[]): Slot[] {
   const start = Date.parse(grid.from);
   const count = (Date.parse(grid.asOf) - start) / step;
 
-  const sums = Array.from({ length: count }, (): number | null => null);
+  const values = Array.from({ length: count }, (): number | null => null);
   for (const bar of bars) {
     const i = (Date.parse(bar.from) - start) / step;
     const value = bar.value === null ? NaN : Number.parseFloat(bar.value);
-    if (i in sums && Number.isFinite(value)) {
-      sums[i] = (sums[i] ?? 0) + value;
+    if (i in values && Number.isFinite(value)) {
+      values[i] = value;
     }
   }
 
-  return sums.map((sum, i) => {
+  return values.map((value, i) => {
     const from = start + i * step;
-    return { from: new Date(from), to: new Date(from + step), value: sum };
+    return { from: new Date(from), to: new Date(from + step), value };
   });
 }
 

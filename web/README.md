@@ -285,15 +285,14 @@ links over the page's periods, each as `/api/windows` says; in its own unkeyed `
 that reads the period has its `<Suspense key={period}>`, so the change shows
 their waiting slots only; the signals do not reload.
 
-**What may not be shown** — a figure the facts do not cover whole is "—", never a smaller number. The API says it (`open`, `opensAt`); the variation is still judged here (`lib/overview/availability.ts`):
+**What may not be shown** — a figure the facts do not cover whole is "—", never a smaller number. The API says it (`open`, `opensAt`, `previous.covered`):
 - a period whose window starts before `coveredSince` (the first frozen hour) is
   closed: a button whose panel says when it opens; reached by its URL anyway,
   every block that sums over it shows "—" and the same reason (the TVL stays,
   with the time it was read). 30d stays closed by the API until
   its times are measured on the prod: a period closed with no date falls back to 24h,
   by its URL too, so its reads never run. So does any period but 24h when `/api/windows` does not answer: the page waits for that read before it renders;
-- the volume change is "—" when the previous window (`offset`) starts before
-  `coveredSince`, or does not end where the current one starts (a tranche or a freeze between the two reads);
+- the volume change is "—" when `swaps/totals` says the window before it is not covered whole (`previous`);
 - the TVL has no change when `tvl/totals` has no reading a window before the last,
   or no discovered part at it: the tile says when it was read, and its ⓘ why.
 Each "—" carries an ⓘ with its reason.
@@ -341,7 +340,7 @@ says its own — and at its right "Live", the period and the advanced mode: `ove
 page's path, the query it keeps and the scope its "Live" rows and its periods are read in.
 
 **KPIs** — the Overview's cells take a `scope` (`lib/api/server/scope.ts`): `"all"`
-on the Overview, which reads the root routes and adds up their protocols, the protocol
+on the Overview, which reads the root routes and shows their `total`, the protocol
 here, which reads its own routes (`/api/protocols/{protocol}/…`) — never a root route
 filtered in the page. The page adds its fees with their
 effective rate and, in the advanced mode, the protocol's fees with their share
@@ -622,7 +621,7 @@ web/
 │   │   ├── announcements/           # pickAnnouncement + dismiss cookie
 │   │   ├── config/                  # zod-validated env (server + client)
 │   │   ├── coverage/                # volumeCoverage (pure, tested)
-│   │   ├── overview/                # period, availability, chart, totals (pure, tested)
+│   │   ├── overview/                # period, chart, totals (pure, tested)
 │   │   ├── format/                  # pubkey, date, number formatters
 │   │   └── signals/                 # mergeSignals, filterSignals (pure, tested)
 │   ├── types/
