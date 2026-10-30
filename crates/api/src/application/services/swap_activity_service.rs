@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use yog_core::{
     Page, RepositoryResult,
@@ -14,8 +15,8 @@ use yog_core::{
 };
 
 use super::period::{
-    BucketPeriod, Measured, ReadPeriod, SeriesInterval, build_frozen_period, build_last_hour,
-    build_read_period,
+    BucketPeriod, Measured, PeriodBounds, ReadPeriod, SeriesInterval, build_frozen_period,
+    build_last_hour, build_read_period,
 };
 
 /// A page of tokens, or the refusal of a cursor taken in a ranking since rewritten.
@@ -23,6 +24,20 @@ use super::period::{
 pub(crate) enum TokenActivityRead {
     Page(Measured<Page<TokenActivity>, ReadPeriod>),
     CursorExpired,
+}
+
+/// The window before a read's: whether the facts cover it whole, and the volume over it.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PreviousVolume {
+    pub(crate) covered: bool,
+    pub(crate) volume_usd: Option<Decimal>,
+}
+
+/// A read of the protocols' totals; `previous` is `None` for a read moved back, or before any fact.
+#[derive(Debug)]
+pub(crate) struct SwapTotals {
+    pub(crate) measured: Measured<Vec<ProtocolSwapActivity>, ReadPeriod>,
+    pub(crate) previous: Option<PreviousVolume>,
 }
 
 pub(crate) struct SwapActivityService {
@@ -115,28 +130,51 @@ impl SwapActivityService {
         }))
     }
 
-    /// Totals: nothing for a period the facts do not cover whole.
+    /// Totals: nothing for a period the facts do not cover whole. Without `offset`, also the
+    /// window before it, on the same end: the two cannot straddle a freeze.
     pub(crate) async fn get_swap_totals(
         &self,
         window: Window,
         offset: Option<Window>,
         protocol: Option<Protocol>,
-    ) -> RepositoryResult<Measured<Vec<ProtocolSwapActivity>, ReadPeriod>> {
+    ) -> RepositoryResult<SwapTotals> {
         let period = build_read_period(self.hours.as_ref(), window, offset).await?;
-        let items = match &period {
+        let before = period
+            .filter(|_| offset.is_none())
+            .map(|period| period.ending_at(period.from()));
+        let (items, before_items) = tokio::try_join!(
+            self.read_totals(period, window, protocol),
+            self.read_totals(before, window, protocol),
+        )?;
+        Ok(SwapTotals {
+            measured: Measured { period, items },
+            previous: before.map(|before| PreviousVolume {
+                covered: before.is_covered(),
+                volume_usd: ProtocolSwapActivity::total(&before_items)
+                    .and_then(|total| total.activity.volume_usd),
+            }),
+        })
+    }
+
+    async fn read_totals(
+        &self,
+        period: Option<ReadPeriod>,
+        window: Window,
+        protocol: Option<Protocol>,
+    ) -> RepositoryResult<Vec<ProtocolSwapActivity>> {
+        match period {
             Some(ReadPeriod::Frozen(p)) if p.is_covered() => {
                 self.swap_activity
-                    .find_protocol_totals(p, window, protocol)
-                    .await?
+                    .find_protocol_totals(&p, window, protocol)
+                    .await
             }
             Some(ReadPeriod::Tranche(p)) if p.is_covered() => {
                 self.swap_activity
-                    .find_protocol_totals_in_tranches(p, protocol)
-                    .await?
+                    .find_protocol_totals_in_tranches(&p, protocol)
+                    .await
             }
-            _ => Vec::new(),
-        };
-        Ok(Measured { period, items })
+            _ => Ok(Vec::new()),
+        }
     }
 
     /// The series of `window` at `interval`.

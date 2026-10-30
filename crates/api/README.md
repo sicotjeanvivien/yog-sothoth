@@ -116,7 +116,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/windows` | Every window, the shortest first: its bounds, `open`, `opensAt` and `late`, without reading a measure over it |
 | `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` filter); each item embeds its pool's token pair (`tokenA`/`tokenB`, `EmbeddedTokenResponse`) |
 | `GET` | `/api/signals/stream` | SSE stream of new signals (see below) |
-| `GET` | `/api/protocols` | A page of every protocol of the domain, in the domain's order: observed by this build or not, pools seen — the catalogue, live; forward-only cursor |
+| `GET` | `/api/protocols` | A page of every protocol of the domain, in the domain's order, and `poolsSeen` over all of them: observed by this build or not, pools seen — the catalogue, live; forward-only cursor |
 | `GET` | `/api/protocols/{protocol}` | The protocol's entry of the catalogue |
 | `GET` | `/api/pools`, `/api/protocols/{protocol}/pools`, `/api/tokens/{mint}/pools` | A page of pools, the most recently first seen first, forward-only cursor refused (400) under another list: identity, the token pair embedded, and the state now — last event, reserves, the value of each side and their TVL (`pool_current_tvl`); 404 for a mint without metadata |
 | `GET` | `/api/pools/{pool}` | The pool of the lists, and the properties of its protocol under the protocol's name (`meteoraDammV2`: fee shares, base-fee kind, the fee its curve charges now); 404 for a pool unknown |
@@ -145,6 +145,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/protocols/{protocol}/rotation-runs/totals` | The runs started in the window, their distinct pools, those still in progress, their median and p90 duration, their volume, and `firstHour`: the runs whose first hour ended before the window did, their volume and its part in that hour, `null` while none did (always over `1h`) — through the last tranche written; its `coveredSince` is the first tranche whose rotation was measured |
 | `GET` | `/api/protocols/{protocol}/rotation-runs/series` | The protocol's volume by `interval`, split by its runs, `splitSince` the first instant they split a bar from: in them and outside them (never under 0), both `null` on a bar the runs do not cover whole or with an hour not valued |
 | `GET` | `/api/protocols/{protocol}/liquidity-moves`, `/api/pools/{pool}/liquidity-moves` | A page of the valued moves (creations, additions, removals), their pool's token symbols embedded, the lock their transaction puts on a position (`none`, `vesting`, `permanent`, `null` before measured), `?kind=create|add|remove` to keep one kind, `?sort=amount` (default) or `at`, forward-only cursor that keeps its first page's end, refused (400) under another list, kind or window, or once that end is over an hour behind; empty while the protocol's liquidity does not cover the window |
+| `GET` | `/api/liquidity-turnover/totals`, `/api/protocols/{protocol}/liquidity-turnover/totals` | Per protocol and in `total`, the volume over the window divided by the last TVL reading, with the volume's coverage; `null` without a volume or a TVL above 0 |
 | `GET` | `/api/tvl`, `/api/protocols/{protocol}/tvl` | Per protocol, the last TVL reading at or before `asOf`, its `at` said |
 | `GET` | `/api/tvl/series`, `/api/protocols/{protocol}/tvl/series` (`interval=1h`, its only step) | Per protocol, the reading of every hour measured from the window's start |
 | `GET` | `/api/tvl/totals`, `/api/protocols/{protocol}/tvl/totals` | Per protocol, the last reading, the one exactly a window before it (`null` when not measured, when the last is not at `asOf`, or over `1h`), the part the pools discovered in the window hold at the last, and the change without it, `null` as soon as one term is |
@@ -191,7 +192,8 @@ at the end of this section.
    - **business resources**, the entities of the domain and their state, observed on the chain
      or fetched from a provider: `protocols`, `pools`, `tokens`, and a token's `prices`;
    - **produced resources**, what we compute from the first two: the measures (rule 4),
-     `tvl`, `pool-discoveries`, `liquidity-moves`, `rotation-runs`, `vesting-unlocks`, `signals`;
+     `tvl`, `pool-discoveries`, `liquidity-moves`, `liquidity-turnover`, `rotation-runs`, `vesting-unlocks`,
+     `signals`;
    - **service resources**, the state and the messages of the service: `network` and
      `ingestion`, singletons each at `/api/<singleton>`, `windows`, the closed list of the windows, unpaginated,
      and `announcements`.
@@ -201,7 +203,8 @@ at the end of this section.
    family it gathers (`initialize_pool` → `pool-creations`, `EvtLiquidityChange` →
    `liquidity-changes`); a produced one names what it observes: `tvl`, the value deposited, a
    reading at an instant; `liquidity-moves`, the liquidity brought by the pool creations,
-   added or removed, valued; `rotation-runs`, a pool's tranches whose quoted reserve turned
+   added or removed, valued; `liquidity-turnover`, how many times the liquidity deposited changed hands over a window;
+   `rotation-runs`, a pool's tranches whose quoted reserve turned
    over at least once, no more than 30 min apart, with the tranches between them;
    `vesting-unlocks`, the liquidity a vesting lock releases at an instant.
 2. **Three path forms for a request**: `/api/<collection>`, every protocol;
@@ -218,17 +221,20 @@ at the end of this section.
    name an entity. Every item of a collection shared by several protocols carries its
    protocol.
 4. **A measure is a collection followed by a cut**, a reserved word that ends the path:
-   - `totals`, the whole window: one row per protocol at the root, under an entity its own;
+   - `totals`, the whole window: one row per protocol at the root, under an entity its own.
+     `swaps`, `tvl`, `pool-creations` and `liquidity-turnover` add `total`, the protocols combined at the root
+     as under one: a figure unknown in one row is unknown, `null` without a row;
    - `series`: the same rows, one per bucket, unpaginated, the window bounding them. Without
      `interval`, the window's own step — `5m` over `1h`, `1h` over `24h`, `6h` over `7d`, `1d` over
      `30d` — and the response says it (`interval`); named, `5m` cuts `window=1h` only, which is cut
      at `5m` only, and `6h` cuts `window=7d` only. A bucket ends on `asOf`'s grid; one that starts
-     before `coveredSince` is absent;
+     before `coveredSince` is absent. `swaps/series` over every protocol or under one adds `total`, one row per
+     bucket: a USD field sums the protocols that know it, `null` if none does;
    - `by-token`, `by-pool`, `by-owner`: one row per token, pool or owner address, summed over
      the path's scope (every protocol at the root), a ranking paginated as a collection.
 
    Every measure has both cuts, over `window=1h|24h|7d|30d`, but two the data does not serve
-   so: the TVL, read once an hour, whose `series` is `interval=1h` and starts at a day, its `totals`
+   so: `liquidity-turnover`, without a `series`; the TVL, read once an hour, whose `series` is `interval=1h` and starts at a day, its `totals`
    over `1h` being the last reading alone; and the pools discovered, measured over a day, a week and a month only, without a
    `series`. A request outside what a route serves is refused, 400 for a value outside its
    closed list, 404 for a route that does not exist; the same error is the same message on
@@ -294,6 +300,10 @@ measured on the prod, is `open: false` with `opensAt: null` and still serves its
 `coveredSince`; a series of a measure that starts later than the facts (`liquidity-moves`, the claims) on the
 facts', as it draws a period it covers in part. `late`: `asOf` is more than 2 h behind on a frozen hour,
 30 min on a tranche. An `offset` read is judged at the end it was moved from.
+
+**The window before.** `swaps/totals` over every protocol or under one carries `previous`: whether the
+facts cover the window before this one (`covered`), and the volume over it (`volumeUsd`), read on the same
+end so a freeze cannot split them. A client computes the change. `previous` is `null` with `offset`.
 
 **Parameters and fields.** `window=24h|7d|30d`, a closed list, 400 otherwise; `offset` for the
 previous window. `1h`, the last hour through the last tranche written (through the last frozen hour for the TVL's `totals`), is served by every measure

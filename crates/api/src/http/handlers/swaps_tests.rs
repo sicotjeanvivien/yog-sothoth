@@ -212,6 +212,18 @@ async fn a_series_says_its_step_and_the_totals_their_unit() {
             "\"splitSince\":null",
         ),
         ("/api/windows", "\"window\":\"30d\",\"from\":null"),
+        ("/api/swaps/totals?window=24h", "\"total\":null"),
+        ("/api/swaps/series?window=24h", "\"total\":[]"),
+        ("/api/tvl/totals?window=24h", "\"total\":null"),
+        ("/api/pool-creations/totals?window=24h", "\"total\":null"),
+        (
+            "/api/liquidity-turnover/totals?window=24h",
+            "\"total\":null",
+        ),
+        (
+            "/api/protocols/meteora_damm_v2/liquidity-turnover/totals?window=1h",
+            "\"coverageUnit\":\"poolTranches\"",
+        ),
         ("/api/tvl/series?window=7d", "\"interval\":\"1h\""),
         (
             "/api/protocols/meteora_damm_v2/rotation-runs/series?window=7d",

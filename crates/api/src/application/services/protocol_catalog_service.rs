@@ -81,6 +81,16 @@ impl ProtocolCatalogService {
         })
     }
 
+    /// The pools seen by every protocol, whatever the page.
+    pub(crate) async fn pools_seen(&self) -> RepositoryResult<i64> {
+        Ok(self
+            .list()
+            .await?
+            .iter()
+            .map(|entry| entry.pools_seen)
+            .sum())
+    }
+
     /// `protocol`'s entry of [`Self::list`].
     pub(crate) async fn get_protocol(
         &self,

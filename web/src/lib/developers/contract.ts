@@ -69,6 +69,7 @@ const FAMILY_OF_SEGMENT: Record<string, Family> = {
   windows: "service",
   swaps: "swaps",
   "liquidity-changes": "liquidity",
+  "liquidity-turnover": "liquidity",
   "pool-changes": "liquidity",
   "pool-creations": "poolCreations",
   "pool-discoveries": "poolCreations",

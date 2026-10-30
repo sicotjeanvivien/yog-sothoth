@@ -118,7 +118,10 @@ pub use position_fee_claim_event::{PositionFeeClaimEvent, PositionFeeClaimEventL
 pub use protocol::Protocol;
 pub use protocol_activity::ProtocolActivityLookup;
 pub use protocol_fee_claim_event::{ProtocolFeeClaimEvent, ProtocolFeeClaimEventLookup};
-pub use protocol_tvl::{ProtocolTvl, ProtocolTvlChange, ProtocolTvlLookup, TvlReading};
+pub use protocol_tvl::{
+    LiquidityTurnover, ProtocolLiquidityTurnover, ProtocolTvl, ProtocolTvlChange,
+    ProtocolTvlLookup, TvlChangeTotal, TvlReading,
+};
 pub use reward_change_event::{
     MeteoraDammV2RewardChange, RewardChangeEvent, RewardChangeEventLookup,
 };
@@ -131,7 +134,10 @@ pub use signals::{
     DetectorError, EvalContext, Severity, Signal, SignalCursor, SignalDetector, SignalFeed,
     SignalFilter, SignalRecord, SignalRepository,
 };
-pub use swap_activity::{PoolSwapBucket, ProtocolSwapActivity, SwapActivity, SwapActivityLookup};
+pub use swap_activity::{
+    PoolSwapBucket, ProtocolSwapActivity, SwapActivity, SwapActivityLookup, SwapActivityTotal,
+    SwapBucket,
+};
 pub use swap_event::{SwapEvent, SwapEventLookup};
 pub use swap_flow::{PoolSwapFlow, SwapFlowRepository};
 pub use token_activity::{

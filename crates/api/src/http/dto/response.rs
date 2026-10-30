@@ -58,7 +58,7 @@ pub(crate) use pool_swap_bucket::PoolSwapBucketResponse;
 pub(crate) use position_change_event::PositionChangeEventResponse;
 pub(crate) use position_fee_claim_event::PositionFeeClaimEventResponse;
 pub(crate) use problem::{PROBLEM_CONTENT_TYPE, ProblemDetailsResponse};
-pub(crate) use protocol_catalog::ProtocolCatalogResponse;
+pub(crate) use protocol_catalog::{ProtocolCatalogPageResponse, ProtocolCatalogResponse};
 pub(crate) use protocol_claim_totals::{ProtocolClaimBucketResponse, ProtocolClaimTotalsResponse};
 pub(crate) use protocol_discovered_tvl::ProtocolDiscoveredTvlResponse;
 pub(crate) use protocol_fee_claim_event::ProtocolFeeClaimEventResponse;
@@ -89,7 +89,8 @@ pub(crate) use token::{TokenPriceResponse, TokenResponse};
 pub(crate) use token_activity::TokenActivityPageResponse;
 pub(crate) use tranche_window::TrancheWindowedResponse;
 pub(crate) use window::{
-    RunSplitSeriesResponse, SeriesResponse, SwapSeriesResponse, SwapTotalsResponse,
-    WindowedResponse, WindowsResponse,
+    LiquidityTurnoverTotalsResponse, PoolCreationTotalsResponse, ProtocolSwapSeriesResponse,
+    ProtocolSwapTotalsResponse, RunSplitSeriesResponse, SeriesResponse, SwapSeriesResponse,
+    SwapTotalsResponse, TvlTotalsResponse, WindowedResponse, WindowsResponse,
 };
 pub(crate) use windowed_page::WindowedPageResponse;

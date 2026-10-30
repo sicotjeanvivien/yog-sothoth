@@ -61,8 +61,8 @@ fn every_measure_reads_every_window_and_every_step() {
         checked += 1;
     }
     assert_eq!(
-        checked, 22,
-        "ten measures, each a `totals` and a `series`, and the TVL's `totals`"
+        checked, 24,
+        "ten measures, each a `totals` and a `series`, the TVL's and the turnover's `totals`"
     );
 }
 
@@ -160,7 +160,7 @@ fn file_name(path: &Path) -> String {
 fn every_api_route_is_in_the_document() {
     let doc = document();
     let paths = doc["paths"].as_object().expect("paths");
-    assert_eq!(paths.len(), 76, "{:?}", paths.keys().collect::<Vec<_>>());
+    assert_eq!(paths.len(), 78, "{:?}", paths.keys().collect::<Vec<_>>());
 }
 
 /// A document of one schema, as `finish` receives it.
@@ -397,7 +397,7 @@ fn every_handler_declares_the_body_and_query_it_has() {
             checked += 1;
         }
     }
-    assert_eq!(checked, 76, "one #[utoipa::path] per /api route");
+    assert_eq!(checked, 78, "one #[utoipa::path] per /api route");
     assert!(drift.is_empty(), "{drift:?}");
 }
 
