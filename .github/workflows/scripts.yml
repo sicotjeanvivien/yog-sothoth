@@ -179,11 +179,13 @@ jobs:
       - name: The log levels are counted in every format, and only there
         run: |
           eval "$(sed -n "/^readonly log_levels=/,/^END .*'\$/p" docker/observe.sh)"
-          counted=$(awk "$log_levels" <<'LINES'
+          counted=$({ cat <<'LINES'
           {"timestamp":"2026-10-30T10:05:03.367394Z","level":"WARN","fields":{"message":"request failed"}}
           {"timestamp":"2026-10-30T10:05:03.367394Z","level":"ERROR","fields":{"message":"cycle failed"}}
           {"timestamp":"2026-10-30T10:05:03.367394Z","level":"INFO","fields":{"message":"x WARN y"}}
           {"timestamp":"2026-10-30T10:05:03.367394Z","level":"INFO","fields":{"message":"quotes \"level\":\"WARN\""}}
+          {"timestamp":"2026-10-30T10:05:03.367394Z","level":"INFO","fields":{"message":"m","level":"WARN"}}
+          {"timestamp":"2026-10-30T10:05:03.367394Z","level":"INFO","fields":{"message":"m","level":"ERROR"}}
           {"timestamp":"2026-10-30T10:05:03.367394Z","level":"INFO","fields":{"message":"token thread panicked at x"}}
           2026-10-30T10:05:03.367394Z  WARN yog_api: request failed
           2026-10-30T10:05:03.367394Z ERROR yog_api: cycle failed
@@ -193,8 +195,9 @@ jobs:
           2026-10-30 09:58:53.387 UTC [92] FATAL:  terminating autovacuum process
           thread 'main' panicked at crates/api/src/main.rs:1:1:
           LINES
-          )
-          [ "$counted" = "warn=3 error=5" ] || { echo "counted: $counted, expected warn=3 error=5"; exit 1; }
+            printf '\033[2m2026-10-30T10:05:03.367394Z\033[0m \033[33m WARN\033[0m \033[2myog_api\033[0m: coloured\n'
+          } | awk "$log_levels")
+          [ "$counted" = "warn=4 error=5" ] || { echo "counted: $counted, expected warn=4 error=5"; exit 1; }
           echo "every format counted, no message read as a level"
 
   # The one check the ruleset of main requires from this workflow: green when

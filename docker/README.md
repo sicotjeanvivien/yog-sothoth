@@ -112,8 +112,8 @@ A key that reads production and can do nothing else, so that its state is
 read without the account that deploys: `ssh yog-obs health`, `metrics` or `db`.
 
 - `health` — each service's state, start time, restarts and OOM kill; its
-  memory against its limit; its `WARN` and `ERROR` lines of the last hour, in
-  JSON or in text, **counted**; the host's disk and memory; and whether the installed script
+  memory against its limit; its `WARN` and `ERROR` lines of the last hour,
+  in JSON or in text, **counted**; the host's disk and memory; and whether the installed script
   still matches the checkout's.
 - `metrics` — the `yog_*` series of the four daemons, read from inside the
   compose network through yog-web's `wget`.
