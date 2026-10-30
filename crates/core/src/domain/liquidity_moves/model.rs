@@ -126,7 +126,7 @@ pub enum LiquidityMoveOrder {
 }
 
 /// The key of the last move of a page, and the list it was read from — its scope and kind,
-/// window, order and instant: a page of another list, or read after a freeze, would not follow.
+/// window, order and instant: a page of another list would not follow.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiquidityMoveCursor {
     pub list: LiquidityMoveList,
