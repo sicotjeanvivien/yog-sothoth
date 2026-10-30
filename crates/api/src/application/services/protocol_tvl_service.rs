@@ -75,13 +75,21 @@ impl ProtocolTvlService {
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Measured<Vec<ProtocolTvlChange>>> {
         let period = build_frozen_period(self.hours.as_ref(), window, None).await?;
-        let items = match &period {
-            Some(period) => {
+        let items = match (&period, window) {
+            // ⚠️ The discovered parts stop at a day: over an hour, no change to publish.
+            (Some(period), Window::Hour) => self
+                .protocol_tvl
+                .list_latest(period.last_hour(), protocol)
+                .await?
+                .into_iter()
+                .map(ProtocolTvlChange::last_reading)
+                .collect(),
+            (Some(period), _) => {
                 self.protocol_tvl
                     .list_changes(period.last_hour(), window, protocol)
                     .await?
             }
-            None => Vec::new(),
+            (None, _) => Vec::new(),
         };
         Ok(Measured { period, items })
     }

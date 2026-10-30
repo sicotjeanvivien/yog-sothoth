@@ -10,7 +10,7 @@ use yog_core::domain::{
 };
 
 use super::{LiquidityMoveService, MovesError};
-use crate::application::services::period::PeriodBounds;
+use crate::application::services::period::{PeriodBounds, SeriesInterval};
 use crate::testing::{
     MockLiquidityMoveRepo, MockProtocolActivityRepo, at_october, frozen_hours_repo,
     make_frozen_hours, make_pool, pk,
@@ -266,4 +266,24 @@ async fn the_last_hours_moves_are_read_on_its_tranches() {
         ]
     );
     assert!(reads(&repo).is_empty(), "{:?}", reads(&repo));
+}
+
+/// Mutation: a slice of 6 hours read at another width — bars of a day under `interval=6h`.
+#[tokio::test]
+async fn a_week_is_read_in_slices_of_six_hours() {
+    let repo = Arc::new(MockLiquidityMoveRepo {
+        since: Some(at_october(13, 13)),
+        ..MockLiquidityMoveRepo::default()
+    });
+
+    service(&repo)
+        .list_liquidity_series(
+            Window::Week,
+            SeriesInterval::SixHours,
+            Protocol::MeteoraDammV2,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(*repo.widths.lock().unwrap(), [chrono::TimeDelta::hours(6)]);
 }

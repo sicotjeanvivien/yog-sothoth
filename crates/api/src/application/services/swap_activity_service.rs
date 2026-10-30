@@ -139,8 +139,7 @@ impl SwapActivityService {
         Ok(Measured { period, items })
     }
 
-    /// The series of `window` at `interval`: 5 minutes over the last hour, else by frozen hour or
-    /// 24 hours.
+    /// The series of `window` at `interval`.
     pub(crate) async fn list_swap_series(
         &self,
         window: Window,
@@ -180,9 +179,9 @@ impl SwapActivityService {
                     .list_protocol_hourly(period, protocol)
                     .await?
             }
-            (Some(period), BucketPeriod::Day) => {
+            (Some(period), bucket) => {
                 self.swap_activity
-                    .list_protocol_daily(period, protocol)
+                    .list_protocol_buckets(period, bucket.width(), protocol)
                     .await?
             }
             (None, _) => Vec::new(),
@@ -227,8 +226,10 @@ impl SwapActivityService {
             (Some(ReadPeriod::Frozen(p)), Some(BucketPeriod::Hour)) => {
                 self.swap_activity.list_pool_hourly(p, pool).await?
             }
-            (Some(ReadPeriod::Frozen(p)), Some(BucketPeriod::Day)) => {
-                self.swap_activity.list_pool_daily(p, pool).await?
+            (Some(ReadPeriod::Frozen(p)), Some(bucket)) => {
+                self.swap_activity
+                    .list_pool_buckets(p, bucket.width(), pool)
+                    .await?
             }
             _ => Vec::new(),
         };

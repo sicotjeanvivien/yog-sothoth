@@ -102,8 +102,10 @@ impl LiquidityMoveService {
             (Some(ReadPeriod::Frozen(p)), Some(BucketPeriod::Hour)) => {
                 self.liquidity_moves.list_hourly(p, protocol).await?
             }
-            (Some(ReadPeriod::Frozen(p)), Some(BucketPeriod::Day)) => {
-                self.liquidity_moves.list_daily(p, protocol).await?
+            (Some(ReadPeriod::Frozen(p)), Some(bucket)) => {
+                self.liquidity_moves
+                    .list_buckets(p, bucket.width(), protocol)
+                    .await?
             }
             _ => Vec::new(),
         };

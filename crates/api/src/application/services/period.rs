@@ -144,18 +144,35 @@ pub(crate) async fn build_last_hour(
         .map(|tranches| TranchePeriod::hour_through(tranches, None)))
 }
 
-/// The step of a `…/series`: 5 minutes over the last hour only, an hour or 24 hours otherwise.
+/// The step of a `…/series`: 5 minutes over the last hour only, 6 hours over a week only, an hour
+/// or a day over the other windows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SeriesInterval {
     FiveMinutes,
     Hour,
+    SixHours,
     Day,
 }
 
 impl SeriesInterval {
-    /// Whether `window` is cut at this step: 5 minutes for 1h, which nothing else is cut into.
+    /// The step a window is read at when the request names none.
+    pub(crate) fn of(window: Window) -> Self {
+        match window {
+            Window::Hour => Self::FiveMinutes,
+            Window::Day => Self::Hour,
+            Window::Week => Self::SixHours,
+            Window::Month => Self::Day,
+        }
+    }
+
+    /// Whether `window` is cut at this step: 5 minutes for 1h, which nothing else is cut into, and
+    /// 6 hours for a week.
     pub(crate) fn fits(self, window: Window) -> bool {
-        (self == Self::FiveMinutes) == (window == Window::Hour)
+        match self {
+            Self::FiveMinutes => window == Window::Hour,
+            Self::SixHours => window == Window::Week,
+            Self::Hour | Self::Day => window != Window::Hour,
+        }
     }
 
     /// The frozen buckets this step reads; `None` for 5 minutes, read from the tranches.
@@ -163,16 +180,28 @@ impl SeriesInterval {
         match self {
             Self::FiveMinutes => None,
             Self::Hour => Some(BucketPeriod::Hour),
+            Self::SixHours => Some(BucketPeriod::SixHours),
             Self::Day => Some(BucketPeriod::Day),
         }
     }
 }
 
-/// The buckets of a series: one per hour, or one per 24 hours ending at `as_of`.
+/// The buckets of a series: one per hour, or one per 6 or 24 hours ending at `as_of`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BucketPeriod {
     Hour,
+    SixHours,
     Day,
+}
+
+impl BucketPeriod {
+    pub(crate) fn width(self) -> TimeDelta {
+        match self {
+            Self::Hour => TimeDelta::hours(1),
+            Self::SixHours => TimeDelta::hours(6),
+            Self::Day => TimeDelta::days(1),
+        }
+    }
 }
 
 /// `window` through the last frozen hour, moved `offset` back; `None` before the first freeze.
@@ -206,3 +235,7 @@ pub(crate) fn first_whole_hour(at: DateTime<Utc>) -> DateTime<Utc> {
         start + TimeDelta::hours(1)
     }
 }
+
+#[cfg(test)]
+#[path = "tests/period_tests.rs"]
+mod tests;

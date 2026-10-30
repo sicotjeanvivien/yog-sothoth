@@ -58,9 +58,10 @@ async fn a_protocols_hour_without_a_creation_reads_zero(pool: PgPool) {
     let hourly = PoolCreationsLookup::list_hourly(&repository, &day, None)
         .await
         .unwrap();
-    let daily = PoolCreationsLookup::list_daily(&repository, &day, None)
-        .await
-        .unwrap();
+    let daily =
+        PoolCreationsLookup::list_buckets(&repository, &day, chrono::Duration::days(1), None)
+            .await
+            .unwrap();
 
     assert_eq!(
         totals.len(),
@@ -71,4 +72,9 @@ async fn a_protocols_hour_without_a_creation_reads_zero(pool: PgPool) {
     assert_eq!(hourly.len(), 24);
     assert!(hourly.iter().all(|b| b.value.pools == 0));
     assert_eq!(daily.len(), 1);
+    let slices =
+        PoolCreationsLookup::list_buckets(&repository, &day, chrono::Duration::hours(6), None)
+            .await
+            .unwrap();
+    assert_eq!(slices.len(), 4);
 }

@@ -4,7 +4,7 @@
 mod rows;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use rows::{RotationRunRow, RotationRunTotalsRow, RunSplitRow};
 use sqlx::PgPool;
 use yog_core::{
@@ -17,7 +17,7 @@ use yog_core::{
 };
 
 use crate::repositories::helper::{
-    PageBuilder, QueryMode, convert_decimal_to_bigdecimal, map_sqlx_error,
+    PageBuilder, QueryMode, convert_decimal_to_bigdecimal, interval_of, map_sqlx_error,
 };
 
 pub struct PgRotationRunRepository {
@@ -334,9 +334,10 @@ impl RotationRunLookup for PgRotationRunRepository {
         rows.into_iter().map(ProtocolBucket::try_from).collect()
     }
 
-    async fn list_daily(
+    async fn list_buckets(
         &self,
         period: &FrozenPeriod,
+        width: TimeDelta,
         runs_since: Option<DateTime<Utc>>,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<RunSplit>>> {
@@ -351,7 +352,7 @@ impl RotationRunLookup for PgRotationRunRepository {
                        AS in_runs_usd
               FROM (
                   SELECT bucket, volume_usd,
-                         time_bucket(INTERVAL '1 day', bucket, origin => $2::TIMESTAMPTZ)
+                         time_bucket($6::INTERVAL, bucket, origin => $2::TIMESTAMPTZ)
                              AS bucket_from
                     FROM analytic_protocol_hourly
                    WHERE protocol = $4 AND bucket >= $1 AND bucket < $2
@@ -371,6 +372,7 @@ impl RotationRunLookup for PgRotationRunRepository {
             period.covered_since,
             protocol.as_str(),
             runs_since,
+            interval_of(width),
         )
         .fetch_all(&self.pool)
         .await

@@ -82,8 +82,10 @@ impl ClaimTotalsService {
             (Some(ReadPeriod::Frozen(p)), Some(BucketPeriod::Hour)) => {
                 self.claims.list_hourly(kind, p, protocol).await?
             }
-            (Some(ReadPeriod::Frozen(p)), Some(BucketPeriod::Day)) => {
-                self.claims.list_daily(kind, p, protocol).await?
+            (Some(ReadPeriod::Frozen(p)), Some(bucket)) => {
+                self.claims
+                    .list_buckets(kind, p, bucket.width(), protocol)
+                    .await?
             }
             _ => Vec::new(),
         };

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use chrono::TimeDelta;
 
 use super::{PoolCreations, ProtocolPoolCreations};
 use crate::RepositoryResult;
@@ -20,9 +21,10 @@ pub trait PoolCreationsLookup: Send + Sync {
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBucket<PoolCreations>>>;
 
-    async fn list_daily(
+    async fn list_buckets(
         &self,
         period: &FrozenPeriod,
+        width: TimeDelta,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBucket<PoolCreations>>>;
 

@@ -7,13 +7,13 @@ use axum::{
 };
 use yog_core::domain::Protocol;
 
+use crate::application::SeriesInterval;
 use crate::http::{
     AppState,
     dto::{
-        ProtocolTvlChangeResponse, ProtocolTvlResponse, ReadingResponse, WindowedResponse,
-        request::{
-            NoQuery, ReadingIntervalParam, ReadingSeriesParams, WindowParams, parse_protocol,
-        },
+        ProtocolTvlChangeResponse, ProtocolTvlResponse, ReadingResponse, SeriesResponse,
+        WindowedResponse,
+        request::{MeasureWindowParams, NoQuery, ReadingSeriesParams, parse_protocol},
     },
     error::ApiError,
 };
@@ -67,13 +67,13 @@ async fn get_latest(
     responses((
         status = 200,
         description = "Each protocol's TVL reading of every hour measured, from the window's start.",
-        body = WindowedResponse<ProtocolTvlResponse>
+        body = SeriesResponse<ProtocolTvlResponse>
     ))
 )]
 pub(crate) async fn get_tvl_series(
     State(state): State<AppState>,
     Query(params): Query<ReadingSeriesParams>,
-) -> Result<Json<WindowedResponse<ProtocolTvlResponse>>, ApiError> {
+) -> Result<Json<SeriesResponse<ProtocolTvlResponse>>, ApiError> {
     list_readings(&state, params, None).await
 }
 
@@ -84,14 +84,14 @@ pub(crate) async fn get_tvl_series(
     responses((
         status = 200,
         description = "The protocol's TVL reading of every hour measured, from the window's start.",
-        body = WindowedResponse<ProtocolTvlResponse>
+        body = SeriesResponse<ProtocolTvlResponse>
     ))
 )]
 pub(crate) async fn get_protocol_tvl_series(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
     Query(params): Query<ReadingSeriesParams>,
-) -> Result<Json<WindowedResponse<ProtocolTvlResponse>>, ApiError> {
+) -> Result<Json<SeriesResponse<ProtocolTvlResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
     list_readings(&state, params, Some(protocol)).await
 }
@@ -100,34 +100,33 @@ async fn list_readings(
     state: &AppState,
     params: ReadingSeriesParams,
     protocol: Option<Protocol>,
-) -> Result<Json<WindowedResponse<ProtocolTvlResponse>>, ApiError> {
-    let ReadingSeriesParams {
-        window,
-        interval: ReadingIntervalParam::Hour,
-    } = params;
-    let window = window.into();
+) -> Result<Json<SeriesResponse<ProtocolTvlResponse>>, ApiError> {
+    let window = params.window.into();
+    let interval = params
+        .interval
+        .map_or(SeriesInterval::Hour, SeriesInterval::from);
     let measured = state
         .protocol_tvl_service
         .list_tvl_hourly(window, protocol)
         .await?;
-    Ok(Json(WindowedResponse::new(window, measured)))
+    Ok(Json(SeriesResponse::new(window, interval, measured)))
 }
 
 #[utoipa::path(
     get,
     path = "/api/tvl/totals",
-    params(WindowParams),
+    params(MeasureWindowParams),
     responses((
         status = 200,
         description = "Each protocol's last TVL reading, the one a window before it, and the \
-                       change without the pools discovered in the window; no start but for a \
-                       last reading at `asOf`.",
+                       change without the pools discovered in the window; over `1h`, the last \
+                       reading alone, at the close of the last frozen hour.",
         body = WindowedResponse<ProtocolTvlChangeResponse>
     ))
 )]
 pub(crate) async fn get_tvl_totals(
     State(state): State<AppState>,
-    Query(params): Query<WindowParams>,
+    Query(params): Query<MeasureWindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolTvlChangeResponse>>, ApiError> {
     get_change(&state, params, None).await
 }
@@ -135,19 +134,19 @@ pub(crate) async fn get_tvl_totals(
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/tvl/totals",
-    params(WindowParams),
+    params(MeasureWindowParams),
     responses((
         status = 200,
         description = "The protocol's last TVL reading, the one a window before it, and the \
-                       change without the pools discovered in the window; no start but for a \
-                       last reading at `asOf`.",
+                       change without the pools discovered in the window; over `1h`, the last \
+                       reading alone, at the close of the last frozen hour.",
         body = WindowedResponse<ProtocolTvlChangeResponse>
     ))
 )]
 pub(crate) async fn get_protocol_tvl_totals(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(params): Query<WindowParams>,
+    Query(params): Query<MeasureWindowParams>,
 ) -> Result<Json<WindowedResponse<ProtocolTvlChangeResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
     get_change(&state, params, Some(protocol)).await
@@ -155,7 +154,7 @@ pub(crate) async fn get_protocol_tvl_totals(
 
 async fn get_change(
     state: &AppState,
-    params: WindowParams,
+    params: MeasureWindowParams,
     protocol: Option<Protocol>,
 ) -> Result<Json<WindowedResponse<ProtocolTvlChangeResponse>>, ApiError> {
     let window = params.window.into();

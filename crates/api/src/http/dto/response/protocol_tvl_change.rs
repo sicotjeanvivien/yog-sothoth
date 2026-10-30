@@ -34,7 +34,7 @@ pub(crate) struct ProtocolTvlChangeResponse {
     protocol: ProtocolResponse,
     /// The last reading at or before `asOf`.
     end: TvlReadingResponse,
-    /// The reading exactly a window before `end`, when `end` is at `asOf`.
+    /// The reading exactly a window before `end`, when `end` is at `asOf`; never over `1h`.
     start: Option<TvlReadingResponse>,
     /// What the pools first seen in the window, their birth unobserved, hold at `end`; `null`
     /// when not measured at that reading.

@@ -38,3 +38,22 @@ fn the_change_is_unknown_as_soon_as_one_term_is() {
     assert_eq!(change(None, Some(200)).change_usd(), None);
     assert_eq!(change(Some(reading(None)), Some(200)).change_usd(), None);
 }
+
+/// Mutation: a last reading given a start or a discovered part — a change published over an hour
+/// that has no discovered part.
+#[test]
+fn a_last_reading_alone_has_no_change() {
+    let at = Utc.with_ymd_and_hms(2026, 10, 25, 3, 0, 0).unwrap();
+    let last = ProtocolTvlChange::last_reading(super::ProtocolTvl {
+        protocol: Protocol::MeteoraDammV2,
+        at,
+        tvl_usd: Some(Decimal::from(5)),
+        pools_priced: 1,
+        pools_unvalued: 0,
+    });
+
+    assert_eq!(last.end, reading(Some(5)));
+    assert_eq!(last.start, None);
+    assert_eq!(last.discovered_tvl_usd, None);
+    assert_eq!(last.change_usd(), None);
+}

@@ -112,12 +112,13 @@ impl PositionChangeCountsLookup for PgPositionChangeCountsRepository {
             .await
     }
 
-    async fn list_daily(
+    async fn list_buckets(
         &self,
         period: &FrozenPeriod,
+        width: TimeDelta,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<PositionChangeCounts>>> {
-        self.list_frozen(period, TimeDelta::days(1), protocol).await
+        self.list_frozen(period, width, protocol).await
     }
 
     async fn list_tranches(

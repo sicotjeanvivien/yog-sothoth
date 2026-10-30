@@ -88,11 +88,17 @@ impl PoolCreationsService {
             (Some(period), BucketPeriod::Hour) => {
                 self.pool_creations.list_hourly(period, protocol).await?
             }
-            (Some(period), BucketPeriod::Day) => {
-                self.pool_creations.list_daily(period, protocol).await?
+            (Some(period), bucket) => {
+                self.pool_creations
+                    .list_buckets(period, bucket.width(), protocol)
+                    .await?
             }
             (None, _) => Vec::new(),
         };
         Ok(Measured { period, items })
     }
 }
+
+#[cfg(test)]
+#[path = "tests/pool_creations_service_tests.rs"]
+mod tests;

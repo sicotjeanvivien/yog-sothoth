@@ -39,7 +39,7 @@ async fn the_produced_routes_are_mounted() {
 }
 
 /// Mutation: an `hourly` or `daily` route kept, or a series taking a step it does not serve — 5
-/// minutes over the frozen hours, a day over the TVL's hourly readings, or no step.
+/// minutes over the frozen hours, 6 hours off a week, or a day over the TVL's hourly readings.
 #[tokio::test]
 async fn a_series_is_cut_by_its_interval_only() {
     let pool = pk(1);
@@ -71,8 +71,8 @@ async fn a_series_is_cut_by_its_interval_only() {
         "/api/protocols/meteora_damm_v2/liquidity-moves/series?interval=5m".to_owned(),
         "/api/protocols/meteora_damm_v2/rotation-runs/series?interval=5m".to_owned(),
         "/api/tvl/series?interval=1d".to_owned(),
-        "/api/tvl/series".to_owned(),
-        "/api/protocols/meteora_damm_v2/liquidity-moves/series".to_owned(),
+        "/api/swaps/series?window=24h&interval=6h".to_owned(),
+        "/api/swaps/series?window=30d&interval=6h".to_owned(),
     ] {
         let (status, content_type, _) = get(&uri).await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}");
@@ -130,18 +130,17 @@ async fn an_unknown_protocol_or_window_is_refused_in_problem_details() {
     }
 }
 
-/// Mutation: `1h` taken where it is not served — the TVL, the pools discovered, a list of events —
-/// or refused by the moves or the runs; or a series cut at a step that does not fit its window.
+/// Mutation: `1h` taken where it is not served — the TVL's series, the pools discovered, a list of
+/// events — or refused by the TVL's totals, the moves or the runs; or a step that does not fit.
 #[tokio::test]
 async fn the_last_hour_and_its_step_are_refused_where_they_do_not_fit() {
     for uri in [
-        "/api/tvl/totals?window=1h",
+        "/api/tvl/series?window=1h",
         "/api/protocols/meteora_damm_v2/pool-discoveries/totals?window=1h",
         "/api/protocols/meteora_damm_v2/swaps?window=1h",
         "/api/protocols/meteora_damm_v2/liquidity-moves/series?window=1h&interval=1h",
         "/api/swaps/series?window=24h&interval=5m",
         "/api/swaps/series?window=1h&interval=1h",
-        "/api/swaps/series?window=24h",
         "/api/pool-creations/series?window=1h&interval=1d",
     ] {
         let (status, content_type, _) = get(uri).await;
@@ -150,6 +149,8 @@ async fn the_last_hour_and_its_step_are_refused_where_they_do_not_fit() {
     }
     for uri in [
         "/api/swaps/totals?window=1h&offset=1h",
+        "/api/tvl/totals?window=1h",
+        "/api/protocols/meteora_damm_v2/tvl/totals?window=1h",
         "/api/swaps/series?window=1h&interval=5m",
         "/api/swaps/series?window=7d&interval=1h",
         "/api/protocols/meteora_damm_v2/swaps/series?window=30d&interval=1d",
@@ -172,6 +173,51 @@ async fn the_last_hour_and_its_step_are_refused_where_they_do_not_fit() {
     ] {
         let (status, _, body) = get(uri).await;
         assert_eq!(status, StatusCode::OK, "{uri}: {body}");
+    }
+}
+
+/// Mutation: a window read at another step than its own when the request names none, or a response
+/// that does not say the step it serves; the swaps' coverage unit read off the window.
+#[tokio::test]
+async fn a_series_says_its_step_and_the_totals_their_unit() {
+    for (uri, expected) in [
+        ("/api/swaps/series?window=1h", "\"interval\":\"5m\""),
+        ("/api/swaps/series?window=24h", "\"interval\":\"1h\""),
+        ("/api/swaps/series?window=7d", "\"interval\":\"6h\""),
+        ("/api/swaps/series?window=30d", "\"interval\":\"1d\""),
+        (
+            "/api/swaps/series?window=7d&interval=1h",
+            "\"interval\":\"1h\"",
+        ),
+        (
+            "/api/swaps/series?window=1h",
+            "\"coverageUnit\":\"poolTranches\"",
+        ),
+        (
+            "/api/swaps/series?window=7d",
+            "\"coverageUnit\":\"poolHours\"",
+        ),
+        ("/api/tvl/series?window=7d", "\"interval\":\"1h\""),
+        (
+            "/api/protocols/meteora_damm_v2/rotation-runs/series?window=7d",
+            "\"interval\":\"6h\"",
+        ),
+        (
+            "/api/swaps/totals?window=1h",
+            "\"coverageUnit\":\"poolTranches\"",
+        ),
+        (
+            "/api/swaps/totals?window=24h",
+            "\"coverageUnit\":\"poolHours\"",
+        ),
+        (
+            "/api/swaps/by-token?window=1h",
+            "\"coverageUnit\":\"poolTranches\"",
+        ),
+    ] {
+        let (status, _, body) = get(uri).await;
+        assert_eq!(status, StatusCode::OK, "{uri}: {body}");
+        assert!(body.contains(expected), "{uri}: {body}");
     }
 }
 

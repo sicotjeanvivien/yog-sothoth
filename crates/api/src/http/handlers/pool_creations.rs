@@ -11,7 +11,7 @@ use crate::http::{
     AppState,
     dto::{
         PageResponse, PoolCreationEventResponse, ProtocolPoolCreationsBucketResponse,
-        ProtocolPoolCreationsResponse, WindowedResponse,
+        ProtocolPoolCreationsResponse, SeriesResponse, WindowedResponse,
         request::{
             EventsParams, ListEventsRequest, MeasureWindowParams, SeriesParams, parse_protocol,
         },
@@ -75,13 +75,13 @@ async fn get_totals(
     responses((
         status = 200,
         description = "Each protocol's pools created by `interval`, under the rules of `/api/swaps/series`.",
-        body = WindowedResponse<ProtocolPoolCreationsBucketResponse>
+        body = SeriesResponse<ProtocolPoolCreationsBucketResponse>
     ))
 )]
 pub(crate) async fn get_pool_creations_series(
     State(state): State<AppState>,
     Query(params): Query<SeriesParams>,
-) -> Result<Json<WindowedResponse<ProtocolPoolCreationsBucketResponse>>, ApiError> {
+) -> Result<Json<SeriesResponse<ProtocolPoolCreationsBucketResponse>>, ApiError> {
     list_series(&state, params, None).await
 }
 
@@ -92,14 +92,14 @@ pub(crate) async fn get_pool_creations_series(
     responses((
         status = 200,
         description = "The protocol's pools created by `interval`, under the rules of `/api/swaps/series`.",
-        body = WindowedResponse<ProtocolPoolCreationsBucketResponse>
+        body = SeriesResponse<ProtocolPoolCreationsBucketResponse>
     ))
 )]
 pub(crate) async fn get_protocol_pool_creations_series(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
     Query(params): Query<SeriesParams>,
-) -> Result<Json<WindowedResponse<ProtocolPoolCreationsBucketResponse>>, ApiError> {
+) -> Result<Json<SeriesResponse<ProtocolPoolCreationsBucketResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
     list_series(&state, params, Some(protocol)).await
 }
@@ -108,13 +108,13 @@ async fn list_series(
     state: &AppState,
     params: SeriesParams,
     protocol: Option<Protocol>,
-) -> Result<Json<WindowedResponse<ProtocolPoolCreationsBucketResponse>>, ApiError> {
+) -> Result<Json<SeriesResponse<ProtocolPoolCreationsBucketResponse>>, ApiError> {
     let (window, interval) = params.parse()?;
     let measured = state
         .pool_creations_service
         .list_pool_creation_series(window, interval, protocol)
         .await?;
-    Ok(Json(WindowedResponse::new(window, measured)))
+    Ok(Json(SeriesResponse::new(window, interval, measured)))
 }
 
 #[utoipa::path(

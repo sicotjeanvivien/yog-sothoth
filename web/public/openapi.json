@@ -82,6 +82,14 @@
         "minimum": 0,
         "type": "integer"
       },
+      "CoverageUnitResponse": {
+        "description": "What `poolHours` and `poolHoursValued` count: a pool's hours, or over `1h` its tranches.",
+        "enum": [
+          "poolHours",
+          "poolTranches"
+        ],
+        "type": "string"
+      },
       "EmbeddedTokenResponse": {
         "description": "A token, embedded in another resource's response.",
         "properties": {
@@ -161,6 +169,16 @@
           "lastEventAt"
         ],
         "type": "object"
+      },
+      "IntervalResponse": {
+        "description": "The step of a series.",
+        "enum": [
+          "5m",
+          "1h",
+          "6h",
+          "1d"
+        ],
+        "type": "string"
       },
       "LiquidityChangeEventKindResponse": {
         "description": "Whether the change added liquidity to the pool or removed it.",
@@ -3784,7 +3802,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/TvlReadingResponse",
-                "description": "The reading exactly a window before `end`, when `end` is at `asOf`."
+                "description": "The reading exactly a window before `end`, when `end` is at `asOf`; never over `1h`."
               },
               {
                 "type": "null"
@@ -4214,6 +4232,454 @@
         ],
         "type": "object"
       },
+      "SeriesResponse_ProtocolClaimBucketResponse": {
+        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.",
+        "properties": {
+          "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "description": "Where the facts start.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "interval": {
+            "$ref": "#/components/schemas/IntervalResponse"
+          },
+          "items": {
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ProtocolClaimTotalsResponse"
+                },
+                {
+                  "properties": {
+                    "from": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "from"
+                  ],
+                  "type": "object"
+                }
+              ],
+              "description": "A bucket of the series; `owners` is distinct over the bucket."
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "interval",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
+      "SeriesResponse_ProtocolLiquidityFlowsBucketResponse": {
+        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.",
+        "properties": {
+          "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "description": "Where the facts start.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "interval": {
+            "$ref": "#/components/schemas/IntervalResponse"
+          },
+          "items": {
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/LiquidityFlowsResponse"
+                },
+                {
+                  "properties": {
+                    "from": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "protocol": {
+                      "$ref": "#/components/schemas/ProtocolResponse"
+                    }
+                  },
+                  "required": [
+                    "protocol",
+                    "from"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "interval",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
+      "SeriesResponse_ProtocolPoolCreationsBucketResponse": {
+        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.",
+        "properties": {
+          "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "description": "Where the facts start.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "interval": {
+            "$ref": "#/components/schemas/IntervalResponse"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "from": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "pools": {
+                  "$ref": "#/components/schemas/Count"
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                }
+              },
+              "required": [
+                "protocol",
+                "from",
+                "pools"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "interval",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
+      "SeriesResponse_ProtocolPositionChangeBucketResponse": {
+        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.",
+        "properties": {
+          "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "description": "Where the facts start.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "interval": {
+            "$ref": "#/components/schemas/IntervalResponse"
+          },
+          "items": {
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ProtocolPositionChangeTotalsResponse"
+                },
+                {
+                  "properties": {
+                    "from": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "from"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "interval",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
+      "SeriesResponse_ProtocolRotationRunBucketResponse": {
+        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.",
+        "properties": {
+          "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "description": "Where the facts start.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "interval": {
+            "$ref": "#/components/schemas/IntervalResponse"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "from": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "inRunsUsd": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/UnsignedDecimal",
+                      "description": "`null` where the runs do not cover the bucket whole, or an hour of it is not valued."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "outsideRunsUsd": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/UnsignedDecimal",
+                      "description": "`volumeUsd − inRunsUsd`, never under 0; `null` as soon as one of them is."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "volumeUsd": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/UnsignedDecimal",
+                      "description": "Every swap of the bucket, as `swaps/series`; `null` where none is valued."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "protocol",
+                "from",
+                "inRunsUsd",
+                "outsideRunsUsd",
+                "volumeUsd"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "interval",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
+      "SeriesResponse_ProtocolTvlResponse": {
+        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.",
+        "properties": {
+          "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "description": "Where the facts start.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "interval": {
+            "$ref": "#/components/schemas/IntervalResponse"
+          },
+          "items": {
+            "items": {
+              "description": "A protocol's TVL at `at`, the close of the hour it was last measured in.",
+              "properties": {
+                "at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "poolsPriced": {
+                  "$ref": "#/components/schemas/Count",
+                  "description": "Pools with at least one side valued, a side without a price counting 0."
+                },
+                "poolsUnvalued": {
+                  "$ref": "#/components/schemas/Count",
+                  "description": "Pools with no side valued, out of `tvlUsd`."
+                },
+                "protocol": {
+                  "$ref": "#/components/schemas/ProtocolResponse"
+                },
+                "tvlUsd": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/UnsignedDecimal"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "protocol",
+                "at",
+                "poolsPriced",
+                "poolsUnvalued",
+                "tvlUsd"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "interval",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
       "SeverityResponse": {
         "description": "How serious a signal is.",
         "enum": [
@@ -4477,6 +4943,344 @@
         ],
         "type": "object"
       },
+      "SwapSeriesResponse_PoolSwapBucketResponse": {
+        "description": "The swaps by bucket: `interval` is their step, `coverageUnit` what their coverage counts.",
+        "properties": {
+          "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coverageUnit": {
+            "$ref": "#/components/schemas/CoverageUnitResponse"
+          },
+          "coveredSince": {
+            "description": "Where the facts start.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "interval": {
+            "$ref": "#/components/schemas/IntervalResponse"
+          },
+          "items": {
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/SwapActivityResponse"
+                },
+                {
+                  "properties": {
+                    "from": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "from"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "interval",
+          "coverageUnit",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
+      "SwapSeriesResponse_ProtocolSwapActivityBucketResponse": {
+        "description": "The swaps by bucket: `interval` is their step, `coverageUnit` what their coverage counts.",
+        "properties": {
+          "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coverageUnit": {
+            "$ref": "#/components/schemas/CoverageUnitResponse"
+          },
+          "coveredSince": {
+            "description": "Where the facts start.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "interval": {
+            "$ref": "#/components/schemas/IntervalResponse"
+          },
+          "items": {
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/SwapActivityResponse"
+                },
+                {
+                  "properties": {
+                    "from": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "protocol": {
+                      "$ref": "#/components/schemas/ProtocolResponse"
+                    }
+                  },
+                  "required": [
+                    "protocol",
+                    "from"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "interval",
+          "coverageUnit",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
+      "SwapTotalsResponse_ProtocolSwapActivityResponse": {
+        "description": "The swaps over `from..asOf`: `coverageUnit` is what their coverage counts.",
+        "properties": {
+          "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coverageUnit": {
+            "$ref": "#/components/schemas/CoverageUnitResponse"
+          },
+          "coveredSince": {
+            "description": "Where the facts start.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/SwapActivityResponse"
+                },
+                {
+                  "properties": {
+                    "pools": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/Count",
+                          "description": "Distinct over the window; `null` when no cycle counted them at its last hour."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "protocol": {
+                      "$ref": "#/components/schemas/ProtocolResponse"
+                    }
+                  },
+                  "required": [
+                    "protocol",
+                    "pools"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "coverageUnit",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
+      "SwapTotalsResponse_SwapActivityResponse": {
+        "description": "The swaps over `from..asOf`: `coverageUnit` is what their coverage counts.",
+        "properties": {
+          "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coverageUnit": {
+            "$ref": "#/components/schemas/CoverageUnitResponse"
+          },
+          "coveredSince": {
+            "description": "Where the facts start.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "feesUsd": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/UnsignedDecimal"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "lpFeesUsd": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/UnsignedDecimal"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "poolHours": {
+                  "$ref": "#/components/schemas/Count"
+                },
+                "poolHoursValued": {
+                  "$ref": "#/components/schemas/Count"
+                },
+                "protocolFeesUsd": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/UnsignedDecimal"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "referralFeesUsd": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/UnsignedDecimal"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "swaps": {
+                  "$ref": "#/components/schemas/Count"
+                },
+                "volumeUsd": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/UnsignedDecimal"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "swaps",
+                "poolHours",
+                "poolHoursValued",
+                "feesUsd",
+                "lpFeesUsd",
+                "protocolFeesUsd",
+                "referralFeesUsd",
+                "volumeUsd"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WindowResponse"
+          }
+        },
+        "required": [
+          "window",
+          "coverageUnit",
+          "items",
+          "asOf",
+          "coveredSince",
+          "from"
+        ],
+        "type": "object"
+      },
       "TokenActivityPageResponse": {
         "description": "The window envelope over a forward-only page: `prevCursor` is always `null`.",
         "properties": {
@@ -4486,6 +5290,9 @@
               "string",
               "null"
             ]
+          },
+          "coverageUnit": {
+            "$ref": "#/components/schemas/CoverageUnitResponse"
           },
           "coveredSince": {
             "format": "date-time",
@@ -4531,6 +5338,7 @@
         },
         "required": [
           "window",
+          "coverageUnit",
           "items",
           "isFirst",
           "isLast",
@@ -5051,134 +5859,11 @@
         ],
         "type": "object"
       },
-      "WindowedResponse_PoolSwapBucketResponse": {
-        "description": "`from..asOf`, each `null` before any fact.",
-        "properties": {
-          "asOf": {
-            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/SwapActivityResponse"
-                },
-                {
-                  "properties": {
-                    "from": {
-                      "format": "date-time",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "from"
-                  ],
-                  "type": "object"
-                }
-              ]
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
-      "WindowedResponse_ProtocolClaimBucketResponse": {
-        "description": "`from..asOf`, each `null` before any fact.",
-        "properties": {
-          "asOf": {
-            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/ProtocolClaimTotalsResponse"
-                },
-                {
-                  "properties": {
-                    "from": {
-                      "format": "date-time",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "from"
-                  ],
-                  "type": "object"
-                }
-              ],
-              "description": "A bucket of the series; `owners` is distinct over the bucket."
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
       "WindowedResponse_ProtocolClaimTotalsResponse": {
         "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
             "format": "date-time",
             "type": [
               "string",
@@ -5248,7 +5933,7 @@
         "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
             "format": "date-time",
             "type": [
               "string",
@@ -5310,76 +5995,11 @@
         ],
         "type": "object"
       },
-      "WindowedResponse_ProtocolLiquidityFlowsBucketResponse": {
-        "description": "`from..asOf`, each `null` before any fact.",
-        "properties": {
-          "asOf": {
-            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/LiquidityFlowsResponse"
-                },
-                {
-                  "properties": {
-                    "from": {
-                      "format": "date-time",
-                      "type": "string"
-                    },
-                    "protocol": {
-                      "$ref": "#/components/schemas/ProtocolResponse"
-                    }
-                  },
-                  "required": [
-                    "protocol",
-                    "from"
-                  ],
-                  "type": "object"
-                }
-              ]
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
       "WindowedResponse_ProtocolLiquidityFlowsResponse": {
         "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
             "format": "date-time",
             "type": [
               "string",
@@ -5440,73 +6060,11 @@
         ],
         "type": "object"
       },
-      "WindowedResponse_ProtocolPoolCreationsBucketResponse": {
-        "description": "`from..asOf`, each `null` before any fact.",
-        "properties": {
-          "asOf": {
-            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "properties": {
-                "from": {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "pools": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                }
-              },
-              "required": [
-                "protocol",
-                "from",
-                "pools"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
       "WindowedResponse_ProtocolPoolCreationsResponse": {
         "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
             "format": "date-time",
             "type": [
               "string",
@@ -5543,67 +6101,6 @@
                 "pools"
               ],
               "type": "object"
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
-      "WindowedResponse_ProtocolPositionChangeBucketResponse": {
-        "description": "`from..asOf`, each `null` before any fact.",
-        "properties": {
-          "asOf": {
-            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/ProtocolPositionChangeTotalsResponse"
-                },
-                {
-                  "properties": {
-                    "from": {
-                      "format": "date-time",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "from"
-                  ],
-                  "type": "object"
-                }
-              ]
             },
             "type": "array"
           },
@@ -5624,7 +6121,7 @@
         "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
             "format": "date-time",
             "type": [
               "string",
@@ -5693,242 +6190,11 @@
         ],
         "type": "object"
       },
-      "WindowedResponse_ProtocolRotationRunBucketResponse": {
-        "description": "`from..asOf`, each `null` before any fact.",
-        "properties": {
-          "asOf": {
-            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "properties": {
-                "from": {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "inRunsUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal",
-                      "description": "`null` where the runs do not cover the bucket whole, or an hour of it is not valued."
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "outsideRunsUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal",
-                      "description": "`volumeUsd − inRunsUsd`, never under 0; `null` as soon as one of them is."
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                },
-                "volumeUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal",
-                      "description": "Every swap of the bucket, as `swaps/series`; `null` where none is valued."
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              },
-              "required": [
-                "protocol",
-                "from",
-                "inRunsUsd",
-                "outsideRunsUsd",
-                "volumeUsd"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
-      "WindowedResponse_ProtocolSwapActivityBucketResponse": {
-        "description": "`from..asOf`, each `null` before any fact.",
-        "properties": {
-          "asOf": {
-            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/SwapActivityResponse"
-                },
-                {
-                  "properties": {
-                    "from": {
-                      "format": "date-time",
-                      "type": "string"
-                    },
-                    "protocol": {
-                      "$ref": "#/components/schemas/ProtocolResponse"
-                    }
-                  },
-                  "required": [
-                    "protocol",
-                    "from"
-                  ],
-                  "type": "object"
-                }
-              ]
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
-      "WindowedResponse_ProtocolSwapActivityResponse": {
-        "description": "`from..asOf`, each `null` before any fact.",
-        "properties": {
-          "asOf": {
-            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/SwapActivityResponse"
-                },
-                {
-                  "properties": {
-                    "pools": {
-                      "oneOf": [
-                        {
-                          "$ref": "#/components/schemas/Count",
-                          "description": "Distinct over the window; `null` when no cycle counted them at its last hour."
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "protocol": {
-                      "$ref": "#/components/schemas/ProtocolResponse"
-                    }
-                  },
-                  "required": [
-                    "protocol",
-                    "pools"
-                  ],
-                  "type": "object"
-                }
-              ]
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
       "WindowedResponse_ProtocolTvlChangeResponse": {
         "description": "`from..asOf`, each `null` before any fact.",
         "properties": {
           "asOf": {
-            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
             "format": "date-time",
             "type": [
               "string",
@@ -5986,7 +6252,7 @@
                   "oneOf": [
                     {
                       "$ref": "#/components/schemas/TvlReadingResponse",
-                      "description": "The reading exactly a window before `end`, when `end` is at `asOf`."
+                      "description": "The reading exactly a window before `end`, when `end` is at `asOf`; never over `1h`."
                     },
                     {
                       "type": "null"
@@ -6000,202 +6266,6 @@
                 "changeUsd",
                 "discoveredTvlUsd",
                 "start"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
-      "WindowedResponse_ProtocolTvlResponse": {
-        "description": "`from..asOf`, each `null` before any fact.",
-        "properties": {
-          "asOf": {
-            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "description": "A protocol's TVL at `at`, the close of the hour it was last measured in.",
-              "properties": {
-                "at": {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "poolsPriced": {
-                  "$ref": "#/components/schemas/Count",
-                  "description": "Pools with at least one side valued, a side without a price counting 0."
-                },
-                "poolsUnvalued": {
-                  "$ref": "#/components/schemas/Count",
-                  "description": "Pools with no side valued, out of `tvlUsd`."
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                },
-                "tvlUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              },
-              "required": [
-                "protocol",
-                "at",
-                "poolsPriced",
-                "poolsUnvalued",
-                "tvlUsd"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
-      "WindowedResponse_SwapActivityResponse": {
-        "description": "`from..asOf`, each `null` before any fact.",
-        "properties": {
-          "asOf": {
-            "description": "The close of the last frozen hour, or for `1h` the end of the last tranche written: the\ninstant the rows reflect.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "properties": {
-                "feesUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "lpFeesUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "poolHours": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "poolHoursValued": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "protocolFeesUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "referralFeesUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "swaps": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "volumeUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              },
-              "required": [
-                "swaps",
-                "poolHours",
-                "poolHoursValued",
-                "feesUsd",
-                "lpFeesUsd",
-                "protocolFeesUsd",
-                "referralFeesUsd",
-                "volumeUsd"
               ],
               "type": "object"
             },
@@ -6555,7 +6625,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -6568,12 +6638,13 @@
           {
             "in": "query",
             "name": "interval",
-            "required": true,
+            "required": false,
             "schema": {
               "description": "The step of a series.",
               "enum": [
                 "5m",
                 "1h",
+                "6h",
                 "1d"
               ],
               "type": "string"
@@ -6585,7 +6656,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPoolCreationsBucketResponse"
+                  "$ref": "#/components/schemas/SeriesResponse_ProtocolPoolCreationsBucketResponse"
                 }
               }
             },
@@ -6613,7 +6684,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -6861,7 +6932,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -7401,7 +7472,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -7673,7 +7744,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -7686,12 +7757,13 @@
           {
             "in": "query",
             "name": "interval",
-            "required": true,
+            "required": false,
             "schema": {
               "description": "The step of a series.",
               "enum": [
                 "5m",
                 "1h",
+                "6h",
                 "1d"
               ],
               "type": "string"
@@ -7711,7 +7783,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_PoolSwapBucketResponse"
+                  "$ref": "#/components/schemas/SwapSeriesResponse_PoolSwapBucketResponse"
                 }
               }
             },
@@ -7739,7 +7811,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -7763,7 +7835,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_SwapActivityResponse"
+                  "$ref": "#/components/schemas/SwapTotalsResponse_SwapActivityResponse"
                 }
               }
             },
@@ -8148,7 +8220,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -8250,7 +8322,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -8263,12 +8335,13 @@
           {
             "in": "query",
             "name": "interval",
-            "required": true,
+            "required": false,
             "schema": {
               "description": "The step of a series.",
               "enum": [
                 "5m",
                 "1h",
+                "6h",
                 "1d"
               ],
               "type": "string"
@@ -8288,11 +8361,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolLiquidityFlowsBucketResponse"
+                  "$ref": "#/components/schemas/SeriesResponse_ProtocolLiquidityFlowsBucketResponse"
                 }
               }
             },
-            "description": "The protocol's liquidity created, added and removed, by `interval`: 5 minutes over the last hour, an hour or 24 hours ending at `asOf` over the other windows."
+            "description": "The protocol's liquidity created, added and removed, by `interval`, the window's own step by default: 5 minutes over `1h`, an hour over `24h`, 6 hours over `7d`, a day over `30d`."
           },
           "default": {
             "content": {
@@ -8316,7 +8389,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -8514,7 +8587,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -8527,12 +8600,13 @@
           {
             "in": "query",
             "name": "interval",
-            "required": true,
+            "required": false,
             "schema": {
               "description": "The step of a series.",
               "enum": [
                 "5m",
                 "1h",
+                "6h",
                 "1d"
               ],
               "type": "string"
@@ -8552,7 +8626,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPoolCreationsBucketResponse"
+                  "$ref": "#/components/schemas/SeriesResponse_ProtocolPoolCreationsBucketResponse"
                 }
               }
             },
@@ -8580,7 +8654,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -8815,7 +8889,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -8828,12 +8902,13 @@
           {
             "in": "query",
             "name": "interval",
-            "required": true,
+            "required": false,
             "schema": {
               "description": "The step of a series.",
               "enum": [
                 "5m",
                 "1h",
+                "6h",
                 "1d"
               ],
               "type": "string"
@@ -8853,7 +8928,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPositionChangeBucketResponse"
+                  "$ref": "#/components/schemas/SeriesResponse_ProtocolPositionChangeBucketResponse"
                 }
               }
             },
@@ -8881,7 +8956,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -9006,7 +9081,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -9019,12 +9094,13 @@
           {
             "in": "query",
             "name": "interval",
-            "required": true,
+            "required": false,
             "schema": {
               "description": "The step of a series.",
               "enum": [
                 "5m",
                 "1h",
+                "6h",
                 "1d"
               ],
               "type": "string"
@@ -9044,7 +9120,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolClaimBucketResponse"
+                  "$ref": "#/components/schemas/SeriesResponse_ProtocolClaimBucketResponse"
                 }
               }
             },
@@ -9072,7 +9148,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -9343,7 +9419,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -9356,12 +9432,13 @@
           {
             "in": "query",
             "name": "interval",
-            "required": true,
+            "required": false,
             "schema": {
               "description": "The step of a series.",
               "enum": [
                 "5m",
                 "1h",
+                "6h",
                 "1d"
               ],
               "type": "string"
@@ -9381,7 +9458,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolClaimBucketResponse"
+                  "$ref": "#/components/schemas/SeriesResponse_ProtocolClaimBucketResponse"
                 }
               }
             },
@@ -9409,7 +9486,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -9461,7 +9538,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -9549,7 +9626,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -9562,12 +9639,13 @@
           {
             "in": "query",
             "name": "interval",
-            "required": true,
+            "required": false,
             "schema": {
               "description": "The step of a series.",
               "enum": [
                 "5m",
                 "1h",
+                "6h",
                 "1d"
               ],
               "type": "string"
@@ -9587,11 +9665,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolRotationRunBucketResponse"
+                  "$ref": "#/components/schemas/SeriesResponse_ProtocolRotationRunBucketResponse"
                 }
               }
             },
-            "description": "The protocol's volume by `interval`, 5 minutes over the last hour, an hour or 24 hours ending at `asOf` over the other windows, split by its rotation runs."
+            "description": "The protocol's volume by `interval`, the window's own step by default (5 minutes over `1h`, an hour over `24h`, 6 hours over `7d`, a day over `30d`), split by its rotation runs."
           },
           "default": {
             "content": {
@@ -9615,7 +9693,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -9851,7 +9929,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -9864,12 +9942,13 @@
           {
             "in": "query",
             "name": "interval",
-            "required": true,
+            "required": false,
             "schema": {
               "description": "The step of a series.",
               "enum": [
                 "5m",
                 "1h",
+                "6h",
                 "1d"
               ],
               "type": "string"
@@ -9889,7 +9968,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapActivityBucketResponse"
+                  "$ref": "#/components/schemas/SwapSeriesResponse_ProtocolSwapActivityBucketResponse"
                 }
               }
             },
@@ -9917,7 +9996,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -9934,7 +10013,7 @@
             "schema": {
               "oneOf": [
                 {
-                  "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+                  "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
                   "enum": [
                     "1h",
                     "24h",
@@ -9963,7 +10042,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapActivityResponse"
+                  "$ref": "#/components/schemas/SwapTotalsResponse_ProtocolSwapActivityResponse"
                 }
               }
             },
@@ -10039,7 +10118,7 @@
           {
             "in": "query",
             "name": "interval",
-            "required": true,
+            "required": false,
             "schema": {
               "description": "The step of a series of readings: one per hour measured.",
               "enum": [
@@ -10062,7 +10141,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolTvlResponse"
+                  "$ref": "#/components/schemas/SeriesResponse_ProtocolTvlResponse"
                 }
               }
             },
@@ -10090,7 +10169,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -10116,7 +10197,7 @@
                 }
               }
             },
-            "description": "The protocol's last TVL reading, the one a window before it, and the change without the pools discovered in the window; no start but for a last reading at `asOf`."
+            "description": "The protocol's last TVL reading, the one a window before it, and the change without the pools discovered in the window; over `1h`, the last reading alone, at the close of the last frozen hour."
           },
           "default": {
             "content": {
@@ -10467,7 +10548,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -10546,7 +10627,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -10559,12 +10640,13 @@
           {
             "in": "query",
             "name": "interval",
-            "required": true,
+            "required": false,
             "schema": {
               "description": "The step of a series.",
               "enum": [
                 "5m",
                 "1h",
+                "6h",
                 "1d"
               ],
               "type": "string"
@@ -10576,11 +10658,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapActivityBucketResponse"
+                  "$ref": "#/components/schemas/SwapSeriesResponse_ProtocolSwapActivityBucketResponse"
                 }
               }
             },
-            "description": "Each protocol's swaps by `interval`: 5 minutes over the last hour, an hour or 24 hours ending at `asOf` over the other windows."
+            "description": "Each protocol's swaps by `interval`, the window's own step by default: 5 minutes over `1h`, an hour over `24h`, 6 hours over `7d`, a day over `30d`."
           },
           "default": {
             "content": {
@@ -10604,7 +10686,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
                 "1h",
                 "24h",
@@ -10621,7 +10703,7 @@
             "schema": {
               "oneOf": [
                 {
-                  "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
+                  "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
                   "enum": [
                     "1h",
                     "24h",
@@ -10642,7 +10724,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolSwapActivityResponse"
+                  "$ref": "#/components/schemas/SwapTotalsResponse_ProtocolSwapActivityResponse"
                 }
               }
             },
@@ -10930,7 +11012,7 @@
           {
             "in": "query",
             "name": "interval",
-            "required": true,
+            "required": false,
             "schema": {
               "description": "The step of a series of readings: one per hour measured.",
               "enum": [
@@ -10945,7 +11027,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolTvlResponse"
+                  "$ref": "#/components/schemas/SeriesResponse_ProtocolTvlResponse"
                 }
               }
             },
@@ -10973,7 +11055,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -10991,7 +11075,7 @@
                 }
               }
             },
-            "description": "Each protocol's last TVL reading, the one a window before it, and the change without the pools discovered in the window; no start but for a last reading at `asOf`."
+            "description": "Each protocol's last TVL reading, the one a window before it, and the change without the pools discovered in the window; over `1h`, the last reading alone, at the close of the last frozen hour."
           },
           "default": {
             "content": {

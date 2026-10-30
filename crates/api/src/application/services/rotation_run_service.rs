@@ -146,7 +146,11 @@ impl RotationRunService {
         let since = self.find_split_since(protocol).await?;
         let items = match bucket {
             BucketPeriod::Hour => self.runs.list_hourly(&period, since, protocol).await?,
-            BucketPeriod::Day => self.runs.list_daily(&period, since, protocol).await?,
+            bucket => {
+                self.runs
+                    .list_buckets(&period, bucket.width(), since, protocol)
+                    .await?
+            }
         };
         Ok(Measured {
             period: Some(period),

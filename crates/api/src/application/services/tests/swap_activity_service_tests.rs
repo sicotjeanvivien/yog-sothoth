@@ -165,7 +165,7 @@ async fn a_series_reads_the_frozen_buckets_of_its_interval() {
         .unwrap();
 
     let reads: Vec<_> = repo.reads.lock().unwrap().iter().map(|r| r.0).collect();
-    assert_eq!(reads, vec!["swap_hourly", "swap_daily"]);
+    assert_eq!(reads, vec!["swap_hourly", "swap_buckets"]);
 }
 
 /// Mutation: the hour's ranking read without its cursor checked — page 2 of a ranking read once a
@@ -197,4 +197,23 @@ async fn a_cursor_of_an_hour_moved_since_is_expired() {
     assert!(matches!(stale, TokenActivityRead::CursorExpired));
     assert!(matches!(fresh, TokenActivityRead::Page(_)));
     assert_eq!(*tokens.tranche_reads.lock().unwrap(), vec![hour]);
+}
+
+/// Mutation: a slice of 6 hours read at another width — bars of a day under `interval=6h`.
+#[tokio::test]
+async fn a_week_is_read_in_slices_of_six_hours() {
+    let repo = Arc::new(MockSwapActivityRepo::default());
+    let svc = service(&repo);
+
+    svc.list_swap_series(Window::Week, SeriesInterval::SixHours, None)
+        .await
+        .unwrap();
+    svc.list_pool_swap_series(Window::Week, SeriesInterval::SixHours, pk(1))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *repo.widths.lock().unwrap(),
+        [chrono::TimeDelta::hours(6); 2]
+    );
 }
