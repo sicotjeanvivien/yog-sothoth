@@ -6,7 +6,7 @@ use serde::Deserialize;
 use utoipa::IntoParams;
 use yog_core::domain::{RotationRunCursor, RotationRunOrder, RotationRunScope, Window};
 
-use super::window_param::WindowParam;
+use super::window_param::MeasureWindowParam;
 use crate::http::{cursor::decode_rotation_run_cursor, error::ApiError};
 
 use sort_param::RotationRunSortParam;
@@ -17,7 +17,7 @@ use sort_param::RotationRunSortParam;
 pub(crate) struct RotationRunsParams {
     #[serde(default)]
     #[param(inline)]
-    window: WindowParam,
+    window: MeasureWindowParam,
     #[serde(default)]
     #[param(inline)]
     sort: RotationRunSortParam,

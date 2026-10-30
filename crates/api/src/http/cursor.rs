@@ -315,8 +315,9 @@ pub(crate) fn decode_liquidity_move_cursor(
     }
     Ok(LiquidityMoveCursor {
         list,
-        window: Window::ALL
+        window: [Window::Hour]
             .into_iter()
+            .chain(Window::ALL)
             .find(|w| w.as_str() == wire.window)
             .ok_or_else(|| ApiError::BadRequest("invalid cursor: malformed window".to_string()))?,
         as_of: parse_rfc3339(&wire.as_of)?,

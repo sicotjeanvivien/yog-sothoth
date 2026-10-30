@@ -115,8 +115,8 @@ impl From<MovesError> for ApiError {
         match err {
             MovesError::Repository(err) => err.into(),
             MovesError::CursorRefused => ApiError::BadRequest(
-                "`cursor` belongs to another list, or to one read before the last freeze: start \
-                 again without it"
+                "`cursor` belongs to another list, was read more than an hour of freezes or \
+                 tranches ago, or is forged: start again without it"
                     .to_string(),
             ),
         }

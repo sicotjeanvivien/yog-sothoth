@@ -1,27 +1,23 @@
 /**
- * A protocol page's compact header: its platform, its title and an ⓘ with the program and since
- * when its figures are measured; at the right, the Overview's controls. ⚠️ The period links
+ * A protocol page's compact header: its platform, its title and an ⓘ with the program; at the
+ * right, the Overview's controls. ⚠️ The period links
  * keep the tab, the tab links keep the period.
  */
 
-import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 
 import { HeaderControls } from "@/components/dashboard/overview/header-controls";
 import { LABEL_CLASS } from "@/components/dashboard/overview/overview-layout";
-import { utcMoment } from "@/components/dashboard/overview/overview-parts";
 import { InfoPopover } from "@/components/shared/info-popover";
 import type { PagePath } from "@/config/site";
-import { ApiClientError } from "@/lib/api/errors";
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
-import { fetchSwapTotals } from "@/lib/api/server/protocols";
 import { shortenPubkey } from "@/lib/format/pubkey";
-import { PROTOCOL_PERIODS, type FrozenPeriod } from "@/lib/overview/period";
+import { OVERVIEW_PERIODS, type Period } from "@/lib/overview/period";
 import { tabQuery, type ProtocolTab } from "@/lib/protocol/tabs";
 
 type HeaderProps = {
   pathname: PagePath;
-  period: FrozenPeriod;
+  period: Period;
   tab: ProtocolTab | null;
   protocol: ProtocolResponse;
   programId: string;
@@ -45,44 +41,16 @@ export async function ProtocolHeader({ pathname, period, tab, protocol, programI
             <span className="block font-dash-mono">
               {t("program", { id: shortenPubkey(programId, 6) })}
             </span>
-            <Suspense fallback={null}>
-              <MeasuredSince period={period} protocol={protocol} />
-            </Suspense>
           </InfoPopover>
         </span>
       </div>
       <HeaderControls
         period={period}
-        periods={PROTOCOL_PERIODS}
+        periods={OVERVIEW_PERIODS}
         scope={protocol}
         pathname={pathname}
         keep={tabQuery(tab)}
       />
     </header>
-  );
-}
-
-/** The first frozen hour, from which every figure of the page exists. */
-async function MeasuredSince({
-  period,
-  protocol,
-}: {
-  period: FrozenPeriod;
-  protocol: ProtocolResponse;
-}) {
-  const t = await getTranslations("Dashboard.Protocol.page");
-  let since;
-  try {
-    since = (await fetchSwapTotals(protocol, period)).coveredSince;
-  } catch (err) {
-    if (err instanceof ApiClientError) {
-      return null;
-    }
-    throw err;
-  }
-  return (
-    <span className="mt-1 block">
-      {since === null ? t("measuredNone") : t("measuredSince", { since: await utcMoment(since) })}
-    </span>
   );
 }

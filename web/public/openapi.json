@@ -6519,7 +6519,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -6577,7 +6577,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -6825,7 +6825,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -7363,7 +7365,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -7633,7 +7637,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -7699,7 +7703,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -8108,7 +8112,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -8208,7 +8214,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -8274,7 +8280,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -8472,7 +8478,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -8538,7 +8544,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -8773,7 +8779,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -8839,7 +8845,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -8964,7 +8970,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -9030,7 +9036,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -9301,7 +9307,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -9367,7 +9373,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -9419,7 +9425,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
+                "1h",
                 "24h",
                 "7d",
                 "30d"
@@ -9505,7 +9513,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -9571,7 +9579,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -9807,7 +9815,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -9873,7 +9881,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -9890,7 +9898,7 @@
             "schema": {
               "oneOf": [
                 {
-                  "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+                  "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
                   "enum": [
                     "1h",
                     "24h",
@@ -10423,7 +10431,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -10502,7 +10510,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -10560,7 +10568,7 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
               "enum": [
                 "1h",
                 "24h",
@@ -10577,7 +10585,7 @@
             "schema": {
               "oneOf": [
                 {
-                  "description": "The window of a measure the Overview reads: [`WindowParam`]'s, and `1h`, the last hour through\nthe last tranche written.",
+                  "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written.",
                   "enum": [
                     "1h",
                     "24h",

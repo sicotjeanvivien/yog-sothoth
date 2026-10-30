@@ -274,13 +274,14 @@ measures (`/api/swaps/…`, `/api/tvl…`, `/api/pool-creations/…`), which all
 hour — over the last hour, the end of the last 5-minute tranche written.
 
 **The period** — `?period=1h|24h|7d|30d` (`lib/overview/period.ts`; missing,
-unknown or not offered by the page is 24h; the DAMM v2 page offers no `1h`) drives every label, section title, chart and ⓘ, which speak of
+unknown or not offered by the page is 24h) drives every label, section title, chart and ⓘ, which speak of
 "the chosen period". A bar is a 5-minute tranche over 1h, an hour over 24h, a 6-hour slice over 7d, a 24-hour
 slice over 30d (`SLOT_MS`), each ending at `asOf`; over 7d the web sums the
 hourly series (`interval=1h`) by six, as the API sums its days: whether an hour is covered is the API's. 1h is the rolling
 hour through the last tranche written, read on `swaps/series?interval=5m`; it does not fall on the last bar of
 24h, and its coverage counts pool tranches, not pool-hours (`coverageUnit`). The TVL stays
-the value of the last frozen hour; only its change follows the period, and over 1h it has none. The selector (`period-selector.tsx`) is a set of
+the value of the last frozen hour; only its change follows the period, and over 1h it has none.
+A block reads the chosen period or says why it cannot, never another period on the same page. The selector (`period-selector.tsx`) is a set of
 links over the page's periods, each judged on the span of its own reads — 1h on the tranches still held, the others on the
 frozen hours; in its own unkeyed `<Suspense>` so a period change keeps it; every block
 that reads the period has its `<Suspense key={period}>`, so the change shows
@@ -338,9 +339,8 @@ the protocol's KPIs, then the row of its tabs and the content of the one
 chosen.
 
 **Header** — `protocol/protocol-header.tsx`: the platform, then the title, its ⓘ
-giving the program and since when the figures are measured (`coveredSince`,
-the first frozen hour), and at its right "Live", the period and the advanced
-mode: `overview/header-controls.tsx`, shared with the Overview, takes the
+giving the program — no date: no route serves one coverage for the whole page, each block
+says its own — and at its right "Live", the period and the advanced mode: `overview/header-controls.tsx`, shared with the Overview, takes the
 page's path, the query it keeps and the scope its "Live" rows and its periods are read in.
 
 **KPIs** — the Overview's cells take a `scope` (`lib/api/server/scope.ts`): `"all"`
@@ -356,7 +356,7 @@ created, added, removed and net — a pool's creation deposits its first
 liquidity without an addition, so it has its own colour (`dash-flow-create`),
 stacked under the additions; the TVL hour by hour on a tight axis
 (`lib/protocol/liquidity.ts`), its reading fixed above and a dashed mark under
-the pointer; the liquidity created and added above the axis and removed under
+the pointer — over a period the contract does not serve `tvl/series` on (`servesTvlSeries`), its place greyed with the reason, the route not read; the liquidity created and added above the axis and removed under
 it (`dash-flow-out`, darker than the text red), per bar
 of the period, with symmetric marks; and, in the advanced mode, the largest moves
 beside the chart, so the page is no longer. The liquidity is measured from a
@@ -399,9 +399,8 @@ period, bar by bar, from `pool-creations/series` of the protocol
 `liquidity-moves?kind=create&sort=amount`: pair, creator, lock, deposit, age; a lock not measured
 yet reads "—", apart from "none" (`lockKey`). A pool whose deposit
 could not be valued is not in that list; the chart counts it. In the advanced mode, beside them
-so the page is no longer, the positions' life cycle in two fixed columns, 24 h and 7 d, whatever
-the period: `position-changes/totals` for the positions opened, locked, split and closed, and the
-`owners` of `liquidity-moves/totals` for the distinct LPs; a window without a row reads "—"
+so the page is no longer, the positions' life cycle over the period, in one column: `position-changes/totals` for the positions opened, locked, split and closed, and the
+`owners` of `liquidity-moves/totals` for the distinct LPs; a period without a row reads "—"
 (`lifeCountOf`).
 
 **Tabs** — `lib/protocol/tabs.ts` lists the six tabs of the canvas, in order;

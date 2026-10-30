@@ -1169,6 +1169,21 @@ impl LiquidityMoveLookup for MockLiquidityMoveRepo {
         self.record("moves", period, None);
         Ok(Page::empty())
     }
+    async fn list_moves_in_tranches(
+        &self,
+        period: &TranchePeriod,
+        _: Window,
+        _: LiquidityMoveList,
+        _: LiquidityMoveOrder,
+        _: Option<LiquidityMoveCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<LiquidityMove>> {
+        self.tranche_reads
+            .lock()
+            .unwrap()
+            .push(("moves_in_tranches", *period));
+        Ok(Page::empty())
+    }
 }
 
 /// A `ProtocolTvlLookup` that answers nothing and records the instant and the scope of each read.

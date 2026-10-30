@@ -1,7 +1,7 @@
 /** The fees tab's chart, as data: each bar's fees split between the LPs, the protocol and the referral. */
 
 import { slotsOf } from "@/lib/overview/chart";
-import type { FrozenPeriod } from "@/lib/overview/period";
+import type { Period } from "@/lib/overview/period";
 import { shareOf } from "@/lib/overview/totals";
 
 /** Where a swap's fees go, in the order the bars stack them, bottom first. */
@@ -20,7 +20,7 @@ type FeeBar = {
 };
 
 /** The fees in the period's slots, each part summed as `slotsOf` sums a bar. */
-export function feeSlotsOf(period: FrozenPeriod, asOf: string, bars: readonly FeeBar[]): FeeSlot[] {
+export function feeSlotsOf(period: Period, asOf: string, bars: readonly FeeBar[]): FeeSlot[] {
   const slots = (pick: (bar: FeeBar) => string | null) =>
     slotsOf(
       period,

@@ -23,6 +23,15 @@ const hoursFrom = (from: string, parts: [string, string | null, string | null][]
   parts.map(([v, i, o], h) => bar(new Date(Date.parse(from) + h * 3_600_000).toISOString(), v, i, o));
 
 describe("splitSlotsOf", () => {
+  // Mutation: the period not passed through — the last hour drawn on 24 hourly slots.
+  it("draws the last hour on its twelve tranches", () => {
+    const at = new Date(Date.parse(AS_OF) - 5 * 60_000).toISOString();
+    const slots = splitSlotsOf("1h", AS_OF, [bar(at, "30", "20", "10")]);
+
+    expect(slots).toHaveLength(12);
+    expect(slots.at(-1)).toMatchObject({ total: 30, inRuns: 20, outside: 10 });
+  });
+
   // Mutation: a part read from another's field — the volume outside the runs drawn in them.
   it("carries each hour's split as the response gives it", () => {
     const slots = splitSlotsOf("24h", AS_OF, [bar(hour(22), "100", "80", "20"), bar(hour(23), "50", "0", "50")]);

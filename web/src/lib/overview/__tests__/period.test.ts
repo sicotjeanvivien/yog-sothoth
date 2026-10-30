@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { coverageUnit, OVERVIEW_PERIODS, pageQuery, parsePeriod, PROTOCOL_PERIODS } from "../period";
+import { coverageUnit, OVERVIEW_PERIODS, pageQuery, parsePeriod } from "../period";
 
 describe("parsePeriod", () => {
   it("keeps an open period", () => {
@@ -8,9 +8,9 @@ describe("parsePeriod", () => {
     expect(parsePeriod("1h", OVERVIEW_PERIODS)).toBe("1h");
   });
 
-  // Mutation: the page's list not checked — the DAMM v2 page reads the last hour it has no bars for.
+  // Mutation: the page's list not checked — a page reads a period it does not offer.
   it("falls back to 24h on a period the page does not offer", () => {
-    expect(parsePeriod("1h", PROTOCOL_PERIODS)).toBe("24h");
+    expect(parsePeriod("1h", ["24h", "7d", "30d"])).toBe("24h");
   });
 
   // Mutation: the `CLOSED_PERIODS` guard dropped runs 30d's reads from its URL.

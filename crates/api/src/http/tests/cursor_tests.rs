@@ -46,10 +46,16 @@ fn signal_cursor_round_trip() {
 }
 
 /// Mutation: the scope, the kind or the window not written to, or not read from, the wire — a
-/// page of a pool followed under its protocol, of the creations over every move, or compared on a
-/// default.
+/// page of a pool followed under its protocol, of the creations over every move, compared on a
+/// default, or the last hour's refused.
 #[test]
 fn liquidity_move_cursor_round_trip() {
+    for window in [Window::Hour, Window::Week] {
+        liquidity_move_cursor_round_trips_over(window);
+    }
+}
+
+fn liquidity_move_cursor_round_trips_over(window: Window) {
     let scope = LiquidityMoveScope::Pool(Pubkey::new_unique());
     let list = LiquidityMoveList {
         scope,
@@ -57,7 +63,7 @@ fn liquidity_move_cursor_round_trip() {
     };
     let original = LiquidityMoveCursor {
         list,
-        window: Window::Week,
+        window,
         as_of: ts(1_700_000_400),
         order: LiquidityMoveOrder::At,
         amount_usd: Decimal::new(12_345, 2),

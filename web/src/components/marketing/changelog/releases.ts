@@ -34,7 +34,7 @@ export const RELEASES: readonly Release[] = [
   {
     version: "v0.6.0",
     date: "2026-10-29",
-    summary: "The Overview shows the last hour, in 5-minute bars.",
+    summary: "The Overview and the DAMM v2 page show the last hour, in 5-minute bars.",
     sections: [
       {
         kind: "features",
@@ -53,6 +53,14 @@ export const RELEASES: readonly Release[] = [
           },
           {
             text: "Every measure is read in …/totals and …/series over window=1h|24h|7d|30d, interval=5m over 1h only: the swaps of a pool, the liquidity moves, the rotation runs, the position changes and both claims join the swaps and the pool creations; position-changes, position-fee-claims and reward-claims gain their series. The TVL (read once an hour) and the pools discovered (measured over a day, a week and a month) are the two exceptions. The same error gives the same 400 message on every route.",
+            technical: true,
+          },
+          {
+            text: "1H on the DAMM v2 page: every tab reads the last hour in 5-minute bars. The TVL, read once an hour, draws no curve over it and says so; the positions' life cycle now follows the chosen period, in one column.",
+            technical: false,
+          },
+          {
+            text: "window=1h on the liquidity-moves and rotation-runs lists, under a protocol and under a pool: the moves and the runs started in the last hour through the last tranche written.",
             technical: true,
           },
         ],

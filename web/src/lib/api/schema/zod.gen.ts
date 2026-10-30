@@ -1684,6 +1684,7 @@ export const zListPoolLiquidityMovesPath = z.object({
 
 export const zListPoolLiquidityMovesQuery = z.object({
     window: z.enum([
+        '1h',
         '24h',
         '7d',
         '30d'
@@ -1802,6 +1803,7 @@ export const zListPoolRotationRunsPath = z.object({
 
 export const zListPoolRotationRunsQuery = z.object({
     window: z.enum([
+        '1h',
         '24h',
         '7d',
         '30d'
@@ -1956,6 +1958,7 @@ export const zListProtocolLiquidityMovesPath = z.object({
 
 export const zListProtocolLiquidityMovesQuery = z.object({
     window: z.enum([
+        '1h',
         '24h',
         '7d',
         '30d'
@@ -2290,6 +2293,7 @@ export const zListProtocolRotationRunsPath = z.object({
 
 export const zListProtocolRotationRunsQuery = z.object({
     window: z.enum([
+        '1h',
         '24h',
         '7d',
         '30d'

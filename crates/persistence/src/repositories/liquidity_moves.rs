@@ -215,6 +215,49 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
         cursor: Option<LiquidityMoveCursor>,
         limit: i64,
     ) -> RepositoryResult<Page<LiquidityMove>> {
+        let span = MoveSpan {
+            from: period.from,
+            as_of: period.as_of,
+        };
+        self.list_moves_over(span, window, list, order, cursor, limit)
+            .await
+    }
+
+    async fn list_moves_in_tranches(
+        &self,
+        period: &TranchePeriod,
+        window: Window,
+        list: LiquidityMoveList,
+        order: LiquidityMoveOrder,
+        cursor: Option<LiquidityMoveCursor>,
+        limit: i64,
+    ) -> RepositoryResult<Page<LiquidityMove>> {
+        let span = MoveSpan {
+            from: period.from,
+            as_of: period.as_of,
+        };
+        self.list_moves_over(span, window, list, order, cursor, limit)
+            .await
+    }
+}
+
+/// The instants `from..as_of` a list of moves reads: a frozen period's, or the last hour's.
+#[derive(Clone, Copy)]
+struct MoveSpan {
+    from: DateTime<Utc>,
+    as_of: DateTime<Utc>,
+}
+
+impl PgLiquidityMoveRepository {
+    async fn list_moves_over(
+        &self,
+        span: MoveSpan,
+        window: Window,
+        list: LiquidityMoveList,
+        order: LiquidityMoveOrder,
+        cursor: Option<LiquidityMoveCursor>,
+        limit: i64,
+    ) -> RepositoryResult<Page<LiquidityMove>> {
         let kind = list.kind.map(LiquidityMoveKind::as_str);
         let had_cursor = cursor.is_some();
         let (after_amount, after_at, after_signature, after_index) = match cursor {
@@ -255,8 +298,8 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
                           m.event_index
                  LIMIT $8
                 "#,
-                period.from,
-                period.as_of,
+                span.from,
+                span.as_of,
                 protocol.as_str(),
                 after_amount,
                 after_at,
@@ -290,8 +333,8 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
                  ORDER BY m.timestamp DESC, m.signature, m.event_index
                  LIMIT $7
                 "#,
-                period.from,
-                period.as_of,
+                span.from,
+                span.as_of,
                 protocol.as_str(),
                 after_at,
                 after_signature,
@@ -327,8 +370,8 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
                           m.event_index
                  LIMIT $8
                 "#,
-                period.from,
-                period.as_of,
+                span.from,
+                span.as_of,
                 pool.to_string(),
                 after_amount,
                 after_at,
@@ -362,8 +405,8 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
                  ORDER BY m.timestamp DESC, m.signature, m.event_index
                  LIMIT $7
                 "#,
-                period.from,
-                period.as_of,
+                span.from,
+                span.as_of,
                 pool.to_string(),
                 after_at,
                 after_signature,
@@ -384,7 +427,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
                 Cursor::LiquidityMove(Box::new(LiquidityMoveCursor {
                     list,
                     window,
-                    as_of: period.as_of,
+                    as_of: span.as_of,
                     order,
                     amount_usd: *key,
                     at: m.at,

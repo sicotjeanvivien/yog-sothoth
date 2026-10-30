@@ -30,12 +30,13 @@ import {
   fetchLiquiditySeries,
   fetchSwapTotals,
   fetchTvlSeries,
+  servesTvlSeries,
 } from "@/lib/api/server/protocols";
 import { formatRelative, formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { pairLabel, shortenPubkey } from "@/lib/format/pubkey";
 import { axisOf, daysAgoOf, hourOf, readsClock, roundTicks } from "@/lib/overview/chart";
-import type { FrozenPeriod } from "@/lib/overview/period";
+import type { Period } from "@/lib/overview/period";
 import { CURVE_BOX, curveOf, flowSlotsOf } from "@/lib/protocol/liquidity";
 
 import { FlowBars } from "./flow-bars";
@@ -46,7 +47,12 @@ const FLOW_PX = { half: 64, top: 58 } as const;
 
 const MOVES_SHOWN = 5;
 
-const FLOWS = { "24h": "flowsHourly", "7d": "flowsSixHours", "30d": "flowsDaily" } as const;
+const FLOWS = {
+  "1h": "flowsFiveMinutes",
+  "24h": "flowsHourly",
+  "7d": "flowsSixHours",
+  "30d": "flowsDaily",
+} as const;
 
 /** A creation enters as an addition does: its own colour, the same sign. */
 const SIGN = {
@@ -66,7 +72,7 @@ const MOVES_CLASS = `${CELL_CLASS} ${MOVES_SPAN} min-h-[262px]`;
 
 const MOVE_COLUMNS = "grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)_auto_auto]";
 
-type TabProps = { period: FrozenPeriod; protocol: ProtocolResponse };
+type TabProps = { period: Period; protocol: ProtocolResponse };
 
 export async function LiquidityTab({ period, protocol }: TabProps) {
   const t = await getTranslations("Dashboard.Protocol.liquidity");
@@ -117,10 +123,11 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
     }
     throw err;
   });
+  const tvlRead = servesTvlSeries(protocol, period) ? fetchTvlSeries(protocol, period) : null;
   let tvl, series, totals, swaps;
   try {
     [tvl, series, totals, swaps] = await Promise.all([
-      fetchTvlSeries(protocol, period),
+      tvlRead,
       fetchLiquiditySeries(protocol, period),
       fetchLiquidityMoveTotals(protocol, period),
       swapsRead,
@@ -183,10 +190,14 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
     </div>
   );
 
-  const curve = curveOf(tvl.items);
+  const curve = tvl === null ? null : curveOf(tvl.items);
   const moment = (date: Date) => formatUtcMoment(date, locale) ?? "—";
   const curveBlock =
-    curve === null ? (
+    tvl === null ? (
+      <div className="mt-[26px] flex h-[140px] items-center justify-center border-b border-dash-rule bg-dash-surface-2 px-4 text-center text-[14px] text-dash-ink-3">
+        {t("curveNotApplicable")}
+      </div>
+    ) : curve === null ? (
       <p className="py-6 text-[14px] text-dash-ink-2">— {t("noCurve")}</p>
     ) : (
       <TvlCurve

@@ -63,6 +63,34 @@ fn every_measure_reads_every_window_and_every_step() {
     assert_eq!(checked, 20, "ten measures, each a `totals` and a `series`");
 }
 
+/// Mutation: a list of moves or runs kept on `WindowParam` — under a protocol or a pool.
+#[test]
+fn the_moves_and_the_runs_list_every_window() {
+    let doc = document();
+    let mut checked = 0;
+    for path in doc["paths"].as_object().expect("paths").keys() {
+        if !(path.ends_with("/liquidity-moves") || path.ends_with("/rotation-runs")) {
+            continue;
+        }
+        let window = doc["paths"][path]["get"]["parameters"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|p| p["name"] == "window")
+            .map(|p| p["schema"]["enum"].clone());
+        assert_eq!(
+            window,
+            Some(serde_json::json!(["1h", "24h", "7d", "30d"])),
+            "{path}"
+        );
+        checked += 1;
+    }
+    assert_eq!(
+        checked, 4,
+        "two lists, each under a protocol and under a pool"
+    );
+}
+
 /// Red when a route is mounted with a literal path — `Router::route`, or
 /// `OpenApiRouter::route`, which serves it without a contract — outside the probes.
 #[test]
