@@ -114,7 +114,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/network` | The chain's latest slot as the probe saw it, the probe's `getSlot` latency, when it was observed |
 | `GET` | `/api/ingestion` | Our ingestion's freshness (`live` / `delayed` / `stale`) and its last indexed event |
 | `GET` | `/api/windows` | Every window, the shortest first: its bounds, `open`, `opensAt` and `late`, without reading a measure over it |
-| `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` filter); each item embeds its pool's token pair (`tokenA`/`tokenB`, `EmbeddedTokenResponse`) |
+| `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` filter); each item embeds its pool's token pair (`tokenA`/`tokenB`, `EmbeddedTokenResponse`), says what its value counts (`valueUnit`) and, on a flow imbalance, which token its swaps mostly take from the pool (`leansToward`) |
 | `GET` | `/api/signals/stream` | SSE stream of new signals (see below) |
 | `GET` | `/api/protocols` | A page of every protocol of the domain, in the domain's order, and `poolsSeen` over all of them: observed by this build or not, pools seen — the catalogue, live; forward-only cursor |
 | `GET` | `/api/protocols/{protocol}` | The protocol's entry of the catalogue |

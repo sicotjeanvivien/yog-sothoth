@@ -1,7 +1,10 @@
 use yog_core::domain;
 
-use super::SeverityResponse;
-use crate::testing::wire_tag;
+use solana_pubkey::Pubkey;
+
+use super::{PairTokenResponse, SeverityResponse, SignalResponse, SignalValueUnitResponse};
+use crate::application::EnrichedSignal;
+use crate::testing::{make_signal_record, wire_tag};
 
 #[test]
 fn severity_matches_the_domain() {
@@ -9,4 +12,38 @@ fn severity_matches_the_domain() {
     for v in [Info, Warning, Critical] {
         assert_eq!(wire_tag(SeverityResponse::from(v)), v.as_str());
     }
+}
+
+// Mutation: a variant mapped to its neighbour shows a drain with a sign, or the wrong token.
+#[test]
+fn the_meaning_of_a_value_matches_the_domain() {
+    use domain::{PairToken, SignalValueUnit};
+    for v in [
+        SignalValueUnit::SignedRatio,
+        SignalValueUnit::Ratio,
+        SignalValueUnit::Raw,
+    ] {
+        assert_eq!(wire_tag(SignalValueUnitResponse::from(v)), v.as_str());
+    }
+    for v in [PairToken::TokenA, PairToken::TokenB] {
+        assert_eq!(wire_tag(PairTokenResponse::from(v)), v.as_str());
+    }
+}
+
+// Mutation: the unit read off a fixed detector, or the direction left out of the response.
+#[test]
+fn a_signal_says_what_its_value_means() {
+    let response = |detector: &str| {
+        let mut record = make_signal_record(1, Pubkey::new_unique());
+        record.signal.detector = detector.to_string();
+        serde_json::to_value(SignalResponse::from(EnrichedSignal::bare(record))).unwrap()
+    };
+
+    let flow = response(domain::DETECTOR_FLOW_IMBALANCE);
+    assert_eq!(flow["valueUnit"], "signedRatio");
+    assert_eq!(flow["leansToward"], "tokenB");
+
+    let drain = response(domain::DETECTOR_TVL_DRAIN);
+    assert_eq!(drain["valueUnit"], "ratio");
+    assert_eq!(drain["leansToward"], serde_json::Value::Null);
 }

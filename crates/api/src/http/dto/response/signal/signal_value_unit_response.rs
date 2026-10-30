@@ -1,0 +1,22 @@
+use serde::Serialize;
+use utoipa::ToSchema;
+use yog_core::domain;
+
+/// What a signal's `value` and `threshold` count; a threshold has no sign, whatever the unit.
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(super) enum SignalValueUnitResponse {
+    SignedRatio,
+    Ratio,
+    Raw,
+}
+
+impl From<domain::SignalValueUnit> for SignalValueUnitResponse {
+    fn from(unit: domain::SignalValueUnit) -> Self {
+        match unit {
+            domain::SignalValueUnit::SignedRatio => Self::SignedRatio,
+            domain::SignalValueUnit::Ratio => Self::Ratio,
+            domain::SignalValueUnit::Raw => Self::Raw,
+        }
+    }
+}

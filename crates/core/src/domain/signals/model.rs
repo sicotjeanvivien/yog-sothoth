@@ -8,6 +8,58 @@ use solana_pubkey::Pubkey;
 
 use crate::domain::Protocol;
 
+/// The tag of the detector measuring a pool's spot price against its oracle price.
+pub const DETECTOR_PRICE_ORACLE_DEVIATION: &str = "price_oracle_deviation";
+/// The tag of the detector measuring the direction of a pool's swaps.
+pub const DETECTOR_FLOW_IMBALANCE: &str = "flow_imbalance";
+/// The tag of the detector measuring the share of a pool's liquidity withdrawn.
+pub const DETECTOR_TVL_DRAIN: &str = "tvl_drain";
+
+/// What a signal's `value` and `threshold` count; a threshold has no sign, whatever the unit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignalValueUnit {
+    SignedRatio,
+    Ratio,
+    /// A detector's own unit, not known here.
+    Raw,
+}
+
+impl SignalValueUnit {
+    /// The unit of `detector`'s values, past signals included.
+    pub fn of(detector: &str) -> Self {
+        match detector {
+            DETECTOR_PRICE_ORACLE_DEVIATION | DETECTOR_FLOW_IMBALANCE => Self::SignedRatio,
+            DETECTOR_TVL_DRAIN => Self::Ratio,
+            _ => Self::Raw,
+        }
+    }
+
+    /// Stable tag of the unit.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::SignedRatio => "signedRatio",
+            Self::Ratio => "ratio",
+            Self::Raw => "raw",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PairToken {
+    TokenA,
+    TokenB,
+}
+
+impl PairToken {
+    /// Stable tag of the side.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::TokenA => "tokenA",
+            Self::TokenB => "tokenB",
+        }
+    }
+}
+
 /// How much attention a signal warrants; mirrors the `signals.severity` CHECK.
 /// ⚠️ The declaration order is the escalation order the engine's dedup compares.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -76,6 +128,21 @@ pub struct Signal {
     pub triggered_at: DateTime<Utc>,
 }
 
+impl Signal {
+    /// The token a flow imbalance's swaps mostly take from the pool: B on a positive value, A→B
+    /// dominating. `None` for any other detector, and for a flow balanced at zero.
+    pub fn leans_toward(&self) -> Option<PairToken> {
+        if self.detector != DETECTOR_FLOW_IMBALANCE || self.value.is_zero() {
+            return None;
+        }
+        Some(if self.value.is_sign_positive() {
+            PairToken::TokenB
+        } else {
+            PairToken::TokenA
+        })
+    }
+}
+
 /// A persisted signal and its storage `id`, the tie-breaker of the feed ordering.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SignalRecord {
@@ -84,3 +151,7 @@ pub struct SignalRecord {
     /// The signal as emitted by its detector.
     pub signal: Signal,
 }
+
+#[cfg(test)]
+#[path = "model_tests.rs"]
+mod tests;
