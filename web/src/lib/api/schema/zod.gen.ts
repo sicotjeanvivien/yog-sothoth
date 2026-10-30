@@ -977,8 +977,8 @@ export const zPageResponseSignalResponse = z.object({
     isLast: z.boolean(),
     items: z.array(z.object({
         detector: z.string().min(1),
-        flowsToward: zPairTokenResponse.nullable(),
         id: zCount,
+        leansToward: zPairTokenResponse.nullable(),
         message: z.string().nullable(),
         poolAddress: z.string().min(1),
         protocol: zProtocolResponse,
@@ -1185,8 +1185,8 @@ export type ProtocolRotationRunTotalsResponse = z.infer<typeof zProtocolRotation
 
 export const zSignalResponse = z.object({
     detector: z.string().min(1),
-    flowsToward: zPairTokenResponse.nullable(),
     id: zCount,
+    leansToward: zPairTokenResponse.nullable(),
     message: z.string().nullable(),
     poolAddress: z.string().min(1),
     protocol: zProtocolResponse,

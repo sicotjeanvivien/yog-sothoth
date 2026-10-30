@@ -2342,7 +2342,11 @@
                   "minLength": 1,
                   "type": "string"
                 },
-                "flowsToward": {
+                "id": {
+                  "$ref": "#/components/schemas/Count",
+                  "description": "Storage identity — stable across pages, usable as a client-side\nlist key. Emitted as a JSON number: signals are sparse, the\nsequence will never approach 2^53."
+                },
+                "leansToward": {
                   "oneOf": [
                     {
                       "$ref": "#/components/schemas/PairTokenResponse",
@@ -2352,10 +2356,6 @@
                       "type": "null"
                     }
                   ]
-                },
-                "id": {
-                  "$ref": "#/components/schemas/Count",
-                  "description": "Storage identity — stable across pages, usable as a client-side\nlist key. Emitted as a JSON number: signals are sparse, the\nsequence will never approach 2^53."
                 },
                 "message": {
                   "type": [
@@ -2412,7 +2412,7 @@
                 "value",
                 "valueUnit",
                 "triggeredAt",
-                "flowsToward",
+                "leansToward",
                 "message",
                 "threshold"
               ],
@@ -4922,7 +4922,11 @@
             "minLength": 1,
             "type": "string"
           },
-          "flowsToward": {
+          "id": {
+            "$ref": "#/components/schemas/Count",
+            "description": "Storage identity — stable across pages, usable as a client-side\nlist key. Emitted as a JSON number: signals are sparse, the\nsequence will never approach 2^53."
+          },
+          "leansToward": {
             "oneOf": [
               {
                 "$ref": "#/components/schemas/PairTokenResponse",
@@ -4932,10 +4936,6 @@
                 "type": "null"
               }
             ]
-          },
-          "id": {
-            "$ref": "#/components/schemas/Count",
-            "description": "Storage identity — stable across pages, usable as a client-side\nlist key. Emitted as a JSON number: signals are sparse, the\nsequence will never approach 2^53."
           },
           "message": {
             "type": [
@@ -4992,7 +4992,7 @@
           "value",
           "valueUnit",
           "triggeredAt",
-          "flowsToward",
+          "leansToward",
           "message",
           "threshold"
         ],

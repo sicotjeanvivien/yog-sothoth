@@ -27,7 +27,7 @@ function signal(id: number, triggeredAt: string): SignalResponse {
     value: "0.75",
     threshold: "0.6",
     valueUnit: "signedRatio",
-    flowsToward: null,
+    leansToward: "tokenB",
     message: null,
     triggeredAt,
   };

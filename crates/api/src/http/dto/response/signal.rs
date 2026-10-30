@@ -1,7 +1,8 @@
 //! Response DTO for the signal feed.
 
-mod meaning_response;
+mod pair_token_response;
 mod severity_response;
+mod signal_value_unit_response;
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -13,8 +14,9 @@ use super::token::EmbeddedTokenResponse;
 use crate::application::EnrichedSignal;
 use crate::http::dto::schema::{Count, SignedDecimal, UnsignedDecimal};
 
-use meaning_response::{PairTokenResponse, SignalValueUnitResponse};
+use pair_token_response::PairTokenResponse;
 pub(super) use severity_response::SeverityResponse;
+use signal_value_unit_response::SignalValueUnitResponse;
 
 /// `GET /api/signals` item (and `GET /api/signals/stream` event — both
 /// endpoints emit exactly this object).
@@ -42,7 +44,7 @@ pub(crate) struct SignalResponse {
     threshold: Option<String>,
     value_unit: SignalValueUnitResponse,
     /// The token a flow imbalance's swaps mostly take from the pool, if any.
-    flows_toward: Option<PairTokenResponse>,
+    leans_toward: Option<PairTokenResponse>,
     message: Option<String>,
     triggered_at: DateTime<Utc>,
 }
@@ -51,7 +53,7 @@ impl From<EnrichedSignal> for SignalResponse {
     fn from(enriched: EnrichedSignal) -> Self {
         let signal = enriched.record.signal;
         let value_unit = domain::SignalValueUnit::of(&signal.detector).into();
-        let flows_toward = signal.flows_toward().map(Into::into);
+        let leans_toward = signal.leans_toward().map(Into::into);
         Self {
             id: enriched.record.id,
             detector: signal.detector,
@@ -63,7 +65,7 @@ impl From<EnrichedSignal> for SignalResponse {
             value: signal.value.to_string(),
             threshold: signal.threshold.map(|t| t.to_string()),
             value_unit,
-            flows_toward,
+            leans_toward,
             message: signal.message,
             triggered_at: signal.triggered_at,
         }

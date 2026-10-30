@@ -18,9 +18,7 @@ pub const DETECTOR_TVL_DRAIN: &str = "tvl_drain";
 /// What a signal's `value` and `threshold` count; a threshold has no sign, whatever the unit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignalValueUnit {
-    /// A ratio whose sign says something.
     SignedRatio,
-    /// A ratio without a sign.
     Ratio,
     /// A detector's own unit, not known here.
     Raw,
@@ -35,13 +33,31 @@ impl SignalValueUnit {
             _ => Self::Raw,
         }
     }
+
+    /// Stable tag of the unit.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::SignedRatio => "signedRatio",
+            Self::Ratio => "ratio",
+            Self::Raw => "raw",
+        }
+    }
 }
 
-/// The token of a pool's pair.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PairToken {
     TokenA,
     TokenB,
+}
+
+impl PairToken {
+    /// Stable tag of the side.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::TokenA => "tokenA",
+            Self::TokenB => "tokenB",
+        }
+    }
 }
 
 /// How much attention a signal warrants; mirrors the `signals.severity` CHECK.
@@ -115,7 +131,7 @@ pub struct Signal {
 impl Signal {
     /// The token a flow imbalance's swaps mostly take from the pool: B on a positive value, A→B
     /// dominating. `None` for any other detector, and for a flow balanced at zero.
-    pub fn flows_toward(&self) -> Option<PairToken> {
+    pub fn leans_toward(&self) -> Option<PairToken> {
         if self.detector != DETECTOR_FLOW_IMBALANCE || self.value.is_zero() {
             return None;
         }

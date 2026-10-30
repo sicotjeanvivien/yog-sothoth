@@ -31,7 +31,7 @@ function signal(
     value: "0.75",
     threshold: "0.6",
     valueUnit: "raw",
-    flowsToward: null,
+    leansToward: null,
     message: null,
     triggeredAt: "2026-07-06T10:00:00Z",
   };

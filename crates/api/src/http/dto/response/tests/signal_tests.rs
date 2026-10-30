@@ -16,15 +16,18 @@ fn severity_matches_the_domain() {
 
 // Mutation: a variant mapped to its neighbour shows a drain with a sign, or the wrong token.
 #[test]
-fn the_meaning_of_a_value_keeps_its_wire_tags() {
+fn the_meaning_of_a_value_matches_the_domain() {
     use domain::{PairToken, SignalValueUnit};
-    let unit = |v: SignalValueUnit| wire_tag(SignalValueUnitResponse::from(v));
-    assert_eq!(unit(SignalValueUnit::SignedRatio), "signedRatio");
-    assert_eq!(unit(SignalValueUnit::Ratio), "ratio");
-    assert_eq!(unit(SignalValueUnit::Raw), "raw");
-    let token = |v: PairToken| wire_tag(PairTokenResponse::from(v));
-    assert_eq!(token(PairToken::TokenA), "tokenA");
-    assert_eq!(token(PairToken::TokenB), "tokenB");
+    for v in [
+        SignalValueUnit::SignedRatio,
+        SignalValueUnit::Ratio,
+        SignalValueUnit::Raw,
+    ] {
+        assert_eq!(wire_tag(SignalValueUnitResponse::from(v)), v.as_str());
+    }
+    for v in [PairToken::TokenA, PairToken::TokenB] {
+        assert_eq!(wire_tag(PairTokenResponse::from(v)), v.as_str());
+    }
 }
 
 // Mutation: the unit read off a fixed detector, or the direction left out of the response.
@@ -38,9 +41,9 @@ fn a_signal_says_what_its_value_means() {
 
     let flow = response(domain::DETECTOR_FLOW_IMBALANCE);
     assert_eq!(flow["valueUnit"], "signedRatio");
-    assert_eq!(flow["flowsToward"], "tokenB");
+    assert_eq!(flow["leansToward"], "tokenB");
 
     let drain = response(domain::DETECTOR_TVL_DRAIN);
     assert_eq!(drain["valueUnit"], "ratio");
-    assert_eq!(drain["flowsToward"], serde_json::Value::Null);
+    assert_eq!(drain["leansToward"], serde_json::Value::Null);
 }
