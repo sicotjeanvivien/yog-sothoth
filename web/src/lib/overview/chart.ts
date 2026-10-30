@@ -3,6 +3,7 @@
 import type { IntervalResponse } from "@/lib/api/schema/zod.gen";
 
 import { HOUR_MS, type Period } from "./period";
+import { amountOf } from "./totals";
 
 /** Each chart's height, and its tallest bar a little under it so the top mark's label stays clear. */
 export const CHART_PX = {
@@ -32,7 +33,7 @@ const INTERVAL_MS: Record<IntervalResponse, number> = {
   "1d": 24 * HOUR_MS,
 };
 
-/** The grid's slots, each holding its bar's value; `null` without a valued bar. */
+/** The grid's slots, one bar each; `null` without a valued bar. */
 export function slotsOf(grid: SeriesGrid, bars: readonly Bar[]): Slot[] {
   if (grid.from === null || grid.asOf === null) {
     return [];
@@ -44,8 +45,8 @@ export function slotsOf(grid: SeriesGrid, bars: readonly Bar[]): Slot[] {
   const values = Array.from({ length: count }, (): number | null => null);
   for (const bar of bars) {
     const i = (Date.parse(bar.from) - start) / step;
-    const value = bar.value === null ? NaN : Number.parseFloat(bar.value);
-    if (i in values && Number.isFinite(value)) {
+    const value = amountOf(bar.value);
+    if (i in values && value !== null) {
       values[i] = value;
     }
   }

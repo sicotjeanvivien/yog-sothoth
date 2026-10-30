@@ -15,8 +15,8 @@ export function sumUsd(values: readonly (string | null)[]): number | null {
   }
   let total = 0;
   for (const value of values) {
-    const parsed = value === null ? NaN : Number.parseFloat(value);
-    if (!Number.isFinite(parsed)) {
+    const parsed = amountOf(value);
+    if (parsed === null) {
       return null;
     }
     total += parsed;
