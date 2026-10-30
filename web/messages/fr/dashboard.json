@@ -202,6 +202,7 @@
         }
       },
       "tabsLabel": "Thèmes",
+      "notApplicable": "Périodicité non applicable pour cette donnée.",
       "tabs": {
         "liquidity": "Liquidité",
         "volume": "Volume",
@@ -220,7 +221,6 @@
         "notMeasured": "La liquidité n'est mesurée que depuis peu : la période choisie commence avant, un total la sous-compterait.",
         "notMeasuredShort": "liquidité pas encore mesurée",
         "noCurve": "Pas encore assez d'heures de TVL mesurées pour tracer la courbe.",
-        "curveNotApplicable": "Périodicité non applicable pour cette donnée.",
         "curveCaption": "TVL horaire · axe resserré, {low} → {high}",
         "curveLabel": "TVL sur la période, de {low} à {high}",
         "tvlAt": "TVL {tvl}",

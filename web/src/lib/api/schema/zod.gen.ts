@@ -1073,7 +1073,7 @@ export const zProtocolRotationRunBucketResponse = z.object({
 export type ProtocolRotationRunBucketResponse = z.infer<typeof zProtocolRotationRunBucketResponse>;
 
 export const zProtocolRotationRunTotalsResponse = z.object({
-    firstHourVolumeUsd: zUnsignedDecimal,
+    firstHourVolumeUsd: zUnsignedDecimal.nullable(),
     inProgress: zCount,
     medianDurationSeconds: zCount.nullable(),
     p90DurationSeconds: zCount.nullable(),
@@ -1267,7 +1267,7 @@ export const zTrancheWindowedResponseProtocolRotationRunTotalsResponse = z.objec
     coveredSince: z.iso.datetime({ offset: true }).nullable(),
     from: z.iso.datetime({ offset: true }).nullable(),
     items: z.array(z.object({
-        firstHourVolumeUsd: zUnsignedDecimal,
+        firstHourVolumeUsd: zUnsignedDecimal.nullable(),
         inProgress: zCount,
         medianDurationSeconds: zCount.nullable(),
         p90DurationSeconds: zCount.nullable(),

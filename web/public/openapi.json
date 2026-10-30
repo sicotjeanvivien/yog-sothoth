@@ -3635,7 +3635,15 @@
       "ProtocolRotationRunTotalsResponse": {
         "properties": {
           "firstHourVolumeUsd": {
-            "$ref": "#/components/schemas/UnsignedDecimal"
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal",
+                "description": "`null` over `1h`: a run started in the hour has only its first hour."
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "inProgress": {
             "$ref": "#/components/schemas/Count",
@@ -4666,7 +4674,15 @@
             "items": {
               "properties": {
                 "firstHourVolumeUsd": {
-                  "$ref": "#/components/schemas/UnsignedDecimal"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/UnsignedDecimal",
+                      "description": "`null` over `1h`: a run started in the hour has only its first hour."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "inProgress": {
                   "$ref": "#/components/schemas/Count",

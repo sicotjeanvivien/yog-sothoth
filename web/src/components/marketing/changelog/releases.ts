@@ -63,6 +63,10 @@ export const RELEASES: readonly Release[] = [
             text: "window=1h on the liquidity-moves and rotation-runs lists, under a protocol and under a pool: the moves and the runs started in the last hour through the last tranche written.",
             technical: true,
           },
+          {
+            text: "rotation-runs/totals over window=1h serves firstHourVolumeUsd as null: a run started in the last hour has only its first hour, so its share there would read 100 % by construction. The runs' in-progress count shows over every period.",
+            technical: true,
+          },
         ],
       },
     ],

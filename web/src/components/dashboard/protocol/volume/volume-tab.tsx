@@ -275,6 +275,7 @@ async function VolumeSources({ period, protocol }: TabProps) {
 
 async function RunStats({ period, protocol }: TabProps) {
   const t = await getTranslations("Dashboard.Protocol.volume");
+  const tProtocol = await getTranslations("Dashboard.Protocol");
   const tPeriod = await getTranslations("Dashboard.Overview.period");
   const locale = (await getLocale()) as FormatLocale;
   const title = t("stats.title", { period: tPeriod(`short.${period}`) });
@@ -296,7 +297,7 @@ async function RunStats({ period, protocol }: TabProps) {
 
   const mine = totals.items.find((i) => i.protocol === protocol);
   const closed = (await closedReason(period, totals)) ?? t("notMeasured");
-  const stat = (label: string, big: string, sub: ReactNode, last = false) => (
+  const stat = (label: string, big: ReactNode, sub: ReactNode, last = false) => (
     <div className={`flex flex-col gap-1 py-3 ${last ? "" : "border-b border-dash-rule"}`}>
       <span className={LABEL_CLASS}>{label}</span>
       <span className="font-dash-mono text-[24px] leading-[1.1] font-medium tracking-[-0.02em] text-dash-ink tabular-nums">
@@ -320,15 +321,11 @@ async function RunStats({ period, protocol }: TabProps) {
             formatCount(mine.runs),
             <>
               {t("stats.onPools", { pools: formatCount(mine.pools), count: mine.pools })}
-              {period === "24h" && (
-                <>
-                  {" · "}
-                  <span className="text-dash-ink">
-                    <span aria-hidden="true" className="mr-1.5 inline-block h-1.5 w-1.5 bg-dash-up align-[1px]" />
-                    {t("stats.inProgress", { count: formatCount(mine.inProgress) })}
-                  </span>
-                </>
-              )}
+              {" · "}
+              <span className="text-dash-ink">
+                <span aria-hidden="true" className="mr-1.5 inline-block h-1.5 w-1.5 bg-dash-up align-[1px]" />
+                {t("stats.inProgress", { count: formatCount(mine.inProgress) })}
+              </span>
             </>,
           )}
           {stat(
@@ -340,13 +337,19 @@ async function RunStats({ period, protocol }: TabProps) {
           )}
           {stat(
             t("stats.firstHour"),
-            Number.parseFloat(mine.volumeUsd) > 0
-              ? formatPercent(
-                  String(Number.parseFloat(mine.firstHourVolumeUsd) / Number.parseFloat(mine.volumeUsd)),
-                  locale,
-                )
-              : "—",
-            t("stats.firstHourSub"),
+            mine.firstHourVolumeUsd === null ? (
+              <span className="font-dash-sans text-[14px] font-normal tracking-normal text-dash-ink-3">
+                {tProtocol("notApplicable")}
+              </span>
+            ) : Number.parseFloat(mine.volumeUsd) > 0 ? (
+              formatPercent(
+                String(Number.parseFloat(mine.firstHourVolumeUsd) / Number.parseFloat(mine.volumeUsd)),
+                locale,
+              )
+            ) : (
+              "—"
+            ),
+            mine.firstHourVolumeUsd === null ? null : t("stats.firstHourSub"),
             true,
           )}
         </>
