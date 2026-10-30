@@ -12,6 +12,7 @@ import type { Period } from "@/lib/overview/period";
 
 import { apiGet } from "../client/server";
 import {
+  zGetLiquidityTurnoverTotalsResponse,
   zGetPoolCreationTotalsResponse,
   zGetProtocolLiquidityMovesSeriesResponse,
   zGetProtocolLiquidityMoveTotalsResponse,
@@ -55,15 +56,6 @@ export const fetchSwapTotals = cache((scope: Scope, window: WindowResponse) =>
   apiGet(scopedPath(scope, "swaps/totals"), { window }, zGetSwapTotalsResponse),
 );
 
-/** The window that ends where `window` starts. */
-export const fetchPreviousSwapTotals = cache((scope: Scope, window: WindowResponse) =>
-  apiGet(
-    scopedPath(scope, "swaps/totals"),
-    { window, offset: window },
-    zGetSwapTotalsResponse,
-  ),
-);
-
 export const fetchSwapsSeries = cache((scope: Scope, window: Period) =>
   apiGet(
     scopedPath(scope, "swaps/series"),
@@ -92,6 +84,15 @@ export function servesTvlSeries(scope: Scope, window: Period): window is TvlSeri
 
 export const fetchTvlSeries = cache((scope: Scope, window: TvlSeriesWindow) =>
   apiGet(scopedPath(scope, "tvl/series"), { window }, zGetTvlSeriesResponse),
+);
+
+/** The window's volume over the last TVL reading. */
+export const fetchLiquidityTurnoverTotals = cache((scope: Scope, window: WindowResponse) =>
+  apiGet(
+    scopedPath(scope, "liquidity-turnover/totals"),
+    { window },
+    zGetLiquidityTurnoverTotalsResponse,
+  ),
 );
 
 /** The last TVL reading, the one a window before it, and the change without the pools discovered. */

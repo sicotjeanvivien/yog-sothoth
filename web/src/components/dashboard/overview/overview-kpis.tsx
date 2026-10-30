@@ -1,7 +1,7 @@
 /**
- * The KPI cells, each fetching on its own so a slow route holds only its cell, and adding up
- * the protocols its `scope`'s routes return; swaps and rotation are the advanced mode's. A
- * failed secondary read costs only its line.
+ * The KPI cells, each fetching on its own so a slow route holds only its cell, and reading the
+ * `total` of its `scope`'s routes; swaps and rotation are the advanced mode's. A failed secondary
+ * read costs only its line.
  */
 
 import type { ReactNode } from "react";
@@ -10,12 +10,11 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { ApiClientError } from "@/lib/api/errors";
 import type { CoverageUnitResponse } from "@/lib/api/schema/zod.gen";
 import {
+  fetchLiquidityTurnoverTotals,
   fetchPoolCreationTotals,
-  fetchPreviousSwapTotals,
   fetchProtocol,
   fetchProtocols,
   fetchSwapTotals,
-  fetchTvl,
   fetchTvlTotals,
 } from "@/lib/api/server/protocols";
 import type { Scope } from "@/lib/api/server/scope";
@@ -23,16 +22,12 @@ import { volumeCoverage } from "@/lib/coverage/volume-coverage";
 import { formatCount, formatCountCompact, formatRate } from "@/lib/format/format-count";
 import { formatTimes } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
-import { previousWindowAdjoins, previousWindowCovered } from "@/lib/overview/availability";
 import type { Period } from "@/lib/overview/period";
-import { changeRatio, rotation, shareOf, sumUsd, swapsPerSecond } from "@/lib/overview/totals";
+import { amountOf, changeRatio, shareOf, swapsPerSecond } from "@/lib/overview/totals";
 
 import { Change, closedReason, KpiCell, Unavailable, utcMoment } from "./overview-parts";
 import { KpiFailedLine, KpiSkeleton, lateStamp } from "./overview-states";
 import { VolumeCoverageMark } from "./volume-coverage-mark";
-
-export const usd = (value: number | null) =>
-  value === null ? "—" : formatUsdCompact(String(value));
 
 export async function TvlKpi({ period, scope }: { period: Period; scope: Scope }) {
   const t = await getTranslations("Dashboard.Overview");
@@ -46,23 +41,22 @@ export async function TvlKpi({ period, scope }: { period: Period; scope: Scope }
     return kpiError(err, label, info);
   }
 
-  const rows = totals.items;
-  const current = sumUsd(rows.map((r) => r.end.tvlUsd));
-  const start = sumUsd(rows.map((r) => r.start?.tvlUsd ?? null));
-  const ratio = shareOf(sumUsd(rows.map((r) => r.changeUsd)), start);
+  const total = totals.total;
+  const current = total?.endTvlUsd ?? null;
+  const ratio = shareOf(amountOf(total?.changeUsd), amountOf(total?.startTvlUsd));
   const at = totals.asOf;
 
   return (
     <KpiCell
       label={label}
       info={info}
-      value={usd(current)}
+      value={formatUsdCompact(current)}
       sub={
         current === null ? undefined : ratio !== null ? (
           <>
             <Change ratio={ratio} suffix={t("kpis.tvlChange", { period: t(`period.short.${period}`) })} />
             {" · "}
-            {t("kpis.tvlDiscovered", { amount: usd(sumUsd(rows.map((r) => r.discoveredTvlUsd))) })}
+            {t("kpis.tvlDiscovered", { amount: formatUsdCompact(total?.discoveredTvlUsd) })}
           </>
         ) : at === null ? undefined : (
           t("kpis.tvlAt", { at: await utcMoment(at) })
@@ -80,33 +74,27 @@ export async function VolumeKpi({ period, scope }: { period: Period; scope: Scop
   const info = t(period === "1h" ? "kpis.info.volumeLastHour" : "kpis.info.volume");
   const suffix = t("kpis.volumeChange", { period: short });
 
-  const [now, before] = await Promise.allSettled([
-    fetchSwapTotals(scope, period),
-    fetchPreviousSwapTotals(scope, period),
-  ]);
-  if (now.status === "rejected") {
-    return kpiError(now.reason, label, info);
+  let now;
+  try {
+    now = await fetchSwapTotals(scope, period);
+  } catch (err) {
+    return kpiError(err, label, info);
   }
-  const closed = await closedReason(now.value);
+  const closed = await closedReason(now);
   if (closed !== null) {
     return <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} />;
   }
 
-  const items = now.value.items;
-  const current = sumUsd(items.map((i) => i.volumeUsd));
+  const volume = now.total?.volumeUsd ?? null;
   let sub: ReactNode;
-  if (before.status === "rejected") {
-    sub = <Withheld reason={await failure(before.reason)} suffix={suffix} />;
-  } else if (!previousWindowCovered(before.value)) {
-    const since = before.value.coveredSince;
+  if (now.previous === null || !now.previous.covered) {
+    const since = now.coveredSince;
     const reason = t("unavailable.previous", {
       since: since === null ? "—" : await utcMoment(since),
     });
     sub = <Withheld reason={reason} suffix={suffix} />;
-  } else if (!previousWindowAdjoins(before.value, now.value)) {
-    sub = <Withheld reason={t("unavailable.previousMoved")} suffix={suffix} />;
   } else {
-    const ratio = changeRatio(current, sumUsd(before.value.items.map((i) => i.volumeUsd)));
+    const ratio = changeRatio(amountOf(volume), amountOf(now.previous.volumeUsd));
     sub = ratio === null ? undefined : <Change ratio={ratio} suffix={suffix} />;
   }
 
@@ -114,9 +102,9 @@ export async function VolumeKpi({ period, scope }: { period: Period; scope: Scop
     <KpiCell
       label={label}
       info={info}
-      value={await valued(usd(current), items, now.value.coverageUnit)}
+      value={await valued(formatUsdCompact(volume), now.total, now.coverageUnit)}
       sub={sub}
-      stamp={await lateStamp(now.value)}
+      stamp={await lateStamp(now)}
     />
   );
 }
@@ -137,19 +125,17 @@ export async function FeesKpi({ period, scope }: { period: Period; scope: Scope 
     return <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} />;
   }
 
-  const items = now.items;
-  const fees = sumUsd(items.map((i) => i.feesUsd));
-  const protocolFees = sumUsd(items.map((i) => i.protocolFeesUsd));
+  const protocolFees = now.total?.protocolFeesUsd ?? null;
 
   return (
     <KpiCell
       label={label}
       info={info}
-      value={await valued(usd(fees), items, now.coverageUnit)}
+      value={await valued(formatUsdCompact(now.total?.feesUsd), now.total, now.coverageUnit)}
       sub={
         protocolFees === null
           ? undefined
-          : t("kpis.feesProtocol", { amount: usd(protocolFees) })
+          : t("kpis.feesProtocol", { amount: formatUsdCompact(protocolFees) })
       }
       stamp={await lateStamp(now)}
     />
@@ -175,11 +161,6 @@ export async function PoolsKpi({ period, scope }: { period: Period; scope: Scope
     return <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} />;
   }
 
-  const items = now.value.items;
-  const active =
-    items.length > 0 && items.every((i) => i.pools !== null)
-      ? items.reduce((sum, i) => sum + (i.pools ?? 0), 0)
-      : null;
   const observed =
     seen.status === "fulfilled" ? (
       t("kpis.poolsObserved", { observed: formatCount(seen.value) })
@@ -192,7 +173,7 @@ export async function PoolsKpi({ period, scope }: { period: Period; scope: Scope
   const born =
     creations.status === "fulfilled" ? (
       t("kpis.poolsBorn", {
-        births: formatCount(creations.value.items.reduce((sum, i) => sum + i.pools, 0)),
+        births: formatCount(creations.value.total?.pools),
         period: short,
       })
     ) : (
@@ -203,7 +184,7 @@ export async function PoolsKpi({ period, scope }: { period: Period; scope: Scope
     <KpiCell
       label={label}
       info={info}
-      value={formatCount(active)}
+      value={formatCount(now.value.total?.pools)}
       sub={
         <>
           {observed}
@@ -234,7 +215,7 @@ export async function SwapsKpi({ period, scope }: { period: Period; scope: Scope
     );
   }
 
-  const swaps = now.items.length === 0 ? null : now.items.reduce((sum, i) => sum + i.swaps, 0);
+  const swaps = now.total?.swaps ?? null;
 
   return (
     <KpiCell
@@ -258,9 +239,9 @@ export async function RotationKpi({ period, scope }: { period: Period; scope: Sc
   const label = t("kpis.rotation", { period: t(`period.short.${period}`) });
   const info = t("kpis.info.rotation");
 
-  let now, tvl;
+  let now;
   try {
-    [now, tvl] = await Promise.all([fetchSwapTotals(scope, period), fetchTvl(scope)]);
+    now = await fetchLiquidityTurnoverTotals(scope, period);
   } catch (err) {
     return kpiError(err, label, info, true);
   }
@@ -271,17 +252,13 @@ export async function RotationKpi({ period, scope }: { period: Period; scope: Sc
     );
   }
 
-  const items = now.items;
-  const ratio = rotation(
-    sumUsd(items.map((i) => i.volumeUsd)),
-    sumUsd(tvl.items.map((i) => i.tvlUsd)),
-  );
+  const ratio = amountOf(now.total?.turnover);
 
   return (
     <KpiCell
       label={label}
       info={info}
-      value={await valued(ratio === null ? "—" : formatTimes(ratio, locale), items, now.coverageUnit)}
+      value={await valued(ratio === null ? "—" : formatTimes(ratio, locale), now.total, now.coverageUnit)}
       sub={t("kpis.rotationSub")}
       stamp={await lateStamp(now)}
       advanced
@@ -296,14 +273,11 @@ export async function KpiPlaceholder({ advanced = false }: { advanced?: boolean 
 /** A figure built on the volume, with the mark when it leaves out pool-hours not valued. */
 export async function valued(
   figure: string,
-  items: readonly { poolHours: number; poolHoursValued: number }[],
+  counters: { poolHours: number; poolHoursValued: number } | null,
   unit: CoverageUnitResponse,
 ): Promise<ReactNode> {
   const t = await getTranslations("Dashboard.Overview.coverage");
-  const coverage = volumeCoverage({
-    poolHours: items.reduce((sum, i) => sum + i.poolHours, 0),
-    poolHoursValued: items.reduce((sum, i) => sum + i.poolHoursValued, 0),
-  });
+  const coverage = counters === null ? null : volumeCoverage(counters);
   return (
     <>
       {figure}
@@ -319,10 +293,7 @@ export async function valued(
 
 /** The pools seen by `scope`'s protocols, from the catalogue. */
 async function poolsSeen(scope: Scope): Promise<number> {
-  if (scope !== "all") {
-    return (await fetchProtocol(scope)).poolsSeen;
-  }
-  return (await fetchProtocols()).items.reduce((sum, p) => sum + p.poolsSeen, 0);
+  return (await (scope === "all" ? fetchProtocols() : fetchProtocol(scope))).poolsSeen;
 }
 
 /** "— ⓘ over 7d": a secondary figure withheld, its reason one click away. */

@@ -27,8 +27,8 @@ export async function OverviewLiveRows({ period, scope }: { period: Period; scop
     return <OverviewLiveRowsFallback />;
   }
 
-  const total = activity.items.reduce((sum, i) => sum + i.poolHours, 0);
-  const valued = activity.items.reduce((sum, i) => sum + i.poolHoursValued, 0);
+  const total = activity.total?.poolHours ?? 0;
+  const valued = activity.total?.poolHoursValued ?? 0;
   const percent = new Intl.NumberFormat(locale, {
     style: "percent",
     maximumFractionDigits: 0,

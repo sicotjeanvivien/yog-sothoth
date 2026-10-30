@@ -18,7 +18,7 @@ type FeeBar = {
   referralFeesUsd: string | null;
 };
 
-/** The fees in the series' slots, each part summed as `slotsOf` sums a bar. */
+/** The fees in the series' slots, part by part. */
 export function feeSlotsOf(series: Series<FeeBar>): FeeSlot[] {
   const slots = (pick: (bar: FeeBar) => string | null) =>
     slotsOf(

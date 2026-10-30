@@ -7,13 +7,14 @@
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { closedReason, KpiCell, Unavailable } from "@/components/dashboard/overview/overview-parts";
-import { kpiError, usd, valued } from "@/components/dashboard/overview/overview-kpis";
+import { kpiError, valued } from "@/components/dashboard/overview/overview-kpis";
 import { lateStamp } from "@/components/dashboard/overview/overview-states";
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
 import { fetchSwapTotals } from "@/lib/api/server/protocols";
 import { formatFeeRate, formatPercent } from "@/lib/format/format-percent";
+import { formatUsdCompact } from "@/lib/format/format-usd";
 import type { Period } from "@/lib/overview/period";
-import { shareOf, sumUsd } from "@/lib/overview/totals";
+import { amountOf, shareOf } from "@/lib/overview/totals";
 
 type KpiProps = { period: Period; protocol: ProtocolResponse };
 
@@ -35,15 +36,14 @@ export async function FeesRateKpi({ period, protocol }: KpiProps) {
     return <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} />;
   }
 
-  const items = now.items;
-  const fees = sumUsd(items.map((i) => i.feesUsd));
-  const rate = shareOf(fees, sumUsd(items.map((i) => i.volumeUsd)));
+  const fees = now.total?.feesUsd ?? null;
+  const rate = shareOf(amountOf(fees), amountOf(now.total?.volumeUsd));
 
   return (
     <KpiCell
       label={label}
       info={info}
-      value={await valued(usd(fees), items, now.coverageUnit)}
+      value={await valued(formatUsdCompact(fees), now.total, now.coverageUnit)}
       sub={rate === null ? undefined : t("feesRate", { rate: formatFeeRate(rate, locale) })}
       stamp={await lateStamp(now)}
     />
@@ -70,15 +70,14 @@ export async function ProtocolFeesKpi({ period, protocol }: KpiProps) {
     );
   }
 
-  const items = now.items;
-  const protocolFees = sumUsd(items.map((i) => i.protocolFeesUsd));
-  const share = shareOf(protocolFees, sumUsd(items.map((i) => i.feesUsd)));
+  const protocolFees = now.total?.protocolFeesUsd ?? null;
+  const share = shareOf(amountOf(protocolFees), amountOf(now.total?.feesUsd));
 
   return (
     <KpiCell
       label={label}
       info={info}
-      value={await valued(usd(protocolFees), items, now.coverageUnit)}
+      value={await valued(formatUsdCompact(protocolFees), now.total, now.coverageUnit)}
       sub={
         share === null
           ? undefined

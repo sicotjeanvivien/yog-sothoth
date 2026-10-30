@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { changeRatio, rotation, shareOf, sumUsd, swapsPerSecond } from "../totals";
+import { amountOf, changeRatio, shareOf, sumUsd, swapsPerSecond } from "../totals";
+
+describe("amountOf", () => {
+  it("reads the API's decimal string", () => {
+    expect(amountOf("1.5")).toBe(1.5);
+  });
+
+  // Mutation: an absent total read as 0 renders a "+0 %" instead of no figure.
+  it("is unknown on an absent or unreadable value", () => {
+    expect(amountOf(null)).toBeNull();
+    expect(amountOf(undefined)).toBeNull();
+    expect(amountOf("n/a")).toBeNull();
+  });
+});
 
 describe("sumUsd", () => {
   it("adds the protocols' amounts", () => {
@@ -38,22 +51,6 @@ describe("shareOf", () => {
     expect(shareOf(1, 0)).toBeNull();
     expect(shareOf(null, 10)).toBeNull();
     expect(shareOf(1, null)).toBeNull();
-  });
-});
-
-describe("rotation", () => {
-  // Mutation: TVL over volume renders × 2 for a liquidity that turned half over.
-  it("is the volume over the TVL", () => {
-    expect(rotation(50, 100)).toBe(0.5);
-  });
-
-  // Mutation: the zero guard dropped renders "× ∞".
-  it("is unknown on a zero TVL", () => {
-    expect(rotation(50, 0)).toBeNull();
-  });
-
-  it("is unknown when the volume is", () => {
-    expect(rotation(null, 100)).toBeNull();
   });
 });
 

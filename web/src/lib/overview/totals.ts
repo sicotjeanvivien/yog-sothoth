@@ -2,6 +2,12 @@
 
 import { periodMs, type Period } from "./period";
 
+/** A decimal string of the API as a number, `null` where it is unknown. */
+export function amountOf(value: string | null | undefined): number | null {
+  const parsed = value === null || value === undefined ? NaN : Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 /** `null` when there is nothing to sum, or one term is unknown: a sum without it would lie. */
 export function sumUsd(values: readonly (string | null)[]): number | null {
   if (values.length === 0) {
@@ -9,8 +15,8 @@ export function sumUsd(values: readonly (string | null)[]): number | null {
   }
   let total = 0;
   for (const value of values) {
-    const parsed = value === null ? NaN : Number.parseFloat(value);
-    if (!Number.isFinite(parsed)) {
+    const parsed = amountOf(value);
+    if (parsed === null) {
       return null;
     }
     total += parsed;
@@ -32,14 +38,6 @@ export function shareOf(part: number | null, whole: number | null): number | nul
     return null;
   }
   return part / whole;
-}
-
-/** Volume over TVL, or `null` when either is unknown or the TVL is zero. */
-export function rotation(volume: number | null, tvl: number | null): number | null {
-  if (volume === null || tvl === null || tvl <= 0) {
-    return null;
-  }
-  return volume / tvl;
 }
 
 /** The average number of swaps per second over the whole period. */
