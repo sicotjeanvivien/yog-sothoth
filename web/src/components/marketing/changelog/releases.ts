@@ -64,7 +64,11 @@ export const RELEASES: readonly Release[] = [
             technical: true,
           },
           {
-            text: "rotation-runs/totals over window=1h serves firstHourVolumeUsd as null: a run started in the last hour has only its first hour, so its share there would read 100 % by construction. The runs' in-progress count shows over every period.",
+            text: "The rotation runs' stats on the DAMM v2 page: the runs still in progress show over every period, and the share seen in the first hour is read over the runs whose first hour ended before the period did — greyed over 1H, where none did.",
+            technical: false,
+          },
+          {
+            text: "rotation-runs/totals: firstHourVolumeUsd gives way to a firstHour block — the runs whose first hour ended before the window did, their volume and its part in that hour — null while none did, always over window=1h.",
             technical: true,
           },
         ],

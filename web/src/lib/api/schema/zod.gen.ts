@@ -1072,19 +1072,6 @@ export const zProtocolRotationRunBucketResponse = z.object({
 
 export type ProtocolRotationRunBucketResponse = z.infer<typeof zProtocolRotationRunBucketResponse>;
 
-export const zProtocolRotationRunTotalsResponse = z.object({
-    firstHourVolumeUsd: zUnsignedDecimal.nullable(),
-    inProgress: zCount,
-    medianDurationSeconds: zCount.nullable(),
-    p90DurationSeconds: zCount.nullable(),
-    pools: zCount,
-    protocol: zProtocolResponse,
-    runs: zCount,
-    volumeUsd: zUnsignedDecimal
-});
-
-export type ProtocolRotationRunTotalsResponse = z.infer<typeof zProtocolRotationRunTotalsResponse>;
-
 export const zProtocolTvlResponse = z.object({
     at: z.iso.datetime({ offset: true }),
     poolsPriced: zCount,
@@ -1122,6 +1109,27 @@ export const zRotationRunResponse = z.object({
 });
 
 export type RotationRunResponse = z.infer<typeof zRotationRunResponse>;
+
+export const zRotationRunsFirstHourResponse = z.object({
+    inFirstHourUsd: zUnsignedDecimal,
+    runs: zCount,
+    volumeUsd: zUnsignedDecimal
+});
+
+export type RotationRunsFirstHourResponse = z.infer<typeof zRotationRunsFirstHourResponse>;
+
+export const zProtocolRotationRunTotalsResponse = z.object({
+    firstHour: zRotationRunsFirstHourResponse.nullable(),
+    inProgress: zCount,
+    medianDurationSeconds: zCount.nullable(),
+    p90DurationSeconds: zCount.nullable(),
+    pools: zCount,
+    protocol: zProtocolResponse,
+    runs: zCount,
+    volumeUsd: zUnsignedDecimal
+});
+
+export type ProtocolRotationRunTotalsResponse = z.infer<typeof zProtocolRotationRunTotalsResponse>;
 
 export const zSignalResponse = z.object({
     detector: z.string().min(1),
@@ -1267,7 +1275,7 @@ export const zTrancheWindowedResponseProtocolRotationRunTotalsResponse = z.objec
     coveredSince: z.iso.datetime({ offset: true }).nullable(),
     from: z.iso.datetime({ offset: true }).nullable(),
     items: z.array(z.object({
-        firstHourVolumeUsd: zUnsignedDecimal.nullable(),
+        firstHour: zRotationRunsFirstHourResponse.nullable(),
         inProgress: zCount,
         medianDurationSeconds: zCount.nullable(),
         p90DurationSeconds: zCount.nullable(),

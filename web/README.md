@@ -374,8 +374,8 @@ not split keeps its volume, unsplit, in a neutral tint, and the legend says sinc
 which hour they split it. Under the chart, the
 period's detail, replaced by the bar's under the pointer
 (`protocol/split-bars.tsx`, shared with the fees). Beside it, the runs of the period
-(`rotation-runs/totals`: their count and pools, those in progress over 24 h,
-the median and p90 length, the share seen in the first hour), and under both
+(`rotation-runs/totals`: their count and pools, those in progress, the median and p90 length,
+the share seen in the first hour over the runs whose first hour ended before the period did — greyed while none did, as over 1h), and under both
 the five largest (`rotation-runs?sort=volume`), named by their tokens. The
 runs' totals and list end at the last tranche written: until a window is
 covered, they say so instead of a partial count. The words are "rafale" and

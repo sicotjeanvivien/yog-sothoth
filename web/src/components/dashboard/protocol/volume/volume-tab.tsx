@@ -35,6 +35,7 @@ import { formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { pairLabel } from "@/lib/format/pubkey";
 import { axisOf, daysAgoOf, hourOf, readsClock, roundTicks } from "@/lib/overview/chart";
+import { shareOf } from "@/lib/overview/totals";
 import type { Period } from "@/lib/overview/period";
 import {
   durationOf,
@@ -297,6 +298,13 @@ async function RunStats({ period, protocol }: TabProps) {
 
   const mine = totals.items.find((i) => i.protocol === protocol);
   const closed = (await closedReason(period, totals)) ?? t("notMeasured");
+  const firstHourShare = (firstHour: { volumeUsd: string; inFirstHourUsd: string }) => {
+    const share = shareOf(
+      Number.parseFloat(firstHour.inFirstHourUsd),
+      Number.parseFloat(firstHour.volumeUsd),
+    );
+    return share === null ? "—" : formatPercent(String(share), locale);
+  };
   const stat = (label: string, big: ReactNode, sub: ReactNode, last = false) => (
     <div className={`flex flex-col gap-1 py-3 ${last ? "" : "border-b border-dash-rule"}`}>
       <span className={LABEL_CLASS}>{label}</span>
@@ -335,23 +343,21 @@ async function RunStats({ period, protocol }: TabProps) {
               ? t("stats.median")
               : t("stats.medianAndP90", { p90: durationOf(mine.p90DurationSeconds) }),
           )}
-          {stat(
-            t("stats.firstHour"),
-            mine.firstHourVolumeUsd === null ? (
-              <span className="font-dash-sans text-[14px] font-normal tracking-normal text-dash-ink-3">
-                {tProtocol("notApplicable")}
-              </span>
-            ) : Number.parseFloat(mine.volumeUsd) > 0 ? (
-              formatPercent(
-                String(Number.parseFloat(mine.firstHourVolumeUsd) / Number.parseFloat(mine.volumeUsd)),
-                locale,
+          {mine.firstHour === null
+            ? stat(
+                t("stats.firstHour"),
+                <span className="font-dash-sans text-[14px] font-normal tracking-normal text-dash-ink-3">
+                  {tProtocol("notApplicable")}
+                </span>,
+                null,
+                true,
               )
-            ) : (
-              "—"
-            ),
-            mine.firstHourVolumeUsd === null ? null : t("stats.firstHourSub"),
-            true,
-          )}
+            : stat(
+                t("stats.firstHour"),
+                firstHourShare(mine.firstHour),
+                t("stats.firstHourSub"),
+                true,
+              )}
         </>
       )}
     </section>
