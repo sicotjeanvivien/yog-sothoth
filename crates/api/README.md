@@ -143,7 +143,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/protocols/{protocol}/rotation-runs`, `/api/pools/{pool}/rotation-runs` | A page of the rotation runs started in the window, through the last tranche written: pool and its tokens' symbols, start, end, volume, first hour's volume, extinct; `?sort=volume` (default) or `at`, forward-only cursor that keeps its first page's end, refused (400) under another list; empty while the rotation does not cover the window |
 | `GET` | `/api/protocols/{protocol}/rotation-runs/totals` | The runs started in the window, their distinct pools, those still in progress, their median and p90 duration, their volume and first hour's volume, through the last tranche written; its `coveredSince` is the first tranche whose rotation was measured |
 | `GET` | `/api/protocols/{protocol}/rotation-runs/series` | The protocol's volume by tranche, frozen hour, or 24 hours ending at `asOf`, split by its runs: in them and outside them (never under 0), both `null` on a bar the runs do not cover whole or with an hour not valued |
-| `GET` | `/api/protocols/{protocol}/liquidity-moves`, `/api/pools/{pool}/liquidity-moves` | A page of the valued moves (creations, additions, removals), their pool's token symbols embedded, the lock their transaction puts on a position (`none`, `vesting`, `permanent`, `null` before measured), `?kind=create|add|remove` to keep one kind, `?sort=amount` (default) or `at`, forward-only cursor, refused (400) under another list, kind or window or after a freeze; empty while the protocol's liquidity does not cover the window |
+| `GET` | `/api/protocols/{protocol}/liquidity-moves`, `/api/pools/{pool}/liquidity-moves` | A page of the valued moves (creations, additions, removals), their pool's token symbols embedded, the lock their transaction puts on a position (`none`, `vesting`, `permanent`, `null` before measured), `?kind=create|add|remove` to keep one kind, `?sort=amount` (default) or `at`, forward-only cursor, refused (400) under another list, kind or window, or once its end moved — a freeze, or over `1h` a tranche written; empty while the protocol's liquidity does not cover the window |
 | `GET` | `/api/tvl`, `/api/protocols/{protocol}/tvl` | Per protocol, the last TVL reading at or before `asOf`, its `at` said |
 | `GET` | `/api/tvl/series`, `/api/protocols/{protocol}/tvl/series` (`interval=1h`) | Per protocol, the reading of every hour measured from the window's start |
 | `GET` | `/api/tvl/totals`, `/api/protocols/{protocol}/tvl/totals` | Per protocol, the last reading, the one exactly a window before it (`null` when not measured, or when the last is not at `asOf`), the part the pools discovered in the window hold at the last, and the change without it, `null` as soon as one term is |
@@ -281,7 +281,8 @@ at the end of this section.
 
 **Parameters and fields.** `window=24h|7d|30d`, a closed list, 400 otherwise; `offset` for the
 previous window. `1h`, the last hour through the last tranche written, is served by every measure
-but the two exceptions of rule 4, and by `swaps/by-token`; a collection refuses it (400). For a collection of future events (`vesting-unlocks`), `window` covers the
+but the two exceptions of rule 4, by `swaps/by-token`, and by the `liquidity-moves` and
+`rotation-runs` lists; an on-chain collection refuses it (400). For a collection of future events (`vesting-unlocks`), `window` covers the
 period after `asOf`, and takes no `offset`. An on-chain collection read live ends its window
 at its first page, whose start the cursor carries. The swaps of every pool, at the root and
 under a protocol, are served over `24h` only: past a day they are compressed by pool, and
