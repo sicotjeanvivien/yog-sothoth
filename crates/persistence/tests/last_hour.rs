@@ -158,7 +158,6 @@ async fn the_last_hour_has_twelve_bars_and_the_hour_before_its_own(pool: PgPool)
 #[sqlx::test(migrations = "./migrations")]
 async fn the_last_hours_tokens_count_their_pools_once(pool: PgPool) {
     write_tranches(&pool).await;
-    // ⚠️ The largest token has the last mint: a page cut in mint order would miss it.
     let (x, y, shared) = (pk(1).to_string(), pk(2).to_string(), pk(12).to_string());
     seed_pool(&pool, &x, &shared, &pk(10).to_string()).await;
     seed_pool(&pool, &y, &shared, &pk(11).to_string()).await;
