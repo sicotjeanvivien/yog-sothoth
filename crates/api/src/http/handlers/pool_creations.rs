@@ -10,8 +10,8 @@ use crate::http::cursor::EventCollection;
 use crate::http::{
     AppState,
     dto::{
-        PageResponse, PoolCreationEventResponse, ProtocolPoolCreationsBucketResponse,
-        ProtocolPoolCreationsResponse, SeriesResponse, WindowedResponse,
+        PageResponse, PoolCreationEventResponse, PoolCreationTotalsResponse,
+        ProtocolPoolCreationsBucketResponse, ProtocolPoolCreationsResponse, SeriesResponse,
         request::{
             EventsParams, ListEventsRequest, MeasureWindowParams, SeriesParams, parse_protocol,
         },
@@ -26,13 +26,13 @@ use crate::http::{
     responses((
         status = 200,
         description = "Each protocol's pools created over the window.",
-        body = WindowedResponse<ProtocolPoolCreationsResponse>
+        body = PoolCreationTotalsResponse<ProtocolPoolCreationsResponse>
     ))
 )]
 pub(crate) async fn get_pool_creation_totals(
     State(state): State<AppState>,
     Query(params): Query<MeasureWindowParams>,
-) -> Result<Json<WindowedResponse<ProtocolPoolCreationsResponse>>, ApiError> {
+) -> Result<Json<PoolCreationTotalsResponse<ProtocolPoolCreationsResponse>>, ApiError> {
     get_totals(&state, params, None).await
 }
 
@@ -43,14 +43,14 @@ pub(crate) async fn get_pool_creation_totals(
     responses((
         status = 200,
         description = "The protocol's pools created over the window.",
-        body = WindowedResponse<ProtocolPoolCreationsResponse>
+        body = PoolCreationTotalsResponse<ProtocolPoolCreationsResponse>
     ))
 )]
 pub(crate) async fn get_protocol_pool_creation_totals(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
     Query(params): Query<MeasureWindowParams>,
-) -> Result<Json<WindowedResponse<ProtocolPoolCreationsResponse>>, ApiError> {
+) -> Result<Json<PoolCreationTotalsResponse<ProtocolPoolCreationsResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
     get_totals(&state, params, Some(protocol)).await
 }
@@ -59,13 +59,13 @@ async fn get_totals(
     state: &AppState,
     params: MeasureWindowParams,
     protocol: Option<Protocol>,
-) -> Result<Json<WindowedResponse<ProtocolPoolCreationsResponse>>, ApiError> {
+) -> Result<Json<PoolCreationTotalsResponse<ProtocolPoolCreationsResponse>>, ApiError> {
     let window = params.window.into();
     let measured = state
         .pool_creations_service
         .get_pool_creation_totals(window, protocol)
         .await?;
-    Ok(Json(WindowedResponse::new(window, measured)))
+    Ok(Json(PoolCreationTotalsResponse::new(window, measured)))
 }
 
 #[utoipa::path(

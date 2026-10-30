@@ -2,11 +2,18 @@
 //! and the rows. ⚠️ A total whose period starts before `coveredSince` has no row.
 
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::Serialize;
 use utoipa::ToSchema;
-use yog_core::domain::Window;
+use yog_core::domain::{
+    LiquidityTurnover, ProtocolLiquidityTurnover, ProtocolPoolCreations, ProtocolSwapActivity,
+    ProtocolTvlChange, SwapActivity, SwapActivityTotal, SwapBucket, TvlChangeTotal, Window,
+};
 
-use crate::application::{Availability, Measured, PeriodBounds, SeriesInterval};
+use super::protocol::ProtocolResponse;
+use super::swap_activity::SwapActivityResponse;
+use crate::application::{Availability, Measured, PeriodBounds, SeriesInterval, SwapTotals};
+use crate::http::dto::schema::{Count, SignedDecimal, UnsignedDecimal};
 
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub(in crate::http::dto::response) enum WindowResponse {
@@ -285,3 +292,277 @@ impl WindowsResponse {
         }
     }
 }
+
+/// The protocols of a read summed; each field unknown as soon as one protocol's is.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SwapTotalResponse {
+    #[serde(flatten)]
+    activity: SwapActivityResponse,
+    #[schema(value_type = Option<Count>)]
+    pools: Option<i64>,
+}
+
+impl From<SwapActivityTotal> for SwapTotalResponse {
+    fn from(total: SwapActivityTotal) -> Self {
+        Self {
+            activity: total.activity.into(),
+            pools: total.pools,
+        }
+    }
+}
+
+/// The window before this one: whether the facts cover it whole, and the volume over it.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PreviousVolumeResponse {
+    covered: bool,
+    #[schema(value_type = Option<UnsignedDecimal>)]
+    volume_usd: Option<Decimal>,
+}
+
+/// [`SwapTotalsResponse`] of the protocols: their `total`, and the window before it; `previous` is
+/// `null` for a read moved back by `offset`, and before any fact.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ProtocolSwapTotalsResponse<T> {
+    window: WindowResponse,
+    coverage_unit: CoverageUnitResponse,
+    #[serde(flatten)]
+    period: WindowPeriodResponse,
+    total: Option<SwapTotalResponse>,
+    previous: Option<PreviousVolumeResponse>,
+    items: Vec<T>,
+}
+
+impl<T: From<ProtocolSwapActivity>> ProtocolSwapTotalsResponse<T> {
+    pub(crate) fn new(window: Window, offset: Option<Window>, totals: SwapTotals) -> Self {
+        let measured = totals.measured;
+        Self {
+            window: window.into(),
+            coverage_unit: window.into(),
+            period: WindowPeriodResponse::moved(window, offset, measured.period),
+            total: ProtocolSwapActivity::total(&measured.items).map(Into::into),
+            previous: totals.previous.map(|previous| PreviousVolumeResponse {
+                covered: previous.covered,
+                volume_usd: previous.volume_usd,
+            }),
+            items: measured.items.into_iter().map(T::from).collect(),
+        }
+    }
+}
+
+/// Every protocol's swaps over one bucket.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SwapBucketTotalResponse {
+    from: DateTime<Utc>,
+    #[serde(flatten)]
+    activity: SwapActivityResponse,
+}
+
+impl From<SwapBucket> for SwapBucketTotalResponse {
+    fn from(bucket: SwapBucket) -> Self {
+        Self {
+            from: bucket.from,
+            activity: bucket.activity.into(),
+        }
+    }
+}
+
+/// [`SwapSeriesResponse`] of the protocols: `total` sums each bucket's, a USD field over the
+/// protocols that know it, the earliest first.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ProtocolSwapSeriesResponse<T> {
+    window: WindowResponse,
+    interval: IntervalResponse,
+    coverage_unit: CoverageUnitResponse,
+    #[serde(flatten)]
+    period: WindowPeriodResponse,
+    total: Vec<SwapBucketTotalResponse>,
+    items: Vec<T>,
+}
+
+impl<T> ProtocolSwapSeriesResponse<T> {
+    pub(crate) fn new<P: PeriodBounds>(
+        window: Window,
+        interval: SeriesInterval,
+        measured: Measured<Vec<yog_core::domain::ProtocolBucket<SwapActivity>>, P>,
+    ) -> Self
+    where
+        T: From<yog_core::domain::ProtocolBucket<SwapActivity>>,
+    {
+        Self {
+            window: window.into(),
+            interval: interval.into(),
+            coverage_unit: window.into(),
+            period: WindowPeriodResponse::of(window, measured.period),
+            total: SwapActivity::bucket_totals(&measured.items)
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+            items: measured.items.into_iter().map(T::from).collect(),
+        }
+    }
+}
+
+/// The protocols' TVL over a window, summed; each field unknown as soon as one protocol's is.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TvlTotalResponse {
+    #[schema(value_type = Option<UnsignedDecimal>)]
+    end_tvl_usd: Option<Decimal>,
+    #[schema(value_type = Option<UnsignedDecimal>)]
+    start_tvl_usd: Option<Decimal>,
+    #[schema(value_type = Option<UnsignedDecimal>)]
+    discovered_tvl_usd: Option<Decimal>,
+    #[schema(value_type = Option<SignedDecimal>)]
+    change_usd: Option<Decimal>,
+}
+
+impl From<TvlChangeTotal> for TvlTotalResponse {
+    fn from(total: TvlChangeTotal) -> Self {
+        Self {
+            end_tvl_usd: total.end_tvl_usd,
+            start_tvl_usd: total.start_tvl_usd,
+            discovered_tvl_usd: total.discovered_tvl_usd,
+            change_usd: total.change_usd,
+        }
+    }
+}
+
+/// [`WindowedResponse`] of the TVL's change, with its `total`.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TvlTotalsResponse<T> {
+    window: WindowResponse,
+    #[serde(flatten)]
+    period: WindowPeriodResponse,
+    total: Option<TvlTotalResponse>,
+    items: Vec<T>,
+}
+
+impl<T: From<ProtocolTvlChange>> TvlTotalsResponse<T> {
+    pub(crate) fn new<P: PeriodBounds>(
+        window: Window,
+        measured: Measured<Vec<ProtocolTvlChange>, P>,
+    ) -> Self {
+        Self {
+            window: window.into(),
+            period: WindowPeriodResponse::of(window, measured.period),
+            total: ProtocolTvlChange::total(&measured.items).map(Into::into),
+            items: measured.items.into_iter().map(T::from).collect(),
+        }
+    }
+}
+
+/// The protocols' pools created over a window, summed.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PoolCreationsTotalResponse {
+    #[schema(value_type = Count)]
+    pools: i64,
+}
+
+/// [`WindowedResponse`] of the pools created, with their `total`.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PoolCreationTotalsResponse<T> {
+    window: WindowResponse,
+    #[serde(flatten)]
+    period: WindowPeriodResponse,
+    total: Option<PoolCreationsTotalResponse>,
+    items: Vec<T>,
+}
+
+impl<T: From<ProtocolPoolCreations>> PoolCreationTotalsResponse<T> {
+    pub(crate) fn new<P: PeriodBounds>(
+        window: Window,
+        measured: Measured<Vec<ProtocolPoolCreations>, P>,
+    ) -> Self {
+        Self {
+            window: window.into(),
+            period: WindowPeriodResponse::of(window, measured.period),
+            total: ProtocolPoolCreations::total(&measured.items)
+                .map(|pools| PoolCreationsTotalResponse { pools }),
+            items: measured.items.into_iter().map(T::from).collect(),
+        }
+    }
+}
+
+/// How many times the liquidity deposited changed hands over the window, its coverage that of the
+/// volume; `turnover` is `null` without a volume, or a TVL above 0.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LiquidityTurnoverResponse {
+    #[schema(value_type = Option<UnsignedDecimal>)]
+    turnover: Option<Decimal>,
+    #[schema(value_type = Count)]
+    pool_hours: i64,
+    #[schema(value_type = Count)]
+    pool_hours_valued: i64,
+}
+
+impl From<LiquidityTurnover> for LiquidityTurnoverResponse {
+    fn from(turnover: LiquidityTurnover) -> Self {
+        Self {
+            turnover: turnover.turnover,
+            pool_hours: turnover.pool_hours,
+            pool_hours_valued: turnover.pool_hours_valued,
+        }
+    }
+}
+
+/// A row of `liquidity-turnover/totals`.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ProtocolLiquidityTurnoverResponse {
+    protocol: ProtocolResponse,
+    #[serde(flatten)]
+    turnover: LiquidityTurnoverResponse,
+    /// The close of the hour of the TVL reading divided by; `null` without one.
+    tvl_at: Option<DateTime<Utc>>,
+}
+
+impl From<ProtocolLiquidityTurnover> for ProtocolLiquidityTurnoverResponse {
+    fn from(row: ProtocolLiquidityTurnover) -> Self {
+        Self {
+            protocol: row.protocol.into(),
+            turnover: row.turnover.into(),
+            tvl_at: row.tvl_at,
+        }
+    }
+}
+
+/// `liquidity-turnover/totals`: `total` is every volume over every TVL, not a sum of the rows'.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LiquidityTurnoverTotalsResponse {
+    window: WindowResponse,
+    coverage_unit: CoverageUnitResponse,
+    #[serde(flatten)]
+    period: WindowPeriodResponse,
+    total: Option<LiquidityTurnoverResponse>,
+    items: Vec<ProtocolLiquidityTurnoverResponse>,
+}
+
+impl LiquidityTurnoverTotalsResponse {
+    pub(crate) fn new<P: PeriodBounds>(
+        window: Window,
+        measured: Measured<Vec<ProtocolLiquidityTurnover>, P>,
+        total: Option<LiquidityTurnover>,
+    ) -> Self {
+        Self {
+            window: window.into(),
+            coverage_unit: window.into(),
+            period: WindowPeriodResponse::of(window, measured.period),
+            total: total.map(Into::into),
+            items: measured.items.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "tests/window_tests.rs"]
+mod tests;

@@ -46,7 +46,8 @@ core/src/
 │   ├── claim_totals/      (ClaimTotals, the claims of fees or rewards by protocol —
 │   │                       ClaimTotalsLookup)
 │   ├── protocol_tvl/      (ProtocolTvl, a reading at an instant; ProtocolTvlChange, from the
-│   │                       reading a window before — ProtocolTvlLookup)
+│   │                       reading a window before; TvlChangeTotal; LiquidityTurnover, a
+│   │                       window's volume over the last TVL — ProtocolTvlLookup)
 │   ├── discovered_tvl/    (ProtocolDiscoveredTvl — DiscoveredTvlLookup)
 │   ├── protocol_activity/ (ProtocolActivityLookup: the frozen hours every measure is read over)
 │   ├── token_activity/    (TokenActivity — TokenActivityFeed, by volume)

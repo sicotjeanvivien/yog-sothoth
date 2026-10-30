@@ -8,7 +8,7 @@ use axum::{
 use crate::http::{
     AppState,
     dto::{
-        PageResponse, ProtocolCatalogResponse,
+        ProtocolCatalogPageResponse, ProtocolCatalogResponse,
         request::{ListProtocolsRequest, NoQuery, ProtocolsParams, parse_protocol},
     },
     error::ApiError,
@@ -21,19 +21,19 @@ use crate::http::{
     responses((
         status = 200,
         description = "A page of every protocol of the domain, observed or not.",
-        body = PageResponse<ProtocolCatalogResponse>
+        body = ProtocolCatalogPageResponse
     ))
 )]
 pub(crate) async fn list_protocols(
     State(state): State<AppState>,
     Query(params): Query<ProtocolsParams>,
-) -> Result<Json<PageResponse<ProtocolCatalogResponse>>, ApiError> {
+) -> Result<Json<ProtocolCatalogPageResponse>, ApiError> {
     let request = ListProtocolsRequest::parse(params)?;
-    let page = state
+    let (page, pools_seen) = state
         .protocol_catalog_service
         .list_page(request.after, request.limit)
         .await?;
-    Ok(Json(PageResponse::from_page(page)?))
+    Ok(Json(ProtocolCatalogPageResponse::new(page, pools_seen)?))
 }
 
 #[utoipa::path(

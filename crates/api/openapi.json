@@ -378,6 +378,74 @@
         ],
         "type": "object"
       },
+      "LiquidityTurnoverResponse": {
+        "description": "How many times the liquidity deposited changed hands over the window, its coverage that of the\nvolume; `turnover` is `null` without a volume, or a TVL above 0.",
+        "properties": {
+          "poolHours": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "poolHoursValued": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "turnover": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "poolHours",
+          "poolHoursValued",
+          "turnover"
+        ],
+        "type": "object"
+      },
+      "LiquidityTurnoverTotalsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
+          },
+          {
+            "properties": {
+              "coverageUnit": {
+                "$ref": "#/components/schemas/CoverageUnitResponse"
+              },
+              "items": {
+                "items": {
+                  "$ref": "#/components/schemas/ProtocolLiquidityTurnoverResponse"
+                },
+                "type": "array"
+              },
+              "total": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/LiquidityTurnoverResponse"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
+            },
+            "required": [
+              "window",
+              "coverageUnit",
+              "items",
+              "total"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "`liquidity-turnover/totals`: `total` is every volume over every TVL, not a sum of the rows'."
+      },
       "MeteoraDammV2BaseFeeResponse": {
         "description": "The base fee, named by the `mode` cp-amm writes; a scheduler of 0 periods never moves.",
         "oneOf": [
@@ -2007,60 +2075,6 @@
         ],
         "type": "object"
       },
-      "PageResponse_ProtocolCatalogResponse": {
-        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
-        "properties": {
-          "isFirst": {
-            "type": "boolean"
-          },
-          "isLast": {
-            "type": "boolean"
-          },
-          "items": {
-            "items": {
-              "properties": {
-                "observed": {
-                  "description": "Whether this build ingests the protocol.",
-                  "type": "boolean"
-                },
-                "poolsSeen": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                }
-              },
-              "required": [
-                "protocol",
-                "observed",
-                "poolsSeen"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "nextCursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "prevCursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "items",
-          "isFirst",
-          "isLast",
-          "nextCursor",
-          "prevCursor"
-        ],
-        "type": "object"
-      },
       "PageResponse_ProtocolFeeClaimEventResponse": {
         "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
         "properties": {
@@ -2910,6 +2924,67 @@
         ],
         "type": "object"
       },
+      "PoolCreationTotalsResponse_ProtocolPoolCreationsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
+          },
+          {
+            "properties": {
+              "items": {
+                "items": {
+                  "properties": {
+                    "pools": {
+                      "$ref": "#/components/schemas/Count"
+                    },
+                    "protocol": {
+                      "$ref": "#/components/schemas/ProtocolResponse"
+                    }
+                  },
+                  "required": [
+                    "protocol",
+                    "pools"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "total": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PoolCreationsTotalResponse"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
+            },
+            "required": [
+              "window",
+              "items",
+              "total"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "[`WindowedResponse`] of the pools created, with their `total`."
+      },
+      "PoolCreationsTotalResponse": {
+        "description": "The protocols' pools created over a window, summed.",
+        "properties": {
+          "pools": {
+            "$ref": "#/components/schemas/Count"
+          }
+        },
+        "required": [
+          "pools"
+        ],
+        "type": "object"
+      },
       "PoolDetailResponse": {
         "allOf": [
           {
@@ -3286,6 +3361,29 @@
         ],
         "type": "object"
       },
+      "PreviousVolumeResponse": {
+        "description": "The window before this one: whether the facts cover it whole, and the volume over it.",
+        "properties": {
+          "covered": {
+            "type": "boolean"
+          },
+          "volumeUsd": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "covered",
+          "volumeUsd"
+        ],
+        "type": "object"
+      },
       "PriceProviderResponse": {
         "description": "Where a price came from.",
         "enum": [
@@ -3319,6 +3417,47 @@
           "title",
           "status",
           "detail"
+        ],
+        "type": "object"
+      },
+      "ProtocolCatalogPageResponse": {
+        "description": "A page of the catalogue; `poolsSeen` counts every protocol's, whatever the page.",
+        "properties": {
+          "isFirst": {
+            "type": "boolean"
+          },
+          "isLast": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProtocolCatalogResponse"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "poolsSeen": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "prevCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "isFirst",
+          "isLast",
+          "poolsSeen",
+          "nextCursor",
+          "prevCursor"
         ],
         "type": "object"
       },
@@ -3504,6 +3643,34 @@
             "type": "object"
           }
         ]
+      },
+      "ProtocolLiquidityTurnoverResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/LiquidityTurnoverResponse"
+          },
+          {
+            "properties": {
+              "protocol": {
+                "$ref": "#/components/schemas/ProtocolResponse"
+              },
+              "tvlAt": {
+                "description": "The close of the hour of the TVL reading divided by; `null` without one.",
+                "format": "date-time",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "protocol",
+              "tvlAt"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "A row of `liquidity-turnover/totals`."
       },
       "ProtocolPoolCreationsBucketResponse": {
         "properties": {
@@ -3766,6 +3933,146 @@
             "type": "object"
           }
         ]
+      },
+      "ProtocolSwapSeriesResponse_ProtocolSwapActivityBucketResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
+          },
+          {
+            "properties": {
+              "coverageUnit": {
+                "$ref": "#/components/schemas/CoverageUnitResponse"
+              },
+              "interval": {
+                "$ref": "#/components/schemas/IntervalResponse"
+              },
+              "items": {
+                "items": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SwapActivityResponse"
+                    },
+                    {
+                      "properties": {
+                        "from": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "protocol": {
+                          "$ref": "#/components/schemas/ProtocolResponse"
+                        }
+                      },
+                      "required": [
+                        "protocol",
+                        "from"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              "total": {
+                "items": {
+                  "$ref": "#/components/schemas/SwapBucketTotalResponse"
+                },
+                "type": "array"
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
+            },
+            "required": [
+              "window",
+              "interval",
+              "coverageUnit",
+              "total",
+              "items"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "[`SwapSeriesResponse`] of the protocols: `total` sums each bucket's, a USD field over the\nprotocols that know it, the earliest first."
+      },
+      "ProtocolSwapTotalsResponse_ProtocolSwapActivityResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
+          },
+          {
+            "properties": {
+              "coverageUnit": {
+                "$ref": "#/components/schemas/CoverageUnitResponse"
+              },
+              "items": {
+                "items": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SwapActivityResponse"
+                    },
+                    {
+                      "properties": {
+                        "pools": {
+                          "oneOf": [
+                            {
+                              "$ref": "#/components/schemas/Count",
+                              "description": "Distinct over the window; `null` when no cycle counted them at its last hour."
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "protocol": {
+                          "$ref": "#/components/schemas/ProtocolResponse"
+                        }
+                      },
+                      "required": [
+                        "protocol",
+                        "pools"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              "previous": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PreviousVolumeResponse"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "total": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SwapTotalResponse"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
+            },
+            "required": [
+              "window",
+              "coverageUnit",
+              "items",
+              "previous",
+              "total"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "[`SwapTotalsResponse`] of the protocols: their `total`, and the window before it; `previous` is\n`null` for a read moved back by `offset`, and before any fact."
       },
       "ProtocolTvlChangeResponse": {
         "properties": {
@@ -4729,6 +5036,26 @@
         ],
         "type": "object"
       },
+      "SwapBucketTotalResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SwapActivityResponse"
+          },
+          {
+            "properties": {
+              "from": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "from"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "Every protocol's swaps over one bucket."
+      },
       "SwapEventDirectionResponse": {
         "description": "Which token went in: `a_to_b` sold token A for token B.",
         "enum": [
@@ -4888,116 +5215,31 @@
         ],
         "description": "The swaps by bucket: `interval` is their step, `coverageUnit` what their coverage counts."
       },
-      "SwapSeriesResponse_ProtocolSwapActivityBucketResponse": {
+      "SwapTotalResponse": {
         "allOf": [
           {
-            "$ref": "#/components/schemas/WindowPeriodResponse"
+            "$ref": "#/components/schemas/SwapActivityResponse"
           },
           {
             "properties": {
-              "coverageUnit": {
-                "$ref": "#/components/schemas/CoverageUnitResponse"
-              },
-              "interval": {
-                "$ref": "#/components/schemas/IntervalResponse"
-              },
-              "items": {
-                "items": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/SwapActivityResponse"
-                    },
-                    {
-                      "properties": {
-                        "from": {
-                          "format": "date-time",
-                          "type": "string"
-                        },
-                        "protocol": {
-                          "$ref": "#/components/schemas/ProtocolResponse"
-                        }
-                      },
-                      "required": [
-                        "protocol",
-                        "from"
-                      ],
-                      "type": "object"
-                    }
-                  ]
-                },
-                "type": "array"
-              },
-              "window": {
-                "$ref": "#/components/schemas/WindowResponse"
+              "pools": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/Count"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
-              "window",
-              "interval",
-              "coverageUnit",
-              "items"
+              "pools"
             ],
             "type": "object"
           }
         ],
-        "description": "The swaps by bucket: `interval` is their step, `coverageUnit` what their coverage counts."
-      },
-      "SwapTotalsResponse_ProtocolSwapActivityResponse": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/WindowPeriodResponse"
-          },
-          {
-            "properties": {
-              "coverageUnit": {
-                "$ref": "#/components/schemas/CoverageUnitResponse"
-              },
-              "items": {
-                "items": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/SwapActivityResponse"
-                    },
-                    {
-                      "properties": {
-                        "pools": {
-                          "oneOf": [
-                            {
-                              "$ref": "#/components/schemas/Count",
-                              "description": "Distinct over the window; `null` when no cycle counted them at its last hour."
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "protocol": {
-                          "$ref": "#/components/schemas/ProtocolResponse"
-                        }
-                      },
-                      "required": [
-                        "protocol",
-                        "pools"
-                      ],
-                      "type": "object"
-                    }
-                  ]
-                },
-                "type": "array"
-              },
-              "window": {
-                "$ref": "#/components/schemas/WindowResponse"
-              }
-            },
-            "required": [
-              "window",
-              "coverageUnit",
-              "items"
-            ],
-            "type": "object"
-          }
-        ],
-        "description": "The swaps over `from..asOf`: `coverageUnit` is what their coverage counts."
+        "description": "The protocols of a read summed; each field unknown as soon as one protocol's is."
       },
       "SwapTotalsResponse_SwapActivityResponse": {
         "allOf": [
@@ -5385,6 +5627,144 @@
           "tvlUsd"
         ],
         "type": "object"
+      },
+      "TvlTotalResponse": {
+        "description": "The protocols' TVL over a window, summed; each field unknown as soon as one protocol's is.",
+        "properties": {
+          "changeUsd": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SignedDecimal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "discoveredTvlUsd": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "endTvlUsd": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "startTvlUsd": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "changeUsd",
+          "discoveredTvlUsd",
+          "endTvlUsd",
+          "startTvlUsd"
+        ],
+        "type": "object"
+      },
+      "TvlTotalsResponse_ProtocolTvlChangeResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
+          },
+          {
+            "properties": {
+              "items": {
+                "items": {
+                  "properties": {
+                    "changeUsd": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/SignedDecimal",
+                          "description": "`end − discoveredTvlUsd − start`; `null` as soon as one of them is."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "discoveredTvlUsd": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/UnsignedDecimal",
+                          "description": "What the pools first seen in the window, their birth unobserved, hold at `end`; `null`\nwhen not measured at that reading."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "end": {
+                      "$ref": "#/components/schemas/TvlReadingResponse",
+                      "description": "The last reading at or before `asOf`."
+                    },
+                    "protocol": {
+                      "$ref": "#/components/schemas/ProtocolResponse"
+                    },
+                    "start": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/TvlReadingResponse",
+                          "description": "The reading exactly a window before `end`, when `end` is at `asOf`; never over `1h`."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "protocol",
+                    "end",
+                    "changeUsd",
+                    "discoveredTvlUsd",
+                    "start"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "total": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/TvlTotalResponse"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
+            },
+            "required": [
+              "window",
+              "items",
+              "total"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "[`WindowedResponse`] of the TVL's change, with its `total`."
       },
       "U128String": {
         "pattern": "^\\d+$",
@@ -5826,44 +6206,6 @@
         ],
         "description": "A measure over its window."
       },
-      "WindowedResponse_ProtocolPoolCreationsResponse": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/WindowPeriodResponse"
-          },
-          {
-            "properties": {
-              "items": {
-                "items": {
-                  "properties": {
-                    "pools": {
-                      "$ref": "#/components/schemas/Count"
-                    },
-                    "protocol": {
-                      "$ref": "#/components/schemas/ProtocolResponse"
-                    }
-                  },
-                  "required": [
-                    "protocol",
-                    "pools"
-                  ],
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              "window": {
-                "$ref": "#/components/schemas/WindowResponse"
-              }
-            },
-            "required": [
-              "window",
-              "items"
-            ],
-            "type": "object"
-          }
-        ],
-        "description": "A measure over its window."
-      },
       "WindowedResponse_ProtocolPositionChangeTotalsResponse": {
         "allOf": [
           {
@@ -5900,81 +6242,6 @@
                     "permanentLocks",
                     "splits",
                     "closed"
-                  ],
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              "window": {
-                "$ref": "#/components/schemas/WindowResponse"
-              }
-            },
-            "required": [
-              "window",
-              "items"
-            ],
-            "type": "object"
-          }
-        ],
-        "description": "A measure over its window."
-      },
-      "WindowedResponse_ProtocolTvlChangeResponse": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/WindowPeriodResponse"
-          },
-          {
-            "properties": {
-              "items": {
-                "items": {
-                  "properties": {
-                    "changeUsd": {
-                      "oneOf": [
-                        {
-                          "$ref": "#/components/schemas/SignedDecimal",
-                          "description": "`end − discoveredTvlUsd − start`; `null` as soon as one of them is."
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "discoveredTvlUsd": {
-                      "oneOf": [
-                        {
-                          "$ref": "#/components/schemas/UnsignedDecimal",
-                          "description": "What the pools first seen in the window, their birth unobserved, hold at `end`; `null`\nwhen not measured at that reading."
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "end": {
-                      "$ref": "#/components/schemas/TvlReadingResponse",
-                      "description": "The last reading at or before `asOf`."
-                    },
-                    "protocol": {
-                      "$ref": "#/components/schemas/ProtocolResponse"
-                    },
-                    "start": {
-                      "oneOf": [
-                        {
-                          "$ref": "#/components/schemas/TvlReadingResponse",
-                          "description": "The reading exactly a window before `end`, when `end` is at `asOf`; never over `1h`."
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "protocol",
-                    "end",
-                    "changeUsd",
-                    "discoveredTvlUsd",
-                    "start"
                   ],
                   "type": "object"
                 },
@@ -6168,6 +6435,50 @@
               }
             },
             "description": "A page of every protocol's liquidity changes, the most recent first; the window ends at the first page."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/liquidity-turnover/totals": {
+      "get": {
+        "operationId": "get_liquidity_turnover_totals",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
+              "enum": [
+                "1h",
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiquidityTurnoverTotalsResponse"
+                }
+              }
+            },
+            "description": "Each protocol's volume over the window divided by its last TVL reading, and every volume over every TVL."
           },
           "default": {
             "content": {
@@ -6424,7 +6735,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPoolCreationsResponse"
+                  "$ref": "#/components/schemas/PoolCreationTotalsResponse_ProtocolPoolCreationsResponse"
                 }
               }
             },
@@ -7806,7 +8117,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PageResponse_ProtocolCatalogResponse"
+                  "$ref": "#/components/schemas/ProtocolCatalogPageResponse"
                 }
               }
             },
@@ -8156,6 +8467,58 @@
         }
       }
     },
+    "/api/protocols/{protocol}/liquidity-turnover/totals": {
+      "get": {
+        "operationId": "get_protocol_liquidity_turnover_totals",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "description": "The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour\nthrough the last tranche written, or for the TVL through the last frozen hour.",
+              "enum": [
+                "1h",
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiquidityTurnoverTotalsResponse"
+                }
+              }
+            },
+            "description": "The protocol's volume over the window divided by its last TVL reading."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
     "/api/protocols/{protocol}/pool-changes": {
       "get": {
         "operationId": "list_protocol_pool_changes",
@@ -8402,7 +8765,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolPoolCreationsResponse"
+                  "$ref": "#/components/schemas/PoolCreationTotalsResponse_ProtocolPoolCreationsResponse"
                 }
               }
             },
@@ -9692,7 +10055,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SwapSeriesResponse_ProtocolSwapActivityBucketResponse"
+                  "$ref": "#/components/schemas/ProtocolSwapSeriesResponse_ProtocolSwapActivityBucketResponse"
                 }
               }
             },
@@ -9766,7 +10129,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SwapTotalsResponse_ProtocolSwapActivityResponse"
+                  "$ref": "#/components/schemas/ProtocolSwapTotalsResponse_ProtocolSwapActivityResponse"
                 }
               }
             },
@@ -9917,7 +10280,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolTvlChangeResponse"
+                  "$ref": "#/components/schemas/TvlTotalsResponse_ProtocolTvlChangeResponse"
                 }
               }
             },
@@ -10382,7 +10745,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SwapSeriesResponse_ProtocolSwapActivityBucketResponse"
+                  "$ref": "#/components/schemas/ProtocolSwapSeriesResponse_ProtocolSwapActivityBucketResponse"
                 }
               }
             },
@@ -10448,7 +10811,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SwapTotalsResponse_ProtocolSwapActivityResponse"
+                  "$ref": "#/components/schemas/ProtocolSwapTotalsResponse_ProtocolSwapActivityResponse"
                 }
               }
             },
@@ -10795,7 +11158,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WindowedResponse_ProtocolTvlChangeResponse"
+                  "$ref": "#/components/schemas/TvlTotalsResponse_ProtocolTvlChangeResponse"
                 }
               }
             },

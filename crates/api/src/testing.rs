@@ -41,12 +41,12 @@ use yog_core::{
 
 use crate::application::{
     AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService,
-    LiquidityChangeEventService, LiquidityMoveService, NetworkService, PoolChangeEventService,
-    PoolCreationEventService, PoolCreationsService, PoolService, PositionChangeCountsService,
-    PositionChangeEventService, PositionFeeClaimEventService, ProtocolCatalogService,
-    ProtocolFeeClaimEventService, ProtocolTvlService, RewardChangeEventService,
-    RewardClaimEventService, RotationRunService, SignalService, SwapActivityService,
-    SwapEventService, TokenService, WindowsService, WorkSlots,
+    LiquidityChangeEventService, LiquidityMoveService, LiquidityTurnoverService, NetworkService,
+    PoolChangeEventService, PoolCreationEventService, PoolCreationsService, PoolService,
+    PositionChangeCountsService, PositionChangeEventService, PositionFeeClaimEventService,
+    ProtocolCatalogService, ProtocolFeeClaimEventService, ProtocolTvlService,
+    RewardChangeEventService, RewardClaimEventService, RotationRunService, SignalService,
+    SwapActivityService, SwapEventService, TokenService, WindowsService, WorkSlots,
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
@@ -63,6 +63,11 @@ pub(crate) fn app_state() -> AppState {
             MockNetworkStatusRepo::failing(),
         ))),
         windows_service: Arc::new(WindowsService::new(frozen_hours_repo(None))),
+        liquidity_turnover_service: Arc::new(LiquidityTurnoverService::new(
+            frozen_hours_repo(None),
+            Arc::new(MockSwapActivityRepo::default()),
+            Arc::new(MockProtocolTvlRepo::default()),
+        )),
         ingestion_service: Arc::new(IngestionService::new(Arc::new(
             MockEventFreshnessRepo::failing(),
         ))),

@@ -139,6 +139,12 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         .routes(routes!(
             handlers::liquidity_moves::list_protocol_liquidity_moves
         ))
+        .routes(routes!(
+            handlers::liquidity_turnover::get_liquidity_turnover_totals
+        ))
+        .routes(routes!(
+            handlers::liquidity_turnover::get_protocol_liquidity_turnover_totals
+        ))
         .routes(routes!(handlers::swaps::get_swap_totals))
         .routes(routes!(handlers::swaps::get_protocol_swap_totals))
         .routes(routes!(handlers::swaps::get_swaps_series))

@@ -175,6 +175,13 @@ impl PeriodBounds for DrawnPeriod {
 }
 
 impl ReadPeriod {
+    pub(crate) fn is_covered(&self) -> bool {
+        match self {
+            Self::Frozen(p) => p.is_covered(),
+            Self::Tranche(p) => p.is_covered(),
+        }
+    }
+
     /// The step its end moves by: an hour frozen, a tranche through the last one written.
     pub(crate) fn step(&self) -> TimeDelta {
         match self {

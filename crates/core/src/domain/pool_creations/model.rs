@@ -14,3 +14,10 @@ pub struct ProtocolPoolCreations {
     pub protocol: Protocol,
     pub pools: i64,
 }
+
+impl ProtocolPoolCreations {
+    /// The pools of every row; `None` without rows.
+    pub fn total(rows: &[Self]) -> Option<i64> {
+        (!rows.is_empty()).then(|| rows.iter().map(|row| row.pools).sum())
+    }
+}

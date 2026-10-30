@@ -13,7 +13,7 @@ use crate::testing::{
     MockProtocolActivityRepo, MockSwapActivityRepo, MockTokenActivityRepo, at_october,
     frozen_hours_repo, make_frozen_hours, pk,
 };
-use yog_core::domain::{TranchePeriod, WrittenTranches};
+use yog_core::domain::{FrozenHours, TranchePeriod, WrittenTranches};
 
 fn service(repo: &Arc<MockSwapActivityRepo>) -> SwapActivityService {
     SwapActivityService::new(
@@ -52,8 +52,8 @@ async fn a_swap_total_over_hours_the_facts_lack_is_not_read() {
         .await
         .unwrap();
 
-    assert!(month.items.is_empty());
-    let Some(ReadPeriod::Frozen(week)) = week.period else {
+    assert!(month.measured.items.is_empty());
+    let Some(ReadPeriod::Frozen(week)) = week.measured.period else {
         panic!("a week is a frozen period");
     };
     assert_eq!(week.as_of, at_october(20, 13));
@@ -145,6 +145,7 @@ async fn the_last_hour_is_read_through_the_last_tranche() {
         vec![
             ("swap_totals", hour, None),
             ("swap_totals", before, None),
+            ("swap_totals", before, None),
             ("swap_tranches", hour, None),
         ]
     );
@@ -216,4 +217,57 @@ async fn a_week_is_read_in_slices_of_six_hours() {
         *repo.widths.lock().unwrap(),
         [chrono::TimeDelta::hours(6); 2]
     );
+}
+
+/// Mutation: the previous window read on its own end — two reads a freeze can split.
+#[tokio::test]
+async fn the_previous_window_ends_where_the_window_starts() {
+    let repo = Arc::new(MockSwapActivityRepo::default());
+    let hours = FrozenHours {
+        first: at_october(1, 0),
+        last_frozen: at_october(20, 12),
+    };
+    let svc = SwapActivityService::new(
+        frozen_hours_repo(Some(hours)),
+        repo.clone(),
+        Arc::new(MockTokenActivityRepo::default()),
+    );
+
+    let totals = svc.get_swap_totals(Window::Week, None, None).await.unwrap();
+
+    let previous = totals.previous.unwrap();
+    assert!(previous.covered);
+    let reads = repo.reads.lock().unwrap();
+    assert_eq!(reads.len(), 2);
+    assert_eq!(reads[1].1.as_of, reads[0].1.from);
+    assert_eq!(reads[1].1.from, reads[0].1.from - Window::Week.duration());
+}
+
+/// Mutation: an uncovered previous window summed anyway — a change over part of a window.
+#[tokio::test]
+async fn a_previous_window_the_facts_do_not_cover_is_said_and_not_read() {
+    let repo = Arc::new(MockSwapActivityRepo::default());
+    let svc = service(&repo);
+
+    let totals = svc.get_swap_totals(Window::Week, None, None).await.unwrap();
+
+    let previous = totals.previous.unwrap();
+    assert!(!previous.covered);
+    assert_eq!(previous.volume_usd, None);
+    assert_eq!(repo.reads.lock().unwrap().len(), 1);
+}
+
+/// Mutation: a read moved back given a previous window of its own — a third read nobody asked for.
+#[tokio::test]
+async fn a_read_moved_back_has_no_previous_window() {
+    let repo = Arc::new(MockSwapActivityRepo::default());
+    let svc = service(&repo);
+
+    let totals = svc
+        .get_swap_totals(Window::Day, Some(Window::Day), None)
+        .await
+        .unwrap();
+
+    assert!(totals.previous.is_none());
+    assert_eq!(repo.reads.lock().unwrap().len(), 1);
 }
