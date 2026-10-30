@@ -4,6 +4,7 @@
 mod rows;
 
 use async_trait::async_trait;
+use chrono::TimeDelta;
 use rows::PoolCreationsRow;
 use sqlx::PgPool;
 use yog_core::{
@@ -14,7 +15,7 @@ use yog_core::{
     },
 };
 
-use crate::repositories::helper::{bind_protocol_filter, map_sqlx_error};
+use crate::repositories::helper::{bind_protocol_filter, interval_of, map_sqlx_error};
 
 pub struct PgPoolCreationsRepository {
     pool: PgPool,
@@ -83,9 +84,10 @@ impl PoolCreationsLookup for PgPoolCreationsRepository {
         rows.into_iter().map(ProtocolBucket::try_from).collect()
     }
 
-    async fn list_daily(
+    async fn list_buckets(
         &self,
         period: &FrozenPeriod,
+        width: TimeDelta,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBucket<PoolCreations>>> {
         let rows = sqlx::query_as!(
@@ -95,7 +97,7 @@ impl PoolCreationsLookup for PgPoolCreationsRepository {
                    SUM(births)::BIGINT AS "pools!"
               FROM (
                   SELECT b.*,
-                         time_bucket(INTERVAL '1 day', bucket, origin => $2::TIMESTAMPTZ)
+                         time_bucket($5::INTERVAL, bucket, origin => $2::TIMESTAMPTZ)
                              AS bucket_from
                     FROM analytic_protocol_births_hourly b
                    WHERE bucket >= $1 AND bucket < $2
@@ -109,6 +111,7 @@ impl PoolCreationsLookup for PgPoolCreationsRepository {
             period.as_of,
             period.covered_since,
             bind_protocol_filter(protocol),
+            interval_of(width),
         )
         .fetch_all(&self.pool)
         .await

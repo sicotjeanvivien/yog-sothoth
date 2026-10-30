@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 
 use super::{ClaimKind, ClaimTotals};
 use crate::RepositoryResult;
@@ -43,11 +43,12 @@ pub trait ClaimTotalsLookup: Send + Sync {
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<ClaimTotals>>>;
 
-    /// The same by 24 hours ending at the period's `as_of`.
-    async fn list_daily(
+    /// The same by `width` ending at the period's `as_of`.
+    async fn list_buckets(
         &self,
         kind: ClaimKind,
         period: &FrozenPeriod,
+        width: TimeDelta,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<ClaimTotals>>>;
 

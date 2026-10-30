@@ -34,6 +34,19 @@ pub struct ProtocolTvlChange {
 }
 
 impl ProtocolTvlChange {
+    /// A last reading alone: no start, no discovered part, so no change.
+    pub fn last_reading(reading: ProtocolTvl) -> Self {
+        Self {
+            protocol: reading.protocol,
+            end: TvlReading {
+                at: reading.at,
+                tvl_usd: reading.tvl_usd,
+            },
+            start: None,
+            discovered_tvl_usd: None,
+        }
+    }
+
     /// The change without the discovered part; `None` as soon as one term is unknown.
     pub fn change_usd(&self) -> Option<Decimal> {
         let start = self.start.as_ref()?.tvl_usd?;

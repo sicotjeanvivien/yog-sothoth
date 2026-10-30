@@ -4,7 +4,7 @@
 mod rows;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use rows::{LiquidityFlowsRow, LiquidityMoveRow, LiquidityTotalsRow};
 use sqlx::PgPool;
 use yog_core::{
@@ -17,7 +17,7 @@ use yog_core::{
 };
 
 use crate::repositories::helper::{
-    PageBuilder, QueryMode, convert_decimal_to_bigdecimal, map_sqlx_error,
+    PageBuilder, QueryMode, convert_decimal_to_bigdecimal, interval_of, map_sqlx_error,
 };
 
 pub struct PgLiquidityMoveRepository {
@@ -107,9 +107,10 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
         rows.into_iter().map(ProtocolBucket::try_from).collect()
     }
 
-    async fn list_daily(
+    async fn list_buckets(
         &self,
         period: &FrozenPeriod,
+        width: TimeDelta,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<LiquidityFlows>>> {
         let rows = sqlx::query_as!(
@@ -121,7 +122,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
                    SUM(moves_valued)::BIGINT AS "moves_valued!"
               FROM (
                   SELECT l.*,
-                         time_bucket(INTERVAL '1 day', bucket, origin => $2::TIMESTAMPTZ)
+                         time_bucket($5::INTERVAL, bucket, origin => $2::TIMESTAMPTZ)
                              AS bucket_from
                     FROM analytic_protocol_liquidity_hourly l
                    WHERE protocol = $4 AND bucket >= $1 AND bucket < $2
@@ -134,6 +135,7 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
             period.as_of,
             period.covered_since,
             protocol.as_str(),
+            interval_of(width),
         )
         .fetch_all(&self.pool)
         .await

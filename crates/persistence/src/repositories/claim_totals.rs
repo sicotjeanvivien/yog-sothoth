@@ -122,13 +122,14 @@ impl ClaimTotalsLookup for PgClaimTotalsRepository {
             .await
     }
 
-    async fn list_daily(
+    async fn list_buckets(
         &self,
         kind: ClaimKind,
         period: &FrozenPeriod,
+        width: TimeDelta,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<ClaimTotals>>> {
-        self.list_series(kind, frozen_bounds(period, TimeDelta::days(1)), protocol)
+        self.list_series(kind, frozen_bounds(period, width), protocol)
             .await
     }
 

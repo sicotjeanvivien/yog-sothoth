@@ -9,7 +9,7 @@ use crate::application::Measured;
 use crate::http::{
     AppState,
     dto::{
-        ProtocolPositionChangeBucketResponse, ProtocolPositionChangeTotalsResponse,
+        ProtocolPositionChangeBucketResponse, ProtocolPositionChangeTotalsResponse, SeriesResponse,
         WindowedResponse,
         request::{MeasureWindowParams, SeriesParams, parse_protocol},
     },
@@ -57,19 +57,19 @@ pub(crate) async fn get_protocol_position_change_totals(
         status = 200,
         description = "The positions the protocol opened, locked, split and closed by `interval`, \
                        from the facts' coverage.",
-        body = WindowedResponse<ProtocolPositionChangeBucketResponse>
+        body = SeriesResponse<ProtocolPositionChangeBucketResponse>
     ))
 )]
 pub(crate) async fn get_protocol_position_change_series(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
     Query(params): Query<SeriesParams>,
-) -> Result<Json<WindowedResponse<ProtocolPositionChangeBucketResponse>>, ApiError> {
+) -> Result<Json<SeriesResponse<ProtocolPositionChangeBucketResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
     let (window, interval) = params.parse()?;
     let measured = state
         .position_change_counts_service
         .list_position_change_series(window, interval, protocol)
         .await?;
-    Ok(Json(WindowedResponse::new(window, measured)))
+    Ok(Json(SeriesResponse::new(window, interval, measured)))
 }

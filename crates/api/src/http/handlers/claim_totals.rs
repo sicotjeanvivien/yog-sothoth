@@ -12,7 +12,7 @@ use crate::application::Measured;
 use crate::http::{
     AppState,
     dto::{
-        ProtocolClaimBucketResponse, ProtocolClaimTotalsResponse, WindowedResponse,
+        ProtocolClaimBucketResponse, ProtocolClaimTotalsResponse, SeriesResponse, WindowedResponse,
         request::{MeasureWindowParams, SeriesParams, parse_protocol},
     },
     error::ApiError,
@@ -45,14 +45,14 @@ pub(crate) async fn get_protocol_position_fee_claim_totals(
         status = 200,
         description = "The fees the protocol's positions claimed by `interval`, valued, from the \
                        claims' coverage.",
-        body = WindowedResponse<ProtocolClaimBucketResponse>
+        body = SeriesResponse<ProtocolClaimBucketResponse>
     ))
 )]
 pub(crate) async fn get_protocol_position_fee_claim_series(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
     Query(params): Query<SeriesParams>,
-) -> Result<Json<WindowedResponse<ProtocolClaimBucketResponse>>, ApiError> {
+) -> Result<Json<SeriesResponse<ProtocolClaimBucketResponse>>, ApiError> {
     list_series(&state, &protocol, params, ClaimKind::PositionFee).await
 }
 
@@ -83,14 +83,14 @@ pub(crate) async fn get_protocol_reward_claim_totals(
         status = 200,
         description = "The rewards the protocol's positions claimed by `interval`, valued, from \
                        the claims' coverage.",
-        body = WindowedResponse<ProtocolClaimBucketResponse>
+        body = SeriesResponse<ProtocolClaimBucketResponse>
     ))
 )]
 pub(crate) async fn get_protocol_reward_claim_series(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
     Query(params): Query<SeriesParams>,
-) -> Result<Json<WindowedResponse<ProtocolClaimBucketResponse>>, ApiError> {
+) -> Result<Json<SeriesResponse<ProtocolClaimBucketResponse>>, ApiError> {
     list_series(&state, &protocol, params, ClaimKind::Reward).await
 }
 
@@ -122,12 +122,12 @@ async fn list_series(
     protocol: &str,
     params: SeriesParams,
     kind: ClaimKind,
-) -> Result<Json<WindowedResponse<ProtocolClaimBucketResponse>>, ApiError> {
+) -> Result<Json<SeriesResponse<ProtocolClaimBucketResponse>>, ApiError> {
     let protocol = parse_protocol(protocol)?;
     let (window, interval) = params.parse()?;
     let measured = state
         .claim_totals_service
         .list_claim_series(kind, window, interval, protocol)
         .await?;
-    Ok(Json(WindowedResponse::new(window, measured)))
+    Ok(Json(SeriesResponse::new(window, interval, measured)))
 }

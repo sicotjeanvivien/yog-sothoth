@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use chrono::TimeDelta;
 use solana_pubkey::Pubkey;
 
 use super::{PoolSwapBucket, ProtocolSwapActivity, SwapActivity};
@@ -25,11 +26,12 @@ pub trait SwapActivityLookup: Send + Sync {
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBucket<SwapActivity>>>;
 
-    /// The 24 hours ending at `period.as_of`, then the 24 before: a bucket the facts do not hold
+    /// By `width` ending at `period.as_of`, then the `width` before: a bucket the facts do not hold
     /// whole is left out.
-    async fn list_protocol_daily(
+    async fn list_protocol_buckets(
         &self,
         period: &FrozenPeriod,
+        width: TimeDelta,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBucket<SwapActivity>>>;
 
@@ -75,9 +77,10 @@ pub trait SwapActivityLookup: Send + Sync {
         pool: Pubkey,
     ) -> RepositoryResult<Vec<PoolSwapBucket>>;
 
-    async fn list_pool_daily(
+    async fn list_pool_buckets(
         &self,
         period: &FrozenPeriod,
+        width: TimeDelta,
         pool: Pubkey,
     ) -> RepositoryResult<Vec<PoolSwapBucket>>;
 }

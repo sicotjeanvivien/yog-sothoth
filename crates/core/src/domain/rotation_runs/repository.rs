@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 
 use super::{
     RotationRun, RotationRunCursor, RotationRunOrder, RotationRunScope, RotationRunTotals, RunSplit,
@@ -48,11 +48,12 @@ pub trait RotationRunLookup: Send + Sync {
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<RunSplit>>>;
 
-    /// The same, by 24 hours ending at the period's `as_of`, split only when whole from
+    /// The same, by `width` ending at the period's `as_of`, split only when whole from
     /// `runs_since` and valued every hour.
-    async fn list_daily(
+    async fn list_buckets(
         &self,
         period: &FrozenPeriod,
+        width: TimeDelta,
         runs_since: Option<DateTime<Utc>>,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<RunSplit>>>;

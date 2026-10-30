@@ -499,17 +499,19 @@ async fn the_claims_are_read_by_tranche_by_hour_and_by_day(pool: PgPool) {
         .unwrap();
     let day = |covered| frozen(noon - TimeDelta::days(7), noon, covered);
     let whole = repo
-        .list_daily(
+        .list_buckets(
             ClaimKind::PositionFee,
             &day(noon - TimeDelta::days(1)),
+            TimeDelta::days(1),
             damm,
         )
         .await
         .unwrap();
     let partial = repo
-        .list_daily(
+        .list_buckets(
             ClaimKind::PositionFee,
             &day(noon - TimeDelta::hours(23)),
+            TimeDelta::days(1),
             damm,
         )
         .await
@@ -525,6 +527,17 @@ async fn the_claims_are_read_by_tranche_by_hour_and_by_day(pool: PgPool) {
     assert_eq!(whole.len(), 1);
     assert_eq!(whole[0].value.claims, 3);
     assert!(partial.is_empty());
+    let slices = repo
+        .list_buckets(
+            ClaimKind::PositionFee,
+            &day(noon - TimeDelta::hours(6)),
+            TimeDelta::hours(6),
+            damm,
+        )
+        .await
+        .unwrap();
+    assert_eq!(slices.len(), 1);
+    assert_eq!(slices[0].value.claims, 3);
 }
 
 /// A position opened, or closed, at `at`.
@@ -591,6 +604,17 @@ async fn the_position_changes_are_counted_by_tranche_and_by_hour(pool: PgPool) {
     assert_eq!(bars.len(), 12);
     assert_eq!(hours.len(), 2);
     assert_eq!((hours[0].value.opened, hours[1].value.opened), (2, 3));
+    let twelve = noon - TimeDelta::hours(12);
+    let slices = repo
+        .list_buckets(
+            &frozen(twelve, noon, twelve),
+            TimeDelta::hours(6),
+            Protocol::MeteoraDammV2,
+        )
+        .await
+        .unwrap();
+    assert_eq!(slices.len(), 1);
+    assert_eq!((slices[0].value.opened, slices[0].value.closed), (5, 1));
 }
 
 /// Against a pool's hour cut at 11 or 13 tranches, or a pool seen and idle read as unknown: its

@@ -12,7 +12,7 @@ use crate::http::{
     AppState,
     dto::{
         LiquidityMoveResponse, ProtocolLiquidityFlowsBucketResponse,
-        ProtocolLiquidityFlowsResponse, WindowedPageResponse, WindowedResponse,
+        ProtocolLiquidityFlowsResponse, SeriesResponse, WindowedPageResponse, WindowedResponse,
         request::{
             LiquidityMovesParams, ListLiquidityMovesRequest, MeasureWindowParams, SeriesParams,
             parse_pool, parse_protocol,
@@ -63,21 +63,21 @@ pub(crate) async fn get_protocol_liquidity_move_totals(
         description = "The protocol's liquidity created, added and removed, by `interval`: 5 \
                        minutes over the last hour, an hour or 24 hours ending at `asOf` over the \
                        other windows.",
-        body = WindowedResponse<ProtocolLiquidityFlowsBucketResponse>
+        body = SeriesResponse<ProtocolLiquidityFlowsBucketResponse>
     ))
 )]
 pub(crate) async fn get_protocol_liquidity_moves_series(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
     Query(params): Query<SeriesParams>,
-) -> Result<Json<WindowedResponse<ProtocolLiquidityFlowsBucketResponse>>, ApiError> {
+) -> Result<Json<SeriesResponse<ProtocolLiquidityFlowsBucketResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
     let (window, interval) = params.parse()?;
     let measured = state
         .liquidity_move_service
         .list_liquidity_series(window, interval, protocol)
         .await?;
-    Ok(Json(WindowedResponse::new(window, measured)))
+    Ok(Json(SeriesResponse::new(window, interval, measured)))
 }
 
 #[utoipa::path(

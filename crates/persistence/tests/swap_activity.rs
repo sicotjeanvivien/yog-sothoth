@@ -124,7 +124,7 @@ async fn a_protocols_swaps_count_only_it(pool: PgPool) {
         .await
         .unwrap();
     let daily = repository
-        .list_protocol_daily(&day, Some(Protocol::MeteoraDammV2))
+        .list_protocol_buckets(&day, Duration::days(1), Some(Protocol::MeteoraDammV2))
         .await
         .unwrap();
 
@@ -136,6 +136,16 @@ async fn a_protocols_swaps_count_only_it(pool: PgPool) {
     assert!(hourly.iter().all(|b| b.protocol == Protocol::MeteoraDammV2));
     assert_eq!(daily.len(), 1);
     assert_eq!(daily[0].value.volume_usd, Some(Decimal::from(24)));
+    let slices = repository
+        .list_protocol_buckets(&day, Duration::hours(6), Some(Protocol::MeteoraDammV2))
+        .await
+        .unwrap();
+    assert_eq!(slices.len(), 4);
+    assert!(
+        slices
+            .iter()
+            .all(|b| b.value.volume_usd == Some(Decimal::from(6)))
+    );
 }
 
 /// Mutation: the pool filter dropped — the other pool's volume counted; or `valued` ignored in
@@ -182,11 +192,20 @@ async fn a_pools_day_is_24_hours_ending_at_as_of_and_held_whole(pool: PgPool) {
         ..period(24 * 3)
     };
 
-    let daily = repository.list_pool_daily(&three_days, mine).await.unwrap();
+    let daily = repository
+        .list_pool_buckets(&three_days, Duration::days(1), mine)
+        .await
+        .unwrap();
 
     assert_eq!(daily.len(), 2);
     assert_eq!(daily[0].from, as_of() - Duration::hours(48));
     assert_eq!(daily[1].activity.pool_hours, 24);
+    let slices = repository
+        .list_pool_buckets(&three_days, Duration::hours(6), mine)
+        .await
+        .unwrap();
+    assert_eq!(slices.len(), 10);
+    assert!(slices.iter().all(|b| b.activity.pool_hours == 6));
 }
 
 /// Mutation: a protocol's days cut at midnight, or the `covered_since` bound dropped — a first
@@ -200,7 +219,10 @@ async fn a_protocols_day_is_24_hours_ending_at_as_of_and_held_whole(pool: PgPool
         ..period(24 * 7)
     };
 
-    let daily = repository.list_protocol_daily(&week, None).await.unwrap();
+    let daily = repository
+        .list_protocol_buckets(&week, Duration::days(1), None)
+        .await
+        .unwrap();
 
     assert_eq!(daily.len(), 6);
     assert_eq!(daily[0].from, week.from + Duration::days(1));
@@ -266,7 +288,10 @@ async fn a_pools_covered_hour_without_a_swap_is_zero(pool: PgPool) {
     let day = period(24);
 
     let hourly = repository.list_pool_hourly(&day, busy).await.unwrap();
-    let daily = repository.list_pool_daily(&day, quiet).await.unwrap();
+    let daily = repository
+        .list_pool_buckets(&day, Duration::days(1), quiet)
+        .await
+        .unwrap();
     let quiet_totals = repository.find_pool_totals(&day, quiet).await.unwrap();
 
     assert_eq!(hourly.len(), 24, "every covered hour, swapped or not");
@@ -367,7 +392,7 @@ async fn an_unmeasured_protocols_pool_reads_nothing(pool: PgPool) {
     );
     assert!(
         repository
-            .list_pool_daily(&day, dlmm)
+            .list_pool_buckets(&day, Duration::days(1), dlmm)
             .await
             .unwrap()
             .is_empty()
@@ -389,7 +414,10 @@ async fn an_unvalued_hour_stays_unvalued_beside_hours_without_a_swap(pool: PgPoo
         .await
         .unwrap()
         .unwrap();
-    let daily = repository.list_pool_daily(&day, mine).await.unwrap();
+    let daily = repository
+        .list_pool_buckets(&day, Duration::days(1), mine)
+        .await
+        .unwrap();
 
     assert_eq!(totals.volume_usd, None, "{totals:?}");
     assert_eq!(daily[0].activity.volume_usd, None, "{daily:?}");
@@ -409,7 +437,10 @@ async fn a_protocols_hour_without_a_swap_reads_zero(pool: PgPool) {
         .await
         .unwrap();
     let hourly = repository.list_protocol_hourly(&day, None).await.unwrap();
-    let daily = repository.list_protocol_daily(&day, None).await.unwrap();
+    let daily = repository
+        .list_protocol_buckets(&day, Duration::days(1), None)
+        .await
+        .unwrap();
 
     assert_eq!(
         totals.len(),

@@ -808,9 +808,10 @@ impl SwapActivityLookup for MockSwapActivityRepo {
         self.record("swap_hourly", period, protocol);
         Ok(vec![])
     }
-    async fn list_protocol_daily(
+    async fn list_protocol_buckets(
         &self,
         period: &FrozenPeriod,
+        _: chrono::TimeDelta,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBucket<SwapActivity>>> {
         self.record("swap_daily", period, protocol);
@@ -850,9 +851,10 @@ impl SwapActivityLookup for MockSwapActivityRepo {
         self.record("pool_swap_hourly", period, None);
         Ok(vec![])
     }
-    async fn list_pool_daily(
+    async fn list_pool_buckets(
         &self,
         period: &FrozenPeriod,
+        _: chrono::TimeDelta,
         _: Pubkey,
     ) -> RepositoryResult<Vec<PoolSwapBucket>> {
         self.record("pool_swap_daily", period, None);
@@ -898,9 +900,10 @@ impl PoolCreationsLookup for MockPoolCreationsRepo {
     ) -> RepositoryResult<Vec<ProtocolBucket<PoolCreations>>> {
         Ok(vec![])
     }
-    async fn list_daily(
+    async fn list_buckets(
         &self,
         _: &FrozenPeriod,
+        _: chrono::TimeDelta,
         _: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBucket<PoolCreations>>> {
         Ok(vec![])
@@ -961,9 +964,10 @@ impl PositionChangeCountsLookup for MockPositionChangeCountsRepo {
         self.series_reads.lock().unwrap().push("position_hourly");
         Ok(vec![])
     }
-    async fn list_daily(
+    async fn list_buckets(
         &self,
         _: &FrozenPeriod,
+        _: chrono::TimeDelta,
         _: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<PositionChangeCounts>>> {
         self.series_reads.lock().unwrap().push("position_daily");
@@ -1054,10 +1058,11 @@ impl ClaimTotalsLookup for MockClaimTotalsRepo {
             .push((name, *period, Some(protocol)));
         Ok(vec![])
     }
-    async fn list_daily(
+    async fn list_buckets(
         &self,
         kind: ClaimKind,
         period: &FrozenPeriod,
+        _: chrono::TimeDelta,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<ClaimTotals>>> {
         let name = match kind {
@@ -1118,9 +1123,10 @@ impl LiquidityMoveLookup for MockLiquidityMoveRepo {
         self.record("liquidity_hourly", period, Some(protocol));
         Ok(vec![])
     }
-    async fn list_daily(
+    async fn list_buckets(
         &self,
         period: &FrozenPeriod,
+        _: chrono::TimeDelta,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<LiquidityFlows>>> {
         self.record("liquidity_daily", period, Some(protocol));
@@ -1502,9 +1508,10 @@ impl RotationRunLookup for MockRotationRunRepo {
         Ok(Vec::new())
     }
 
-    async fn list_daily(
+    async fn list_buckets(
         &self,
         _: &FrozenPeriod,
+        _: chrono::TimeDelta,
         runs_since: Option<DateTime<Utc>>,
         _: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<RunSplit>>> {

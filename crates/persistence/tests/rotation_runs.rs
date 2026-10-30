@@ -364,11 +364,16 @@ async fn a_day_sums_each_hour_once_and_is_split_only_whole(pool: PgPool) {
     };
 
     let daily = repository
-        .list_daily(&frozen, Some(at(-40 * 60)), Protocol::MeteoraDammV2)
+        .list_buckets(
+            &frozen,
+            Duration::days(1),
+            Some(at(-40 * 60)),
+            Protocol::MeteoraDammV2,
+        )
         .await
         .unwrap();
     let never_measured = repository
-        .list_daily(&frozen, None, Protocol::MeteoraDammV2)
+        .list_buckets(&frozen, Duration::days(1), None, Protocol::MeteoraDammV2)
         .await
         .unwrap();
 
@@ -383,6 +388,23 @@ async fn a_day_sums_each_hour_once_and_is_split_only_whole(pool: PgPool) {
     );
     assert!(never_measured.iter().all(|b| b.value.in_runs_usd.is_none()));
     assert_eq!(never_measured.len(), 3);
+    let slices = repository
+        .list_buckets(
+            &frozen,
+            Duration::hours(6),
+            Some(at(-40 * 60)),
+            Protocol::MeteoraDammV2,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        splits(&slices),
+        [
+            (at(-72 * 60), dec(7), None),
+            (at(-30 * 60), dec(3), Some(dec(1))),
+            (at(-6 * 60), dec(10), Some(dec(6))),
+        ]
+    );
 }
 
 /// Mutation: an hour not valued split anyway — its runs' volume drawn against no volume; or a
@@ -422,7 +444,7 @@ async fn a_bar_with_an_hour_not_valued_is_not_split(pool: PgPool) {
         .await
         .unwrap();
     let daily = repository
-        .list_daily(&frozen, since, Protocol::MeteoraDammV2)
+        .list_buckets(&frozen, Duration::days(1), since, Protocol::MeteoraDammV2)
         .await
         .unwrap();
 
@@ -434,6 +456,11 @@ async fn a_bar_with_an_hour_not_valued_is_not_split(pool: PgPool) {
     let dec = |v: i64| Some(Decimal::from(v));
     assert_eq!(read(&hourly), [(None, None), (dec(10), dec(4))]);
     assert_eq!(read(&daily), [(dec(10), None)]);
+    let slices = repository
+        .list_buckets(&frozen, Duration::hours(6), since, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+    assert_eq!(read(&slices), [(dec(10), None)]);
 }
 
 /// Mutation: the coverage read from another column, or every tranche taken as measured — a

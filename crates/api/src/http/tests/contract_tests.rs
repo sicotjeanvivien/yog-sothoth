@@ -56,7 +56,7 @@ fn every_measure_reads_every_window_and_every_step() {
         }
         assert_eq!(values(path, "window"), ["1h", "24h", "7d", "30d"], "{path}");
         if path.ends_with("/series") {
-            assert_eq!(values(path, "interval"), ["5m", "1h", "1d"], "{path}");
+            assert_eq!(values(path, "interval"), ["5m", "1h", "6h", "1d"], "{path}");
         }
         checked += 1;
     }

@@ -11,7 +11,7 @@ use crate::http::{
     AppState,
     dto::{
         ProtocolRotationRunBucketResponse, ProtocolRotationRunTotalsResponse, RotationRunResponse,
-        TrancheWindowedResponse, WindowedPageResponse, WindowedResponse,
+        SeriesResponse, TrancheWindowedResponse, WindowedPageResponse,
         request::{
             ListRotationRunsRequest, MeasureWindowParams, RotationRunsParams, SeriesParams,
             parse_pool, parse_protocol,
@@ -141,21 +141,21 @@ pub(crate) async fn get_protocol_rotation_run_totals(
         description = "The protocol's volume by `interval`, 5 minutes over the last hour, an hour \
                        or 24 hours ending at `asOf` over the other windows, split by its rotation \
                        runs.",
-        body = WindowedResponse<ProtocolRotationRunBucketResponse>
+        body = SeriesResponse<ProtocolRotationRunBucketResponse>
     ))
 )]
 pub(crate) async fn get_protocol_rotation_runs_series(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
     Query(params): Query<SeriesParams>,
-) -> Result<Json<WindowedResponse<ProtocolRotationRunBucketResponse>>, ApiError> {
+) -> Result<Json<SeriesResponse<ProtocolRotationRunBucketResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
     let (window, interval) = params.parse()?;
     let measured = state
         .rotation_run_service
         .list_series(window, interval, protocol)
         .await?;
-    Ok(Json(WindowedResponse::new(window, measured)))
+    Ok(Json(SeriesResponse::new(window, interval, measured)))
 }
 
 #[cfg(test)]

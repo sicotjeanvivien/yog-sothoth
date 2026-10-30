@@ -90,6 +90,8 @@ pub(crate) enum IntervalParam {
     FiveMinutes,
     #[serde(rename = "1h")]
     Hour,
+    #[serde(rename = "6h")]
+    SixHours,
     #[serde(rename = "1d")]
     Day,
 }
@@ -99,32 +101,37 @@ impl From<IntervalParam> for SeriesInterval {
         match value {
             IntervalParam::FiveMinutes => SeriesInterval::FiveMinutes,
             IntervalParam::Hour => SeriesInterval::Hour,
+            IntervalParam::SixHours => SeriesInterval::SixHours,
             IntervalParam::Day => SeriesInterval::Day,
         }
     }
 }
 
-/// A series over `window` at `interval`: `5m` over `1h` only, `1h` or `1d` over the others.
+/// A series over `window` at `interval`, by default the window's own step: `5m` over `1h` only,
+/// `6h` over `7d` only, `1h` or `1d` over the others.
 #[derive(Debug, Deserialize, IntoParams)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct SeriesParams {
     #[serde(default)]
     #[param(inline)]
     pub(crate) window: MeasureWindowParam,
-    #[param(inline)]
-    pub(crate) interval: IntervalParam,
+    #[param(inline, nullable = false)]
+    pub(crate) interval: Option<IntervalParam>,
 }
 
 impl SeriesParams {
     /// The window and its step, or 400 for a step that does not cut it.
     pub(crate) fn parse(self) -> Result<(Window, SeriesInterval), ApiError> {
         let window: Window = self.window.into();
-        let interval: SeriesInterval = self.interval.into();
+        let interval = self
+            .interval
+            .map_or_else(|| SeriesInterval::of(window), SeriesInterval::from);
         if interval.fits(window) {
             Ok((window, interval))
         } else {
             Err(ApiError::BadRequest(
-                "`interval=5m` cuts `window=1h` only, and `window=1h` is cut at `5m` only"
+                "`interval=5m` cuts `window=1h` only, `interval=6h` cuts `window=7d` only, and \
+                 `window=1h` is cut at `5m` only"
                     .to_string(),
             ))
         }
@@ -138,6 +145,14 @@ pub(crate) enum ReadingIntervalParam {
     Hour,
 }
 
+impl From<ReadingIntervalParam> for SeriesInterval {
+    fn from(value: ReadingIntervalParam) -> Self {
+        match value {
+            ReadingIntervalParam::Hour => SeriesInterval::Hour,
+        }
+    }
+}
+
 /// The readings over `window`, one per `interval`.
 #[derive(Debug, Deserialize, IntoParams)]
 #[serde(deny_unknown_fields)]
@@ -145,6 +160,6 @@ pub(crate) struct ReadingSeriesParams {
     #[serde(default)]
     #[param(inline)]
     pub(crate) window: WindowParam,
-    #[param(inline)]
-    pub(crate) interval: ReadingIntervalParam,
+    #[param(inline, nullable = false)]
+    pub(crate) interval: Option<ReadingIntervalParam>,
 }

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use chrono::TimeDelta;
 
 use super::PositionChangeCounts;
 use crate::RepositoryResult;
@@ -29,10 +30,11 @@ pub trait PositionChangeCountsLookup: Send + Sync {
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<PositionChangeCounts>>>;
 
-    /// The same by 24 hours ending at the period's `as_of`.
-    async fn list_daily(
+    /// The same by `width` ending at the period's `as_of`.
+    async fn list_buckets(
         &self,
         period: &FrozenPeriod,
+        width: TimeDelta,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<PositionChangeCounts>>>;
 

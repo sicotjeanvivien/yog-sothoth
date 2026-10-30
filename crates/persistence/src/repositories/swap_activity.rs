@@ -4,6 +4,7 @@
 mod rows;
 
 use async_trait::async_trait;
+use chrono::TimeDelta;
 use rows::{PoolSwapBucketRow, ProtocolSwapActivityRow, ProtocolSwapBucketRow, SwapActivityRow};
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
@@ -16,7 +17,7 @@ use yog_core::{
 };
 
 use crate::repositories::analytic::MEASURED;
-use crate::repositories::helper::{bind_protocol_filter, map_sqlx_error};
+use crate::repositories::helper::{bind_protocol_filter, interval_of, map_sqlx_error};
 
 pub struct PgSwapActivityRepository {
     pool: PgPool,
@@ -99,12 +100,13 @@ impl SwapActivityLookup for PgSwapActivityRepository {
         rows.into_iter().map(ProtocolBucket::try_from).collect()
     }
 
-    async fn list_protocol_daily(
+    async fn list_protocol_buckets(
         &self,
         period: &FrozenPeriod,
+        width: TimeDelta,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBucket<SwapActivity>>> {
-        // ⚠️ Days aligned on `as_of`, not on midnight: the buckets then add up to the period.
+        // ⚠️ Aligned on `as_of`, not on midnight: the buckets then add up to the period.
         let rows = sqlx::query_as!(
             ProtocolSwapBucketRow,
             r#"
@@ -117,7 +119,7 @@ impl SwapActivityLookup for PgSwapActivityRepository {
                    SUM(active_pools_valued)::BIGINT AS "pool_hours_valued!"
               FROM (
                   SELECT h.*,
-                         time_bucket(INTERVAL '1 day', bucket, origin => $2::TIMESTAMPTZ)
+                         time_bucket($5::INTERVAL, bucket, origin => $2::TIMESTAMPTZ)
                              AS bucket_from
                     FROM analytic_protocol_hourly h
                    WHERE bucket >= $1 AND bucket < $2
@@ -131,6 +133,7 @@ impl SwapActivityLookup for PgSwapActivityRepository {
             period.as_of,
             period.covered_since,
             bind_protocol_filter(protocol),
+            interval_of(width),
         )
         .fetch_all(&self.pool)
         .await
@@ -330,9 +333,10 @@ impl SwapActivityLookup for PgSwapActivityRepository {
         rows.into_iter().map(PoolSwapBucket::try_from).collect()
     }
 
-    async fn list_pool_daily(
+    async fn list_pool_buckets(
         &self,
         period: &FrozenPeriod,
+        width: TimeDelta,
         pool: Pubkey,
     ) -> RepositoryResult<Vec<PoolSwapBucket>> {
         let rows = sqlx::query_as!(
@@ -349,7 +353,7 @@ impl SwapActivityLookup for PgSwapActivityRepository {
                   FROM pools
                  WHERE pool_address = $4 AND protocol = ANY($5::TEXT[])
             )
-            SELECT time_bucket(INTERVAL '1 day', h.bucket, origin => $2::TIMESTAMPTZ)
+            SELECT time_bucket($6::INTERVAL, h.bucket, origin => $2::TIMESTAMPTZ)
                        AS "bucket_from!",
                    COALESCE(SUM(f.swap_count), 0)::BIGINT AS "swaps!",
                    CASE WHEN COUNT(f.bucket) = 0 THEN 0
@@ -366,7 +370,7 @@ impl SwapActivityLookup for PgSwapActivityRepository {
               JOIN analytic_hours h ON h.bucket >= seen.since
               LEFT JOIN facts f ON f.bucket = h.bucket
              WHERE h.bucket >= $1 AND h.bucket < $2
-               AND time_bucket(INTERVAL '1 day', h.bucket, origin => $2::TIMESTAMPTZ) >= $3
+               AND time_bucket($6::INTERVAL, h.bucket, origin => $2::TIMESTAMPTZ) >= $3
              GROUP BY 1
              ORDER BY 1
             "#,
@@ -375,6 +379,7 @@ impl SwapActivityLookup for PgSwapActivityRepository {
             period.covered_since,
             pool.to_string(),
             &measured() as &[&str],
+            interval_of(width),
         )
         .fetch_all(&self.pool)
         .await

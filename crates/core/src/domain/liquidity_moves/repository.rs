@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 
 use super::{
     LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveList, LiquidityMoveOrder,
@@ -31,9 +31,10 @@ pub trait LiquidityMoveLookup: Send + Sync {
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<LiquidityFlows>>>;
 
-    async fn list_daily(
+    async fn list_buckets(
         &self,
         period: &FrozenPeriod,
+        width: TimeDelta,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<LiquidityFlows>>>;
 

@@ -43,3 +43,19 @@ async fn the_change_reads_the_last_frozen_hour_over_its_window() {
     assert_eq!(instants, vec![("tvl_changes", at_october(20, 12), None)]);
     assert_eq!(*repo.windows.lock().unwrap(), vec![Window::Week]);
 }
+
+/// Mutation: the last hour read as a change — a window of an hour looked up among the readings
+/// and the discovered parts, which have none.
+#[tokio::test]
+async fn the_change_over_the_last_hour_is_the_last_reading_alone() {
+    let repo = Arc::new(MockProtocolTvlRepo::default());
+    let svc = ProtocolTvlService::new(frozen_hours_repo(Some(make_frozen_hours())), repo.clone());
+
+    svc.get_tvl_change(Window::Hour, None).await.unwrap();
+
+    assert!(repo.windows.lock().unwrap().is_empty());
+    assert_eq!(
+        repo.instants.lock().unwrap().clone(),
+        [("tvl", at_october(20, 12), None)]
+    );
+}

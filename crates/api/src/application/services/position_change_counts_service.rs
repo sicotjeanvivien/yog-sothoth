@@ -61,8 +61,10 @@ impl PositionChangeCountsService {
             (Some(ReadPeriod::Frozen(p)), Some(BucketPeriod::Hour)) => {
                 self.counts.list_hourly(p, protocol).await?
             }
-            (Some(ReadPeriod::Frozen(p)), Some(BucketPeriod::Day)) => {
-                self.counts.list_daily(p, protocol).await?
+            (Some(ReadPeriod::Frozen(p)), Some(bucket)) => {
+                self.counts
+                    .list_buckets(p, bucket.width(), protocol)
+                    .await?
             }
             _ => Vec::new(),
         };
