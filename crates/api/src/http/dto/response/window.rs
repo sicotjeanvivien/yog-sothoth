@@ -37,8 +37,7 @@ impl From<Window> for WindowResponse {
 pub(crate) struct WindowPeriodResponse {
     /// Where the window starts, `null` before any fact.
     from: Option<DateTime<Utc>>,
-    /// The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches
-    /// the end of the last one written.
+    /// The instant the rows reflect.
     as_of: Option<DateTime<Utc>>,
     /// Where the read's coverage starts.
     covered_since: Option<DateTime<Utc>>,

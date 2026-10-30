@@ -5398,7 +5398,7 @@
         "description": "What a response says of its window: its bounds, whether it is open, and whether it runs late.",
         "properties": {
           "asOf": {
-            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
+            "description": "The instant the rows reflect.",
             "format": "date-time",
             "type": [
               "string",

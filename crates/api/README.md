@@ -192,8 +192,9 @@ at the end of this section.
      or fetched from a provider: `protocols`, `pools`, `tokens`, and a token's `prices`;
    - **produced resources**, what we compute from the first two: the measures (rule 4),
      `tvl`, `pool-discoveries`, `liquidity-moves`, `rotation-runs`, `vesting-unlocks`, `signals`;
-   - **service resources**, the state and the messages of the service: `network`,
-     `ingestion` and `windows`, singletons each at `/api/<singleton>`, and `announcements`.
+   - **service resources**, the state and the messages of the service: `network` and
+     `ingestion`, singletons each at `/api/<singleton>`, `windows`, the closed list of the windows, unpaginated,
+     and `announcements`.
 
    A name says what is observed, never an image or a category (`activity`, `stats`,
    `metrics`, `analytics`). An on-chain collection takes the name of the on-chain event
@@ -285,7 +286,7 @@ at the end of this section.
     labels, ⓘ). What a route serves, it reads in the contract. The dashboard does not hold to this
     yet in full: what it still decides is being moved here.
 
-**What a window says of itself.** Every response over a window carries `open`, `opensAt` and `late`,
+**What a window says of itself.** Every measure and every list read over a produced period carries `open`, `opensAt` and `late`,
 judged in one place. `open`: the service opens this window, its facts covering it whole; it says
 what the dashboard may show, not what can be computed, so `30d`, held closed until its reads are
 measured on the prod, is `open: false` with `opensAt: null` and still serves its figures on request.
