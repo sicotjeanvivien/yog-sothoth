@@ -32,6 +32,63 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.7.0",
+    date: "2026-10-30",
+    summary: "The API now says what the dashboard used to decide on its own; the figures on screen stay the same.",
+    sections: [
+      {
+        kind: "features",
+        items: [
+          {
+            text: "The TVL tile says when its figure was read whenever it has no change to show.",
+            technical: false,
+          },
+          {
+            text: "GET /api/windows: every window's bounds, whether it is open, when it opens and whether it runs late. The measures carry open, opensAt and late too, and rotation-runs/series its splitSince.",
+            technical: true,
+          },
+          {
+            text: "swaps/totals, tvl/totals and pool-creations/totals gain a total across protocols, swaps/series a total per bar, swaps/totals the window before it (previous) and /api/protocols the pools seen.",
+            technical: true,
+          },
+          {
+            text: "GET …/liquidity-turnover/totals, at the root and under a protocol: the window's volume over the last TVL reading.",
+            technical: true,
+          },
+          {
+            text: "Every series says its interval: 6h is the default over 7d, 1d over 30d. tvl/totals answers over 1h with the last reading alone, and the measures say what their coverage counts (coverageUnit).",
+            technical: true,
+          },
+          {
+            text: "Each signal says what its value counts (valueUnit) and, on a flow imbalance, which token its swaps mostly take from the pool (leansToward).",
+            technical: true,
+          },
+          {
+            text: "The dashboard no longer decides anything about the data: when a figure is available, how figures combine and what a signal's value means are read from the API, so any client publishes the same figures.",
+            technical: true,
+          },
+        ],
+      },
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "Over 7D, the liquidity chart no longer draws a partial bar at the edge of what it covers.",
+            technical: false,
+          },
+          {
+            text: "A named list ranks its rows before it names the page's, so a list read cold stays fast.",
+            technical: true,
+          },
+          {
+            text: "The observation key's health counts the WARN and ERROR of the daemons, which log in JSON.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.6.0",
     date: "2026-10-30",
     summary: "The Overview and the DAMM v2 page show the last hour, in 5-minute bars.",
