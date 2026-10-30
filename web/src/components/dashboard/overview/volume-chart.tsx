@@ -63,18 +63,15 @@ export async function VolumeChart({ period }: { period: Period }) {
 
   const closed = await closedReason(period, series);
   const slotsFor = (pick: (bar: ProtocolSwapActivityBucketResponse) => string | null) =>
-    series.asOf === null
-      ? []
-      : slotsOf(
-          period,
-          series.asOf,
-          series.items.map((bar) => ({ from: bar.from, value: pick(bar) })),
-        );
+    slotsOf(
+      series,
+      series.items.map((bar) => ({ from: bar.from, value: pick(bar) })),
+    );
   const slots = slotsFor((bar) => bar.volumeUsd);
   const feeSlots = slotsFor((bar) => bar.feesUsd);
 
   const daysAgo = (days: number) => (days === 0 ? t("today") : t("daysAgo", { days }));
-  const dayLabel = (i: number) => daysAgo(daysAgoOf(period, slots.length, i));
+  const dayLabel = (i: number) => daysAgo(daysAgoOf(slots, i));
   const slotName = (slot: Slot, i: number) =>
     !readsClock(period)
       ? `${dayLabel(i)} · ${formatUtcMoment(slot.from, locale)} → ${formatUtcMoment(slot.to, locale)}`

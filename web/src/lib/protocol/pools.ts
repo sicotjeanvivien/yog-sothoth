@@ -1,17 +1,15 @@
 /** The pools tab's chart, as data: the pools born in each bar. */
 
 import type { LiquidityMoveLockResponse } from "@/lib/api/schema/zod.gen";
-import { slotsOf, type Slot } from "@/lib/overview/chart";
-import type { Period } from "@/lib/overview/period";
+import { slotsOf, type Series, type Slot } from "@/lib/overview/chart";
 
 type BirthBar = { from: string; pools: number };
 
-/** The pools born in the period's slots; a slot without any bar is `null`, not 0. */
-export function birthSlotsOf(period: Period, asOf: string, bars: readonly BirthBar[]): Slot[] {
+/** The pools born in the series' slots; a slot without any bar is `null`, not 0. */
+export function birthSlotsOf(series: Series<BirthBar>): Slot[] {
   return slotsOf(
-    period,
-    asOf,
-    bars.map((bar) => ({ from: bar.from, value: String(bar.pools) })),
+    series,
+    series.items.map((bar) => ({ from: bar.from, value: String(bar.pools) })),
   );
 }
 

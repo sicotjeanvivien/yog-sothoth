@@ -227,7 +227,7 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
       />
     );
 
-  const slots = series.asOf === null ? [] : flowSlotsOf(period, series.asOf, series.items);
+  const slots = flowSlotsOf(series);
   const max = Math.max(
     0,
     ...slots.flatMap((s) => [(s.created ?? 0) + (s.added ?? 0), s.removed ?? 0]),
@@ -238,7 +238,7 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
   const bars = slots.map((slot, i) => {
     const name =
       !readsClock(period)
-        ? `${daysAgo(daysAgoOf(period, slots.length, i))} · ${moment(slot.from)} → ${moment(slot.to)}`
+        ? `${daysAgo(daysAgoOf(slots, i))} · ${moment(slot.from)} → ${moment(slot.to)}`
       : `${hourOf(slot.from)} UTC`;
     const reading =
       slot.created === null || slot.added === null || slot.removed === null

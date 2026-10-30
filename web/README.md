@@ -275,11 +275,10 @@ hour — over the last hour, the end of the last 5-minute tranche written.
 
 **The period** — `?period=1h|24h|7d|30d` (`lib/overview/period.ts`; missing,
 unknown or not offered by the page is 24h) drives every label, section title, chart and ⓘ, which speak of
-"the chosen period". A bar is a 5-minute tranche over 1h, an hour over 24h, a 6-hour slice over 7d, a 24-hour
-slice over 30d (`SLOT_MS`), each ending at `asOf`; over 7d the web sums the
-hourly series (`interval=1h`) by six, as the API sums its days: whether an hour is covered is the API's. 1h is the rolling
-hour through the last tranche written, read on `swaps/series?interval=5m`; it does not fall on the last bar of
-24h, and its coverage counts pool tranches, not pool-hours (`coverageUnit`). The TVL stays
+"the chosen period". The bars are the series' own: the API says their step (`interval`), and the chart lays them from `from` to `asOf` — a 5-minute tranche over 1h, an hour over 24h, a 6-hour slice over 7d, a 24-hour
+slice over 30d. 1h is the rolling
+hour through the last tranche written; it does not fall on the last bar of
+24h, and what its coverage counts, the response says (`coverageUnit`). The TVL stays
 the value of the last frozen hour; only its change follows the period, and over 1h it has none.
 A block reads the chosen period or says why it cannot, never another period on the same page. The selector (`period-selector.tsx`) is a set of
 links over the page's periods, each judged on the span of its own reads — 1h on the tranches still held, the others on the

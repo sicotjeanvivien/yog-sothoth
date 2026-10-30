@@ -1,7 +1,6 @@
 /** The volume tab's chart, as data: each bar's volume split between the rotation runs and the rest. */
 
-import { slotsOf } from "@/lib/overview/chart";
-import type { Period } from "@/lib/overview/period";
+import { slotsOf, type Series } from "@/lib/overview/chart";
 
 /**
  * One bar: `total` is `null` where no volume is valued; `inRuns` and `outside` are `null` where
@@ -22,18 +21,16 @@ type SplitBar = {
   outsideRunsUsd: string | null;
 };
 
-/** The protocol's volume in the period's slots, ending at `asOf`, as its runs split it. */
-export function splitSlotsOf(period: Period, asOf: string, bars: readonly SplitBar[]): SplitSlot[] {
-  const pick = (value: (bar: SplitBar) => string | null, strict: boolean) =>
+/** The protocol's volume in the series' slots, as its runs split it. */
+export function splitSlotsOf(series: Series<SplitBar>): SplitSlot[] {
+  const pick = (value: (bar: SplitBar) => string | null) =>
     slotsOf(
-      period,
-      asOf,
-      bars.map((bar) => ({ from: bar.from, value: value(bar) })),
-      { strict },
+      series,
+      series.items.map((bar) => ({ from: bar.from, value: value(bar) })),
     );
-  const totals = pick((bar) => bar.volumeUsd, false);
-  const inRuns = pick((bar) => bar.inRunsUsd, true);
-  const outside = pick((bar) => bar.outsideRunsUsd, true);
+  const totals = pick((bar) => bar.volumeUsd);
+  const inRuns = pick((bar) => bar.inRunsUsd);
+  const outside = pick((bar) => bar.outsideRunsUsd);
   return totals.map((slot, i) => ({
     from: slot.from,
     to: slot.to,

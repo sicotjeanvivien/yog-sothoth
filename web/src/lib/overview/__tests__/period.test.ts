@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { coverageUnit, OVERVIEW_PERIODS, pageQuery, parsePeriod } from "../period";
+import { OVERVIEW_PERIODS, pageQuery, parsePeriod } from "../period";
 
 describe("parsePeriod", () => {
   it("keeps an open period", () => {
@@ -29,13 +29,5 @@ describe("pageQuery", () => {
   it("leaves the default period out and keeps the other parameters", () => {
     expect(pageQuery("24h", { tab: "fees" })).toEqual({ tab: "fees" });
     expect(pageQuery("7d", { tab: "fees" })).toEqual({ tab: "fees", period: "7d" });
-  });
-});
-
-describe("coverageUnit", () => {
-  // Mutation: `<` turned `<=` — the hours' coverage worded as tranches.
-  it("counts tranches under an hour's bars, pool-hours from an hour", () => {
-    expect(coverageUnit("1h")).toBe("poolTranches");
-    expect(coverageUnit("24h")).toBe("poolHours");
   });
 });

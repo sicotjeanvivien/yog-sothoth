@@ -70,8 +70,6 @@
       "unavailable": {
         "label": "Pourquoi « — » ?",
         "previous": "La période précédente commence avant le {since}, début des mesures : pas de comparaison avec une somme incomplète.",
-        "tvlStart": "La TVL n'a pas de mesure au début de la période : sa variation ne peut pas être calculée.",
-        "tvlDiscovered": "La part des pools découvertes pendant la période n'est pas mesurée : sans elle, la variation compterait une découverte comme un dépôt.",
         "previousMoved": "Une tranche de 5 minutes ou une heure figée est arrivée entre la lecture de la période et celle de la précédente : rechargez la page pour les comparer."
       },
       "kpis": {
@@ -92,7 +90,7 @@
         "poolsObservedAfter": "observées",
         "poolsBorn": "+{births} nées en {period}",
         "info": {
-          "tvl": "La valeur de ce qui est déposé dans les pools que Yog-Scope a observées depuis le 1er octobre 2026, à la fin de la dernière heure complète : leurs réserves, chacune au prix Jupiter de son token s'il a moins de 15 minutes. Un token sans prix compte pour 0, comme un token coté plus de dix fois au-dessus du plus haut prix auquel nos pools l'ont échangé en 7 jours. La TVL dit ce qui est déposé, pas ce qu'on peut échanger. Sa variation compare à son niveau au début de la période choisie, sans les pools découvertes pendant la période : une pool vue pour la première fois apporte tout son stock, qui n'est pas un dépôt.",
+          "tvl": "La valeur de ce qui est déposé dans les pools que Yog-Scope a observées depuis le 1er octobre 2026, à la fin de la dernière heure complète : leurs réserves, chacune au prix Jupiter de son token s'il a moins de 15 minutes. Un token sans prix compte pour 0, comme un token coté plus de dix fois au-dessus du plus haut prix auquel nos pools l'ont échangé en 7 jours. La TVL dit ce qui est déposé, pas ce qu'on peut échanger. Sa variation compare à son niveau au début de la période choisie, sans les pools découvertes pendant la période : une pool vue pour la première fois apporte tout son stock, qui n'est pas un dépôt. Sans mesure au début de la période, ou sans la part des pools découvertes, sa variation n'est pas calculée : la tuile donne alors l'heure de sa lecture.",
           "volume": "Ce qui s'est échangé sur la période choisie, valorisé au prix du moment de chaque échange, jusqu'à la dernière heure complète. La variation compare à la période précédente de même durée.",
           "fees": "Ce que ces échanges ont payé en frais sur la période choisie : la part des déposants (LP) et celle du protocole.",
           "swaps": "Le nombre d'échanges sur la période choisie, et leur rythme moyen par seconde.",
