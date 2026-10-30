@@ -355,4 +355,55 @@ impl RotationRunLookup for PgRotationRunRepository {
 
         rows.into_iter().map(ProtocolBucket::try_from).collect()
     }
+
+    async fn list_tranches(
+        &self,
+        period: &TranchePeriod,
+        runs_since: Option<DateTime<Utc>>,
+        protocol: Protocol,
+    ) -> RepositoryResult<Vec<ProtocolBucket<RunSplit>>> {
+        // ⚠️ A run's tranches read pool by pool through the key: joined whole, every pool is read.
+        let rows = sqlx::query_as!(
+            RunSplitRow,
+            r#"
+            SELECT $4::TEXT AS "protocol!", t.bucket AS "bucket_from!",
+                   CASE WHEN v.bucket IS NULL THEN 0 ELSE v.volume_usd END AS volume_usd,
+                   CASE WHEN t.bucket >= $5 AND (v.bucket IS NULL OR v.volume_usd IS NOT NULL)
+                        THEN COALESCE(r.volume_usd, 0) END AS in_runs_usd
+              FROM generate_series(GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ),
+                                   $2::TIMESTAMPTZ - INTERVAL '5 minutes',
+                                   INTERVAL '5 minutes') AS t (bucket)
+              LEFT JOIN (
+                  SELECT bucket, SUM(volume_in_a_usd + volume_in_b_usd) AS volume_usd
+                    FROM analytic_pool_5min
+                   WHERE protocol = $4 AND bucket >= $1 AND bucket < $2
+                   GROUP BY bucket
+              ) v ON v.bucket = t.bucket
+              LEFT JOIN (
+                  SELECT f.bucket, SUM(f.volume_in_a_usd + f.volume_in_b_usd) AS volume_usd
+                    FROM analytic_rotation_runs run
+                   CROSS JOIN LATERAL (
+                       SELECT bucket, volume_in_a_usd, volume_in_b_usd
+                         FROM analytic_pool_5min
+                        WHERE pool_address = run.pool_address AND valued
+                          AND bucket >= GREATEST(run.started_at, $1::TIMESTAMPTZ)
+                          AND bucket < LEAST(run.ended_at, $2::TIMESTAMPTZ)
+                   ) f
+                   WHERE run.protocol = $4 AND run.started_at < $2 AND run.ended_at > $1
+                   GROUP BY f.bucket
+              ) r ON r.bucket = t.bucket
+             ORDER BY t.bucket
+            "#,
+            period.from,
+            period.as_of,
+            period.covered_since,
+            protocol.as_str(),
+            runs_since,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter().map(ProtocolBucket::try_from).collect()
+    }
 }

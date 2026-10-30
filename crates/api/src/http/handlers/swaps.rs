@@ -10,9 +10,8 @@ use crate::http::{
         ProtocolSwapActivityResponse, SwapActivityResponse, SwapEventResponse,
         TokenActivityPageResponse, WindowedResponse,
         request::{
-            EventsParams, FrozenSeriesParams, ListEventsRequest, ListTokenActivityRequest,
-            MeasureActivityParams, SeriesParams, TokenActivityParams, WindowParams, parse_pool,
-            parse_protocol,
+            EventsParams, ListEventsRequest, ListTokenActivityRequest, MeasureActivityParams,
+            MeasureWindowParams, SeriesParams, TokenActivityParams, parse_pool, parse_protocol,
         },
     },
     error::ApiError,
@@ -124,7 +123,7 @@ async fn list_series(
 #[utoipa::path(
     get,
     path = "/api/pools/{pool}/swaps/totals",
-    params(WindowParams),
+    params(MeasureWindowParams),
     responses((
         status = 200,
         description = "The pool's swaps over the window, 0 when it did not swap; no row before it was first seen.",
@@ -134,7 +133,7 @@ async fn list_series(
 pub(crate) async fn get_pool_swap_totals(
     State(state): State<AppState>,
     Path(pool): Path<String>,
-    Query(params): Query<WindowParams>,
+    Query(params): Query<MeasureWindowParams>,
 ) -> Result<Json<WindowedResponse<SwapActivityResponse>>, ApiError> {
     let pool = super::known_pool(&state, &pool).await?;
     let window = params.window.into();
@@ -148,23 +147,23 @@ pub(crate) async fn get_pool_swap_totals(
 #[utoipa::path(
     get,
     path = "/api/pools/{pool}/swaps/series",
-    params(FrozenSeriesParams),
+    params(SeriesParams),
     responses((
         status = 200,
-        description = "The pool's swaps by `interval`: an hour, or 24 hours ending at `asOf`.",
+        description = "The pool's swaps by `interval`, under the rules of `/api/swaps/series`.",
         body = WindowedResponse<PoolSwapBucketResponse>
     ))
 )]
 pub(crate) async fn get_pool_swaps_series(
     State(state): State<AppState>,
     Path(pool): Path<String>,
-    Query(params): Query<FrozenSeriesParams>,
+    Query(params): Query<SeriesParams>,
 ) -> Result<Json<WindowedResponse<PoolSwapBucketResponse>>, ApiError> {
+    let (window, interval) = params.parse()?;
     let pool = super::known_pool(&state, &pool).await?;
-    let window = params.window.into();
     let measured = state
         .swap_activity_service
-        .list_pool_swap_buckets(window, params.interval.into(), pool.pool_address)
+        .list_pool_swap_series(window, interval, pool.pool_address)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }

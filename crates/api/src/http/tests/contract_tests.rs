@@ -29,6 +29,40 @@ fn the_committed_document_is_the_one_the_routes_declare() {
     );
 }
 
+/// Mutation: a measure kept on its old lists — `WindowParams` on a `totals`, no `5m` on a `series` —
+/// outside the two exceptions the data makes, the TVL and the pools discovered.
+#[test]
+fn every_measure_reads_every_window_and_every_step() {
+    let doc = document();
+    let values = |path: &str, name: &str| -> Vec<String> {
+        doc["paths"][path]["get"]["parameters"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|p| p["name"] == name)
+            .and_then(|p| p["schema"]["enum"].as_array())
+            .map(|e| {
+                e.iter()
+                    .filter_map(|v| v.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let mut checked = 0;
+    for path in doc["paths"].as_object().expect("paths").keys() {
+        let measure = path.ends_with("/totals") || path.ends_with("/series");
+        if !measure || path.contains("/tvl") || path.contains("/pool-discoveries") {
+            continue;
+        }
+        assert_eq!(values(path, "window"), ["1h", "24h", "7d", "30d"], "{path}");
+        if path.ends_with("/series") {
+            assert_eq!(values(path, "interval"), ["5m", "1h", "1d"], "{path}");
+        }
+        checked += 1;
+    }
+    assert_eq!(checked, 20, "ten measures, each a `totals` and a `series`");
+}
+
 /// Red when a route is mounted with a literal path — `Router::route`, or
 /// `OpenApiRouter::route`, which serves it without a contract — outside the probes.
 #[test]
@@ -95,7 +129,7 @@ fn file_name(path: &Path) -> String {
 fn every_api_route_is_in_the_document() {
     let doc = document();
     let paths = doc["paths"].as_object().expect("paths");
-    assert_eq!(paths.len(), 72, "{:?}", paths.keys().collect::<Vec<_>>());
+    assert_eq!(paths.len(), 75, "{:?}", paths.keys().collect::<Vec<_>>());
 }
 
 /// A document of one schema, as `finish` receives it.
@@ -332,7 +366,7 @@ fn every_handler_declares_the_body_and_query_it_has() {
             checked += 1;
         }
     }
-    assert_eq!(checked, 72, "one #[utoipa::path] per /api route");
+    assert_eq!(checked, 75, "one #[utoipa::path] per /api route");
     assert!(drift.is_empty(), "{drift:?}");
 }
 

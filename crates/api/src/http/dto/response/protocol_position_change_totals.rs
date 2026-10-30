@@ -1,9 +1,10 @@
-//! The row of a protocol's `position-changes/totals`: the positions opened, locked, split and
-//! closed over the window, one count per event.
+//! The row of a protocol's `position-changes` measure, `totals` and `series`: the positions
+//! opened, locked, split and closed, one count per event.
 
+use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
-use yog_core::domain::{PositionChangeCounts, Protocol};
+use yog_core::domain::{PositionChangeCounts, Protocol, ProtocolBucket};
 
 use super::protocol::ProtocolResponse;
 use crate::http::dto::schema::Count;
@@ -33,6 +34,23 @@ impl ProtocolPositionChangeTotalsResponse {
             permanent_locks: counts.permanent_locks,
             splits: counts.splits,
             closed: counts.closed,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ProtocolPositionChangeBucketResponse {
+    from: DateTime<Utc>,
+    #[serde(flatten)]
+    counts: ProtocolPositionChangeTotalsResponse,
+}
+
+impl From<ProtocolBucket<PositionChangeCounts>> for ProtocolPositionChangeBucketResponse {
+    fn from(b: ProtocolBucket<PositionChangeCounts>) -> Self {
+        Self {
+            from: b.from,
+            counts: ProtocolPositionChangeTotalsResponse::new(b.protocol, b.value),
         }
     }
 }

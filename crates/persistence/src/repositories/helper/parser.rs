@@ -1,8 +1,9 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 use sqlx::Error as SqlxError;
+use sqlx::postgres::types::PgInterval;
 use sqlx::types::BigDecimal;
 use std::str::FromStr;
 use yog_core::{RepositoryError, RepositoryResult, domain::Protocol};
@@ -139,3 +140,14 @@ pub(crate) fn convert_bigdecimal_to_decimal(
 #[cfg(test)]
 #[path = "tests/parser_tests.rs"]
 mod tests;
+
+/// A span as Postgres takes it.
+pub(crate) fn interval_of(span: TimeDelta) -> PgInterval {
+    PgInterval {
+        months: 0,
+        days: 0,
+        microseconds: span
+            .num_microseconds()
+            .expect("a span fits in microseconds"),
+    }
+}

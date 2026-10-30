@@ -4,10 +4,14 @@
 use std::sync::Arc;
 
 use chrono::TimeDelta;
-use yog_core::domain::{Protocol, Window};
+use yog_core::domain::{ClaimKind, Protocol, Window, WrittenTranches};
 
 use super::ClaimTotalsService;
-use crate::testing::{MockClaimTotalsRepo, at_october, frozen_hours_repo, make_frozen_hours};
+use crate::application::services::period::PeriodBounds;
+use crate::application::services::period::SeriesInterval;
+use crate::testing::{
+    MockClaimTotalsRepo, MockProtocolActivityRepo, at_october, frozen_hours_repo, make_frozen_hours,
+};
 
 fn service(repo: &Arc<MockClaimTotalsRepo>) -> ClaimTotalsService {
     ClaimTotalsService::new(frozen_hours_repo(Some(make_frozen_hours())), repo.clone())
@@ -28,23 +32,23 @@ async fn the_claims_are_covered_from_the_first_whole_hour_valued() {
     let unmeasured = Arc::new(MockClaimTotalsRepo::default());
 
     let day = service(&measured)
-        .get_position_fee_claim_totals(Window::Day, Protocol::MeteoraDammV2)
+        .get_claim_totals(ClaimKind::PositionFee, Window::Day, Protocol::MeteoraDammV2)
         .await
         .unwrap();
     let not_yet = service(&unmeasured)
-        .get_position_fee_claim_totals(Window::Day, Protocol::MeteoraDammV2)
+        .get_claim_totals(ClaimKind::PositionFee, Window::Day, Protocol::MeteoraDammV2)
         .await
         .unwrap();
 
-    assert_eq!(day.period.unwrap().covered_since, at_october(20, 1));
+    assert_eq!(day.period.unwrap().covered_since(), at_october(20, 1));
     assert!(
         day.items.is_empty() && reads(&measured).is_empty(),
         "{:?}",
         reads(&measured)
     );
     assert_eq!(
-        not_yet.period.unwrap().covered_since,
-        not_yet.period.unwrap().as_of
+        not_yet.period.unwrap().covered_since(),
+        not_yet.period.unwrap().as_of()
     );
     assert!(reads(&unmeasured).is_empty());
 }
@@ -62,7 +66,7 @@ async fn the_fees_totals_read_the_fee_claims() {
     let repo = covering();
 
     let totals = service(&repo)
-        .get_position_fee_claim_totals(Window::Day, Protocol::MeteoraDammV2)
+        .get_claim_totals(ClaimKind::PositionFee, Window::Day, Protocol::MeteoraDammV2)
         .await
         .unwrap();
 
@@ -76,10 +80,45 @@ async fn the_rewards_totals_read_the_reward_claims() {
     let repo = covering();
 
     let totals = service(&repo)
-        .get_reward_claim_totals(Window::Day, Protocol::MeteoraDammV2)
+        .get_claim_totals(ClaimKind::Reward, Window::Day, Protocol::MeteoraDammV2)
         .await
         .unwrap();
 
     assert_eq!(totals.items.len(), 1);
     assert_eq!(reads(&repo), ["reward_claim_totals"]);
+}
+
+/// Mutation: a series of one kind read from the other's claims, or at another step.
+#[tokio::test]
+async fn a_series_reads_its_claims_at_its_interval() {
+    let repo = covering();
+    let hours = MockProtocolActivityRepo::with_hours_and_tranches(
+        make_frozen_hours(),
+        WrittenTranches {
+            first: at_october(13, 13),
+            through: at_october(20, 12) + chrono::TimeDelta::minutes(40),
+        },
+    );
+    let svc = ClaimTotalsService::new(Arc::new(hours), repo.clone());
+
+    for (kind, window, interval) in [
+        (ClaimKind::PositionFee, Window::Day, SeriesInterval::Hour),
+        (ClaimKind::Reward, Window::Week, SeriesInterval::Day),
+        (ClaimKind::Reward, Window::Hour, SeriesInterval::FiveMinutes),
+    ] {
+        svc.list_claim_series(kind, window, interval, Protocol::MeteoraDammV2)
+            .await
+            .unwrap();
+    }
+
+    assert_eq!(
+        reads(&repo),
+        ["position_fee_claim_hourly", "reward_claim_daily"]
+    );
+    let tranches = repo.tranche_reads.lock().unwrap();
+    assert_eq!(tranches.len(), 1);
+    assert_eq!(
+        (tranches[0].0, tranches[0].1),
+        ("claim_tranches", ClaimKind::Reward)
+    );
 }

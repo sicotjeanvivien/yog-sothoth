@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT bucket AS \"bucket_from!\", opened AS \"opened!\", vesting_locks AS \"vesting_locks!\",\n                   permanent_locks AS \"permanent_locks!\", splits AS \"splits!\", closed AS \"closed!\"\n              FROM meteora_damm_v2_position_changes_every(\n                       GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ),\n                       $2::TIMESTAMPTZ - INTERVAL '5 minutes', INTERVAL '5 minutes')\n             ORDER BY bucket\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bucket_from!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "opened!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "vesting_locks!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "permanent_locks!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "splits!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "closed!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "a03f14ccc6070ae181b9a3b09a01eab0c90d563bc6e2fe061f442659415f398a"
+}

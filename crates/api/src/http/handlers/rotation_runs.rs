@@ -13,7 +13,7 @@ use crate::http::{
         ProtocolRotationRunBucketResponse, ProtocolRotationRunTotalsResponse, RotationRunResponse,
         TrancheWindowedResponse, WindowedPageResponse, WindowedResponse,
         request::{
-            FrozenSeriesParams, ListRotationRunsRequest, MeasureWindowParams, RotationRunsParams,
+            ListRotationRunsRequest, MeasureWindowParams, RotationRunsParams, SeriesParams,
             parse_pool, parse_protocol,
         },
     },
@@ -135,24 +135,25 @@ pub(crate) async fn get_protocol_rotation_run_totals(
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/rotation-runs/series",
-    params(FrozenSeriesParams),
+    params(SeriesParams),
     responses((
         status = 200,
-        description = "The protocol's volume by `interval`, an hour or 24 hours ending at `asOf`, \
-                       split by its rotation runs.",
+        description = "The protocol's volume by `interval`, 5 minutes over the last hour, an hour \
+                       or 24 hours ending at `asOf` over the other windows, split by its rotation \
+                       runs.",
         body = WindowedResponse<ProtocolRotationRunBucketResponse>
     ))
 )]
 pub(crate) async fn get_protocol_rotation_runs_series(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(params): Query<FrozenSeriesParams>,
+    Query(params): Query<SeriesParams>,
 ) -> Result<Json<WindowedResponse<ProtocolRotationRunBucketResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
-    let window = params.window.into();
+    let (window, interval) = params.parse()?;
     let measured = state
         .rotation_run_service
-        .list_buckets(window, params.interval.into(), protocol)
+        .list_series(window, interval, protocol)
         .await?;
     Ok(Json(WindowedResponse::new(window, measured)))
 }

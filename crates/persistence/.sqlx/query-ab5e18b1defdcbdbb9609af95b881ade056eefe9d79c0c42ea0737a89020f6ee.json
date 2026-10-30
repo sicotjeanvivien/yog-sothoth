@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT COUNT(*) AS \"claims!\", COUNT(amount_usd) AS \"claims_valued!\",\n                   COALESCE(SUM(amount_usd), 0) AS \"amount_usd!\",\n                   COUNT(DISTINCT owner) AS \"owners!\"\n              FROM analytic_reward_claims\n             WHERE protocol = $3 AND timestamp >= $1 AND timestamp < $2\n            ",
+  "query": "\n                    SELECT COUNT(*) AS \"claims!\", COUNT(amount_usd) AS \"claims_valued!\",\n                           COALESCE(SUM(amount_usd), 0) AS \"amount_usd!\",\n                           COUNT(DISTINCT owner) AS \"owners!\"\n                      FROM analytic_reward_claims\n                     WHERE protocol = $3 AND timestamp >= $1 AND timestamp < $2\n                    ",
   "describe": {
     "columns": [
       {
@@ -42,5 +42,5 @@
       null
     ]
   },
-  "hash": "e0e868ef33e5deda39500571049cd423ac8e426d6da1318fd210ad1ce342d436"
+  "hash": "ab5e18b1defdcbdbb9609af95b881ade056eefe9d79c0c42ea0737a89020f6ee"
 }

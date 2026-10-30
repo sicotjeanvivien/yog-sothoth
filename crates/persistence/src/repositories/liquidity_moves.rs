@@ -12,7 +12,7 @@ use yog_core::{
     domain::{
         FrozenPeriod, LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveKind,
         LiquidityMoveList, LiquidityMoveLookup, LiquidityMoveOrder, LiquidityMoveScope,
-        LiquidityTotals, Protocol, ProtocolBucket, Window,
+        LiquidityTotals, Protocol, ProtocolBucket, TranchePeriod, Window,
     },
 };
 
@@ -129,6 +129,70 @@ impl LiquidityMoveLookup for PgLiquidityMoveRepository {
              WHERE bucket_from >= $3
              GROUP BY protocol, bucket_from
              ORDER BY bucket_from
+            "#,
+            period.from,
+            period.as_of,
+            period.covered_since,
+            protocol.as_str(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter().map(ProtocolBucket::try_from).collect()
+    }
+
+    async fn find_totals_in_tranches(
+        &self,
+        period: &TranchePeriod,
+        protocol: Protocol,
+    ) -> RepositoryResult<LiquidityTotals> {
+        // ⚠️ The rule of `analytic_protocol_liquidity_hourly`'s writer, at the tranche.
+        let row = sqlx::query_as!(
+            LiquidityTotalsRow,
+            r#"
+            SELECT COALESCE(SUM(amount_usd) FILTER (WHERE kind = 'create'), 0) AS "created_usd!",
+                   COALESCE(SUM(amount_usd) FILTER (WHERE kind = 'add'), 0) AS "added_usd!",
+                   COALESCE(SUM(amount_usd) FILTER (WHERE kind = 'remove'), 0) AS "removed_usd!",
+                   COUNT(*) AS "moves!", COUNT(amount_usd) AS "moves_valued!",
+                   COUNT(DISTINCT owner) AS "owners!"
+              FROM analytic_liquidity_moves
+             WHERE protocol = $3 AND timestamp >= $1 AND timestamp < $2
+            "#,
+            period.from,
+            period.as_of,
+            protocol.as_str(),
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        LiquidityTotals::try_from(row)
+    }
+
+    async fn list_tranches(
+        &self,
+        period: &TranchePeriod,
+        protocol: Protocol,
+    ) -> RepositoryResult<Vec<ProtocolBucket<LiquidityFlows>>> {
+        let rows = sqlx::query_as!(
+            LiquidityFlowsRow,
+            r#"
+            SELECT $4::TEXT AS "protocol!", t.bucket AS "bucket_from?",
+                   COALESCE(SUM(m.amount_usd) FILTER (WHERE m.kind = 'create'), 0) AS "created_usd!",
+                   COALESCE(SUM(m.amount_usd) FILTER (WHERE m.kind = 'add'), 0) AS "added_usd!",
+                   COALESCE(SUM(m.amount_usd) FILTER (WHERE m.kind = 'remove'), 0) AS "removed_usd!",
+                   COUNT(m.signature) AS "moves!", COUNT(m.amount_usd) AS "moves_valued!"
+              FROM generate_series(GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ),
+                                   $2::TIMESTAMPTZ - INTERVAL '5 minutes',
+                                   INTERVAL '5 minutes') AS t (bucket)
+              LEFT JOIN analytic_liquidity_moves m
+                     ON m.protocol = $4
+                    AND m.timestamp >= t.bucket AND m.timestamp < t.bucket + INTERVAL '5 minutes'
+                    -- ⚠️ Constant bounds too: the planner excludes chunks on them only.
+                    AND m.timestamp >= $1 AND m.timestamp < $2
+             GROUP BY t.bucket
+             ORDER BY t.bucket
             "#,
             period.from,
             period.as_of,

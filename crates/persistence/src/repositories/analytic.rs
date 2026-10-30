@@ -5,9 +5,9 @@
 
 mod meteora_damm_v2;
 
-use crate::repositories::helper::map_sqlx_error;
+use crate::repositories::helper::{interval_of, map_sqlx_error};
 use async_trait::async_trait;
-use chrono::{DateTime, TimeDelta, Utc};
+use chrono::{DateTime, Utc};
 use sqlx::{PgExecutor, PgPool, Postgres, Transaction, postgres::types::PgInterval};
 use yog_core::{
     RepositoryResult,
@@ -115,17 +115,6 @@ async fn lock_out_other_writers(tx: &mut Transaction<'static, Postgres>) -> Repo
 /// [`TRANCHE`] as Postgres takes it.
 fn tranche_interval() -> PgInterval {
     interval_of(TRANCHE)
-}
-
-/// A span of minutes as Postgres takes it.
-fn interval_of(span: TimeDelta) -> PgInterval {
-    PgInterval {
-        months: 0,
-        days: 0,
-        microseconds: span
-            .num_microseconds()
-            .expect("a span of minutes fits in microseconds"),
-    }
 }
 
 /// Read again inside the cycle's transaction: what a cycle committed since

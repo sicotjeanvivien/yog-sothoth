@@ -56,4 +56,12 @@ pub trait RotationRunLookup: Send + Sync {
         runs_since: Option<DateTime<Utc>>,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<RunSplit>>>;
+
+    /// The same by tranche of `period`, split in the valued tranches from `runs_since`.
+    async fn list_tranches(
+        &self,
+        period: &TranchePeriod,
+        runs_since: Option<DateTime<Utc>>,
+        protocol: Protocol,
+    ) -> RepositoryResult<Vec<ProtocolBucket<RunSplit>>>;
 }

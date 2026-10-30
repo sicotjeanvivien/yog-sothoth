@@ -5,7 +5,7 @@ use super::{
     LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveList, LiquidityMoveOrder,
     LiquidityTotals,
 };
-use crate::domain::{FrozenPeriod, Protocol, ProtocolBucket, Window};
+use crate::domain::{FrozenPeriod, Protocol, ProtocolBucket, TranchePeriod, Window};
 use crate::{Page, RepositoryResult};
 
 /// The valued liquidity moves. ⚠️ Measured from a later hour than the swaps: every read
@@ -34,6 +34,20 @@ pub trait LiquidityMoveLookup: Send + Sync {
     async fn list_daily(
         &self,
         period: &FrozenPeriod,
+        protocol: Protocol,
+    ) -> RepositoryResult<Vec<ProtocolBucket<LiquidityFlows>>>;
+
+    /// `protocol`'s liquidity over the tranches of `period`, the owners of its moves distinct.
+    async fn find_totals_in_tranches(
+        &self,
+        period: &TranchePeriod,
+        protocol: Protocol,
+    ) -> RepositoryResult<LiquidityTotals>;
+
+    /// `protocol`'s liquidity by tranche of `period`, from its coverage, 0 in a tranche without.
+    async fn list_tranches(
+        &self,
+        period: &TranchePeriod,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<LiquidityFlows>>>;
 

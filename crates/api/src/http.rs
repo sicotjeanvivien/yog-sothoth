@@ -215,7 +215,16 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
             handlers::claim_totals::get_protocol_reward_claim_totals
         ))
         .routes(routes!(
+            handlers::claim_totals::get_protocol_position_fee_claim_series
+        ))
+        .routes(routes!(
+            handlers::claim_totals::get_protocol_reward_claim_series
+        ))
+        .routes(routes!(
             handlers::position_change_counts::get_protocol_position_change_totals
+        ))
+        .routes(routes!(
+            handlers::position_change_counts::get_protocol_position_change_series
         ))
         .routes(routes!(
             handlers::liquidity_moves::get_protocol_liquidity_moves_series

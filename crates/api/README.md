@@ -134,15 +134,15 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/announcements` | A page of every announcement, the latest start first, ties by id: kind, severity, message, link, window, and `status` — `upcoming`, `open` or `closed` at the request; `?status=` keeps one; forward-only cursor, refused (400) under another status |
 | `GET` | `/api/swaps/totals` (`?offset=`), `/series` | Per protocol, the swaps over `?window=`, then per bucket: swaps, volume, fees and their shares — LP, protocol and referral sum to the fees, all known or all null — pool-hours and the valued ones; the totals with the distinct pools that swapped |
 | `GET` | `/api/protocols/{protocol}/swaps/totals`, `/series` | The same, the protocol's own |
-| `GET` | `/api/pools/{pool}/swaps/totals`, `/series` (`interval=1h\|1d`) | The same for one pool, without the protocol nor the distinct pools; 404 for a pool unknown |
+| `GET` | `/api/pools/{pool}/swaps/totals`, `/series` | The same for one pool, without the protocol nor the distinct pools; 404 for a pool unknown |
 | `GET` | `/api/swaps/by-token` | Tokens by volume over `?window=`, every protocol summed, identity embedded, forward-only cursor; a swap counts for both its tokens |
 | `GET` | `/api/pool-creations/totals`, `/series`, and under `/api/protocols/{protocol}/` | Per protocol, the pools created over the window, then per bucket |
-| `GET` | `/api/protocols/{protocol}/liquidity-moves/totals`, `/series` (`interval=1h\|1d`) | The protocol's liquidity created, added and removed, valued, with its moves valued, and on `totals` the distinct owners of its moves; its `coveredSince` is the liquidity's |
-| `GET` | `/api/protocols/{protocol}/position-changes/totals` | The positions the protocol opened, locked (vesting or permanent), split and closed over the window, one count per event |
-| `GET` | `/api/protocols/{protocol}/position-fee-claims/totals`, `/api/protocols/{protocol}/reward-claims/totals` | The fees, or the rewards, the positions claimed over the window: claims, the valued ones, their value and the distinct owners; its `coveredSince` is the first whole hour whose claims were valued |
+| `GET` | `/api/protocols/{protocol}/liquidity-moves/totals`, `/series` | The protocol's liquidity created, added and removed, valued, with its moves valued, and on `totals` the distinct owners of its moves; its `coveredSince` is the liquidity's |
+| `GET` | `/api/protocols/{protocol}/position-changes/totals`, `/series` | The positions the protocol opened, locked (vesting or permanent), split and closed over the window, then per bucket, one count per event; over the last hour, counted on the events themselves |
+| `GET` | `/api/protocols/{protocol}/position-fee-claims/totals`, `/series`, `/api/protocols/{protocol}/reward-claims/totals`, `/series` | The fees, or the rewards, the positions claimed over the window, then per bucket: claims, the valued ones, their value and the distinct owners; its `coveredSince` is the first whole hour whose claims were valued, the first tranche over the last hour |
 | `GET` | `/api/protocols/{protocol}/rotation-runs`, `/api/pools/{pool}/rotation-runs` | A page of the rotation runs started in the window, through the last tranche written: pool and its tokens' symbols, start, end, volume, first hour's volume, extinct; `?sort=volume` (default) or `at`, forward-only cursor that keeps its first page's end, refused (400) under another list; empty while the rotation does not cover the window |
 | `GET` | `/api/protocols/{protocol}/rotation-runs/totals` | The runs started in the window, their distinct pools, those still in progress, their median and p90 duration, their volume and first hour's volume, through the last tranche written; its `coveredSince` is the first tranche whose rotation was measured |
-| `GET` | `/api/protocols/{protocol}/rotation-runs/series` (`interval=1h\|1d`) | The protocol's volume by frozen hour, or by 24 hours ending at `asOf`, split by its runs: in them and outside them (never under 0), both `null` on a bar the runs do not cover whole or with an hour not valued |
+| `GET` | `/api/protocols/{protocol}/rotation-runs/series` | The protocol's volume by tranche, frozen hour, or 24 hours ending at `asOf`, split by its runs: in them and outside them (never under 0), both `null` on a bar the runs do not cover whole or with an hour not valued |
 | `GET` | `/api/protocols/{protocol}/liquidity-moves`, `/api/pools/{pool}/liquidity-moves` | A page of the valued moves (creations, additions, removals), their pool's token symbols embedded, the lock their transaction puts on a position (`none`, `vesting`, `permanent`, `null` before measured), `?kind=create|add|remove` to keep one kind, `?sort=amount` (default) or `at`, forward-only cursor, refused (400) under another list, kind or window or after a freeze; empty while the protocol's liquidity does not cover the window |
 | `GET` | `/api/tvl`, `/api/protocols/{protocol}/tvl` | Per protocol, the last TVL reading at or before `asOf`, its `at` said |
 | `GET` | `/api/tvl/series`, `/api/protocols/{protocol}/tvl/series` (`interval=1h`) | Per protocol, the reading of every hour measured from the window's start |
@@ -171,9 +171,11 @@ before it, rather than a partial sum.
 The tokens are the exception to one read of the frozen hours: their span ends at
 the hour of the ranking read with them, which each freeze rewrites whole — a
 cursor carries that hour, and one taken before a freeze is refused (400).
-The last hour (`window=1h`) is the other: it ends at the last tranche written, read from the
-pools' 5-minute tranches, and its `poolHours` count pools × tranches; a cursor of its tokens
-carries that end, refused (400) once the hour has moved.
+The last hour (`window=1h`) is the other: it ends at the last tranche written, read on each
+measure's facts by tranche — the pools' tranches, the moves, the claims, and for the creations
+and the position changes the events themselves — covered from the later of the first tranche
+still held and the measure's own start; its `poolHours` count pools × tranches; a cursor of its
+tokens carries that end, refused (400) once the hour has moved.
 
 ## What a route may return
 
@@ -215,11 +217,18 @@ at the end of this section.
    protocol.
 4. **A measure is a collection followed by a cut**, a reserved word that ends the path:
    - `totals`, the whole window: one row per protocol at the root, under an entity its own;
-   - `series?interval=`: the same rows, one per bucket — `1h` an hour, `1d` the 24 hours ending
-     at `asOf`, `5m` a tranche — unpaginated, the window bounding them; a closed list per
-     resource (`5m` where `window=1h` is served, and only over it), 400 otherwise;
+   - `series?interval=5m|1h|1d`: the same rows, one per bucket — `5m` a tranche, `1h` an hour,
+     `1d` the 24 hours ending at `asOf` — unpaginated, the window bounding them; `5m` cuts
+     `window=1h` only, which is cut at `5m` only;
    - `by-token`, `by-pool`, `by-owner`: one row per token, pool or owner address, summed over
      the path's scope (every protocol at the root), a ranking paginated as a collection.
+
+   Every measure has both cuts, over `window=1h|24h|7d|30d`, but two the data does not serve
+   so: the TVL, read once an hour, whose `series` is `interval=1h` and whose windows start at a
+   day; and the pools discovered, measured over a day, a week and a month only, without a
+   `series`. A request outside what a route serves is refused, 400 for a value outside its
+   closed list, 404 for a route that does not exist; the same error is the same message on
+   every route, never words of a measure's own.
 
    A measure's row is not an item: it carries a protocol only where it is cut by protocol.
    An hour observed without a fact is a row or a bucket at 0; an absent one says only that it
@@ -271,9 +280,8 @@ at the end of this section.
     can carry it under rule 6, and its ⓘ says the TVL is the last reading.
 
 **Parameters and fields.** `window=24h|7d|30d`, a closed list, 400 otherwise; `offset` for the
-previous window. `1h` is served by `swaps/totals`, `swaps/by-token`, `pool-creations/totals`,
-`rotation-runs/totals` and the `series` of the swaps (root, protocol) and of the pool creations,
-and refused (400) elsewhere. For a collection of future events (`vesting-unlocks`), `window` covers the
+previous window. `1h`, the last hour through the last tranche written, is served by every measure
+but the two exceptions of rule 4, and by `swaps/by-token`; a collection refuses it (400). For a collection of future events (`vesting-unlocks`), `window` covers the
 period after `asOf`, and takes no `offset`. An on-chain collection read live ends its window
 at its first page, whose start the cursor carries. The swaps of every pool, at the root and
 under a protocol, are served over `24h` only: past a day they are compressed by pool, and

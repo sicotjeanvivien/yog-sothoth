@@ -51,7 +51,7 @@ pub use announcements::{
     Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementKind, AnnouncementLookup,
     AnnouncementSeverity, AnnouncementStatus,
 };
-pub use claim_totals::{ClaimTotals, ClaimTotalsLookup};
+pub use claim_totals::{ClaimKind, ClaimTotals, ClaimTotalsLookup};
 pub use discovered_tvl::{DiscoveredTvlLookup, ProtocolDiscoveredTvl};
 pub use domain_event::DomainEvent;
 pub use event_cursor::{EventCursor, EventScope};

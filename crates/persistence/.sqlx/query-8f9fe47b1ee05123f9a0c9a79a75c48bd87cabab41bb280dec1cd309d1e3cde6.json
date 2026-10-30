@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT b.bucket AS \"bucket_from!\", COALESCE(c.claims, 0) AS \"claims!\",\n                           COALESCE(c.claims_valued, 0) AS \"claims_valued!\",\n                           COALESCE(c.amount_usd, 0) AS \"amount_usd!\",\n                           COALESCE(c.owners, 0) AS \"owners!\"\n                      FROM generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ - $4::INTERVAL,\n                                           $4::INTERVAL) AS b (bucket)\n                      -- ⚠️ Grouped, then joined: joined per bucket, the claims are read once a bucket.\n                      LEFT JOIN (\n                          SELECT time_bucket($4::INTERVAL, timestamp, $1::TIMESTAMPTZ) AS bucket,\n                                 COUNT(*) AS claims, COUNT(amount_usd) AS claims_valued,\n                                 SUM(amount_usd) AS amount_usd, COUNT(DISTINCT owner) AS owners\n                            FROM analytic_position_fee_claims\n                           WHERE protocol = $5\n                             AND timestamp >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ)\n                             AND timestamp < $2\n                           GROUP BY 1\n                      ) c ON c.bucket = b.bucket\n                     WHERE b.bucket >= $3\n                     ORDER BY b.bucket\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bucket_from!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "claims!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "claims_valued!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "amount_usd!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "owners!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Interval",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "8f9fe47b1ee05123f9a0c9a79a75c48bd87cabab41bb280dec1cd309d1e3cde6"
+}

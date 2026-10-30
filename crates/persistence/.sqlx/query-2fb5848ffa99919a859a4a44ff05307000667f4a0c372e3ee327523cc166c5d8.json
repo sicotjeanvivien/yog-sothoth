@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT b.bucket AS \"bucket_from!\",\n                   COALESCE(SUM(h.opened), 0)::BIGINT AS \"opened!\",\n                   COALESCE(SUM(h.vesting_locks), 0)::BIGINT AS \"vesting_locks!\",\n                   COALESCE(SUM(h.permanent_locks), 0)::BIGINT AS \"permanent_locks!\",\n                   COALESCE(SUM(h.splits), 0)::BIGINT AS \"splits!\",\n                   COALESCE(SUM(h.closed), 0)::BIGINT AS \"closed!\"\n              FROM generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ - $4::INTERVAL, $4::INTERVAL)\n                       AS b (bucket)\n              LEFT JOIN analytic_protocol_position_changes_hourly h\n                     ON h.protocol = $5\n                    AND h.bucket >= b.bucket AND h.bucket < b.bucket + $4::INTERVAL\n             WHERE b.bucket >= $3\n             GROUP BY b.bucket\n            -- ⚠️ A bucket without any hour written is not a 0: the protocol is not counted there.\n            HAVING COUNT(h.bucket) > 0\n             ORDER BY b.bucket\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bucket_from!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "opened!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "vesting_locks!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "permanent_locks!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "splits!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "closed!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Interval",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "2fb5848ffa99919a859a4a44ff05307000667f4a0c372e3ee327523cc166c5d8"
+}
