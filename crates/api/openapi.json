@@ -3802,7 +3802,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/TvlReadingResponse",
-                "description": "The reading exactly a window before `end`, when `end` is at `asOf`."
+                "description": "The reading exactly a window before `end`, when `end` is at `asOf`; never over `1h`."
               },
               {
                 "type": "null"
@@ -4233,9 +4233,10 @@
         "type": "object"
       },
       "SeriesResponse_ProtocolClaimBucketResponse": {
-        "description": "[`WindowedResponse`] by bucket: `interval` is the step of the buckets `from..asOf` hold.",
+        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.",
         "properties": {
           "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
             "format": "date-time",
             "type": [
               "string",
@@ -4243,6 +4244,7 @@
             ]
           },
           "coveredSince": {
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -4297,9 +4299,10 @@
         "type": "object"
       },
       "SeriesResponse_ProtocolLiquidityFlowsBucketResponse": {
-        "description": "[`WindowedResponse`] by bucket: `interval` is the step of the buckets `from..asOf` hold.",
+        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.",
         "properties": {
           "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
             "format": "date-time",
             "type": [
               "string",
@@ -4307,6 +4310,7 @@
             ]
           },
           "coveredSince": {
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -4364,9 +4368,10 @@
         "type": "object"
       },
       "SeriesResponse_ProtocolPoolCreationsBucketResponse": {
-        "description": "[`WindowedResponse`] by bucket: `interval` is the step of the buckets `from..asOf` hold.",
+        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.",
         "properties": {
           "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
             "format": "date-time",
             "type": [
               "string",
@@ -4374,6 +4379,7 @@
             ]
           },
           "coveredSince": {
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -4428,9 +4434,10 @@
         "type": "object"
       },
       "SeriesResponse_ProtocolPositionChangeBucketResponse": {
-        "description": "[`WindowedResponse`] by bucket: `interval` is the step of the buckets `from..asOf` hold.",
+        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.",
         "properties": {
           "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
             "format": "date-time",
             "type": [
               "string",
@@ -4438,6 +4445,7 @@
             ]
           },
           "coveredSince": {
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -4491,9 +4499,10 @@
         "type": "object"
       },
       "SeriesResponse_ProtocolRotationRunBucketResponse": {
-        "description": "[`WindowedResponse`] by bucket: `interval` is the step of the buckets `from..asOf` hold.",
+        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.",
         "properties": {
           "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
             "format": "date-time",
             "type": [
               "string",
@@ -4501,6 +4510,7 @@
             ]
           },
           "coveredSince": {
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -4587,9 +4597,10 @@
         "type": "object"
       },
       "SeriesResponse_ProtocolTvlResponse": {
-        "description": "[`WindowedResponse`] by bucket: `interval` is the step of the buckets `from..asOf` hold.",
+        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.",
         "properties": {
           "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
             "format": "date-time",
             "type": [
               "string",
@@ -4597,6 +4608,7 @@
             ]
           },
           "coveredSince": {
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -4932,9 +4944,10 @@
         "type": "object"
       },
       "SwapSeriesResponse_PoolSwapBucketResponse": {
-        "description": "[`SeriesResponse`] of the swaps, which says what its coverage counts.",
+        "description": "The swaps by bucket: `interval` is their step, `coverageUnit` what their coverage counts.",
         "properties": {
           "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
             "format": "date-time",
             "type": [
               "string",
@@ -4945,6 +4958,7 @@
             "$ref": "#/components/schemas/CoverageUnitResponse"
           },
           "coveredSince": {
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -4999,9 +5013,10 @@
         "type": "object"
       },
       "SwapSeriesResponse_ProtocolSwapActivityBucketResponse": {
-        "description": "[`SeriesResponse`] of the swaps, which says what its coverage counts.",
+        "description": "The swaps by bucket: `interval` is their step, `coverageUnit` what their coverage counts.",
         "properties": {
           "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
             "format": "date-time",
             "type": [
               "string",
@@ -5012,6 +5027,7 @@
             "$ref": "#/components/schemas/CoverageUnitResponse"
           },
           "coveredSince": {
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -5070,9 +5086,10 @@
         "type": "object"
       },
       "SwapTotalsResponse_ProtocolSwapActivityResponse": {
-        "description": "[`WindowedResponse`] of the swaps, which says what its coverage counts.",
+        "description": "The swaps over `from..asOf`: `coverageUnit` is what their coverage counts.",
         "properties": {
           "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
             "format": "date-time",
             "type": [
               "string",
@@ -5083,6 +5100,7 @@
             "$ref": "#/components/schemas/CoverageUnitResponse"
           },
           "coveredSince": {
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -5144,9 +5162,10 @@
         "type": "object"
       },
       "SwapTotalsResponse_SwapActivityResponse": {
-        "description": "[`WindowedResponse`] of the swaps, which says what its coverage counts.",
+        "description": "The swaps over `from..asOf`: `coverageUnit` is what their coverage counts.",
         "properties": {
           "asOf": {
+            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
             "format": "date-time",
             "type": [
               "string",
@@ -5157,6 +5176,7 @@
             "$ref": "#/components/schemas/CoverageUnitResponse"
           },
           "coveredSince": {
+            "description": "Where the facts start.",
             "format": "date-time",
             "type": [
               "string",
@@ -6232,7 +6252,7 @@
                   "oneOf": [
                     {
                       "$ref": "#/components/schemas/TvlReadingResponse",
-                      "description": "The reading exactly a window before `end`, when `end` is at `asOf`."
+                      "description": "The reading exactly a window before `end`, when `end` is at `asOf`; never over `1h`."
                     },
                     {
                       "type": "null"

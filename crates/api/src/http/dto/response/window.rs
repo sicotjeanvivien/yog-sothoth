@@ -85,14 +85,17 @@ impl From<SeriesInterval> for IntervalResponse {
     }
 }
 
-/// [`WindowedResponse`] by bucket: `interval` is the step of the buckets `from..asOf` hold.
+/// A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SeriesResponse<T> {
     window: WindowResponse,
     interval: IntervalResponse,
     from: Option<DateTime<Utc>>,
+    /// The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches
+    /// the end of the last one written.
     as_of: Option<DateTime<Utc>>,
+    /// Where the facts start.
     covered_since: Option<DateTime<Utc>>,
     items: Vec<T>,
 }
@@ -135,7 +138,7 @@ impl From<Window> for CoverageUnitResponse {
     }
 }
 
-/// [`SeriesResponse`] of the swaps, which says what its coverage counts.
+/// The swaps by bucket: `interval` is their step, `coverageUnit` what their coverage counts.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SwapSeriesResponse<T> {
@@ -143,7 +146,10 @@ pub(crate) struct SwapSeriesResponse<T> {
     interval: IntervalResponse,
     coverage_unit: CoverageUnitResponse,
     from: Option<DateTime<Utc>>,
+    /// The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches
+    /// the end of the last one written.
     as_of: Option<DateTime<Utc>>,
+    /// Where the facts start.
     covered_since: Option<DateTime<Utc>>,
     items: Vec<T>,
 }
@@ -170,14 +176,17 @@ impl<T> SwapSeriesResponse<T> {
     }
 }
 
-/// [`WindowedResponse`] of the swaps, which says what its coverage counts.
+/// The swaps over `from..asOf`: `coverageUnit` is what their coverage counts.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SwapTotalsResponse<T> {
     window: WindowResponse,
     coverage_unit: CoverageUnitResponse,
     from: Option<DateTime<Utc>>,
+    /// The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches
+    /// the end of the last one written.
     as_of: Option<DateTime<Utc>>,
+    /// Where the facts start.
     covered_since: Option<DateTime<Utc>>,
     items: Vec<T>,
 }

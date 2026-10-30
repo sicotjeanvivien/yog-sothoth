@@ -30,7 +30,7 @@ fn the_committed_document_is_the_one_the_routes_declare() {
 }
 
 /// Mutation: a measure kept on its old lists — `WindowParams` on a `totals`, no `5m` on a `series` —
-/// outside the two exceptions the data makes, the TVL and the pools discovered.
+/// outside the two exceptions the data makes, the TVL's `series` and the pools discovered.
 #[test]
 fn every_measure_reads_every_window_and_every_step() {
     let doc = document();
@@ -51,7 +51,7 @@ fn every_measure_reads_every_window_and_every_step() {
     let mut checked = 0;
     for path in doc["paths"].as_object().expect("paths").keys() {
         let measure = path.ends_with("/totals") || path.ends_with("/series");
-        if !measure || path.contains("/tvl") || path.contains("/pool-discoveries") {
+        if !measure || path.contains("/tvl/series") || path.contains("/pool-discoveries") {
             continue;
         }
         assert_eq!(values(path, "window"), ["1h", "24h", "7d", "30d"], "{path}");
@@ -60,7 +60,10 @@ fn every_measure_reads_every_window_and_every_step() {
         }
         checked += 1;
     }
-    assert_eq!(checked, 20, "ten measures, each a `totals` and a `series`");
+    assert_eq!(
+        checked, 22,
+        "ten measures, each a `totals` and a `series`, and the TVL's `totals`"
+    );
 }
 
 /// Mutation: a list of moves or runs kept on `WindowParam` — under a protocol or a pool.

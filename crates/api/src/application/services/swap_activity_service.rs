@@ -139,8 +139,7 @@ impl SwapActivityService {
         Ok(Measured { period, items })
     }
 
-    /// The series of `window` at `interval`: 5 minutes over the last hour, else by frozen hour or
-    /// 24 hours.
+    /// The series of `window` at `interval`.
     pub(crate) async fn list_swap_series(
         &self,
         window: Window,
