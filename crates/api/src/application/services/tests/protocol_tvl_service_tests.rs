@@ -44,8 +44,8 @@ async fn the_change_reads_the_last_frozen_hour_over_its_window() {
     assert_eq!(*repo.windows.lock().unwrap(), vec![Window::Week]);
 }
 
-/// Mutation: the last hour read as a change — a window of an hour looked up among the readings
-/// and the discovered parts, which have none.
+/// Mutation: the last hour read as a change — a window of an hour looked up among the discovered
+/// parts, which have none.
 #[tokio::test]
 async fn the_change_over_the_last_hour_is_the_last_reading_alone() {
     let repo = Arc::new(MockProtocolTvlRepo::default());

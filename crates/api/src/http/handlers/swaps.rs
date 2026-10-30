@@ -7,7 +7,7 @@ use crate::http::{
     AppState,
     dto::{
         PageResponse, PoolSwapBucketResponse, ProtocolSwapActivityBucketResponse,
-        ProtocolSwapActivityResponse, SeriesResponse, SwapActivityResponse, SwapEventResponse,
+        ProtocolSwapActivityResponse, SwapActivityResponse, SwapEventResponse, SwapSeriesResponse,
         SwapTotalsResponse, TokenActivityPageResponse,
         request::{
             EventsParams, ListEventsRequest, ListTokenActivityRequest, MeasureActivityParams,
@@ -77,14 +77,14 @@ async fn get_totals(
     params(SeriesParams),
     responses((
         status = 200,
-        description = "Each protocol's swaps by `interval`: 5 minutes over the last hour, an hour or 24 hours ending at `asOf` over the other windows.",
-        body = SeriesResponse<ProtocolSwapActivityBucketResponse>
+        description = "Each protocol's swaps by `interval`, the window's own step by default: 5 minutes over `1h`, an hour over `24h`, 6 hours over `7d`, a day over `30d`.",
+        body = SwapSeriesResponse<ProtocolSwapActivityBucketResponse>
     ))
 )]
 pub(crate) async fn get_swaps_series(
     State(state): State<AppState>,
     Query(params): Query<SeriesParams>,
-) -> Result<Json<SeriesResponse<ProtocolSwapActivityBucketResponse>>, ApiError> {
+) -> Result<Json<SwapSeriesResponse<ProtocolSwapActivityBucketResponse>>, ApiError> {
     list_series(&state, params, None).await
 }
 
@@ -95,14 +95,14 @@ pub(crate) async fn get_swaps_series(
     responses((
         status = 200,
         description = "The protocol's swaps by `interval`, under the rules of `/api/swaps/series`.",
-        body = SeriesResponse<ProtocolSwapActivityBucketResponse>
+        body = SwapSeriesResponse<ProtocolSwapActivityBucketResponse>
     ))
 )]
 pub(crate) async fn get_protocol_swaps_series(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
     Query(params): Query<SeriesParams>,
-) -> Result<Json<SeriesResponse<ProtocolSwapActivityBucketResponse>>, ApiError> {
+) -> Result<Json<SwapSeriesResponse<ProtocolSwapActivityBucketResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
     list_series(&state, params, Some(protocol)).await
 }
@@ -111,13 +111,13 @@ async fn list_series(
     state: &AppState,
     params: SeriesParams,
     protocol: Option<yog_core::domain::Protocol>,
-) -> Result<Json<SeriesResponse<ProtocolSwapActivityBucketResponse>>, ApiError> {
+) -> Result<Json<SwapSeriesResponse<ProtocolSwapActivityBucketResponse>>, ApiError> {
     let (window, interval) = params.parse()?;
     let measured = state
         .swap_activity_service
         .list_swap_series(window, interval, protocol)
         .await?;
-    Ok(Json(SeriesResponse::new(window, interval, measured)))
+    Ok(Json(SwapSeriesResponse::new(window, interval, measured)))
 }
 
 #[utoipa::path(
@@ -151,21 +151,21 @@ pub(crate) async fn get_pool_swap_totals(
     responses((
         status = 200,
         description = "The pool's swaps by `interval`, under the rules of `/api/swaps/series`.",
-        body = SeriesResponse<PoolSwapBucketResponse>
+        body = SwapSeriesResponse<PoolSwapBucketResponse>
     ))
 )]
 pub(crate) async fn get_pool_swaps_series(
     State(state): State<AppState>,
     Path(pool): Path<String>,
     Query(params): Query<SeriesParams>,
-) -> Result<Json<SeriesResponse<PoolSwapBucketResponse>>, ApiError> {
+) -> Result<Json<SwapSeriesResponse<PoolSwapBucketResponse>>, ApiError> {
     let (window, interval) = params.parse()?;
     let pool = super::known_pool(&state, &pool).await?;
     let measured = state
         .swap_activity_service
         .list_pool_swap_series(window, interval, pool.pool_address)
         .await?;
-    Ok(Json(SeriesResponse::new(window, interval, measured)))
+    Ok(Json(SwapSeriesResponse::new(window, interval, measured)))
 }
 
 #[utoipa::path(

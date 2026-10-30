@@ -189,6 +189,14 @@ async fn a_series_says_its_step_and_the_totals_their_unit() {
             "/api/swaps/series?window=7d&interval=1h",
             "\"interval\":\"1h\"",
         ),
+        (
+            "/api/swaps/series?window=1h",
+            "\"coverageUnit\":\"poolTranches\"",
+        ),
+        (
+            "/api/swaps/series?window=7d",
+            "\"coverageUnit\":\"poolHours\"",
+        ),
         ("/api/tvl/series?window=7d", "\"interval\":\"1h\""),
         (
             "/api/protocols/meteora_damm_v2/rotation-runs/series?window=7d",

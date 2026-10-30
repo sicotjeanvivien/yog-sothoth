@@ -40,7 +40,7 @@ fn the_change_is_unknown_as_soon_as_one_term_is() {
 }
 
 /// Mutation: a last reading given a start or a discovered part — a change published over an hour
-/// the TVL has no reading a window back for.
+/// that has no discovered part.
 #[test]
 fn a_last_reading_alone_has_no_change() {
     let at = Utc.with_ymd_and_hms(2026, 10, 25, 3, 0, 0).unwrap();

@@ -145,7 +145,7 @@ pub(crate) async fn build_last_hour(
 }
 
 /// The step of a `…/series`: 5 minutes over the last hour only, 6 hours over a week only, an hour
-/// or 24 hours over the other windows.
+/// or a day over the other windows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SeriesInterval {
     FiveMinutes,

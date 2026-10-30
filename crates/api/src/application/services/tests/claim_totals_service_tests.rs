@@ -113,7 +113,7 @@ async fn a_series_reads_its_claims_at_its_interval() {
 
     assert_eq!(
         reads(&repo),
-        ["position_fee_claim_hourly", "reward_claim_daily"]
+        ["position_fee_claim_hourly", "reward_claim_buckets"]
     );
     let tranches = repo.tranche_reads.lock().unwrap();
     assert_eq!(tranches.len(), 1);
@@ -121,4 +121,22 @@ async fn a_series_reads_its_claims_at_its_interval() {
         (tranches[0].0, tranches[0].1),
         ("claim_tranches", ClaimKind::Reward)
     );
+}
+
+/// Mutation: a slice of 6 hours read at another width — bars of a day under `interval=6h`.
+#[tokio::test]
+async fn a_week_is_read_in_slices_of_six_hours() {
+    let repo = covering();
+
+    service(&repo)
+        .list_claim_series(
+            ClaimKind::Reward,
+            Window::Week,
+            SeriesInterval::SixHours,
+            Protocol::MeteoraDammV2,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(*repo.widths.lock().unwrap(), [TimeDelta::hours(6)]);
 }

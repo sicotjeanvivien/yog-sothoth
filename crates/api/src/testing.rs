@@ -3,7 +3,7 @@
 //! single time, and a second call panics.
 
 use async_trait::async_trait;
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, TimeDelta, TimeZone, Utc};
 use solana_pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -84,7 +84,7 @@ pub(crate) fn app_state() -> AppState {
         )),
         pool_creations_service: Arc::new(PoolCreationsService::new(
             frozen_hours_repo(None),
-            Arc::new(MockPoolCreationsRepo),
+            Arc::new(MockPoolCreationsRepo::default()),
         )),
         liquidity_move_service: Arc::new(LiquidityMoveService::new(
             frozen_hours_repo(None),
@@ -779,6 +779,7 @@ pub(crate) fn frozen_hours_repo(frozen: Option<FrozenHours>) -> Arc<MockProtocol
 /// A `SwapActivityLookup` that answers nothing and records the period and the scope of each read.
 #[derive(Default)]
 pub(crate) struct MockSwapActivityRepo {
+    pub(crate) widths: Mutex<Vec<TimeDelta>>,
     pub(crate) reads: Mutex<Vec<PeriodRead>>,
     pub(crate) tranche_reads: Mutex<Vec<(&'static str, TranchePeriod, Option<Protocol>)>>,
 }
@@ -811,10 +812,11 @@ impl SwapActivityLookup for MockSwapActivityRepo {
     async fn list_protocol_buckets(
         &self,
         period: &FrozenPeriod,
-        _: chrono::TimeDelta,
+        width: TimeDelta,
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBucket<SwapActivity>>> {
-        self.record("swap_daily", period, protocol);
+        self.widths.lock().unwrap().push(width);
+        self.record("swap_buckets", period, protocol);
         Ok(vec![])
     }
     async fn find_protocol_totals_in_tranches(
@@ -854,10 +856,11 @@ impl SwapActivityLookup for MockSwapActivityRepo {
     async fn list_pool_buckets(
         &self,
         period: &FrozenPeriod,
-        _: chrono::TimeDelta,
+        width: TimeDelta,
         _: Pubkey,
     ) -> RepositoryResult<Vec<PoolSwapBucket>> {
-        self.record("pool_swap_daily", period, None);
+        self.widths.lock().unwrap().push(width);
+        self.record("pool_swap_buckets", period, None);
         Ok(vec![])
     }
     async fn find_pool_totals_in_tranches(
@@ -880,9 +883,11 @@ impl SwapActivityLookup for MockSwapActivityRepo {
     }
 }
 
-/// A `PoolCreationsLookup` that answers nothing.
+/// A `PoolCreationsLookup` that answers nothing and records the width of each bucket read.
 #[derive(Default)]
-pub(crate) struct MockPoolCreationsRepo;
+pub(crate) struct MockPoolCreationsRepo {
+    pub(crate) widths: Mutex<Vec<TimeDelta>>,
+}
 
 #[async_trait]
 impl PoolCreationsLookup for MockPoolCreationsRepo {
@@ -903,9 +908,10 @@ impl PoolCreationsLookup for MockPoolCreationsRepo {
     async fn list_buckets(
         &self,
         _: &FrozenPeriod,
-        _: chrono::TimeDelta,
+        width: TimeDelta,
         _: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBucket<PoolCreations>>> {
+        self.widths.lock().unwrap().push(width);
         Ok(vec![])
     }
     async fn list_totals_in_tranches(
@@ -927,6 +933,7 @@ impl PoolCreationsLookup for MockPoolCreationsRepo {
 /// A `PositionChangeCountsLookup` answering zero changes, which records each period it reads.
 #[derive(Default)]
 pub(crate) struct MockPositionChangeCountsRepo {
+    pub(crate) widths: Mutex<Vec<TimeDelta>>,
     pub(crate) reads: Mutex<Vec<FrozenPeriod>>,
     pub(crate) series_reads: Mutex<Vec<&'static str>>,
     pub(crate) tranche_reads: Mutex<Vec<TranchePeriod>>,
@@ -967,10 +974,11 @@ impl PositionChangeCountsLookup for MockPositionChangeCountsRepo {
     async fn list_buckets(
         &self,
         _: &FrozenPeriod,
-        _: chrono::TimeDelta,
+        width: TimeDelta,
         _: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<PositionChangeCounts>>> {
-        self.series_reads.lock().unwrap().push("position_daily");
+        self.widths.lock().unwrap().push(width);
+        self.series_reads.lock().unwrap().push("position_buckets");
         Ok(vec![])
     }
     async fn list_tranches(
@@ -988,6 +996,7 @@ impl PositionChangeCountsLookup for MockPositionChangeCountsRepo {
 /// and the protocol of each read.
 #[derive(Default)]
 pub(crate) struct MockClaimTotalsRepo {
+    pub(crate) widths: Mutex<Vec<TimeDelta>>,
     pub(crate) since: Option<DateTime<Utc>>,
     pub(crate) reads: Mutex<Vec<PeriodRead>>,
     pub(crate) tranche_reads: Mutex<Vec<(&'static str, ClaimKind, TranchePeriod)>>,
@@ -1062,12 +1071,13 @@ impl ClaimTotalsLookup for MockClaimTotalsRepo {
         &self,
         kind: ClaimKind,
         period: &FrozenPeriod,
-        _: chrono::TimeDelta,
+        width: TimeDelta,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<ClaimTotals>>> {
+        self.widths.lock().unwrap().push(width);
         let name = match kind {
-            ClaimKind::PositionFee => "position_fee_claim_daily",
-            ClaimKind::Reward => "reward_claim_daily",
+            ClaimKind::PositionFee => "position_fee_claim_buckets",
+            ClaimKind::Reward => "reward_claim_buckets",
         };
         self.reads
             .lock()
@@ -1091,6 +1101,7 @@ impl ClaimTotalsLookup for MockClaimTotalsRepo {
 /// and the scope of each read.
 #[derive(Default)]
 pub(crate) struct MockLiquidityMoveRepo {
+    pub(crate) widths: Mutex<Vec<TimeDelta>>,
     pub(crate) since: Option<DateTime<Utc>>,
     pub(crate) reads: Mutex<Vec<PeriodRead>>,
     pub(crate) tranche_reads: Mutex<Vec<(&'static str, TranchePeriod)>>,
@@ -1126,10 +1137,11 @@ impl LiquidityMoveLookup for MockLiquidityMoveRepo {
     async fn list_buckets(
         &self,
         period: &FrozenPeriod,
-        _: chrono::TimeDelta,
+        width: TimeDelta,
         protocol: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<LiquidityFlows>>> {
-        self.record("liquidity_daily", period, Some(protocol));
+        self.widths.lock().unwrap().push(width);
+        self.record("liquidity_buckets", period, Some(protocol));
         Ok(vec![])
     }
     async fn find_totals_in_tranches(
@@ -1452,6 +1464,7 @@ impl PoolCreationEventLookup for MockPoolCreationEventRepo {
 /// series of bars is split from.
 #[derive(Default)]
 pub(crate) struct MockRotationRunRepo {
+    pub(crate) widths: Mutex<Vec<TimeDelta>>,
     pub(crate) written_through: Option<DateTime<Utc>>,
     pub(crate) measured_since: Option<DateTime<Utc>>,
     pub(crate) lists: Mutex<Vec<(RotationRunScope, TranchePeriod)>>,
@@ -1511,10 +1524,11 @@ impl RotationRunLookup for MockRotationRunRepo {
     async fn list_buckets(
         &self,
         _: &FrozenPeriod,
-        _: chrono::TimeDelta,
+        width: TimeDelta,
         runs_since: Option<DateTime<Utc>>,
         _: Protocol,
     ) -> RepositoryResult<Vec<ProtocolBucket<RunSplit>>> {
+        self.widths.lock().unwrap().push(width);
         self.splits_since.lock().unwrap().push(runs_since);
         Ok(Vec::new())
     }

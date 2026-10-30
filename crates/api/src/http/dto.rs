@@ -16,7 +16,7 @@ pub(crate) use response::{
     ProtocolRotationRunTotalsResponse, ProtocolSwapActivityBucketResponse,
     ProtocolSwapActivityResponse, ProtocolTvlChangeResponse, ProtocolTvlResponse, ReadingResponse,
     RewardChangeEventResponse, RewardClaimEventResponse, RotationRunResponse, SeriesResponse,
-    SignalResponse, SwapActivityResponse, SwapEventResponse, SwapTotalsResponse,
-    TokenActivityPageResponse, TokenPriceResponse, TokenResponse, TrancheWindowedResponse,
-    WindowedPageResponse, WindowedResponse,
+    SignalResponse, SwapActivityResponse, SwapEventResponse, SwapSeriesResponse,
+    SwapTotalsResponse, TokenActivityPageResponse, TokenPriceResponse, TokenResponse,
+    TrancheWindowedResponse, WindowedPageResponse, WindowedResponse,
 };

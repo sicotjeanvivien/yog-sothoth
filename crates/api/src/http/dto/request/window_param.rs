@@ -38,7 +38,7 @@ pub(crate) struct WindowParams {
 }
 
 /// The window of a measure, of the moves or of the runs: [`WindowParam`]'s, and `1h`, the last hour
-/// through the last tranche written.
+/// through the last tranche written, or for the TVL through the last frozen hour.
 #[derive(Debug, Default, Deserialize, Clone, Copy, ToSchema)]
 pub(crate) enum MeasureWindowParam {
     #[serde(rename = "1h")]

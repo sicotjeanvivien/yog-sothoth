@@ -37,8 +37,8 @@ impl From<Window> for WindowResponse {
 pub(crate) struct WindowedResponse<T> {
     window: WindowResponse,
     from: Option<DateTime<Utc>>,
-    /// The close of the last frozen hour, or for `1h` the end of the last tranche written: the
-    /// instant the rows reflect.
+    /// The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches
+    /// the end of the last one written.
     as_of: Option<DateTime<Utc>>,
     /// Where the facts start.
     covered_since: Option<DateTime<Utc>>,
@@ -131,6 +131,41 @@ impl From<Window> for CoverageUnitResponse {
         match window {
             Window::Hour => Self::PoolTranches,
             Window::Day | Window::Week | Window::Month => Self::PoolHours,
+        }
+    }
+}
+
+/// [`SeriesResponse`] of the swaps, which says what its coverage counts.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SwapSeriesResponse<T> {
+    window: WindowResponse,
+    interval: IntervalResponse,
+    coverage_unit: CoverageUnitResponse,
+    from: Option<DateTime<Utc>>,
+    as_of: Option<DateTime<Utc>>,
+    covered_since: Option<DateTime<Utc>>,
+    items: Vec<T>,
+}
+
+impl<T> SwapSeriesResponse<T> {
+    pub(crate) fn new<U, P: PeriodBounds>(
+        window: Window,
+        interval: SeriesInterval,
+        measured: Measured<Vec<U>, P>,
+    ) -> Self
+    where
+        T: From<U>,
+    {
+        let period = measured.period;
+        Self {
+            window: window.into(),
+            interval: interval.into(),
+            coverage_unit: window.into(),
+            from: period.map(|s| s.from()),
+            as_of: period.map(|s| s.as_of()),
+            covered_since: period.map(|s| s.covered_since()),
+            items: measured.items.into_iter().map(T::from).collect(),
         }
     }
 }

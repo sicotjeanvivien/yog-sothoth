@@ -88,5 +88,5 @@ pub(crate) use swap_event::SwapEventResponse;
 pub(crate) use token::{TokenPriceResponse, TokenResponse};
 pub(crate) use token_activity::TokenActivityPageResponse;
 pub(crate) use tranche_window::TrancheWindowedResponse;
-pub(crate) use window::{SeriesResponse, SwapTotalsResponse, WindowedResponse};
+pub(crate) use window::{SeriesResponse, SwapSeriesResponse, SwapTotalsResponse, WindowedResponse};
 pub(crate) use windowed_page::WindowedPageResponse;

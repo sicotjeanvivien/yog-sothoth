@@ -60,9 +60,9 @@ pub(crate) async fn get_protocol_liquidity_move_totals(
     params(SeriesParams),
     responses((
         status = 200,
-        description = "The protocol's liquidity created, added and removed, by `interval`: 5 \
-                       minutes over the last hour, an hour or 24 hours ending at `asOf` over the \
-                       other windows.",
+        description = "The protocol's liquidity created, added and removed, by `interval`, the \
+                       window's own step by default: 5 minutes over `1h`, an hour over `24h`, 6 \
+                       hours over `7d`, a day over `30d`.",
         body = SeriesResponse<ProtocolLiquidityFlowsBucketResponse>
     ))
 )]

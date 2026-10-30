@@ -98,3 +98,7 @@ impl PoolCreationsService {
         Ok(Measured { period, items })
     }
 }
+
+#[cfg(test)]
+#[path = "tests/pool_creations_service_tests.rs"]
+mod tests;

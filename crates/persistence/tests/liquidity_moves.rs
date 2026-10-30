@@ -63,7 +63,6 @@ async fn a_protocols_liquidity_starts_and_sums_on_its_own(pool: PgPool) {
     assert_eq!(since, Some(start));
     assert_eq!(totals.flows.added_usd, Decimal::from(50));
     assert_eq!(hourly.len(), 10);
-    // The slice the liquidity starts inside is left out: only the last 6 hours are whole.
     let slices = LiquidityMoveLookup::list_buckets(
         &repository,
         &covered,

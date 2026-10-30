@@ -76,7 +76,7 @@ impl ProtocolTvlService {
     ) -> RepositoryResult<Measured<Vec<ProtocolTvlChange>>> {
         let period = build_frozen_period(self.hours.as_ref(), window, None).await?;
         let items = match (&period, window) {
-            // ⚠️ Read by the hour, the TVL has no reading a window of one hour back to start from.
+            // ⚠️ The discovered parts stop at a day: over an hour, no change to publish.
             (Some(period), Window::Hour) => self
                 .protocol_tvl
                 .list_latest(period.last_hour(), protocol)

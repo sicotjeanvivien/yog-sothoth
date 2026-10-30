@@ -142,7 +142,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/protocols/{protocol}/position-fee-claims/totals`, `/series`, `/api/protocols/{protocol}/reward-claims/totals`, `/series` | The fees, or the rewards, the positions claimed over the window, then per bucket: claims, the valued ones, their value and the distinct owners; its `coveredSince` is the first whole hour whose claims were valued, the first tranche over the last hour |
 | `GET` | `/api/protocols/{protocol}/rotation-runs`, `/api/pools/{pool}/rotation-runs` | A page of the rotation runs started in the window, through the last tranche written: pool and its tokens' symbols, start, end, volume, first hour's volume, extinct; `?sort=volume` (default) or `at`, forward-only cursor that keeps its first page's end, refused (400) under another list; empty while the rotation does not cover the window |
 | `GET` | `/api/protocols/{protocol}/rotation-runs/totals` | The runs started in the window, their distinct pools, those still in progress, their median and p90 duration, their volume, and `firstHour`: the runs whose first hour ended before the window did, their volume and its part in that hour, `null` while none did (always over `1h`) — through the last tranche written; its `coveredSince` is the first tranche whose rotation was measured |
-| `GET` | `/api/protocols/{protocol}/rotation-runs/series` | The protocol's volume by tranche, frozen hour, or 24 hours ending at `asOf`, split by its runs: in them and outside them (never under 0), both `null` on a bar the runs do not cover whole or with an hour not valued |
+| `GET` | `/api/protocols/{protocol}/rotation-runs/series` | The protocol's volume by `interval`, split by its runs: in them and outside them (never under 0), both `null` on a bar the runs do not cover whole or with an hour not valued |
 | `GET` | `/api/protocols/{protocol}/liquidity-moves`, `/api/pools/{pool}/liquidity-moves` | A page of the valued moves (creations, additions, removals), their pool's token symbols embedded, the lock their transaction puts on a position (`none`, `vesting`, `permanent`, `null` before measured), `?kind=create|add|remove` to keep one kind, `?sort=amount` (default) or `at`, forward-only cursor that keeps its first page's end, refused (400) under another list, kind or window, or once that end is over an hour behind; empty while the protocol's liquidity does not cover the window |
 | `GET` | `/api/tvl`, `/api/protocols/{protocol}/tvl` | Per protocol, the last TVL reading at or before `asOf`, its `at` said |
 | `GET` | `/api/tvl/series`, `/api/protocols/{protocol}/tvl/series` (`interval=1h`, its only step) | Per protocol, the reading of every hour measured from the window's start |
@@ -220,8 +220,8 @@ at the end of this section.
    - `series`: the same rows, one per bucket, unpaginated, the window bounding them. Without
      `interval`, the window's own step — `5m` over `1h`, `1h` over `24h`, `6h` over `7d`, `1d` over
      `30d` — and the response says it (`interval`); named, `5m` cuts `window=1h` only, which is cut
-     at `5m` only, and `6h` cuts `window=7d` only. A bucket ends on `asOf`'s grid and is whole, or
-     absent;
+     at `5m` only, and `6h` cuts `window=7d` only. A bucket ends on `asOf`'s grid; one that starts
+     before `coveredSince` is absent;
    - `by-token`, `by-pool`, `by-owner`: one row per token, pool or owner address, summed over
      the path's scope (every protocol at the root), a ranking paginated as a collection.
 
@@ -285,7 +285,7 @@ at the end of this section.
     yet in full: what it still decides is being moved here.
 
 **Parameters and fields.** `window=24h|7d|30d`, a closed list, 400 otherwise; `offset` for the
-previous window. `1h`, the last hour through the last tranche written, is served by every measure
+previous window. `1h`, the last hour through the last tranche written (through the last frozen hour for the TVL's `totals`), is served by every measure
 but the pools discovered and the TVL's `series`, by `swaps/by-token`, and by the `liquidity-moves` and
 `rotation-runs` lists; an on-chain collection refuses it (400). For a collection of future events (`vesting-unlocks`), `window` covers the
 period after `asOf`, and takes no `offset`. An on-chain collection read live ends its window
