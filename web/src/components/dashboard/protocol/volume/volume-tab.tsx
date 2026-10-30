@@ -276,7 +276,6 @@ async function VolumeSources({ period, protocol }: TabProps) {
 
 async function RunStats({ period, protocol }: TabProps) {
   const t = await getTranslations("Dashboard.Protocol.volume");
-  const tProtocol = await getTranslations("Dashboard.Protocol");
   const tPeriod = await getTranslations("Dashboard.Overview.period");
   const locale = (await getLocale()) as FormatLocale;
   const title = t("stats.title", { period: tPeriod(`short.${period}`) });
@@ -347,7 +346,7 @@ async function RunStats({ period, protocol }: TabProps) {
             ? stat(
                 t("stats.firstHour"),
                 <span className="font-dash-sans text-[14px] font-normal tracking-normal text-dash-ink-3">
-                  {tProtocol("notApplicable")}
+                  {t("stats.firstHourNone")}
                 </span>,
                 null,
                 true,

@@ -267,7 +267,7 @@
         "chartLabelSixHours": "Volume par tranche de 6 h, en rafale et hors rafale",
         "stats": {
           "title": "Les rafales · {period}",
-          "info": "Les rafales commencées sur la période : leur nombre et celui de leurs pools, combien durent encore, leur durée du début à la fin (jusqu'ici pour celles en cours), et la part de leur volume échangée dans leur première heure.",
+          "info": "Les rafales commencées sur la période : leur nombre et celui de leurs pools, combien durent encore, leur durée du début à la fin (jusqu'ici pour celles en cours), et, pour celles dont la première heure est terminée, la part de leur volume échangée dans cette heure.",
           "runs": "Rafales",
           "onPools": "sur {pools} {count, plural, one {pool} other {pools}}",
           "inProgress": "{count} en cours",
@@ -275,7 +275,8 @@
           "median": "médiane",
           "medianAndP90": "médiane · 9 sur 10 durent moins de {p90}",
           "firstHour": "Vu dans la première heure",
-          "firstHourSub": "du volume d'une rafale",
+          "firstHourSub": "du volume des rafales à la première heure terminée",
+          "firstHourNone": "Aucune rafale n'a encore fini sa première heure sur la période.",
           "none": "Aucune rafale sur la période."
         },
         "runs": {
