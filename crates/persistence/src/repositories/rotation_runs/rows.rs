@@ -68,10 +68,10 @@ impl TryFrom<RotationRunTotalsRow> for RotationRunTotals {
             median_duration_seconds: row.median_duration_seconds,
             p90_duration_seconds: row.p90_duration_seconds,
             volume_usd: convert_bigdecimal_to_decimal(row.volume_usd, "volume_usd")?,
-            first_hour_volume_usd: convert_bigdecimal_to_decimal(
+            first_hour_volume_usd: Some(convert_bigdecimal_to_decimal(
                 row.first_hour_volume_usd,
                 "first_hour_volume_usd",
-            )?,
+            )?),
         })
     }
 }

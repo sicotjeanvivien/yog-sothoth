@@ -27,8 +27,9 @@ pub(crate) struct ProtocolRotationRunTotalsResponse {
     p90_duration_seconds: Option<i64>,
     #[schema(value_type = UnsignedDecimal)]
     volume_usd: Decimal,
-    #[schema(value_type = UnsignedDecimal)]
-    first_hour_volume_usd: Decimal,
+    /// `null` over `1h`: a run started in the hour has only its first hour.
+    #[schema(value_type = Option<UnsignedDecimal>)]
+    first_hour_volume_usd: Option<Decimal>,
 }
 
 impl ProtocolRotationRunTotalsResponse {
@@ -45,3 +46,7 @@ impl ProtocolRotationRunTotalsResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/protocol_rotation_run_totals_tests.rs"]
+mod tests;

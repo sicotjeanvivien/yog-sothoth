@@ -88,7 +88,11 @@ impl RotationRunService {
         let period = self.build_tranche_period(window, protocol, None).await?;
         let items = match &period {
             Some(period) if period.is_covered() => {
-                vec![self.runs.find_totals(period, protocol).await?]
+                let mut totals = self.runs.find_totals(period, protocol).await?;
+                if window == Window::Hour {
+                    totals.first_hour_volume_usd = None;
+                }
+                vec![totals]
             }
             _ => Vec::new(),
         };

@@ -145,7 +145,7 @@ async fn a_list_and_its_totals_read_the_runs_started_in_their_period(pool: PgPoo
     assert_eq!(one_pool.iter().map(|r| r.1).collect::<Vec<_>>(), [at(-30)]);
     assert_eq!(
         (totals.runs, totals.volume_usd, totals.first_hour_volume_usd),
-        (2, Decimal::from(5), Decimal::new(25, 1))
+        (2, Decimal::from(5), Some(Decimal::new(25, 1)))
     );
 }
 
