@@ -152,8 +152,9 @@ async fn the_last_hour_has_twelve_bars_and_the_hour_before_its_own(pool: PgPool)
     assert_eq!(previous[0].activity.swaps, 3);
 }
 
-/// Against a token's pools counted per tranche, or its hour cut at 11 or 13 tranches: the token
-/// of two pools, one active twice, has two pools and their volume within the hour.
+/// Against a token's pools counted per tranche, its hour cut at 11 or 13 tranches, or a page cut
+/// before it is ranked: the token of two pools, one active twice, has two pools and their volume
+/// within the hour, and comes first on a page of one.
 #[sqlx::test(migrations = "./migrations")]
 async fn the_last_hours_tokens_count_their_pools_once(pool: PgPool) {
     write_tranches(&pool).await;
@@ -175,6 +176,9 @@ async fn the_last_hours_tokens_count_their_pools_once(pool: PgPool) {
     assert_eq!(first.mint.to_string(), shared);
     assert_eq!(first.volume_usd, Decimal::from(25));
     assert_eq!((first.pools, first.pool_hours), (2, 3));
+    let top = repo.list_in_tranches(&period, None, 1).await.unwrap();
+    assert_eq!(top.page.items[0].mint.to_string(), shared);
+    assert!(top.page.next_cursor.is_some());
 }
 
 /// Against the coverage taken from the tranches recorded rather than those still held: past their

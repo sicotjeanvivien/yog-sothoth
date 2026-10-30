@@ -272,6 +272,7 @@ impl PgLiquidityMoveRepository {
             ),
             None => (None, None, None, None),
         };
+        // ⚠️ Ranked before it is named: joined first, a page costs its whole window.
         let rows = match (list.scope, order) {
             (LiquidityMoveScope::Protocol(protocol), LiquidityMoveOrder::Amount) => sqlx::query_as!(
                 LiquidityMoveRow,
@@ -281,22 +282,27 @@ impl PgLiquidityMoveRepository {
                        tb.symbol AS "token_b_symbol?", m.owner, m.kind, m.lock,
                        m.amount_usd AS "amount_usd!",
                        ROUND(m.amount_usd, 6) AS "amount_key!"
-                  FROM analytic_liquidity_moves m
+                  FROM (
+                        SELECT m.*
+                          FROM analytic_liquidity_moves m
+                         WHERE m.protocol = $3
+                           AND m.timestamp >= $1 AND m.timestamp < $2
+                           AND m.amount_usd IS NOT NULL
+                           AND ($9::TEXT IS NULL OR m.kind = $9)
+                           -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits, the column more.
+                           AND ($4::NUMERIC IS NULL
+                                OR ROUND(m.amount_usd, 6) < $4
+                                OR (ROUND(m.amount_usd, 6) = $4 AND (m.timestamp < $5
+                                    OR (m.timestamp = $5 AND (m.signature, m.event_index) > ($6, $7)))))
+                         ORDER BY ROUND(m.amount_usd, 6) DESC, m.timestamp DESC, m.signature,
+                                  m.event_index
+                         LIMIT $8
+                  ) m
                   LEFT JOIN pools p ON p.pool_address = m.pool_address
                   LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
                   LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT
-                 WHERE m.protocol = $3
-                   AND m.timestamp >= $1 AND m.timestamp < $2
-                   AND m.amount_usd IS NOT NULL
-                   AND ($9::TEXT IS NULL OR m.kind = $9)
-                   -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits, the column more.
-                   AND ($4::NUMERIC IS NULL
-                        OR ROUND(m.amount_usd, 6) < $4
-                        OR (ROUND(m.amount_usd, 6) = $4 AND (m.timestamp < $5
-                            OR (m.timestamp = $5 AND (m.signature, m.event_index) > ($6, $7)))))
                  ORDER BY ROUND(m.amount_usd, 6) DESC, m.timestamp DESC, m.signature,
                           m.event_index
-                 LIMIT $8
                 "#,
                 span.from,
                 span.as_of,
@@ -319,19 +325,23 @@ impl PgLiquidityMoveRepository {
                        tb.symbol AS "token_b_symbol?", m.owner, m.kind, m.lock,
                        m.amount_usd AS "amount_usd!",
                        ROUND(m.amount_usd, 6) AS "amount_key!"
-                  FROM analytic_liquidity_moves m
+                  FROM (
+                        SELECT m.*
+                          FROM analytic_liquidity_moves m
+                         WHERE m.protocol = $3
+                           AND m.timestamp >= $1 AND m.timestamp < $2
+                           AND m.amount_usd IS NOT NULL
+                           AND ($8::TEXT IS NULL OR m.kind = $8)
+                           AND ($4::TIMESTAMPTZ IS NULL
+                                OR m.timestamp < $4
+                                OR (m.timestamp = $4 AND (m.signature, m.event_index) > ($5, $6)))
+                         ORDER BY m.timestamp DESC, m.signature, m.event_index
+                         LIMIT $7
+                  ) m
                   LEFT JOIN pools p ON p.pool_address = m.pool_address
                   LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
                   LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT
-                 WHERE m.protocol = $3
-                   AND m.timestamp >= $1 AND m.timestamp < $2
-                   AND m.amount_usd IS NOT NULL
-                   AND ($8::TEXT IS NULL OR m.kind = $8)
-                   AND ($4::TIMESTAMPTZ IS NULL
-                        OR m.timestamp < $4
-                        OR (m.timestamp = $4 AND (m.signature, m.event_index) > ($5, $6)))
                  ORDER BY m.timestamp DESC, m.signature, m.event_index
-                 LIMIT $7
                 "#,
                 span.from,
                 span.as_of,
@@ -353,22 +363,27 @@ impl PgLiquidityMoveRepository {
                        tb.symbol AS "token_b_symbol?", m.owner, m.kind, m.lock,
                        m.amount_usd AS "amount_usd!",
                        ROUND(m.amount_usd, 6) AS "amount_key!"
-                  FROM analytic_liquidity_moves m
+                  FROM (
+                        SELECT m.*
+                          FROM analytic_liquidity_moves m
+                         WHERE m.pool_address = $3
+                           AND m.timestamp >= $1 AND m.timestamp < $2
+                           AND m.amount_usd IS NOT NULL
+                           AND ($9::TEXT IS NULL OR m.kind = $9)
+                           -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits, the column more.
+                           AND ($4::NUMERIC IS NULL
+                                OR ROUND(m.amount_usd, 6) < $4
+                                OR (ROUND(m.amount_usd, 6) = $4 AND (m.timestamp < $5
+                                    OR (m.timestamp = $5 AND (m.signature, m.event_index) > ($6, $7)))))
+                         ORDER BY ROUND(m.amount_usd, 6) DESC, m.timestamp DESC, m.signature,
+                                  m.event_index
+                         LIMIT $8
+                  ) m
                   LEFT JOIN pools p ON p.pool_address = m.pool_address
                   LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
                   LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT
-                 WHERE m.pool_address = $3
-                   AND m.timestamp >= $1 AND m.timestamp < $2
-                   AND m.amount_usd IS NOT NULL
-                   AND ($9::TEXT IS NULL OR m.kind = $9)
-                   -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits, the column more.
-                   AND ($4::NUMERIC IS NULL
-                        OR ROUND(m.amount_usd, 6) < $4
-                        OR (ROUND(m.amount_usd, 6) = $4 AND (m.timestamp < $5
-                            OR (m.timestamp = $5 AND (m.signature, m.event_index) > ($6, $7)))))
                  ORDER BY ROUND(m.amount_usd, 6) DESC, m.timestamp DESC, m.signature,
                           m.event_index
-                 LIMIT $8
                 "#,
                 span.from,
                 span.as_of,
@@ -391,19 +406,23 @@ impl PgLiquidityMoveRepository {
                        tb.symbol AS "token_b_symbol?", m.owner, m.kind, m.lock,
                        m.amount_usd AS "amount_usd!",
                        ROUND(m.amount_usd, 6) AS "amount_key!"
-                  FROM analytic_liquidity_moves m
+                  FROM (
+                        SELECT m.*
+                          FROM analytic_liquidity_moves m
+                         WHERE m.pool_address = $3
+                           AND m.timestamp >= $1 AND m.timestamp < $2
+                           AND m.amount_usd IS NOT NULL
+                           AND ($8::TEXT IS NULL OR m.kind = $8)
+                           AND ($4::TIMESTAMPTZ IS NULL
+                                OR m.timestamp < $4
+                                OR (m.timestamp = $4 AND (m.signature, m.event_index) > ($5, $6)))
+                         ORDER BY m.timestamp DESC, m.signature, m.event_index
+                         LIMIT $7
+                  ) m
                   LEFT JOIN pools p ON p.pool_address = m.pool_address
                   LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
                   LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT
-                 WHERE m.pool_address = $3
-                   AND m.timestamp >= $1 AND m.timestamp < $2
-                   AND m.amount_usd IS NOT NULL
-                   AND ($8::TEXT IS NULL OR m.kind = $8)
-                   AND ($4::TIMESTAMPTZ IS NULL
-                        OR m.timestamp < $4
-                        OR (m.timestamp = $4 AND (m.signature, m.event_index) > ($5, $6)))
                  ORDER BY m.timestamp DESC, m.signature, m.event_index
-                 LIMIT $7
                 "#,
                 span.from,
                 span.as_of,

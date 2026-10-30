@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT r.protocol, r.pool_address, r.started_at, r.ended_at, r.volume_usd,\n                       r.first_hour_volume_usd, r.extinct, ROUND(r.volume_usd, 6) AS \"volume_key!\",\n                       ta.symbol AS \"token_a_symbol?\", tb.symbol AS \"token_b_symbol?\"\n                  FROM analytic_rotation_runs r\n                  LEFT JOIN pools p ON p.pool_address = r.pool_address\n                  LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT\n                  LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT\n                 WHERE r.protocol = $3 AND r.started_at >= $1 AND r.started_at < $2\n                   -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits.\n                   AND ($4::NUMERIC IS NULL\n                        OR ROUND(r.volume_usd, 6) < $4\n                        OR (ROUND(r.volume_usd, 6) = $4 AND (r.pool_address > $6\n                            OR (r.pool_address = $6 AND r.started_at > $5))))\n                 ORDER BY ROUND(r.volume_usd, 6) DESC, r.pool_address, r.started_at\n                 LIMIT $7\n                ",
+  "query": "\n                SELECT r.protocol, r.pool_address, r.started_at, r.ended_at, r.volume_usd,\n                       r.first_hour_volume_usd, r.extinct, ROUND(r.volume_usd, 6) AS \"volume_key!\",\n                       ta.symbol AS \"token_a_symbol?\", tb.symbol AS \"token_b_symbol?\"\n                  FROM (\n                        SELECT r.*\n                          FROM analytic_rotation_runs r\n                         WHERE r.protocol = $3 AND r.started_at >= $1 AND r.started_at < $2\n                           -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits.\n                           AND ($4::NUMERIC IS NULL\n                                OR ROUND(r.volume_usd, 6) < $4\n                                OR (ROUND(r.volume_usd, 6) = $4 AND (r.pool_address > $6\n                                    OR (r.pool_address = $6 AND r.started_at > $5))))\n                         ORDER BY ROUND(r.volume_usd, 6) DESC, r.pool_address, r.started_at\n                         LIMIT $7\n                  ) r\n                  LEFT JOIN pools p ON p.pool_address = r.pool_address\n                  LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT\n                  LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT\n                 ORDER BY ROUND(r.volume_usd, 6) DESC, r.pool_address, r.started_at\n                ",
   "describe": {
     "columns": [
       {
@@ -133,5 +133,5 @@
       true
     ]
   },
-  "hash": "4aa27919947beb68b6e906f7e1b0786e6178d88d2489605371e186811224ca5f"
+  "hash": "649cb6cf48dfe6edf63503d54a657f2b51de9250dd69dbcfbe8fa11156c45aa5"
 }

@@ -154,13 +154,18 @@ impl TokenActivityFeed for PgTokenActivityRepository {
                    m.decimals AS "decimals?", m.logo_uri AS "logo_uri?",
                    m.metadata_provider AS "metadata_provider?",
                    m.fetched_at AS "fetched_at?", m.last_refresh_at AS "last_refresh_at?"
-              FROM ranked t
+              -- ⚠️ Ranked before it is named: joined first, a page costs every token of the hour.
+              FROM (
+                  SELECT t.*
+                    FROM ranked t
+                   WHERE $3::NUMERIC IS NULL
+                      OR t.volume_usd < $3
+                      OR (t.volume_usd = $3 AND t.mint > $4)
+                   ORDER BY t.volume_usd DESC, t.mint
+                   LIMIT $5
+              ) t
               LEFT JOIN token_metadata m ON m.mint = t.mint
-             WHERE $3::NUMERIC IS NULL
-                OR t.volume_usd < $3
-                OR (t.volume_usd = $3 AND t.mint > $4)
              ORDER BY t.volume_usd DESC, t.mint
-             LIMIT $5
             "#,
             period.from,
             period.as_of,

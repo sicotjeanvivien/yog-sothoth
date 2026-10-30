@@ -243,6 +243,12 @@ EXPLAIN (COSTS OFF) SELECT … FROM <view> WHERE pool_address = '…' AND bucket
    not descend and the aggregate ran over everything; you want the condition on
    the chunk scan itself.
 
+**A list ranks its facts, then names its page.** `ORDER BY … LIMIT` and the cursor's filter go in a
+subquery on the table of the facts alone; what names a row (`pools`, `token_metadata`) joins on the
+rows it keeps, and the order is said again outside it. Joined first, a page costs its whole window,
+and only the planner's choice decides: the same shape read 30 days of rotation runs through all of
+`pools` and 30 days of moves through six rows. A writer that values every fact joins them all.
+
 ## USD valuation: which price, and what "unknown" means
 
 Two conventions coexist, and mixing them is a real risk that nothing in the

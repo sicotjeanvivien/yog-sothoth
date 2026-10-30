@@ -111,6 +111,38 @@ async fn read_all(
     seen
 }
 
+/// Mutation: a pool's list ranked backwards before its page is cut — its smallest run or its oldest
+/// listed first; or another pool's runs read.
+#[sqlx::test(migrations = "./migrations")]
+async fn the_runs_of_a_pool_page_in_each_order(pool: PgPool) {
+    insert_run(&pool, "meteora_damm_v2", 1, -50, "5", &[]).await;
+    insert_run(&pool, "meteora_damm_v2", 1, -40, "1", &[]).await;
+    insert_run(&pool, "meteora_damm_v2", 1, -30, "3", &[]).await;
+    insert_run(&pool, "meteora_damm_v2", 2, -20, "9", &[]).await;
+    let repository =
+        PgRotationRunRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+    let scope = RotationRunScope::Pool(pk(1));
+
+    let by_volume = read_all(
+        &repository,
+        &period(-60, 0),
+        scope,
+        RotationRunOrder::Volume,
+        1,
+    )
+    .await;
+    let by_date = read_all(&repository, &period(-60, 0), scope, RotationRunOrder::At, 1).await;
+
+    assert_eq!(
+        by_volume.iter().map(|r| r.1).collect::<Vec<_>>(),
+        [at(-50), at(-30), at(-40)]
+    );
+    assert_eq!(
+        by_date.iter().map(|r| r.1).collect::<Vec<_>>(),
+        [at(-30), at(-40), at(-50)]
+    );
+}
+
 /// Mutation: the period's start or end bound dropped or moved, the protocol or pool filter
 /// dropped, or a first hour summed before it ends inside the period — a run listed out of it,
 /// another scope's, or one with no time past its first hour counting all its volume in it.
