@@ -135,7 +135,7 @@ async function FeeSplit({ period, protocol }: TabProps) {
   const percent = (ratio: number | null | undefined) =>
     ratio === null || ratio === undefined ? "—" : formatPercent(String(ratio), locale);
 
-  const slots = swaps.asOf === null ? [] : feeSlotsOf(period, swaps.asOf, swaps.items);
+  const slots = feeSlotsOf(swaps);
   const totals = feeTotalsOf(slots);
   const shares = totals === null ? null : feeSharesOf(totals);
   const max = Math.max(0, ...slots.map(feeSumOf));
@@ -160,7 +160,7 @@ async function FeeSplit({ period, protocol }: TabProps) {
   const bars = slots.map((slot, i) => {
     const when =
       !readsClock(period)
-        ? `${daysAgo(daysAgoOf(period, slots.length, i))} · ${moment(slot.from)} → ${moment(slot.to)}`
+        ? `${daysAgo(daysAgoOf(slots, i))} · ${moment(slot.from)} → ${moment(slot.to)}`
         : `${hourOf(slot.from)} UTC`;
     if (FEE_PARTS.every((part) => slot[part] === null)) {
       return { segments: [], detail: { when, total: t("noValue"), rows: [] } };

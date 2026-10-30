@@ -152,7 +152,7 @@ async function Births({ period, protocol }: TabProps) {
   }
 
   const closed = await closedReason(period, series);
-  const slots = series.asOf === null ? [] : birthSlotsOf(period, series.asOf, series.items);
+  const slots = birthSlotsOf(series);
   const total = birthTotalOf(slots);
   const max = Math.max(0, ...slots.map((s) => s.value ?? 0));
   const scale = (v: number) => (max > 0 ? (v / max) * CHART_PX.top : 0);
@@ -168,7 +168,7 @@ async function Births({ period, protocol }: TabProps) {
   const bars = slots.map((slot, i) => {
     const when =
       !readsClock(period)
-        ? `${daysAgo(daysAgoOf(period, slots.length, i))} · ${moment(slot.from)} → ${moment(slot.to)}`
+        ? `${daysAgo(daysAgoOf(slots, i))} · ${moment(slot.from)} → ${moment(slot.to)}`
         : `${hourOf(slot.from)} UTC`;
     if (slot.value === null) {
       return { segments: [], detail: { when, total: t("noValue"), rows: [] } };

@@ -1,7 +1,6 @@
 /** The liquidity tab's two charts, as data: the TVL curve on a tight axis, and its flows per bar. */
 
-import { slotsOf, type Slot } from "@/lib/overview/chart";
-import type { Period } from "@/lib/overview/period";
+import { slotsOf, type Series, type Slot } from "@/lib/overview/chart";
 
 /** The curve's box, in the SVG's own units: the line keeps `CURVE_MARGIN` clear above and below. */
 export const CURVE_BOX = { width: 1000, height: 140 } as const;
@@ -59,17 +58,12 @@ export type FlowSlot = {
 
 type LiquidityBar = { from: string; createdUsd: string; addedUsd: string; removedUsd: string };
 
-/** The flows in the period's slots (`slotsOf`): a slot not whole was not measured. */
-export function flowSlotsOf(
-  period: Period,
-  asOf: string,
-  bars: readonly LiquidityBar[],
-): FlowSlot[] {
+/** The flows in the series' slots: a slot without a bar was not measured. */
+export function flowSlotsOf(series: Series<LiquidityBar>): FlowSlot[] {
   const slots = (pick: (bar: LiquidityBar) => string): Slot[] =>
     slotsOf(
-      period,
-      asOf,
-      bars.map((bar) => ({ from: bar.from, value: pick(bar) })),
+      series,
+      series.items.map((bar) => ({ from: bar.from, value: pick(bar) })),
     );
   const created = slots((bar) => bar.createdUsd);
   const added = slots((bar) => bar.addedUsd);

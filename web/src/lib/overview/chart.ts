@@ -1,6 +1,8 @@
 /** The Overview's bar series: fixed slots ending at `asOf`, and the scale's two round marks. */
 
-import { BAR_MS, HOUR_MS, periodMs, SLOT_MS, type Period } from "./period";
+import type { IntervalResponse } from "@/lib/api/schema/zod.gen";
+
+import { HOUR_MS, type Period } from "./period";
 
 /** Each chart's height, and its tallest bar a little under it so the top mark's label stays clear. */
 export const CHART_PX = {
@@ -13,50 +15,51 @@ export type Slot = { from: Date; to: Date; value: number | null };
 
 type Bar = { from: string; value: string | null };
 
-/**
- * 5-minute tranches over 1 h, hours over 24 h, 6-hour slices over 7 days, 24-hour slices beyond: each
- * slot sums the valued bars it holds, across protocols, as the API's days do; `null` without any,
- * or, `strict`, with one unknown.
- */
-export function slotsOf(
-  period: Period,
-  asOf: string,
-  bars: readonly Bar[],
-  { strict = false }: { strict?: boolean } = {},
-): Slot[] {
-  const step = SLOT_MS[period];
-  const count = periodMs(period) / step;
-  const start = Date.parse(asOf) - count * step;
-  const barStep = BAR_MS[period];
+/** The grid a series says it serves, `null` bounds before any fact. */
+export type SeriesGrid = {
+  from: string | null;
+  asOf: string | null;
+  interval: IntervalResponse;
+};
+
+/** A series response, its rows the bars of its grid. */
+export type Series<B> = SeriesGrid & { items: readonly B[] };
+
+const INTERVAL_MS: Record<IntervalResponse, number> = {
+  "5m": HOUR_MS / 12,
+  "1h": HOUR_MS,
+  "6h": 6 * HOUR_MS,
+  "1d": 24 * HOUR_MS,
+};
+
+/** The grid's slots: each sums the valued bars it holds, across protocols; `null` without any. */
+export function slotsOf(grid: SeriesGrid, bars: readonly Bar[]): Slot[] {
+  if (grid.from === null || grid.asOf === null) {
+    return [];
+  }
+  const step = INTERVAL_MS[grid.interval];
+  const start = Date.parse(grid.from);
+  const count = (Date.parse(grid.asOf) - start) / step;
 
   const sums = Array.from({ length: count }, (): number | null => null);
-  const unknown = Array.from({ length: count }, () => false);
   for (const bar of bars) {
-    const at = Date.parse(bar.from);
-    const i = Math.floor((at - start) / step);
-    // ⚠️ A bar off the slots' grid (read at another `asOf`) belongs to none of them.
-    if (i < 0 || i >= count || (at - start) % barStep !== 0) continue;
+    const i = (Date.parse(bar.from) - start) / step;
     const value = bar.value === null ? NaN : Number.parseFloat(bar.value);
-    if (Number.isFinite(value)) {
+    if (i in sums && Number.isFinite(value)) {
       sums[i] = (sums[i] ?? 0) + value;
-    } else {
-      unknown[i] = true;
     }
   }
 
   return sums.map((sum, i) => {
     const from = start + i * step;
-    return {
-      from: new Date(from),
-      to: new Date(from + step),
-      value: strict && unknown[i] ? null : sum,
-    };
+    return { from: new Date(from), to: new Date(from + step), value: sum };
   });
 }
 
-/** How many 24-hour slices before `asOf` slot `i` of `count` falls in. */
-export function daysAgoOf(period: Period, count: number, i: number): number {
-  return Math.floor(((count - 1 - i) * SLOT_MS[period]) / (24 * HOUR_MS));
+/** How many 24-hour slices before the last slot slot `i` falls in. */
+export function daysAgoOf(slots: readonly { from: Date }[], i: number): number {
+  const elapsed = slots[slots.length - 1]!.from.getTime() - slots[i]!.from.getTime();
+  return Math.floor(elapsed / (24 * HOUR_MS));
 }
 
 /**
@@ -86,7 +89,7 @@ export function hourOf(date: Date): string {
 
 /** Whether a period's slots are named by their time of day rather than by their day. */
 export function readsClock(period: Period): boolean {
-  return SLOT_MS[period] < 6 * HOUR_MS;
+  return period === "1h" || period === "24h";
 }
 
 /** The axis under a series: times of day up to 24 h, day labels beyond, the last one always shown. */
@@ -106,7 +109,7 @@ export function axisOf(
     labelled(i)
       ? [
           !readsClock(period)
-            ? dayLabel(daysAgoOf(period, slots.length, i))
+            ? dayLabel(daysAgoOf(slots, i))
             : i === last
               ? `${hourOf(slot.from)} UTC`
               : hourOf(slot.from),

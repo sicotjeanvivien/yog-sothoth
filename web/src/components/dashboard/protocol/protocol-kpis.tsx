@@ -43,7 +43,7 @@ export async function FeesRateKpi({ period, protocol }: KpiProps) {
     <KpiCell
       label={label}
       info={info}
-      value={await valued(usd(fees), items, period)}
+      value={await valued(usd(fees), items, now.coverageUnit)}
       sub={rate === null ? undefined : t("feesRate", { rate: formatFeeRate(rate, locale) })}
       stamp={await lateStamp(now.asOf, period)}
     />
@@ -78,7 +78,7 @@ export async function ProtocolFeesKpi({ period, protocol }: KpiProps) {
     <KpiCell
       label={label}
       info={info}
-      value={await valued(usd(protocolFees), items, period)}
+      value={await valued(usd(protocolFees), items, now.coverageUnit)}
       sub={
         share === null
           ? undefined

@@ -155,7 +155,7 @@ async function VolumeSources({ period, protocol }: TabProps) {
   const share = (part: number, whole: number) =>
     whole > 0 ? formatPercent(String(part / whole), locale) : "—";
 
-  const slots = runs.asOf === null ? [] : splitSlotsOf(period, runs.asOf, runs.items);
+  const slots = splitSlotsOf(runs);
   const totals = splitTotalsOf(slots);
   const max = Math.max(0, ...slots.map((s) => s.total ?? 0));
   const scale = (v: number) => (max > 0 ? (v / max) * CHART_PX.top : 0);
@@ -190,7 +190,7 @@ async function VolumeSources({ period, protocol }: TabProps) {
   const bars = slots.map((slot, i) => {
     const when =
       !readsClock(period)
-        ? `${daysAgo(daysAgoOf(period, slots.length, i))} · ${moment(slot.from)} → ${moment(slot.to)}`
+        ? `${daysAgo(daysAgoOf(slots, i))} · ${moment(slot.from)} → ${moment(slot.to)}`
       : `${hourOf(slot.from)} UTC`;
     if (slot.total === null) {
       return { segments: [], detail: { when, total: tVolume("noValue"), rows: [] } };

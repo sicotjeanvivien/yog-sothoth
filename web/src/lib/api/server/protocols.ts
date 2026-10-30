@@ -8,7 +8,7 @@
 import { cache } from "react";
 import type { z } from "zod";
 
-import { SERIES_INTERVAL, type FrozenPeriod, type Period } from "@/lib/overview/period";
+import type { Period } from "@/lib/overview/period";
 
 import { apiGet } from "../client/server";
 import {
@@ -63,7 +63,7 @@ export const fetchPreviousSwapTotals = cache((scope: Scope, window: WindowRespon
 export const fetchSwapsSeries = cache((scope: Scope, window: Period) =>
   apiGet(
     scopedPath(scope, "swaps/series"),
-    { window, interval: SERIES_INTERVAL[window] },
+    { window },
     zGetSwapsSeriesResponse,
   ),
 );
@@ -87,11 +87,11 @@ export function servesTvlSeries(scope: Scope, window: Period): window is TvlSeri
 }
 
 export const fetchTvlSeries = cache((scope: Scope, window: TvlSeriesWindow) =>
-  apiGet(scopedPath(scope, "tvl/series"), { window, interval: "1h" }, zGetTvlSeriesResponse),
+  apiGet(scopedPath(scope, "tvl/series"), { window }, zGetTvlSeriesResponse),
 );
 
-/** The TVL a window before its last reading, and the change without the pools discovered. */
-export const fetchTvlTotals = cache((scope: Scope, window: FrozenPeriod) =>
+/** The last TVL reading, the one a window before it, and the change without the pools discovered. */
+export const fetchTvlTotals = cache((scope: Scope, window: Period) =>
   apiGet(scopedPath(scope, "tvl/totals"), { window }, zGetTvlTotalsResponse),
 );
 
@@ -128,7 +128,7 @@ export const fetchRewardClaimTotals = cache((protocol: ProtocolResponse, window:
 export const fetchLiquiditySeries = cache((protocol: ProtocolResponse, window: Period) =>
   apiGet(
     `/api/protocols/${protocol}/liquidity-moves/series`,
-    { window, interval: SERIES_INTERVAL[window] },
+    { window },
     zGetProtocolLiquidityMovesSeriesResponse,
   ),
 );
@@ -153,11 +153,11 @@ export const fetchPositionChangeTotals = cache(
     ),
 );
 
-/** The pools the protocol saw born, hour by hour up to 7 days, by 24-hour slices beyond. */
+/** The pools the protocol saw born, by bar. */
 export const fetchPoolCreationsSeries = cache((protocol: ProtocolResponse, window: Period) =>
   apiGet(
     `/api/protocols/${protocol}/pool-creations/series`,
-    { window, interval: SERIES_INTERVAL[window] },
+    { window },
     zGetProtocolPoolCreationsSeriesResponse,
   ),
 );
@@ -166,7 +166,7 @@ export const fetchPoolCreationsSeries = cache((protocol: ProtocolResponse, windo
 export const fetchRotationRunsSeries = cache((protocol: ProtocolResponse, window: Period) =>
   apiGet(
     `/api/protocols/${protocol}/rotation-runs/series`,
-    { window, interval: SERIES_INTERVAL[window] },
+    { window },
     zGetProtocolRotationRunsSeriesResponse,
   ),
 );

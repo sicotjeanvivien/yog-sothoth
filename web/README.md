@@ -275,11 +275,10 @@ hour — over the last hour, the end of the last 5-minute tranche written.
 
 **The period** — `?period=1h|24h|7d|30d` (`lib/overview/period.ts`; missing,
 unknown or not offered by the page is 24h) drives every label, section title, chart and ⓘ, which speak of
-"the chosen period". A bar is a 5-minute tranche over 1h, an hour over 24h, a 6-hour slice over 7d, a 24-hour
-slice over 30d (`SLOT_MS`), each ending at `asOf`; over 7d the web sums the
-hourly series (`interval=1h`) by six, as the API sums its days: whether an hour is covered is the API's. 1h is the rolling
-hour through the last tranche written, read on `swaps/series?interval=5m`; it does not fall on the last bar of
-24h, and its coverage counts pool tranches, not pool-hours (`coverageUnit`). The TVL stays
+"the chosen period". The bars are the series' own: the API says their step (`interval`), and the chart lays them from `from` to `asOf` — a 5-minute tranche over 1h, an hour over 24h, a 6-hour slice over 7d, a 24-hour
+slice over 30d. 1h is the rolling
+hour through the last tranche written; it does not fall on the last bar of
+24h, and what its coverage counts, the response says (`coverageUnit`). The TVL stays
 the value of the last frozen hour; only its change follows the period, and over 1h it has none.
 A block reads the chosen period or says why it cannot, never another period on the same page. The selector (`period-selector.tsx`) is a set of
 links over the page's periods, each judged on the span of its own reads — 1h on the tranches still held, the others on the
@@ -292,13 +291,13 @@ figure the facts do not cover whole is "—", never a smaller number:
 - a period whose window starts before `coveredSince` (the first frozen hour) is
   closed: a button whose panel says when it opens; reached by its URL anyway,
   every block that sums over it shows "—" and the same reason (the TVL stays,
-  its change says why it has none). 30d stays closed in the web
+  with the time it was read). 30d stays closed in the web
   (`CLOSED_PERIODS`) until its times are measured on the prod: its URL falls
   back to 24h, so its reads never run;
 - the volume change is "—" when the previous window (`offset`) starts before
   `coveredSince`, or does not end where the current one starts (a tranche or a freeze between the two reads);
-- the TVL change is "—" when `tvl/totals` has no reading a window before the last,
-  or no discovered part at it: the hours before the first complete TVL are deleted.
+- the TVL has no change when `tvl/totals` has no reading a window before the last,
+  or no discovered part at it: the tile says when it was read, and its ⓘ why.
 Each "—" carries an ⓘ with its reason.
 
 **ⓘ** — every KPI and section has one, click-toggled
@@ -368,8 +367,7 @@ with a green dot beside it while the ingestion is live
 **02 Volume** — `protocol/volume/volume-tab.tsx`: where the volume comes from,
 each bar of the protocol's swaps split between its rotation runs
 (`dash-run`) and the rest (`dash-run-out`), as `rotation-runs/series` serves
-it; `lib/protocol/volume.ts` sums the hours of a 7-day slice, split only when each
-of them is. The runs are measured from a later hour than the swaps: a bar they do
+it. The runs are measured from a later hour than the swaps: a bar they do
 not split keeps its volume, unsplit, in a neutral tint, and the legend says since
 which hour they split it. Under the chart, the
 period's detail, replaced by the bar's under the pointer

@@ -1,7 +1,6 @@
 /** The fees tab's chart, as data: each bar's fees split between the LPs, the protocol and the referral. */
 
-import { slotsOf } from "@/lib/overview/chart";
-import type { Period } from "@/lib/overview/period";
+import { slotsOf, type Series } from "@/lib/overview/chart";
 import { shareOf } from "@/lib/overview/totals";
 
 /** Where a swap's fees go, in the order the bars stack them, bottom first. */
@@ -19,13 +18,12 @@ type FeeBar = {
   referralFeesUsd: string | null;
 };
 
-/** The fees in the period's slots, each part summed as `slotsOf` sums a bar. */
-export function feeSlotsOf(period: Period, asOf: string, bars: readonly FeeBar[]): FeeSlot[] {
+/** The fees in the series' slots, each part summed as `slotsOf` sums a bar. */
+export function feeSlotsOf(series: Series<FeeBar>): FeeSlot[] {
   const slots = (pick: (bar: FeeBar) => string | null) =>
     slotsOf(
-      period,
-      asOf,
-      bars.map((bar) => ({ from: bar.from, value: pick(bar) })),
+      series,
+      series.items.map((bar) => ({ from: bar.from, value: pick(bar) })),
     );
   const lp = slots((bar) => bar.lpFeesUsd);
   const protocol = slots((bar) => bar.protocolFeesUsd);
