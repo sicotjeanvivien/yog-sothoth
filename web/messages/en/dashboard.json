@@ -220,7 +220,7 @@
         "notMeasured": "Liquidity has been measured only recently: the chosen period starts before, and a total would undercount it.",
         "notMeasuredShort": "liquidity not measured yet",
         "noCurve": "Not enough measured hours of TVL to draw the curve yet.",
-        "curveNotApplicable": "The TVL is read once an hour: no curve over one hour.",
+        "curveNotApplicable": "Period not applicable to this data.",
         "curveCaption": "Hourly TVL · tight axis, {low} → {high}",
         "curveLabel": "TVL over the period, from {low} to {high}",
         "tvlAt": "TVL {tvl}",
