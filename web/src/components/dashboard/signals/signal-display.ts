@@ -37,7 +37,7 @@ export const SEVERITY_ICON: Record<SeverityResponse, FC<IconProps>> = {
   critical: AlertOctagonIcon,
 };
 
-/** Detectors the UI phrases, with ratios as percents; an unknown one renders raw. */
+/** Detectors the UI phrases. */
 export const KNOWN_DETECTORS = new Set([
   "price_oracle_deviation",
   "flow_imbalance",
@@ -57,13 +57,24 @@ export const STATUS_DOT: Record<
 /** How many signals the Overview's signals block shows. */
 export const LATEST_SIGNALS_COUNT = 7;
 
-/** A known detector's value as a percent, an unknown one raw. */
 export function formatSignalValue(signal: SignalResponse, locale: string): string {
-  if (!KNOWN_DETECTORS.has(signal.detector)) {
-    return signal.value;
+  switch (signal.valueUnit) {
+    case "raw":
+      return signal.value;
+    case "ratio":
+      return formatPercent(signal.value, locale);
+    case "signedRatio":
+      return formatSignedPercent(signal.value, locale);
   }
-  // The drain ratio is unsigned: "+61%" would read as growth.
-  return signal.detector === "tvl_drain"
-    ? formatPercent(signal.value, locale)
-    : formatSignedPercent(signal.value, locale);
+}
+
+export function formatSignalThreshold(signal: SignalResponse, locale: string): string {
+  if (signal.threshold === null) {
+    return "—";
+  }
+  return signal.valueUnit === "raw" ? signal.threshold : formatPercent(signal.threshold, locale);
+}
+
+export function leanedSymbolOf(signal: SignalResponse): string | null {
+  return signal.leansToward === null ? null : signal[signal.leansToward].symbol;
 }

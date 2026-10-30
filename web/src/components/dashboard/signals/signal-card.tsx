@@ -9,18 +9,17 @@
 import { useLocale, useTranslations } from "next-intl";
 
 import type { SeverityResponse, SignalResponse } from "@/lib/api/schema/zod.gen";
-import {
-  formatPercent,
-  formatSignedPercent,
-} from "@/lib/format/format-percent";
+import { formatPercent } from "@/lib/format/format-percent";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatShortAddress } from "@/lib/format/format-short-address";
 
 import { PoolPairCell } from "./pool-pair-cell";
 import {
+  formatSignalThreshold,
   formatSignalValue,
   KNOWN_DETECTORS,
+  leanedSymbolOf,
   SEVERITY_COLOR,
   SEVERITY_ICON,
 } from "./signal-display";
@@ -43,13 +42,10 @@ function detectorSummary(
   switch (signal.detector) {
     case "price_oracle_deviation":
       return t("detectors.price_oracle_deviation.summary", {
-        deviation: formatSignedPercent(signal.value, locale),
+        deviation: formatSignalValue(signal, locale),
       });
     case "flow_imbalance": {
-      // Positive: A→B dominates, the flow pours into token B.
-      const toward = signal.value.startsWith("-")
-        ? signal.tokenA.symbol
-        : signal.tokenB.symbol;
+      const toward = leanedSymbolOf(signal);
       const percent = formatPercent(signal.value, locale);
       return toward
         ? t("detectors.flow_imbalance.summaryToward", {
@@ -60,7 +56,7 @@ function detectorSummary(
     }
     case "tvl_drain":
       return t("detectors.tvl_drain.summary", {
-        percent: formatPercent(signal.value, locale),
+        percent: formatSignalValue(signal, locale),
       });
     default:
       return (
@@ -79,12 +75,7 @@ export function SignalCard({ signal }: { signal: SignalResponse }) {
 
   const known = KNOWN_DETECTORS.has(signal.detector);
   const value = formatSignalValue(signal, locale);
-  const threshold =
-    signal.threshold === null
-      ? "—"
-      : known
-        ? formatPercent(signal.threshold, locale)
-        : signal.threshold;
+  const threshold = formatSignalThreshold(signal, locale);
   const severityLabel = t(`severity.${signal.severity}`);
   const SeverityIcon = SEVERITY_ICON[signal.severity];
 
