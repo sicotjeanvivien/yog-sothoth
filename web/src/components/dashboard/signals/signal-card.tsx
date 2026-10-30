@@ -19,8 +19,10 @@ import { formatShortAddress } from "@/lib/format/format-short-address";
 
 import { PoolPairCell } from "./pool-pair-cell";
 import {
+  formatSignalThreshold,
   formatSignalValue,
   KNOWN_DETECTORS,
+  leanedSymbolOf,
   SEVERITY_COLOR,
   SEVERITY_ICON,
 } from "./signal-display";
@@ -46,10 +48,7 @@ function detectorSummary(
         deviation: formatSignedPercent(signal.value, locale),
       });
     case "flow_imbalance": {
-      // Positive: A→B dominates, the flow pours into token B.
-      const toward = signal.value.startsWith("-")
-        ? signal.tokenA.symbol
-        : signal.tokenB.symbol;
+      const toward = leanedSymbolOf(signal);
       const percent = formatPercent(signal.value, locale);
       return toward
         ? t("detectors.flow_imbalance.summaryToward", {
@@ -79,12 +78,7 @@ export function SignalCard({ signal }: { signal: SignalResponse }) {
 
   const known = KNOWN_DETECTORS.has(signal.detector);
   const value = formatSignalValue(signal, locale);
-  const threshold =
-    signal.threshold === null
-      ? "—"
-      : known
-        ? formatPercent(signal.threshold, locale)
-        : signal.threshold;
+  const threshold = formatSignalThreshold(signal, locale);
   const severityLabel = t(`severity.${signal.severity}`);
   const SeverityIcon = SEVERITY_ICON[signal.severity];
 
