@@ -159,15 +159,21 @@ pub(crate) fn app_state() -> AppState {
 /// `method uri` through the whole router on [`app_state`]: the status, the headers, and the
 /// `detail` of a Problem Details body (else the body as text).
 pub(crate) async fn call(method: Method, uri: &str) -> (StatusCode, HeaderMap, String) {
+    call_on(app_state(), method, uri).await
+}
+
+/// [`call`] on `state`.
+pub(crate) async fn call_on(
+    state: AppState,
+    method: Method,
+    uri: &str,
+) -> (StatusCode, HeaderMap, String) {
     let request = Request::builder()
         .method(method)
         .uri(uri)
         .body(Body::empty())
         .unwrap();
-    let response = build_router(app_state(), vec![])
-        .oneshot(request)
-        .await
-        .unwrap();
+    let response = build_router(state, vec![]).oneshot(request).await.unwrap();
     let (parts, body) = response.into_parts();
     let body = axum::body::to_bytes(body, usize::MAX).await.unwrap();
     let detail = serde_json::from_slice::<serde_json::Value>(&body)

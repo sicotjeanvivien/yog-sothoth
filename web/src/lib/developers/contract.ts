@@ -66,6 +66,7 @@ export type Family = (typeof FAMILIES)[number];
 const FAMILY_OF_SEGMENT: Record<string, Family> = {
   ingestion: "service",
   network: "service",
+  windows: "service",
   swaps: "swaps",
   "liquidity-changes": "liquidity",
   "pool-changes": "liquidity",

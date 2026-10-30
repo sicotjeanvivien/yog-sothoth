@@ -289,9 +289,10 @@ at the end of this section.
 judged in one place. `open`: the service opens this window, its facts covering it whole; it says
 what the dashboard may show, not what can be computed, so `30d`, held closed until its reads are
 measured on the prod, is `open: false` with `opensAt: null` and still serves its figures on request.
-`opensAt`: when the facts will cover it. A measure judges on its own `coveredSince`; `liquidity-moves/series`
-on the facts', as it draws a period it covers in part. `late`: `asOf` is more than 2 h behind on a frozen
-hour, 30 min on a tranche.
+`opensAt`: when it will be covered whole; `null` for a measure not measured yet. A read judges on its own
+`coveredSince`; a series of a measure that starts later than the facts (`liquidity-moves`, the claims) on the
+facts', as it draws a period it covers in part. `late`: `asOf` is more than 2 h behind on a frozen hour,
+30 min on a tranche. An `offset` read is judged at the end it was moved from.
 
 **Parameters and fields.** `window=24h|7d|30d`, a closed list, 400 otherwise; `offset` for the
 previous window. `1h`, the last hour through the last tranche written (through the last frozen hour for the TVL's `totals`), is served by every measure

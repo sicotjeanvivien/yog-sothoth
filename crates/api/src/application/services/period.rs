@@ -47,8 +47,10 @@ pub(crate) struct Availability {
 
 impl Availability {
     /// `period` is `None` before the first freeze, or the first tranche: closed, nothing late.
+    /// ⚠️ `period` is moved `offset` back: its end and its opening are judged at the unmoved end.
     pub(crate) fn of<P: PeriodBounds>(
         window: Window,
+        offset: Option<Window>,
         period: Option<P>,
         now: DateTime<Utc>,
     ) -> Self {
@@ -59,7 +61,9 @@ impl Availability {
                 late: false,
             };
         };
-        let late = now - period.as_of() > period.late_after();
+        let offset = offset.map_or(TimeDelta::zero(), Window::duration);
+        let end = period.as_of() + offset;
+        let late = now - end > period.late_after();
         if CLOSED_WINDOWS.contains(&window) {
             return Self {
                 open: false,
@@ -67,11 +71,13 @@ impl Availability {
                 late,
             };
         }
-        let opens_at = period.opening_since() + window.duration();
-        let open = period.as_of() >= opens_at;
+        let opening = period.opening_since();
+        let opens_at = opening + window.duration() + offset;
+        let open = end >= opens_at;
         Self {
             open,
-            opens_at: (!open).then_some(opens_at),
+            // ⚠️ Not measured yet, covered from `as_of` on: a date that would only slide forward.
+            opens_at: (!open && opening < end).then_some(opens_at),
             late,
         }
     }

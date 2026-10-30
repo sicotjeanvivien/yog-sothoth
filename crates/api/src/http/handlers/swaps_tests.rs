@@ -1,6 +1,13 @@
-use axum::http::StatusCode;
+use std::sync::Arc;
 
-use crate::testing::{get, pk};
+use axum::http::{Method, StatusCode};
+use chrono::{TimeDelta, Utc};
+use yog_core::domain::FrozenHours;
+
+use crate::application::SwapActivityService;
+use crate::testing::{
+    MockSwapActivityRepo, MockTokenActivityRepo, app_state, call_on, frozen_hours_repo, get, pk,
+};
 
 /// The control: each produced route reaches its handler on a known protocol.
 #[tokio::test]
@@ -411,4 +418,25 @@ async fn a_window_refused_under_a_pool_points_nowhere_else() {
 
     assert!(at_root.contains("read it under a pool"), "{at_root}");
     assert!(!under_pool.contains("under a pool"), "{under_pool}");
+}
+
+/// Mutation: the handler not passing `offset` on — a healthy previous window said late, every read.
+#[tokio::test]
+async fn an_offset_read_is_not_late_for_being_moved_back() {
+    let now = Utc::now();
+    let mut state = app_state();
+    state.swap_activity_service = Arc::new(SwapActivityService::new(
+        frozen_hours_repo(Some(FrozenHours {
+            first: now - TimeDelta::days(10),
+            last_frozen: now - TimeDelta::hours(2),
+        })),
+        Arc::new(MockSwapActivityRepo::default()),
+        Arc::new(MockTokenActivityRepo::default()),
+    ));
+
+    let uri = "/api/swaps/totals?window=24h&offset=24h";
+    let (status, _, body) = call_on(state, Method::GET, uri).await;
+
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(body.contains("\"late\":false"), "{body}");
 }

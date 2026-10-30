@@ -5406,7 +5406,7 @@
             ]
           },
           "coveredSince": {
-            "description": "Where the facts start.",
+            "description": "Where the read's coverage starts.",
             "format": "date-time",
             "type": [
               "string",
@@ -5426,11 +5426,11 @@
             "type": "boolean"
           },
           "open": {
-            "description": "Whether the service opens this window: the facts cover it whole, and it is not held closed.",
+            "description": "Whether the service opens this window: it is covered whole, and not held closed.",
             "type": "boolean"
           },
           "opensAt": {
-            "description": "When the facts will cover it; `null` when open, or when no date can be said.",
+            "description": "When it will be covered whole; `null` when open, or when no date can be said.",
             "format": "date-time",
             "type": [
               "string",

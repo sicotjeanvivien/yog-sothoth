@@ -6,7 +6,7 @@ use yog_core::domain::Window;
 use crate::testing::{at_october, make_frozen_hours};
 use yog_core::domain::{FrozenPeriod, TranchePeriod, WrittenTranches};
 
-use super::{Availability, BucketPeriod, DrawnPeriod, ReadPeriod, SeriesInterval};
+use super::{Availability, BucketPeriod, DrawnPeriod, ReadPeriod, SeriesInterval, measured_from};
 
 /// Mutation: a window given another step than the one its bars are drawn at, or a step that does
 /// not fit it.
@@ -63,11 +63,11 @@ fn a_window_opens_the_hour_the_facts_cover_it_whole() {
         as_of: at_october(20, 12),
         ..frozen(Window::Week)
     };
-    let week = Availability::of(Window::Week, Some(short), now);
+    let week = Availability::of(Window::Week, None, Some(short), now);
     assert!(!week.open);
     assert_eq!(week.opens_at, Some(at_october(20, 13)));
 
-    let week = Availability::of(Window::Week, Some(frozen(Window::Week)), now);
+    let week = Availability::of(Window::Week, None, Some(frozen(Window::Week)), now);
     assert!(week.open);
     assert_eq!(week.opens_at, None);
 }
@@ -80,7 +80,7 @@ fn the_month_is_closed_with_no_date_however_covered() {
         ..frozen(Window::Month)
     };
 
-    let month = Availability::of(Window::Month, Some(whole), at_october(20, 12));
+    let month = Availability::of(Window::Month, None, Some(whole), at_october(20, 12));
 
     assert!(!month.open);
     assert_eq!(month.opens_at, None);
@@ -89,7 +89,7 @@ fn the_month_is_closed_with_no_date_however_covered() {
 /// Mutation: a window before any fact read as open, or as late.
 #[test]
 fn before_any_fact_a_window_is_closed_and_nothing_is_late() {
-    let none = Availability::of::<FrozenPeriod>(Window::Day, None, at_october(20, 12));
+    let none = Availability::of::<FrozenPeriod>(Window::Day, None, None, at_october(20, 12));
 
     assert!(!none.open);
     assert_eq!(none.opens_at, None);
@@ -113,7 +113,7 @@ fn a_frozen_hour_runs_late_after_two_hours_and_a_tranche_after_thirty_minutes() 
         None,
     );
     let late = |period: ReadPeriod, past: TimeDelta| {
-        Availability::of(Window::Day, Some(period), as_of + past).late
+        Availability::of(Window::Day, None, Some(period), as_of + past).late
     };
 
     assert!(!late(ReadPeriod::Frozen(hour), TimeDelta::hours(2)));
@@ -134,6 +134,38 @@ fn a_drawn_period_opens_on_the_facts_not_on_its_measure() {
         facts_since: at_october(13, 13),
     };
 
-    assert!(Availability::of(Window::Day, Some(drawn), at_october(20, 12)).open);
-    assert!(!Availability::of(Window::Day, Some(measured), at_october(20, 12)).open);
+    assert!(Availability::of(Window::Day, None, Some(drawn), at_october(20, 12)).open);
+    assert!(!Availability::of(Window::Day, None, Some(measured), at_october(20, 12)).open);
+}
+
+/// Mutation: an `offset` read judged on its moved end — late on every healthy read, its `opensAt`
+/// a window too soon.
+#[test]
+fn an_offset_read_is_judged_at_the_end_it_was_moved_from() {
+    let hours = make_frozen_hours();
+    let moved = FrozenPeriod::of(hours, Window::Day, Some(Window::Day));
+    let on_time = at_october(20, 13) + TimeDelta::hours(1);
+
+    let previous = Availability::of(Window::Day, Some(Window::Day), Some(moved), on_time);
+    assert!(previous.open);
+    assert!(!previous.late);
+
+    let not_yet = FrozenPeriod {
+        covered_since: at_october(19, 0),
+        ..moved
+    };
+    let previous = Availability::of(Window::Day, Some(Window::Day), Some(not_yet), on_time);
+    assert!(!previous.open);
+    assert_eq!(previous.opens_at, Some(at_october(21, 0)));
+}
+
+/// Mutation: a measure not yet measured given `asOf + window`, a date that never arrives.
+#[test]
+fn a_measure_not_yet_measured_has_no_date() {
+    let unmeasured = measured_from(frozen(Window::Day), None);
+
+    let day = Availability::of(Window::Day, None, Some(unmeasured), at_october(20, 13));
+
+    assert!(!day.open);
+    assert_eq!(day.opens_at, None);
 }

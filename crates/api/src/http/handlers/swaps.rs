@@ -64,11 +64,12 @@ async fn get_totals(
     protocol: Option<yog_core::domain::Protocol>,
 ) -> Result<Json<SwapTotalsResponse<ProtocolSwapActivityResponse>>, ApiError> {
     let window = params.window.into();
+    let offset = params.offset.map(Into::into);
     let measured = state
         .swap_activity_service
-        .get_swap_totals(window, params.offset.map(Into::into), protocol)
+        .get_swap_totals(window, offset, protocol)
         .await?;
-    Ok(Json(SwapTotalsResponse::new(window, measured)))
+    Ok(Json(SwapTotalsResponse::new(window, offset, measured)))
 }
 
 #[utoipa::path(
@@ -141,7 +142,7 @@ pub(crate) async fn get_pool_swap_totals(
         .swap_activity_service
         .get_pool_swap_totals(window, pool.pool_address)
         .await?;
-    Ok(Json(SwapTotalsResponse::new(window, measured)))
+    Ok(Json(SwapTotalsResponse::new(window, None, measured)))
 }
 
 #[utoipa::path(

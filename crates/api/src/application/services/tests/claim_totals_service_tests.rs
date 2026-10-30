@@ -140,3 +140,26 @@ async fn a_week_is_read_in_slices_of_six_hours() {
 
     assert_eq!(*repo.widths.lock().unwrap(), [TimeDelta::hours(6)]);
 }
+
+/// Mutation: the series judged on the claims' coverage — bars served under `open: false`.
+#[tokio::test]
+async fn a_series_keeps_its_coverage_and_opens_on_the_facts() {
+    let repo = Arc::new(MockClaimTotalsRepo {
+        since: Some(at_october(20, 0)),
+        ..MockClaimTotalsRepo::default()
+    });
+
+    let series = service(&repo)
+        .list_claim_series(
+            ClaimKind::Reward,
+            Window::Day,
+            SeriesInterval::Hour,
+            Protocol::MeteoraDammV2,
+        )
+        .await
+        .unwrap();
+
+    let period = series.period.unwrap();
+    assert_eq!(period.covered_since(), at_october(20, 0));
+    assert_eq!(period.opening_since(), at_october(13, 13));
+}

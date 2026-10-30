@@ -40,11 +40,11 @@ pub(crate) struct WindowPeriodResponse {
     /// The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches
     /// the end of the last one written.
     as_of: Option<DateTime<Utc>>,
-    /// Where the facts start.
+    /// Where the read's coverage starts.
     covered_since: Option<DateTime<Utc>>,
-    /// Whether the service opens this window: the facts cover it whole, and it is not held closed.
+    /// Whether the service opens this window: it is covered whole, and not held closed.
     open: bool,
-    /// When the facts will cover it; `null` when open, or when no date can be said.
+    /// When it will be covered whole; `null` when open, or when no date can be said.
     opens_at: Option<DateTime<Utc>>,
     /// Whether `asOf` is further behind than a frozen hour or a tranche should be.
     late: bool,
@@ -52,7 +52,11 @@ pub(crate) struct WindowPeriodResponse {
 
 impl WindowPeriodResponse {
     pub(crate) fn of<P: PeriodBounds>(window: Window, period: Option<P>) -> Self {
-        let availability = Availability::of(window, period, Utc::now());
+        Self::moved(window, None, period)
+    }
+
+    fn moved<P: PeriodBounds>(window: Window, offset: Option<Window>, period: Option<P>) -> Self {
+        let availability = Availability::of(window, offset, period, Utc::now());
         Self {
             from: period.map(|s| s.from()),
             as_of: period.map(|s| s.as_of()),
@@ -200,14 +204,18 @@ pub(crate) struct SwapTotalsResponse<T> {
 }
 
 impl<T> SwapTotalsResponse<T> {
-    pub(crate) fn new<U, P: PeriodBounds>(window: Window, measured: Measured<Vec<U>, P>) -> Self
+    pub(crate) fn new<U, P: PeriodBounds>(
+        window: Window,
+        offset: Option<Window>,
+        measured: Measured<Vec<U>, P>,
+    ) -> Self
     where
         T: From<U>,
     {
         Self {
             window: window.into(),
             coverage_unit: window.into(),
-            period: WindowPeriodResponse::of(window, measured.period),
+            period: WindowPeriodResponse::moved(window, offset, measured.period),
             items: measured.items.into_iter().map(T::from).collect(),
         }
     }
