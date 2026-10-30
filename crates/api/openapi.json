@@ -2346,7 +2346,7 @@
                   "oneOf": [
                     {
                       "$ref": "#/components/schemas/PairTokenResponse",
-                      "description": "The token a flow imbalance pours into; `null` for any other detector."
+                      "description": "The token a flow imbalance's swaps mostly take from the pool, if any."
                     },
                     {
                       "type": "null"
@@ -4926,7 +4926,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/PairTokenResponse",
-                "description": "The token a flow imbalance pours into; `null` for any other detector."
+                "description": "The token a flow imbalance's swaps mostly take from the pool, if any."
               },
               {
                 "type": "null"

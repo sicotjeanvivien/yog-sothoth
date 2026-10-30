@@ -131,9 +131,9 @@ pub use rotation_runs::{
     RotationRunTotals, RunSplit, RunsFirstHour,
 };
 pub use signals::{
-    DetectorError, EvalContext, FLOW_IMBALANCE, PRICE_ORACLE_DEVIATION, PairToken, Severity,
-    Signal, SignalCursor, SignalDetector, SignalFeed, SignalFilter, SignalRecord, SignalRepository,
-    SignalValueUnit, TVL_DRAIN,
+    DETECTOR_FLOW_IMBALANCE, DETECTOR_PRICE_ORACLE_DEVIATION, DETECTOR_TVL_DRAIN, DetectorError,
+    EvalContext, PairToken, Severity, Signal, SignalCursor, SignalDetector, SignalFeed,
+    SignalFilter, SignalRecord, SignalRepository, SignalValueUnit,
 };
 pub use swap_activity::{
     PoolSwapBucket, ProtocolSwapActivity, SwapActivity, SwapActivityLookup, SwapActivityTotal,

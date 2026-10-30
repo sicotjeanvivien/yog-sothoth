@@ -314,7 +314,9 @@ cargo run -p yog-signals
    doesn't exist yet, add a read model + VIEW following the
    `swap_flow`/`pool_price_snapshot` pattern (VIEW in a migration, `GRANT
    SELECT … TO yog_signals`, slim repo in `persistence`).
-2. Wire it in `bootstrap/daemon.rs` with its concrete `Pg*` repos and its
+2. Name its tag in `yog-core` (`domain/signals/model.rs`) and give it its unit in
+   `SignalValueUnit::of`: a tag left out is served as `raw`, without any error.
+3. Wire it in `bootstrap/daemon.rs` with its concrete `Pg*` repos and its
    config block — a new loop joins the `JoinSet`; the engine is untouched.
-3. Unit-test the decision function against synthetic snapshots (see
+4. Unit-test the decision function against synthetic snapshots (see
    `*_tests.rs` next to each detector).

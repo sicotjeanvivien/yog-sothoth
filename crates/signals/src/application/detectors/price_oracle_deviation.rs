@@ -11,7 +11,7 @@ use chrono::Duration as ChronoDuration;
 use rust_decimal::Decimal;
 
 use yog_core::domain::{
-    DetectorError, EvalContext, PRICE_ORACLE_DEVIATION, PoolPriceSnapshot,
+    DETECTOR_PRICE_ORACLE_DEVIATION, DetectorError, EvalContext, PoolPriceSnapshot,
     PoolPriceSnapshotRepository, Protocol, Severity, Signal, SignalDetector,
 };
 
@@ -81,7 +81,7 @@ fn compact(price: Decimal) -> Decimal {
 #[async_trait]
 impl SignalDetector for PriceOracleDeviationDetector {
     fn name(&self) -> &'static str {
-        PRICE_ORACLE_DEVIATION
+        DETECTOR_PRICE_ORACLE_DEVIATION
     }
 
     fn interval(&self) -> Duration {

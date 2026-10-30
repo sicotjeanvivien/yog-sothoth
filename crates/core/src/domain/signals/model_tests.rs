@@ -39,22 +39,28 @@ fn an_unknown_detector_stays_in_its_own_unit() {
 
 // Mutation: the two tokens swapped sends every lean to the token it left.
 #[test]
-fn a_flow_pours_into_the_token_its_sign_names() {
-    let toward = |value| signal(FLOW_IMBALANCE, value).flows_toward();
+fn a_flow_leans_toward_the_token_its_sign_names() {
+    let toward = |value| signal(DETECTOR_FLOW_IMBALANCE, value).flows_toward();
     assert_eq!(toward(Decimal::new(75, 2)), Some(PairToken::TokenB));
     assert_eq!(toward(Decimal::new(-75, 2)), Some(PairToken::TokenA));
 }
 
 // Mutation: the zero guard dropped gives a balanced flow a direction.
 #[test]
-fn a_balanced_flow_pours_nowhere() {
-    assert_eq!(signal(FLOW_IMBALANCE, Decimal::ZERO).flows_toward(), None);
+fn a_balanced_flow_leans_nowhere() {
+    assert_eq!(
+        signal(DETECTOR_FLOW_IMBALANCE, Decimal::ZERO).flows_toward(),
+        None
+    );
 }
 
 // Mutation: the detector guard dropped reads a price deviation's sign as a flow's.
 #[test]
 fn only_a_flow_imbalance_has_a_direction() {
     let value = Decimal::new(-75, 2);
-    assert_eq!(signal(PRICE_ORACLE_DEVIATION, value).flows_toward(), None);
-    assert_eq!(signal(TVL_DRAIN, value).flows_toward(), None);
+    assert_eq!(
+        signal(DETECTOR_PRICE_ORACLE_DEVIATION, value).flows_toward(),
+        None
+    );
+    assert_eq!(signal(DETECTOR_TVL_DRAIN, value).flows_toward(), None);
 }

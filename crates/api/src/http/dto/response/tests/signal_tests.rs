@@ -36,11 +36,11 @@ fn a_signal_says_what_its_value_means() {
         serde_json::to_value(SignalResponse::from(EnrichedSignal::bare(record))).unwrap()
     };
 
-    let flow = response(domain::FLOW_IMBALANCE);
+    let flow = response(domain::DETECTOR_FLOW_IMBALANCE);
     assert_eq!(flow["valueUnit"], "signedRatio");
     assert_eq!(flow["flowsToward"], "tokenB");
 
-    let drain = response(domain::TVL_DRAIN);
+    let drain = response(domain::DETECTOR_TVL_DRAIN);
     assert_eq!(drain["valueUnit"], "ratio");
     assert_eq!(drain["flowsToward"], serde_json::Value::Null);
 }

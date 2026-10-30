@@ -41,7 +41,7 @@ pub(crate) struct SignalResponse {
     #[schema(value_type = Option<UnsignedDecimal>)]
     threshold: Option<String>,
     value_unit: SignalValueUnitResponse,
-    /// The token a flow imbalance pours into; `null` for any other detector.
+    /// The token a flow imbalance's swaps mostly take from the pool, if any.
     flows_toward: Option<PairTokenResponse>,
     message: Option<String>,
     triggered_at: DateTime<Utc>,

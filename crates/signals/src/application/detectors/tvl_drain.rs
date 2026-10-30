@@ -11,8 +11,8 @@ use chrono::Duration as ChronoDuration;
 use rust_decimal::Decimal;
 
 use yog_core::domain::{
-    DetectorError, EvalContext, LiquidityFlowRepository, Protocol, Severity, Signal,
-    SignalDetector, TVL_DRAIN,
+    DETECTOR_TVL_DRAIN, DetectorError, EvalContext, LiquidityFlowRepository, Protocol, Severity,
+    Signal, SignalDetector,
 };
 
 use super::metrics::{DetectorMetrics, SkipReason};
@@ -62,7 +62,7 @@ impl TvlDrainDetector {
 #[async_trait]
 impl SignalDetector for TvlDrainDetector {
     fn name(&self) -> &'static str {
-        TVL_DRAIN
+        DETECTOR_TVL_DRAIN
     }
 
     fn interval(&self) -> Duration {

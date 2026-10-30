@@ -10,8 +10,8 @@ use chrono::Duration as ChronoDuration;
 use rust_decimal::Decimal;
 
 use yog_core::domain::{
-    DetectorError, EvalContext, FLOW_IMBALANCE, Protocol, Severity, Signal, SignalDetector,
-    SwapFlowRepository,
+    DETECTOR_FLOW_IMBALANCE, DetectorError, EvalContext, Protocol, Severity, Signal,
+    SignalDetector, SwapFlowRepository,
 };
 
 use super::metrics::{DetectorMetrics, SkipReason};
@@ -61,7 +61,7 @@ impl FlowImbalanceDetector {
 #[async_trait]
 impl SignalDetector for FlowImbalanceDetector {
     fn name(&self) -> &'static str {
-        FLOW_IMBALANCE
+        DETECTOR_FLOW_IMBALANCE
     }
 
     fn interval(&self) -> Duration {
