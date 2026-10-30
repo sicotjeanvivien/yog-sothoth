@@ -30,6 +30,7 @@ import {
   fetchLiquiditySeries,
   fetchSwapTotals,
   fetchTvlSeries,
+  servesTvlSeries,
 } from "@/lib/api/server/protocols";
 import { formatRelative, formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatUsdCompact } from "@/lib/format/format-usd";
@@ -122,8 +123,7 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
     }
     throw err;
   });
-  // ⚠️ The TVL is read once an hour: the last hour has no curve, and its route refuses `1h`.
-  const tvlRead = period === "1h" ? null : fetchTvlSeries(protocol, period);
+  const tvlRead = servesTvlSeries(protocol, period) ? fetchTvlSeries(protocol, period) : null;
   let tvl, series, totals, swaps;
   try {
     [tvl, series, totals, swaps] = await Promise.all([

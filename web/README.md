@@ -339,9 +339,8 @@ the protocol's KPIs, then the row of its tabs and the content of the one
 chosen.
 
 **Header** — `protocol/protocol-header.tsx`: the platform, then the title, its ⓘ
-giving the program and since when the figures are measured (`coveredSince`,
-the first frozen hour), and at its right "Live", the period and the advanced
-mode: `overview/header-controls.tsx`, shared with the Overview, takes the
+giving the program — no date: no route serves one coverage for the whole page, each block
+says its own — and at its right "Live", the period and the advanced mode: `overview/header-controls.tsx`, shared with the Overview, takes the
 page's path, the query it keeps and the scope its "Live" rows and its periods are read in.
 
 **KPIs** — the Overview's cells take a `scope` (`lib/api/server/scope.ts`): `"all"`
@@ -357,7 +356,7 @@ created, added, removed and net — a pool's creation deposits its first
 liquidity without an addition, so it has its own colour (`dash-flow-create`),
 stacked under the additions; the TVL hour by hour on a tight axis
 (`lib/protocol/liquidity.ts`), its reading fixed above and a dashed mark under
-the pointer — over 1h, read once an hour, its place greyed with the reason, `tvl/series` not read; the liquidity created and added above the axis and removed under
+the pointer — over a period the contract does not serve `tvl/series` on (`servesTvlSeries`), its place greyed with the reason, the route not read; the liquidity created and added above the axis and removed under
 it (`dash-flow-out`, darker than the text red), per bar
 of the period, with symmetric marks; and, in the advanced mode, the largest moves
 beside the chart, so the page is no longer. The liquidity is measured from a

@@ -190,9 +190,7 @@
         "platform": "Meteora",
         "title": "DAMM v2",
         "infoLabel": "About: DAMM v2 program",
-        "program": "Program {id}",
-        "measuredSince": "Measured since {since}.",
-        "measuredNone": "No hour is measured yet."
+        "program": "Program {id}"
       },
       "kpis": {
         "feesRate": "effective rate {rate}",

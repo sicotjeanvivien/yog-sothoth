@@ -6,6 +6,7 @@
  */
 
 import { cache } from "react";
+import type { z } from "zod";
 
 import { SERIES_INTERVAL, type FrozenPeriod, type Period } from "@/lib/overview/period";
 
@@ -21,9 +22,11 @@ import {
   zGetProtocolRewardClaimTotalsResponse,
   zGetProtocolRotationRunsSeriesResponse,
   zGetProtocolRotationRunTotalsResponse,
+  zGetProtocolTvlSeriesQuery,
   zGetSwapsSeriesResponse,
   zGetSwapTotalsResponse,
   zGetTvlResponse,
+  zGetTvlSeriesQuery,
   zGetTvlSeriesResponse,
   zGetTvlTotalsResponse,
   zListProtocolLiquidityMovesResponse,
@@ -74,7 +77,16 @@ export const fetchTvl = cache((scope: Scope) =>
   apiGet(scopedPath(scope, "tvl"), {}, zGetTvlResponse),
 );
 
-export const fetchTvlSeries = cache((scope: Scope, window: FrozenPeriod) =>
+/** The windows the contract serves the TVL series over. */
+type TvlSeriesWindow = NonNullable<z.infer<typeof zGetTvlSeriesQuery>["window"]>;
+
+/** Whether the contract serves the TVL series of `scope` over `window`. */
+export function servesTvlSeries(scope: Scope, window: Period): window is TvlSeriesWindow {
+  const query = scope === "all" ? zGetTvlSeriesQuery : zGetProtocolTvlSeriesQuery;
+  return query.shape.window.unwrap().safeParse(window).success;
+}
+
+export const fetchTvlSeries = cache((scope: Scope, window: TvlSeriesWindow) =>
   apiGet(scopedPath(scope, "tvl/series"), { window, interval: "1h" }, zGetTvlSeriesResponse),
 );
 
