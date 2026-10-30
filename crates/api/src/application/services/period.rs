@@ -23,6 +23,58 @@ pub(crate) trait PeriodBounds: Copy {
     fn from(&self) -> DateTime<Utc>;
     fn as_of(&self) -> DateTime<Utc>;
     fn covered_since(&self) -> DateTime<Utc>;
+    /// How long past `as_of` the period may stay before it runs late.
+    fn late_after(&self) -> TimeDelta;
+    /// What must cover the window for it to open.
+    fn opening_since(&self) -> DateTime<Utc> {
+        self.covered_since()
+    }
+}
+
+/// Closed whatever the facts hold, until their reads are measured on the prod.
+const CLOSED_WINDOWS: [Window; 1] = [Window::Month];
+
+const FROZEN_LATE_AFTER: TimeDelta = TimeDelta::hours(2);
+const TRANCHE_LATE_AFTER: TimeDelta = TimeDelta::minutes(30);
+
+/// Whether a window is open, when it will be, and whether its figures run late.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Availability {
+    pub(crate) open: bool,
+    pub(crate) opens_at: Option<DateTime<Utc>>,
+    pub(crate) late: bool,
+}
+
+impl Availability {
+    /// `period` is `None` before the first freeze, or the first tranche: closed, nothing late.
+    pub(crate) fn of<P: PeriodBounds>(
+        window: Window,
+        period: Option<P>,
+        now: DateTime<Utc>,
+    ) -> Self {
+        let Some(period) = period else {
+            return Self {
+                open: false,
+                opens_at: None,
+                late: false,
+            };
+        };
+        let late = now - period.as_of() > period.late_after();
+        if CLOSED_WINDOWS.contains(&window) {
+            return Self {
+                open: false,
+                opens_at: None,
+                late,
+            };
+        }
+        let opens_at = period.opening_since() + window.duration();
+        let open = period.as_of() >= opens_at;
+        Self {
+            open,
+            opens_at: (!open).then_some(opens_at),
+            late,
+        }
+    }
 }
 
 impl PeriodBounds for FrozenPeriod {
@@ -35,6 +87,9 @@ impl PeriodBounds for FrozenPeriod {
     fn covered_since(&self) -> DateTime<Utc> {
         self.covered_since
     }
+    fn late_after(&self) -> TimeDelta {
+        FROZEN_LATE_AFTER
+    }
 }
 
 impl PeriodBounds for TranchePeriod {
@@ -46,6 +101,9 @@ impl PeriodBounds for TranchePeriod {
     }
     fn covered_since(&self) -> DateTime<Utc> {
         self.covered_since
+    }
+    fn late_after(&self) -> TimeDelta {
+        TRANCHE_LATE_AFTER
     }
 }
 
@@ -75,6 +133,38 @@ impl PeriodBounds for ReadPeriod {
             Self::Frozen(p) => p.covered_since,
             Self::Tranche(p) => p.covered_since,
         }
+    }
+    fn late_after(&self) -> TimeDelta {
+        match self {
+            Self::Frozen(p) => p.late_after(),
+            Self::Tranche(p) => p.late_after(),
+        }
+    }
+}
+
+/// A period a series draws once the facts cover it, its own measure covering it from `period`'s
+/// `covered_since`, maybe in part.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DrawnPeriod {
+    pub(crate) period: ReadPeriod,
+    pub(crate) facts_since: DateTime<Utc>,
+}
+
+impl PeriodBounds for DrawnPeriod {
+    fn from(&self) -> DateTime<Utc> {
+        self.period.from()
+    }
+    fn as_of(&self) -> DateTime<Utc> {
+        self.period.as_of()
+    }
+    fn covered_since(&self) -> DateTime<Utc> {
+        self.period.covered_since()
+    }
+    fn late_after(&self) -> TimeDelta {
+        self.period.late_after()
+    }
+    fn opening_since(&self) -> DateTime<Utc> {
+        self.facts_since
     }
 }
 

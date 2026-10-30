@@ -7,9 +7,9 @@ use chrono::{DateTime, Utc};
 use yog_core::{
     Page, RepositoryError, RepositoryResult,
     domain::{
-        Protocol, ProtocolActivityLookup, ProtocolBucket, RUN_GAP, RotationRun, RotationRunCursor,
-        RotationRunLookup, RotationRunOrder, RotationRunScope, RotationRunTotals, RunSplit,
-        TranchePeriod, Window,
+        FrozenPeriod, Protocol, ProtocolActivityLookup, ProtocolBucket, RUN_GAP, RotationRun,
+        RotationRunCursor, RotationRunLookup, RotationRunOrder, RotationRunScope,
+        RotationRunTotals, RunSplit, TranchePeriod, Window,
     },
 };
 
@@ -17,6 +17,13 @@ use super::period::{
     BucketPeriod, CURSOR_END_MARGIN, Measured, ReadPeriod, SeriesInterval, build_frozen_period,
     build_last_hour, first_whole_hour,
 };
+
+/// The volume the runs split, by bar, and the first instant they split a bar from.
+#[derive(Debug)]
+pub(crate) struct RunSplitSeries<P> {
+    pub(crate) measured: Measured<Vec<ProtocolBucket<RunSplit>>, P>,
+    pub(crate) split_since: Option<DateTime<Utc>>,
+}
 
 /// Why a page of runs is not read.
 #[derive(Debug)]
@@ -136,11 +143,14 @@ impl RotationRunService {
         window: Window,
         bucket: BucketPeriod,
         protocol: Protocol,
-    ) -> RepositoryResult<Measured<Vec<ProtocolBucket<RunSplit>>>> {
+    ) -> RepositoryResult<RunSplitSeries<FrozenPeriod>> {
         let Some(period) = build_frozen_period(self.hours.as_ref(), window, None).await? else {
-            return Ok(Measured {
-                period: None,
-                items: Vec::new(),
+            return Ok(RunSplitSeries {
+                measured: Measured {
+                    period: None,
+                    items: Vec::new(),
+                },
+                split_since: None,
             });
         };
         let since = self.find_split_since(protocol).await?;
@@ -152,9 +162,12 @@ impl RotationRunService {
                     .await?
             }
         };
-        Ok(Measured {
-            period: Some(period),
-            items,
+        Ok(RunSplitSeries {
+            measured: Measured {
+                period: Some(period),
+                items,
+            },
+            split_since: since,
         })
     }
 
@@ -165,25 +178,28 @@ impl RotationRunService {
         window: Window,
         interval: SeriesInterval,
         protocol: Protocol,
-    ) -> RepositoryResult<Measured<Vec<ProtocolBucket<RunSplit>>, ReadPeriod>> {
+    ) -> RepositoryResult<RunSplitSeries<ReadPeriod>> {
         let Some(bucket) = interval.frozen_bucket() else {
             let period = build_last_hour(self.hours.as_ref()).await?;
             let since = self.runs.find_measured_since(protocol).await?;
+            let split_since = since.map(|since| since + RUN_GAP);
             let items = match &period {
-                Some(p) => {
-                    self.runs
-                        .list_tranches(p, since.map(|since| since + RUN_GAP), protocol)
-                        .await?
-                }
+                Some(p) => self.runs.list_tranches(p, split_since, protocol).await?,
                 None => Vec::new(),
             };
             let period = period.map(ReadPeriod::Tranche);
-            return Ok(Measured { period, items });
+            return Ok(RunSplitSeries {
+                measured: Measured { period, items },
+                split_since,
+            });
         };
-        let measured = self.list_buckets(window, bucket, protocol).await?;
-        Ok(Measured {
-            period: measured.period.map(ReadPeriod::Frozen),
-            items: measured.items,
+        let series = self.list_buckets(window, bucket, protocol).await?;
+        Ok(RunSplitSeries {
+            measured: Measured {
+                period: series.measured.period.map(ReadPeriod::Frozen),
+                items: series.measured.items,
+            },
+            split_since: series.split_since,
         })
     }
 }

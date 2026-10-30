@@ -1,12 +1,11 @@
 //! The window envelope over a forward-only page of a computed collection: `prevCursor` is
 //! always `null`.
 
-use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::{Page, domain::Window};
 
-use super::window::WindowResponse;
+use super::window::{WindowPeriodResponse, WindowResponse};
 use crate::application::{Measured, PeriodBounds};
 use crate::http::cursor::encode_cursor_opt;
 use crate::http::error::ApiError;
@@ -15,9 +14,8 @@ use crate::http::error::ApiError;
 #[serde(rename_all = "camelCase")]
 pub(crate) struct WindowedPageResponse<T> {
     window: WindowResponse,
-    from: Option<DateTime<Utc>>,
-    as_of: Option<DateTime<Utc>>,
-    covered_since: Option<DateTime<Utc>>,
+    #[serde(flatten)]
+    period: WindowPeriodResponse,
     items: Vec<T>,
     next_cursor: Option<String>,
     prev_cursor: Option<String>,
@@ -33,13 +31,10 @@ impl<T> WindowedPageResponse<T> {
     where
         T: From<U>,
     {
-        let period = measured.period;
         let page = measured.items;
         Ok(Self {
             window: window.into(),
-            from: period.map(|s| s.from()),
-            as_of: period.map(|s| s.as_of()),
-            covered_since: period.map(|s| s.covered_since()),
+            period: WindowPeriodResponse::of(window, measured.period),
             next_cursor: encode_cursor_opt(page.next_cursor.as_ref())?,
             prev_cursor: encode_cursor_opt(page.prev_cursor.as_ref())?,
             is_first: page.is_first,

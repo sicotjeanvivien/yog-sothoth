@@ -225,3 +225,34 @@ async fn a_week_is_read_in_slices_of_six_hours() {
 
     assert_eq!(*repo.widths.lock().unwrap(), [TimeDelta::hours(6)]);
 }
+
+/// Mutation: `splitSince` left at the first tranche measured, where a bar is not split yet.
+#[tokio::test]
+async fn a_series_says_the_first_instant_the_runs_split_a_bar() {
+    let measured_since = minutes(at_october(19, 9), 50);
+    let repo = Arc::new(MockRotationRunRepo {
+        measured_since: Some(measured_since),
+        ..MockRotationRunRepo::default()
+    });
+    let hours = MockProtocolActivityRepo::with_hours_and_tranches(
+        make_frozen_hours(),
+        WrittenTranches {
+            first: at_october(13, 13),
+            through: at_october(20, 12) + TimeDelta::minutes(40),
+        },
+    );
+    let svc = RotationRunService::new(Arc::new(hours), repo.clone());
+    let protocol = Protocol::MeteoraDammV2;
+
+    let week = svc
+        .list_series(Window::Week, SeriesInterval::SixHours, protocol)
+        .await
+        .unwrap();
+    let hour = svc
+        .list_series(Window::Hour, SeriesInterval::FiveMinutes, protocol)
+        .await
+        .unwrap();
+
+    assert_eq!(week.split_since, Some(at_october(19, 11)));
+    assert_eq!(hour.split_since, Some(measured_since + RUN_GAP));
+}

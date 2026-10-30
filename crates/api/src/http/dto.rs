@@ -15,8 +15,9 @@ pub(crate) use response::{
     ProtocolPositionChangeTotalsResponse, ProtocolRotationRunBucketResponse,
     ProtocolRotationRunTotalsResponse, ProtocolSwapActivityBucketResponse,
     ProtocolSwapActivityResponse, ProtocolTvlChangeResponse, ProtocolTvlResponse, ReadingResponse,
-    RewardChangeEventResponse, RewardClaimEventResponse, RotationRunResponse, SeriesResponse,
-    SignalResponse, SwapActivityResponse, SwapEventResponse, SwapSeriesResponse,
-    SwapTotalsResponse, TokenActivityPageResponse, TokenPriceResponse, TokenResponse,
-    TrancheWindowedResponse, WindowedPageResponse, WindowedResponse,
+    RewardChangeEventResponse, RewardClaimEventResponse, RotationRunResponse,
+    RunSplitSeriesResponse, SeriesResponse, SignalResponse, SwapActivityResponse,
+    SwapEventResponse, SwapSeriesResponse, SwapTotalsResponse, TokenActivityPageResponse,
+    TokenPriceResponse, TokenResponse, TrancheWindowedResponse, WindowedPageResponse,
+    WindowedResponse, WindowsResponse,
 };

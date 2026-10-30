@@ -11,7 +11,7 @@ use crate::http::{
     AppState,
     dto::{
         ProtocolRotationRunBucketResponse, ProtocolRotationRunTotalsResponse, RotationRunResponse,
-        SeriesResponse, TrancheWindowedResponse, WindowedPageResponse,
+        RunSplitSeriesResponse, TrancheWindowedResponse, WindowedPageResponse,
         request::{
             ListRotationRunsRequest, MeasureWindowParams, RotationRunsParams, SeriesParams,
             parse_pool, parse_protocol,
@@ -141,21 +141,26 @@ pub(crate) async fn get_protocol_rotation_run_totals(
         description = "The protocol's volume by `interval`, the window's own step by default (5 \
                        minutes over `1h`, an hour over `24h`, 6 hours over `7d`, a day over \
                        `30d`), split by its rotation runs.",
-        body = SeriesResponse<ProtocolRotationRunBucketResponse>
+        body = RunSplitSeriesResponse<ProtocolRotationRunBucketResponse>
     ))
 )]
 pub(crate) async fn get_protocol_rotation_runs_series(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
     Query(params): Query<SeriesParams>,
-) -> Result<Json<SeriesResponse<ProtocolRotationRunBucketResponse>>, ApiError> {
+) -> Result<Json<RunSplitSeriesResponse<ProtocolRotationRunBucketResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
     let (window, interval) = params.parse()?;
-    let measured = state
+    let series = state
         .rotation_run_service
         .list_series(window, interval, protocol)
         .await?;
-    Ok(Json(SeriesResponse::new(window, interval, measured)))
+    Ok(Json(RunSplitSeriesResponse::new(
+        window,
+        interval,
+        series.measured,
+        series.split_since,
+    )))
 }
 
 #[cfg(test)]

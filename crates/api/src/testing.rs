@@ -46,7 +46,7 @@ use crate::application::{
     PositionChangeEventService, PositionFeeClaimEventService, ProtocolCatalogService,
     ProtocolFeeClaimEventService, ProtocolTvlService, RewardChangeEventService,
     RewardClaimEventService, RotationRunService, SignalService, SwapActivityService,
-    SwapEventService, TokenService, WorkSlots,
+    SwapEventService, TokenService, WindowsService, WorkSlots,
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
@@ -62,6 +62,7 @@ pub(crate) fn app_state() -> AppState {
         network_service: Arc::new(NetworkService::new(Arc::new(
             MockNetworkStatusRepo::failing(),
         ))),
+        windows_service: Arc::new(WindowsService::new(frozen_hours_repo(None))),
         ingestion_service: Arc::new(IngestionService::new(Arc::new(
             MockEventFreshnessRepo::failing(),
         ))),
