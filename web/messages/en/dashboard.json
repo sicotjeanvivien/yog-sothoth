@@ -64,7 +64,7 @@
         },
         "closedLabel": "{period}: not available yet",
         "closedUntil": "Not enough data yet: Yog-Scope has measured it since {since}. This period will be complete on {opens}.",
-        "closedSoon": "The 30-day period is not open yet: it will be once its reads are measured over 30 days of data.",
+        "closedSoon": "This period is not open yet: its reads are not measured yet.",
         "closedEmpty": "Nothing is measured yet over this period."
       },
       "unavailable": {

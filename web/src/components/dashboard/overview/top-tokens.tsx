@@ -51,7 +51,7 @@ export async function TopTokens({ period }: { period: Period }) {
     throw err;
   }
 
-  const closed = await closedReason(period, page);
+  const closed = await closedReason(page);
 
   return (
     <section aria-label={title} className={SECTION_CLASS}>

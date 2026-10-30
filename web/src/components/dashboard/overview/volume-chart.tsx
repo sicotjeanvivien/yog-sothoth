@@ -61,7 +61,7 @@ export async function VolumeChart({ period }: { period: Period }) {
     throw err;
   }
 
-  const closed = await closedReason(period, series);
+  const closed = await closedReason(series);
   const slotsFor = (pick: (bar: ProtocolSwapActivityBucketResponse) => string | null) =>
     slotsOf(
       series,

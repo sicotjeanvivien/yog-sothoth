@@ -24,7 +24,7 @@ import { formatCount, formatCountCompact, formatRate } from "@/lib/format/format
 import { formatTimes } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { previousWindowAdjoins, previousWindowCovered } from "@/lib/overview/availability";
-import { DEFAULT_PERIOD, type Period } from "@/lib/overview/period";
+import type { Period } from "@/lib/overview/period";
 import { changeRatio, rotation, shareOf, sumUsd, swapsPerSecond } from "@/lib/overview/totals";
 
 import { Change, closedReason, KpiCell, Unavailable, utcMoment } from "./overview-parts";
@@ -68,8 +68,7 @@ export async function TvlKpi({ period, scope }: { period: Period; scope: Scope }
           t("kpis.tvlAt", { at: await utcMoment(at) })
         )
       }
-      // ⚠️ The TVL is read by the hour whatever the period: its lag is a frozen hour's.
-      stamp={await lateStamp(at, DEFAULT_PERIOD)}
+      stamp={await lateStamp(totals)}
     />
   );
 }
@@ -88,7 +87,7 @@ export async function VolumeKpi({ period, scope }: { period: Period; scope: Scop
   if (now.status === "rejected") {
     return kpiError(now.reason, label, info);
   }
-  const closed = await closedReason(period, now.value);
+  const closed = await closedReason(now.value);
   if (closed !== null) {
     return <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} />;
   }
@@ -117,7 +116,7 @@ export async function VolumeKpi({ period, scope }: { period: Period; scope: Scop
       info={info}
       value={await valued(usd(current), items, now.value.coverageUnit)}
       sub={sub}
-      stamp={await lateStamp(now.value.asOf, period)}
+      stamp={await lateStamp(now.value)}
     />
   );
 }
@@ -133,7 +132,7 @@ export async function FeesKpi({ period, scope }: { period: Period; scope: Scope 
   } catch (err) {
     return kpiError(err, label, info);
   }
-  const closed = await closedReason(period, now);
+  const closed = await closedReason(now);
   if (closed !== null) {
     return <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} />;
   }
@@ -152,7 +151,7 @@ export async function FeesKpi({ period, scope }: { period: Period; scope: Scope 
           ? undefined
           : t("kpis.feesProtocol", { amount: usd(protocolFees) })
       }
-      stamp={await lateStamp(now.asOf, period)}
+      stamp={await lateStamp(now)}
     />
   );
 }
@@ -171,7 +170,7 @@ export async function PoolsKpi({ period, scope }: { period: Period; scope: Scope
   if (now.status === "rejected") {
     return kpiError(now.reason, label, info);
   }
-  const closed = await closedReason(period, now.value);
+  const closed = await closedReason(now.value);
   if (closed !== null) {
     return <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} />;
   }
@@ -212,7 +211,7 @@ export async function PoolsKpi({ period, scope }: { period: Period; scope: Scope
           {born}
         </>
       }
-      stamp={await lateStamp(now.value.asOf, period)}
+      stamp={await lateStamp(now.value)}
     />
   );
 }
@@ -228,7 +227,7 @@ export async function SwapsKpi({ period, scope }: { period: Period; scope: Scope
   } catch (err) {
     return kpiError(err, label, info, true);
   }
-  const closed = await closedReason(period, now);
+  const closed = await closedReason(now);
   if (closed !== null) {
     return (
       <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} advanced />
@@ -247,7 +246,7 @@ export async function SwapsKpi({ period, scope }: { period: Period; scope: Scope
           ? undefined
           : t("kpis.swapsRate", { rate: formatRate(swapsPerSecond(swaps, period)) })
       }
-      stamp={await lateStamp(now.asOf, period)}
+      stamp={await lateStamp(now)}
       advanced
     />
   );
@@ -265,7 +264,7 @@ export async function RotationKpi({ period, scope }: { period: Period; scope: Sc
   } catch (err) {
     return kpiError(err, label, info, true);
   }
-  const closed = await closedReason(period, now);
+  const closed = await closedReason(now);
   if (closed !== null) {
     return (
       <KpiCell label={label} info={info} value={<Unavailable reason={closed} />} advanced />
@@ -284,7 +283,7 @@ export async function RotationKpi({ period, scope }: { period: Period; scope: Sc
       info={info}
       value={await valued(ratio === null ? "—" : formatTimes(ratio, locale), items, now.coverageUnit)}
       sub={t("kpis.rotationSub")}
-      stamp={await lateStamp(now.asOf, period)}
+      stamp={await lateStamp(now)}
       advanced
     />
   );

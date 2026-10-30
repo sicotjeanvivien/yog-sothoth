@@ -151,7 +151,7 @@ async function Births({ period, protocol }: TabProps) {
     throw err;
   }
 
-  const closed = await closedReason(period, series);
+  const closed = await closedReason(series);
   const slots = birthSlotsOf(series);
   const total = birthTotalOf(slots);
   const max = Math.max(0, ...slots.map((s) => s.value ?? 0));
@@ -234,7 +234,7 @@ async function LargestDeposits({ period, protocol }: TabProps) {
     throw err;
   }
 
-  const closed = await closedReason(period, creations);
+  const closed = await closedReason(creations);
   const now = new Date();
 
   return (

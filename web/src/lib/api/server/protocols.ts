@@ -29,6 +29,7 @@ import {
   zGetTvlSeriesQuery,
   zGetTvlSeriesResponse,
   zGetTvlTotalsResponse,
+  zGetWindowsResponse,
   zListProtocolLiquidityMovesResponse,
   zListProtocolRotationRunsResponse,
   zListProtocolsResponse,
@@ -46,6 +47,9 @@ export const fetchProtocols = cache(() =>
 export const fetchProtocol = cache((protocol: ProtocolResponse) =>
   apiGet(`/api/protocols/${protocol}`, {}, zGetProtocolResponse),
 );
+
+/** Every window: its bounds, whether it is open, and whether it runs late. */
+export const fetchWindows = cache(() => apiGet("/api/windows", {}, zGetWindowsResponse));
 
 export const fetchSwapTotals = cache((scope: Scope, window: WindowResponse) =>
   apiGet(scopedPath(scope, "swaps/totals"), { window }, zGetSwapTotalsResponse),

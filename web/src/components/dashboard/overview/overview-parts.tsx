@@ -9,8 +9,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { InfoPopover } from "@/components/shared/info-popover";
 import { formatUtcMoment, type FormatLocale } from "@/lib/format/date";
 import { formatSignedPercent } from "@/lib/format/format-percent";
-import { periodState, type MeasuredSpan } from "@/lib/overview/availability";
-import type { Period } from "@/lib/overview/period";
+import type { WindowPeriodResponse } from "@/lib/api/schema/zod.gen";
 
 import {
   BLOCK_HEAD_CLASS,
@@ -131,22 +130,21 @@ export async function utcMoment(input: string | Date): Promise<string> {
   return formatUtcMoment(input, locale) ?? "—";
 }
 
-/** Why `period` is closed on this span, or `null` when its facts are whole. */
-export async function closedReason(period: Period, span: MeasuredSpan): Promise<string | null> {
-  const t = await getTranslations("Dashboard.Overview.period");
-  const state = periodState(period, span);
-  if (state.open) {
+/** Why this window is closed, or `null` when it is open. */
+export async function closedReason(span: WindowPeriodResponse): Promise<string | null> {
+  if (span.open) {
     return null;
   }
+  const t = await getTranslations("Dashboard.Overview.period");
   if (span.asOf === null || span.coveredSince === null) {
     return t("closedEmpty");
   }
-  if (state.opensAt === null) {
+  if (span.opensAt === null) {
     return t("closedSoon");
   }
   return t("closedUntil", {
     since: await utcMoment(span.coveredSince),
-    opens: await utcMoment(state.opensAt),
+    opens: await utcMoment(span.opensAt),
   });
 }
 

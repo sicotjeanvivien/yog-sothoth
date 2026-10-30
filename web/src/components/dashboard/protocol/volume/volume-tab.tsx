@@ -39,7 +39,6 @@ import { shareOf } from "@/lib/overview/totals";
 import type { Period } from "@/lib/overview/period";
 import {
   durationOf,
-  splitSinceOf,
   splitSlotsOf,
   splitTotalsOf,
 } from "@/lib/protocol/volume";
@@ -150,7 +149,7 @@ async function VolumeSources({ period, protocol }: TabProps) {
     throw err;
   }
 
-  const closed = await closedReason(period, runs);
+  const closed = await closedReason(runs);
   const usd = (value: number | null) => formatUsdCompact(value === null ? null : String(value));
   const share = (part: number, whole: number) =>
     whole > 0 ? formatPercent(String(part / whole), locale) : "—";
@@ -211,7 +210,7 @@ async function VolumeSources({ period, protocol }: TabProps) {
     };
   });
 
-  const measuredSince = splitSinceOf(runs.items);
+  const measuredSince = runs.splitSince;
   const partly = totals.unsplit > 0;
   const legend = (
     <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] text-dash-ink-2">
@@ -296,7 +295,7 @@ async function RunStats({ period, protocol }: TabProps) {
   }
 
   const mine = totals.items.find((i) => i.protocol === protocol);
-  const closed = (await closedReason(period, totals)) ?? t("notMeasured");
+  const closed = (await closedReason(totals)) ?? t("notMeasured");
   const firstHourShare = (firstHour: { volumeUsd: string; inFirstHourUsd: string }) => {
     const share = shareOf(
       Number.parseFloat(firstHour.inFirstHourUsd),
@@ -384,7 +383,7 @@ async function LargestRuns({ period, protocol }: TabProps) {
     throw err;
   }
 
-  const closed = await closedReason(period, runs);
+  const closed = await closedReason(runs);
 
   return (
     <section aria-label={title} className={RUNS_CLASS}>

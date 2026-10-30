@@ -39,7 +39,8 @@ import {
   VolumeChart,
   VolumeChartPlaceholder,
 } from "@/components/dashboard/overview/volume-chart";
-import { OVERVIEW_PERIODS, parsePeriod } from "@/lib/overview/period";
+import { OVERVIEW_PERIODS } from "@/lib/overview/period";
+import { readPeriod } from "@/lib/api/server/read-period";
 import { pageMetadata } from "@/lib/seo/page-metadata";
 
 type OverviewPageProps = {
@@ -69,14 +70,14 @@ export default async function OverviewPage({
 }: OverviewPageProps) {
   const { locale } = await params;
   setRequestLocale(locale);
-  const period = parsePeriod((await searchParams).period, OVERVIEW_PERIODS);
+  const period = await readPeriod((await searchParams).period, OVERVIEW_PERIODS);
   const initialAdvanced = (await cookies()).get(OVERVIEW_ADVANCED_COOKIE)?.value === "1";
 
   return (
     <OverviewMode initialAdvanced={initialAdvanced}>
       <OverviewHeader period={period} />
       <Suspense fallback={null}>
-        <StaleBanner period={period} scope="all" />
+        <StaleBanner period={period} />
       </Suspense>
 
       <div className={GRID_CLASS}>

@@ -40,11 +40,6 @@ export function splitSlotsOf(series: Series<SplitBar>): SplitSlot[] {
   }));
 }
 
-/** The first bar the runs split, `null` before any is. */
-export function splitSinceOf(bars: readonly SplitBar[]): string | null {
-  return bars.find((bar) => bar.inRunsUsd !== null)?.from ?? null;
-}
-
 /** The legend: the split bars summed, the share in runs `null` without volume, and what is unsplit. */
 export function splitTotalsOf(slots: readonly SplitSlot[]): {
   inRuns: number;

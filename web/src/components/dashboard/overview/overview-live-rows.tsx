@@ -10,7 +10,6 @@ import { ApiClientError } from "@/lib/api/errors";
 import { fetchSwapTotals } from "@/lib/api/server/protocols";
 import type { Period } from "@/lib/overview/period";
 import type { Scope } from "@/lib/api/server/scope";
-import { isStale } from "@/lib/overview/staleness";
 
 import { utcMoment } from "./overview-parts";
 
@@ -45,7 +44,7 @@ export async function OverviewLiveRows({ period, scope }: { period: Period; scop
       <LiveRow
         label={t("liveStatus.measuredUntil")}
         value={activity.asOf === null ? "—" : await utcMoment(activity.asOf)}
-        late={isStale(activity.asOf, new Date(), period)}
+        late={activity.late}
       />
     </>
   );

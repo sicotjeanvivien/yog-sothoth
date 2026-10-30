@@ -28,7 +28,6 @@ import {
   fetchLargestLiquidityMoves,
   fetchLiquidityMoveTotals,
   fetchLiquiditySeries,
-  fetchSwapTotals,
   fetchTvlSeries,
   servesTvlSeries,
 } from "@/lib/api/server/protocols";
@@ -118,20 +117,13 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
   const locale = (await getLocale()) as FormatLocale;
   const title = t("title");
 
-  const swapsRead = fetchSwapTotals(protocol, period).catch((err: unknown) => {
-    if (err instanceof ApiClientError) {
-      return null;
-    }
-    throw err;
-  });
   const tvlRead = servesTvlSeries(protocol, period) ? fetchTvlSeries(protocol, period) : null;
-  let tvl, series, totals, swaps;
+  let tvl, series, totals;
   try {
-    [tvl, series, totals, swaps] = await Promise.all([
+    [tvl, series, totals] = await Promise.all([
       tvlRead,
       fetchLiquiditySeries(protocol, period),
       fetchLiquidityMoveTotals(protocol, period),
-      swapsRead,
     ]);
   } catch (err) {
     if (err instanceof ApiClientError) {
@@ -145,9 +137,7 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
     throw err;
   }
 
-  // ⚠️ The swaps' span, not the liquidity's: a period its liquidity covers in part still draws.
-  // Without the swaps, the liquidity's own: the block does not fall with a read it can spare.
-  const closed = await closedReason(period, swaps ?? series);
+  const closed = await closedReason(series);
   const usd = (value: number | null) => formatUsdCompact(value === null ? null : String(value));
   const signed = (value: number) => `${value < 0 ? "−" : "+"}${usd(Math.abs(value))}`;
 
