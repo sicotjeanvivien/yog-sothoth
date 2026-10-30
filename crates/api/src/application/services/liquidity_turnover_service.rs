@@ -59,9 +59,10 @@ impl LiquidityTurnoverService {
             }
             _ => Vec::new(),
         };
-        let frozen = match swaps.is_empty() {
-            true => None,
-            false => build_frozen_period(self.hours.as_ref(), Window::Day, None).await?,
+        let frozen = match &period {
+            _ if swaps.is_empty() => None,
+            Some(ReadPeriod::Frozen(p)) => Some(*p),
+            _ => build_frozen_period(self.hours.as_ref(), Window::Day, None).await?,
         };
         let tvl = match &frozen {
             Some(frozen) => {

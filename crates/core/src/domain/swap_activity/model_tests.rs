@@ -124,4 +124,22 @@ fn a_sum_that_overflows_is_unknown() {
         }),
     );
     assert_eq!(buckets[0].activity.volume_usd, None);
+
+    let mut rows = vec![
+        ProtocolBucket {
+            protocol: Protocol::MeteoraDammV2,
+            from: at,
+            value: huge(Protocol::MeteoraDammV2).activity,
+        };
+        2
+    ];
+    rows.push(ProtocolBucket {
+        protocol: Protocol::MeteoraDlmm,
+        from: at,
+        value: activity(Some(1)),
+    });
+    assert_eq!(
+        SwapActivity::bucket_totals(&rows)[0].activity.volume_usd,
+        None
+    );
 }

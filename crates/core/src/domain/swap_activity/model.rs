@@ -38,37 +38,35 @@ pub struct ProtocolSwapActivity {
 }
 
 impl SwapActivity {
-    /// The rows of one bucket summed: each USD field over the rows that know it; `None` if none
-    /// does, or on overflow.
-    fn of_bucket(self, other: &Self) -> Self {
-        let add = |a: Option<Decimal>, b: Option<Decimal>| match (a, b) {
-            (Some(a), Some(b)) => a.checked_add(b),
-            (a, b) => a.or(b),
-        };
-        Self {
-            swaps: self.swaps + other.swaps,
-            volume_usd: add(self.volume_usd, other.volume_usd),
-            fees_usd: add(self.fees_usd, other.fees_usd),
-            lp_fees_usd: add(self.lp_fees_usd, other.lp_fees_usd),
-            protocol_fees_usd: add(self.protocol_fees_usd, other.protocol_fees_usd),
-            referral_fees_usd: add(self.referral_fees_usd, other.referral_fees_usd),
-            pool_hours: self.pool_hours + other.pool_hours,
-            pool_hours_valued: self.pool_hours_valued + other.pool_hours_valued,
-        }
-    }
-
-    /// The protocols of each bucket summed, the earliest first.
+    /// The protocols of each bucket summed, the earliest first: each USD field over the rows that
+    /// know it; `None` if none does, or on overflow.
     pub fn bucket_totals(rows: &[ProtocolBucket<Self>]) -> Vec<SwapBucket> {
-        let mut buckets: BTreeMap<DateTime<Utc>, Self> = BTreeMap::new();
+        let mut buckets: BTreeMap<DateTime<Utc>, Vec<&Self>> = BTreeMap::new();
         for row in rows {
-            buckets
-                .entry(row.from)
-                .and_modify(|sum| *sum = sum.clone().of_bucket(&row.value))
-                .or_insert_with(|| row.value.clone());
+            buckets.entry(row.from).or_default().push(&row.value);
         }
         buckets
             .into_iter()
-            .map(|(from, activity)| SwapBucket { from, activity })
+            .map(|(from, values)| {
+                let usd = |field: fn(&Self) -> Option<Decimal>| {
+                    let mut known = values.iter().filter_map(|value| field(value));
+                    let first = known.next()?;
+                    known.try_fold(first, Decimal::checked_add)
+                };
+                SwapBucket {
+                    from,
+                    activity: Self {
+                        swaps: values.iter().map(|value| value.swaps).sum(),
+                        volume_usd: usd(|a| a.volume_usd),
+                        fees_usd: usd(|a| a.fees_usd),
+                        lp_fees_usd: usd(|a| a.lp_fees_usd),
+                        protocol_fees_usd: usd(|a| a.protocol_fees_usd),
+                        referral_fees_usd: usd(|a| a.referral_fees_usd),
+                        pool_hours: values.iter().map(|value| value.pool_hours).sum(),
+                        pool_hours_valued: values.iter().map(|value| value.pool_hours_valued).sum(),
+                    },
+                }
+            })
             .collect()
     }
 }
