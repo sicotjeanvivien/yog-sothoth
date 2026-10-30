@@ -113,6 +113,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/readyz` | Readiness — pings the DB; 503 with per-check detail when it fails |
 | `GET` | `/api/network` | The chain's latest slot as the probe saw it, the probe's `getSlot` latency, when it was observed |
 | `GET` | `/api/ingestion` | Our ingestion's freshness (`live` / `delayed` / `stale`) and its last indexed event |
+| `GET` | `/api/windows` | Every window, the shortest first: its bounds, `open`, `opensAt` and `late`, without reading a measure over it |
 | `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` filter); each item embeds its pool's token pair (`tokenA`/`tokenB`, `EmbeddedTokenResponse`) |
 | `GET` | `/api/signals/stream` | SSE stream of new signals (see below) |
 | `GET` | `/api/protocols` | A page of every protocol of the domain, in the domain's order: observed by this build or not, pools seen — the catalogue, live; forward-only cursor |
@@ -142,7 +143,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/protocols/{protocol}/position-fee-claims/totals`, `/series`, `/api/protocols/{protocol}/reward-claims/totals`, `/series` | The fees, or the rewards, the positions claimed over the window, then per bucket: claims, the valued ones, their value and the distinct owners; its `coveredSince` is the first whole hour whose claims were valued, the first tranche over the last hour |
 | `GET` | `/api/protocols/{protocol}/rotation-runs`, `/api/pools/{pool}/rotation-runs` | A page of the rotation runs started in the window, through the last tranche written: pool and its tokens' symbols, start, end, volume, first hour's volume, extinct; `?sort=volume` (default) or `at`, forward-only cursor that keeps its first page's end, refused (400) under another list; empty while the rotation does not cover the window |
 | `GET` | `/api/protocols/{protocol}/rotation-runs/totals` | The runs started in the window, their distinct pools, those still in progress, their median and p90 duration, their volume, and `firstHour`: the runs whose first hour ended before the window did, their volume and its part in that hour, `null` while none did (always over `1h`) — through the last tranche written; its `coveredSince` is the first tranche whose rotation was measured |
-| `GET` | `/api/protocols/{protocol}/rotation-runs/series` | The protocol's volume by `interval`, split by its runs: in them and outside them (never under 0), both `null` on a bar the runs do not cover whole or with an hour not valued |
+| `GET` | `/api/protocols/{protocol}/rotation-runs/series` | The protocol's volume by `interval`, split by its runs, `splitSince` the first instant they split a bar from: in them and outside them (never under 0), both `null` on a bar the runs do not cover whole or with an hour not valued |
 | `GET` | `/api/protocols/{protocol}/liquidity-moves`, `/api/pools/{pool}/liquidity-moves` | A page of the valued moves (creations, additions, removals), their pool's token symbols embedded, the lock their transaction puts on a position (`none`, `vesting`, `permanent`, `null` before measured), `?kind=create|add|remove` to keep one kind, `?sort=amount` (default) or `at`, forward-only cursor that keeps its first page's end, refused (400) under another list, kind or window, or once that end is over an hour behind; empty while the protocol's liquidity does not cover the window |
 | `GET` | `/api/tvl`, `/api/protocols/{protocol}/tvl` | Per protocol, the last TVL reading at or before `asOf`, its `at` said |
 | `GET` | `/api/tvl/series`, `/api/protocols/{protocol}/tvl/series` (`interval=1h`, its only step) | Per protocol, the reading of every hour measured from the window's start |
@@ -192,7 +193,8 @@ at the end of this section.
    - **produced resources**, what we compute from the first two: the measures (rule 4),
      `tvl`, `pool-discoveries`, `liquidity-moves`, `rotation-runs`, `vesting-unlocks`, `signals`;
    - **service resources**, the state and the messages of the service: `network` and
-     `ingestion`, singletons each at `/api/<singleton>`, and `announcements`.
+     `ingestion`, singletons each at `/api/<singleton>`, `windows`, the closed list of the windows, unpaginated,
+     and `announcements`.
 
    A name says what is observed, never an image or a category (`activity`, `stats`,
    `metrics`, `analytics`). An on-chain collection takes the name of the on-chain event
@@ -283,6 +285,15 @@ at the end of this section.
     arithmetic over the fields of one response, and the presentation (format, layout, colours,
     labels, ⓘ). What a route serves, it reads in the contract. The dashboard does not hold to this
     yet in full: what it still decides is being moved here.
+
+**What a window says of itself.** Every measure and every list read over a produced period carries `open`, `opensAt` and `late`,
+judged in one place. `open`: the service opens this window, its facts covering it whole; it says
+what the dashboard may show, not what can be computed, so `30d`, held closed until its reads are
+measured on the prod, is `open: false` with `opensAt: null` and still serves its figures on request.
+`opensAt`: when it will be covered whole; `null` for a measure not measured yet. A read judges on its own
+`coveredSince`; a series of a measure that starts later than the facts (`liquidity-moves`, the claims) on the
+facts', as it draws a period it covers in part. `late`: `asOf` is more than 2 h behind on a frozen hour,
+30 min on a tranche. An `offset` read is judged at the end it was moved from.
 
 **Parameters and fields.** `window=24h|7d|30d`, a closed list, 400 otherwise; `offset` for the
 previous window. `1h`, the last hour through the last tranche written (through the last frozen hour for the TVL's `totals`), is served by every measure

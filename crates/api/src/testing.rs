@@ -46,7 +46,7 @@ use crate::application::{
     PositionChangeEventService, PositionFeeClaimEventService, ProtocolCatalogService,
     ProtocolFeeClaimEventService, ProtocolTvlService, RewardChangeEventService,
     RewardClaimEventService, RotationRunService, SignalService, SwapActivityService,
-    SwapEventService, TokenService, WorkSlots,
+    SwapEventService, TokenService, WindowsService, WorkSlots,
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
@@ -62,6 +62,7 @@ pub(crate) fn app_state() -> AppState {
         network_service: Arc::new(NetworkService::new(Arc::new(
             MockNetworkStatusRepo::failing(),
         ))),
+        windows_service: Arc::new(WindowsService::new(frozen_hours_repo(None))),
         ingestion_service: Arc::new(IngestionService::new(Arc::new(
             MockEventFreshnessRepo::failing(),
         ))),
@@ -158,15 +159,21 @@ pub(crate) fn app_state() -> AppState {
 /// `method uri` through the whole router on [`app_state`]: the status, the headers, and the
 /// `detail` of a Problem Details body (else the body as text).
 pub(crate) async fn call(method: Method, uri: &str) -> (StatusCode, HeaderMap, String) {
+    call_on(app_state(), method, uri).await
+}
+
+/// [`call`] on `state`.
+pub(crate) async fn call_on(
+    state: AppState,
+    method: Method,
+    uri: &str,
+) -> (StatusCode, HeaderMap, String) {
     let request = Request::builder()
         .method(method)
         .uri(uri)
         .body(Body::empty())
         .unwrap();
-    let response = build_router(app_state(), vec![])
-        .oneshot(request)
-        .await
-        .unwrap();
+    let response = build_router(state, vec![]).oneshot(request).await.unwrap();
     let (parts, body) = response.into_parts();
     let body = axum::body::to_bytes(body, usize::MAX).await.unwrap();
     let detail = serde_json::from_slice::<serde_json::Value>(&body)

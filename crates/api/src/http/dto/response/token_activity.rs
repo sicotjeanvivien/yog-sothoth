@@ -1,13 +1,12 @@
 //! `/api/swaps/by-token`: a page of tokens by volume, over a window.
 
-use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::{TokenActivity, Window};
 
 use super::token::EmbeddedTokenResponse;
-use super::window::{CoverageUnitResponse, WindowResponse};
+use super::window::{CoverageUnitResponse, WindowPeriodResponse, WindowResponse};
 use crate::application::{Measured, PeriodBounds};
 use crate::http::cursor::encode_cursor_opt;
 use crate::http::dto::schema::{Count, UnsignedDecimal};
@@ -36,9 +35,8 @@ pub(crate) struct TokenActivityResponse {
 pub(crate) struct TokenActivityPageResponse {
     window: WindowResponse,
     coverage_unit: CoverageUnitResponse,
-    from: Option<DateTime<Utc>>,
-    as_of: Option<DateTime<Utc>>,
-    covered_since: Option<DateTime<Utc>>,
+    #[serde(flatten)]
+    period: WindowPeriodResponse,
     items: Vec<TokenActivityResponse>,
     next_cursor: Option<String>,
     prev_cursor: Option<String>,
@@ -51,14 +49,11 @@ impl TokenActivityPageResponse {
         window: Window,
         measured: Measured<yog_core::Page<TokenActivity>, P>,
     ) -> Result<Self, ApiError> {
-        let period = measured.period;
         let page = measured.items;
         Ok(Self {
             window: window.into(),
             coverage_unit: window.into(),
-            from: period.map(|s| s.from()),
-            as_of: period.map(|s| s.as_of()),
-            covered_since: period.map(|s| s.covered_since()),
+            period: WindowPeriodResponse::of(window, measured.period),
             next_cursor: encode_cursor_opt(page.next_cursor.as_ref())?,
             prev_cursor: encode_cursor_opt(page.prev_cursor.as_ref())?,
             is_first: page.is_first,

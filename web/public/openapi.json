@@ -4232,112 +4232,210 @@
         ],
         "type": "object"
       },
-      "SeriesResponse_ProtocolClaimBucketResponse": {
-        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.",
-        "properties": {
-          "asOf": {
-            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
+      "RunSplitSeriesResponse_ProtocolRotationRunBucketResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
           },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "interval": {
-            "$ref": "#/components/schemas/IntervalResponse"
-          },
-          "items": {
-            "items": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/ProtocolClaimTotalsResponse"
-                },
-                {
+          {
+            "properties": {
+              "interval": {
+                "$ref": "#/components/schemas/IntervalResponse"
+              },
+              "items": {
+                "items": {
                   "properties": {
                     "from": {
                       "format": "date-time",
                       "type": "string"
+                    },
+                    "inRunsUsd": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/UnsignedDecimal",
+                          "description": "`null` where the runs do not cover the bucket whole, or an hour of it is not valued."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "outsideRunsUsd": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/UnsignedDecimal",
+                          "description": "`volumeUsd − inRunsUsd`, never under 0; `null` as soon as one of them is."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "protocol": {
+                      "$ref": "#/components/schemas/ProtocolResponse"
+                    },
+                    "volumeUsd": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/UnsignedDecimal",
+                          "description": "Every swap of the bucket, as `swaps/series`; `null` where none is valued."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
-                    "from"
+                    "protocol",
+                    "from",
+                    "inRunsUsd",
+                    "outsideRunsUsd",
+                    "volumeUsd"
                   ],
                   "type": "object"
-                }
-              ],
-              "description": "A bucket of the series; `owners` is distinct over the bucket."
+                },
+                "type": "array"
+              },
+              "splitSince": {
+                "description": "The first instant the runs split a bar from; `null` before they are measured.",
+                "format": "date-time",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
             },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
+            "required": [
+              "window",
+              "interval",
+              "items",
+              "splitSince"
+            ],
+            "type": "object"
           }
-        },
-        "required": [
-          "window",
-          "interval",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
         ],
-        "type": "object"
+        "description": "[`SeriesResponse`] of the volume the runs split, which says since when they split it."
+      },
+      "SeriesResponse_ProtocolClaimBucketResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
+          },
+          {
+            "properties": {
+              "interval": {
+                "$ref": "#/components/schemas/IntervalResponse"
+              },
+              "items": {
+                "items": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProtocolClaimTotalsResponse"
+                    },
+                    {
+                      "properties": {
+                        "from": {
+                          "format": "date-time",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "from"
+                      ],
+                      "type": "object"
+                    }
+                  ],
+                  "description": "A bucket of the series; `owners` is distinct over the bucket."
+                },
+                "type": "array"
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
+            },
+            "required": [
+              "window",
+              "interval",
+              "items"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold."
       },
       "SeriesResponse_ProtocolLiquidityFlowsBucketResponse": {
-        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.",
-        "properties": {
-          "asOf": {
-            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
           },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "interval": {
-            "$ref": "#/components/schemas/IntervalResponse"
-          },
-          "items": {
-            "items": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/LiquidityFlowsResponse"
+          {
+            "properties": {
+              "interval": {
+                "$ref": "#/components/schemas/IntervalResponse"
+              },
+              "items": {
+                "items": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/LiquidityFlowsResponse"
+                    },
+                    {
+                      "properties": {
+                        "from": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "protocol": {
+                          "$ref": "#/components/schemas/ProtocolResponse"
+                        }
+                      },
+                      "required": [
+                        "protocol",
+                        "from"
+                      ],
+                      "type": "object"
+                    }
+                  ]
                 },
-                {
+                "type": "array"
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
+            },
+            "required": [
+              "window",
+              "interval",
+              "items"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold."
+      },
+      "SeriesResponse_ProtocolPoolCreationsBucketResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
+          },
+          {
+            "properties": {
+              "interval": {
+                "$ref": "#/components/schemas/IntervalResponse"
+              },
+              "items": {
+                "items": {
                   "properties": {
                     "from": {
                       "format": "date-time",
                       "type": "string"
+                    },
+                    "pools": {
+                      "$ref": "#/components/schemas/Count"
                     },
                     "protocol": {
                       "$ref": "#/components/schemas/ProtocolResponse"
@@ -4345,340 +4443,137 @@
                   },
                   "required": [
                     "protocol",
-                    "from"
+                    "from",
+                    "pools"
                   ],
                   "type": "object"
-                }
-              ]
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "interval",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
-      "SeriesResponse_ProtocolPoolCreationsBucketResponse": {
-        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.",
-        "properties": {
-          "asOf": {
-            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "interval": {
-            "$ref": "#/components/schemas/IntervalResponse"
-          },
-          "items": {
-            "items": {
-              "properties": {
-                "from": {
-                  "format": "date-time",
-                  "type": "string"
                 },
-                "pools": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                }
+                "type": "array"
               },
-              "required": [
-                "protocol",
-                "from",
-                "pools"
-              ],
-              "type": "object"
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
             },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
+            "required": [
+              "window",
+              "interval",
+              "items"
+            ],
+            "type": "object"
           }
-        },
-        "required": [
-          "window",
-          "interval",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
         ],
-        "type": "object"
+        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold."
       },
       "SeriesResponse_ProtocolPositionChangeBucketResponse": {
-        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.",
-        "properties": {
-          "asOf": {
-            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
           },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "interval": {
-            "$ref": "#/components/schemas/IntervalResponse"
-          },
-          "items": {
-            "items": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/ProtocolPositionChangeTotalsResponse"
+          {
+            "properties": {
+              "interval": {
+                "$ref": "#/components/schemas/IntervalResponse"
+              },
+              "items": {
+                "items": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProtocolPositionChangeTotalsResponse"
+                    },
+                    {
+                      "properties": {
+                        "from": {
+                          "format": "date-time",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "from"
+                      ],
+                      "type": "object"
+                    }
+                  ]
                 },
-                {
+                "type": "array"
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
+            },
+            "required": [
+              "window",
+              "interval",
+              "items"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold."
+      },
+      "SeriesResponse_ProtocolTvlResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
+          },
+          {
+            "properties": {
+              "interval": {
+                "$ref": "#/components/schemas/IntervalResponse"
+              },
+              "items": {
+                "items": {
+                  "description": "A protocol's TVL at `at`, the close of the hour it was last measured in.",
                   "properties": {
-                    "from": {
+                    "at": {
                       "format": "date-time",
                       "type": "string"
+                    },
+                    "poolsPriced": {
+                      "$ref": "#/components/schemas/Count",
+                      "description": "Pools with at least one side valued, a side without a price counting 0."
+                    },
+                    "poolsUnvalued": {
+                      "$ref": "#/components/schemas/Count",
+                      "description": "Pools with no side valued, out of `tvlUsd`."
+                    },
+                    "protocol": {
+                      "$ref": "#/components/schemas/ProtocolResponse"
+                    },
+                    "tvlUsd": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/UnsignedDecimal"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
-                    "from"
+                    "protocol",
+                    "at",
+                    "poolsPriced",
+                    "poolsUnvalued",
+                    "tvlUsd"
                   ],
                   "type": "object"
-                }
-              ]
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "interval",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
-      "SeriesResponse_ProtocolRotationRunBucketResponse": {
-        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.",
-        "properties": {
-          "asOf": {
-            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "interval": {
-            "$ref": "#/components/schemas/IntervalResponse"
-          },
-          "items": {
-            "items": {
-              "properties": {
-                "from": {
-                  "format": "date-time",
-                  "type": "string"
                 },
-                "inRunsUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal",
-                      "description": "`null` where the runs do not cover the bucket whole, or an hour of it is not valued."
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "outsideRunsUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal",
-                      "description": "`volumeUsd − inRunsUsd`, never under 0; `null` as soon as one of them is."
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                },
-                "volumeUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal",
-                      "description": "Every swap of the bucket, as `swaps/series`; `null` where none is valued."
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
+                "type": "array"
               },
-              "required": [
-                "protocol",
-                "from",
-                "inRunsUsd",
-                "outsideRunsUsd",
-                "volumeUsd"
-              ],
-              "type": "object"
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
             },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
+            "required": [
+              "window",
+              "interval",
+              "items"
+            ],
+            "type": "object"
           }
-        },
-        "required": [
-          "window",
-          "interval",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
         ],
-        "type": "object"
-      },
-      "SeriesResponse_ProtocolTvlResponse": {
-        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold.",
-        "properties": {
-          "asOf": {
-            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "interval": {
-            "$ref": "#/components/schemas/IntervalResponse"
-          },
-          "items": {
-            "items": {
-              "description": "A protocol's TVL at `at`, the close of the hour it was last measured in.",
-              "properties": {
-                "at": {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "poolsPriced": {
-                  "$ref": "#/components/schemas/Count",
-                  "description": "Pools with at least one side valued, a side without a price counting 0."
-                },
-                "poolsUnvalued": {
-                  "$ref": "#/components/schemas/Count",
-                  "description": "Pools with no side valued, out of `tvlUsd`."
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                },
-                "tvlUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              },
-              "required": [
-                "protocol",
-                "at",
-                "poolsPriced",
-                "poolsUnvalued",
-                "tvlUsd"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "interval",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
+        "description": "A measure by bucket: `interval` is the step of the buckets `from..asOf` hold."
       },
       "SeverityResponse": {
         "description": "How serious a signal is.",
@@ -4944,411 +4839,318 @@
         "type": "object"
       },
       "SwapSeriesResponse_PoolSwapBucketResponse": {
-        "description": "The swaps by bucket: `interval` is their step, `coverageUnit` what their coverage counts.",
-        "properties": {
-          "asOf": {
-            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
           },
-          "coverageUnit": {
-            "$ref": "#/components/schemas/CoverageUnitResponse"
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "interval": {
-            "$ref": "#/components/schemas/IntervalResponse"
-          },
-          "items": {
-            "items": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/SwapActivityResponse"
-                },
-                {
-                  "properties": {
-                    "from": {
-                      "format": "date-time",
-                      "type": "string"
+          {
+            "properties": {
+              "coverageUnit": {
+                "$ref": "#/components/schemas/CoverageUnitResponse"
+              },
+              "interval": {
+                "$ref": "#/components/schemas/IntervalResponse"
+              },
+              "items": {
+                "items": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SwapActivityResponse"
+                    },
+                    {
+                      "properties": {
+                        "from": {
+                          "format": "date-time",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "from"
+                      ],
+                      "type": "object"
                     }
-                  },
-                  "required": [
-                    "from"
-                  ],
-                  "type": "object"
-                }
-              ]
+                  ]
+                },
+                "type": "array"
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
             },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
+            "required": [
+              "window",
+              "interval",
+              "coverageUnit",
+              "items"
+            ],
+            "type": "object"
           }
-        },
-        "required": [
-          "window",
-          "interval",
-          "coverageUnit",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
         ],
-        "type": "object"
+        "description": "The swaps by bucket: `interval` is their step, `coverageUnit` what their coverage counts."
       },
       "SwapSeriesResponse_ProtocolSwapActivityBucketResponse": {
-        "description": "The swaps by bucket: `interval` is their step, `coverageUnit` what their coverage counts.",
-        "properties": {
-          "asOf": {
-            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
           },
-          "coverageUnit": {
-            "$ref": "#/components/schemas/CoverageUnitResponse"
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "interval": {
-            "$ref": "#/components/schemas/IntervalResponse"
-          },
-          "items": {
-            "items": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/SwapActivityResponse"
-                },
-                {
-                  "properties": {
-                    "from": {
-                      "format": "date-time",
-                      "type": "string"
+          {
+            "properties": {
+              "coverageUnit": {
+                "$ref": "#/components/schemas/CoverageUnitResponse"
+              },
+              "interval": {
+                "$ref": "#/components/schemas/IntervalResponse"
+              },
+              "items": {
+                "items": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SwapActivityResponse"
                     },
-                    "protocol": {
-                      "$ref": "#/components/schemas/ProtocolResponse"
+                    {
+                      "properties": {
+                        "from": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "protocol": {
+                          "$ref": "#/components/schemas/ProtocolResponse"
+                        }
+                      },
+                      "required": [
+                        "protocol",
+                        "from"
+                      ],
+                      "type": "object"
                     }
-                  },
-                  "required": [
-                    "protocol",
-                    "from"
-                  ],
-                  "type": "object"
-                }
-              ]
+                  ]
+                },
+                "type": "array"
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
             },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
+            "required": [
+              "window",
+              "interval",
+              "coverageUnit",
+              "items"
+            ],
+            "type": "object"
           }
-        },
-        "required": [
-          "window",
-          "interval",
-          "coverageUnit",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
         ],
-        "type": "object"
+        "description": "The swaps by bucket: `interval` is their step, `coverageUnit` what their coverage counts."
       },
       "SwapTotalsResponse_ProtocolSwapActivityResponse": {
-        "description": "The swaps over `from..asOf`: `coverageUnit` is what their coverage counts.",
-        "properties": {
-          "asOf": {
-            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
           },
-          "coverageUnit": {
-            "$ref": "#/components/schemas/CoverageUnitResponse"
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/SwapActivityResponse"
+          {
+            "properties": {
+              "coverageUnit": {
+                "$ref": "#/components/schemas/CoverageUnitResponse"
+              },
+              "items": {
+                "items": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SwapActivityResponse"
+                    },
+                    {
+                      "properties": {
+                        "pools": {
+                          "oneOf": [
+                            {
+                              "$ref": "#/components/schemas/Count",
+                              "description": "Distinct over the window; `null` when no cycle counted them at its last hour."
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "protocol": {
+                          "$ref": "#/components/schemas/ProtocolResponse"
+                        }
+                      },
+                      "required": [
+                        "protocol",
+                        "pools"
+                      ],
+                      "type": "object"
+                    }
+                  ]
                 },
-                {
+                "type": "array"
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
+            },
+            "required": [
+              "window",
+              "coverageUnit",
+              "items"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "The swaps over `from..asOf`: `coverageUnit` is what their coverage counts."
+      },
+      "SwapTotalsResponse_SwapActivityResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
+          },
+          {
+            "properties": {
+              "coverageUnit": {
+                "$ref": "#/components/schemas/CoverageUnitResponse"
+              },
+              "items": {
+                "items": {
                   "properties": {
-                    "pools": {
+                    "feesUsd": {
                       "oneOf": [
                         {
-                          "$ref": "#/components/schemas/Count",
-                          "description": "Distinct over the window; `null` when no cycle counted them at its last hour."
+                          "$ref": "#/components/schemas/UnsignedDecimal"
                         },
                         {
                           "type": "null"
                         }
                       ]
                     },
-                    "protocol": {
-                      "$ref": "#/components/schemas/ProtocolResponse"
+                    "lpFeesUsd": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/UnsignedDecimal"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "poolHours": {
+                      "$ref": "#/components/schemas/Count"
+                    },
+                    "poolHoursValued": {
+                      "$ref": "#/components/schemas/Count"
+                    },
+                    "protocolFeesUsd": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/UnsignedDecimal"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "referralFeesUsd": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/UnsignedDecimal"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "swaps": {
+                      "$ref": "#/components/schemas/Count"
+                    },
+                    "volumeUsd": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/UnsignedDecimal"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
-                    "protocol",
-                    "pools"
+                    "swaps",
+                    "poolHours",
+                    "poolHoursValued",
+                    "feesUsd",
+                    "lpFeesUsd",
+                    "protocolFeesUsd",
+                    "referralFeesUsd",
+                    "volumeUsd"
                   ],
                   "type": "object"
-                }
-              ]
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "coverageUnit",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
-      "SwapTotalsResponse_SwapActivityResponse": {
-        "description": "The swaps over `from..asOf`: `coverageUnit` is what their coverage counts.",
-        "properties": {
-          "asOf": {
-            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coverageUnit": {
-            "$ref": "#/components/schemas/CoverageUnitResponse"
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "properties": {
-                "feesUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
                 },
-                "lpFeesUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "poolHours": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "poolHoursValued": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "protocolFeesUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "referralFeesUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "swaps": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "volumeUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
+                "type": "array"
               },
-              "required": [
-                "swaps",
-                "poolHours",
-                "poolHoursValued",
-                "feesUsd",
-                "lpFeesUsd",
-                "protocolFeesUsd",
-                "referralFeesUsd",
-                "volumeUsd"
-              ],
-              "type": "object"
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
             },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
+            "required": [
+              "window",
+              "coverageUnit",
+              "items"
+            ],
+            "type": "object"
           }
-        },
-        "required": [
-          "window",
-          "coverageUnit",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
         ],
-        "type": "object"
+        "description": "The swaps over `from..asOf`: `coverageUnit` is what their coverage counts."
       },
       "TokenActivityPageResponse": {
-        "description": "The window envelope over a forward-only page: `prevCursor` is always `null`.",
-        "properties": {
-          "asOf": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
           },
-          "coverageUnit": {
-            "$ref": "#/components/schemas/CoverageUnitResponse"
-          },
-          "coveredSince": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "isFirst": {
-            "type": "boolean"
-          },
-          "isLast": {
-            "type": "boolean"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/TokenActivityResponse"
+          {
+            "properties": {
+              "coverageUnit": {
+                "$ref": "#/components/schemas/CoverageUnitResponse"
+              },
+              "isFirst": {
+                "type": "boolean"
+              },
+              "isLast": {
+                "type": "boolean"
+              },
+              "items": {
+                "items": {
+                  "$ref": "#/components/schemas/TokenActivityResponse"
+                },
+                "type": "array"
+              },
+              "nextCursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "prevCursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
             },
-            "type": "array"
-          },
-          "nextCursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "prevCursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
+            "required": [
+              "window",
+              "coverageUnit",
+              "items",
+              "isFirst",
+              "isLast",
+              "nextCursor",
+              "prevCursor"
+            ],
+            "type": "object"
           }
-        },
-        "required": [
-          "window",
-          "coverageUnit",
-          "items",
-          "isFirst",
-          "isLast",
-          "asOf",
-          "coveredSince",
-          "from",
-          "nextCursor",
-          "prevCursor"
         ],
-        "type": "object"
+        "description": "The window envelope over a forward-only page: `prevCursor` is always `null`."
       },
       "TokenActivityResponse": {
         "description": "⚠️ A swap counts for both its tokens: the volumes add up to twice the total.\n`poolHoursValued` of `poolHours` is the volume's coverage.",
@@ -5474,109 +5276,91 @@
         "type": "object"
       },
       "TrancheWindowedResponse_ProtocolRotationRunTotalsResponse": {
-        "description": "`from..asOf`, each `null` before the first tranche is written.",
-        "properties": {
-          "asOf": {
-            "description": "The end of the last tranche written: the instant the rows reflect.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
           },
-          "coveredSince": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "properties": {
-                "firstHour": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/RotationRunsFirstHourResponse",
-                      "description": "`null` while no run's first hour ended before the window did: always over `1h`."
+          {
+            "properties": {
+              "items": {
+                "items": {
+                  "properties": {
+                    "firstHour": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/RotationRunsFirstHourResponse",
+                          "description": "`null` while no run's first hour ended before the window did: always over `1h`."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "inProgress": {
-                  "$ref": "#/components/schemas/Count",
-                  "description": "The runs not extinct yet."
-                },
-                "medianDurationSeconds": {
-                  "oneOf": [
-                    {
+                    "inProgress": {
                       "$ref": "#/components/schemas/Count",
-                      "description": "From start to end; `null` without a run."
+                      "description": "The runs not extinct yet."
                     },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "p90DurationSeconds": {
-                  "oneOf": [
-                    {
+                    "medianDurationSeconds": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/Count",
+                          "description": "From start to end; `null` without a run."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "p90DurationSeconds": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/Count"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "pools": {
+                      "$ref": "#/components/schemas/Count",
+                      "description": "The distinct pools the runs are of."
+                    },
+                    "protocol": {
+                      "$ref": "#/components/schemas/ProtocolResponse"
+                    },
+                    "runs": {
                       "$ref": "#/components/schemas/Count"
                     },
-                    {
-                      "type": "null"
+                    "volumeUsd": {
+                      "$ref": "#/components/schemas/UnsignedDecimal"
                     }
-                  ]
+                  },
+                  "required": [
+                    "protocol",
+                    "runs",
+                    "pools",
+                    "inProgress",
+                    "volumeUsd",
+                    "firstHour",
+                    "medianDurationSeconds",
+                    "p90DurationSeconds"
+                  ],
+                  "type": "object"
                 },
-                "pools": {
-                  "$ref": "#/components/schemas/Count",
-                  "description": "The distinct pools the runs are of."
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                },
-                "runs": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "volumeUsd": {
-                  "$ref": "#/components/schemas/UnsignedDecimal"
-                }
+                "type": "array"
               },
-              "required": [
-                "protocol",
-                "runs",
-                "pools",
-                "inProgress",
-                "volumeUsd",
-                "firstHour",
-                "medianDurationSeconds",
-                "p90DurationSeconds"
-              ],
-              "type": "object"
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
             },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
+            "required": [
+              "window",
+              "items"
+            ],
+            "type": "object"
           }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
         ],
-        "type": "object"
+        "description": "A measure over its window, through the last tranche written."
       },
       "TvlReadingResponse": {
         "description": "The TVL at `at`, the close of the hour it was measured in.",
@@ -5610,6 +5394,60 @@
         "pattern": "^\\d+(\\.\\d+)?$",
         "type": "string"
       },
+      "WindowPeriodResponse": {
+        "description": "What a response says of its window: its bounds, whether it is open, and whether it runs late.",
+        "properties": {
+          "asOf": {
+            "description": "The instant the rows reflect.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coveredSince": {
+            "description": "Where the read's coverage starts.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "description": "Where the window starts, `null` before any fact.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "late": {
+            "description": "Whether `asOf` is further behind than a frozen hour or a tranche should be.",
+            "type": "boolean"
+          },
+          "open": {
+            "description": "Whether the service opens this window: it is covered whole, and not held closed.",
+            "type": "boolean"
+          },
+          "opensAt": {
+            "description": "When it will be covered whole; `null` when open, or when no date can be said.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "open",
+          "late",
+          "asOf",
+          "coveredSince",
+          "from",
+          "opensAt"
+        ],
+        "type": "object"
+      },
       "WindowResponse": {
         "enum": [
           "1h",
@@ -5619,419 +5457,253 @@
         ],
         "type": "string"
       },
-      "WindowedPageResponse_LiquidityMoveResponse": {
-        "properties": {
-          "asOf": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
+      "WindowRowResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
           },
-          "coveredSince": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "isFirst": {
-            "type": "boolean"
-          },
-          "isLast": {
-            "type": "boolean"
-          },
-          "items": {
-            "items": {
-              "description": "One valued liquidity move, with its pool's token symbols.",
-              "properties": {
-                "amountUsd": {
-                  "$ref": "#/components/schemas/UnsignedDecimal"
-                },
-                "at": {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "kind": {
-                  "$ref": "#/components/schemas/LiquidityMoveKindResponse"
-                },
-                "lock": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/LiquidityMoveLockResponse",
-                      "description": "The lock its transaction puts on a position; `null` for a move valued before it was measured."
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "owner": {
-                  "type": "string"
-                },
-                "poolAddress": {
-                  "type": "string"
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                },
-                "signature": {
-                  "type": "string"
-                },
-                "tokenASymbol": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "tokenBSymbol": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                }
-              },
-              "required": [
-                "protocol",
-                "at",
-                "signature",
-                "poolAddress",
-                "owner",
-                "kind",
-                "amountUsd",
-                "lock",
-                "tokenASymbol",
-                "tokenBSymbol"
-              ],
-              "type": "object"
+          {
+            "properties": {
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
             },
-            "type": "array"
-          },
-          "nextCursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "prevCursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
+            "required": [
+              "window"
+            ],
+            "type": "object"
           }
-        },
-        "required": [
-          "window",
-          "items",
-          "isFirst",
-          "isLast",
-          "asOf",
-          "coveredSince",
-          "from",
-          "nextCursor",
-          "prevCursor"
         ],
-        "type": "object"
+        "description": "The windows the service reads, each with what it says of its period."
+      },
+      "WindowedPageResponse_LiquidityMoveResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
+          },
+          {
+            "properties": {
+              "isFirst": {
+                "type": "boolean"
+              },
+              "isLast": {
+                "type": "boolean"
+              },
+              "items": {
+                "items": {
+                  "description": "One valued liquidity move, with its pool's token symbols.",
+                  "properties": {
+                    "amountUsd": {
+                      "$ref": "#/components/schemas/UnsignedDecimal"
+                    },
+                    "at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "kind": {
+                      "$ref": "#/components/schemas/LiquidityMoveKindResponse"
+                    },
+                    "lock": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/LiquidityMoveLockResponse",
+                          "description": "The lock its transaction puts on a position; `null` for a move valued before it was measured."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "owner": {
+                      "type": "string"
+                    },
+                    "poolAddress": {
+                      "type": "string"
+                    },
+                    "protocol": {
+                      "$ref": "#/components/schemas/ProtocolResponse"
+                    },
+                    "signature": {
+                      "type": "string"
+                    },
+                    "tokenASymbol": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "tokenBSymbol": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "protocol",
+                    "at",
+                    "signature",
+                    "poolAddress",
+                    "owner",
+                    "kind",
+                    "amountUsd",
+                    "lock",
+                    "tokenASymbol",
+                    "tokenBSymbol"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "nextCursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "prevCursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
+            },
+            "required": [
+              "window",
+              "items",
+              "isFirst",
+              "isLast",
+              "nextCursor",
+              "prevCursor"
+            ],
+            "type": "object"
+          }
+        ]
       },
       "WindowedPageResponse_RotationRunResponse": {
-        "properties": {
-          "asOf": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
           },
-          "coveredSince": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "isFirst": {
-            "type": "boolean"
-          },
-          "isLast": {
-            "type": "boolean"
-          },
-          "items": {
-            "items": {
-              "properties": {
-                "endedAt": {
-                  "description": "The end of its last marked tranche.",
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "extinct": {
-                  "description": "No marked tranche followed within the gap: the run will not grow.",
-                  "type": "boolean"
-                },
-                "firstHourVolumeUsd": {
-                  "$ref": "#/components/schemas/UnsignedDecimal"
-                },
-                "poolAddress": {
-                  "minLength": 1,
-                  "type": "string"
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                },
-                "startedAt": {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "tokenASymbol": {
-                  "description": "`null` before its metadata is fetched.",
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "tokenBSymbol": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "volumeUsd": {
-                  "$ref": "#/components/schemas/UnsignedDecimal"
-                }
+          {
+            "properties": {
+              "isFirst": {
+                "type": "boolean"
               },
-              "required": [
-                "protocol",
-                "poolAddress",
-                "startedAt",
-                "endedAt",
-                "volumeUsd",
-                "firstHourVolumeUsd",
-                "extinct",
-                "tokenASymbol",
-                "tokenBSymbol"
-              ],
-              "type": "object"
+              "isLast": {
+                "type": "boolean"
+              },
+              "items": {
+                "items": {
+                  "properties": {
+                    "endedAt": {
+                      "description": "The end of its last marked tranche.",
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "extinct": {
+                      "description": "No marked tranche followed within the gap: the run will not grow.",
+                      "type": "boolean"
+                    },
+                    "firstHourVolumeUsd": {
+                      "$ref": "#/components/schemas/UnsignedDecimal"
+                    },
+                    "poolAddress": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "protocol": {
+                      "$ref": "#/components/schemas/ProtocolResponse"
+                    },
+                    "startedAt": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "tokenASymbol": {
+                      "description": "`null` before its metadata is fetched.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "tokenBSymbol": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "volumeUsd": {
+                      "$ref": "#/components/schemas/UnsignedDecimal"
+                    }
+                  },
+                  "required": [
+                    "protocol",
+                    "poolAddress",
+                    "startedAt",
+                    "endedAt",
+                    "volumeUsd",
+                    "firstHourVolumeUsd",
+                    "extinct",
+                    "tokenASymbol",
+                    "tokenBSymbol"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "nextCursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "prevCursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
             },
-            "type": "array"
-          },
-          "nextCursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "prevCursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
+            "required": [
+              "window",
+              "items",
+              "isFirst",
+              "isLast",
+              "nextCursor",
+              "prevCursor"
+            ],
+            "type": "object"
           }
-        },
-        "required": [
-          "window",
-          "items",
-          "isFirst",
-          "isLast",
-          "asOf",
-          "coveredSince",
-          "from",
-          "nextCursor",
-          "prevCursor"
-        ],
-        "type": "object"
+        ]
       },
       "WindowedResponse_ProtocolClaimTotalsResponse": {
-        "description": "`from..asOf`, each `null` before any fact.",
-        "properties": {
-          "asOf": {
-            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
           },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "description": "The sum skips the claims not valued; `owners` is distinct over the window.",
-              "properties": {
-                "amountUsd": {
-                  "$ref": "#/components/schemas/UnsignedDecimal"
-                },
-                "claims": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "claimsValued": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "owners": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                }
-              },
-              "required": [
-                "protocol",
-                "claims",
-                "claimsValued",
-                "amountUsd",
-                "owners"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
-      "WindowedResponse_ProtocolDiscoveredTvlResponse": {
-        "description": "`from..asOf`, each `null` before any fact.",
-        "properties": {
-          "asOf": {
-            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "properties": {
-                "at": {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "pools": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                },
-                "tvlUsd": {
-                  "$ref": "#/components/schemas/UnsignedDecimal"
-                }
-              },
-              "required": [
-                "protocol",
-                "at",
-                "pools",
-                "tvlUsd"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
-          }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
-        ],
-        "type": "object"
-      },
-      "WindowedResponse_ProtocolLiquidityFlowsResponse": {
-        "description": "`from..asOf`, each `null` before any fact.",
-        "properties": {
-          "asOf": {
-            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/LiquidityFlowsResponse"
-                },
-                {
+          {
+            "properties": {
+              "items": {
+                "items": {
+                  "description": "The sum skips the claims not valued; `owners` is distinct over the window.",
                   "properties": {
+                    "amountUsd": {
+                      "$ref": "#/components/schemas/UnsignedDecimal"
+                    },
+                    "claims": {
+                      "$ref": "#/components/schemas/Count"
+                    },
+                    "claimsValued": {
+                      "$ref": "#/components/schemas/Count"
+                    },
                     "owners": {
-                      "$ref": "#/components/schemas/Count",
-                      "description": "The addresses that created a pool, added or removed liquidity over the window, once each."
+                      "$ref": "#/components/schemas/Count"
                     },
                     "protocol": {
                       "$ref": "#/components/schemas/ProtocolResponse"
@@ -6039,248 +5711,300 @@
                   },
                   "required": [
                     "protocol",
+                    "claims",
+                    "claimsValued",
+                    "amountUsd",
                     "owners"
                   ],
                   "type": "object"
-                }
-              ]
+                },
+                "type": "array"
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
             },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
+            "required": [
+              "window",
+              "items"
+            ],
+            "type": "object"
           }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
         ],
-        "type": "object"
+        "description": "A measure over its window."
+      },
+      "WindowedResponse_ProtocolDiscoveredTvlResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
+          },
+          {
+            "properties": {
+              "items": {
+                "items": {
+                  "properties": {
+                    "at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "pools": {
+                      "$ref": "#/components/schemas/Count"
+                    },
+                    "protocol": {
+                      "$ref": "#/components/schemas/ProtocolResponse"
+                    },
+                    "tvlUsd": {
+                      "$ref": "#/components/schemas/UnsignedDecimal"
+                    }
+                  },
+                  "required": [
+                    "protocol",
+                    "at",
+                    "pools",
+                    "tvlUsd"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
+            },
+            "required": [
+              "window",
+              "items"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "A measure over its window."
+      },
+      "WindowedResponse_ProtocolLiquidityFlowsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
+          },
+          {
+            "properties": {
+              "items": {
+                "items": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/LiquidityFlowsResponse"
+                    },
+                    {
+                      "properties": {
+                        "owners": {
+                          "$ref": "#/components/schemas/Count",
+                          "description": "The addresses that created a pool, added or removed liquidity over the window, once each."
+                        },
+                        "protocol": {
+                          "$ref": "#/components/schemas/ProtocolResponse"
+                        }
+                      },
+                      "required": [
+                        "protocol",
+                        "owners"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
+            },
+            "required": [
+              "window",
+              "items"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "A measure over its window."
       },
       "WindowedResponse_ProtocolPoolCreationsResponse": {
-        "description": "`from..asOf`, each `null` before any fact.",
-        "properties": {
-          "asOf": {
-            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
           },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "properties": {
-                "pools": {
-                  "$ref": "#/components/schemas/Count"
+          {
+            "properties": {
+              "items": {
+                "items": {
+                  "properties": {
+                    "pools": {
+                      "$ref": "#/components/schemas/Count"
+                    },
+                    "protocol": {
+                      "$ref": "#/components/schemas/ProtocolResponse"
+                    }
+                  },
+                  "required": [
+                    "protocol",
+                    "pools"
+                  ],
+                  "type": "object"
                 },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                }
+                "type": "array"
               },
-              "required": [
-                "protocol",
-                "pools"
-              ],
-              "type": "object"
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
             },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
+            "required": [
+              "window",
+              "items"
+            ],
+            "type": "object"
           }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
         ],
-        "type": "object"
+        "description": "A measure over its window."
       },
       "WindowedResponse_ProtocolPositionChangeTotalsResponse": {
-        "description": "`from..asOf`, each `null` before any fact.",
-        "properties": {
-          "asOf": {
-            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
           },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "items": {
-            "items": {
-              "properties": {
-                "closed": {
-                  "$ref": "#/components/schemas/Count"
+          {
+            "properties": {
+              "items": {
+                "items": {
+                  "properties": {
+                    "closed": {
+                      "$ref": "#/components/schemas/Count"
+                    },
+                    "opened": {
+                      "$ref": "#/components/schemas/Count"
+                    },
+                    "permanentLocks": {
+                      "$ref": "#/components/schemas/Count"
+                    },
+                    "protocol": {
+                      "$ref": "#/components/schemas/ProtocolResponse"
+                    },
+                    "splits": {
+                      "$ref": "#/components/schemas/Count"
+                    },
+                    "vestingLocks": {
+                      "$ref": "#/components/schemas/Count"
+                    }
+                  },
+                  "required": [
+                    "protocol",
+                    "opened",
+                    "vestingLocks",
+                    "permanentLocks",
+                    "splits",
+                    "closed"
+                  ],
+                  "type": "object"
                 },
-                "opened": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "permanentLocks": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                },
-                "splits": {
-                  "$ref": "#/components/schemas/Count"
-                },
-                "vestingLocks": {
-                  "$ref": "#/components/schemas/Count"
-                }
+                "type": "array"
               },
-              "required": [
-                "protocol",
-                "opened",
-                "vestingLocks",
-                "permanentLocks",
-                "splits",
-                "closed"
-              ],
-              "type": "object"
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
             },
-            "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
+            "required": [
+              "window",
+              "items"
+            ],
+            "type": "object"
           }
-        },
-        "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
         ],
-        "type": "object"
+        "description": "A measure over its window."
       },
       "WindowedResponse_ProtocolTvlChangeResponse": {
-        "description": "`from..asOf`, each `null` before any fact.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowPeriodResponse"
+          },
+          {
+            "properties": {
+              "items": {
+                "items": {
+                  "properties": {
+                    "changeUsd": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/SignedDecimal",
+                          "description": "`end − discoveredTvlUsd − start`; `null` as soon as one of them is."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "discoveredTvlUsd": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/UnsignedDecimal",
+                          "description": "What the pools first seen in the window, their birth unobserved, hold at `end`; `null`\nwhen not measured at that reading."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "end": {
+                      "$ref": "#/components/schemas/TvlReadingResponse",
+                      "description": "The last reading at or before `asOf`."
+                    },
+                    "protocol": {
+                      "$ref": "#/components/schemas/ProtocolResponse"
+                    },
+                    "start": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/TvlReadingResponse",
+                          "description": "The reading exactly a window before `end`, when `end` is at `asOf`; never over `1h`."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "protocol",
+                    "end",
+                    "changeUsd",
+                    "discoveredTvlUsd",
+                    "start"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "window": {
+                "$ref": "#/components/schemas/WindowResponse"
+              }
+            },
+            "required": [
+              "window",
+              "items"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "A measure over its window."
+      },
+      "WindowsResponse": {
+        "description": "Every window, the shortest first.",
         "properties": {
-          "asOf": {
-            "description": "The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches\nthe end of the last one written.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "coveredSince": {
-            "description": "Where the facts start.",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "items": {
             "items": {
-              "properties": {
-                "changeUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/SignedDecimal",
-                      "description": "`end − discoveredTvlUsd − start`; `null` as soon as one of them is."
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "discoveredTvlUsd": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/UnsignedDecimal",
-                      "description": "What the pools first seen in the window, their birth unobserved, hold at `end`; `null`\nwhen not measured at that reading."
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "end": {
-                  "$ref": "#/components/schemas/TvlReadingResponse",
-                  "description": "The last reading at or before `asOf`."
-                },
-                "protocol": {
-                  "$ref": "#/components/schemas/ProtocolResponse"
-                },
-                "start": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/TvlReadingResponse",
-                      "description": "The reading exactly a window before `end`, when `end` is at `asOf`; never over `1h`."
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              },
-              "required": [
-                "protocol",
-                "end",
-                "changeUsd",
-                "discoveredTvlUsd",
-                "start"
-              ],
-              "type": "object"
+              "$ref": "#/components/schemas/WindowRowResponse"
             },
             "type": "array"
-          },
-          "window": {
-            "$ref": "#/components/schemas/WindowResponse"
           }
         },
         "required": [
-          "window",
-          "items",
-          "asOf",
-          "coveredSince",
-          "from"
+          "items"
         ],
         "type": "object"
       }
@@ -9665,7 +9389,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SeriesResponse_ProtocolRotationRunBucketResponse"
+                  "$ref": "#/components/schemas/RunSplitSeriesResponse_ProtocolRotationRunBucketResponse"
                 }
               }
             },
@@ -11076,6 +10800,33 @@
               }
             },
             "description": "Each protocol's last TVL reading, the one a window before it, and the change without the pools discovered in the window; over `1h`, the last reading alone, at the close of the last frozen hour."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        }
+      }
+    },
+    "/api/windows": {
+      "get": {
+        "operationId": "get_windows",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowsResponse"
+                }
+              }
+            },
+            "description": "Every window, its bounds, whether it is open, when it opens, and whether its figures run late."
           },
           "default": {
             "content": {

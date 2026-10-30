@@ -16,7 +16,7 @@ use crate::application::{
     PositionChangeCountsService, PositionChangeEventService, PositionFeeClaimEventService,
     ProtocolCatalogService, ProtocolFeeClaimEventService, ProtocolTvlService,
     RewardChangeEventService, RewardClaimEventService, RotationRunService, SignalService,
-    SwapActivityService, SwapEventService, TokenService, WorkSlots,
+    SwapActivityService, SwapEventService, TokenService, WindowsService, WorkSlots,
 };
 
 /// The services and the runtime handles the router and handlers read. Handlers never reach a
@@ -25,6 +25,7 @@ use crate::application::{
 pub(crate) struct AppState {
     pub(crate) network_service: Arc<NetworkService>,
     pub(crate) ingestion_service: Arc<IngestionService>,
+    pub(crate) windows_service: Arc<WindowsService>,
     pub(crate) signal_service: Arc<SignalService>,
     /// Live end of the signal feed, fed by the
     /// [`SignalStreamPoller`](crate::application::SignalStreamPoller); signals travel enriched.

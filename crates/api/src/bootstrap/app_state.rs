@@ -27,7 +27,8 @@ use crate::application::{
     PositionChangeEventService, PositionFeeClaimEventService, ProtocolCatalogService,
     ProtocolFeeClaimEventService, ProtocolTvlService, RewardChangeEventService,
     RewardClaimEventService, RotationRunService, STREAM_CHANNEL_CAPACITY, SignalService,
-    SignalStreamPoller, SwapActivityService, SwapEventService, TokenService, WorkSlots,
+    SignalStreamPoller, SwapActivityService, SwapEventService, TokenService, WindowsService,
+    WorkSlots,
 };
 use crate::bootstrap::Config;
 use crate::http::{AppState, SSE_MAX_STREAMS, STATEMENT_TIMEOUT, WORK_SLOT_WAIT, WORK_SLOTS};
@@ -96,9 +97,10 @@ pub(crate) async fn build_app_state(
         Arc::new(PgProtocolTvlRepository::new(db_pool.clone())),
     ));
     let discovered_tvl_service = Arc::new(DiscoveredTvlService::new(
-        protocol_activity_repo,
+        protocol_activity_repo.clone(),
         Arc::new(PgDiscoveredTvlRepository::new(db_pool.clone())),
     ));
+    let windows_service = Arc::new(WindowsService::new(protocol_activity_repo));
     let swap_event_service = Arc::new(SwapEventService::new(Arc::new(PgSwapEventRepository::new(
         db_pool.clone(),
     ))));
@@ -152,6 +154,7 @@ pub(crate) async fn build_app_state(
     let state = AppState {
         network_service: Arc::new(NetworkService::new(network_status_repo)),
         ingestion_service: Arc::new(IngestionService::new(event_freshness_repo)),
+        windows_service,
         signal_service,
         signal_stream,
         stream_slots: Arc::new(Semaphore::new(SSE_MAX_STREAMS)),

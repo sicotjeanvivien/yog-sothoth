@@ -16,8 +16,8 @@ use yog_core::{
 };
 
 use super::period::{
-    BucketPeriod, CURSOR_END_MARGIN, Measured, PeriodBounds, ReadPeriod, SeriesInterval,
-    build_read_period,
+    BucketPeriod, CURSOR_END_MARGIN, DrawnPeriod, Measured, PeriodBounds, ReadPeriod,
+    SeriesInterval, build_read_period,
 };
 
 /// Why a page of moves is not read.
@@ -93,23 +93,36 @@ impl LiquidityMoveService {
         window: Window,
         interval: SeriesInterval,
         protocol: Protocol,
-    ) -> RepositoryResult<Measured<Vec<ProtocolBucket<LiquidityFlows>>, ReadPeriod>> {
-        let period = self.build_liquidity_read_period(window, protocol).await?;
+    ) -> RepositoryResult<Measured<Vec<ProtocolBucket<LiquidityFlows>>, DrawnPeriod>> {
+        let Some(facts) = build_read_period(self.hours.as_ref(), window, None).await? else {
+            return Ok(Measured {
+                period: None,
+                items: Vec::new(),
+            });
+        };
+        let since = self.liquidity_moves.find_measured_since(protocol).await?;
+        let period = facts.measured_from(since);
         let items = match (&period, interval.frozen_bucket()) {
-            (Some(ReadPeriod::Tranche(p)), None) => {
+            (ReadPeriod::Tranche(p), None) => {
                 self.liquidity_moves.list_tranches(p, protocol).await?
             }
-            (Some(ReadPeriod::Frozen(p)), Some(BucketPeriod::Hour)) => {
+            (ReadPeriod::Frozen(p), Some(BucketPeriod::Hour)) => {
                 self.liquidity_moves.list_hourly(p, protocol).await?
             }
-            (Some(ReadPeriod::Frozen(p)), Some(bucket)) => {
+            (ReadPeriod::Frozen(p), Some(bucket)) => {
                 self.liquidity_moves
                     .list_buckets(p, bucket.width(), protocol)
                     .await?
             }
             _ => Vec::new(),
         };
-        Ok(Measured { period, items })
+        Ok(Measured {
+            period: Some(DrawnPeriod {
+                period,
+                facts_since: facts.covered_since(),
+            }),
+            items,
+        })
     }
 
     /// `list`'s valued moves; an empty page over a period `protocol`'s liquidity does not cover

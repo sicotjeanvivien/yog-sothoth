@@ -25,6 +25,7 @@ pub(super) mod signals;
 pub(super) mod swaps;
 pub(super) mod token;
 pub(super) mod tvl;
+pub(super) mod windows;
 
 /// The token of the path, or a 404 when the catalog has not fetched its metadata.
 async fn known_token(state: &AppState, mint: Pubkey) -> Result<(), ApiError> {

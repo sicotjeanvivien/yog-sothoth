@@ -6,7 +6,7 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::Window;
 
-use crate::application::{Measured, PeriodBounds, SeriesInterval};
+use crate::application::{Availability, Measured, PeriodBounds, SeriesInterval};
 
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub(in crate::http::dto::response) enum WindowResponse {
@@ -31,17 +31,49 @@ impl From<Window> for WindowResponse {
     }
 }
 
-/// `from..asOf`, each `null` before any fact.
+/// What a response says of its window: its bounds, whether it is open, and whether it runs late.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WindowPeriodResponse {
+    /// Where the window starts, `null` before any fact.
+    from: Option<DateTime<Utc>>,
+    /// The instant the rows reflect.
+    as_of: Option<DateTime<Utc>>,
+    /// Where the read's coverage starts.
+    covered_since: Option<DateTime<Utc>>,
+    /// Whether the service opens this window: it is covered whole, and not held closed.
+    open: bool,
+    /// When it will be covered whole; `null` when open, or when no date can be said.
+    opens_at: Option<DateTime<Utc>>,
+    /// Whether `asOf` is further behind than a frozen hour or a tranche should be.
+    late: bool,
+}
+
+impl WindowPeriodResponse {
+    pub(crate) fn of<P: PeriodBounds>(window: Window, period: Option<P>) -> Self {
+        Self::moved(window, None, period)
+    }
+
+    fn moved<P: PeriodBounds>(window: Window, offset: Option<Window>, period: Option<P>) -> Self {
+        let availability = Availability::of(window, offset, period, Utc::now());
+        Self {
+            from: period.map(|s| s.from()),
+            as_of: period.map(|s| s.as_of()),
+            covered_since: period.map(|s| s.covered_since()),
+            open: availability.open,
+            opens_at: availability.opens_at,
+            late: availability.late,
+        }
+    }
+}
+
+/// A measure over its window.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct WindowedResponse<T> {
     window: WindowResponse,
-    from: Option<DateTime<Utc>>,
-    /// The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches
-    /// the end of the last one written.
-    as_of: Option<DateTime<Utc>>,
-    /// Where the facts start.
-    covered_since: Option<DateTime<Utc>>,
+    #[serde(flatten)]
+    period: WindowPeriodResponse,
     items: Vec<T>,
 }
 
@@ -50,12 +82,9 @@ impl<T> WindowedResponse<T> {
     where
         T: From<U>,
     {
-        let period = measured.period;
         Self {
             window: window.into(),
-            from: period.map(|s| s.from()),
-            as_of: period.map(|s| s.as_of()),
-            covered_since: period.map(|s| s.covered_since()),
+            period: WindowPeriodResponse::of(window, measured.period),
             items: measured.items.into_iter().map(T::from).collect(),
         }
     }
@@ -91,12 +120,8 @@ impl From<SeriesInterval> for IntervalResponse {
 pub(crate) struct SeriesResponse<T> {
     window: WindowResponse,
     interval: IntervalResponse,
-    from: Option<DateTime<Utc>>,
-    /// The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches
-    /// the end of the last one written.
-    as_of: Option<DateTime<Utc>>,
-    /// Where the facts start.
-    covered_since: Option<DateTime<Utc>>,
+    #[serde(flatten)]
+    period: WindowPeriodResponse,
     items: Vec<T>,
 }
 
@@ -109,13 +134,10 @@ impl<T> SeriesResponse<T> {
     where
         T: From<U>,
     {
-        let period = measured.period;
         Self {
             window: window.into(),
             interval: interval.into(),
-            from: period.map(|s| s.from()),
-            as_of: period.map(|s| s.as_of()),
-            covered_since: period.map(|s| s.covered_since()),
+            period: WindowPeriodResponse::of(window, measured.period),
             items: measured.items.into_iter().map(T::from).collect(),
         }
     }
@@ -145,12 +167,8 @@ pub(crate) struct SwapSeriesResponse<T> {
     window: WindowResponse,
     interval: IntervalResponse,
     coverage_unit: CoverageUnitResponse,
-    from: Option<DateTime<Utc>>,
-    /// The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches
-    /// the end of the last one written.
-    as_of: Option<DateTime<Utc>>,
-    /// Where the facts start.
-    covered_since: Option<DateTime<Utc>>,
+    #[serde(flatten)]
+    period: WindowPeriodResponse,
     items: Vec<T>,
 }
 
@@ -163,14 +181,11 @@ impl<T> SwapSeriesResponse<T> {
     where
         T: From<U>,
     {
-        let period = measured.period;
         Self {
             window: window.into(),
             interval: interval.into(),
             coverage_unit: window.into(),
-            from: period.map(|s| s.from()),
-            as_of: period.map(|s| s.as_of()),
-            covered_since: period.map(|s| s.covered_since()),
+            period: WindowPeriodResponse::of(window, measured.period),
             items: measured.items.into_iter().map(T::from).collect(),
         }
     }
@@ -182,28 +197,91 @@ impl<T> SwapSeriesResponse<T> {
 pub(crate) struct SwapTotalsResponse<T> {
     window: WindowResponse,
     coverage_unit: CoverageUnitResponse,
-    from: Option<DateTime<Utc>>,
-    /// The instant the rows reflect: the close of the last frozen hour, or where `1h` reads tranches
-    /// the end of the last one written.
-    as_of: Option<DateTime<Utc>>,
-    /// Where the facts start.
-    covered_since: Option<DateTime<Utc>>,
+    #[serde(flatten)]
+    period: WindowPeriodResponse,
     items: Vec<T>,
 }
 
 impl<T> SwapTotalsResponse<T> {
-    pub(crate) fn new<U, P: PeriodBounds>(window: Window, measured: Measured<Vec<U>, P>) -> Self
+    pub(crate) fn new<U, P: PeriodBounds>(
+        window: Window,
+        offset: Option<Window>,
+        measured: Measured<Vec<U>, P>,
+    ) -> Self
     where
         T: From<U>,
     {
-        let period = measured.period;
         Self {
             window: window.into(),
             coverage_unit: window.into(),
-            from: period.map(|s| s.from()),
-            as_of: period.map(|s| s.as_of()),
-            covered_since: period.map(|s| s.covered_since()),
+            period: WindowPeriodResponse::moved(window, offset, measured.period),
             items: measured.items.into_iter().map(T::from).collect(),
+        }
+    }
+}
+
+/// [`SeriesResponse`] of the volume the runs split, which says since when they split it.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RunSplitSeriesResponse<T> {
+    window: WindowResponse,
+    interval: IntervalResponse,
+    #[serde(flatten)]
+    period: WindowPeriodResponse,
+    /// The first instant the runs split a bar from; `null` before they are measured.
+    split_since: Option<DateTime<Utc>>,
+    items: Vec<T>,
+}
+
+impl<T> RunSplitSeriesResponse<T> {
+    pub(crate) fn new<U, P: PeriodBounds>(
+        window: Window,
+        interval: SeriesInterval,
+        measured: Measured<Vec<U>, P>,
+        split_since: Option<DateTime<Utc>>,
+    ) -> Self
+    where
+        T: From<U>,
+    {
+        Self {
+            window: window.into(),
+            interval: interval.into(),
+            period: WindowPeriodResponse::of(window, measured.period),
+            split_since,
+            items: measured.items.into_iter().map(T::from).collect(),
+        }
+    }
+}
+
+/// The windows the service reads, each with what it says of its period.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WindowRowResponse {
+    window: WindowResponse,
+    #[serde(flatten)]
+    period: WindowPeriodResponse,
+}
+
+impl<P: PeriodBounds> From<(Window, Option<P>)> for WindowRowResponse {
+    fn from((window, period): (Window, Option<P>)) -> Self {
+        Self {
+            window: window.into(),
+            period: WindowPeriodResponse::of(window, period),
+        }
+    }
+}
+
+/// Every window, the shortest first.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WindowsResponse {
+    items: Vec<WindowRowResponse>,
+}
+
+impl WindowsResponse {
+    pub(crate) fn new<P: PeriodBounds>(windows: Vec<(Window, Option<P>)>) -> Self {
+        Self {
+            items: windows.into_iter().map(Into::into).collect(),
         }
     }
 }

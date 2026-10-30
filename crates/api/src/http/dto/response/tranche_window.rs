@@ -1,23 +1,20 @@
 //! The envelope of a measure through the last tranche written: the window, the period it
 //! covers, and the rows. ⚠️ A total whose period starts before `coveredSince` has no row.
 
-use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::{TranchePeriod, Window};
 
-use super::window::WindowResponse;
+use super::window::{WindowPeriodResponse, WindowResponse};
 use crate::application::Measured;
 
-/// `from..asOf`, each `null` before the first tranche is written.
+/// A measure over its window, through the last tranche written.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TrancheWindowedResponse<T> {
     window: WindowResponse,
-    from: Option<DateTime<Utc>>,
-    /// The end of the last tranche written: the instant the rows reflect.
-    as_of: Option<DateTime<Utc>>,
-    covered_since: Option<DateTime<Utc>>,
+    #[serde(flatten)]
+    period: WindowPeriodResponse,
     items: Vec<T>,
 }
 
@@ -26,12 +23,9 @@ impl<T> TrancheWindowedResponse<T> {
     where
         T: From<U>,
     {
-        let period = measured.period;
         Self {
             window: window.into(),
-            from: period.map(|s| s.from),
-            as_of: period.map(|s| s.as_of),
-            covered_since: period.map(|s| s.covered_since),
+            period: WindowPeriodResponse::of(window, measured.period),
             items: measured.items.into_iter().map(T::from).collect(),
         }
     }

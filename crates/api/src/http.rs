@@ -124,6 +124,7 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         .routes(routes!(handlers::announcements::list_announcements))
         .routes(routes!(handlers::network::get_network))
         .routes(routes!(handlers::ingestion::get_ingestion))
+        .routes(routes!(handlers::windows::get_windows))
         // The live feed is capped by its own slots, in the handler.
         .routes(routes!(handlers::signals::stream_signals))
         .routes(routes!(handlers::token::get_token))
