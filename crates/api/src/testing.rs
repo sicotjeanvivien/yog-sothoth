@@ -1475,7 +1475,7 @@ impl RotationRunLookup for MockRotationRunRepo {
             median_duration_seconds: None,
             p90_duration_seconds: None,
             volume_usd: rust_decimal::Decimal::ZERO,
-            first_hour_volume_usd: rust_decimal::Decimal::ZERO,
+            first_hour: None,
         })
     }
 

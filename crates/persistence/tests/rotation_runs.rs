@@ -9,7 +9,7 @@ use yog_core::{
     Cursor,
     domain::{
         FrozenPeriod, Protocol, ProtocolBucket, RotationRunLookup, RotationRunOrder,
-        RotationRunScope, RunSplit, TranchePeriod, Window,
+        RotationRunScope, RunSplit, RunsFirstHour, TranchePeriod, Window,
     },
 };
 use yog_persistence::PgRotationRunRepository;
@@ -112,7 +112,8 @@ async fn read_all(
 }
 
 /// Mutation: the period's start or end bound dropped or moved, the protocol or pool filter
-/// dropped — a run started before or at the end listed, or another scope's.
+/// dropped, or a first hour summed before it ends inside the period — a run listed out of it,
+/// another scope's, or one with no time past its first hour counting all its volume in it.
 #[sqlx::test(migrations = "./migrations")]
 async fn a_list_and_its_totals_read_the_runs_started_in_their_period(pool: PgPool) {
     insert_run(&pool, "meteora_damm_v2", 1, -61, "1", &[]).await;
@@ -137,6 +138,10 @@ async fn a_list_and_its_totals_read_the_runs_started_in_their_period(pool: PgPoo
         .find_totals(&last_hour, Protocol::MeteoraDammV2)
         .await
         .unwrap();
+    let two_hours = repository
+        .find_totals(&period(-120, 0), Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
 
     assert_eq!(
         all.iter().map(|r| r.1).collect::<Vec<_>>(),
@@ -144,8 +149,19 @@ async fn a_list_and_its_totals_read_the_runs_started_in_their_period(pool: PgPoo
     );
     assert_eq!(one_pool.iter().map(|r| r.1).collect::<Vec<_>>(), [at(-30)]);
     assert_eq!(
-        (totals.runs, totals.volume_usd, totals.first_hour_volume_usd),
-        (2, Decimal::from(5), Decimal::new(25, 1))
+        (totals.runs, totals.volume_usd, totals.first_hour),
+        (2, Decimal::from(5), None)
+    );
+    assert_eq!(
+        (two_hours.runs, two_hours.first_hour),
+        (
+            3,
+            Some(RunsFirstHour {
+                runs: 1,
+                volume_usd: Decimal::from(1),
+                in_first_hour_usd: Decimal::new(5, 1),
+            })
+        )
     );
 }
 

@@ -202,6 +202,7 @@
         }
       },
       "tabsLabel": "Themes",
+      "notApplicable": "Period not applicable to this data.",
       "tabs": {
         "liquidity": "Liquidity",
         "volume": "Volume",
@@ -220,7 +221,6 @@
         "notMeasured": "Liquidity has been measured only recently: the chosen period starts before, and a total would undercount it.",
         "notMeasuredShort": "liquidity not measured yet",
         "noCurve": "Not enough measured hours of TVL to draw the curve yet.",
-        "curveNotApplicable": "Period not applicable to this data.",
         "curveCaption": "Hourly TVL · tight axis, {low} → {high}",
         "curveLabel": "TVL over the period, from {low} to {high}",
         "tvlAt": "TVL {tvl}",
@@ -267,7 +267,7 @@
         "chartLabelSixHours": "Volume per 6-hour slice, in runs and outside them",
         "stats": {
           "title": "Rotation runs · {period}",
-          "info": "The runs that started in the period: how many, on how many pools, how many still go on, how long they last from start to end (so far for those in progress), and the share of their volume traded in their first hour.",
+          "info": "The runs that started in the period: how many, on how many pools, how many still go on, how long they last from start to end (so far for those in progress), and, for those whose first hour is over, the share of their volume traded in that hour.",
           "runs": "Runs",
           "onPools": "on {pools} {count, plural, one {pool} other {pools}}",
           "inProgress": "{count} in progress",
@@ -275,7 +275,8 @@
           "median": "median",
           "medianAndP90": "median · 9 in 10 last under {p90}",
           "firstHour": "Seen in the first hour",
-          "firstHourSub": "of a run's volume",
+          "firstHourSub": "of the volume of runs past their first hour",
+          "firstHourNone": "No run has finished its first hour over the period yet.",
           "none": "No run in the period."
         },
         "runs": {

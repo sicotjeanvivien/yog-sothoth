@@ -35,6 +35,7 @@ import { formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { pairLabel } from "@/lib/format/pubkey";
 import { axisOf, daysAgoOf, hourOf, readsClock, roundTicks } from "@/lib/overview/chart";
+import { shareOf } from "@/lib/overview/totals";
 import type { Period } from "@/lib/overview/period";
 import {
   durationOf,
@@ -296,7 +297,14 @@ async function RunStats({ period, protocol }: TabProps) {
 
   const mine = totals.items.find((i) => i.protocol === protocol);
   const closed = (await closedReason(period, totals)) ?? t("notMeasured");
-  const stat = (label: string, big: string, sub: ReactNode, last = false) => (
+  const firstHourShare = (firstHour: { volumeUsd: string; inFirstHourUsd: string }) => {
+    const share = shareOf(
+      Number.parseFloat(firstHour.inFirstHourUsd),
+      Number.parseFloat(firstHour.volumeUsd),
+    );
+    return share === null ? "—" : formatPercent(String(share), locale);
+  };
+  const stat = (label: string, big: ReactNode, sub: ReactNode, last = false) => (
     <div className={`flex flex-col gap-1 py-3 ${last ? "" : "border-b border-dash-rule"}`}>
       <span className={LABEL_CLASS}>{label}</span>
       <span className="font-dash-mono text-[24px] leading-[1.1] font-medium tracking-[-0.02em] text-dash-ink tabular-nums">
@@ -320,15 +328,11 @@ async function RunStats({ period, protocol }: TabProps) {
             formatCount(mine.runs),
             <>
               {t("stats.onPools", { pools: formatCount(mine.pools), count: mine.pools })}
-              {period === "24h" && (
-                <>
-                  {" · "}
-                  <span className="text-dash-ink">
-                    <span aria-hidden="true" className="mr-1.5 inline-block h-1.5 w-1.5 bg-dash-up align-[1px]" />
-                    {t("stats.inProgress", { count: formatCount(mine.inProgress) })}
-                  </span>
-                </>
-              )}
+              {" · "}
+              <span className="text-dash-ink">
+                <span aria-hidden="true" className="mr-1.5 inline-block h-1.5 w-1.5 bg-dash-up align-[1px]" />
+                {t("stats.inProgress", { count: formatCount(mine.inProgress) })}
+              </span>
             </>,
           )}
           {stat(
@@ -338,17 +342,21 @@ async function RunStats({ period, protocol }: TabProps) {
               ? t("stats.median")
               : t("stats.medianAndP90", { p90: durationOf(mine.p90DurationSeconds) }),
           )}
-          {stat(
-            t("stats.firstHour"),
-            Number.parseFloat(mine.volumeUsd) > 0
-              ? formatPercent(
-                  String(Number.parseFloat(mine.firstHourVolumeUsd) / Number.parseFloat(mine.volumeUsd)),
-                  locale,
-                )
-              : "—",
-            t("stats.firstHourSub"),
-            true,
-          )}
+          {mine.firstHour === null
+            ? stat(
+                t("stats.firstHour"),
+                <span className="font-dash-sans text-[14px] font-normal tracking-normal text-dash-ink-3">
+                  {t("stats.firstHourNone")}
+                </span>,
+                null,
+                true,
+              )
+            : stat(
+                t("stats.firstHour"),
+                firstHourShare(mine.firstHour),
+                t("stats.firstHourSub"),
+                true,
+              )}
         </>
       )}
     </section>

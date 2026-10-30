@@ -125,7 +125,7 @@ pub use reward_change_event::{
 pub use reward_claim_event::{RewardClaimEvent, RewardClaimEventLookup};
 pub use rotation_runs::{
     RotationRun, RotationRunCursor, RotationRunLookup, RotationRunOrder, RotationRunScope,
-    RotationRunTotals, RunSplit,
+    RotationRunTotals, RunSplit, RunsFirstHour,
 };
 pub use signals::{
     DetectorError, EvalContext, Severity, Signal, SignalCursor, SignalDetector, SignalFeed,

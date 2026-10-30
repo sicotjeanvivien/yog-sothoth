@@ -3634,8 +3634,16 @@
       },
       "ProtocolRotationRunTotalsResponse": {
         "properties": {
-          "firstHourVolumeUsd": {
-            "$ref": "#/components/schemas/UnsignedDecimal"
+          "firstHour": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RotationRunsFirstHourResponse",
+                "description": "`null` while no run's first hour ended before the window did: always over `1h`."
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "inProgress": {
             "$ref": "#/components/schemas/Count",
@@ -3682,7 +3690,7 @@
           "pools",
           "inProgress",
           "volumeUsd",
-          "firstHourVolumeUsd",
+          "firstHour",
           "medianDurationSeconds",
           "p90DurationSeconds"
         ],
@@ -4186,6 +4194,26 @@
         ],
         "type": "object"
       },
+      "RotationRunsFirstHourResponse": {
+        "description": "The runs whose first hour ended before the window did, their volume, and its part in it.",
+        "properties": {
+          "inFirstHourUsd": {
+            "$ref": "#/components/schemas/UnsignedDecimal"
+          },
+          "runs": {
+            "$ref": "#/components/schemas/Count"
+          },
+          "volumeUsd": {
+            "$ref": "#/components/schemas/UnsignedDecimal"
+          }
+        },
+        "required": [
+          "runs",
+          "volumeUsd",
+          "inFirstHourUsd"
+        ],
+        "type": "object"
+      },
       "SeverityResponse": {
         "description": "How serious a signal is.",
         "enum": [
@@ -4665,8 +4693,16 @@
           "items": {
             "items": {
               "properties": {
-                "firstHourVolumeUsd": {
-                  "$ref": "#/components/schemas/UnsignedDecimal"
+                "firstHour": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/RotationRunsFirstHourResponse",
+                      "description": "`null` while no run's first hour ended before the window did: always over `1h`."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "inProgress": {
                   "$ref": "#/components/schemas/Count",
@@ -4713,7 +4749,7 @@
                 "pools",
                 "inProgress",
                 "volumeUsd",
-                "firstHourVolumeUsd",
+                "firstHour",
                 "medianDurationSeconds",
                 "p90DurationSeconds"
               ],

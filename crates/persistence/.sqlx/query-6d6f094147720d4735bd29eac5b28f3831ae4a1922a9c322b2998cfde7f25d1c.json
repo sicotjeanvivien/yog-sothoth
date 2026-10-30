@@ -1,0 +1,81 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) AS \"runs!\", COUNT(DISTINCT pool_address) AS \"pools!\",\n                   COUNT(*) FILTER (WHERE NOT extinct) AS \"in_progress!\",\n                   COALESCE(SUM(volume_usd), 0) AS \"volume_usd!\",\n                   -- ⚠️ Until its first hour ends before the period does, a run's volume is all in it.\n                   COUNT(*) FILTER (WHERE started_at + INTERVAL '1 hour' < $2)\n                       AS \"first_hour_runs!\",\n                   SUM(volume_usd) FILTER (WHERE started_at + INTERVAL '1 hour' < $2)\n                       AS \"first_hour_runs_volume_usd?\",\n                   SUM(first_hour_volume_usd) FILTER (WHERE started_at + INTERVAL '1 hour' < $2)\n                       AS \"in_first_hour_usd?\",\n                   ROUND(percentile_cont(0.5) WITHIN GROUP (\n                       ORDER BY EXTRACT(EPOCH FROM ended_at - started_at)))::BIGINT\n                       AS \"median_duration_seconds?\",\n                   ROUND(percentile_cont(0.9) WITHIN GROUP (\n                       ORDER BY EXTRACT(EPOCH FROM ended_at - started_at)))::BIGINT\n                       AS \"p90_duration_seconds?\"\n              FROM analytic_rotation_runs\n             WHERE protocol = $3 AND started_at >= $1 AND started_at < $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "runs!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "pools!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "in_progress!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "volume_usd!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "first_hour_runs!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "first_hour_runs_volume_usd?",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "in_first_hour_usd?",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "median_duration_seconds?",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "p90_duration_seconds?",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "6d6f094147720d4735bd29eac5b28f3831ae4a1922a9c322b2998cfde7f25d1c"
+}

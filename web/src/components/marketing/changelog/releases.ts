@@ -63,6 +63,14 @@ export const RELEASES: readonly Release[] = [
             text: "window=1h on the liquidity-moves and rotation-runs lists, under a protocol and under a pool: the moves and the runs started in the last hour through the last tranche written.",
             technical: true,
           },
+          {
+            text: "The rotation runs' stats on the DAMM v2 page: the runs still in progress show over every period, and the share seen in the first hour is read over the runs whose first hour ended before the period did — greyed over 1H, where none did.",
+            technical: false,
+          },
+          {
+            text: "rotation-runs/totals: firstHourVolumeUsd gives way to a firstHour block — the runs whose first hour ended before the window did, their volume and its part in that hour — null while none did, always over window=1h.",
+            technical: true,
+          },
         ],
       },
     ],

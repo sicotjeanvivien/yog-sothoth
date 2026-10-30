@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use yog_core::{
     RepositoryError,
-    domain::{ProtocolBucket, RotationRun, RotationRunTotals, RunSplit},
+    domain::{ProtocolBucket, RotationRun, RotationRunTotals, RunSplit, RunsFirstHour},
 };
 
 use crate::repositories::helper::{
@@ -54,7 +54,9 @@ pub(super) struct RotationRunTotalsRow {
     pub(super) median_duration_seconds: Option<i64>,
     pub(super) p90_duration_seconds: Option<i64>,
     pub(super) volume_usd: BigDecimal,
-    pub(super) first_hour_volume_usd: BigDecimal,
+    pub(super) first_hour_runs: i64,
+    pub(super) first_hour_runs_volume_usd: Option<BigDecimal>,
+    pub(super) in_first_hour_usd: Option<BigDecimal>,
 }
 
 impl TryFrom<RotationRunTotalsRow> for RotationRunTotals {
@@ -68,10 +70,22 @@ impl TryFrom<RotationRunTotalsRow> for RotationRunTotals {
             median_duration_seconds: row.median_duration_seconds,
             p90_duration_seconds: row.p90_duration_seconds,
             volume_usd: convert_bigdecimal_to_decimal(row.volume_usd, "volume_usd")?,
-            first_hour_volume_usd: convert_bigdecimal_to_decimal(
-                row.first_hour_volume_usd,
-                "first_hour_volume_usd",
-            )?,
+            first_hour: match (row.first_hour_runs_volume_usd, row.in_first_hour_usd) {
+                (Some(volume), Some(in_first_hour)) if row.first_hour_runs > 0 => {
+                    Some(RunsFirstHour {
+                        runs: row.first_hour_runs,
+                        volume_usd: convert_bigdecimal_to_decimal(
+                            volume,
+                            "first_hour_runs_volume_usd",
+                        )?,
+                        in_first_hour_usd: convert_bigdecimal_to_decimal(
+                            in_first_hour,
+                            "in_first_hour_usd",
+                        )?,
+                    })
+                }
+                _ => None,
+            },
         })
     }
 }

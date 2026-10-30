@@ -113,6 +113,7 @@ export async function LiquidityTab({ period, protocol }: TabProps) {
 
 async function LiquidityFlows({ period, protocol }: TabProps) {
   const t = await getTranslations("Dashboard.Protocol.liquidity");
+  const tProtocol = await getTranslations("Dashboard.Protocol");
   const tVolume = await getTranslations("Dashboard.Overview.volume");
   const locale = (await getLocale()) as FormatLocale;
   const title = t("title");
@@ -195,7 +196,7 @@ async function LiquidityFlows({ period, protocol }: TabProps) {
   const curveBlock =
     tvl === null ? (
       <div className="mt-[26px] flex h-[140px] items-center justify-center border-b border-dash-rule bg-dash-surface-2 px-4 text-center text-[14px] text-dash-ink-3">
-        {t("curveNotApplicable")}
+        {tProtocol("notApplicable")}
       </div>
     ) : curve === null ? (
       <p className="py-6 text-[14px] text-dash-ink-2">— {t("noCurve")}</p>
