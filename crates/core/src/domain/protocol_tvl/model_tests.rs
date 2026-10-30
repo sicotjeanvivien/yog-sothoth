@@ -153,6 +153,10 @@ fn a_turnover_is_unknown_without_a_tvl_above_zero() {
 
     let turnovers: Vec<_> = rows.iter().map(|row| row.turnover.turnover).collect();
     assert_eq!(turnovers, [Some(Decimal::from(4)), None]);
+    assert_eq!(
+        rows[0].tvl_at,
+        Some(tvl_reading(Protocol::MeteoraDammV2, None).at)
+    );
     let below = super::ProtocolLiquidityTurnover::rows(
         &[swaps(Protocol::MeteoraDlmm, Some(50))],
         &[tvl_reading(Protocol::MeteoraDlmm, Some(-1))],
@@ -161,6 +165,7 @@ fn a_turnover_is_unknown_without_a_tvl_above_zero() {
     let unread =
         super::ProtocolLiquidityTurnover::rows(&[swaps(Protocol::MeteoraDlmm, Some(50))], &[]);
     assert_eq!(unread[0].turnover.turnover, None);
+    assert_eq!(unread[0].tvl_at, None);
     assert_eq!(
         super::LiquidityTurnover::total(&[swaps(Protocol::MeteoraDammV2, Some(1))], &[])
             .unwrap()

@@ -29,11 +29,10 @@ pub(crate) async fn list_protocols(
     Query(params): Query<ProtocolsParams>,
 ) -> Result<Json<ProtocolCatalogPageResponse>, ApiError> {
     let request = ListProtocolsRequest::parse(params)?;
-    let page = state
+    let (page, pools_seen) = state
         .protocol_catalog_service
         .list_page(request.after, request.limit)
         .await?;
-    let pools_seen = state.protocol_catalog_service.pools_seen().await?;
     Ok(Json(ProtocolCatalogPageResponse::new(page, pools_seen)?))
 }
 

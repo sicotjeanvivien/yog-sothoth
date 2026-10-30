@@ -3,6 +3,7 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
+use crate::domain::swap_activity::sum_known;
 use crate::domain::{Protocol, ProtocolSwapActivity};
 
 /// One protocol's TVL as last measured during the hour that closes at `at`: its pools
@@ -56,13 +57,13 @@ impl ProtocolTvlChange {
     /// The rows summed: a field unknown in one row is unknown; `None` without rows.
     pub fn total(rows: &[Self]) -> Option<TvlChangeTotal> {
         (!rows.is_empty()).then(|| TvlChangeTotal {
-            end_tvl_usd: rows.iter().map(|row| row.end.tvl_usd).sum(),
-            start_tvl_usd: rows
-                .iter()
-                .map(|row| row.start.as_ref().and_then(|start| start.tvl_usd))
-                .sum(),
-            discovered_tvl_usd: rows.iter().map(|row| row.discovered_tvl_usd).sum(),
-            change_usd: rows.iter().map(Self::change_usd).sum(),
+            end_tvl_usd: sum_known(rows.iter().map(|row| row.end.tvl_usd)),
+            start_tvl_usd: sum_known(
+                rows.iter()
+                    .map(|row| row.start.as_ref().and_then(|start| start.tvl_usd)),
+            ),
+            discovered_tvl_usd: sum_known(rows.iter().map(|row| row.discovered_tvl_usd)),
+            change_usd: sum_known(rows.iter().map(Self::change_usd)),
         })
     }
 }
@@ -97,7 +98,7 @@ impl LiquidityTurnover {
         let tvl_usd = if tvl.is_empty() {
             None
         } else {
-            tvl.iter().map(|reading| reading.tvl_usd).sum()
+            sum_known(tvl.iter().map(|reading| reading.tvl_usd))
         };
         Some(Self {
             turnover: Self::ratio(total.activity.volume_usd, tvl_usd),
@@ -112,6 +113,8 @@ impl LiquidityTurnover {
 pub struct ProtocolLiquidityTurnover {
     pub protocol: Protocol,
     pub turnover: LiquidityTurnover,
+    /// The close of the hour of the reading divided by; `None` without one.
+    pub tvl_at: Option<DateTime<Utc>>,
 }
 
 impl ProtocolLiquidityTurnover {
@@ -123,6 +126,7 @@ impl ProtocolLiquidityTurnover {
                 let reading = tvl.iter().find(|reading| reading.protocol == row.protocol);
                 Self {
                     protocol: row.protocol,
+                    tvl_at: reading.map(|reading| reading.at),
                     turnover: LiquidityTurnover {
                         turnover: LiquidityTurnover::ratio(
                             row.activity.volume_usd,

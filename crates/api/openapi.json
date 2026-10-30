@@ -3653,10 +3653,19 @@
             "properties": {
               "protocol": {
                 "$ref": "#/components/schemas/ProtocolResponse"
+              },
+              "tvlAt": {
+                "description": "The close of the hour of the TVL reading divided by; `null` without one.",
+                "format": "date-time",
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             },
             "required": [
-              "protocol"
+              "protocol",
+              "tvlAt"
             ],
             "type": "object"
           }

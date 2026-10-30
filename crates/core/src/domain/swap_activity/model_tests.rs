@@ -63,8 +63,7 @@ fn no_row_has_no_total() {
     assert_eq!(ProtocolSwapActivity::total(&[]), None);
 }
 
-/// Mutation: a bucket kept per protocol, or one unknown value emptying its bar — unlike the bars
-/// the chart has always drawn.
+/// Mutation: a bucket kept per protocol, or one unknown value emptying its bar.
 #[test]
 fn a_bucket_adds_its_protocols_and_skips_what_one_does_not_know() {
     let at = |hour| Utc.with_ymd_and_hms(2026, 10, 25, hour, 0, 0).unwrap();
@@ -97,4 +96,32 @@ fn a_bucket_adds_its_protocols_and_skips_what_one_does_not_know() {
     assert_eq!(buckets[0].activity.pool_hours, 20);
     assert_eq!(buckets[0].activity.pool_hours_valued, 16);
     assert_eq!(buckets[0].activity.swaps, 4);
+}
+
+/// Mutation: an unchecked add — a mispriced token panics the request instead of being unknown.
+#[test]
+fn a_sum_that_overflows_is_unknown() {
+    let huge = |protocol| ProtocolSwapActivity {
+        protocol,
+        activity: SwapActivity {
+            volume_usd: Some(Decimal::MAX),
+            ..activity(None)
+        },
+        pools: None,
+    };
+
+    let total =
+        ProtocolSwapActivity::total(&[huge(Protocol::MeteoraDammV2), huge(Protocol::MeteoraDlmm)])
+            .unwrap();
+    assert_eq!(total.activity.volume_usd, None);
+
+    let at = Utc.with_ymd_and_hms(2026, 10, 25, 3, 0, 0).unwrap();
+    let buckets = SwapActivity::bucket_totals(
+        &[Protocol::MeteoraDammV2, Protocol::MeteoraDlmm].map(|protocol| ProtocolBucket {
+            protocol,
+            from: at,
+            value: huge(protocol).activity,
+        }),
+    );
+    assert_eq!(buckets[0].activity.volume_usd, None);
 }

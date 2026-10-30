@@ -52,7 +52,7 @@ async fn the_catalogue_pages_without_repeat_nor_gap() {
     let mut seen = Vec::new();
     let mut after = None;
     loop {
-        let page = svc.list_page(after, 1).await.unwrap();
+        let (page, _) = svc.list_page(after, 1).await.unwrap();
         assert_eq!(page.is_first, after.is_none());
         seen.extend(page.items.iter().map(|entry| entry.protocol));
         match page.next_cursor {
@@ -67,4 +67,28 @@ async fn the_catalogue_pages_without_repeat_nor_gap() {
     }
 
     assert_eq!(seen, Protocol::all());
+}
+
+/// Mutation: the pools seen summed over the page — a total that shrinks with `limit`.
+#[tokio::test]
+async fn the_pools_seen_count_every_protocol_whatever_the_page() {
+    let svc = ProtocolCatalogService::new(
+        Arc::new(PoolCountsRepo::by_protocol(vec![
+            ProtocolPools {
+                protocol: Protocol::MeteoraDammV2,
+                pools_seen: 3,
+            },
+            ProtocolPools {
+                protocol: Protocol::MeteoraDlmm,
+                pools_seen: 4,
+            },
+        ])),
+        vec![],
+        work_slots(),
+    );
+
+    let (page, pools_seen) = svc.list_page(None, 1).await.unwrap();
+
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(pools_seen, 7);
 }

@@ -131,7 +131,11 @@ fn each_envelope_sums_its_protocols_in_total() {
         pool_hours: 6,
         pool_hours_valued: 2,
     };
-    let rows = BOTH.map(|protocol| ProtocolLiquidityTurnover { protocol, turnover });
+    let rows = BOTH.map(|protocol| ProtocolLiquidityTurnover {
+        protocol,
+        turnover,
+        tvl_at: Some(at),
+    });
     let body = to_value(LiquidityTurnoverTotalsResponse::new(
         Window::Day,
         measured(rows.to_vec()),
@@ -139,5 +143,6 @@ fn each_envelope_sums_its_protocols_in_total() {
     ))
     .unwrap();
     assert_eq!(body["total"]["turnover"], json!("2"));
+    assert_eq!(body["items"][0]["tvlAt"], json!("2026-10-20T13:00:00Z"));
     assert_eq!(body["coverageUnit"], json!("poolHours"));
 }

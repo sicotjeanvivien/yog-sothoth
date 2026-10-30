@@ -51,13 +51,15 @@ impl ProtocolCatalogService {
             .await
     }
 
-    /// The entries of [`Self::list`] after `after`, `limit` of them; forward only.
+    /// The entries of [`Self::list`] after `after`, `limit` of them, forward only, and the pools
+    /// seen by every protocol, whatever the page.
     pub(crate) async fn list_page(
         &self,
         after: Option<Protocol>,
         limit: i64,
-    ) -> RepositoryResult<Page<ProtocolEntry>> {
+    ) -> RepositoryResult<(Page<ProtocolEntry>, i64)> {
         let entries = self.list().await?;
+        let pools_seen = entries.iter().map(|entry| entry.pools_seen).sum();
         let start = after.map_or(0, |after| {
             entries
                 .iter()
@@ -68,7 +70,7 @@ impl ProtocolCatalogService {
         let taken = usize::try_from(limit).unwrap_or(usize::MAX).min(rest.len());
         let items = rest[..taken].to_vec();
         let is_last = taken == rest.len();
-        Ok(Page {
+        let page = Page {
             next_cursor: if is_last {
                 None
             } else {
@@ -78,17 +80,8 @@ impl ProtocolCatalogService {
             is_first: after.is_none(),
             is_last,
             items,
-        })
-    }
-
-    /// The pools seen by every protocol, whatever the page.
-    pub(crate) async fn pools_seen(&self) -> RepositoryResult<i64> {
-        Ok(self
-            .list()
-            .await?
-            .iter()
-            .map(|entry| entry.pools_seen)
-            .sum())
+        };
+        Ok((page, pools_seen))
     }
 
     /// `protocol`'s entry of [`Self::list`].

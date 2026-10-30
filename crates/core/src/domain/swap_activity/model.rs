@@ -7,6 +7,13 @@ use rust_decimal::Decimal;
 
 use crate::domain::{Protocol, ProtocolBucket};
 
+/// The terms added, `None` as soon as one is unknown or their sum overflows.
+pub(crate) fn sum_known(terms: impl IntoIterator<Item = Option<Decimal>>) -> Option<Decimal> {
+    terms
+        .into_iter()
+        .try_fold(Decimal::ZERO, |sum, term| sum.checked_add(term?))
+}
+
 /// The swaps of a scope over a period or a bucket. The USD sums skip the pool-hours not
 /// valued, which `pool_hours - pool_hours_valued` counts.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,10 +38,11 @@ pub struct ProtocolSwapActivity {
 }
 
 impl SwapActivity {
-    /// The rows of one bucket summed: each USD field over the rows that know it, `None` if none.
+    /// The rows of one bucket summed: each USD field over the rows that know it; `None` if none
+    /// does, or on overflow.
     fn of_bucket(self, other: &Self) -> Self {
         let add = |a: Option<Decimal>, b: Option<Decimal>| match (a, b) {
-            (Some(a), Some(b)) => Some(a + b),
+            (Some(a), Some(b)) => a.checked_add(b),
             (a, b) => a.or(b),
         };
         Self {
@@ -80,15 +88,14 @@ pub struct SwapActivityTotal {
 }
 
 impl ProtocolSwapActivity {
-    /// The rows summed: a USD field or `pools` unknown in one row is unknown; `None` without rows.
+    /// The rows summed: a USD field or `pools` unknown in one row is unknown, and a USD field that
+    /// overflows; `None` without rows.
     pub fn total(rows: &[Self]) -> Option<SwapActivityTotal> {
         if rows.is_empty() {
             return None;
         }
         let usd = |field: fn(&SwapActivity) -> Option<Decimal>| {
-            rows.iter()
-                .map(|row| field(&row.activity))
-                .sum::<Option<Decimal>>()
+            sum_known(rows.iter().map(|row| field(&row.activity)))
         };
         Some(SwapActivityTotal {
             activity: SwapActivity {

@@ -1094,7 +1094,8 @@ export const zProtocolLiquidityFlowsResponse = zLiquidityFlowsResponse.and(z.obj
 export type ProtocolLiquidityFlowsResponse = z.infer<typeof zProtocolLiquidityFlowsResponse>;
 
 export const zProtocolLiquidityTurnoverResponse = zLiquidityTurnoverResponse.and(z.object({
-    protocol: zProtocolResponse
+    protocol: zProtocolResponse,
+    tvlAt: z.iso.datetime({ offset: true }).nullable()
 }));
 
 export type ProtocolLiquidityTurnoverResponse = z.infer<typeof zProtocolLiquidityTurnoverResponse>;

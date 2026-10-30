@@ -145,7 +145,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/protocols/{protocol}/rotation-runs/totals` | The runs started in the window, their distinct pools, those still in progress, their median and p90 duration, their volume, and `firstHour`: the runs whose first hour ended before the window did, their volume and its part in that hour, `null` while none did (always over `1h`) — through the last tranche written; its `coveredSince` is the first tranche whose rotation was measured |
 | `GET` | `/api/protocols/{protocol}/rotation-runs/series` | The protocol's volume by `interval`, split by its runs, `splitSince` the first instant they split a bar from: in them and outside them (never under 0), both `null` on a bar the runs do not cover whole or with an hour not valued |
 | `GET` | `/api/protocols/{protocol}/liquidity-moves`, `/api/pools/{pool}/liquidity-moves` | A page of the valued moves (creations, additions, removals), their pool's token symbols embedded, the lock their transaction puts on a position (`none`, `vesting`, `permanent`, `null` before measured), `?kind=create|add|remove` to keep one kind, `?sort=amount` (default) or `at`, forward-only cursor that keeps its first page's end, refused (400) under another list, kind or window, or once that end is over an hour behind; empty while the protocol's liquidity does not cover the window |
-| `GET` | `/api/liquidity-turnover/totals`, `/api/protocols/{protocol}/liquidity-turnover/totals` | Per protocol and in `total`, the volume over the window divided by the last TVL reading, with the volume's coverage; `null` without a volume or a TVL above 0 |
+| `GET` | `/api/liquidity-turnover/totals`, `/api/protocols/{protocol}/liquidity-turnover/totals` | Per protocol and in `total`, the volume over the window divided by the last TVL reading, whose hour its rows say (`tvlAt`), with the volume's coverage; `null` without a volume or a TVL above 0 |
 | `GET` | `/api/tvl`, `/api/protocols/{protocol}/tvl` | Per protocol, the last TVL reading at or before `asOf`, its `at` said |
 | `GET` | `/api/tvl/series`, `/api/protocols/{protocol}/tvl/series` (`interval=1h`, its only step) | Per protocol, the reading of every hour measured from the window's start |
 | `GET` | `/api/tvl/totals`, `/api/protocols/{protocol}/tvl/totals` | Per protocol, the last reading, the one exactly a window before it (`null` when not measured, when the last is not at `asOf`, or over `1h`), the part the pools discovered in the window hold at the last, and the change without it, `null` as soon as one term is |
@@ -223,7 +223,8 @@ at the end of this section.
 4. **A measure is a collection followed by a cut**, a reserved word that ends the path:
    - `totals`, the whole window: one row per protocol at the root, under an entity its own.
      `swaps`, `tvl`, `pool-creations` and `liquidity-turnover` add `total`, the protocols combined at the root
-     as under one: a figure unknown in one row is unknown, `null` without a row;
+     as under one: a figure unknown in one row is unknown, `null` without a row; the turnover's is every
+     volume over every TVL reading, not a sum of its rows;
    - `series`: the same rows, one per bucket, unpaginated, the window bounding them. Without
      `interval`, the window's own step — `5m` over `1h`, `1h` over `24h`, `6h` over `7d`, `1d` over
      `30d` — and the response says it (`interval`); named, `5m` cuts `window=1h` only, which is cut
@@ -233,7 +234,7 @@ at the end of this section.
    - `by-token`, `by-pool`, `by-owner`: one row per token, pool or owner address, summed over
      the path's scope (every protocol at the root), a ranking paginated as a collection.
 
-   Every measure has both cuts, over `window=1h|24h|7d|30d`, but two the data does not serve
+   Every measure has both cuts, over `window=1h|24h|7d|30d`, but three the data does not serve
    so: `liquidity-turnover`, without a `series`; the TVL, read once an hour, whose `series` is `interval=1h` and starts at a day, its `totals`
    over `1h` being the last reading alone; and the pools discovered, measured over a day, a week and a month only, without a
    `series`. A request outside what a route serves is refused, 400 for a value outside its

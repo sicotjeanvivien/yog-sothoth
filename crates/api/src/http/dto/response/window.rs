@@ -521,6 +521,8 @@ pub(crate) struct ProtocolLiquidityTurnoverResponse {
     protocol: ProtocolResponse,
     #[serde(flatten)]
     turnover: LiquidityTurnoverResponse,
+    /// The close of the hour of the TVL reading divided by; `null` without one.
+    tvl_at: Option<DateTime<Utc>>,
 }
 
 impl From<ProtocolLiquidityTurnover> for ProtocolLiquidityTurnoverResponse {
@@ -528,6 +530,7 @@ impl From<ProtocolLiquidityTurnover> for ProtocolLiquidityTurnoverResponse {
         Self {
             protocol: row.protocol.into(),
             turnover: row.turnover.into(),
+            tvl_at: row.tvl_at,
         }
     }
 }

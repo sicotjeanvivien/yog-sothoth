@@ -59,14 +59,17 @@ impl LiquidityTurnoverService {
             }
             _ => Vec::new(),
         };
-        let frozen = build_frozen_period(self.hours.as_ref(), Window::Day, None).await?;
-        let tvl = match (&frozen, swaps.is_empty()) {
-            (Some(frozen), false) => {
+        let frozen = match swaps.is_empty() {
+            true => None,
+            false => build_frozen_period(self.hours.as_ref(), Window::Day, None).await?,
+        };
+        let tvl = match &frozen {
+            Some(frozen) => {
                 self.protocol_tvl
                     .list_latest(frozen.last_hour(), protocol)
                     .await?
             }
-            _ => Vec::new(),
+            None => Vec::new(),
         };
         Ok(TurnoverRead {
             total: LiquidityTurnover::total(&swaps, &tvl),
