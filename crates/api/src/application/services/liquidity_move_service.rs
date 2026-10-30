@@ -4,6 +4,8 @@
 
 use std::sync::Arc;
 
+use chrono::TimeDelta;
+
 use yog_core::{
     Page, RepositoryError, RepositoryResult,
     domain::{
@@ -22,8 +24,8 @@ use super::period::{
 #[derive(Debug)]
 pub(crate) enum MovesError {
     Repository(RepositoryError),
-    /// The cursor was taken over another window, or its end is past the period's or more than
-    /// the margin behind it.
+    /// The cursor was taken over another window, or its end is past the period's, more than the
+    /// margin behind it, or off the period's step.
     CursorRefused,
 }
 
@@ -125,7 +127,12 @@ impl LiquidityMoveService {
         ) {
             (Some(period), Some(c)) => {
                 let end = period.as_of();
-                if c.window != window || c.as_of > end || c.as_of < end - CURSOR_END_MARGIN {
+                let behind = end - c.as_of;
+                if c.window != window
+                    || behind < TimeDelta::zero()
+                    || behind > CURSOR_END_MARGIN
+                    || behind.num_seconds() % period.step().num_seconds() != 0
+                {
                     return Err(MovesError::CursorRefused);
                 }
                 Some(period.ending_at(c.as_of))

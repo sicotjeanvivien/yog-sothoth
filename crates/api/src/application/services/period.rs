@@ -4,7 +4,7 @@
 use chrono::{DateTime, DurationRound, TimeDelta, Utc};
 use yog_core::{
     RepositoryResult,
-    domain::{FrozenPeriod, ProtocolActivityLookup, TranchePeriod, Window},
+    domain::{FrozenPeriod, ProtocolActivityLookup, TRANCHE, TranchePeriod, Window},
 };
 
 /// How far behind the end of the latest period a cursor's end stays accepted, for pages read slowly.
@@ -79,6 +79,14 @@ impl PeriodBounds for ReadPeriod {
 }
 
 impl ReadPeriod {
+    /// The step its end moves by: an hour frozen, a tranche through the last one written.
+    pub(crate) fn step(&self) -> TimeDelta {
+        match self {
+            Self::Frozen(_) => TimeDelta::hours(1),
+            Self::Tranche(_) => TRANCHE,
+        }
+    }
+
     /// The same window ended at `as_of`: a later page read over its first page's end.
     pub(crate) fn ending_at(self, as_of: DateTime<Utc>) -> Self {
         match self {

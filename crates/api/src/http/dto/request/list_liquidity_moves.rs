@@ -62,6 +62,14 @@ impl ListLiquidityMovesRequest {
                     .and_then(|raw| decode_liquidity_move_cursor(raw, list, order))
             })
             .transpose()?;
+        // ⚠️ A key outside its own window is forged; the end is checked by the service.
+        if let Some(c) = &cursor
+            && (c.at < c.as_of - c.window.duration() || c.at >= c.as_of)
+        {
+            return Err(ApiError::BadRequest(
+                "invalid cursor: its window is not one this list serves".to_string(),
+            ));
+        }
         Ok(Self {
             window: params.window.into(),
             list,

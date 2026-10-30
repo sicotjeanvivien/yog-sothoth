@@ -89,8 +89,8 @@ async fn the_moves_wait_for_their_protocols_liquidity() {
     }
 }
 
-/// Mutation: the cursor's end or window not compared, or the page read over the latest end — a
-/// page follows one read two freezes back, ahead, or over another window, or skips an hour.
+/// Mutation: the cursor's end, its step or its window not compared, or the page read over the
+/// latest end — a page follows one read two freezes back, ahead, mid-hour, or skips an hour.
 #[tokio::test]
 async fn a_cursor_is_read_over_its_own_end_within_the_margin() {
     let pool = make_pool(pk(1), pk(2), pk(3));
@@ -123,12 +123,19 @@ async fn a_cursor_is_read_over_its_own_end_within_the_margin() {
     let stale = read(cursor(at_october(20, 11), Window::Day, pk(1))).await;
     let ahead = read(cursor(at_october(20, 14), Window::Day, pk(1))).await;
     let other_window = read(cursor(at_october(20, 13), Window::Week, pk(1))).await;
+    let off_step = read(cursor(
+        at_october(20, 13) - chrono::TimeDelta::minutes(30),
+        Window::Day,
+        pk(1),
+    ))
+    .await;
     let behind = read(cursor(at_october(20, 12), Window::Day, pk(1))).await;
     let current = read(cursor(at_october(20, 13), Window::Day, pk(1))).await;
 
     assert!(matches!(stale, Err(MovesError::CursorRefused)));
     assert!(matches!(ahead, Err(MovesError::CursorRefused)));
     assert!(matches!(other_window, Err(MovesError::CursorRefused)));
+    assert!(matches!(off_step, Err(MovesError::CursorRefused)));
     assert_eq!(behind.unwrap().period.unwrap().as_of(), at_october(20, 12));
     assert!(current.is_ok());
     let ends: Vec<_> = repo
@@ -223,6 +230,7 @@ async fn the_last_hours_moves_are_read_on_its_tranches() {
     let first = read(None).await.unwrap();
     let moved = read(Some(cursor(tranches.through - minutes(5)))).await;
     let stale = read(Some(cursor(tranches.through - minutes(65)))).await;
+    let off_step = read(Some(cursor(tranches.through - minutes(2)))).await;
 
     let period = first.period.unwrap();
     assert_eq!(
@@ -234,6 +242,7 @@ async fn the_last_hours_moves_are_read_on_its_tranches() {
         tranches.through - minutes(5)
     );
     assert!(matches!(stale, Err(MovesError::CursorRefused)));
+    assert!(matches!(off_step, Err(MovesError::CursorRefused)));
     let tranche_reads: Vec<_> = repo
         .tranche_reads
         .lock()
