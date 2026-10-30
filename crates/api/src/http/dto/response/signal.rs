@@ -1,16 +1,19 @@
 //! Response DTO for the signal feed.
 
+mod meaning_response;
 mod severity_response;
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
+use yog_core::domain;
 
 use super::protocol::ProtocolResponse;
 use super::token::EmbeddedTokenResponse;
 use crate::application::EnrichedSignal;
 use crate::http::dto::schema::{Count, SignedDecimal, UnsignedDecimal};
 
+use meaning_response::{PairTokenResponse, SignalValueUnitResponse};
 pub(super) use severity_response::SeverityResponse;
 
 /// `GET /api/signals` item (and `GET /api/signals/stream` event — both
@@ -37,6 +40,9 @@ pub(crate) struct SignalResponse {
     value: String,
     #[schema(value_type = Option<UnsignedDecimal>)]
     threshold: Option<String>,
+    value_unit: SignalValueUnitResponse,
+    /// The token a flow imbalance pours into; `null` for any other detector.
+    flows_toward: Option<PairTokenResponse>,
     message: Option<String>,
     triggered_at: DateTime<Utc>,
 }
@@ -44,6 +50,8 @@ pub(crate) struct SignalResponse {
 impl From<EnrichedSignal> for SignalResponse {
     fn from(enriched: EnrichedSignal) -> Self {
         let signal = enriched.record.signal;
+        let value_unit = domain::SignalValueUnit::of(&signal.detector).into();
+        let flows_toward = signal.flows_toward().map(Into::into);
         Self {
             id: enriched.record.id,
             detector: signal.detector,
@@ -54,6 +62,8 @@ impl From<EnrichedSignal> for SignalResponse {
             severity: signal.severity.into(),
             value: signal.value.to_string(),
             threshold: signal.threshold.map(|t| t.to_string()),
+            value_unit,
+            flows_toward,
             message: signal.message,
             triggered_at: signal.triggered_at,
         }

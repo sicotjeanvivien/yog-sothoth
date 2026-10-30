@@ -26,6 +26,8 @@ function signal(id: number, triggeredAt: string): SignalResponse {
     severity: "warning",
     value: "0.75",
     threshold: "0.6",
+    valueUnit: "signedRatio",
+    flowsToward: null,
     message: null,
     triggeredAt,
   };

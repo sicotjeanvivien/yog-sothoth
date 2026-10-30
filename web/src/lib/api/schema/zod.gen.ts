@@ -167,6 +167,10 @@ export const zPageResponseAnnouncementEntryResponse = z.object({
 
 export type PageResponseAnnouncementEntryResponse = z.infer<typeof zPageResponseAnnouncementEntryResponse>;
 
+export const zPairTokenResponse = z.enum(['tokenA', 'tokenB']);
+
+export type PairTokenResponse = z.infer<typeof zPairTokenResponse>;
+
 export const zPoolCreationsTotalResponse = z.object({
     pools: zCount
 });
@@ -260,6 +264,14 @@ export const zSeverityResponse = z.enum([
 ]);
 
 export type SeverityResponse = z.infer<typeof zSeverityResponse>;
+
+export const zSignalValueUnitResponse = z.enum([
+    'signedRatio',
+    'ratio',
+    'raw'
+]);
+
+export type SignalValueUnitResponse = z.infer<typeof zSignalValueUnitResponse>;
 
 export const zSignedDecimal = z.string().regex(/^-?\d+(\.\d+)?$/);
 
@@ -965,6 +977,7 @@ export const zPageResponseSignalResponse = z.object({
     isLast: z.boolean(),
     items: z.array(z.object({
         detector: z.string().min(1),
+        flowsToward: zPairTokenResponse.nullable(),
         id: zCount,
         message: z.string().nullable(),
         poolAddress: z.string().min(1),
@@ -974,7 +987,8 @@ export const zPageResponseSignalResponse = z.object({
         tokenA: zEmbeddedTokenResponse,
         tokenB: zEmbeddedTokenResponse,
         triggeredAt: z.iso.datetime({ offset: true }),
-        value: zSignedDecimal
+        value: zSignedDecimal,
+        valueUnit: zSignalValueUnitResponse
     })),
     nextCursor: z.string().nullable(),
     prevCursor: z.string().nullable()
@@ -1171,6 +1185,7 @@ export type ProtocolRotationRunTotalsResponse = z.infer<typeof zProtocolRotation
 
 export const zSignalResponse = z.object({
     detector: z.string().min(1),
+    flowsToward: zPairTokenResponse.nullable(),
     id: zCount,
     message: z.string().nullable(),
     poolAddress: z.string().min(1),
@@ -1180,7 +1195,8 @@ export const zSignalResponse = z.object({
     tokenA: zEmbeddedTokenResponse,
     tokenB: zEmbeddedTokenResponse,
     triggeredAt: z.iso.datetime({ offset: true }),
-    value: zSignedDecimal
+    value: zSignedDecimal,
+    valueUnit: zSignalValueUnitResponse
 });
 
 export type SignalResponse = z.infer<typeof zSignalResponse>;

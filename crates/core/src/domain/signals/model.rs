@@ -8,6 +8,42 @@ use solana_pubkey::Pubkey;
 
 use crate::domain::Protocol;
 
+/// The tag of the detector measuring a pool's spot price against its oracle price.
+pub const PRICE_ORACLE_DEVIATION: &str = "price_oracle_deviation";
+/// The tag of the detector measuring the direction of a pool's swaps.
+pub const FLOW_IMBALANCE: &str = "flow_imbalance";
+/// The tag of the detector measuring the share of a pool's liquidity withdrawn.
+pub const TVL_DRAIN: &str = "tvl_drain";
+
+/// What a signal's `value` and `threshold` count; a threshold has no sign, whatever the unit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignalValueUnit {
+    /// A ratio whose sign says something.
+    SignedRatio,
+    /// A ratio without a sign.
+    Ratio,
+    /// A detector's own unit, not known here.
+    Raw,
+}
+
+impl SignalValueUnit {
+    /// The unit of `detector`'s values, past signals included.
+    pub fn of(detector: &str) -> Self {
+        match detector {
+            PRICE_ORACLE_DEVIATION | FLOW_IMBALANCE => Self::SignedRatio,
+            TVL_DRAIN => Self::Ratio,
+            _ => Self::Raw,
+        }
+    }
+}
+
+/// The token of a pool's pair.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PairToken {
+    TokenA,
+    TokenB,
+}
+
 /// How much attention a signal warrants; mirrors the `signals.severity` CHECK.
 /// ⚠️ The declaration order is the escalation order the engine's dedup compares.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -76,6 +112,21 @@ pub struct Signal {
     pub triggered_at: DateTime<Utc>,
 }
 
+impl Signal {
+    /// The token a flow imbalance pours into: A→B dominating is a positive value. `None` for any
+    /// other detector, and for a flow balanced at zero.
+    pub fn flows_toward(&self) -> Option<PairToken> {
+        if self.detector != FLOW_IMBALANCE || self.value.is_zero() {
+            return None;
+        }
+        Some(if self.value.is_sign_positive() {
+            PairToken::TokenB
+        } else {
+            PairToken::TokenA
+        })
+    }
+}
+
 /// A persisted signal and its storage `id`, the tie-breaker of the feed ordering.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SignalRecord {
@@ -84,3 +135,7 @@ pub struct SignalRecord {
     /// The signal as emitted by its detector.
     pub signal: Signal,
 }
+
+#[cfg(test)]
+#[path = "model_tests.rs"]
+mod tests;

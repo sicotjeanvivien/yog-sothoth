@@ -2342,6 +2342,17 @@
                   "minLength": 1,
                   "type": "string"
                 },
+                "flowsToward": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/PairTokenResponse",
+                      "description": "The token a flow imbalance pours into; `null` for any other detector."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "id": {
                   "$ref": "#/components/schemas/Count",
                   "description": "Storage identity — stable across pages, usable as a client-side\nlist key. Emitted as a JSON number: signals are sparse, the\nsequence will never approach 2^53."
@@ -2385,6 +2396,9 @@
                 },
                 "value": {
                   "$ref": "#/components/schemas/SignedDecimal"
+                },
+                "valueUnit": {
+                  "$ref": "#/components/schemas/SignalValueUnitResponse"
                 }
               },
               "required": [
@@ -2396,7 +2410,9 @@
                 "tokenB",
                 "severity",
                 "value",
+                "valueUnit",
                 "triggeredAt",
+                "flowsToward",
                 "message",
                 "threshold"
               ],
@@ -2681,6 +2697,14 @@
           "prevCursor"
         ],
         "type": "object"
+      },
+      "PairTokenResponse": {
+        "description": "One token of a pool's pair.",
+        "enum": [
+          "tokenA",
+          "tokenB"
+        ],
+        "type": "string"
       },
       "PoolChangeEventMeteoraDammV2Response": {
         "description": "What a DAMM v2 pool change is, named by `kind`, and what that change says.",
@@ -4898,6 +4922,17 @@
             "minLength": 1,
             "type": "string"
           },
+          "flowsToward": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PairTokenResponse",
+                "description": "The token a flow imbalance pours into; `null` for any other detector."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "id": {
             "$ref": "#/components/schemas/Count",
             "description": "Storage identity — stable across pages, usable as a client-side\nlist key. Emitted as a JSON number: signals are sparse, the\nsequence will never approach 2^53."
@@ -4941,6 +4976,9 @@
           },
           "value": {
             "$ref": "#/components/schemas/SignedDecimal"
+          },
+          "valueUnit": {
+            "$ref": "#/components/schemas/SignalValueUnitResponse"
           }
         },
         "required": [
@@ -4952,11 +4990,22 @@
           "tokenB",
           "severity",
           "value",
+          "valueUnit",
           "triggeredAt",
+          "flowsToward",
           "message",
           "threshold"
         ],
         "type": "object"
+      },
+      "SignalValueUnitResponse": {
+        "description": "What a signal's `value` and `threshold` count; a threshold has no sign, whatever the unit.",
+        "enum": [
+          "signedRatio",
+          "ratio",
+          "raw"
+        ],
+        "type": "string"
       },
       "SignedDecimal": {
         "pattern": "^-?\\d+(\\.\\d+)?$",

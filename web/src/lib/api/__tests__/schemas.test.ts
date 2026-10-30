@@ -156,6 +156,8 @@ function validSignal() {
     severity: "critical",
     value: "1.1059558665865029280736523078",
     threshold: "0.0500",
+    valueUnit: "signedRatio",
+    flowsToward: null,
     message: "spot price deviates 1.1060 from oracle (spot 0.000000582488, oracle 0.000000276591)",
     triggeredAt: "2026-07-02T10:03:31.056847Z",
   };
