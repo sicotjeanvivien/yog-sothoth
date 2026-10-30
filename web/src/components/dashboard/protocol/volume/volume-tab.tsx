@@ -35,7 +35,7 @@ import { formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { pairLabel } from "@/lib/format/pubkey";
 import { axisOf, daysAgoOf, hourOf, readsClock, roundTicks } from "@/lib/overview/chart";
-import type { FrozenPeriod } from "@/lib/overview/period";
+import type { Period } from "@/lib/overview/period";
 import {
   durationOf,
   splitSinceOf,
@@ -51,9 +51,15 @@ const CHART_PX = { height: 122, top: 112 } as const;
 
 const RUNS_SHOWN = 5;
 
-const PER_SLOT = { "24h": "perHour", "7d": "perSixHours", "30d": "perDay" } as const;
+const PER_SLOT = {
+  "1h": "perFiveMinutes",
+  "24h": "perHour",
+  "7d": "perSixHours",
+  "30d": "perDay",
+} as const;
 
 const CHART_LABEL = {
+  "1h": "chartLabelFiveMinutes",
   "24h": "chartLabelHourly",
   "7d": "chartLabelSixHours",
   "30d": "chartLabelDaily",
@@ -74,7 +80,7 @@ const RUNS_CLASS = `${CELL_CLASS} ${RUNS_SPAN} min-h-[262px]`;
 const RUN_COLUMNS =
   "grid-cols-[minmax(0,1.6fr)_10.5rem_minmax(0,0.7fr)_minmax(0,0.9fr)_minmax(0,0.8fr)]";
 
-type TabProps = { period: FrozenPeriod; protocol: ProtocolResponse };
+type TabProps = { period: Period; protocol: ProtocolResponse };
 
 export async function VolumeTab({ period, protocol }: TabProps) {
   const t = await getTranslations("Dashboard.Protocol.volume");

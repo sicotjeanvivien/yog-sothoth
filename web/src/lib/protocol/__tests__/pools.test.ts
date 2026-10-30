@@ -7,6 +7,15 @@ const AS_OF = "2026-10-25T03:00:00Z";
 const hour = (h: number) => new Date(Date.parse(AS_OF) - (24 - h) * 3_600_000).toISOString();
 
 describe("birthSlotsOf", () => {
+  // Mutation: the period not passed through — the last hour drawn on 24 hourly slots.
+  it("draws the last hour on its twelve tranches", () => {
+    const at = new Date(Date.parse(AS_OF) - 5 * 60_000).toISOString();
+    const slots = birthSlotsOf("1h", AS_OF, [{ from: at, pools: 2 }]);
+
+    expect(slots).toHaveLength(12);
+    expect(slots.at(-1)?.value).toBe(2);
+  });
+
   // Mutation: a slot without a bar read as zero — an hour not measured drawn as one without birth.
   it("carries each hour's births, and nothing where no bar is", () => {
     const slots = birthSlotsOf("24h", AS_OF, [

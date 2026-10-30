@@ -35,6 +35,17 @@ describe("curveOf", () => {
 });
 
 describe("flowSlotsOf", () => {
+  // Mutation: the period not passed through — the last hour drawn on 24 hourly slots.
+  it("draws the last hour on its twelve tranches", () => {
+    const at = new Date(Date.parse("2026-10-24T12:00:00Z") - 5 * 60_000).toISOString();
+    const slots = flowSlotsOf("1h", "2026-10-24T12:00:00Z", [
+      { from: at, createdUsd: "0", addedUsd: "4", removedUsd: "1" },
+    ]);
+
+    expect(slots).toHaveLength(12);
+    expect(slots.at(-1)).toMatchObject({ created: 0, added: 4, removed: 1 });
+  });
+
   // Mutation: an hour without a bar read as zero — an hour before the liquidity was measured
   // drawn as one without any move.
   it("keeps a slot without a bar as nothing, not zero", () => {

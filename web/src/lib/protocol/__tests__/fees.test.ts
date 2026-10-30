@@ -14,6 +14,15 @@ const bar = (from: string, lp: string | null, protocol: string | null, referral:
 });
 
 describe("feeSlotsOf", () => {
+  // Mutation: the period not passed through — the last hour drawn on 24 hourly slots.
+  it("draws the last hour on its twelve tranches", () => {
+    const at = new Date(Date.parse(AS_OF) - 5 * 60_000).toISOString();
+    const slots = feeSlotsOf("1h", AS_OF, [bar(at, "8", "1", "0")]);
+
+    expect(slots).toHaveLength(12);
+    expect(slots.at(-1)).toMatchObject({ lp: 8, protocol: 1, referral: 0 });
+  });
+
   // Mutation: a part read from another's column — the protocol's fees drawn as the LPs'.
   it("carries each part of a bar from its own field", () => {
     const slots = feeSlotsOf("24h", AS_OF, [bar(hour(23), "80", "18", "2")]);

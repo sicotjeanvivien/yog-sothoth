@@ -31,7 +31,7 @@ import { formatRelative, formatUtcMoment, type FormatLocale } from "@/lib/format
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { pairLabel, shortenPubkey } from "@/lib/format/pubkey";
 import { axisOf, daysAgoOf, hourOf, readsClock, roundTicks } from "@/lib/overview/chart";
-import type { FrozenPeriod } from "@/lib/overview/period";
+import type { Period } from "@/lib/overview/period";
 import { birthSlotsOf, birthTotalOf, lifeCountOf, lockKey } from "@/lib/protocol/pools";
 
 import { SplitBars, type SplitDetail } from "../split-bars";
@@ -50,7 +50,7 @@ const LIFE_SPAN = `col-span-12 dash-wide:col-span-4 ${ADVANCED_ONLY.block}`;
 
 const LIFE_CLASS = `${CELL_CLASS} ${LIFE_SPAN} min-h-[262px]`;
 
-const LIFE_COLUMNS = "grid-cols-[minmax(0,1fr)_auto_auto]";
+const LIFE_COLUMNS = "grid-cols-[minmax(0,1fr)_auto]";
 
 /** The life cycle's rows, each with the event it counts; the owners are the liquidity moves'. */
 const LIFE_ROWS = [
@@ -69,15 +69,21 @@ const DEPOSIT_COLUMNS = "grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_auto_auto_au
 
 const BIRTH_TONE = { births: "bg-dash-flow-create" } as const;
 
-const PER_SLOT = { "24h": "perHour", "7d": "perSixHours", "30d": "perDay" } as const;
+const PER_SLOT = {
+  "1h": "perFiveMinutes",
+  "24h": "perHour",
+  "7d": "perSixHours",
+  "30d": "perDay",
+} as const;
 
 const CHART_LABEL = {
+  "1h": "chartLabelFiveMinutes",
   "24h": "chartLabelHourly",
   "7d": "chartLabelSixHours",
   "30d": "chartLabelDaily",
 } as const;
 
-type TabProps = { period: FrozenPeriod; protocol: ProtocolResponse };
+type TabProps = { period: Period; protocol: ProtocolResponse };
 
 export async function PoolsTab({ period, protocol }: TabProps) {
   const t = await getTranslations("Dashboard.Protocol.pools");
@@ -107,16 +113,17 @@ export async function PoolsTab({ period, protocol }: TabProps) {
         <LargestDeposits period={period} protocol={protocol} />
       </Suspense>
       <Suspense
+        key={`life-${period}`}
         fallback={
           <BlockSkeleton
-            title={t("life.title")}
+            title={t("life.title", { period: tPeriod(`short.${period}`) })}
             span={LIFE_SPAN}
             minHeight="min-h-[262px]"
             shape={{ rows: 6 }}
           />
         }
       >
-        <LifeCycle protocol={protocol} />
+        <LifeCycle period={period} protocol={protocol} />
       </Suspense>
     </div>
   );
@@ -278,18 +285,17 @@ async function LargestDeposits({ period, protocol }: TabProps) {
   );
 }
 
-/** The positions' life cycle, in two fixed columns whatever the period: a comparison. */
-async function LifeCycle({ protocol }: { protocol: ProtocolResponse }) {
+/** The positions' life cycle over the period: one count per event, and the distinct LPs. */
+async function LifeCycle({ period, protocol }: TabProps) {
   const t = await getTranslations("Dashboard.Protocol.pools.life");
-  const title = t("title");
+  const tPeriod = await getTranslations("Dashboard.Overview.period");
+  const title = t("title", { period: tPeriod(`short.${period}`) });
 
-  let day, week, dayOwners, weekOwners;
+  let changes, moves;
   try {
-    [day, week, dayOwners, weekOwners] = await Promise.all([
-      fetchPositionChangeTotals(protocol, "24h"),
-      fetchPositionChangeTotals(protocol, "7d"),
-      fetchLiquidityMoveTotals(protocol, "24h"),
-      fetchLiquidityMoveTotals(protocol, "7d"),
+    [changes, moves] = await Promise.all([
+      fetchPositionChangeTotals(protocol, period),
+      fetchLiquidityMoveTotals(protocol, period),
     ]);
   } catch (err) {
     if (err instanceof ApiClientError) {
@@ -307,14 +313,12 @@ async function LifeCycle({ protocol }: { protocol: ProtocolResponse }) {
     ...LIFE_ROWS.map(({ key, event }) => ({
       key,
       event,
-      day: lifeCountOf(day.items, (r) => r[key]),
-      week: lifeCountOf(week.items, (r) => r[key]),
+      count: lifeCountOf(changes.items, (r) => r[key]),
     })),
     {
       key: "owners" as const,
       event: "owner (liquidity)",
-      day: lifeCountOf(dayOwners.items, (r) => r.owners),
-      week: lifeCountOf(weekOwners.items, (r) => r.owners),
+      count: lifeCountOf(moves.items, (r) => r.owners),
     },
   ];
 
@@ -325,10 +329,7 @@ async function LifeCycle({ protocol }: { protocol: ProtocolResponse }) {
         <div role="row" className={`${HEAD_ROW_CLASS} ${LIFE_COLUMNS}`}>
           <div role="columnheader">{t("step")}</div>
           <div role="columnheader" className={NUM_CLASS}>
-            {t("day")}
-          </div>
-          <div role="columnheader" className={NUM_CLASS}>
-            {t("week")}
+            {t("count")}
           </div>
         </div>
         {rows.map((row) => (
@@ -338,10 +339,7 @@ async function LifeCycle({ protocol }: { protocol: ProtocolResponse }) {
               <div className="truncate font-dash-mono text-[11px] text-dash-ink-3">{row.event}</div>
             </div>
             <div role="cell" className={`${NUM_CLASS} text-dash-ink`}>
-              {formatCount(row.day)}
-            </div>
-            <div role="cell" className={`${NUM_CLASS} text-dash-ink-2`}>
-              {formatCount(row.week)}
+              {formatCount(row.count)}
             </div>
           </div>
         ))}

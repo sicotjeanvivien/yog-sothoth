@@ -9,8 +9,6 @@ export type FrozenPeriod = Exclude<Period, "1h">;
 
 export const OVERVIEW_PERIODS: readonly Period[] = ["1h", "24h", "7d", "30d"];
 
-export const PROTOCOL_PERIODS: readonly FrozenPeriod[] = ["24h", "7d", "30d"];
-
 export const DEFAULT_PERIOD = "24h" satisfies FrozenPeriod;
 
 export const HOUR_MS = 60 * 60 * 1000;

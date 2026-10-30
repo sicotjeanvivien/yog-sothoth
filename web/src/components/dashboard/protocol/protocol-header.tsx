@@ -16,12 +16,12 @@ import { ApiClientError } from "@/lib/api/errors";
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
 import { fetchSwapTotals } from "@/lib/api/server/protocols";
 import { shortenPubkey } from "@/lib/format/pubkey";
-import { PROTOCOL_PERIODS, type FrozenPeriod } from "@/lib/overview/period";
+import { DEFAULT_PERIOD, OVERVIEW_PERIODS, type Period } from "@/lib/overview/period";
 import { tabQuery, type ProtocolTab } from "@/lib/protocol/tabs";
 
 type HeaderProps = {
   pathname: PagePath;
-  period: FrozenPeriod;
+  period: Period;
   tab: ProtocolTab | null;
   protocol: ProtocolResponse;
   programId: string;
@@ -46,14 +46,14 @@ export async function ProtocolHeader({ pathname, period, tab, protocol, programI
               {t("program", { id: shortenPubkey(programId, 6) })}
             </span>
             <Suspense fallback={null}>
-              <MeasuredSince period={period} protocol={protocol} />
+              <MeasuredSince protocol={protocol} />
             </Suspense>
           </InfoPopover>
         </span>
       </div>
       <HeaderControls
         period={period}
-        periods={PROTOCOL_PERIODS}
+        periods={OVERVIEW_PERIODS}
         scope={protocol}
         pathname={pathname}
         keep={tabQuery(tab)}
@@ -63,17 +63,12 @@ export async function ProtocolHeader({ pathname, period, tab, protocol, programI
 }
 
 /** The first frozen hour, from which every figure of the page exists. */
-async function MeasuredSince({
-  period,
-  protocol,
-}: {
-  period: FrozenPeriod;
-  protocol: ProtocolResponse;
-}) {
+async function MeasuredSince({ protocol }: { protocol: ProtocolResponse }) {
   const t = await getTranslations("Dashboard.Protocol.page");
   let since;
   try {
-    since = (await fetchSwapTotals(protocol, period)).coveredSince;
+    // ⚠️ Not the page's period: over the last hour, the coverage is the tranches still held.
+    since = (await fetchSwapTotals(protocol, DEFAULT_PERIOD)).coveredSince;
   } catch (err) {
     if (err instanceof ApiClientError) {
       return null;
