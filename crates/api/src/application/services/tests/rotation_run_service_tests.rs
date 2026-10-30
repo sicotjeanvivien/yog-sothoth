@@ -208,27 +208,3 @@ async fn the_last_hour_is_split_by_tranche_a_gap_after_the_runs_were_measured() 
     assert_eq!(reads.len(), 1);
     assert_eq!(reads[0].1, Some(since + RUN_GAP));
 }
-
-/// Mutation: the first hour served over the last one, or withheld over a day — a share at 100 %
-/// by construction published, or a day's share lost.
-#[tokio::test]
-async fn the_first_hour_is_not_served_over_the_last_hour() {
-    let repo = Arc::new(MockRotationRunRepo {
-        written_through: Some(minutes(at_october(20, 13), 20)),
-        measured_since: Some(minutes(at_october(19, 10), 5)),
-        ..MockRotationRunRepo::default()
-    });
-    let first_hour = |window| {
-        let svc = service(&repo);
-        async move {
-            svc.get_totals(window, Protocol::MeteoraDammV2)
-                .await
-                .unwrap()
-                .items[0]
-                .first_hour_volume_usd
-        }
-    };
-
-    assert_eq!(first_hour(Window::Hour).await, None);
-    assert_eq!(first_hour(Window::Day).await, Some(Decimal::ZERO));
-}

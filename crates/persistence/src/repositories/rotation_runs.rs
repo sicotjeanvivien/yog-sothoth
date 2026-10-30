@@ -79,7 +79,13 @@ impl RotationRunLookup for PgRotationRunRepository {
             SELECT COUNT(*) AS "runs!", COUNT(DISTINCT pool_address) AS "pools!",
                    COUNT(*) FILTER (WHERE NOT extinct) AS "in_progress!",
                    COALESCE(SUM(volume_usd), 0) AS "volume_usd!",
-                   COALESCE(SUM(first_hour_volume_usd), 0) AS "first_hour_volume_usd!",
+                   -- ⚠️ Until its first hour ends before the period does, a run's volume is all in it.
+                   COUNT(*) FILTER (WHERE started_at + INTERVAL '1 hour' < $2)
+                       AS "first_hour_runs!",
+                   SUM(volume_usd) FILTER (WHERE started_at + INTERVAL '1 hour' < $2)
+                       AS "first_hour_runs_volume_usd?",
+                   SUM(first_hour_volume_usd) FILTER (WHERE started_at + INTERVAL '1 hour' < $2)
+                       AS "in_first_hour_usd?",
                    ROUND(percentile_cont(0.5) WITHIN GROUP (
                        ORDER BY EXTRACT(EPOCH FROM ended_at - started_at)))::BIGINT
                        AS "median_duration_seconds?",

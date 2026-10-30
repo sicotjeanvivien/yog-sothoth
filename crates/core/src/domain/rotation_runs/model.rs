@@ -34,8 +34,16 @@ pub struct RotationRunTotals {
     pub median_duration_seconds: Option<i64>,
     pub p90_duration_seconds: Option<i64>,
     pub volume_usd: Decimal,
-    /// `None` over the last hour: a run started in it has only its first hour.
-    pub first_hour_volume_usd: Option<Decimal>,
+    /// `None` while no run's first hour ended before the period does.
+    pub first_hour: Option<RunsFirstHour>,
+}
+
+/// The runs whose first hour ended before their period did, their volume, and its part in that hour.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunsFirstHour {
+    pub runs: i64,
+    pub volume_usd: Decimal,
+    pub in_first_hour_usd: Decimal,
 }
 
 /// Which runs a list reads: one protocol's, or one pool's.
