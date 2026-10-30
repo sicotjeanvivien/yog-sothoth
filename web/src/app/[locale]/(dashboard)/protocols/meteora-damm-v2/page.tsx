@@ -26,7 +26,7 @@ import { FeesRateKpi, ProtocolFeesKpi } from "@/components/dashboard/protocol/pr
 import { ProtocolTabs } from "@/components/dashboard/protocol/protocol-tabs";
 import { VolumeTab } from "@/components/dashboard/protocol/volume/volume-tab";
 import { OVERVIEW_PERIODS } from "@/lib/overview/period";
-import { readPeriod } from "@/lib/api/server/protocols";
+import { readPeriod } from "@/lib/api/server/read-period";
 import { parseTab, readyTabs } from "@/lib/protocol/tabs";
 import { pageMetadata } from "@/lib/seo/page-metadata";
 

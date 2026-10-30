@@ -1,6 +1,6 @@
 /**
  * The period selector of a page's header, each period open or closed as `/api/windows` says.
- * ⚠️ A failed read keeps them links: each block then says what its period lacks.
+ * ⚠️ A failed read keeps them links.
  */
 
 import { getTranslations } from "next-intl/server";

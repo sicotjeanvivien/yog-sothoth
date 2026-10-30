@@ -291,7 +291,7 @@ their waiting slots only; the signals do not reload.
   every block that sums over it shows "—" and the same reason (the TVL stays,
   with the time it was read). 30d stays closed by the API until
   its times are measured on the prod: a period closed with no date falls back to 24h,
-  by its URL too, so its reads never run;
+  by its URL too, so its reads never run. So does any period but 24h when `/api/windows` does not answer: the page waits for that read before it renders;
 - the volume change is "—" when the previous window (`offset`) starts before
   `coveredSince`, or does not end where the current one starts (a tranche or a freeze between the two reads);
 - the TVL has no change when `tvl/totals` has no reading a window before the last,
@@ -358,7 +358,7 @@ it (`dash-flow-out`, darker than the text red), per bar
 of the period, with symmetric marks; and, in the advanced mode, the largest moves
 beside the chart, so the page is no longer. The liquidity is measured from a
 later hour than the swaps: until a window is covered, its totals, bars and
-moves say so instead of a partial sum, while the period stays open on the swaps' span. Opening this tab opened the menu entry,
+moves say so instead of a partial sum, while the API keeps the period open on the facts' coverage. Opening this tab opened the menu entry,
 with a green dot beside it while the ingestion is live
 (`sidebar/product-live-dot.tsx`), and put the page in the sitemap.
 

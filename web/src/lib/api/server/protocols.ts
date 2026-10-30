@@ -5,16 +5,10 @@
  * @throws ApiClientError on any transport, HTTP, or schema failure.
  */
 
-import { ApiClientError } from "@/lib/api/errors";
 import { cache } from "react";
 import type { z } from "zod";
 
-import {
-  DEFAULT_PERIOD,
-  parsePeriod,
-  periodHeldClosed,
-  type Period,
-} from "@/lib/overview/period";
+import type { Period } from "@/lib/overview/period";
 
 import { apiGet } from "../client/server";
 import {
@@ -198,22 +192,3 @@ export const fetchLargestRotationRuns = cache(
       zListProtocolRotationRunsResponse,
     ),
 );
-
-/** The page's period: 24h when a period is held closed, or when the windows cannot be read. */
-export async function readPeriod<P extends Period>(
-  raw: string | string[] | undefined,
-  periods: readonly P[],
-): Promise<P | typeof DEFAULT_PERIOD> {
-  const period = parsePeriod(raw, periods);
-  if (period === DEFAULT_PERIOD) {
-    return period;
-  }
-  try {
-    return periodHeldClosed(period, (await fetchWindows()).items) ? DEFAULT_PERIOD : period;
-  } catch (err) {
-    if (err instanceof ApiClientError) {
-      return DEFAULT_PERIOD;
-    }
-    throw err;
-  }
-}

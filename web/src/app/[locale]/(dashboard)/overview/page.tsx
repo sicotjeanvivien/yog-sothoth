@@ -40,7 +40,7 @@ import {
   VolumeChartPlaceholder,
 } from "@/components/dashboard/overview/volume-chart";
 import { OVERVIEW_PERIODS } from "@/lib/overview/period";
-import { readPeriod } from "@/lib/api/server/protocols";
+import { readPeriod } from "@/lib/api/server/read-period";
 import { pageMetadata } from "@/lib/seo/page-metadata";
 
 type OverviewPageProps = {
