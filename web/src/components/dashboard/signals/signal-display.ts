@@ -57,7 +57,6 @@ export const STATUS_DOT: Record<
 /** How many signals the Overview's signals block shows. */
 export const LATEST_SIGNALS_COUNT = 7;
 
-/** The value in the unit the API says it counts. */
 export function formatSignalValue(signal: SignalResponse, locale: string): string {
   switch (signal.valueUnit) {
     case "raw":
@@ -69,7 +68,6 @@ export function formatSignalValue(signal: SignalResponse, locale: string): strin
   }
 }
 
-/** The threshold in the value's unit, without a sign; "—" where there is none. */
 export function formatSignalThreshold(signal: SignalResponse, locale: string): string {
   if (signal.threshold === null) {
     return "—";
@@ -77,7 +75,6 @@ export function formatSignalThreshold(signal: SignalResponse, locale: string): s
   return signal.valueUnit === "raw" ? signal.threshold : formatPercent(signal.threshold, locale);
 }
 
-/** The symbol of the token the signal's swaps lean toward, where it says one and it is resolved. */
 export function leanedSymbolOf(signal: SignalResponse): string | null {
   return signal.leansToward === null ? null : signal[signal.leansToward].symbol;
 }

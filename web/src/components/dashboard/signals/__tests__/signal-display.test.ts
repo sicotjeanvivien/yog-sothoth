@@ -47,9 +47,10 @@ describe("formatSignalValue", () => {
 });
 
 describe("formatSignalThreshold", () => {
-  // Mutation: the threshold formatted as the value gives it a "+".
+  // Mutation: the threshold formatted as the value gives it a "+"; a drain's left raw.
   it("has no sign, whatever the value's", () => {
     expect(formatSignalThreshold(signal({ valueUnit: "signedRatio" }), "en")).toBe("60%");
+    expect(formatSignalThreshold(signal({ valueUnit: "ratio" }), "en")).toBe("60%");
   });
 
   it("stays raw in a raw unit, and is empty without a threshold", () => {
@@ -67,5 +68,11 @@ describe("leanedSymbolOf", () => {
 
   it("names none where the API says none", () => {
     expect(leanedSymbolOf(signal({ leansToward: null, value: "-0.75" }))).toBeNull();
+  });
+
+  // Mutation: a fallback on the other token names one the swaps left.
+  it("names none while the token is unresolved", () => {
+    const tokenA = { mint: null, name: null, decimals: 0, logoUri: null, symbol: null };
+    expect(leanedSymbolOf(signal({ leansToward: "tokenA", tokenA }))).toBeNull();
   });
 });

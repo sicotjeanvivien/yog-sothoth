@@ -9,10 +9,7 @@
 import { useLocale, useTranslations } from "next-intl";
 
 import type { SeverityResponse, SignalResponse } from "@/lib/api/schema/zod.gen";
-import {
-  formatPercent,
-  formatSignedPercent,
-} from "@/lib/format/format-percent";
+import { formatPercent } from "@/lib/format/format-percent";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatShortAddress } from "@/lib/format/format-short-address";
@@ -45,7 +42,7 @@ function detectorSummary(
   switch (signal.detector) {
     case "price_oracle_deviation":
       return t("detectors.price_oracle_deviation.summary", {
-        deviation: formatSignedPercent(signal.value, locale),
+        deviation: formatSignalValue(signal, locale),
       });
     case "flow_imbalance": {
       const toward = leanedSymbolOf(signal);
@@ -59,7 +56,7 @@ function detectorSummary(
     }
     case "tvl_drain":
       return t("detectors.tvl_drain.summary", {
-        percent: formatPercent(signal.value, locale),
+        percent: formatSignalValue(signal, locale),
       });
     default:
       return (
