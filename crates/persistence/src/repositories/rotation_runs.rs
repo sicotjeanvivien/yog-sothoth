@@ -127,6 +127,7 @@ impl RotationRunLookup for PgRotationRunRepository {
             ),
             None => (None, None, None),
         };
+        // ⚠️ Ranked before it is named: joined first, a page costs its whole window.
         let rows = match (scope, order) {
             (RotationRunScope::Protocol(protocol), RotationRunOrder::Volume) => {
                 let key = protocol.as_str();
@@ -136,18 +137,22 @@ impl RotationRunLookup for PgRotationRunRepository {
                 SELECT r.protocol, r.pool_address, r.started_at, r.ended_at, r.volume_usd,
                        r.first_hour_volume_usd, r.extinct, ROUND(r.volume_usd, 6) AS "volume_key!",
                        ta.symbol AS "token_a_symbol?", tb.symbol AS "token_b_symbol?"
-                  FROM analytic_rotation_runs r
+                  FROM (
+                        SELECT r.*
+                          FROM analytic_rotation_runs r
+                         WHERE r.protocol = $3 AND r.started_at >= $1 AND r.started_at < $2
+                           -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits.
+                           AND ($4::NUMERIC IS NULL
+                                OR ROUND(r.volume_usd, 6) < $4
+                                OR (ROUND(r.volume_usd, 6) = $4 AND (r.pool_address > $6
+                                    OR (r.pool_address = $6 AND r.started_at > $5))))
+                         ORDER BY ROUND(r.volume_usd, 6) DESC, r.pool_address, r.started_at
+                         LIMIT $7
+                  ) r
                   LEFT JOIN pools p ON p.pool_address = r.pool_address
                   LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
                   LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT
-                 WHERE r.protocol = $3 AND r.started_at >= $1 AND r.started_at < $2
-                   -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits.
-                   AND ($4::NUMERIC IS NULL
-                        OR ROUND(r.volume_usd, 6) < $4
-                        OR (ROUND(r.volume_usd, 6) = $4 AND (r.pool_address > $6
-                            OR (r.pool_address = $6 AND r.started_at > $5))))
                  ORDER BY ROUND(r.volume_usd, 6) DESC, r.pool_address, r.started_at
-                 LIMIT $7
                 "#,
                     period.from,
                     period.as_of,
@@ -169,16 +174,20 @@ impl RotationRunLookup for PgRotationRunRepository {
                 SELECT r.protocol, r.pool_address, r.started_at, r.ended_at, r.volume_usd,
                        r.first_hour_volume_usd, r.extinct, ROUND(r.volume_usd, 6) AS "volume_key!",
                        ta.symbol AS "token_a_symbol?", tb.symbol AS "token_b_symbol?"
-                  FROM analytic_rotation_runs r
+                  FROM (
+                        SELECT r.*
+                          FROM analytic_rotation_runs r
+                         WHERE r.protocol = $3 AND r.started_at >= $1 AND r.started_at < $2
+                           AND ($4::TIMESTAMPTZ IS NULL
+                                OR r.started_at < $4
+                                OR (r.started_at = $4 AND r.pool_address > $5))
+                         ORDER BY r.started_at DESC, r.pool_address
+                         LIMIT $6
+                  ) r
                   LEFT JOIN pools p ON p.pool_address = r.pool_address
                   LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
                   LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT
-                 WHERE r.protocol = $3 AND r.started_at >= $1 AND r.started_at < $2
-                   AND ($4::TIMESTAMPTZ IS NULL
-                        OR r.started_at < $4
-                        OR (r.started_at = $4 AND r.pool_address > $5))
                  ORDER BY r.started_at DESC, r.pool_address
-                 LIMIT $6
                 "#,
                     period.from,
                     period.as_of,
@@ -199,18 +208,22 @@ impl RotationRunLookup for PgRotationRunRepository {
                 SELECT r.protocol, r.pool_address, r.started_at, r.ended_at, r.volume_usd,
                        r.first_hour_volume_usd, r.extinct, ROUND(r.volume_usd, 6) AS "volume_key!",
                        ta.symbol AS "token_a_symbol?", tb.symbol AS "token_b_symbol?"
-                  FROM analytic_rotation_runs r
+                  FROM (
+                        SELECT r.*
+                          FROM analytic_rotation_runs r
+                         WHERE r.pool_address = $3 AND r.started_at >= $1 AND r.started_at < $2
+                           -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits.
+                           AND ($4::NUMERIC IS NULL
+                                OR ROUND(r.volume_usd, 6) < $4
+                                OR (ROUND(r.volume_usd, 6) = $4 AND (r.pool_address > $6
+                                    OR (r.pool_address = $6 AND r.started_at > $5))))
+                         ORDER BY ROUND(r.volume_usd, 6) DESC, r.pool_address, r.started_at
+                         LIMIT $7
+                  ) r
                   LEFT JOIN pools p ON p.pool_address = r.pool_address
                   LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
                   LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT
-                 WHERE r.pool_address = $3 AND r.started_at >= $1 AND r.started_at < $2
-                   -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits.
-                   AND ($4::NUMERIC IS NULL
-                        OR ROUND(r.volume_usd, 6) < $4
-                        OR (ROUND(r.volume_usd, 6) = $4 AND (r.pool_address > $6
-                            OR (r.pool_address = $6 AND r.started_at > $5))))
                  ORDER BY ROUND(r.volume_usd, 6) DESC, r.pool_address, r.started_at
-                 LIMIT $7
                 "#,
                     period.from,
                     period.as_of,
@@ -232,16 +245,20 @@ impl RotationRunLookup for PgRotationRunRepository {
                 SELECT r.protocol, r.pool_address, r.started_at, r.ended_at, r.volume_usd,
                        r.first_hour_volume_usd, r.extinct, ROUND(r.volume_usd, 6) AS "volume_key!",
                        ta.symbol AS "token_a_symbol?", tb.symbol AS "token_b_symbol?"
-                  FROM analytic_rotation_runs r
+                  FROM (
+                        SELECT r.*
+                          FROM analytic_rotation_runs r
+                         WHERE r.pool_address = $3 AND r.started_at >= $1 AND r.started_at < $2
+                           AND ($4::TIMESTAMPTZ IS NULL
+                                OR r.started_at < $4
+                                OR (r.started_at = $4 AND r.pool_address > $5))
+                         ORDER BY r.started_at DESC, r.pool_address
+                         LIMIT $6
+                  ) r
                   LEFT JOIN pools p ON p.pool_address = r.pool_address
                   LEFT JOIN token_metadata ta ON ta.mint = p.token_a_mint::TEXT
                   LEFT JOIN token_metadata tb ON tb.mint = p.token_b_mint::TEXT
-                 WHERE r.pool_address = $3 AND r.started_at >= $1 AND r.started_at < $2
-                   AND ($4::TIMESTAMPTZ IS NULL
-                        OR r.started_at < $4
-                        OR (r.started_at = $4 AND r.pool_address > $5))
                  ORDER BY r.started_at DESC, r.pool_address
-                 LIMIT $6
                 "#,
                     period.from,
                     period.as_of,

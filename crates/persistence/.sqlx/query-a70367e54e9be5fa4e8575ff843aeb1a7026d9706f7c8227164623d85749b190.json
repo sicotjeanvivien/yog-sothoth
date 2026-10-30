@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            WITH by_pool AS (\n                SELECT f.protocol, f.pool_address,\n                       SUM(f.volume_in_a_usd + f.volume_in_b_usd) FILTER (WHERE f.valued)\n                           AS volume_usd,\n                       COUNT(*) AS pool_hours, COUNT(*) FILTER (WHERE f.valued) AS pool_hours_valued\n                  FROM analytic_pool_5min f\n                 WHERE f.bucket >= $1 AND f.bucket < $2\n                 GROUP BY f.protocol, f.pool_address\n            ),\n            ranked AS (\n                SELECT m.mint, ROUND(COALESCE(SUM(b.volume_usd), 0), 6) AS volume_usd,\n                       COUNT(*) AS pools, SUM(b.pool_hours)::BIGINT AS pool_hours,\n                       SUM(b.pool_hours_valued)::BIGINT AS pool_hours_valued\n                  FROM by_pool b\n                  JOIN pools p ON p.pool_address = b.pool_address AND p.protocol = b.protocol\n                 CROSS JOIN LATERAL (VALUES (p.token_a_mint), (p.token_b_mint)) AS m (mint)\n                 WHERE m.mint IS NOT NULL\n                 GROUP BY m.mint\n            )\n            SELECT $2::TIMESTAMPTZ AS \"last_hour?\",\n                   t.mint AS \"mint?\", t.volume_usd AS \"volume_usd?\", t.pools AS \"pools?\",\n                   t.pool_hours AS \"pool_hours?\", t.pool_hours_valued AS \"pool_hours_valued?\",\n                   m.symbol AS \"symbol?\", m.name AS \"name?\",\n                   m.decimals AS \"decimals?\", m.logo_uri AS \"logo_uri?\",\n                   m.metadata_provider AS \"metadata_provider?\",\n                   m.fetched_at AS \"fetched_at?\", m.last_refresh_at AS \"last_refresh_at?\"\n              FROM ranked t\n              LEFT JOIN token_metadata m ON m.mint = t.mint\n             WHERE $3::NUMERIC IS NULL\n                OR t.volume_usd < $3\n                OR (t.volume_usd = $3 AND t.mint > $4)\n             ORDER BY t.volume_usd DESC, t.mint\n             LIMIT $5\n            ",
+  "query": "\n            WITH by_pool AS (\n                SELECT f.protocol, f.pool_address,\n                       SUM(f.volume_in_a_usd + f.volume_in_b_usd) FILTER (WHERE f.valued)\n                           AS volume_usd,\n                       COUNT(*) AS pool_hours, COUNT(*) FILTER (WHERE f.valued) AS pool_hours_valued\n                  FROM analytic_pool_5min f\n                 WHERE f.bucket >= $1 AND f.bucket < $2\n                 GROUP BY f.protocol, f.pool_address\n            ),\n            ranked AS (\n                SELECT m.mint, ROUND(COALESCE(SUM(b.volume_usd), 0), 6) AS volume_usd,\n                       COUNT(*) AS pools, SUM(b.pool_hours)::BIGINT AS pool_hours,\n                       SUM(b.pool_hours_valued)::BIGINT AS pool_hours_valued\n                  FROM by_pool b\n                  JOIN pools p ON p.pool_address = b.pool_address AND p.protocol = b.protocol\n                 CROSS JOIN LATERAL (VALUES (p.token_a_mint), (p.token_b_mint)) AS m (mint)\n                 WHERE m.mint IS NOT NULL\n                 GROUP BY m.mint\n            )\n            SELECT $2::TIMESTAMPTZ AS \"last_hour?\",\n                   t.mint AS \"mint?\", t.volume_usd AS \"volume_usd?\", t.pools AS \"pools?\",\n                   t.pool_hours AS \"pool_hours?\", t.pool_hours_valued AS \"pool_hours_valued?\",\n                   m.symbol AS \"symbol?\", m.name AS \"name?\",\n                   m.decimals AS \"decimals?\", m.logo_uri AS \"logo_uri?\",\n                   m.metadata_provider AS \"metadata_provider?\",\n                   m.fetched_at AS \"fetched_at?\", m.last_refresh_at AS \"last_refresh_at?\"\n              -- ⚠️ Ranked before it is named: joined first, a page costs every token of the hour.\n              FROM (\n                  SELECT t.*\n                    FROM ranked t\n                   WHERE $3::NUMERIC IS NULL\n                      OR t.volume_usd < $3\n                      OR (t.volume_usd = $3 AND t.mint > $4)\n                   ORDER BY t.volume_usd DESC, t.mint\n                   LIMIT $5\n              ) t\n              LEFT JOIN token_metadata m ON m.mint = t.mint\n             ORDER BY t.volume_usd DESC, t.mint\n            ",
   "describe": {
     "columns": [
       {
@@ -135,12 +135,12 @@
       null,
       true,
       true,
-      false,
       true,
-      false,
-      false,
-      false
+      true,
+      true,
+      true,
+      true
     ]
   },
-  "hash": "e66af6a082a20f63d529e5cfea8f2defeb3c73d876d81e3e75f88dc8238d6f88"
+  "hash": "a70367e54e9be5fa4e8575ff843aeb1a7026d9706f7c8227164623d85749b190"
 }
