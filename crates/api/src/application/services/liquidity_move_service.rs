@@ -14,14 +14,16 @@ use yog_core::{
 };
 
 use super::period::{
-    BucketPeriod, Measured, PeriodBounds, ReadPeriod, SeriesInterval, build_read_period,
+    BucketPeriod, CURSOR_END_MARGIN, Measured, PeriodBounds, ReadPeriod, SeriesInterval,
+    build_read_period,
 };
 
 /// Why a page of moves is not read.
 #[derive(Debug)]
 pub(crate) enum MovesError {
     Repository(RepositoryError),
-    /// The cursor was taken from another list, or before the period's end last moved.
+    /// The cursor was taken over another window, or its end is past the period's or more than
+    /// the margin behind it.
     CursorRefused,
 }
 
@@ -117,12 +119,19 @@ impl LiquidityMoveService {
         cursor: Option<LiquidityMoveCursor>,
         limit: i64,
     ) -> Result<Measured<Page<LiquidityMove>, ReadPeriod>, MovesError> {
-        let period = self.build_liquidity_read_period(window, protocol).await?;
-        if let (Some(period), Some(cursor)) = (&period, &cursor)
-            && (cursor.as_of != period.as_of() || cursor.window != window)
-        {
-            return Err(MovesError::CursorRefused);
-        }
+        let period = match (
+            self.build_liquidity_read_period(window, protocol).await?,
+            &cursor,
+        ) {
+            (Some(period), Some(c)) => {
+                let end = period.as_of();
+                if c.window != window || c.as_of > end || c.as_of < end - CURSOR_END_MARGIN {
+                    return Err(MovesError::CursorRefused);
+                }
+                Some(period.ending_at(c.as_of))
+            }
+            (period, _) => period,
+        };
         let items = match &period {
             Some(ReadPeriod::Frozen(p)) if p.is_covered() => {
                 self.liquidity_moves

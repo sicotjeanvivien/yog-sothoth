@@ -7,6 +7,9 @@ use yog_core::{
     domain::{FrozenPeriod, ProtocolActivityLookup, TranchePeriod, Window},
 };
 
+/// How far behind the end of the latest period a cursor's end stays accepted, for pages read slowly.
+pub(crate) const CURSOR_END_MARGIN: TimeDelta = TimeDelta::hours(1);
+
 /// What a read found over its period; `period` is `None` before the first freeze, or the first
 /// tranche written.
 #[derive(Debug, Clone)]
@@ -76,6 +79,22 @@ impl PeriodBounds for ReadPeriod {
 }
 
 impl ReadPeriod {
+    /// The same window ended at `as_of`: a later page read over its first page's end.
+    pub(crate) fn ending_at(self, as_of: DateTime<Utc>) -> Self {
+        match self {
+            Self::Frozen(p) => Self::Frozen(FrozenPeriod {
+                from: as_of - (p.as_of - p.from),
+                as_of,
+                ..p
+            }),
+            Self::Tranche(p) => Self::Tranche(TranchePeriod {
+                from: as_of - (p.as_of - p.from),
+                as_of,
+                ..p
+            }),
+        }
+    }
+
     /// Covered from `since` on, a frozen period from its first whole hour; before a measure starts,
     /// covered from `as_of`, so nothing reads as covered.
     pub(crate) fn measured_from(self, since: Option<DateTime<Utc>>) -> Self {

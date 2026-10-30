@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use chrono::{DateTime, TimeDelta, Utc};
+use chrono::{DateTime, Utc};
 use yog_core::{
     Page, RepositoryError, RepositoryResult,
     domain::{
@@ -14,12 +14,9 @@ use yog_core::{
 };
 
 use super::period::{
-    BucketPeriod, Measured, ReadPeriod, SeriesInterval, build_frozen_period, build_last_hour,
-    first_whole_hour,
+    BucketPeriod, CURSOR_END_MARGIN, Measured, ReadPeriod, SeriesInterval, build_frozen_period,
+    build_last_hour, first_whole_hour,
 };
-
-/// How far behind the last tranche written a cursor's end stays accepted, for pages read slowly.
-const CURSOR_END_MARGIN: TimeDelta = TimeDelta::hours(1);
 
 /// Why a page of runs is not read.
 #[derive(Debug)]
