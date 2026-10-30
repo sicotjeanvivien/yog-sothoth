@@ -62,10 +62,14 @@ strict() { # <regex>: stdin's matching lines, then how many others were left out
   echo "refused_lines $refused"
 }
 
-# The level column of our daemons (ANSI colours stripped) and of Postgres, and Rust's own panic line,
-# which no hook turns into an ERROR event.
+# The level of our daemons, a field in JSON and a column in text (ANSI colours stripped), of Postgres,
+# and Rust's own panic line, which no hook turns into an ERROR event.
+# ⚠️ A JSON line stops at its field: a word of its message must not read as a column.
 # shellcheck disable=SC2016 # awk's fields, not the shell's
 readonly log_levels='{ gsub(/\033\[[0-9;]*m/, "") }
+/^\{"timestamp":"[^"]*","level":"WARN"/ { warn++; next }
+/^\{"timestamp":"[^"]*","level":"ERROR"/ { error++; next }
+/^\{"timestamp":/ { next }
 $2 == "WARN" || $5 == "WARNING:" { warn++ }
 $2 == "ERROR" || $5 ~ /^(ERROR|FATAL|PANIC):$/ || / panicked at / { error++ }
 END { printf "warn=%d error=%d\n", warn, error }'
