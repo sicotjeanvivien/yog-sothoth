@@ -8,7 +8,7 @@ const AS_OF = "2026-10-25T03:00:00Z";
 const hour = (h: number) => new Date(Date.parse(AS_OF) - (24 - h) * 3_600_000).toISOString();
 
 describe("birthSlotsOf", () => {
-  // Mutation: the response's step not read — the last hour drawn on 24 hourly slots.
+  // Mutation: the response's step not read.
   it("draws the last hour on its twelve tranches", () => {
     const at = new Date(Date.parse(AS_OF) - 5 * 60_000).toISOString();
     const slots = birthSlotsOf(seriesOf("5m", AS_OF, [{ from: at, pools: 2 }]));

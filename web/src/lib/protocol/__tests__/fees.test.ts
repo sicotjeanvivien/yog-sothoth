@@ -15,7 +15,7 @@ const bar = (from: string, lp: string | null, protocol: string | null, referral:
 });
 
 describe("feeSlotsOf", () => {
-  // Mutation: the response's step not read — the last hour drawn on 24 hourly slots.
+  // Mutation: the response's step not read.
   it("draws the last hour on its twelve tranches", () => {
     const at = new Date(Date.parse(AS_OF) - 5 * 60_000).toISOString();
     const slots = feeSlotsOf(seriesOf("5m", AS_OF, [bar(at, "8", "1", "0")]));

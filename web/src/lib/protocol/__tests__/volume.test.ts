@@ -21,7 +21,7 @@ const bar = (from: string, volume: string | null, inRuns: string | null, outside
 const hour = (h: number) => new Date(Date.parse(AS_OF) - (24 - h) * 3_600_000).toISOString();
 
 describe("splitSlotsOf", () => {
-  // Mutation: the response's step not read — the last hour drawn on 24 hourly slots.
+  // Mutation: the response's step not read.
   it("draws the last hour on its twelve tranches", () => {
     const at = new Date(Date.parse(AS_OF) - 5 * 60_000).toISOString();
     const slots = splitSlotsOf(seriesOf("5m", AS_OF, [bar(at, "30", "20", "10")]));

@@ -36,7 +36,7 @@ describe("curveOf", () => {
 });
 
 describe("flowSlotsOf", () => {
-  // Mutation: the response's step not read — the last hour drawn on 24 hourly slots.
+  // Mutation: the response's step not read.
   it("draws the last hour on its twelve tranches", () => {
     const at = new Date(Date.parse("2026-10-24T12:00:00Z") - 5 * 60_000).toISOString();
     const slots = flowSlotsOf(seriesOf("5m", "2026-10-24T12:00:00Z", [

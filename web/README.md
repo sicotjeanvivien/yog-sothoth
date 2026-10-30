@@ -291,13 +291,13 @@ figure the facts do not cover whole is "—", never a smaller number:
 - a period whose window starts before `coveredSince` (the first frozen hour) is
   closed: a button whose panel says when it opens; reached by its URL anyway,
   every block that sums over it shows "—" and the same reason (the TVL stays,
-  its change says why it has none). 30d stays closed in the web
+  with the time it was read). 30d stays closed in the web
   (`CLOSED_PERIODS`) until its times are measured on the prod: its URL falls
   back to 24h, so its reads never run;
 - the volume change is "—" when the previous window (`offset`) starts before
   `coveredSince`, or does not end where the current one starts (a tranche or a freeze between the two reads);
-- the TVL change is "—" when `tvl/totals` has no reading a window before the last,
-  or no discovered part at it: the hours before the first complete TVL are deleted.
+- the TVL has no change when `tvl/totals` has no reading a window before the last,
+  or no discovered part at it: the tile says when it was read, and its ⓘ why.
 Each "—" carries an ⓘ with its reason.
 
 **ⓘ** — every KPI and section has one, click-toggled
@@ -367,8 +367,7 @@ with a green dot beside it while the ingestion is live
 **02 Volume** — `protocol/volume/volume-tab.tsx`: where the volume comes from,
 each bar of the protocol's swaps split between its rotation runs
 (`dash-run`) and the rest (`dash-run-out`), as `rotation-runs/series` serves
-it; `lib/protocol/volume.ts` sums the hours of a 7-day slice, split only when each
-of them is. The runs are measured from a later hour than the swaps: a bar they do
+it. The runs are measured from a later hour than the swaps: a bar they do
 not split keeps its volume, unsplit, in a neutral tint, and the legend says since
 which hour they split it. Under the chart, the
 period's detail, replaced by the bar's under the pointer
