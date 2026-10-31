@@ -55,6 +55,7 @@ mod privileges;
 mod protocol_activity;
 mod protocol_fee_claim_events;
 mod protocol_tvl;
+mod provisioning_lock_timeout;
 mod reward_change_events;
 mod reward_claim_events;
 mod reward_valuation;

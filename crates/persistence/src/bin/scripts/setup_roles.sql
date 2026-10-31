@@ -36,6 +36,18 @@ BEGIN
     END LOOP;
 END $$;
 
+-- ⚠️ A job waiting on a lock queues every reader behind it: it gives up and is retried instead.
+-- Holds for all of this role's jobs. `connect_for_provisioning` lifts it for the migrations.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_roles
+         WHERE rolname = 'yog_migrate' AND 'lock_timeout=3s' = ANY (rolconfig)
+    ) THEN
+        ALTER ROLE yog_migrate SET lock_timeout = '3s';
+    END IF;
+END $$;
+
 
 
 -- Schema access — database scope: re-run for every database of the cluster.

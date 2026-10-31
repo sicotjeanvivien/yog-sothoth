@@ -867,6 +867,20 @@ dump, which the archiver's heartbeat reports, until the file runs again.
 `tests/archive_role.rs` applies the file as production meets it, then creates a
 compressed hypertable, an aggregate and late chunks, and reads them all.
 
+**`yog_migrate` gives up on a lock after 3 s.** The role owns every compression,
+retention and refresh job. `pg_dump` holds a read lock on every chunk until it
+ends; a compression asking for its exclusive lock on one waits behind it, and
+every later read of that chunk, even one that needs no row of it, queues behind
+the request. Bounded, the chunk gives up and stays as it was, at the cost of its
+whole copy: the exclusive lock comes after it. A run that compressed nothing fails
+and the scheduler retries it (first at about 1 h for a compression, 5 min for a
+retention). ⚠️ A run that compressed another chunk ends as a success, and the skipped
+one waits for the next run, up to 12 h. Any read over 3 s on the chunk has the same
+effect as a dump. A refresh takes no lock a dump holds. `connect_for_provisioning` sets
+`lock_timeout` back to 0 as a startup parameter: a migration waits for its lock.
+⚠️ `cargo sqlx migrate run` does not, and inherits the 3 s.
+`tests/provisioning_lock_timeout.rs` holds both, and that a rerun writes nothing.
+
 **Two scopes, one file, and it is idempotent.** Roles are cluster-wide;
 everything else is per-database. That asymmetry used to make the script
 un-rerunnable — bootstrapping a second database of the same cluster aborted on

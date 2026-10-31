@@ -118,6 +118,11 @@ read without the account that deploys: `ssh yog-obs health`, `metrics` or `db`.
 - `metrics` — the `yog_*` series of the four daemons, read from inside the
   compose network through yog-web's `wget`.
 - `db` — fixed counts, as `yog_api`, read-only and bounded to 15 s a query.
+  `jobs_last_run_failed` counts `yog_migrate`'s jobs whose last run failed: one
+  that gave up on a lock is expected, and retries by itself. ⚠️ A run that compressed
+  another chunk ends as a success: `chunks_compression_overdue` is what sees the
+  chunk it skipped, still uncompressed a day past its policy's age. Either one
+  above 0 day after day is the alarm no daemon raises.
 
 Two barriers, each enough on its own to keep root out of reach:
 
