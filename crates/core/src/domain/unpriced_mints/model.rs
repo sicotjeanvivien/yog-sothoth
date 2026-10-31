@@ -6,8 +6,7 @@ use std::collections::{HashMap, HashSet};
 use chrono::{DateTime, Duration, Utc};
 use solana_pubkey::Pubkey;
 
-/// The longest wait: it bounds how long a mint that comes back to life goes
-/// unvalued, and a longer one would save almost no request.
+/// The longest wait: a longer one would save almost no request.
 const UNPRICED_RETRY_MAX: Duration = Duration::minutes(15);
 
 /// The mints the source last answered without a price, and when each is due
@@ -39,8 +38,7 @@ impl UnpricedMints {
         }
     }
 
-    /// The longest a mint without a price goes unasked at this cadence, stated
-    /// by the price worker at startup.
+    /// The longest wait at this cadence, stated at startup.
     pub fn asks_again_at_most_every(&self) -> Duration {
         UNPRICED_RETRY_MAX.max(self.tick)
     }

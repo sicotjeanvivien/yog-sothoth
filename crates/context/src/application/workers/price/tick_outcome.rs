@@ -50,7 +50,7 @@ impl TickOutcome {
             }
             TickOutcome::NothingDue => {
                 debug!("price worker: every candidate is waiting its turn — nothing asked");
-                // Coverage 0 is the truth; `no_prices` would be the wrong alarm.
+                // `no_prices` would be the wrong alarm.
                 reset_priced_mints();
                 "nothing_due"
             }

@@ -102,7 +102,7 @@ decoded at this boundary and never reaches `core`, which stays free of it.
 
   **It asks only for the candidates worth asking.** A mint Jupiter answers
   **without a price** waits before it is asked again — 1, 2, 4, 8, then 15
-  minutes at the default cadence — and goes back to every tick at its first
+  minutes at the default cadence — and waits no more at its first
   price. The rule is `UnpricedMints` in `yog-core`, in memory and empty at
   boot; a mint that leaves the candidates leaves it too. Where half the
   universe never has a price, it halves the requests.
@@ -168,7 +168,7 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   suppressed tick and every tick writes. Correct — freshness beats volume — but
   it means raising the cadence past that silently costs the whole
   benefit, with `yog_context_price_unchanged_total` flat at 0. The startup line
-  says which regime you are in: `rewrite_at_most_every_secs` equal to the
+  says which regime you are in: `rewrite_after_secs` equal to the
   cadence means nothing is being suppressed. See `CONTEXT_PRICE_INTERVAL_SECS`
   under *Configuration* for the two cadences that are refused outright, and why
   they are not this filter's doing.
@@ -333,7 +333,7 @@ yog_context_price_requested_mints / yog_context_price_candidate_mints
 
 The gap is the mints out of their class's turn, and those waiting after an
 answer without a price, for at most the
-`unpriced_asked_again_at_most_every_secs` of the startup line plus one cycle. A
+`unpriced_wait_cap_secs` of the startup line plus one cycle. A
 mint that regains its price while it waits counts as unpriced until its turn. A
 tick where **every** candidate waits asks nothing and records
 `outcome="nothing_due"`, never `no_prices`.

@@ -45,7 +45,7 @@ impl PriceWorkerMetrics {
             "Number of candidate mints actually asked of the price source at the last tick. \
              The rest are mints out of their turn (see PriceCandidate), or the source last \
              answered without a price and waiting (at most \
-             unpriced_asked_again_at_most_every_secs, stated at startup, plus one cycle: see \
+             unpriced_wait_cap_secs, stated at startup, plus one cycle: see \
              UnpricedMints). \
              requested/candidate is the share of the candidates due this tick"
         );

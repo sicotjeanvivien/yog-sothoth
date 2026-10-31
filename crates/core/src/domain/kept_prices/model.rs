@@ -52,8 +52,7 @@ impl KeptPrices {
         }
     }
 
-    /// The longest a motionless price goes unwritten at this cadence, stated by
-    /// the price worker at startup.
+    /// How long a motionless price waits at this cadence, stated at startup.
     pub fn rewrites_at_most_every(&self) -> Duration {
         // A zero cadence is refused at startup; this only avoids a panic.
         let tick = self.tick.num_seconds().max(1);
