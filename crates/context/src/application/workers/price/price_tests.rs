@@ -12,7 +12,8 @@ use std::str::FromStr;
 use yog_core::{
     RepositoryError, RepositoryResult,
     domain::{
-        PriceProvider, TokenMetadata, TokenMetadataRepository, TokenPrice, TokenPriceRepository,
+        PriceCandidateParams, PriceProvider, TokenMetadata, TokenMetadataRepository, TokenPrice,
+        TokenPriceRepository,
     },
 };
 
@@ -34,6 +35,24 @@ fn answer(priced: Vec<FetchedPrice>, unpriced: Vec<Pubkey>) -> Result<PriceAnswe
     Ok(PriceAnswer { priced, unpriced })
 }
 
+fn regular(mint: Pubkey) -> PriceCandidate {
+    PriceCandidate {
+        mint,
+        class: PriceCandidateClass::Regular,
+    }
+}
+
+/// A low-value candidate whose turn is tick number `tick`.
+fn low_value_at_turn(tick: u64) -> PriceCandidate {
+    (0..=u8::MAX)
+        .map(|seed| PriceCandidate {
+            mint: pk(seed),
+            class: PriceCandidateClass::LowValue,
+        })
+        .find(|candidate| candidate.is_turn(tick))
+        .expect("one seed in three lands on each tick")
+}
+
 fn priced(mint: Pubkey, price: &str) -> FetchedPrice {
     FetchedPrice {
         mint,
@@ -46,9 +65,9 @@ fn priced(mint: Pubkey, price: &str) -> FetchedPrice {
 
 #[derive(Default)]
 struct FakeMetadataRepository {
-    candidates: Mutex<Vec<Pubkey>>,
+    candidates: Mutex<Vec<PriceCandidate>>,
     /// Lists served one per call before falling back to `candidates`.
-    candidates_per_call: Mutex<Vec<Vec<Pubkey>>>,
+    candidates_per_call: Mutex<Vec<Vec<PriceCandidate>>>,
     list_error: Mutex<Option<RepositoryError>>,
     /// The `window` of every call, in order.
     asked_windows: Mutex<Vec<Duration>>,
@@ -56,8 +75,12 @@ struct FakeMetadataRepository {
 
 impl FakeMetadataRepository {
     fn with_candidates(mints: Vec<Pubkey>) -> Self {
+        Self::with_classified(mints.into_iter().map(regular).collect())
+    }
+
+    fn with_classified(candidates: Vec<PriceCandidate>) -> Self {
         Self {
-            candidates: Mutex::new(mints),
+            candidates: Mutex::new(candidates),
             ..Self::default()
         }
     }
@@ -65,9 +88,10 @@ impl FakeMetadataRepository {
     /// One list per tick, the last one repeated after that.
     fn with_candidates_per_call(mut lists: Vec<Vec<Pubkey>>) -> Self {
         let last = lists.pop().unwrap_or_default();
+        let regulars = |list: Vec<Pubkey>| list.into_iter().map(regular).collect();
         Self {
-            candidates: Mutex::new(last),
-            candidates_per_call: Mutex::new(lists),
+            candidates: Mutex::new(regulars(last)),
+            candidates_per_call: Mutex::new(lists.into_iter().map(regulars).collect()),
             ..Self::default()
         }
     }
@@ -83,8 +107,11 @@ impl FakeMetadataRepository {
 
 #[async_trait]
 impl TokenMetadataRepository for FakeMetadataRepository {
-    async fn list_price_candidates(&self, window: Duration) -> RepositoryResult<Vec<Pubkey>> {
-        self.asked_windows.lock().unwrap().push(window);
+    async fn list_price_candidates(
+        &self,
+        params: &PriceCandidateParams,
+    ) -> RepositoryResult<Vec<PriceCandidate>> {
+        self.asked_windows.lock().unwrap().push(params.window);
         if let Some(err) = self.list_error.lock().unwrap().take() {
             return Err(err);
         }
@@ -630,6 +657,79 @@ async fn a_failed_insert_leaves_nothing_remembered() {
 //
 // The waits are tested in yog-core; here, what the worker feeds the rule. Two
 // ticks milliseconds apart: a deferred mint is still waiting on the second.
+
+/// Against the turn dropped from the filter, which asks a low-value mint at every tick.
+#[tokio::test]
+async fn a_low_value_mint_is_asked_only_at_its_turn() {
+    let everyone = pk(250);
+    let low_value = low_value_at_turn(1);
+    let source = Arc::new(FakePriceSource::with_answers(vec![]));
+    let mut worker = PriceWorker::new(
+        Arc::new(FakeMetadataRepository::with_classified(vec![
+            regular(everyone),
+            low_value,
+        ])),
+        Arc::new(FakePriceRepository::default()),
+        source.clone(),
+        std::time::Duration::from_secs(30),
+    );
+
+    for _ in 0..3 {
+        worker.run_one_cycle(&CancellationToken::new()).await;
+    }
+
+    assert_eq!(
+        source.calls(),
+        vec![
+            vec![everyone],
+            vec![everyone, low_value.mint],
+            vec![everyone]
+        ]
+    );
+}
+
+/// Against a tick counted only once the candidates are read: an outage would freeze the turns.
+#[tokio::test]
+async fn a_tick_whose_list_failed_still_counts() {
+    let low_value = low_value_at_turn(1);
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_classified(vec![low_value]));
+    metadata_repo.fail_list_once(RepositoryError::Backend("list refused".into()));
+    let source = Arc::new(FakePriceSource::with_answers(vec![]));
+    let mut worker = PriceWorker::new(
+        metadata_repo,
+        Arc::new(FakePriceRepository::default()),
+        source.clone(),
+        std::time::Duration::from_secs(30),
+    );
+
+    worker.run_one_cycle(&CancellationToken::new()).await;
+    worker.run_one_cycle(&CancellationToken::new()).await;
+
+    assert_eq!(source.calls(), vec![vec![low_value.mint]]);
+}
+
+/// Against `retain_only` fed the mints of the tick: out of its turn, a mint would lose its wait.
+#[tokio::test]
+async fn a_mint_keeps_its_wait_through_the_ticks_out_of_its_turn() {
+    let low_value = low_value_at_turn(0);
+    let source = Arc::new(FakePriceSource::with_answers(vec![answer(
+        vec![],
+        vec![low_value.mint],
+    )]));
+    let mut worker = PriceWorker::new(
+        Arc::new(FakeMetadataRepository::with_classified(vec![low_value])),
+        Arc::new(FakePriceRepository::default()),
+        source.clone(),
+        std::time::Duration::from_secs(30),
+    );
+
+    // Tick 3 is its turn again, milliseconds later: still waiting.
+    for _ in 0..4 {
+        worker.run_one_cycle(&CancellationToken::new()).await;
+    }
+
+    assert_eq!(source.calls(), vec![vec![low_value.mint]]);
+}
 
 #[tokio::test]
 async fn a_mint_answered_without_a_price_is_not_asked_on_the_next_tick() {

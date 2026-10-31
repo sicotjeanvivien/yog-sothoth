@@ -6,7 +6,10 @@ use chrono::{DateTime, Duration, Utc};
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 
-use yog_core::domain::{MISSING_MINT_DISCOVERY_WINDOW, TokenMetadataRepository};
+use yog_core::domain::{
+    MISSING_MINT_DISCOVERY_WINDOW, PRICE_CANDIDATE_PARAMS, PriceCandidateClass,
+    TokenMetadataRepository,
+};
 use yog_persistence::PgTokenMetadataRepository;
 
 /// A pool discovered from the event stream, both mints still NULL.
@@ -255,11 +258,11 @@ async fn prices_written_just_now(pool: &PgPool) {
 
 async fn candidates(pool: &PgPool) -> Vec<String> {
     let mut mints: Vec<String> = PgTokenMetadataRepository::new(pool.clone())
-        .list_price_candidates(WINDOW)
+        .list_price_candidates(&PRICE_CANDIDATE_PARAMS)
         .await
         .unwrap()
         .into_iter()
-        .map(|m| m.to_string())
+        .map(|candidate| candidate.mint.to_string())
         .collect();
     mints.sort();
     mints
@@ -378,4 +381,125 @@ async fn an_active_mint_without_metadata_is_not_asked(pool: PgPool) {
     insert_metadata(&pool, &known).await;
 
     assert_eq!(candidates(&pool).await, vec![known]);
+}
+
+// ── The class of a candidate ──────────────────────────────────────────
+
+async fn class_of(pool: &PgPool, mint: &str) -> PriceCandidateClass {
+    PgTokenMetadataRepository::new(pool.clone())
+        .list_price_candidates(&PRICE_CANDIDATE_PARAMS)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|candidate| candidate.mint.to_string() == mint)
+        .expect("a candidate")
+        .class
+}
+
+async fn known_since(pool: &PgPool, mint: &str, ago: Duration) {
+    sqlx::query("UPDATE token_metadata SET fetched_at = $2 WHERE mint = $1")
+        .bind(mint)
+        .bind(Utc::now() - ago)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+/// What the side A of pool `addr` holds, in base units of a 9-decimals mint.
+async fn holds(pool: &PgPool, addr: &str, reserve_a: i64) {
+    sqlx::query("UPDATE pool_current_state SET reserve_a = $2 WHERE pool_address = $1")
+        .bind(addr)
+        .bind(reserve_a)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+/// A traded pair from `seed_known_pair_last_moved_at`, its side A priced at 1 $ with `reserve_a`.
+async fn traded_mint_holding(pool: &PgPool, reserve_a: i64) -> String {
+    let (mint_a, _) = seed_known_pair_last_moved_at(pool, Utc::now()).await;
+    price_at(pool, &mint_a, "1", Utc::now()).await;
+    holds(pool, &pk(1).to_string(), reserve_a).await;
+    mint_a
+}
+
+/// Against the grace dropped, or the wrong way round.
+#[sqlx::test]
+async fn a_mint_without_a_price_is_regular_during_its_grace_then_never_priced(pool: PgPool) {
+    let (mint_a, mint_b) = seed_known_pair_last_moved_at(&pool, Utc::now()).await;
+    known_since(&pool, &mint_a, Duration::minutes(59)).await;
+    known_since(&pool, &mint_b, Duration::minutes(61)).await;
+
+    assert_eq!(class_of(&pool, &mint_a).await, PriceCandidateClass::Regular);
+    assert_eq!(
+        class_of(&pool, &mint_b).await,
+        PriceCandidateClass::NeverPriced
+    );
+}
+
+/// Against the absence of a price dropped: age alone would make an old mint never priced.
+#[sqlx::test]
+async fn an_old_mint_with_a_price_is_not_never_priced(pool: PgPool) {
+    let mint = traded_mint_holding(&pool, 10_000_000_000).await;
+    known_since(&pool, &mint, Duration::days(30)).await;
+
+    assert_eq!(class_of(&pool, &mint).await, PriceCandidateClass::Regular);
+}
+
+/// Against `<` turned into `<=`, and the threshold moved.
+#[sqlx::test]
+async fn ten_dollars_held_is_regular_and_just_under_is_low_value(pool: PgPool) {
+    let mint = traded_mint_holding(&pool, 10_000_000_000).await;
+    assert_eq!(class_of(&pool, &mint).await, PriceCandidateClass::Regular);
+
+    holds(&pool, &pk(1).to_string(), 9_999_999_999).await;
+    assert_eq!(class_of(&pool, &mint).await, PriceCandidateClass::LowValue);
+}
+
+/// Against a value read as absent when the reserves are empty.
+#[sqlx::test]
+async fn a_priced_mint_holding_nothing_is_low_value(pool: PgPool) {
+    let mint = traded_mint_holding(&pool, 0).await;
+
+    assert_eq!(class_of(&pool, &mint).await, PriceCandidateClass::LowValue);
+}
+
+/// Against the sum left to one pool, or to one side of a pool.
+#[sqlx::test]
+async fn what_a_mint_holds_adds_up_over_its_pools_and_sides(pool: PgPool) {
+    let mint = traded_mint_holding(&pool, 6_000_000_000).await;
+    let other = pk(32).to_string();
+    let second_pool = pk(2).to_string();
+    insert_resolved_pool(&pool, &second_pool, &other, &mint).await;
+    insert_pool_state(&pool, &second_pool, Utc::now()).await;
+    insert_metadata(&pool, &other).await;
+    sqlx::query("UPDATE pool_current_state SET reserve_b = 6000000000 WHERE pool_address = $1")
+        .bind(&second_pool)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    assert_eq!(class_of(&pool, &mint).await, PriceCandidateClass::Regular);
+}
+
+/// Against a missing value read as under the threshold.
+#[sqlx::test]
+async fn a_priced_mint_without_a_pool_stays_regular(pool: PgPool) {
+    let mint = pk(40).to_string();
+    insert_metadata(&pool, &mint).await;
+    price_at(&pool, &mint, "1", Utc::now()).await;
+
+    assert_eq!(class_of(&pool, &mint).await, PriceCandidateClass::Regular);
+}
+
+/// Against the value bounded on the staleness of its price, which would make it absent.
+#[sqlx::test]
+async fn a_low_value_is_judged_at_the_last_price_whatever_its_age(pool: PgPool) {
+    let (mint_a, _) = seed_known_pair_last_moved_at(&pool, Utc::now()).await;
+    price_at(&pool, &mint_a, "1", Utc::now() - Duration::days(3)).await;
+
+    assert_eq!(
+        class_of(&pool, &mint_a).await,
+        PriceCandidateClass::LowValue
+    );
 }

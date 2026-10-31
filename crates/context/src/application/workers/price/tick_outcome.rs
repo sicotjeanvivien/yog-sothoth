@@ -18,7 +18,7 @@ pub(super) enum TickOutcome {
     ListFailed(RepositoryError),
     /// No mint moved or was priced within the window.
     NoCandidates,
-    /// Every candidate is waiting its turn (`UnpricedMints`).
+    /// No candidate is due: none whose turn it is (`PriceCandidate`), or all waiting (`UnpricedMints`).
     NothingDue,
     /// The source returned a hard error rather than a partial answer.
     SourceFailed(SourceError),

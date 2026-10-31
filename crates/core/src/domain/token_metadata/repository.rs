@@ -6,7 +6,7 @@ use solana_pubkey::Pubkey;
 
 use crate::{
     Page, RepositoryResult,
-    domain::{TokenCursor, TokenEntry, TokenMetadata},
+    domain::{PriceCandidate, PriceCandidateParams, TokenCursor, TokenEntry, TokenMetadata},
 };
 
 /// How recent an event on one of its pools, or a price from the source, keeps a
@@ -23,9 +23,12 @@ pub trait TokenMetadataRepository: Send + Sync {
     /// Insert or update the metadata of a mint.
     async fn upsert(&self, metadata: &TokenMetadata) -> RepositoryResult<()>;
 
-    /// The mints with a metadata row that one of their pools moved within `window` of now, or
-    /// that the source priced within `window` of the last price written: what the price worker asks.
-    async fn list_price_candidates(&self, window: Duration) -> RepositoryResult<Vec<Pubkey>>;
+    /// The mints with a metadata row that one of their pools moved within `params.window` of now,
+    /// or that the source priced within it of the last price written, each with its class.
+    async fn list_price_candidates(
+        &self,
+        params: &PriceCandidateParams,
+    ) -> RepositoryResult<Vec<PriceCandidate>>;
 
     /// The mints without a metadata row of the pools discovered within `window` of now.
     async fn list_missing_mints_of_recent_pools(

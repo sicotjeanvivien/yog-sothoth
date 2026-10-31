@@ -79,6 +79,18 @@ fn a_motionless_price_is_kept_at_the_floor() {
     );
 }
 
+/// Against the floor back at nine and a half minutes: a mint seen every three ticks of three
+/// minutes would be held back at nine, and rewritten at eighteen.
+#[test]
+fn a_motionless_price_is_written_past_eight_minutes_at_the_default_cadence() {
+    let mint = Pubkey::new_unique();
+    let mut kept = kept_prices();
+    kept.record(&[at(mint, "1", t0())]);
+
+    assert!(!kept.worth_keeping(&at(mint, "1", t0() + Duration::minutes(8))));
+    assert!(kept.worth_keeping(&at(mint, "1", t0() + Duration::seconds(481))));
+}
+
 #[test]
 fn a_difference_below_the_column_scale_is_not_a_change() {
     // Mutation: comparing the raw `Decimal`s; these two store as the same row.
@@ -156,7 +168,7 @@ fn recording_again_moves_the_floor_forward() {
 fn no_cadence_spaces_two_kept_rows_past_the_floor() {
     // Mutation: a floor taken literally, without the tick subtracted. It hides
     // between safe cadences, so this walks them all rather than round numbers.
-    for secs in [1_u64, 30, 100, 200, 299, 300, 301, 400, 480, 599] {
+    for secs in [1_u64, 30, 100, 200, 254, 255, 256, 400, 480, 509] {
         let gap = ticks_until_a_motionless_price_is_rewritten(secs)
             .unwrap_or_else(|| panic!("cadence {secs}s: no row written at all"));
 
@@ -173,7 +185,7 @@ fn no_cadence_spaces_two_kept_rows_past_the_floor() {
 fn the_forced_row_lands_as_late_as_the_cadence_allows() {
     // Mutation: `>` → `>=`, a row one tick early. Expected: the last tick at or
     // before the floor.
-    for secs in [1_u64, 30, 100, 200, 299, 300] {
+    for secs in [1_u64, 30, 100, 200, 254, 255] {
         let step = Duration::seconds(secs as i64);
         let latest = step * (PRICE_SERIES_MAX_GAP.num_seconds() / secs as i64) as i32;
 

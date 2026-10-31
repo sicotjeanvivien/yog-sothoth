@@ -32,6 +32,26 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.7.1",
+    date: "2026-10-31",
+    summary: "An hour of TVL no longer reads up to 30 % too low because a price went unwritten for a few minutes.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "Motionless prices are rewritten in time, so an hourly TVL reading no longer loses the side of a pool whose token did not move.",
+            technical: false,
+          },
+          {
+            text: "The price worker asks tokens at a cadence set by their class: every round, one in three below 10 $ held, one in 105 for a token still unpriced an hour after we met it. A round asks far fewer tokens.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.7.0",
     date: "2026-10-30",
     summary: "The API now says what the dashboard used to decide on its own; the figures on screen stay the same.",

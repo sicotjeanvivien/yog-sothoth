@@ -3,7 +3,7 @@
 pub(super) mod rows;
 
 use crate::repositories::helper::{
-    PageBuilder, QueryMode, convert_string_to_pubkey, map_sqlx_error,
+    PageBuilder, QueryMode, convert_decimal_to_bigdecimal, convert_string_to_pubkey, map_sqlx_error,
 };
 use async_trait::async_trait;
 use chrono::Duration;
@@ -13,7 +13,8 @@ use sqlx::PgPool;
 use yog_core::{
     Cursor, Page, RepositoryResult,
     domain::{
-        TokenCursor, TokenEntry, TokenMetadata, TokenMetadataLookup, TokenMetadataRepository,
+        PriceCandidate, PriceCandidateClass, PriceCandidateParams, TokenCursor, TokenEntry,
+        TokenMetadata, TokenMetadataLookup, TokenMetadataRepository,
     },
 };
 
@@ -64,31 +65,32 @@ impl TokenMetadataRepository for PgTokenMetadataRepository {
         Ok(())
     }
 
-    async fn list_price_candidates(&self, window: Duration) -> RepositoryResult<Vec<Pubkey>> {
-        let mints = sqlx::query_scalar!(
-            r#"
-            SELECT mint FROM token_metadata
-            WHERE mint IN (
-                SELECT mint FROM token_last_price
-                WHERE fetched_at >= (SELECT LEAST(max(fetched_at), now()) FROM token_last_price)
-                                    - $1::BIGINT * INTERVAL '1 second'
-                UNION ALL
-                SELECT side.mint
-                FROM pool_current_state pcs
-                JOIN pools p ON p.pool_address = pcs.pool_address
-                CROSS JOIN LATERAL (VALUES (p.token_a_mint), (p.token_b_mint)) AS side(mint)
-                WHERE pcs.last_event_at >= now() - $1::BIGINT * INTERVAL '1 second'
-            )
-            "#,
-            window.num_seconds(),
+    async fn list_price_candidates(
+        &self,
+        params: &PriceCandidateParams,
+    ) -> RepositoryResult<Vec<PriceCandidate>> {
+        let low_value_below_usd =
+            convert_decimal_to_bigdecimal(params.low_value_below_usd, "low_value_below_usd")?;
+        let rows = sqlx::query_file!(
+            "src/repositories/token_metadata/price_candidates.sql",
+            params.window.num_seconds(),
+            params.never_priced_grace.num_seconds(),
+            low_value_below_usd,
         )
         .fetch_all(&self.pool)
         .await
         .map_err(map_sqlx_error)?;
 
-        mints
-            .into_iter()
-            .map(|mint| convert_string_to_pubkey(mint, "mint"))
+        rows.into_iter()
+            .map(|row| {
+                Ok(PriceCandidate {
+                    mint: convert_string_to_pubkey(row.mint, "mint")?,
+                    class: PriceCandidateClass::of(
+                        row.never_priced_past_grace,
+                        row.below_low_value,
+                    ),
+                })
+            })
             .collect()
     }
 

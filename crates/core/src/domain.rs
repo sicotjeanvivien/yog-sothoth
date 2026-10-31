@@ -24,6 +24,7 @@ mod pool_price_snapshot;
 mod position_change_counts;
 mod position_change_event;
 mod position_fee_claim_event;
+mod price_candidate;
 mod protocol;
 mod protocol_activity;
 mod protocol_fee_claim_event;
@@ -115,6 +116,9 @@ pub use position_change_event::{
     MeteoraDammV2PositionChange, PositionChangeEvent, PositionChangeEventLookup,
 };
 pub use position_fee_claim_event::{PositionFeeClaimEvent, PositionFeeClaimEventLookup};
+pub use price_candidate::{
+    PRICE_CANDIDATE_PARAMS, PriceCandidate, PriceCandidateClass, PriceCandidateParams,
+};
 pub use protocol::Protocol;
 pub use protocol_activity::ProtocolActivityLookup;
 pub use protocol_fee_claim_event::{ProtocolFeeClaimEvent, ProtocolFeeClaimEventLookup};
