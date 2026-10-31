@@ -151,6 +151,8 @@ SELECT 'pools', count(*) FROM pools;
 SELECT 'pools_needs_refresh', count(*) FROM pools WHERE needs_refresh;
 SELECT 'signals_last_24h', count(*) FROM signals WHERE triggered_at > now() - interval '1 day';
 SELECT 'database_bytes', pg_database_size(current_database());
+SELECT 'jobs_last_run_failed', count(*) FROM timescaledb_information.job_stats s
+  JOIN timescaledb_information.jobs j USING (job_id) WHERE j.owner::text = 'yog_migrate' AND s.last_run_status = 'Failed';
 SQL
   ) || rc=$?
   strict "$db_line" <<<"$out"

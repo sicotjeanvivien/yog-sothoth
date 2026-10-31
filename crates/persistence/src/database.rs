@@ -70,7 +70,10 @@ impl Database {
     /// statement logging off. ⚠️ sqlx warns above 1 s with the whole statement
     /// inlined, and every statement here is a whole migration file.
     pub async fn connect_for_provisioning(url: &str) -> Result<Self, sqlx::Error> {
-        let options = PgConnectOptions::from_str(url)?.disable_statement_logging();
+        // ⚠️ A startup parameter wins over `lock_timeout` on `yog_migrate`, meant for its jobs.
+        let options = PgConnectOptions::from_str(url)?
+            .disable_statement_logging()
+            .options([("lock_timeout", "0")]);
 
         let pool = PgPoolOptions::new()
             .max_connections(1)

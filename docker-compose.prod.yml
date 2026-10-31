@@ -118,6 +118,8 @@ services:
       - -c
       - client_connection_check_interval=10s
       - -c
+      - log_lock_waits=on
+      - -c
       - work_mem=4MB
       - -c
       - maintenance_work_mem=64MB

@@ -32,6 +32,26 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.7.2",
+    date: "2026-11-01",
+    summary: "Compressing old data during a database backup no longer stops the dashboard from reading for several minutes.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "The Live indicator keeps answering when a compression of old data crosses a backup.",
+            technical: false,
+          },
+          {
+            text: "TimescaleDB's jobs give up on a lock after 3 s and are retried, instead of queueing every read of the chunk behind them for as long as the pg_dump lasts (503 on /api/ingestion).",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.7.1",
     date: "2026-10-31",
     summary: "An hour of TVL no longer reads up to 30 % too low because a price went unwritten for a few minutes.",
