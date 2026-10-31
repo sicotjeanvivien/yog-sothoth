@@ -5,6 +5,7 @@ use metrics::{counter, describe_counter, describe_gauge, describe_histogram, gau
 const TICK_TOTAL: &str = "yog_context_price_tick_total";
 const TICK_DURATION: &str = "yog_context_price_tick_duration_seconds";
 const CANDIDATE_MINTS: &str = "yog_context_price_candidate_mints";
+const CANDIDATES_BY_CLASS: &str = "yog_context_price_candidates_by_class";
 const REQUESTED_MINTS: &str = "yog_context_price_requested_mints";
 const PRICED_MINTS: &str = "yog_context_price_priced_mints";
 const INSERTED_TOTAL: &str = "yog_context_price_inserted_total";
@@ -35,17 +36,23 @@ impl PriceWorkerMetrics {
              A mint quiet on both counts is not asked"
         );
         describe_gauge!(
+            CANDIDATES_BY_CLASS,
+            "Candidate mints at the last tick by class (label: class=regular|low_value|\
+             never_priced), which sets how often each is asked — see PriceCandidate"
+        );
+        describe_gauge!(
             REQUESTED_MINTS,
             "Number of candidate mints actually asked of the price source at the last tick. \
-             The rest are mints the source last answered without a price, waiting their \
-             turn (at most unpriced_asked_again_at_most_every_secs, stated at startup, \
-             plus one cycle) — see UnpricedMints. \
+             The rest are mints out of their turn (see PriceCandidate), or the source last \
+             answered without a price and waiting (at most \
+             unpriced_wait_cap_secs, stated at startup, plus one cycle: see \
+             UnpricedMints). \
              requested/candidate is the share of the candidates due this tick"
         );
         describe_gauge!(
             PRICED_MINTS,
             "Number of candidate mints that yielded a price we KEPT at the last tick. \
-             priced/candidate is the price coverage — the input every USD valuation \
+             priced/requested is the price coverage — the input every USD valuation \
              downstream depends on, and the thing that silently degrades. \
              Counted after the unstorable-price filter: a price the source \
              returned but we refused is, downstream, as absent as one it never \
@@ -72,7 +79,7 @@ impl PriceWorkerMetrics {
              point, not a fault. rate(unchanged)/(rate(unchanged)+rate(inserted)) is the \
              suppression rate of the series — rates, not the bare counters, which average over \
              the process lifetime and hide the collapse. A collapse towards 0 means the market \
-             moved, or CONTEXT_PRICE_INTERVAL_SECS was raised past 300s, or the comparison \
+             moved, or a tick outlasted half the floor, or the comparison \
              stopped rounding to the price column's scale — see KeptPrices::worth_keeping"
         );
 
@@ -90,6 +97,10 @@ impl PriceWorkerMetrics {
 
     pub(crate) fn set_candidate_mints(count: usize) {
         gauge!(CANDIDATE_MINTS).set(count as f64);
+    }
+
+    pub(crate) fn set_candidates_by_class(class: &'static str, count: usize) {
+        gauge!(CANDIDATES_BY_CLASS, "class" => class).set(count as f64);
     }
 
     /// Set with [`Self::set_candidate_mints`], on every tick that read the

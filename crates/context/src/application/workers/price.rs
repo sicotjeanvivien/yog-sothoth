@@ -1,7 +1,7 @@
 //! Price worker: every `price_interval`, or back to back when a tick outlasts it, lists the
-//! candidate mints, keeps those worth asking (`UnpricedMints`), fetches their USD price, drops
-//! the unstorable and the repeated (`KeptPrices`) and inserts the rest in one statement. A failed
-//! tick is one missing sample.
+//! candidate mints, keeps those whose turn it is (`PriceCandidate`) and worth asking
+//! (`UnpricedMints`), fetches their USD price, drops the unstorable and the repeated (`KeptPrices`)
+//! and inserts the rest in one statement. A failed tick is one missing sample.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -11,8 +11,8 @@ use solana_pubkey::Pubkey;
 use tokio_util::sync::CancellationToken;
 
 use yog_core::domain::{
-    KeptPrices, PRICE_CANDIDATE_WINDOW, TokenMetadataRepository, TokenPrice, TokenPriceRepository,
-    UnpricedMints,
+    KeptPrices, PRICE_CANDIDATE_PARAMS, PriceCandidate, PriceCandidateClass,
+    TokenMetadataRepository, TokenPrice, TokenPriceRepository, UnpricedMints,
 };
 
 use crate::application::source::{FetchedPrice, PriceSource};
@@ -35,6 +35,8 @@ pub struct PriceWorker {
     kept: KeptPrices,
     /// The mints the source last answered without a price, and when each is worth asking again.
     unpriced: UnpricedMints,
+    /// The number of the next tick, from 0 at boot: what [`PriceCandidate::is_turn`] reads.
+    tick: u64,
 }
 
 impl PriceWorker {
@@ -51,6 +53,7 @@ impl PriceWorker {
             interval,
             kept: KeptPrices::new(interval),
             unpriced: UnpricedMints::new(interval),
+            tick: 0,
         }
     }
 
@@ -89,24 +92,29 @@ impl PriceWorker {
     /// ⚠️ A stop cuts the fetch short, not the cycle: what came back goes through the same filters
     /// and the same single insert.
     async fn price_once(&mut self, shutdown: &CancellationToken) -> TickOutcome {
+        let tick = self.tick;
+        self.tick = tick.wrapping_add(1);
+
         let candidates = match self
             .metadata_repository
-            .list_price_candidates(PRICE_CANDIDATE_WINDOW)
+            .list_price_candidates(&PRICE_CANDIDATE_PARAMS)
             .await
         {
-            Ok(mints) => mints,
+            Ok(candidates) => candidates,
             Err(e) => return TickOutcome::ListFailed(e),
         };
-        self.unpriced.retain_only(&candidates);
+        let candidate_mints: Vec<Pubkey> = candidates.iter().map(|c| c.mint).collect();
+        self.unpriced.retain_only(&candidate_mints);
 
-        // Only the mints worth asking — see `UnpricedMints`.
+        // Only the mints whose turn it is and worth asking — see `UnpricedMints`.
         let asked_at = Utc::now();
         let mints: Vec<Pubkey> = candidates
             .iter()
-            .filter(|mint| self.unpriced.is_due(mint, asked_at))
-            .copied()
+            .filter(|c| c.is_turn(tick) && self.unpriced.is_due(&c.mint, asked_at))
+            .map(|c| c.mint)
             .collect();
         PriceWorkerMetrics::set_candidate_mints(candidates.len());
+        record_candidates_by_class(&candidates);
         PriceWorkerMetrics::set_requested_mints(mints.len());
 
         if candidates.is_empty() {
@@ -188,6 +196,17 @@ impl PriceWorker {
         self.kept.record(&to_insert);
 
         TickOutcome::Inserted { count }
+    }
+}
+
+fn record_candidates_by_class(candidates: &[PriceCandidate]) {
+    for (class, label) in [
+        (PriceCandidateClass::Regular, "regular"),
+        (PriceCandidateClass::LowValue, "low_value"),
+        (PriceCandidateClass::NeverPriced, "never_priced"),
+    ] {
+        let count = candidates.iter().filter(|c| c.class == class).count();
+        PriceWorkerMetrics::set_candidates_by_class(label, count);
     }
 }
 

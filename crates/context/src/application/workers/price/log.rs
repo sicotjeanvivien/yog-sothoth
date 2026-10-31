@@ -4,15 +4,14 @@
 use tracing::{debug, info, warn};
 use yog_core::domain::{KeptPrices, TokenPrice, UnpricedMints};
 
-/// The worker starts, stating the two bounds its cadence entails, which an
-/// operator cannot read off the configuration.
+/// The worker starts, stating what its cadence entails for a mint at its turn.
 pub(super) fn started(cadence: std::time::Duration, kept: &KeptPrices, unpriced: &UnpricedMints) {
     info!(
         cadence_secs = cadence.as_secs(),
-        rewrite_at_most_every_secs = kept.rewrites_at_most_every().num_seconds(),
-        unpriced_asked_again_at_most_every_secs = unpriced.asks_again_at_most_every().num_seconds(),
-        "PriceWorker started — a motionless price is rewritten at the floor, \
-         a mint without a price is asked again at the cap"
+        rewrite_after_secs = kept.rewrites_at_most_every().num_seconds(),
+        unpriced_wait_cap_secs = unpriced.asks_again_at_most_every().num_seconds(),
+        "PriceWorker started — at its turn, a motionless price is rewritten past the floor, \
+         a mint without a price is asked again past the cap"
     );
 }
 

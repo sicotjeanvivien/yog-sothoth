@@ -15,10 +15,10 @@ use crate::domain::{PRICE_STORAGE_SCALE, PriceProvider, TokenPrice};
 /// that redefines it must revisit this constant — nothing enforces that.
 pub const PRICE_MAX_AGE_LATEST: Duration = Duration::minutes(15);
 
-/// The widest gap between two kept observations of a mint: below
-/// [`PRICE_MAX_AGE_LATEST`], so that a price that never moves is rewritten
-/// before it stops valuing anything.
-const PRICE_SERIES_MAX_GAP: Duration = Duration::minutes(10);
+/// The widest gap between two kept observations of a mint at the cadence: below
+/// [`PRICE_MAX_AGE_LATEST`] by at least a tick's length, or a motionless price stops valuing.
+/// ⚠️ Under three ticks too: a low-value mint is seen one tick in three.
+const PRICE_SERIES_MAX_GAP: Duration = Duration::seconds(510);
 
 /// The last observation kept for each mint. Held by the price worker, the only
 /// writer of `token_prices`; empty at boot, which costs one full batch.
@@ -52,8 +52,7 @@ impl KeptPrices {
         }
     }
 
-    /// The longest a motionless price goes unwritten at this cadence, stated by
-    /// the price worker at startup.
+    /// How long a motionless price waits at this cadence, stated at startup.
     pub fn rewrites_at_most_every(&self) -> Duration {
         // A zero cadence is refused at startup; this only avoids a panic.
         let tick = self.tick.num_seconds().max(1);

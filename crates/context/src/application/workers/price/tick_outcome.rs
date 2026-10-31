@@ -18,7 +18,7 @@ pub(super) enum TickOutcome {
     ListFailed(RepositoryError),
     /// No mint moved or was priced within the window.
     NoCandidates,
-    /// Every candidate is waiting its turn (`UnpricedMints`).
+    /// No candidate is due: none whose turn it is (`PriceCandidate`), or all waiting (`UnpricedMints`).
     NothingDue,
     /// The source returned a hard error rather than a partial answer.
     SourceFailed(SourceError),
@@ -50,7 +50,7 @@ impl TickOutcome {
             }
             TickOutcome::NothingDue => {
                 debug!("price worker: every candidate is waiting its turn — nothing asked");
-                // Coverage 0 is the truth; `no_prices` would be the wrong alarm.
+                // `no_prices` would be the wrong alarm.
                 reset_priced_mints();
                 "nothing_due"
             }

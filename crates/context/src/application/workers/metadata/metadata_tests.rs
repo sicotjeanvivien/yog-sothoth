@@ -9,7 +9,10 @@ use solana_pubkey::Pubkey;
 
 use yog_core::{
     RepositoryError, RepositoryResult,
-    domain::{MetadataProvider, TokenMetadata, TokenMetadataRepository},
+    domain::{
+        MetadataProvider, PriceCandidate, PriceCandidateParams, TokenMetadata,
+        TokenMetadataRepository,
+    },
 };
 
 use super::*;
@@ -107,7 +110,10 @@ impl TokenMetadataRepository for FakeRepository {
         self.list(Scope::AllPools, None)
     }
 
-    async fn list_price_candidates(&self, _window: Duration) -> RepositoryResult<Vec<Pubkey>> {
+    async fn list_price_candidates(
+        &self,
+        _params: &PriceCandidateParams,
+    ) -> RepositoryResult<Vec<PriceCandidate>> {
         Ok(vec![])
     }
 }

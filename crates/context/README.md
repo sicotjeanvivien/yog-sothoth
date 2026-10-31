@@ -77,9 +77,32 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   15-minute bound on prices (`yog_price_max_age_latest()`), during which every
   pool loses its valuation.
 
+  **A candidate is asked at a cadence set by its class** (`PriceCandidate` in
+  `yog-core`), because the length of a tick follows the mints it asks:
+
+  | Class | Which mints, in this order | Asked |
+  |---|---|---|
+  | `NeverPriced` | no price ever, and known for over an hour | one tick in 105 |
+  | `LowValue` | what its pools hold, at its last price, is under 10 $ | one tick in 3 |
+  | `Regular` | everything else | every tick |
+
+  `list_price_candidates` reads the class from the database at every tick. A
+  mint's turn is drawn from its address and the tick number, so a class spreads
+  evenly over its ticks and a restart does not bring it all back at once. The
+  tick number restarts from 0, so a restart starts a mint's wait over: up to a
+  whole cycle of its class, and a request that fails at its turn costs the same.
+  The rule below applies on top of it. `yog_context_price_candidates_by_class`
+  gives each class's size.
+
+  ⚠️ **The length of a tick is what keeps a motionless price valid**: it is
+  rewritten at the first turn past the floor below, within 15 minutes for a
+  `Regular` mint up to ticks of 7 minutes, and for a `LowValue` mint between
+  ticks of 2 min 40 and 5 minutes. A `CONTEXT_PRICE_INTERVAL_SECS` of 300 s or
+  more puts `LowValue` mints out of that range.
+
   **It asks only for the candidates worth asking.** A mint Jupiter answers
   **without a price** waits before it is asked again — 1, 2, 4, 8, then 15
-  minutes at the default cadence — and goes back to every tick at its first
+  minutes at the default cadence — and waits no more at its first
   price. The rule is `UnpricedMints` in `yog-core`, in memory and empty at
   boot; a mint that leaves the candidates leaves it too. Where half the
   universe never has a price, it halves the requests.
@@ -118,8 +141,10 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   storage trick — and it turns on two things that are easy to get wrong:
 
   - **a floor.** A motionless price is written anyway once the last kept row
-    reaches 10 minutes, chosen under the 15 minutes of
-    `yog_price_max_age_latest()` (migration 005). Without it a stable token's
+    reaches 8 minutes 30, chosen under the 15 minutes of
+    `yog_price_max_age_latest()` (migration 005) by more than a tick's length,
+    and under three ticks so that a `LowValue` mint is rewritten at each of its
+    turns. Without it a stable token's
     last observation ages out of both staleness windows and its USD figures
     turn NULL — a worse defect than the volume it saves.
   - **rounding to the column's scale.** `NUMERIC(38, 18)` rounds on write, and
@@ -134,16 +159,16 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   full batch at the first tick: a row too many, never one too few.
 
   The floor is set **one tick early** (`KeptPrices::new` takes the cadence), so
-  the forced row lands at 10 minutes and not at the first tick past them — which
-  would space rows by 16 minutes at a 480 s cadence while 300 s and 600 s both
-  stay at 10, a defect hiding between two safe values.
+  the forced row lands at 8 minutes 30 and not at the first tick past them. At a
+  cadence where ticks hold to it, that spaces rows evenly; a tick that outlasts
+  the cadence still lands the row late, which is why its length is bounded above.
 
-  ⚠️ **Above 300 s of cadence the rule saves nothing.** Two kept rows are at
-  most 10 minutes apart, so a cadence over half of that leaves no room for a
+  ⚠️ **Above 255 s of cadence the rule saves nothing.** Two kept rows are at
+  most 8 minutes 30 apart, so a cadence over half of that leaves no room for a
   suppressed tick and every tick writes. Correct — freshness beats volume — but
-  it means raising the cadence past five minutes silently costs the whole
+  it means raising the cadence past that silently costs the whole
   benefit, with `yog_context_price_unchanged_total` flat at 0. The startup line
-  says which regime you are in: `rewrite_at_most_every_secs` equal to the
+  says which regime you are in: `rewrite_after_secs` equal to the
   cadence means nothing is being suppressed. See `CONTEXT_PRICE_INTERVAL_SECS`
   under *Configuration* for the two cadences that are refused outright, and why
   they are not this filter's doing.
@@ -215,7 +240,8 @@ retry is a request too) before falling back to skip-and-log.
 
 ⚠️ The spacing is what bounds a tick: about `request_spacing` times the chunks
 asked. Past the cadence, ticks run back to back — at 60 per minute, 27 chunks
-(about 1 350 mints) fit a 30 s cadence.
+(about 1 350 mints) fit a 30 s cadence, and a price's staleness bound allows
+about 7 minutes of tick, or some 19 000 mints asked.
 
 ### One invariant, and it is not optional
 
@@ -286,7 +312,7 @@ tick/upsert/failure counters and per-provider request counters and durations.
 **Price coverage** is the one gauge pair worth alerting on:
 
 ```promql
-yog_context_price_priced_mints / yog_context_price_candidate_mints
+yog_context_price_priced_mints / yog_context_price_requested_mints
 ```
 
 Everything USD-denominated downstream — pool TVL, 24h volume, realized fees,
@@ -305,8 +331,9 @@ tick that never ran.
 yog_context_price_requested_mints / yog_context_price_candidate_mints
 ```
 
-The gap is the mints waiting their turn, for at most the
-`unpriced_asked_again_at_most_every_secs` of the startup line plus one cycle. A
+The gap is the mints out of their class's turn, and those waiting after an
+answer without a price, for at most the
+`unpriced_wait_cap_secs` of the startup line plus one cycle. A
 mint that regains its price while it waits counts as unpriced until its turn. A
 tick where **every** candidate waits asks nothing and records
 `outcome="nothing_due"`, never `no_prices`.
@@ -340,7 +367,7 @@ sum(rate(yog_context_price_unchanged_total[1h]))
 
 It answers "how much of what we fetch is worth storing". It should sit high —
 four rows in five suppressed is the design, not a fault. A collapse towards 0
-means the market genuinely moved, or the cadence was raised past 300 s, or the
+means the market genuinely moved, or a tick outlasted half the floor, or the
 comparison stopped rounding to the price column's scale — the last making the
 filter inert without failing anything.
 

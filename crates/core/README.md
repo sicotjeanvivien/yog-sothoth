@@ -61,6 +61,8 @@ core/src/
 │   ├── token_price/       (TokenPrice + repo, PriceProvider)
 │   ├── kept_prices/       (KeptPrices — what the price series already records,
 │   │                       and what a new observation must say to earn a row)
+│   ├── price_candidate/   (PriceCandidate — how often a candidate mint is
+│   │                       asked of the price source, by class)
 │   ├── unpriced_mints/    (UnpricedMints — which mints the price source
 │   │                       answered without a price, and when to ask again)
 │   ├── network_status/    (singleton snapshot)

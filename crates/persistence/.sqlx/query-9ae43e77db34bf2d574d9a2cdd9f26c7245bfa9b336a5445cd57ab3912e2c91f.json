@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The price candidates and what tells their classes apart: known mints alive within $1 seconds.\nWITH candidates AS (\n    SELECT mint, fetched_at FROM token_metadata\n    WHERE mint IN (\n        SELECT mint FROM token_last_price\n        WHERE fetched_at >= (SELECT LEAST(max(fetched_at), now()) FROM token_last_price)\n                            - $1::BIGINT * INTERVAL '1 second'\n        UNION ALL\n        SELECT side.mint\n        FROM pool_current_state pcs\n        JOIN pools p ON p.pool_address = pcs.pool_address\n        CROSS JOIN LATERAL (VALUES (p.token_a_mint), (p.token_b_mint)) AS side(mint)\n        WHERE pcs.last_event_at >= now() - $1::BIGINT * INTERVAL '1 second'\n    )\n),\n-- ⚠️ At the last price whatever its age: `pool_current_tvl` would make a stale mint worthless.\nheld AS (\n    SELECT side.mint, SUM(yog_amount_usd(side.reserve, tm.decimals::INTEGER, tlp.price_usd)) AS usd\n    FROM pool_current_state pcs\n    JOIN pools p ON p.pool_address = pcs.pool_address\n    CROSS JOIN LATERAL (VALUES (p.token_a_mint, pcs.reserve_a), (p.token_b_mint, pcs.reserve_b))\n        AS side(mint, reserve)\n    JOIN token_metadata tm ON tm.mint = side.mint\n    JOIN token_last_price tlp ON tlp.mint = side.mint\n    GROUP BY side.mint\n)\nSELECT c.mint AS \"mint!: String\",\n       (NOT EXISTS (SELECT 1 FROM token_last_price tlp WHERE tlp.mint = c.mint)\n        AND c.fetched_at < now() - $2::BIGINT * INTERVAL '1 second') AS \"never_priced_past_grace!\",\n       COALESCE(h.usd < $3, FALSE) AS \"below_low_value!\"\nFROM candidates c\nLEFT JOIN held h ON h.mint = c.mint\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mint!: String",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "mint"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "never_priced_past_grace!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "below_low_value!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Numeric"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "9ae43e77db34bf2d574d9a2cdd9f26c7245bfa9b336a5445cd57ab3912e2c91f"
+}
