@@ -5,9 +5,6 @@ use yog_persistence::Database;
 
 use super::helpers::{CLUSTER_ROLES, apply_setup_roles};
 
-/// A login role of its own: `yog_migrate`'s password is not the test's to know.
-const PROBE: &str = "yog_probe_lock_timeout";
-
 async fn yog_migrate_settings(pool: &PgPool) -> (Vec<String>, String) {
     sqlx::query_as(
         "SELECT r.rolconfig, s.xmin::TEXT
@@ -43,6 +40,7 @@ async fn setup_roles_bounds_the_lock_wait_of_yog_migrate_and_a_rerun_writes_noth
 
 /// Against removing the startup parameter of `connect_for_provisioning`. ⚠️ On a role without
 /// the setting this would pass regardless, 0 being the default: the plain connection proves it.
+/// A login role of its own: `yog_migrate`'s password is not the test's to know.
 #[sqlx::test]
 async fn a_provisioning_connection_lifts_the_lock_timeout_of_its_role(pool: PgPool) {
     let _cluster = CLUSTER_ROLES.lock().await;
@@ -56,7 +54,7 @@ async fn a_provisioning_connection_lifts_the_lock_timeout_of_its_role(pool: PgPo
     .unwrap();
     let options = (*pool.connect_options())
         .clone()
-        .username(PROBE)
+        .username("yog_probe_lock_timeout")
         .password("probe");
 
     let plain = PgPool::connect_with(options.clone()).await.unwrap();

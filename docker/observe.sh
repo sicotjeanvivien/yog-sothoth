@@ -151,8 +151,11 @@ SELECT 'pools', count(*) FROM pools;
 SELECT 'pools_needs_refresh', count(*) FROM pools WHERE needs_refresh;
 SELECT 'signals_last_24h', count(*) FROM signals WHERE triggered_at > now() - interval '1 day';
 SELECT 'database_bytes', pg_database_size(current_database());
-SELECT 'jobs_last_run_failed', count(*) FROM timescaledb_information.job_stats s
+SELECT 'jobs_last_run_failed', count(DISTINCT job_id) FROM timescaledb_information.job_stats s
   JOIN timescaledb_information.jobs j USING (job_id) WHERE j.owner::text = 'yog_migrate' AND s.last_run_status = 'Failed';
+SELECT 'chunks_compression_overdue', count(*) FROM timescaledb_information.chunks c
+  JOIN timescaledb_information.jobs j ON j.hypertable_name = c.hypertable_name AND j.proc_name = 'policy_compression'
+  WHERE NOT c.is_compressed AND c.range_end < now() - (j.config->>'compress_after')::interval - interval '1 day';
 SQL
   ) || rc=$?
   strict "$db_line" <<<"$out"
