@@ -87,7 +87,7 @@ All coordination between the binaries happens through the schema, and the schema
 
 | Role | Permissions | Used by |
 |---|---|---|
-| `yog_migrate` | DDL — owns the schema, applies migrations | `yog-migrate` binary, `cargo sqlx migrate run` |
+| `yog_migrate` | DDL — owns the schema, applies migrations; ⚠️ carries `lock_timeout=3s` for its jobs, lifted by `yog-migrate` but not by `cargo sqlx migrate run` | `yog-migrate` binary, `cargo sqlx migrate run` |
 | `yog_indexer` | `INSERT, UPDATE` on the event tables, `pools` (table-level), `pool_current_state` and `network_status`; `nextval` on the sequences of the event tables only | indexer |
 | `yog_api` | writes nothing | api |
 | `yog_context` | `INSERT, UPDATE` on `token_metadata`, `token_last_price` and every per-protocol pool-properties satellite; `INSERT` only on `token_prices`; `UPDATE` on the pool-property columns of `pools` — **the sole writer of account-derived properties** | context |

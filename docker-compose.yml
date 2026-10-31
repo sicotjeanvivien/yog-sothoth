@@ -63,7 +63,8 @@ services:
     # so reads stay correct via real-time aggregation; only the durable backfill
     # and retention drops (themselves scheduler jobs) are paused locally.
     command: ["postgres", "-c", "timescaledb.max_background_workers=0",
-              "-c", "client_connection_check_interval=10s"]
+              "-c", "client_connection_check_interval=10s",
+              "-c", "log_lock_waits=on"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-yog}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-yog}
