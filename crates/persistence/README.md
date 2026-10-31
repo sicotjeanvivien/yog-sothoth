@@ -873,8 +873,8 @@ ends; a compression asking for its exclusive lock on one waits behind it, and
 every later read of that chunk, even one that needs no row of it, queues behind
 the request. Bounded, the chunk gives up and stays as it was, at the cost of its
 whole copy: the exclusive lock comes after it. A run that compressed nothing fails
-and the scheduler retries it (a compression at about 1 h, a retention at about
-5 min). ⚠️ A run that compressed another chunk ends as a success, and the skipped
+and the scheduler retries it (first at about 1 h for a compression, 5 min for a
+retention). ⚠️ A run that compressed another chunk ends as a success, and the skipped
 one waits for the next run, up to 12 h. Any read over 3 s on the chunk has the same
 effect as a dump. A refresh takes no lock a dump holds. `connect_for_provisioning` sets
 `lock_timeout` back to 0 as a startup parameter: a migration waits for its lock.

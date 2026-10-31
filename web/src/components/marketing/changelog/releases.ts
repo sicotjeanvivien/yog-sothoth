@@ -44,7 +44,7 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "TimescaleDB's jobs give up on a lock after 3 s and are retried, instead of queueing every read of the chunk behind them for as long as the pg_dump lasts (503 on /api/ingestion).",
+            text: "TimescaleDB's jobs give up on a lock after 3 s and are retried, instead of queueing every read of the chunk behind them for as long as the pg_dump lasts.",
             technical: true,
           },
         ],
