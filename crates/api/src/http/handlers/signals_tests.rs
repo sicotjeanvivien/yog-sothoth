@@ -70,7 +70,7 @@ async fn streams_past_the_cap_are_refused_until_one_closes() {
 /// Mutation: the unknown keys let through — `?pool=` answered with every protocol's signals.
 #[tokio::test]
 async fn a_key_the_signals_do_not_take_is_refused() {
-    let pool = crate::testing::pk(1);
+    let pool = pk(1);
     for uri in [
         format!("/api/signals?pool={pool}"),
         format!("/api/protocols/meteora_damm_v2/signals?pool={pool}"),
@@ -123,7 +123,7 @@ fn field<'a>(event: &'a str, name: &str) -> &'a str {
 }
 
 /// Mutation: `event.id` removed or holding another value, `data` not the signal's response, or the
-/// signal sent bare, its tokens lost on the way out.
+/// signal sent bare or its tokens swapped; or the event named, which `onmessage` never receives.
 #[tokio::test]
 async fn a_client_receives_each_signal_with_its_id_and_its_response() {
     let (feed, receiver) = broadcast::channel(8);
@@ -133,22 +133,27 @@ async fn a_client_receives_each_signal_with_its_id_and_its_response() {
     }
     drop(feed);
 
-    let (body, _) = read_stream(receiver).await;
+    let (body, slot_back) = read_stream(receiver).await;
+
+    assert!(slot_back);
 
     let events: Vec<&str> = body
-        .split(
-            "
-
-",
-        )
+        .split("\n\n")
         .filter(|event| !event.is_empty())
         .collect();
     assert_eq!(events.len(), 2, "{body}");
     for (event, signal) in events.iter().zip(&signals) {
         assert_eq!(field(event, "id"), signal.record.id.to_string());
+        assert!(
+            !event.lines().any(|line| line.starts_with("event:")),
+            "a named event never reaches `onmessage`: {event}"
+        );
         let data: serde_json::Value = serde_json::from_str(field(event, "data")).expect("JSON");
         let expected = serde_json::to_value(SignalResponse::from(signal.clone())).expect("JSON");
         assert_eq!(data, expected);
+        assert_eq!(data["id"], signal.record.id);
+        assert_eq!(data["tokenA"]["symbol"], "AAA");
+        assert_eq!(data["tokenB"]["symbol"], "BBB");
     }
 }
 
