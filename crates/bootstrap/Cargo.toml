@@ -46,3 +46,5 @@ metrics = { workspace = true, optional = true }
 # trusting the code that sets it. A feature of a crate already in the tree,
 # dev-only.
 tokio = { workspace = true, features = ["test-util"] }
+# `heartbeat`'s undelivered-signal counter, read by its tests. Already in the tree, dev-only.
+metrics-util = { workspace = true, features = ["debugging"] }
