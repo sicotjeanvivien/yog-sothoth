@@ -55,14 +55,12 @@ fn warning_alone() -> MutexGuard<'static, ()> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// One request as the local check received it.
 #[derive(Debug, PartialEq)]
 struct Received {
     request_line: String,
     body: String,
 }
 
-/// A local check answering `status` to one request: its URL, and what it received.
 async fn check_answering(status: u16) -> (String, JoinHandle<Received>) {
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
@@ -260,8 +258,7 @@ impl std::io::Write for Logged {
     }
 }
 
-/// What `report_failure` logs when the check at `suffix` refuses the signal.
-fn logged_for_a_refused_failure(suffix: &str) -> String {
+fn logged_while(body: impl Future<Output = ()>) -> String {
     let logged = Logged::default();
     let writer = logged.clone();
     let subscriber = tracing_subscriber::fmt()
@@ -269,27 +266,31 @@ fn logged_for_a_refused_failure(suffix: &str) -> String {
         .with_ansi(false)
         .finish();
 
-    tracing::subscriber::with_default(subscriber, || {
-        counting(async {
-            let (url, received) = check_answering(500).await;
-            heartbeat(&format!("{url}{suffix}"))
-                .report_failure("late")
-                .await;
-            received.await.expect("the local check");
-        })
-    });
+    tracing::subscriber::with_default(subscriber, || counting(body));
 
     String::from_utf8_lossy(&logged.0.lock().expect("the log")).to_string()
 }
 
+async fn refused_failure(suffix: &str) {
+    let (url, received) = check_answering(500).await;
+    heartbeat(&format!("{url}{suffix}"))
+        .report_failure("late")
+        .await;
+    received.await.expect("the local check");
+}
+
 /// Mutation: `scrub` removed from the warning, or reduced to the whole URL, which a slug check's
-/// `/fail` no longer contains: `reqwest` quotes the URL, and the URL is the secret.
+/// `/fail` no longer contains; or the error dropped from the warning, the only diagnostic.
 #[test]
 fn an_undelivered_signal_keeps_the_secret_out_of_the_log() {
     let _alone = warning_alone();
-    for suffix in ["", "/yog-archive?create=1"] {
-        let text = logged_for_a_refused_failure(suffix);
+    for text in [
+        logged_while(refused_failure("")),
+        logged_while(refused_failure("/yog-archive?create=1")),
+        logged_while(heartbeat(&unreachable_check()).report_failure("late")),
+    ] {
         assert!(text.contains("could not be delivered"), "{text}");
+        assert!(text.contains("127.0.0.1"), "the host survives: {text}");
         assert!(!text.contains(SECRET), "{text}");
     }
 }
