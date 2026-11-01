@@ -55,6 +55,8 @@ fn discriminators_are_unique() {
         discriminator_update_reward_duration(),
         discriminator_update_reward_funder(),
         discriminator_withdraw_dead_liquidity_reward(),
+        discriminator_split_position3(),
+        discriminator_split_position2(),
         discriminator_create_position(),
         discriminator_close_position(),
         discriminator_lock_position(),
@@ -132,13 +134,35 @@ fn withdraw_dead_liquidity_reward_layout_is_pinned() {
 #[test]
 fn set_pool_status_layout_is_pinned() {
     let mut bytes = Vec::new();
-    bytes.extend_from_slice(&[9u8; 32]); // pool
-    bytes.push(1); // status
-    assert_eq!(bytes.len(), 33, "payload size drift"); // 32 + 1
+    bytes.extend_from_slice(&[9u8; 32]);
+    bytes.push(1);
+    assert_eq!(bytes.len(), 33, "payload size drift");
 
     let e = EvtSetPoolStatus::try_from_slice(&bytes).expect("deserialize");
     assert_eq!(e.pool, Pubkey::new_from_array([9u8; 32]));
     assert_eq!(e.status, 1);
+}
+
+/// No capture would catch a misspelled name: its event would land in `unknown`, never stored.
+/// Mutation: a typo in `compute_discriminator`'s name. The bytes are `sha256("event:<name>")[..8]`.
+#[test]
+fn the_discriminators_of_the_events_without_a_capture_are_pinned() {
+    assert_eq!(
+        discriminator_update_reward_duration(),
+        [149, 135, 65, 231, 129, 153, 65, 57]
+    );
+    assert_eq!(
+        discriminator_update_reward_funder(),
+        [76, 154, 208, 13, 40, 115, 246, 146]
+    );
+    assert_eq!(
+        discriminator_withdraw_dead_liquidity_reward(),
+        [228, 66, 150, 195, 42, 62, 163, 13]
+    );
+    assert_eq!(
+        discriminator_set_pool_status(),
+        [100, 213, 74, 3, 95, 91, 228, 146]
+    );
 }
 
 /// Two events with one shape: the same payload decodes to both, so dispatch

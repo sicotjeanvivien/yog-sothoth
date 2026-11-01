@@ -45,7 +45,6 @@ fn extract(payloads: Vec<Vec<u8>>) -> ExtractedEvents {
     extract_wire_events(&transaction(payloads), &program())
 }
 
-/// The one event a clean payload decodes to.
 fn only_event(payload: Vec<u8>) -> DammV2WireEvent {
     let mut outcome = extract(vec![payload]);
     assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
@@ -77,7 +76,6 @@ fn set_pool_status() -> Vec<u8> {
     event_cpi(discriminator_set_pool_status(), &body)
 }
 
-/// Every event `dispatch` decodes, under the name its failure must carry.
 fn decoded_events() -> [([u8; DISCRIMINATOR_LEN], &'static str); 19] {
     [
         (discriminator_swap2(), "EvtSwap2"),
@@ -262,8 +260,25 @@ fn a_payload_that_fails_or_is_unknown_keeps_its_index() {
         set_pool_status(),
     ]);
 
-    assert_eq!(outcome.failures.len(), 1, "{:?}", outcome.failures);
-    assert_eq!(outcome.unknown.len(), 1, "{:?}", outcome.unknown);
+    assert!(
+        matches!(
+            outcome.failures.as_slice(),
+            [ExtractFailure::Borsh {
+                event_name: "EvtSetPoolStatus",
+                ..
+            }]
+        ),
+        "{:?}",
+        outcome.failures
+    );
+    assert!(
+        matches!(
+            outcome.unknown.as_slice(),
+            [UnknownEvent { discriminator }] if *discriminator == [9u8; DISCRIMINATOR_LEN]
+        ),
+        "{:?}",
+        outcome.unknown
+    );
     let indices: Vec<u16> = outcome.events.iter().map(|e| e.event_index).collect();
     assert_eq!(indices, [2]);
 }
@@ -283,6 +298,20 @@ fn an_unknown_discriminator_is_unknown_and_no_failure() {
         "{:?}",
         outcome.unknown
     );
+}
+
+/// Mutation: `translate_extracted_events` no longer carrying the unknown events over.
+#[test]
+fn an_unknown_discriminator_stays_unknown_out_of_the_extractor() {
+    let tx = transaction(vec![event_cpi([9u8; DISCRIMINATOR_LEN], &[])]);
+
+    let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+
+    assert!(outcome.events.is_empty(), "{:?}", outcome.events);
+    assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
+    assert_eq!(outcome.unknown.len(), 1, "{:?}", outcome.unknown);
+    assert_eq!(outcome.unknown[0].protocol, Protocol::MeteoraDammV2);
+    assert_eq!(outcome.unknown[0].discriminator, [9u8; DISCRIMINATOR_LEN]);
 }
 
 /// Mutation: the deprecated split decoded instead of dropped unread.
