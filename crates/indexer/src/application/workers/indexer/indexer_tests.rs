@@ -1,6 +1,8 @@
 use super::*;
 use crate::application::services::meteora_persistor_fakes::Calls;
-use crate::application::services::processor_fixtures::{double_swap, recording, unreadable_only};
+use crate::application::services::processor_fixtures::{
+    double_swap, inserts, recording, unreadable_only,
+};
 use chrono::Utc;
 use metrics_util::debugging::{DebugValue, DebuggingRecorder};
 use solana_signature::Signature;
@@ -117,7 +119,7 @@ async fn a_transaction_waits_for_a_free_place() {
     .expect("the semaphore stays open");
 }
 
-/// Mutation: `record_dropped` removed: a transaction a source paid for vanishes without a count.
+/// Mutation: `record_dropped` removed, or the stop no longer ending the wait for a place.
 #[test]
 fn a_transaction_given_up_at_the_stop_is_counted() {
     let recorder = DebuggingRecorder::new();
@@ -135,10 +137,13 @@ fn a_transaction_given_up_at_the_stop_is_counted() {
                     .await
                     .expect("permits are free");
                 shutdown.cancel();
-                worker
-                    .dispatch_one(ingested(1), 0, &shutdown)
-                    .await
-                    .expect("a stop is no failure");
+                tokio::time::timeout(
+                    Duration::from_secs(5),
+                    worker.dispatch_one(ingested(1), 0, &shutdown),
+                )
+                .await
+                .expect("the stop ends the wait")
+                .expect("a stop is no failure");
             })
     });
 
@@ -157,9 +162,9 @@ fn a_transaction_given_up_at_the_stop_is_counted() {
     assert_eq!(dropped, Some(DebugValue::Counter(1)));
 }
 
-/// Mutation: the loop ending at the first transaction, which here holds nothing it can read.
+/// Mutation: the loop ending at the first transaction.
 #[tokio::test]
-async fn an_unreadable_transaction_does_not_stop_the_next_one() {
+async fn the_loop_goes_on_after_a_first_transaction() {
     let calls = Calls::default();
     let worker = IndexerWorker::new(recording(&calls), 2);
     let (tx, rx) = mpsc::channel(8);
@@ -178,11 +183,5 @@ async fn an_unreadable_transaction_does_not_stop_the_next_one() {
         .await
         .expect("the channel closing is no failure");
 
-    let inserts = calls
-        .lock()
-        .expect("the calls")
-        .iter()
-        .filter(|call| call.starts_with("insert:"))
-        .count();
-    assert_eq!(inserts, 2);
+    assert_eq!(inserts(&calls), 2);
 }

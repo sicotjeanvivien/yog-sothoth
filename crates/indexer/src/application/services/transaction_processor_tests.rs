@@ -37,7 +37,7 @@ pub(crate) fn recording(calls: &Calls) -> Arc<TransactionProcessor> {
     processor(build(calls.clone()))
 }
 
-/// The captured transaction `2qJrr...`: two swaps on one pool.
+/// Two swaps on one pool.
 pub(crate) fn double_swap() -> OnChainTransaction {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../core/tests/fixtures/damm_v2/swap_double.json");
@@ -123,7 +123,7 @@ fn failures_of(snapshot: &Snapshot, kind: &str) -> Option<u64> {
     )
 }
 
-fn inserts(calls: &Calls) -> usize {
+pub(crate) fn inserts(calls: &Calls) -> usize {
     calls
         .lock()
         .expect("the calls")
@@ -195,6 +195,18 @@ fn an_unreadable_payload_is_counted_and_the_valid_events_are_written() {
 
     assert_eq!(inserts(&calls), 2);
     assert_eq!(exited(&counted, "ok"), Some(1));
+    assert_eq!(failures_of(&counted, "borsh"), Some(1));
+}
+
+/// Mutation: `report_diagnostics` moved past the return of a transaction without an event, which
+/// silences a format change: every payload of every transaction then fails.
+#[test]
+fn a_transaction_with_only_unreadable_payloads_still_counts_its_failure() {
+    let calls = Calls::default();
+    let counted = process(recording(&calls), unreadable_only());
+
+    assert_eq!(inserts(&calls), 0);
+    assert_eq!(exited(&counted, "no_events"), Some(1));
     assert_eq!(failures_of(&counted, "borsh"), Some(1));
 }
 
