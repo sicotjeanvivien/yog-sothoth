@@ -801,8 +801,8 @@ pub(crate) fn frozen_hours_repo(frozen: Option<FrozenHours>) -> Arc<MockProtocol
     Arc::new(MockProtocolActivityRepo::new(frozen))
 }
 
-/// A `SwapActivityLookup` answering `totals` to the totals reads and nothing else; it records the
-/// period and the scope of each read.
+/// A `SwapActivityLookup` answering `totals` to the protocols' totals reads, nothing to the others;
+/// it records the period and the scope of each read.
 #[derive(Default)]
 pub(crate) struct MockSwapActivityRepo {
     pub(crate) totals: Vec<ProtocolSwapActivity>,

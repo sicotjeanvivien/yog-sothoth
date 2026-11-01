@@ -99,6 +99,33 @@ async fn the_ratio_is_the_volume_over_the_last_frozen_tvl() {
     assert_eq!(swaps.tranche_reads.lock().unwrap().len(), 1);
 }
 
+/// Mutation: the TVL read for every protocol — one protocol's volume over all their stock.
+#[tokio::test]
+async fn a_protocols_ratio_reads_its_own_tvl() {
+    let tvl = Arc::new(MockProtocolTvlRepo {
+        latest: tvl_of_100_usd(),
+        ..MockProtocolTvlRepo::default()
+    });
+    let swaps = Arc::new(MockSwapActivityRepo {
+        totals: swaps_of_200_usd(),
+        ..MockSwapActivityRepo::default()
+    });
+    let svc = LiquidityTurnoverService::new(
+        frozen_hours_repo(Some(make_frozen_hours())),
+        swaps,
+        tvl.clone(),
+    );
+
+    svc.get_totals(Window::Week, Some(Protocol::MeteoraDammV2))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *tvl.instants.lock().unwrap(),
+        [("tvl", at_october(20, 12), Some(Protocol::MeteoraDammV2))]
+    );
+}
+
 /// Mutation: the hour's guard forced to true — a ratio over half an hour's tranches.
 #[tokio::test]
 async fn an_hour_the_tranches_do_not_cover_has_no_ratio() {
