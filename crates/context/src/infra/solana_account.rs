@@ -133,3 +133,7 @@ impl PoolAccountSource for SolanaAccountClient {
         Ok(all)
     }
 }
+
+#[cfg(test)]
+#[path = "solana_account_tests.rs"]
+mod tests;

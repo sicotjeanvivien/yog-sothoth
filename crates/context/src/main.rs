@@ -7,6 +7,8 @@ mod application;
 mod bootstrap;
 mod error;
 mod infra;
+#[cfg(test)]
+mod testing;
 
 use metrics_exporter_prometheus::PrometheusBuilder;
 use tokio_util::sync::CancellationToken;

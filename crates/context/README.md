@@ -29,6 +29,7 @@ context/src/
 ├── bootstrap/       ← Config::load(), Daemon::connect — composition root, and the
 │                      stop: run() joins its three workers under the shared grace
 ├── error/           ← SourceError, WorkerError — shared by the layers
+├── testing.rs       ← test-only: the local HTTP server of the provider clients' tests
 └── main.rs
 ```
 

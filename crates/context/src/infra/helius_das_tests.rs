@@ -1,9 +1,9 @@
-//! Unit tests for the Helius DAS client: the projection to `FetchedMetadata` with its fallbacks,
-//! and `DasResponse` deserialization (positional `null`s, unknown fields).
+//! Unit tests for the Helius DAS client.
 
 use solana_pubkey::Pubkey;
 
 use super::*;
+use crate::testing::ScriptedProvider;
 
 /// Deterministic Pubkey for tests.
 fn pk(seed: u8) -> Pubkey {
@@ -340,4 +340,101 @@ fn das_response_ignores_unknown_fields() {
     let response: DasResponse =
         serde_json::from_str(&body).expect("unknown fields must be silently ignored by serde");
     assert_eq!(response.result.len(), 1);
+}
+
+// ── fetch_metadata: the calls, against a local server ───────────────────────────────
+
+fn asset_of(mint: Pubkey) -> serde_json::Value {
+    serde_json::json!({ "id": mint.to_string(), "token_info": { "decimals": 6 } })
+}
+
+fn asset(seed: u8) -> serde_json::Value {
+    asset_of(pk(seed))
+}
+
+fn answer(assets: Vec<serde_json::Value>) -> (u16, serde_json::Value) {
+    (200, serde_json::json!({ "result": assets }))
+}
+
+fn mints(fetched: &[FetchedMetadata]) -> Vec<Pubkey> {
+    fetched.iter().map(|metadata| metadata.mint).collect()
+}
+
+/// Mutation: another method asked, or the mints not sent.
+#[tokio::test]
+async fn the_request_asks_for_the_mints() {
+    let provider = ScriptedProvider::answering(vec![answer(vec![asset(1)])]).await;
+    let client = HeliusDasClient::new(provider.url.clone());
+
+    let fetched = client.fetch_metadata(&[pk(1)]).await.expect("the metadata");
+
+    assert_eq!(mints(&fetched), [pk(1)]);
+    let requests = provider.requests();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0]["method"], "getAssetBatch");
+    assert_eq!(
+        requests[0]["params"]["ids"],
+        serde_json::json!([pk(1).to_string()])
+    );
+}
+
+/// Mutation: the batch size raised past what Helius accepts, or a batch sent twice, the mint past the
+/// first thousand then never asked.
+#[tokio::test]
+async fn past_a_thousand_mints_every_batch_is_asked() {
+    let wanted: Vec<Pubkey> = (0..1_001).map(|_| Pubkey::new_unique()).collect();
+    let provider = ScriptedProvider::answering(vec![
+        answer(vec![asset_of(wanted[0])]),
+        answer(vec![asset_of(wanted[1_000])]),
+    ])
+    .await;
+    let client = HeliusDasClient::new(provider.url.clone());
+
+    let fetched = client.fetch_metadata(&wanted).await.expect("the metadata");
+
+    assert_eq!(mints(&fetched), [wanted[0], wanted[1_000]]);
+    let requests = provider.requests();
+    let ids = |request: usize| {
+        requests[request]["params"]["ids"]
+            .as_array()
+            .expect("ids")
+            .clone()
+    };
+    assert_eq!(requests.len(), 2);
+    assert_eq!(ids(0).len(), 1_000);
+    assert_eq!(ids(0)[0], wanted[0].to_string());
+    assert_eq!(ids(1), [wanted[1_000].to_string()]);
+}
+
+/// Mutation: a failed batch ending the call, which would lose the batches after it; or
+/// `error_for_status` removed: what a refused answer carries would then be taken as metadata.
+#[tokio::test]
+async fn a_failed_batch_does_not_stop_the_next_one() {
+    let wanted = vec![pk(1); 1_001];
+    let provider = ScriptedProvider::answering(vec![
+        (500, serde_json::json!({ "result": [asset(9)] })),
+        answer(vec![asset(2)]),
+    ])
+    .await;
+    let client = HeliusDasClient::new(provider.url.clone());
+
+    let fetched = client
+        .fetch_metadata(&wanted)
+        .await
+        .expect("the call survives");
+
+    assert_eq!(mints(&fetched), [pk(2)]);
+    assert_eq!(provider.requests().len(), 2);
+}
+
+/// Mutation: an empty batch sent: a paid call for nothing.
+#[tokio::test]
+async fn no_mint_asks_nothing() {
+    let provider = ScriptedProvider::answering(vec![answer(Vec::new())]).await;
+    let client = HeliusDasClient::new(provider.url.clone());
+
+    let fetched = client.fetch_metadata(&[]).await.expect("nothing to fetch");
+
+    assert!(fetched.is_empty());
+    assert!(provider.requests().is_empty());
 }
