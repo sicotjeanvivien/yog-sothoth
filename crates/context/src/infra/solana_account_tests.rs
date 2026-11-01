@@ -2,8 +2,8 @@
 
 use serde_json::{Value, json};
 
-use super::super::scripted_provider::ScriptedProvider;
 use super::*;
+use crate::testing::ScriptedProvider;
 
 fn pk(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])

@@ -2,8 +2,8 @@
 
 use solana_pubkey::Pubkey;
 
-use super::super::scripted_provider::ScriptedProvider;
 use super::*;
+use crate::testing::ScriptedProvider;
 
 /// Deterministic Pubkey for tests.
 fn pk(seed: u8) -> Pubkey {

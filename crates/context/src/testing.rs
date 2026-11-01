@@ -9,14 +9,14 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use yog_bootstrap::SecretUrl;
 
-pub(super) struct ScriptedProvider {
-    pub(super) url: SecretUrl,
+pub(crate) struct ScriptedProvider {
+    pub(crate) url: SecretUrl,
     received: Arc<Mutex<Vec<Value>>>,
 }
 
 impl ScriptedProvider {
     /// Answers each request with the next `(status, body)`; once they run out, connections are refused.
-    pub(super) async fn answering(script: Vec<(u16, Value)>) -> Self {
+    pub(crate) async fn answering(script: Vec<(u16, Value)>) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .expect("a local port");
@@ -49,7 +49,7 @@ impl ScriptedProvider {
         }
     }
 
-    pub(super) fn requests(&self) -> Vec<Value> {
+    pub(crate) fn requests(&self) -> Vec<Value> {
         self.received.lock().expect("the requests").clone()
     }
 }
