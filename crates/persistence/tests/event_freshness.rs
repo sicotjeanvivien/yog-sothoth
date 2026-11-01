@@ -73,3 +73,13 @@ async fn the_last_event_can_be_a_swap(pool: PgPool) {
         Some(ts() + Duration::hours(1))
     );
 }
+
+/// Mutation: the two compared without skipping NULL — ingestion read as stopped while one table is
+/// still empty.
+#[sqlx::test]
+async fn one_table_empty_still_gives_the_date_of_the_other(pool: PgPool) {
+    let repo = repository(&pool).await;
+    insert_swap(&pool, ts()).await;
+
+    assert_eq!(repo.last_event_at().await.unwrap(), Some(ts()));
+}

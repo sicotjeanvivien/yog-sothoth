@@ -37,3 +37,17 @@ async fn no_event_is_served_stale_without_a_date() {
         json!({ "freshness": "stale", "lastEventAt": null })
     );
 }
+
+/// Mutation: a read that failed answered as stale — a database down read as an empty one.
+#[tokio::test]
+async fn a_failed_read_is_an_error_not_a_verdict() {
+    let mut state = app_state();
+    state.ingestion_service = Arc::new(IngestionService::new(Arc::new(
+        MockEventFreshnessRepo::failing(),
+    )));
+
+    let (status, headers, _) = call_on(state, Method::GET, "/api/ingestion").await;
+
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(headers["content-type"], "application/problem+json");
+}
