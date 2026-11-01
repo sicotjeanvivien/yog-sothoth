@@ -279,8 +279,7 @@ fn logged_for_a_refused_failure(suffix: &str) -> String {
         })
     });
 
-    let text = String::from_utf8_lossy(&logged.0.lock().expect("the log")).to_string();
-    text
+    String::from_utf8_lossy(&logged.0.lock().expect("the log")).to_string()
 }
 
 /// Mutation: `scrub` removed from the warning, or reduced to the whole URL, which a slug check's
