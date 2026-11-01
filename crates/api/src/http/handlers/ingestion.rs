@@ -27,3 +27,7 @@ pub(crate) async fn get_ingestion(
 ) -> Result<Json<IngestionResponse>, ApiError> {
     Ok(Json(state.ingestion_service.freshness().await?.into()))
 }
+
+#[cfg(test)]
+#[path = "ingestion_tests.rs"]
+mod tests;

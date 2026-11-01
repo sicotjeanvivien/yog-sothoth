@@ -24,6 +24,7 @@ mod claim_reward;
 mod close_position;
 mod create_position;
 mod discovered_tvl;
+mod event_freshness;
 mod event_index_uniqueness;
 mod fee_split;
 mod fund_reward;
