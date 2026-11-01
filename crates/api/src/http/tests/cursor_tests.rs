@@ -170,7 +170,7 @@ fn token_cursor() -> TokenCursor {
 fn token_activity_cursor() -> TokenActivityCursor {
     TokenActivityCursor {
         last_hour: Utc.timestamp_micros(MICROS).unwrap(),
-        volume_usd: Decimal::new(123_450, 2),
+        volume_usd: Decimal::new(123_456_789_123_450, 6),
         mint: Pubkey::new_unique(),
     }
 }
@@ -198,7 +198,7 @@ fn token_activity_cursor_round_trip() {
     let encoded = encode_cursor(&Cursor::TokenActivity(original.clone())).unwrap();
     let decoded = decode_token_activity_cursor(&encoded).unwrap();
     assert_eq!(decoded, original);
-    assert_eq!(decoded.volume_usd.to_string(), "1234.50");
+    assert_eq!(decoded.volume_usd.to_string(), "123456789.123450");
 }
 
 /// Mutation: an unreadable date or mint falling back to a default, resuming the list elsewhere.
