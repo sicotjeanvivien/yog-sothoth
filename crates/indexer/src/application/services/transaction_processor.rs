@@ -143,3 +143,7 @@ impl Drop for ExitGuard {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "transaction_processor_tests.rs"]
+pub(crate) mod tests;
