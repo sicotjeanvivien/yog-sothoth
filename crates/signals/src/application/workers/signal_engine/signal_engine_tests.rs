@@ -111,10 +111,7 @@ impl SignalDetector for Detector {
     fn cooldown(&self) -> std::time::Duration {
         std::time::Duration::from_secs(60)
     }
-    async fn evaluate(
-        &self,
-        _ctx: &EvalContext,
-    ) -> Result<Vec<Signal>, yog_core::domain::DetectorError> {
+    async fn evaluate(&self, _ctx: &EvalContext) -> Result<Vec<Signal>, DetectorError> {
         match self.tick {
             Tick::Returns => Ok(Vec::new()),
             Tick::NeverReturns => std::future::pending().await,
@@ -138,7 +135,7 @@ impl SignalRepository for NoSignals {
     async fn latest_severity_by_pool(
         &self,
         _detector: &str,
-        _since: chrono::DateTime<Utc>,
+        _since: DateTime<Utc>,
     ) -> yog_core::RepositoryResult<HashMap<Pubkey, Severity>> {
         Ok(HashMap::new())
     }
@@ -230,16 +227,7 @@ async fn a_panic_during_the_stop_still_waits_for_the_grace_then_fails() {
     assert_eq!(waited, SHUTDOWN_GRACE);
 }
 
-// ── one tick: what it asks, what it writes, what it counts ─────────────────────────────────
-
 const COOLDOWN_SECS: u64 = 90;
-const OUTCOMES: [&str; 5] = [
-    "ok",
-    "suppressed",
-    "eval_failed",
-    "dedup_failed",
-    "persist_failed",
-];
 
 /// A detector with one answer, `None` being a failure, which notes the date it was asked for.
 struct ScriptedDetector {
@@ -335,18 +323,19 @@ fn tick(detector: &ScriptedDetector, repository: &ScriptedRepository) -> Snapsho
 
 /// `outcome` counted once and no other, with `emitted` signals counted, `None` being never touched.
 fn assert_counted(counted: &Snapshot, outcome: &str, emitted: Option<u64>) {
-    for candidate in OUTCOMES {
-        let expected = (candidate == outcome).then_some(1);
-        assert_eq!(
-            counter(
-                counted,
-                "yog_signals_tick_total",
-                &[("detector", NAME), ("outcome", candidate)],
-            ),
-            expected,
-            "outcome {candidate}"
-        );
-    }
+    let ticks: Vec<_> = counted
+        .iter()
+        .filter(|(key, _, _, _)| key.key().name() == "yog_signals_tick_total")
+        .collect();
+    assert_eq!(ticks.len(), 1, "{ticks:?}");
+    assert_eq!(
+        counter(
+            counted,
+            "yog_signals_tick_total",
+            &[("detector", NAME), ("outcome", outcome)],
+        ),
+        Some(1)
+    );
     assert_eq!(
         counter(counted, "yog_signals_emitted_total", &[("detector", NAME)]),
         emitted
