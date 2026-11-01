@@ -4,9 +4,10 @@ use axum::http::{Method, StatusCode};
 use chrono::{TimeDelta, Utc};
 use yog_core::domain::FrozenHours;
 
-use crate::application::SwapActivityService;
+use crate::application::{PoolService, SwapActivityService};
 use crate::testing::{
-    MockSwapActivityRepo, MockTokenActivityRepo, app_state, call_on, frozen_hours_repo, get, pk,
+    MockDammV2PropertiesRepo, MockSwapActivityRepo, MockTokenActivityRepo, PoolRepoOnce, app_state,
+    call_on, frozen_hours_repo, get, make_frozen_hours, make_pool, pk,
 };
 
 /// The control: each produced route reaches its handler on a known protocol.
@@ -451,4 +452,40 @@ async fn an_offset_read_is_not_late_for_being_moved_back() {
 
     assert_eq!(status, StatusCode::OK, "{body}");
     assert!(body.contains("\"late\":false"), "{body}");
+}
+
+/// Mutation: a pool's route calling another read, or refusing a known pool.
+#[tokio::test]
+async fn a_known_pools_totals_and_series_are_served() {
+    for (query, read) in [
+        ("totals?window=7d", "pool_swap_totals"),
+        ("series?window=7d&interval=1h", "pool_swap_hourly"),
+    ] {
+        let repo = Arc::new(MockSwapActivityRepo::default());
+        let mut state = app_state();
+        state.pool_service = Arc::new(PoolService::new(
+            Arc::new(PoolRepoOnce::with_pools(vec![make_pool(
+                pk(1),
+                pk(2),
+                pk(3),
+            )])),
+            Arc::new(MockDammV2PropertiesRepo::default()),
+        ));
+        state.swap_activity_service = Arc::new(SwapActivityService::new(
+            frozen_hours_repo(Some(make_frozen_hours())),
+            repo.clone(),
+            Arc::new(MockTokenActivityRepo::default()),
+        ));
+
+        let uri = format!("/api/pools/{}/swaps/{query}", pk(1));
+        let (status, _, body) = call_on(state, Method::GET, &uri).await;
+
+        assert_eq!(status, StatusCode::OK, "{uri}: {body}");
+        let reads = repo.reads.lock().unwrap();
+        assert_eq!(
+            reads.iter().map(|r| r.0).collect::<Vec<_>>(),
+            [read],
+            "{uri}"
+        );
+    }
 }

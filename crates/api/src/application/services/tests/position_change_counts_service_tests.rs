@@ -8,7 +8,7 @@ use super::PositionChangeCountsService;
 use crate::application::services::period::SeriesInterval;
 use crate::testing::{
     MockPositionChangeCountsRepo, MockProtocolActivityRepo, at_october, frozen_hours_repo,
-    make_frozen_hours,
+    make_frozen_hours, tranches_begun,
 };
 
 /// Mutation: the `is_covered` guard dropped — a 30-day count over seven days of facts.
@@ -82,4 +82,22 @@ async fn a_week_is_read_in_slices_of_six_hours() {
     .unwrap();
 
     assert_eq!(*repo.widths.lock().unwrap(), [chrono::TimeDelta::hours(6)]);
+}
+
+/// Mutation: the tranche guard forced either way — half an hour counted as an hour, or a covered
+/// hour never read.
+#[tokio::test]
+async fn the_counts_of_the_hour_are_read_only_when_its_tranches_cover_it() {
+    let read = async |minutes_ago| {
+        let repo = Arc::new(MockPositionChangeCountsRepo::default());
+        let hours = MockProtocolActivityRepo::with_tranches(tranches_begun(minutes_ago));
+        PositionChangeCountsService::new(Arc::new(hours), repo.clone())
+            .get_position_change_totals(Window::Hour, Protocol::MeteoraDammV2)
+            .await
+            .unwrap();
+        repo.tranche_reads.lock().unwrap().len()
+    };
+
+    assert_eq!(read(30).await, 0);
+    assert_eq!(read(120).await, 1);
 }
