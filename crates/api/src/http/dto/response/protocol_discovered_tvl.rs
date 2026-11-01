@@ -32,3 +32,7 @@ impl From<ProtocolDiscoveredTvl> for ProtocolDiscoveredTvlResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/protocol_discovered_tvl_tests.rs"]
+mod tests;

@@ -71,3 +71,7 @@ impl From<LiquidityChangeEvent> for LiquidityChangeEventResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/liquidity_change_event_tests.rs"]
+mod tests;

@@ -182,3 +182,24 @@ fn price_provider_matches_the_domain() {
         assert_eq!(wire_tag(PriceProviderResponse::from(v)), v.as_str());
     }
 }
+
+/// Mutation: the price or its instant dropped, or the source misnamed.
+#[test]
+fn a_price_says_its_value_source_and_instant() {
+    let price = super::price_response::TokenPriceResponse::from(domain::TokenPrice {
+        mint: Pubkey::new_from_array([1; 32]),
+        price_usd: rust_decimal::Decimal::from(2),
+        price_provider: domain::PriceProvider::Jupiter,
+        confidence: None,
+        fetched_at: Utc.with_ymd_and_hms(2026, 10, 25, 12, 0, 0).unwrap(),
+    });
+
+    assert_eq!(
+        serde_json::to_value(price).unwrap(),
+        serde_json::json!({
+            "usd": "2",
+            "provider": "jupiter",
+            "fetchedAt": "2026-10-25T12:00:00Z",
+        })
+    );
+}

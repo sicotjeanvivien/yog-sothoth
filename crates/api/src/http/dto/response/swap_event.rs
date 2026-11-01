@@ -63,3 +63,7 @@ impl From<SwapEvent> for SwapEventResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/swap_event_tests.rs"]
+mod tests;
