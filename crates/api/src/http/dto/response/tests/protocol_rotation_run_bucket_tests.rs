@@ -37,11 +37,14 @@ fn each_part_of_a_bar_is_under_its_name() {
 fn an_unknown_part_stays_null() {
     let bar = wire(Some(Decimal::from(5)), None);
 
-    assert_eq!(bar["inRunsUsd"], serde_json::Value::Null);
-    assert_eq!(bar["outsideRunsUsd"], serde_json::Value::Null);
+    assert_eq!(bar.get("inRunsUsd"), Some(&serde_json::Value::Null));
+    assert_eq!(bar.get("outsideRunsUsd"), Some(&serde_json::Value::Null));
 
     let unvalued = wire(None, Some(Decimal::from(2)));
 
-    assert_eq!(unvalued["volumeUsd"], serde_json::Value::Null);
-    assert_eq!(unvalued["outsideRunsUsd"], serde_json::Value::Null);
+    assert_eq!(unvalued.get("volumeUsd"), Some(&serde_json::Value::Null));
+    assert_eq!(
+        unvalued.get("outsideRunsUsd"),
+        Some(&serde_json::Value::Null)
+    );
 }

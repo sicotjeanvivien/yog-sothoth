@@ -3,7 +3,7 @@ use rust_decimal::Decimal;
 use serde_json::json;
 use yog_core::domain::{LastEventKind, PoolCurrentState, PoolValue};
 
-use super::PoolStateResponse;
+use super::state_response::PoolStateResponse;
 
 fn wire(kind: LastEventKind, value: PoolValue) -> serde_json::Value {
     serde_json::to_value(PoolStateResponse::new(
@@ -48,9 +48,9 @@ fn each_value_of_the_state_is_under_its_name() {
 fn an_unvalued_pool_stays_null() {
     let state = wire(LastEventKind::Swap, PoolValue::default());
 
-    assert_eq!(state["valueAUsd"], serde_json::Value::Null);
-    assert_eq!(state["valueBUsd"], serde_json::Value::Null);
-    assert_eq!(state["tvlUsd"], serde_json::Value::Null);
+    assert_eq!(state.get("valueAUsd"), Some(&serde_json::Value::Null));
+    assert_eq!(state.get("valueBUsd"), Some(&serde_json::Value::Null));
+    assert_eq!(state.get("tvlUsd"), Some(&serde_json::Value::Null));
 }
 
 /// Mutation: a kind mapped to another — a withdrawal published as a deposit.

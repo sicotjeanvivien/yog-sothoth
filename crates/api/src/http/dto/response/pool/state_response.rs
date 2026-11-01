@@ -43,7 +43,3 @@ impl PoolStateResponse {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/pool_state_tests.rs"]
-mod tests;
