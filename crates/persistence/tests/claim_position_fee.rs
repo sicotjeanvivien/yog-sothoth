@@ -1,4 +1,4 @@
-//! `insert` of `PgMeteoraDammV2ClaimPositionFeeEventRepository`, read back column by column.
+//! `insert` of `PgMeteoraDammV2ClaimPositionFeeEventRepository`.
 
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
@@ -89,7 +89,7 @@ async fn a_replayed_event_is_skipped(pool: PgPool) {
     assert_eq!(rows, 1);
 }
 
-/// Mutation: `event_index` out of the conflict's key — the second claim of one transaction skipped
+/// Mutation: `event_index` written as a constant — the second claim of one transaction skipped
 /// as a replay, and its amount lost.
 #[sqlx::test]
 async fn two_claims_of_one_transaction_are_both_written(pool: PgPool) {
