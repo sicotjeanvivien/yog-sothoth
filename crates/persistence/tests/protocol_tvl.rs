@@ -183,3 +183,55 @@ async fn the_change_of_one_protocol_is_its_own(pool: PgPool) {
     assert_eq!(changes.len(), 1);
     assert_eq!(changes[0].protocol, Protocol::MeteoraDammV2);
 }
+
+async fn tvl_hours(pool: &PgPool, table: &str) -> Vec<(String, DateTime<Utc>)> {
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT protocol, bucket FROM {table} ORDER BY protocol, bucket"
+    )))
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+/// Mutation: 050 reading another hour, another protocol, or leaving the hour's discovered row.
+#[sqlx::test(migrations = false)]
+async fn migration_050_removes_the_false_hour_alone(pool: PgPool) {
+    let migrator = sqlx::migrate!("./migrations");
+    migrator.run_to(49, &pool).await.unwrap();
+    let hour: DateTime<Utc> = "2026-10-31T10:00:00Z".parse().unwrap();
+    let next = hour + Duration::hours(1);
+    insert_tvl(&pool, DAMM, hour, 31_930_000).await;
+    insert_tvl(&pool, DAMM, next, 31_930_000).await;
+    insert_tvl(&pool, DLMM, hour, 31_930_000).await;
+    insert_discovered(&pool, DAMM, "24h", hour, 1).await;
+    insert_discovered(&pool, DAMM, "24h", next, 1).await;
+    insert_discovered(&pool, DLMM, "24h", hour, 1).await;
+
+    migrator.run_to(50, &pool).await.unwrap();
+
+    let left = vec![(DAMM.to_owned(), next), (DLMM.to_owned(), hour)];
+    assert_eq!(tvl_hours(&pool, "analytic_protocol_tvl").await, left);
+    assert_eq!(
+        tvl_hours(&pool, "analytic_protocol_tvl_discovered").await,
+        left
+    );
+}
+
+/// Mutation: 050 without its bound on the value — a true reading of that hour deleted.
+#[sqlx::test(migrations = false)]
+async fn migration_050_keeps_a_true_reading_of_that_hour(pool: PgPool) {
+    let migrator = sqlx::migrate!("./migrations");
+    migrator.run_to(49, &pool).await.unwrap();
+    let hour: DateTime<Utc> = "2026-10-31T10:00:00Z".parse().unwrap();
+    insert_tvl(&pool, DAMM, hour, 50_000_000).await;
+    insert_discovered(&pool, DAMM, "24h", hour, 1).await;
+
+    migrator.run_to(50, &pool).await.unwrap();
+
+    let left = vec![(DAMM.to_owned(), hour)];
+    assert_eq!(tvl_hours(&pool, "analytic_protocol_tvl").await, left);
+    assert_eq!(
+        tvl_hours(&pool, "analytic_protocol_tvl_discovered").await,
+        left
+    );
+}
