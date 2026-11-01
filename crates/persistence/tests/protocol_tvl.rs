@@ -193,7 +193,7 @@ async fn tvl_hours(pool: &PgPool, table: &str) -> Vec<(String, DateTime<Utc>)> {
     .unwrap()
 }
 
-/// Mutation: 050 reading another hour, another protocol, or leaving the hour's discovered row.
+/// Mutation: 050 reading another hour, another protocol, or leaving a discovered row of the hour.
 #[sqlx::test(migrations = false)]
 async fn migration_050_removes_the_false_hour_alone(pool: PgPool) {
     let migrator = sqlx::migrate!("./migrations");
@@ -203,7 +203,9 @@ async fn migration_050_removes_the_false_hour_alone(pool: PgPool) {
     insert_tvl(&pool, DAMM, hour, 31_930_000).await;
     insert_tvl(&pool, DAMM, next, 31_930_000).await;
     insert_tvl(&pool, DLMM, hour, 31_930_000).await;
-    insert_discovered(&pool, DAMM, "24h", hour, 1).await;
+    for period in ["24h", "7d", "30d"] {
+        insert_discovered(&pool, DAMM, period, hour, 1).await;
+    }
     insert_discovered(&pool, DAMM, "24h", next, 1).await;
     insert_discovered(&pool, DLMM, "24h", hour, 1).await;
 

@@ -44,7 +44,7 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "The TVL curve no longer shows the false drop to 31.93 M$ of 31 October at 11:00 UTC, measured just before the v0.7.1 fix: that hour is removed.",
+            text: "The TVL curve no longer shows the false drop to 31.93 M$ of 31 October at 11:00 UTC: that hour is removed.",
             technical: false,
           },
           {
