@@ -343,3 +343,7 @@ fn dispatch(disc: &[u8; DISCRIMINATOR_LEN], body: &[u8], known: &KnownDiscrimina
 fn deserialize<T: BorshDeserialize>(body: &[u8], _event_name: &'static str) -> Result<T, String> {
     T::try_from_slice(body).map_err(|e| e.to_string())
 }
+
+#[cfg(test)]
+#[path = "extractor_tests.rs"]
+mod tests;

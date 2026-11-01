@@ -251,7 +251,7 @@ whatever the source delivered
 ExtractionOutcome { events, unknown, failures }
 ```
 
-Three failure types are distinguished in `ExtractionFailure` and counted as separate metric labels: `AnchorDecode` (a payload shorter than an instruction discriminator, or a tagged one too short to hold an event discriminator), `Borsh` (schema mismatch), `Translation` (invalid enum value). A payload of at least 8 bytes that does not start with `EVENT_IX_TAG` is an ordinary instruction to the program, and is skipped without being counted.
+Four failure types are distinguished in `ExtractionFailure` and counted as separate metric labels: `AnchorDecode` (a payload shorter than an instruction discriminator, or a tagged one too short to hold an event discriminator), `Borsh` (schema mismatch), `Translation` (invalid enum value), `EventIndexOverflow` (a payload past the last number an `event_index` can hold). A payload of at least 8 bytes that does not start with `EVENT_IX_TAG` is an ordinary instruction to the program, and is skipped without being counted.
 
 ## The `SignalDetector` trait
 
@@ -330,11 +330,11 @@ anything partial puts two conventions in one struct.
 ## Tests
 
 ```bash
-cargo test -p yog-core                      # unit + fixture tests
+cargo test -p yog-core                      # unit tests; the fixture suites run in yog-indexer
 cargo test -p yog-core extraction           # extraction only
 ```
 
-Fixture transactions for the extraction pipeline live under `core/tests/fixtures/` — one real mainnet transaction per recognized event kind.
+Fixture transactions for the extraction pipeline live under `core/tests/fixtures/` — real mainnet transactions, read by `yog-indexer`'s suites. `EvtUpdateRewardDuration`, `EvtUpdateRewardFunder`, `EvtWithdrawDeadLiquidityReward` and `EvtSetPoolStatus` have none: their tests use fabricated payloads.
 
 ### Real pool accounts, and why they earn their place
 
