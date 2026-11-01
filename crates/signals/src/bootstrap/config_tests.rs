@@ -3,8 +3,8 @@ use std::sync::Mutex;
 
 use super::*;
 
-/// Held by every test in this file that writes the environment; poison is stepped over, the
-/// panicking test having already failed.
+/// Held by `load_with` while it writes the environment; poison is stepped over, the panicking test
+/// having already failed.
 static ENV: Mutex<()> = Mutex::new(());
 
 const OPTIONAL: [&str; 22] = [
@@ -34,8 +34,9 @@ const OPTIONAL: [&str; 22] = [
 
 /// `Config::load` with the required URL, `set`, and no other optional variable.
 fn load_with(set: &[(&str, &str)]) -> Result<Config, ConfigError> {
-    // SAFETY: `ENV` is held by the caller, and no other code of this binary reads the environment
-    // while its tests run.
+    let _env = ENV.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    // SAFETY: `set_var` is unsound while another thread reads the environment; `ENV` serialises the
+    // writers, and no other test of this crate reads it directly.
     unsafe {
         for key in OPTIONAL {
             env::remove_var(key);
@@ -52,10 +53,9 @@ fn hours(n: u64) -> Duration {
     Duration::from_secs(n * 3600)
 }
 
-/// Mutation: a default changed, of any kind, or one read in the wrong unit.
+/// Mutation: a detector's default changed, or read in the wrong unit.
 #[test]
 fn without_a_variable_each_setting_has_its_default() {
-    let _env = ENV.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let config = load_with(&[]).expect("the defaults load");
 
     let flow = config.flow_imbalance_settings();
@@ -88,7 +88,6 @@ fn without_a_variable_each_setting_has_its_default() {
 /// hours read as seconds.
 #[test]
 fn each_variable_reaches_the_setting_of_its_detector() {
-    let _env = ENV.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let config = load_with(&[
         ("SIGNALS_FLOW_INTERVAL_SECS", "101"),
         ("SIGNALS_FLOW_WINDOW_HOURS", "102"),
@@ -138,10 +137,24 @@ fn each_variable_reaches_the_setting_of_its_detector() {
     assert_eq!(tvl.critical, Decimal::new(32, 2));
 }
 
+/// Mutation: the trim removed, or an unreadable value falling back to the default without a word.
+#[test]
+fn a_decimal_is_read_past_a_crlf_and_refused_when_unreadable() {
+    let config = load_with(&[("SIGNALS_FLOW_THRESHOLD", "0.33\r")]).expect("a CRLF `.env` loads");
+    assert_eq!(
+        config.flow_imbalance_settings().threshold,
+        Decimal::new(33, 2)
+    );
+
+    match load_with(&[("SIGNALS_FLOW_THRESHOLD", "abc")]) {
+        Err(ConfigError::InvalidValue { key, .. }) => assert_eq!(key, "SIGNALS_FLOW_THRESHOLD"),
+        other => panic!("expected a refusal, got {other:?}"),
+    }
+}
+
 /// Mutation: one of the three `validate_ladder` removed, or quoting another detector's variable.
 #[test]
 fn a_threshold_reaching_its_critical_is_refused_under_its_own_variable() {
-    let _env = ENV.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     for (threshold_key, critical_key) in [
         ("SIGNALS_FLOW_THRESHOLD", "SIGNALS_FLOW_CRITICAL"),
         (
