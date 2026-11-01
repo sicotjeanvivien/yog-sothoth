@@ -183,3 +183,73 @@ async fn the_change_of_one_protocol_is_its_own(pool: PgPool) {
     assert_eq!(changes.len(), 1);
     assert_eq!(changes[0].protocol, Protocol::MeteoraDammV2);
 }
+
+async fn tvl_hours(pool: &PgPool, table: &str) -> Vec<(String, DateTime<Utc>)> {
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT protocol, bucket FROM {table} ORDER BY protocol, bucket"
+    )))
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+/// The four hours 050 removes, each with the value it stays at.
+fn false_hours() -> [(DateTime<Utc>, i64); 4] {
+    [
+        ("2026-10-27T10:00:00Z".parse().unwrap(), 41_000_000),
+        ("2026-10-27T21:00:00Z".parse().unwrap(), 37_000_000),
+        ("2026-10-30T21:00:00Z".parse().unwrap(), 35_500_000),
+        ("2026-10-31T10:00:00Z".parse().unwrap(), 32_000_000),
+    ]
+}
+
+/// Mutation: 050 forgetting an hour, reading another protocol or a neighbouring hour, or leaving
+/// a discovered row of an hour.
+#[sqlx::test(migrations = false)]
+async fn migration_050_removes_the_false_hours_alone(pool: PgPool) {
+    let migrator = sqlx::migrate!("./migrations");
+    migrator.run_to(49, &pool).await.unwrap();
+    for (hour, bound) in false_hours() {
+        insert_tvl(&pool, DAMM, hour, bound - 1).await;
+        for period in ["24h", "7d", "30d"] {
+            insert_discovered(&pool, DAMM, period, hour, 1).await;
+        }
+    }
+    let (last, bound) = false_hours()[3];
+    let next = last + Duration::hours(1);
+    insert_tvl(&pool, DAMM, next, bound - 1).await;
+    insert_discovered(&pool, DAMM, "24h", next, 1).await;
+    insert_tvl(&pool, DLMM, last, bound - 1).await;
+    insert_discovered(&pool, DLMM, "24h", last, 1).await;
+
+    migrator.run_to(50, &pool).await.unwrap();
+
+    let left = vec![(DAMM.to_owned(), next), (DLMM.to_owned(), last)];
+    assert_eq!(tvl_hours(&pool, "analytic_protocol_tvl").await, left);
+    assert_eq!(
+        tvl_hours(&pool, "analytic_protocol_tvl_discovered").await,
+        left
+    );
+}
+
+/// Mutation: 050 without its bounds, or one raised — a true reading of those hours deleted.
+#[sqlx::test(migrations = false)]
+async fn migration_050_keeps_a_reading_at_or_above_its_bound(pool: PgPool) {
+    let migrator = sqlx::migrate!("./migrations");
+    migrator.run_to(49, &pool).await.unwrap();
+    for (hour, bound) in false_hours() {
+        insert_tvl(&pool, DAMM, hour, bound).await;
+        insert_discovered(&pool, DAMM, "24h", hour, 1).await;
+    }
+
+    migrator.run_to(50, &pool).await.unwrap();
+
+    let left: Vec<_> = false_hours()
+        .map(|(hour, _)| (DAMM.to_owned(), hour))
+        .to_vec();
+    assert_eq!(tvl_hours(&pool, "analytic_protocol_tvl").await, left);
+    assert_eq!(
+        tvl_hours(&pool, "analytic_protocol_tvl_discovered").await,
+        left
+    );
+}

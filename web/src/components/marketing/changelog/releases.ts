@@ -44,6 +44,10 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
+            text: "The TVL curve no longer shows four false drops between 27 and 31 October, the lowest to $31.93M: those hours are removed.",
+            technical: false,
+          },
+          {
             text: "TimescaleDB's jobs give up on a lock after 3 s and are retried, instead of queueing every read of the chunk behind them for as long as the pg_dump lasts.",
             technical: true,
           },
