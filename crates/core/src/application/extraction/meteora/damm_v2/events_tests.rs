@@ -144,7 +144,7 @@ fn set_pool_status_layout_is_pinned() {
 }
 
 /// No capture would catch a misspelled name: its event would land in `unknown`, never stored.
-/// Mutation: a typo in `compute_discriminator`'s name. The bytes are `sha256("event:<name>")[..8]`.
+/// Mutation: a typo in `compute_discriminator`'s name.
 #[test]
 fn the_discriminators_of_the_events_without_a_capture_are_pinned() {
     assert_eq!(

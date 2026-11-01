@@ -1,5 +1,4 @@
 //! The decoder on fabricated payloads: the type that comes out, and how an unreadable one counts.
-//! ⚠️ Fabricated: a mirror that misreads cp-amm passes here, only a captured transaction fails it.
 
 use chrono::DateTime;
 use solana_signature::Signature;
@@ -354,5 +353,14 @@ fn the_payload_past_the_last_index_is_a_failure_and_not_a_truncated_index() {
         ),
         "{:?}",
         domain.failures
+    );
+    assert!(
+        matches!(
+            domain.events.as_slice(),
+            [DomainEvent::MeteoraDammV2(MeteoraDammV2Event::SetPoolStatus(e))]
+                if e.event_index == u16::MAX
+        ),
+        "{:?}",
+        domain.events
     );
 }
