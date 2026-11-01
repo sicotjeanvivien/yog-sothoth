@@ -12,7 +12,7 @@ fn pk(seed: u8) -> Pubkey {
 fn account(seed: u8) -> Value {
     json!({
         "data": [base64::engine::general_purpose::STANDARD.encode([seed; 4]), "base64"],
-        "owner": pk(seed.wrapping_add(100)).to_string(),
+        "owner": pk(seed + 100).to_string(),
     })
 }
 
@@ -116,6 +116,11 @@ async fn a_refused_call_is_an_http_error() {
             matches!(refused, Err(SourceError::Http(_))),
             "{status}: {refused:?}"
         );
+        assert_eq!(
+            provider.requests().len(),
+            1,
+            "the request reached the server"
+        );
     }
 }
 
@@ -134,7 +139,7 @@ async fn an_rpc_error_is_a_decode_error() {
     );
 }
 
-/// Pinned as it is: unlike Helius, a failed batch fails the whole call, and the worker retries.
+/// Pinned as it is: unlike Helius, a failed batch fails the whole call.
 /// Mutation: a failed batch skipped.
 #[tokio::test]
 async fn a_failed_batch_fails_the_whole_call() {
@@ -149,6 +154,11 @@ async fn a_failed_batch_fails_the_whole_call() {
     let failed = client.fetch_accounts(&addresses).await;
 
     assert!(matches!(failed, Err(SourceError::Http(_))), "{failed:?}");
+    assert_eq!(
+        provider.requests().len(),
+        2,
+        "both requests reached the server"
+    );
 }
 
 /// An answer shorter than the request loses the addresses past its end: absent, retried next cycle.
