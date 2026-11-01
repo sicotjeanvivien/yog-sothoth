@@ -12,7 +12,7 @@ fn wire(kind: LastEventKind, value: PoolValue) -> serde_json::Value {
             last_event_kind: kind,
             reserve_a: 1,
             reserve_b: 2,
-            last_swap_at: None,
+            last_swap_at: Some(Utc.with_ymd_and_hms(2026, 10, 25, 11, 0, 0).unwrap()),
         },
         value,
     ))
@@ -35,7 +35,7 @@ fn each_value_of_the_state_is_under_its_name() {
             "lastEventKind": "swap",
             "reserveA": "1",
             "reserveB": "2",
-            "lastSwapAt": null,
+            "lastSwapAt": "2026-10-25T11:00:00Z",
             "valueAUsd": "3",
             "valueBUsd": "4",
             "tvlUsd": "5",
@@ -46,9 +46,20 @@ fn each_value_of_the_state_is_under_its_name() {
 /// Mutation: a side without a price answered as 0 — a pool not valued said to be worth nothing.
 #[test]
 fn an_unvalued_pool_stays_null() {
-    let state = wire(LastEventKind::LiquidityAdd, PoolValue::default());
+    let state = wire(LastEventKind::Swap, PoolValue::default());
 
     assert_eq!(state["valueAUsd"], serde_json::Value::Null);
+    assert_eq!(state["valueBUsd"], serde_json::Value::Null);
     assert_eq!(state["tvlUsd"], serde_json::Value::Null);
-    assert_eq!(state["lastEventKind"], "liquidity_add");
+}
+
+/// Mutation: a kind mapped to another — a withdrawal published as a deposit.
+#[test]
+fn each_last_event_is_said() {
+    for (kind, tag) in [
+        (LastEventKind::LiquidityAdd, "liquidity_add"),
+        (LastEventKind::LiquidityRemove, "liquidity_remove"),
+    ] {
+        assert_eq!(wire(kind, PoolValue::default())["lastEventKind"], tag);
+    }
 }

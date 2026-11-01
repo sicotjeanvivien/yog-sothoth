@@ -16,7 +16,7 @@ fn a_pools_bar_says_its_start_and_its_activity() {
             fees_usd: Some(Decimal::from(3)),
             lp_fees_usd: Some(Decimal::from(4)),
             protocol_fees_usd: Some(Decimal::from(5)),
-            referral_fees_usd: None,
+            referral_fees_usd: Some(Decimal::from(8)),
             pool_hours: 6,
             pool_hours_valued: 7,
         },
@@ -31,7 +31,7 @@ fn a_pools_bar_says_its_start_and_its_activity() {
             "feesUsd": "3",
             "lpFeesUsd": "4",
             "protocolFeesUsd": "5",
-            "referralFeesUsd": null,
+            "referralFeesUsd": "8",
             "poolHours": 6,
             "poolHoursValued": 7,
         })

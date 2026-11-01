@@ -39,4 +39,9 @@ fn an_unknown_part_stays_null() {
 
     assert_eq!(bar["inRunsUsd"], serde_json::Value::Null);
     assert_eq!(bar["outsideRunsUsd"], serde_json::Value::Null);
+
+    let unvalued = wire(None, Some(Decimal::from(2)));
+
+    assert_eq!(unvalued["volumeUsd"], serde_json::Value::Null);
+    assert_eq!(unvalued["outsideRunsUsd"], serde_json::Value::Null);
 }

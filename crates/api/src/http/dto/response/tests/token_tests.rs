@@ -183,23 +183,18 @@ fn price_provider_matches_the_domain() {
     }
 }
 
-/// Mutation: the price or its instant dropped, or the source misnamed.
+/// Mutation: the price or its instant dropped, the source misnamed, or the confidence served.
 #[test]
 fn a_price_says_its_value_source_and_instant() {
-    let price = super::price_response::TokenPriceResponse::from(domain::TokenPrice {
-        mint: Pubkey::new_from_array([1; 32]),
-        price_usd: rust_decimal::Decimal::from(2),
-        price_provider: domain::PriceProvider::Jupiter,
-        confidence: None,
-        fetched_at: Utc.with_ymd_and_hms(2026, 10, 25, 12, 0, 0).unwrap(),
-    });
+    let price = crate::testing::make_price(Pubkey::new_from_array([1; 32]));
+    let fetched_at = price.fetched_at;
 
     assert_eq!(
-        serde_json::to_value(price).unwrap(),
+        serde_json::to_value(super::price_response::TokenPriceResponse::from(price)).unwrap(),
         serde_json::json!({
-            "usd": "2",
-            "provider": "jupiter",
-            "fetchedAt": "2026-10-25T12:00:00Z",
+            "usd": "100",
+            "provider": "helius",
+            "fetchedAt": fetched_at,
         })
     );
 }

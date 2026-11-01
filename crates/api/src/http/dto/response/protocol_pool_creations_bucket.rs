@@ -26,3 +26,7 @@ impl From<ProtocolBucket<PoolCreations>> for ProtocolPoolCreationsBucketResponse
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/protocol_pool_creations_bucket_tests.rs"]
+mod tests;
