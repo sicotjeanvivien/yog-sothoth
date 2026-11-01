@@ -1,5 +1,6 @@
 use std::future::Future;
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Duration;
 
 use metrics_util::debugging::{DebugValue, DebuggingRecorder};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -38,6 +39,10 @@ fn a_url_that_cannot_take_a_path_is_refused() {
 
 const SECRET: &str = "0b7c5a1e-1111-2222-3333-444455556666";
 const UNDELIVERED: &str = "test_heartbeat_undelivered_total";
+const SETTINGS: HeartbeatSettings = HeartbeatSettings {
+    variable: "TEST_HEARTBEAT_URL",
+    undelivered_counter: UNDELIVERED,
+};
 
 /// Held by every test that reaches the warning of `deliver`.
 /// ⚠️ A log site first reached on a thread with no subscriber, while another thread's is the only
@@ -64,7 +69,10 @@ async fn check_answering(status: u16) -> (String, JoinHandle<Received>) {
         .expect("a local port");
     let port = listener.local_addr().expect("its address").port();
     let received = tokio::spawn(async move {
-        let (mut socket, _) = listener.accept().await.expect("the signal arrives");
+        let (mut socket, _) = tokio::time::timeout(Duration::from_secs(10), listener.accept())
+            .await
+            .expect("the signal arrives")
+            .expect("the connection opens");
         let mut raw = Vec::new();
         let mut chunk = [0u8; 1024];
         let (head, length) = loop {
@@ -100,24 +108,13 @@ async fn check_answering(status: u16) -> (String, JoinHandle<Received>) {
     (format!("http://127.0.0.1:{port}/{SECRET}"), received)
 }
 
-/// A URL nothing listens on: the port is released before the signal is sent.
-async fn unreachable_check() -> String {
-    let listener = TcpListener::bind("127.0.0.1:0")
-        .await
-        .expect("a local port");
-    let port = listener.local_addr().expect("its address").port();
-    format!("http://127.0.0.1:{port}/{SECRET}")
+/// A URL nothing listens on: port 1 is below the range a test's listener is given.
+fn unreachable_check() -> String {
+    format!("http://127.0.0.1:1/{SECRET}")
 }
 
 fn heartbeat(url: &str) -> HealthchecksHeartbeat {
-    HealthchecksHeartbeat::new(
-        SecretUrl::new(url),
-        HeartbeatSettings {
-            variable: "TEST_HEARTBEAT_URL",
-            undelivered_counter: UNDELIVERED,
-        },
-    )
-    .expect("the URL takes `/fail`")
+    HealthchecksHeartbeat::new(SecretUrl::new(url), SETTINGS).expect("the URL takes `/fail`")
 }
 
 /// Drives `body` under a thread-local recorder, on a runtime of this thread, and returns what it
@@ -224,14 +221,12 @@ fn a_signal_the_check_refuses_is_counted_under_its_kind() {
 fn a_signal_that_finds_no_check_is_counted_under_its_kind() {
     let _alone = warning_alone();
     let (_, counted) = counting(async {
-        heartbeat(&unreachable_check().await).report_success().await;
+        heartbeat(&unreachable_check()).report_success().await;
     });
     assert_eq!(counted, one("success"));
 
     let (_, counted) = counting(async {
-        heartbeat(&unreachable_check().await)
-            .report_failure("late")
-            .await;
+        heartbeat(&unreachable_check()).report_failure("late").await;
     });
     assert_eq!(counted, one("failure"));
 }
@@ -241,20 +236,17 @@ fn a_signal_that_finds_no_check_is_counted_under_its_kind() {
 fn a_url_that_cannot_take_fail_is_refused_without_being_quoted() {
     let refused = HealthchecksHeartbeat::new(
         SecretUrl::new(format!("mailto:{SECRET}@example.com")),
-        HeartbeatSettings {
-            variable: "TEST_HEARTBEAT_URL",
-            undelivered_counter: UNDELIVERED,
-        },
+        SETTINGS,
     )
     .err()
     .expect("a refusal")
     .to_string();
 
-    assert!(refused.contains("TEST_HEARTBEAT_URL"), "{refused}");
+    assert!(refused.contains(SETTINGS.variable), "{refused}");
+    assert!(refused.contains("`/fail`"), "{refused}");
     assert!(!refused.contains(SECRET), "{refused}");
 }
 
-/// Everything logged while `body` runs on this thread.
 #[derive(Clone, Default)]
 struct Logged(Arc<Mutex<Vec<u8>>>);
 
@@ -268,10 +260,8 @@ impl std::io::Write for Logged {
     }
 }
 
-/// Mutation: `scrub` removed from the warning; `reqwest` quotes the URL, and the URL is the secret.
-#[test]
-fn an_undelivered_signal_keeps_the_secret_out_of_the_log() {
-    let _alone = warning_alone();
+/// What `report_failure` logs when the check at `suffix` refuses the signal.
+fn logged_for_a_refused_failure(suffix: &str) -> String {
     let logged = Logged::default();
     let writer = logged.clone();
     let subscriber = tracing_subscriber::fmt()
@@ -282,12 +272,25 @@ fn an_undelivered_signal_keeps_the_secret_out_of_the_log() {
     tracing::subscriber::with_default(subscriber, || {
         counting(async {
             let (url, received) = check_answering(500).await;
-            heartbeat(&url).report_failure("late").await;
+            heartbeat(&format!("{url}{suffix}"))
+                .report_failure("late")
+                .await;
             received.await.expect("the local check");
         })
     });
 
     let text = String::from_utf8_lossy(&logged.0.lock().expect("the log")).to_string();
-    assert!(text.contains("could not be delivered"), "{text}");
-    assert!(!text.contains(SECRET), "{text}");
+    text
+}
+
+/// Mutation: `scrub` removed from the warning, or reduced to the whole URL, which a slug check's
+/// `/fail` no longer contains: `reqwest` quotes the URL, and the URL is the secret.
+#[test]
+fn an_undelivered_signal_keeps_the_secret_out_of_the_log() {
+    let _alone = warning_alone();
+    for suffix in ["", "/yog-archive?create=1"] {
+        let text = logged_for_a_refused_failure(suffix);
+        assert!(text.contains("could not be delivered"), "{text}");
+        assert!(!text.contains(SECRET), "{text}");
+    }
 }
