@@ -39,7 +39,7 @@ fn event() -> MeteoraDammV2ClaimPositionFeeEvent {
 
 /// Mutation: two binds of one type exchanged — the fee in A written as the fee in B, and it
 /// compiles.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test]
 async fn each_value_is_written_to_its_column(pool: PgPool) {
     let repo = PgMeteoraDammV2ClaimPositionFeeEventRepository::new(pool.clone());
 
@@ -72,7 +72,7 @@ async fn each_value_is_written_to_its_column(pool: PgPool) {
 }
 
 /// Mutation: the `ON CONFLICT` dropped — a replayed transaction fails instead of being skipped.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test]
 async fn a_replayed_event_is_skipped(pool: PgPool) {
     let repo = PgMeteoraDammV2ClaimPositionFeeEventRepository::new(pool.clone());
 
@@ -87,4 +87,29 @@ async fn a_replayed_event_is_skipped(pool: PgPool) {
             .await
             .unwrap();
     assert_eq!(rows, 1);
+}
+
+/// Mutation: `event_index` out of the conflict's key — the second claim of one transaction skipped
+/// as a replay, and its amount lost.
+#[sqlx::test]
+async fn two_claims_of_one_transaction_are_both_written(pool: PgPool) {
+    let repo = PgMeteoraDammV2ClaimPositionFeeEventRepository::new(pool.clone());
+    let second = MeteoraDammV2ClaimPositionFeeEvent {
+        event_index: 10,
+        ..event()
+    };
+
+    let first = repo.insert(&event()).await.unwrap();
+    let other = repo.insert(&second).await.unwrap();
+
+    assert_eq!(
+        (first, other),
+        (InsertOutcome::Inserted, InsertOutcome::Inserted)
+    );
+    let rows: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM meteora_damm_v2_claim_position_fee_events")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(rows, 2);
 }
