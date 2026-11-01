@@ -316,7 +316,10 @@ cargo run -p yog-signals
    SELECT … TO yog_signals`, slim repo in `persistence`).
 2. Name its tag in `yog-core` (`domain/signals/model.rs`) and give it its unit in
    `SignalValueUnit::of`: a tag left out is served as `raw`, without any error.
-3. Wire it in `bootstrap/daemon.rs` with its concrete `Pg*` repos and its
-   config block — a new loop joins the `JoinSet`; the engine is untouched.
+3. Add its variables and a settings function to `bootstrap/config.rs`, with their
+   cases in `config_tests.rs`, list the variables in `.env.example` and in the
+   `environment:` block of `docker-compose.yml`, which names each one, then wire it in
+   `bootstrap/daemon.rs` with its concrete
+   `Pg*` repos — a new loop joins the `JoinSet`; the engine is untouched.
 4. Unit-test the decision function against synthetic snapshots (see
    `*_tests.rs` next to each detector).

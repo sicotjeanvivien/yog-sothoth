@@ -7,6 +7,10 @@ use chrono::Duration as ChronoDuration;
 use rust_decimal::Decimal;
 use yog_bootstrap::{ConfigError, SecretUrl, duration_var, required_secret_url};
 
+use crate::application::detectors::{
+    FlowImbalanceSettings, PriceOracleDeviationSettings, TvlDrainSettings,
+};
+
 mod types;
 
 pub(crate) use types::MaterializationAlarmConfig;
@@ -62,61 +66,61 @@ pub(crate) struct Config {
     pub(crate) database_url: SecretUrl,
 
     /// Flow-imbalance detector cadence.
-    pub(crate) flow_interval: Duration,
+    flow_interval: Duration,
 
     /// Flow-imbalance aggregation window.
-    pub(crate) flow_window: ChronoDuration,
+    flow_window: ChronoDuration,
 
     /// Flow-imbalance rolling per-pool suppression window.
-    pub(crate) flow_cooldown: Duration,
+    flow_cooldown: Duration,
 
     /// Flow-imbalance volume floor, in USD.
-    pub(crate) flow_min_volume_usd: Decimal,
+    flow_min_volume_usd: Decimal,
 
     /// `|imbalance|` at or above which a signal is emitted.
-    pub(crate) flow_threshold: Decimal,
+    flow_threshold: Decimal,
 
     /// `|imbalance|` at or above which the signal escalates to Critical.
-    pub(crate) flow_critical: Decimal,
+    flow_critical: Decimal,
 
     /// Price-oracle-deviation detector cadence.
-    pub(crate) price_deviation_interval: Duration,
+    price_deviation_interval: Duration,
 
     /// Price-oracle-deviation rolling per-pool suppression window.
-    pub(crate) price_deviation_cooldown: Duration,
+    price_deviation_cooldown: Duration,
 
     /// Oldest acceptable oracle price observation.
-    pub(crate) price_deviation_max_price_age: ChronoDuration,
+    price_deviation_max_price_age: ChronoDuration,
 
     /// Oldest acceptable last swap.
-    pub(crate) price_deviation_max_spot_age: ChronoDuration,
+    price_deviation_max_spot_age: ChronoDuration,
 
     /// Price-oracle-deviation TVL floor, in USD.
-    pub(crate) price_deviation_min_tvl_usd: Decimal,
+    price_deviation_min_tvl_usd: Decimal,
 
     /// `|deviation|` at or above which a signal is emitted.
-    pub(crate) price_deviation_threshold: Decimal,
+    price_deviation_threshold: Decimal,
 
     /// `|deviation|` at or above which the signal escalates to Critical.
-    pub(crate) price_deviation_critical: Decimal,
+    price_deviation_critical: Decimal,
 
     /// TVL-drain detector cadence.
-    pub(crate) tvl_drain_interval: Duration,
+    tvl_drain_interval: Duration,
 
     /// TVL-drain aggregation window.
-    pub(crate) tvl_drain_window: ChronoDuration,
+    tvl_drain_window: ChronoDuration,
 
     /// TVL-drain rolling per-pool suppression window.
-    pub(crate) tvl_drain_cooldown: Duration,
+    tvl_drain_cooldown: Duration,
 
     /// TVL-drain starting-TVL floor, in USD.
-    pub(crate) tvl_drain_min_tvl_usd: Decimal,
+    tvl_drain_min_tvl_usd: Decimal,
 
     /// Drain ratio at or above which a signal is emitted.
-    pub(crate) tvl_drain_threshold: Decimal,
+    tvl_drain_threshold: Decimal,
 
     /// Drain ratio at or above which the signal escalates to Critical.
-    pub(crate) tvl_drain_critical: Decimal,
+    tvl_drain_critical: Decimal,
 
     /// The materialisation alarm: its cadence, its limit and its check.
     pub(crate) materialization_alarm: MaterializationAlarmConfig,
@@ -221,6 +225,43 @@ impl Config {
         )?;
 
         Ok(config)
+    }
+
+    /// The flow-imbalance detector's settings.
+    pub(crate) fn flow_imbalance_settings(&self) -> FlowImbalanceSettings {
+        FlowImbalanceSettings {
+            window: self.flow_window,
+            interval: self.flow_interval,
+            cooldown: self.flow_cooldown,
+            min_volume_usd: self.flow_min_volume_usd,
+            threshold: self.flow_threshold,
+            critical: self.flow_critical,
+        }
+    }
+
+    /// The price-oracle-deviation detector's settings.
+    pub(crate) fn price_oracle_deviation_settings(&self) -> PriceOracleDeviationSettings {
+        PriceOracleDeviationSettings {
+            interval: self.price_deviation_interval,
+            cooldown: self.price_deviation_cooldown,
+            max_price_age: self.price_deviation_max_price_age,
+            max_spot_age: self.price_deviation_max_spot_age,
+            min_tvl_usd: self.price_deviation_min_tvl_usd,
+            threshold: self.price_deviation_threshold,
+            critical: self.price_deviation_critical,
+        }
+    }
+
+    /// The TVL-drain detector's settings.
+    pub(crate) fn tvl_drain_settings(&self) -> TvlDrainSettings {
+        TvlDrainSettings {
+            window: self.tvl_drain_window,
+            interval: self.tvl_drain_interval,
+            cooldown: self.tvl_drain_cooldown,
+            min_tvl_usd: self.tvl_drain_min_tvl_usd,
+            threshold: self.tvl_drain_threshold,
+            critical: self.tvl_drain_critical,
+        }
     }
 }
 
