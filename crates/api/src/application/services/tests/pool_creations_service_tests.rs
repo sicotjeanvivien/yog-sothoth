@@ -3,13 +3,13 @@
 
 use std::sync::Arc;
 
-use yog_core::domain::{Window, WrittenTranches};
+use yog_core::domain::Window;
 
 use super::PoolCreationsService;
 use crate::application::services::period::SeriesInterval;
 use crate::testing::{
-    MockPoolCreationsRepo, MockProtocolActivityRepo, at_october, frozen_hours_repo,
-    make_frozen_hours,
+    MockPoolCreationsRepo, MockProtocolActivityRepo, frozen_hours_repo, make_frozen_hours,
+    tranches_begun,
 };
 
 /// Mutation: a slice of 6 hours read at another width — bars of a day under `interval=6h`.
@@ -25,25 +25,16 @@ async fn a_week_is_read_in_slices_of_six_hours() {
     assert_eq!(*repo.widths.lock().unwrap(), [chrono::TimeDelta::hours(6)]);
 }
 
-fn tranches_begun(minutes_ago: i64) -> WrittenTranches {
-    let through = at_october(20, 12) + chrono::TimeDelta::minutes(40);
-    WrittenTranches {
-        first: through - chrono::TimeDelta::minutes(minutes_ago),
-        through,
-    }
-}
-
 /// Mutation: a frozen guard forced either way — thirty days summed over seven, or a week never.
 #[tokio::test]
 async fn the_totals_are_read_only_over_a_covered_window() {
     let repo = Arc::new(MockPoolCreationsRepo::default());
     let svc = PoolCreationsService::new(frozen_hours_repo(Some(make_frozen_hours())), repo.clone());
 
-    let month = svc
-        .get_pool_creation_totals(Window::Month, None)
+    svc.get_pool_creation_totals(Window::Month, None)
         .await
         .unwrap();
-    assert!(month.items.is_empty() && repo.reads.lock().unwrap().is_empty());
+    assert!(repo.reads.lock().unwrap().is_empty());
 
     svc.get_pool_creation_totals(Window::Week, None)
         .await

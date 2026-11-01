@@ -454,8 +454,7 @@ async fn an_offset_read_is_not_late_for_being_moved_back() {
     assert!(body.contains("\"late\":false"), "{body}");
 }
 
-/// Mutation: a pool's route calling another read, or refusing a known pool — its totals or its
-/// series answered with something else.
+/// Mutation: a pool's route calling another read, or refusing a known pool.
 #[tokio::test]
 async fn a_known_pools_totals_and_series_are_served() {
     for (query, read) in [
@@ -482,6 +481,11 @@ async fn a_known_pools_totals_and_series_are_served() {
         let (status, _, body) = call_on(state, Method::GET, &uri).await;
 
         assert_eq!(status, StatusCode::OK, "{uri}: {body}");
-        assert_eq!(repo.reads.lock().unwrap()[0].0, read, "{uri}");
+        let reads = repo.reads.lock().unwrap();
+        assert_eq!(
+            reads.iter().map(|r| r.0).collect::<Vec<_>>(),
+            [read],
+            "{uri}"
+        );
     }
 }

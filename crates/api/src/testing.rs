@@ -427,8 +427,8 @@ impl ProtocolActivityLookup for MockProtocolActivityRepo {
     }
 }
 
-/// A `TokenActivityFeed` whose last ranking was written at `ranked_at`, `None`
-/// for none: it records each window read and answers an empty page of it.
+/// A `TokenActivityFeed` ranked at `ranked_at`, `None` before a ranking: `list` serves `items`,
+/// `list_in_tranches` an empty page. It records each read.
 #[derive(Default)]
 pub(crate) struct MockTokenActivityRepo {
     pub(crate) ranked_at: Option<DateTime<Utc>>,
@@ -787,12 +787,22 @@ pub(crate) fn make_frozen_hours() -> FrozenHours {
     }
 }
 
+/// Tranches begun `minutes_ago` before their last, at 20 October 12:40: under an hour is not covered.
+pub(crate) fn tranches_begun(minutes_ago: i64) -> WrittenTranches {
+    let through = at_october(20, 12) + TimeDelta::minutes(40);
+    WrittenTranches {
+        first: through - TimeDelta::minutes(minutes_ago),
+        through,
+    }
+}
+
 /// The frozen hours `frozen` answers, the only read the produced-resource services make of it.
 pub(crate) fn frozen_hours_repo(frozen: Option<FrozenHours>) -> Arc<MockProtocolActivityRepo> {
     Arc::new(MockProtocolActivityRepo::new(frozen))
 }
 
-/// A `SwapActivityLookup` that answers nothing and records the period and the scope of each read.
+/// A `SwapActivityLookup` answering `totals` to the totals reads and nothing else; it records the
+/// period and the scope of each read.
 #[derive(Default)]
 pub(crate) struct MockSwapActivityRepo {
     pub(crate) totals: Vec<ProtocolSwapActivity>,
@@ -1227,7 +1237,7 @@ impl LiquidityMoveLookup for MockLiquidityMoveRepo {
     }
 }
 
-/// A `ProtocolTvlLookup` that answers nothing and records the instant and the scope of each read.
+/// A `ProtocolTvlLookup` answering `latest` to `list_latest` and nothing else; it records each read.
 #[derive(Default)]
 pub(crate) struct MockProtocolTvlRepo {
     pub(crate) latest: Vec<ProtocolTvl>,

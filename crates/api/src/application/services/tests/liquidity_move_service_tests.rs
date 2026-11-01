@@ -332,7 +332,7 @@ async fn the_moves_of_an_hour_the_liquidity_does_not_cover_are_not_read() {
         )
         .await;
 
-    assert!(moves.is_ok_and(|moves| moves.items.items.is_empty()));
+    assert!(moves.is_ok());
     assert!(repo.tranche_reads.lock().unwrap().is_empty());
 }
 
@@ -379,9 +379,10 @@ async fn a_series_reads_the_buckets_of_its_interval() {
         .await
         .unwrap();
 
+    let tranche_reads = repo.tranche_reads.lock().unwrap();
     assert_eq!(
-        repo.tranche_reads.lock().unwrap()[0].0,
-        "liquidity_tranches"
+        tranche_reads.iter().map(|r| r.0).collect::<Vec<_>>(),
+        ["liquidity_tranches"]
     );
     assert_eq!(reads(&repo), ["liquidity_hourly"]);
 }

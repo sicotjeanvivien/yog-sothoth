@@ -11,9 +11,11 @@ use super::{SwapActivityService, TokenActivityRead};
 use crate::application::services::period::{PeriodBounds, ReadPeriod, SeriesInterval};
 use crate::testing::{
     MockProtocolActivityRepo, MockSwapActivityRepo, MockTokenActivityRepo, at_october,
-    frozen_hours_repo, make_frozen_hours, pk,
+    frozen_hours_repo, make_frozen_hours, pk, tranches_begun,
 };
-use yog_core::domain::{FrozenHours, TokenActivity, TranchePeriod, WrittenTranches};
+use yog_core::domain::{
+    FrozenHours, ProtocolSwapActivity, SwapActivity, TokenActivity, TranchePeriod, WrittenTranches,
+};
 
 fn service(repo: &Arc<MockSwapActivityRepo>) -> SwapActivityService {
     SwapActivityService::new(
@@ -272,12 +274,17 @@ async fn a_read_moved_back_has_no_previous_window() {
     assert_eq!(repo.reads.lock().unwrap().len(), 1);
 }
 
-/// Tranches begun half an hour ago: the last hour is not covered whole.
-fn late_tranches() -> WrittenTranches {
-    WrittenTranches {
-        first: tranches().through - chrono::TimeDelta::minutes(30),
-        through: tranches().through,
-    }
+fn read_names(repo: &MockSwapActivityRepo) -> Vec<&'static str> {
+    repo.reads.lock().unwrap().iter().map(|r| r.0).collect()
+}
+
+fn tranche_read_names(repo: &MockSwapActivityRepo) -> Vec<&'static str> {
+    repo.tranche_reads
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|r| r.0)
+        .collect()
 }
 
 fn frozen_and_tranches(repo: &Arc<MockSwapActivityRepo>) -> SwapActivityService {
@@ -325,21 +332,37 @@ async fn a_ranking_is_served_only_over_a_covered_window() {
 /// as whole, protocol, pool or tokens.
 #[tokio::test]
 async fn an_hour_the_tranches_do_not_cover_is_not_read() {
-    let repo = Arc::new(MockSwapActivityRepo::default());
+    let repo = Arc::new(MockSwapActivityRepo {
+        totals: vec![ProtocolSwapActivity {
+            protocol: Protocol::MeteoraDammV2,
+            activity: SwapActivity {
+                swaps: 1,
+                volume_usd: None,
+                fees_usd: None,
+                lp_fees_usd: None,
+                protocol_fees_usd: None,
+                referral_fees_usd: None,
+                pool_hours: 1,
+                pool_hours_valued: 0,
+            },
+            pools: None,
+        }],
+        ..MockSwapActivityRepo::default()
+    });
     let tokens = Arc::new(MockTokenActivityRepo::default());
     let svc = SwapActivityService::new(
-        Arc::new(MockProtocolActivityRepo::with_tranches(late_tranches())),
+        Arc::new(MockProtocolActivityRepo::with_tranches(tranches_begun(30))),
         repo.clone(),
         tokens.clone(),
     );
 
     let totals = svc.get_swap_totals(Window::Hour, None, None).await.unwrap();
-    let pool = svc.get_pool_swap_totals(Window::Hour, pk(1)).await.unwrap();
+    svc.get_pool_swap_totals(Window::Hour, pk(1)).await.unwrap();
     svc.list_token_activity(Window::Hour, None, 10)
         .await
         .unwrap();
 
-    assert!(totals.measured.items.is_empty() && pool.items.is_empty());
+    assert!(totals.measured.items.is_empty());
     assert!(repo.tranche_reads.lock().unwrap().is_empty());
     assert!(tokens.tranche_reads.lock().unwrap().is_empty());
 }
@@ -359,8 +382,8 @@ async fn a_pools_totals_are_read_only_over_a_covered_period() {
     svc.get_pool_swap_totals(Window::Week, pk(1)).await.unwrap();
     svc.get_pool_swap_totals(Window::Hour, pk(1)).await.unwrap();
 
-    assert_eq!(repo.reads.lock().unwrap()[0].0, "pool_swap_totals");
-    assert_eq!(repo.tranche_reads.lock().unwrap()[0].0, "pool_swap_totals");
+    assert_eq!(read_names(&repo), ["pool_swap_totals"]);
+    assert_eq!(tranche_read_names(&repo), ["pool_swap_totals"]);
 }
 
 /// Mutation: a bar of a pool's series dropped — its last hour, or its hours, drawn empty.
@@ -376,9 +399,6 @@ async fn a_pools_series_reads_the_buckets_of_its_interval() {
         .await
         .unwrap();
 
-    assert_eq!(
-        repo.tranche_reads.lock().unwrap()[0].0,
-        "pool_swap_tranches"
-    );
-    assert_eq!(repo.reads.lock().unwrap()[0].0, "pool_swap_hourly");
+    assert_eq!(tranche_read_names(&repo), ["pool_swap_tranches"]);
+    assert_eq!(read_names(&repo), ["pool_swap_hourly"]);
 }

@@ -2,16 +2,13 @@
 
 use std::sync::Arc;
 
-use chrono::TimeDelta;
 use rust_decimal::Decimal;
-use yog_core::domain::{
-    Protocol, ProtocolSwapActivity, ProtocolTvl, SwapActivity, Window, WrittenTranches,
-};
+use yog_core::domain::{Protocol, ProtocolSwapActivity, ProtocolTvl, SwapActivity, Window};
 
 use super::LiquidityTurnoverService;
 use crate::testing::{
     MockProtocolActivityRepo, MockProtocolTvlRepo, MockSwapActivityRepo, at_october,
-    frozen_hours_repo, make_frozen_hours,
+    frozen_hours_repo, make_frozen_hours, tranches_begun,
 };
 
 /// Mutation: a TVL read, or a volume, for a window the facts do not cover or that has no row.
@@ -66,14 +63,6 @@ fn tvl_of_100_usd() -> Vec<ProtocolTvl> {
     }]
 }
 
-fn tranches_begun(minutes_ago: i64) -> WrittenTranches {
-    let through = at_october(20, 12) + TimeDelta::minutes(40);
-    WrittenTranches {
-        first: through - TimeDelta::minutes(minutes_ago),
-        through,
-    }
-}
-
 /// Mutation: the TVL never read, or read at another hour — a ratio absent or over another stock.
 #[tokio::test]
 async fn the_ratio_is_the_volume_over_the_last_frozen_tvl() {
@@ -117,8 +106,14 @@ async fn an_hour_the_tranches_do_not_cover_has_no_ratio() {
         totals: swaps_of_200_usd(),
         ..MockSwapActivityRepo::default()
     });
-    let tvl = Arc::new(MockProtocolTvlRepo::default());
-    let hours = Arc::new(MockProtocolActivityRepo::with_tranches(tranches_begun(30)));
+    let tvl = Arc::new(MockProtocolTvlRepo {
+        latest: tvl_of_100_usd(),
+        ..MockProtocolTvlRepo::default()
+    });
+    let hours = Arc::new(MockProtocolActivityRepo::with_hours_and_tranches(
+        make_frozen_hours(),
+        tranches_begun(30),
+    ));
     let svc = LiquidityTurnoverService::new(hours, swaps.clone(), tvl.clone());
 
     let read = svc.get_totals(Window::Hour, None).await.unwrap();
