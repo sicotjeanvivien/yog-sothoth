@@ -64,7 +64,7 @@ fn every_couple_of_the_two_axes_loads() {
         env::set_var("INGEST_SOURCE", "rpc");
     }
 
-    let config = Config::load().expect("rpc + pools is the couple that runs today");
+    let config = Config::load().expect("rpc + pools loads");
     assert_eq!(config.transaction_arrival.source(), IngestSource::Rpc);
     assert_eq!(config.scope, IngestScope::Pools);
 

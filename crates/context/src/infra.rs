@@ -6,6 +6,8 @@
 mod helius_das;
 mod jupiter_price;
 mod metrics;
+#[cfg(test)]
+mod scripted_provider;
 mod solana_account;
 mod source_error;
 
