@@ -3,13 +3,12 @@ use std::time::Duration;
 
 use axum::http::{StatusCode, header};
 use axum::response::IntoResponse;
-use solana_pubkey::Pubkey;
 use tokio::sync::{Semaphore, broadcast};
 use tokio_util::sync::CancellationToken;
 
 use super::{SignalResponse, open_signal_stream, signal_sse};
-use crate::application::EnrichedSignal;
-use crate::testing::{get, make_signal_record};
+use crate::application::{EnrichedSignal, EnrichedToken};
+use crate::testing::{get, make_metadata, make_signal_record, pk};
 
 /// Mutation: the router without its Problem Details layer, axum's refusal left in plain text.
 #[tokio::test]
@@ -84,8 +83,8 @@ async fn a_key_the_signals_do_not_take_is_refused() {
     assert_eq!(status, StatusCode::OK, "{body}");
 }
 
-/// The whole body of a stream, read until it ends, with whether its slot came back.
-async fn read_stream(receiver: broadcast::Receiver<Arc<EnrichedSignal>>) -> (String, usize) {
+/// The whole body of a stream, read until it ends, and whether its slot came back.
+async fn read_stream(receiver: broadcast::Receiver<Arc<EnrichedSignal>>) -> (String, bool) {
     let slots = Arc::new(Semaphore::new(1));
     let slot = slots.clone().try_acquire_owned().expect("a free slot");
     let response = signal_sse(receiver, slot, CancellationToken::new()).into_response();
@@ -100,8 +99,20 @@ async fn read_stream(receiver: broadcast::Receiver<Arc<EnrichedSignal>>) -> (Str
     .expect("the body reads");
     (
         String::from_utf8(body.to_vec()).expect("text"),
-        slots.available_permits(),
+        slots.available_permits() == 1,
     )
+}
+
+fn enriched(id: i64, seed: u8) -> EnrichedSignal {
+    let token = |mint, symbol| EnrichedToken {
+        mint: Some(mint),
+        metadata: Some(make_metadata(mint, symbol)),
+    };
+    EnrichedSignal {
+        record: make_signal_record(id, pk(seed)),
+        token_a: token(pk(seed + 10), "AAA"),
+        token_b: token(pk(seed + 20), "BBB"),
+    }
 }
 
 fn field<'a>(event: &'a str, name: &str) -> &'a str {
@@ -111,66 +122,62 @@ fn field<'a>(event: &'a str, name: &str) -> &'a str {
         .unwrap_or_else(|| panic!("no `{name}` in {event:?}"))
 }
 
-/// Mutation: `event.id` removed or holding another value, or `data` not the signal's response.
+/// Mutation: `event.id` removed or holding another value, `data` not the signal's response, or the
+/// signal sent bare, its tokens lost on the way out.
 #[tokio::test]
 async fn a_client_receives_each_signal_with_its_id_and_its_response() {
     let (feed, receiver) = broadcast::channel(8);
-    let records = [
-        make_signal_record(41, Pubkey::new_unique()),
-        make_signal_record(42, Pubkey::new_unique()),
-    ];
-    for record in &records {
-        feed.send(Arc::new(EnrichedSignal::bare(record.clone())))
-            .expect("a subscriber");
+    let signals = [enriched(41, 1), enriched(42, 2)];
+    for signal in &signals {
+        feed.send(Arc::new(signal.clone())).expect("a subscriber");
     }
     drop(feed);
 
     let (body, _) = read_stream(receiver).await;
 
     let events: Vec<&str> = body
-        .split("\n\n")
+        .split(
+            "
+
+",
+        )
         .filter(|event| !event.is_empty())
         .collect();
     assert_eq!(events.len(), 2, "{body}");
-    for (event, record) in events.iter().zip(&records) {
-        assert_eq!(field(event, "id"), record.id.to_string());
+    for (event, signal) in events.iter().zip(&signals) {
+        assert_eq!(field(event, "id"), signal.record.id.to_string());
         let data: serde_json::Value = serde_json::from_str(field(event, "data")).expect("JSON");
-        let expected =
-            serde_json::to_value(SignalResponse::from(EnrichedSignal::bare(record.clone())))
-                .expect("JSON");
+        let expected = serde_json::to_value(SignalResponse::from(signal.clone())).expect("JSON");
         assert_eq!(data, expected);
     }
 }
 
-/// Mutation: a client past the channel's capacity kept on the stream: it would miss signals without
-/// knowing, where a reconnection reloads the feed. The source stays open here.
+/// Mutation: a client past the channel's capacity kept on the stream. The source stays open here.
 #[tokio::test]
 async fn a_client_too_late_ends_its_stream_and_gives_its_slot_back() {
     let (feed, receiver) = broadcast::channel(1);
     for id in 1..=3 {
         feed.send(Arc::new(EnrichedSignal::bare(make_signal_record(
             id,
-            Pubkey::new_unique(),
+            pk(1),
         ))))
         .expect("a subscriber");
     }
 
-    let (body, slots) = read_stream(receiver).await;
+    let (body, slot_back) = read_stream(receiver).await;
 
     assert_eq!(body, "");
-    assert_eq!(slots, 1);
-    drop(feed);
+    assert!(slot_back);
 }
 
-/// Mutation: a closed source no longer ending the stream, or the slot kept once it ends: past the
-/// cap, no client could then connect again.
+/// Mutation: a closed source no longer ending the stream, or the slot never given back.
 #[tokio::test]
 async fn a_closed_source_ends_the_stream_and_gives_its_slot_back() {
     let (feed, receiver) = broadcast::channel::<Arc<EnrichedSignal>>(8);
     drop(feed);
 
-    let (body, slots) = read_stream(receiver).await;
+    let (body, slot_back) = read_stream(receiver).await;
 
     assert_eq!(body, "");
-    assert_eq!(slots, 1);
+    assert!(slot_back);
 }
