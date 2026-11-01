@@ -8,14 +8,16 @@ use solana_pubkey::Pubkey;
 
 use super::{
     EventCollection, decode_announcement_cursor, decode_event_cursor, decode_liquidity_move_cursor,
-    decode_protocol_cursor, decode_signal_cursor, encode_cursor, encode_cursor_opt,
+    decode_protocol_cursor, decode_signal_cursor, decode_token_activity_cursor,
+    decode_token_cursor, encode_cursor, encode_cursor_opt,
 };
 use crate::http::error::ApiError;
 use yog_core::{
     Cursor,
     domain::{
         EventCursor, EventScope, LiquidityMoveCursor, LiquidityMoveKind, LiquidityMoveList,
-        LiquidityMoveOrder, LiquidityMoveScope, Protocol, SignalCursor, Window,
+        LiquidityMoveOrder, LiquidityMoveScope, Protocol, SignalCursor, TokenActivityCursor,
+        TokenCursor, TokenPriceCursor, Window,
     },
 };
 
@@ -151,6 +153,124 @@ fn rejects_malformed_timestamp() {
 fn rejects_empty_string() {
     // Empty string is valid base64 (empty bytes) but not valid JSON.
     assert_bad_request(decode_signal_cursor(""));
+}
+
+// ⚠️ With microseconds, as `fetched_at` has them: truncated to the second, a page skips or repeats a row.
+const MICROS: i64 = 1_700_000_123_456_789;
+const VALID_DATE: &str = "2023-11-14T22:15:23Z";
+const VALID_MINT: &str = "11111111111111111111111111111111";
+
+fn token_cursor() -> TokenCursor {
+    TokenCursor {
+        fetched_at: Utc.timestamp_micros(MICROS).unwrap(),
+        mint: Pubkey::new_unique(),
+    }
+}
+
+fn token_activity_cursor() -> TokenActivityCursor {
+    TokenActivityCursor {
+        last_hour: Utc.timestamp_micros(MICROS).unwrap(),
+        volume_usd: Decimal::new(123_456_789_123_450, 6),
+        mint: Pubkey::new_unique(),
+    }
+}
+
+fn assert_refused_because<T: std::fmt::Debug>(result: Result<T, ApiError>, reason: &str) {
+    match result {
+        Err(ApiError::BadRequest(message)) => assert_eq!(message, reason),
+        other => panic!("expected a refusal because {reason}, got {other:?}"),
+    }
+}
+
+/// Mutation: the date and the mint swapped, or the date truncated to the second.
+#[test]
+fn token_cursor_round_trip() {
+    let original = token_cursor();
+    let encoded = encode_cursor(&Cursor::Token(original.clone())).unwrap();
+    assert_eq!(decode_token_cursor(&encoded).unwrap(), original);
+}
+
+/// Mutation: the date and the mint swapped, the date truncated to the second, or the volume rounded
+/// or stripped of its final zero, which `Decimal`'s equality alone would not see.
+#[test]
+fn token_activity_cursor_round_trip() {
+    let original = token_activity_cursor();
+    let encoded = encode_cursor(&Cursor::TokenActivity(original.clone())).unwrap();
+    let decoded = decode_token_activity_cursor(&encoded).unwrap();
+    assert_eq!(decoded, original);
+    assert_eq!(decoded.volume_usd.to_string(), "123456789.123450");
+}
+
+/// Mutation: an unreadable date or mint falling back to a default, resuming the list elsewhere.
+#[test]
+fn a_damaged_token_cursor_is_refused_for_its_reason() {
+    let damaged = |date: &str, mint: &str| {
+        URL_SAFE_NO_PAD_ENCODE(&format!(r#"{{"fetched_at":"{date}","mint":"{mint}"}}"#))
+    };
+    assert!(decode_token_cursor(&damaged(VALID_DATE, VALID_MINT)).is_ok());
+    assert_refused_because(
+        decode_token_cursor(&damaged("yesterday", VALID_MINT)),
+        "invalid cursor: malformed timestamp",
+    );
+    assert_refused_because(
+        decode_token_cursor(&damaged(VALID_DATE, "not-a-mint")),
+        "invalid cursor: malformed mint",
+    );
+}
+
+/// Mutation: an unreadable date, volume or mint falling back to a default, resuming the list elsewhere.
+#[test]
+fn a_damaged_token_activity_cursor_is_refused_for_its_reason() {
+    let damaged = |date: &str, volume: &str, mint: &str| {
+        URL_SAFE_NO_PAD_ENCODE(&format!(
+            r#"{{"last_hour":"{date}","volume_usd":"{volume}","mint":"{mint}"}}"#
+        ))
+    };
+    assert!(decode_token_activity_cursor(&damaged(VALID_DATE, "1.5", VALID_MINT)).is_ok());
+    assert_refused_because(
+        decode_token_activity_cursor(&damaged("yesterday", "1.5", VALID_MINT)),
+        "invalid cursor: malformed timestamp",
+    );
+    assert_refused_because(
+        decode_token_activity_cursor(&damaged(VALID_DATE, "a lot", VALID_MINT)),
+        "invalid cursor: malformed volume",
+    );
+    assert_refused_because(
+        decode_token_activity_cursor(&damaged(VALID_DATE, "1.5", "not-a-mint")),
+        "invalid cursor: malformed mint",
+    );
+}
+
+/// Mutation: `deny_unknown_fields` removed from either format; a price cursor holds every field of
+/// a token cursor, and would resume the token list at a price's date.
+#[test]
+fn a_cursor_of_the_other_list_or_with_an_unknown_field_is_refused() {
+    let malformed = "invalid cursor: malformed payload";
+    let price = encode_cursor(&Cursor::TokenPrice(Box::new(TokenPriceCursor {
+        mint: Pubkey::new_unique(),
+        from: ts(1_700_000_000),
+        fetched_at: ts(1_700_000_123),
+    })))
+    .unwrap();
+    assert_refused_because(decode_token_cursor(&price), malformed);
+
+    let token = encode_cursor(&Cursor::Token(token_cursor())).unwrap();
+    let activity = encode_cursor(&Cursor::TokenActivity(token_activity_cursor())).unwrap();
+    assert_refused_because(decode_token_activity_cursor(&token), malformed);
+    assert_refused_because(decode_token_cursor(&activity), malformed);
+
+    assert_refused_because(
+        decode_token_cursor(&URL_SAFE_NO_PAD_ENCODE(&format!(
+            r#"{{"fetched_at":"{VALID_DATE}","mint":"{VALID_MINT}","extra":1}}"#
+        ))),
+        malformed,
+    );
+    assert_refused_because(
+        decode_token_activity_cursor(&URL_SAFE_NO_PAD_ENCODE(&format!(
+            r#"{{"last_hour":"{VALID_DATE}","volume_usd":"1","mint":"{VALID_MINT}","extra":1}}"#
+        ))),
+        malformed,
+    );
 }
 
 #[allow(nonstandard_style)]
