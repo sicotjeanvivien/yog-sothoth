@@ -1,9 +1,15 @@
 //! Unit tests for the dedup filter, for one tick and for the stop, against a fake detector and repository.
 
+use std::sync::Mutex;
+
 use super::*;
-use chrono::Utc;
+use crate::application::metrics_probe::{Snapshot, counter, snapshot};
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
-use yog_core::domain::Protocol;
+use yog_core::RepositoryError;
+use yog_core::domain::{DetectorError, Protocol};
+
+const NAME: &str = "flow_imbalance";
 
 fn pk(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
@@ -11,7 +17,7 @@ fn pk(seed: u8) -> Pubkey {
 
 fn sig(pool: u8, severity: Severity) -> Signal {
     Signal {
-        detector: "flow_imbalance".to_string(),
+        detector: NAME.to_string(),
         protocol: Protocol::MeteoraDammV2,
         pool_address: pk(pool),
         severity,
@@ -226,15 +232,6 @@ async fn a_panic_during_the_stop_still_waits_for_the_grace_then_fails() {
 
 // ── one tick: what it asks, what it writes, what it counts ─────────────────────────────────
 
-use std::sync::Mutex;
-
-use chrono::DateTime;
-use yog_core::RepositoryError;
-use yog_core::domain::DetectorError;
-
-use crate::application::metrics_probe::{Snapshot, counter, snapshot};
-
-const NAME: &str = "scripted";
 const COOLDOWN_SECS: u64 = 90;
 const OUTCOMES: [&str; 5] = [
     "ok",
@@ -281,25 +278,29 @@ impl SignalDetector for ScriptedDetector {
 
 /// A repository with one answer per call, `None` and `write_fails` being failures, which notes
 /// every lookup and every attempted write.
-#[derive(Default)]
 struct ScriptedRepository {
     recent: Option<HashMap<Pubkey, Severity>>,
     write_fails: bool,
     lookups: Mutex<Vec<(String, DateTime<Utc>)>>,
-    writes: Mutex<Vec<Vec<u8>>>,
+    writes: Mutex<Vec<Vec<Signal>>>,
 }
 
 impl ScriptedRepository {
-    fn knowing(recent: HashMap<Pubkey, Severity>) -> Self {
+    fn new(recent: Option<HashMap<Pubkey, Severity>>, write_fails: bool) -> Self {
         Self {
-            recent: Some(recent),
-            ..Self::default()
+            recent,
+            write_fails,
+            lookups: Mutex::default(),
+            writes: Mutex::default(),
         }
+    }
+    fn knowing(recent: HashMap<Pubkey, Severity>) -> Self {
+        Self::new(Some(recent), false)
     }
     fn lookups(&self) -> usize {
         self.lookups.lock().expect("lookups").len()
     }
-    fn writes(&self) -> Vec<Vec<u8>> {
+    fn writes(&self) -> Vec<Vec<Signal>> {
         self.writes.lock().expect("writes").clone()
     }
 }
@@ -307,7 +308,7 @@ impl ScriptedRepository {
 #[async_trait::async_trait]
 impl SignalRepository for ScriptedRepository {
     async fn insert_batch(&self, signals: &[Signal]) -> yog_core::RepositoryResult<()> {
-        self.writes.lock().expect("writes").push(pools(signals));
+        self.writes.lock().expect("writes").push(signals.to_vec());
         if self.write_fails {
             return Err(RepositoryError::Backend("scripted".to_string()));
         }
@@ -333,12 +334,12 @@ fn tick(detector: &ScriptedDetector, repository: &ScriptedRepository) -> Snapsho
 }
 
 /// `outcome` counted once and no other, with `emitted` signals counted, `None` being never touched.
-fn assert_counted(snapshot: &Snapshot, outcome: &str, emitted: Option<u64>) {
+fn assert_counted(counted: &Snapshot, outcome: &str, emitted: Option<u64>) {
     for candidate in OUTCOMES {
         let expected = (candidate == outcome).then_some(1);
         assert_eq!(
             counter(
-                snapshot,
+                counted,
                 "yog_signals_tick_total",
                 &[("detector", NAME), ("outcome", candidate)],
             ),
@@ -347,7 +348,7 @@ fn assert_counted(snapshot: &Snapshot, outcome: &str, emitted: Option<u64>) {
         );
     }
     assert_eq!(
-        counter(snapshot, "yog_signals_emitted_total", &[("detector", NAME)]),
+        counter(counted, "yog_signals_emitted_total", &[("detector", NAME)]),
         emitted
     );
 }
@@ -406,7 +407,7 @@ fn the_lookup_receives_the_detector_and_the_start_of_its_cooldown() {
 #[test]
 fn a_failed_lookup_writes_nothing_and_is_counted_under_its_reason() {
     let detector = ScriptedDetector::new(Some(vec![sig(1, Severity::Warning)]));
-    let repository = ScriptedRepository::default();
+    let repository = ScriptedRepository::new(None, false);
 
     let counted = tick(&detector, &repository);
 
@@ -427,13 +428,16 @@ fn candidates_all_within_the_cooldown_write_nothing_and_count_as_suppressed() {
     assert_counted(&counted, "suppressed", None);
 }
 
-/// Mutation: `candidates` written instead of `to_emit`, or the count taken from the candidates.
+/// Mutation: `candidates` written instead of `to_emit`, a signal altered before the write, or the
+/// count taken from the candidates.
 #[test]
 fn only_the_retained_candidates_are_written_and_counted() {
+    let new_pool = sig(2, Severity::Warning);
+    let escalation = sig(3, Severity::Critical);
     let detector = ScriptedDetector::new(Some(vec![
         sig(1, Severity::Warning),
-        sig(2, Severity::Warning),
-        sig(3, Severity::Critical),
+        new_pool.clone(),
+        escalation.clone(),
     ]));
     let repository = ScriptedRepository::knowing(HashMap::from([
         (pk(1), Severity::Warning),
@@ -442,21 +446,19 @@ fn only_the_retained_candidates_are_written_and_counted() {
 
     let counted = tick(&detector, &repository);
 
-    assert_eq!(repository.writes(), [vec![2, 3]]);
+    assert_eq!(repository.writes(), [vec![new_pool, escalation]]);
     assert_counted(&counted, "ok", Some(2));
 }
 
 /// Mutation: `dedup_failed` and `persist_failed` swapped, or the signals counted before the write.
 #[test]
 fn a_failed_write_counts_no_signal_and_is_counted_under_its_reason() {
-    let detector = ScriptedDetector::new(Some(vec![sig(1, Severity::Warning)]));
-    let repository = ScriptedRepository {
-        write_fails: true,
-        ..ScriptedRepository::knowing(HashMap::new())
-    };
+    let signal = sig(1, Severity::Warning);
+    let detector = ScriptedDetector::new(Some(vec![signal.clone()]));
+    let repository = ScriptedRepository::new(Some(HashMap::new()), true);
 
     let counted = tick(&detector, &repository);
 
-    assert_eq!(repository.writes(), [vec![1]]);
+    assert_eq!(repository.writes(), [vec![signal]]);
     assert_counted(&counted, "persist_failed", None);
 }
