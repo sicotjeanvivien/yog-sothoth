@@ -1,5 +1,4 @@
-//! Unit tests for the Helius DAS client: the projection to `FetchedMetadata` with its fallbacks,
-//! and `DasResponse` deserialization (positional `null`s, unknown fields).
+//! Unit tests for the Helius DAS client.
 
 use solana_pubkey::Pubkey;
 
@@ -394,13 +393,16 @@ async fn past_a_thousand_mints_every_batch_is_asked() {
     assert_eq!(sizes, [1_000, 1]);
 }
 
-/// Mutation: a failed batch ending the call, which would lose the batches after it.
+/// Mutation: a failed batch ending the call, which would lose the batches after it; or
+/// `error_for_status` removed: what a refused answer carries would then be taken as metadata.
 #[tokio::test]
 async fn a_failed_batch_does_not_stop_the_next_one() {
     let wanted = vec![pk(1); 1_001];
-    let provider =
-        ScriptedProvider::answering(vec![(500, serde_json::json!({})), answer(vec![asset(2)])])
-            .await;
+    let provider = ScriptedProvider::answering(vec![
+        (500, serde_json::json!({ "result": [asset(9)] })),
+        answer(vec![asset(2)]),
+    ])
+    .await;
     let client = HeliusDasClient::new(provider.url.clone());
 
     let fetched = client
