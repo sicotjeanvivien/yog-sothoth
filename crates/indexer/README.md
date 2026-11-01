@@ -244,6 +244,8 @@ because this crate is a binary: an integration target could not reach a
 `pub(crate)` adapter without making it public for the tests' sake. The oracle's
 witness lives in `testdata/golden/`, not `tests/`, so nothing sits in the
 directory Cargo reserves for the targets this crate deliberately does not have.
+`transaction_processor_tests.rs` reads `swap_double.json` from the same place, to run
+one transaction through the real decoder against fake repositories.
 
 ## One port, and what each source does behind it
 

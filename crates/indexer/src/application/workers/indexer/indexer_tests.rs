@@ -1,5 +1,10 @@
 use super::*;
+use crate::application::services::meteora_persistor_fakes::Calls;
+use crate::application::services::processor_fixtures::{
+    double_swap, recording, swaps_written, unreadable_only,
+};
 use chrono::Utc;
+use metrics_util::debugging::{DebugValue, DebuggingRecorder};
 use solana_signature::Signature;
 use std::time::Duration;
 use yog_core::{
@@ -83,4 +88,120 @@ async fn a_stop_with_nothing_in_flight_does_not_wait() {
     tokio::time::timeout(Duration::from_secs(5), await_in_flight(&semaphore, 4))
         .await
         .expect("an idle stage must not block the shutdown");
+}
+
+// ── Handing a transaction over ───────────────────────────────────────────────
+
+/// Mutation: the permit no longer awaited: every transaction runs at once, past the pool's limit.
+#[tokio::test(start_paused = true)]
+async fn a_transaction_waits_for_a_free_place() {
+    let worker = IndexerWorker::new(recording(&Calls::default()), 1);
+    let shutdown = CancellationToken::new();
+    let held = Arc::clone(&worker.semaphore)
+        .acquire_owned()
+        .await
+        .expect("permits are free");
+
+    let waited = tokio::time::timeout(
+        Duration::from_secs(1),
+        worker.dispatch_one(ingested(1), 0, &shutdown),
+    )
+    .await;
+    assert!(waited.is_err(), "handed over with no place free");
+
+    drop(held);
+    tokio::time::timeout(
+        Duration::from_secs(1),
+        worker.dispatch_one(ingested(2), 0, &shutdown),
+    )
+    .await
+    .expect("a free place ends the wait")
+    .expect("the semaphore stays open");
+}
+
+/// A transaction handed over once the stop is asked, a place being held or not: what it wrote, and
+/// the transactions counted as given up.
+fn handed_over_after_the_stop(place_held: bool) -> (usize, Option<DebugValue>) {
+    let calls = Calls::default();
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+    ::metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime")
+            .block_on(async {
+                let worker = IndexerWorker::new(recording(&calls), 1);
+                let shutdown = CancellationToken::new();
+                let held = place_held.then(|| Arc::clone(&worker.semaphore));
+                let _held = match held {
+                    Some(semaphore) => Some(semaphore.acquire_owned().await.expect("free")),
+                    None => None,
+                };
+                shutdown.cancel();
+                let mut transaction = ingested(1);
+                transaction.transaction = double_swap();
+                tokio::time::timeout(
+                    Duration::from_secs(5),
+                    worker.dispatch_one(transaction, 0, &shutdown),
+                )
+                .await
+                .expect("the stop ends the wait")
+                .expect("a stop is no failure");
+                await_in_flight(&worker.semaphore, u32::from(!place_held)).await;
+            })
+    });
+
+    let dropped = snapshotter
+        .snapshot()
+        .into_vec()
+        .into_iter()
+        .find(|(key, _, _, _)| {
+            key.key().name() == "yog_indexer_ingested_dropped_total"
+                && key
+                    .key()
+                    .labels()
+                    .any(|l| l.key() == "reason" && l.value() == "shutdown")
+        })
+        .map(|(_, _, _, value)| value);
+    (swaps_written(&calls), dropped)
+}
+
+/// Mutation: `record_dropped` removed, the stop no longer ending the wait for a place, or the place
+/// taken before the stop is read, which would start a write during the stop.
+#[test]
+fn a_transaction_given_up_at_the_stop_is_counted_and_not_written() {
+    for place_held in [true, false] {
+        let (written, dropped) = handed_over_after_the_stop(place_held);
+        assert_eq!(written, 0, "place held: {place_held}");
+        assert_eq!(
+            dropped,
+            Some(DebugValue::Counter(1)),
+            "place held: {place_held}"
+        );
+    }
+}
+
+/// Mutation: the loop ending at the first transaction.
+#[tokio::test]
+async fn the_loop_goes_on_after_a_first_transaction() {
+    let calls = Calls::default();
+    let worker = IndexerWorker::new(recording(&calls), 2);
+    let (tx, rx) = mpsc::channel(8);
+    for transaction in [unreadable_only(), double_swap()] {
+        tx.send(IngestedTransaction {
+            protocol: Protocol::MeteoraDammV2,
+            transaction,
+        })
+        .await
+        .expect("the channel has room");
+    }
+    drop(tx);
+
+    worker
+        .run(rx, CancellationToken::new())
+        .await
+        .expect("the channel closing is no failure");
+
+    assert_eq!(swaps_written(&calls), 2);
 }

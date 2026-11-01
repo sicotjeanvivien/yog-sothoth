@@ -12,7 +12,7 @@ use yog_core::domain::{
 };
 use yog_core::{RepositoryError, RepositoryResult};
 
-type Calls = Arc<Mutex<Vec<&'static str>>>;
+pub(crate) type Calls = Arc<Mutex<Vec<&'static str>>>;
 
 fn rec(calls: &Calls, what: &'static str) {
     calls.lock().unwrap().push(what);
@@ -223,7 +223,7 @@ fn sg() -> Signature {
     Signature::from([0u8; 64])
 }
 
-fn build(calls: Calls) -> MeteoraDammV2EventPersistor {
+pub(crate) fn build(calls: Calls) -> MeteoraDammV2EventPersistor {
     build_with(calls, InsertOutcome::Inserted, applied_without_ambiguity())
 }
 
@@ -255,7 +255,7 @@ fn build_with(
     )
 }
 
-fn build_with_failing_pool_upsert(calls: Calls) -> MeteoraDammV2EventPersistor {
+pub(crate) fn build_with_failing_pool_upsert(calls: Calls) -> MeteoraDammV2EventPersistor {
     build_all(
         calls,
         InsertOutcome::Inserted,

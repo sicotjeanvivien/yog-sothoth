@@ -481,4 +481,4 @@ impl MeteoraDammV2EventPersistor {
 
 #[cfg(test)]
 #[path = "event_persistor_tests.rs"]
-mod tests;
+pub(crate) mod tests;
