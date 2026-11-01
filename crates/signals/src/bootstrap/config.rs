@@ -7,6 +7,10 @@ use chrono::Duration as ChronoDuration;
 use rust_decimal::Decimal;
 use yog_bootstrap::{ConfigError, SecretUrl, duration_var, required_secret_url};
 
+use crate::application::detectors::{
+    FlowImbalanceSettings, PriceOracleDeviationSettings, TvlDrainSettings,
+};
+
 mod types;
 
 pub(crate) use types::MaterializationAlarmConfig;
@@ -221,6 +225,43 @@ impl Config {
         )?;
 
         Ok(config)
+    }
+
+    /// The flow-imbalance detector's settings.
+    pub(crate) fn flow_imbalance_settings(&self) -> FlowImbalanceSettings {
+        FlowImbalanceSettings {
+            window: self.flow_window,
+            interval: self.flow_interval,
+            cooldown: self.flow_cooldown,
+            min_volume_usd: self.flow_min_volume_usd,
+            threshold: self.flow_threshold,
+            critical: self.flow_critical,
+        }
+    }
+
+    /// The price-oracle-deviation detector's settings.
+    pub(crate) fn price_oracle_deviation_settings(&self) -> PriceOracleDeviationSettings {
+        PriceOracleDeviationSettings {
+            interval: self.price_deviation_interval,
+            cooldown: self.price_deviation_cooldown,
+            max_price_age: self.price_deviation_max_price_age,
+            max_spot_age: self.price_deviation_max_spot_age,
+            min_tvl_usd: self.price_deviation_min_tvl_usd,
+            threshold: self.price_deviation_threshold,
+            critical: self.price_deviation_critical,
+        }
+    }
+
+    /// The TVL-drain detector's settings.
+    pub(crate) fn tvl_drain_settings(&self) -> TvlDrainSettings {
+        TvlDrainSettings {
+            window: self.tvl_drain_window,
+            interval: self.tvl_drain_interval,
+            cooldown: self.tvl_drain_cooldown,
+            min_tvl_usd: self.tvl_drain_min_tvl_usd,
+            threshold: self.tvl_drain_threshold,
+            critical: self.tvl_drain_critical,
+        }
     }
 }
 

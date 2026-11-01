@@ -18,8 +18,7 @@ use yog_persistence::{
 mod init;
 
 use crate::application::detectors::{
-    DetectorMetrics, FlowImbalanceDetector, FlowImbalanceSettings, PriceOracleDeviationDetector,
-    PriceOracleDeviationSettings, TvlDrainDetector, TvlDrainSettings,
+    DetectorMetrics, FlowImbalanceDetector, PriceOracleDeviationDetector, TvlDrainDetector,
 };
 use crate::application::workers::{
     AlarmMetrics, EngineMetrics, MaterializationAlarm, SignalEngine,
@@ -55,41 +54,19 @@ impl Daemon {
         let flow_imbalance: Arc<dyn SignalDetector> = Arc::new(FlowImbalanceDetector::new(
             flow_repository,
             Protocol::MeteoraDammV2,
-            FlowImbalanceSettings {
-                window: config.flow_window,
-                interval: config.flow_interval,
-                cooldown: config.flow_cooldown,
-                min_volume_usd: config.flow_min_volume_usd,
-                threshold: config.flow_threshold,
-                critical: config.flow_critical,
-            },
+            config.flow_imbalance_settings(),
         ));
 
         let price_oracle_deviation: Arc<dyn SignalDetector> =
             Arc::new(PriceOracleDeviationDetector::new(
                 snapshot_repository,
-                PriceOracleDeviationSettings {
-                    interval: config.price_deviation_interval,
-                    cooldown: config.price_deviation_cooldown,
-                    max_price_age: config.price_deviation_max_price_age,
-                    max_spot_age: config.price_deviation_max_spot_age,
-                    min_tvl_usd: config.price_deviation_min_tvl_usd,
-                    threshold: config.price_deviation_threshold,
-                    critical: config.price_deviation_critical,
-                },
+                config.price_oracle_deviation_settings(),
             ));
 
         let tvl_drain: Arc<dyn SignalDetector> = Arc::new(TvlDrainDetector::new(
             liquidity_flow_repository,
             Protocol::MeteoraDammV2,
-            TvlDrainSettings {
-                window: config.tvl_drain_window,
-                interval: config.tvl_drain_interval,
-                cooldown: config.tvl_drain_cooldown,
-                min_tvl_usd: config.tvl_drain_min_tvl_usd,
-                threshold: config.tvl_drain_threshold,
-                critical: config.tvl_drain_critical,
-            },
+            config.tvl_drain_settings(),
         ));
 
         EngineMetrics::register_descriptions();
