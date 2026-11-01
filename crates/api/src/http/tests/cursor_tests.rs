@@ -17,7 +17,7 @@ use yog_core::{
     domain::{
         EventCursor, EventScope, LiquidityMoveCursor, LiquidityMoveKind, LiquidityMoveList,
         LiquidityMoveOrder, LiquidityMoveScope, Protocol, SignalCursor, TokenActivityCursor,
-        TokenCursor, Window,
+        TokenCursor, TokenPriceCursor, Window,
     },
 };
 
@@ -155,7 +155,7 @@ fn rejects_empty_string() {
     assert_bad_request(decode_signal_cursor(""));
 }
 
-// A date with its microseconds: truncated to the second, a page would skip or repeat a row.
+// ⚠️ With microseconds, as `fetched_at` has them: truncated to the second, a page skips or repeats a row.
 const MICROS: i64 = 1_700_000_123_456_789;
 const VALID_DATE: &str = "2023-11-14T22:15:23Z";
 const VALID_MINT: &str = "11111111111111111111111111111111";
@@ -241,10 +241,19 @@ fn a_damaged_token_activity_cursor_is_refused_for_its_reason() {
     );
 }
 
-/// Mutation: `deny_unknown_fields` removed from either format.
+/// Mutation: `deny_unknown_fields` removed from either format; a price cursor holds every field of
+/// a token cursor, and would resume the token list at a price's date.
 #[test]
 fn a_cursor_of_the_other_list_or_with_an_unknown_field_is_refused() {
     let malformed = "invalid cursor: malformed payload";
+    let price = encode_cursor(&Cursor::TokenPrice(Box::new(TokenPriceCursor {
+        mint: Pubkey::new_unique(),
+        from: ts(1_700_000_000),
+        fetched_at: ts(1_700_000_123),
+    })))
+    .unwrap();
+    assert_refused_because(decode_token_cursor(&price), malformed);
+
     let token = encode_cursor(&Cursor::Token(token_cursor())).unwrap();
     let activity = encode_cursor(&Cursor::TokenActivity(token_activity_cursor())).unwrap();
     assert_refused_because(decode_token_activity_cursor(&token), malformed);
