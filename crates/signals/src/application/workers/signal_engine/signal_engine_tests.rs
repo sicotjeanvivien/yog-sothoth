@@ -1,9 +1,15 @@
-//! Unit tests for the cooldown / escalation dedup filter; the `recent` map stands in for the repository.
+//! Unit tests for the dedup filter, for one tick and for the stop, against a fake detector and repository.
+
+use std::sync::Mutex;
 
 use super::*;
-use chrono::Utc;
+use crate::application::metrics_probe::{Snapshot, counter, snapshot};
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
-use yog_core::domain::Protocol;
+use yog_core::RepositoryError;
+use yog_core::domain::{DetectorError, Protocol};
+
+const NAME: &str = "flow_imbalance";
 
 fn pk(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
@@ -11,7 +17,7 @@ fn pk(seed: u8) -> Pubkey {
 
 fn sig(pool: u8, severity: Severity) -> Signal {
     Signal {
-        detector: "flow_imbalance".to_string(),
+        detector: NAME.to_string(),
         protocol: Protocol::MeteoraDammV2,
         pool_address: pk(pool),
         severity,
@@ -105,10 +111,7 @@ impl SignalDetector for Detector {
     fn cooldown(&self) -> std::time::Duration {
         std::time::Duration::from_secs(60)
     }
-    async fn evaluate(
-        &self,
-        _ctx: &EvalContext,
-    ) -> Result<Vec<Signal>, yog_core::domain::DetectorError> {
+    async fn evaluate(&self, _ctx: &EvalContext) -> Result<Vec<Signal>, DetectorError> {
         match self.tick {
             Tick::Returns => Ok(Vec::new()),
             Tick::NeverReturns => std::future::pending().await,
@@ -132,7 +135,7 @@ impl SignalRepository for NoSignals {
     async fn latest_severity_by_pool(
         &self,
         _detector: &str,
-        _since: chrono::DateTime<Utc>,
+        _since: DateTime<Utc>,
     ) -> yog_core::RepositoryResult<HashMap<Pubkey, Severity>> {
         Ok(HashMap::new())
     }
@@ -222,4 +225,229 @@ async fn a_panic_during_the_stop_still_waits_for_the_grace_then_fails() {
         "{result:?}"
     );
     assert_eq!(waited, SHUTDOWN_GRACE);
+}
+
+const COOLDOWN_SECS: u64 = 90;
+
+/// A detector with one answer, `None` being a failure, which notes the date it was asked for.
+struct ScriptedDetector {
+    answer: Option<Vec<Signal>>,
+    evaluated_at: Mutex<Option<DateTime<Utc>>>,
+}
+
+impl ScriptedDetector {
+    fn new(answer: Option<Vec<Signal>>) -> Self {
+        Self {
+            answer,
+            evaluated_at: Mutex::new(None),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl SignalDetector for ScriptedDetector {
+    fn name(&self) -> &'static str {
+        NAME
+    }
+    // ⚠️ Differs from the cooldown, so that reading one for the other fails.
+    fn interval(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(60)
+    }
+    fn cooldown(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(COOLDOWN_SECS)
+    }
+    async fn evaluate(&self, ctx: &EvalContext) -> Result<Vec<Signal>, DetectorError> {
+        *self.evaluated_at.lock().expect("evaluated_at") = Some(ctx.evaluated_at);
+        self.answer
+            .clone()
+            .ok_or_else(|| DetectorError::Evaluation("scripted".to_string()))
+    }
+}
+
+/// A repository with one answer per call, `None` and `write_fails` being failures, which notes
+/// every lookup and every attempted write.
+struct ScriptedRepository {
+    recent: Option<HashMap<Pubkey, Severity>>,
+    write_fails: bool,
+    lookups: Mutex<Vec<(String, DateTime<Utc>)>>,
+    writes: Mutex<Vec<Vec<Signal>>>,
+}
+
+impl ScriptedRepository {
+    fn new(recent: Option<HashMap<Pubkey, Severity>>, write_fails: bool) -> Self {
+        Self {
+            recent,
+            write_fails,
+            lookups: Mutex::default(),
+            writes: Mutex::default(),
+        }
+    }
+    fn knowing(recent: HashMap<Pubkey, Severity>) -> Self {
+        Self::new(Some(recent), false)
+    }
+    fn lookups(&self) -> usize {
+        self.lookups.lock().expect("lookups").len()
+    }
+    fn writes(&self) -> Vec<Vec<Signal>> {
+        self.writes.lock().expect("writes").clone()
+    }
+}
+
+#[async_trait::async_trait]
+impl SignalRepository for ScriptedRepository {
+    async fn insert_batch(&self, signals: &[Signal]) -> yog_core::RepositoryResult<()> {
+        self.writes.lock().expect("writes").push(signals.to_vec());
+        if self.write_fails {
+            return Err(RepositoryError::Backend("scripted".to_string()));
+        }
+        Ok(())
+    }
+    async fn latest_severity_by_pool(
+        &self,
+        detector: &str,
+        since: DateTime<Utc>,
+    ) -> yog_core::RepositoryResult<HashMap<Pubkey, Severity>> {
+        self.lookups
+            .lock()
+            .expect("lookups")
+            .push((detector.to_string(), since));
+        self.recent
+            .clone()
+            .ok_or_else(|| RepositoryError::Backend("scripted".to_string()))
+    }
+}
+
+fn tick(detector: &ScriptedDetector, repository: &ScriptedRepository) -> Snapshot {
+    snapshot(|| async { run_tick(detector, repository, NAME).await })
+}
+
+/// `outcome` counted once and no other, with `emitted` signals counted, `None` being never touched.
+fn assert_counted(counted: &Snapshot, outcome: &str, emitted: Option<u64>) {
+    let ticks: Vec<_> = counted
+        .iter()
+        .filter(|(key, _, _, _)| key.key().name() == "yog_signals_tick_total")
+        .collect();
+    assert_eq!(ticks.len(), 1, "{ticks:?}");
+    assert_eq!(
+        counter(
+            counted,
+            "yog_signals_tick_total",
+            &[("detector", NAME), ("outcome", outcome)],
+        ),
+        Some(1)
+    );
+    assert_eq!(
+        counter(counted, "yog_signals_emitted_total", &[("detector", NAME)]),
+        emitted
+    );
+}
+
+/// Mutation: `eval_failed` counted as `ok`, or a failed evaluation read as no candidate.
+#[test]
+fn a_failed_evaluation_asks_nothing_and_writes_nothing() {
+    let detector = ScriptedDetector::new(None);
+    let repository = ScriptedRepository::knowing(HashMap::new());
+
+    let counted = tick(&detector, &repository);
+
+    assert_eq!(repository.lookups(), 0);
+    assert!(repository.writes().is_empty());
+    assert_counted(&counted, "eval_failed", None);
+}
+
+/// Mutation: the early return on no candidate removed, which then counts `suppressed`.
+#[test]
+fn no_candidate_asks_nothing_and_counts_an_ordinary_tick() {
+    let detector = ScriptedDetector::new(Some(Vec::new()));
+    let repository = ScriptedRepository::knowing(HashMap::new());
+
+    let counted = tick(&detector, &repository);
+
+    assert_eq!(repository.lookups(), 0);
+    assert!(repository.writes().is_empty());
+    assert_counted(&counted, "ok", None);
+}
+
+/// Mutation: the cooldown dropped from the date, the interval read for it, or the date taken anew.
+#[test]
+fn the_lookup_receives_the_detector_and_the_start_of_its_cooldown() {
+    let detector = ScriptedDetector::new(Some(vec![sig(1, Severity::Warning)]));
+    let repository = ScriptedRepository::knowing(HashMap::new());
+
+    tick(&detector, &repository);
+
+    let evaluated_at = detector
+        .evaluated_at
+        .lock()
+        .expect("evaluated_at")
+        .expect("the detector was evaluated");
+    let lookups = repository.lookups.lock().expect("lookups");
+    assert_eq!(
+        *lookups,
+        [(
+            NAME.to_string(),
+            evaluated_at - ChronoDuration::seconds(COOLDOWN_SECS as i64)
+        )]
+    );
+}
+
+/// Mutation: `dedup_failed` and `persist_failed` swapped, or a failed lookup read as no past signal,
+/// which would write a signal twice.
+#[test]
+fn a_failed_lookup_writes_nothing_and_is_counted_under_its_reason() {
+    let detector = ScriptedDetector::new(Some(vec![sig(1, Severity::Warning)]));
+    let repository = ScriptedRepository::new(None, false);
+
+    let counted = tick(&detector, &repository);
+
+    assert_eq!(repository.lookups(), 1);
+    assert!(repository.writes().is_empty());
+    assert_counted(&counted, "dedup_failed", None);
+}
+
+/// Mutation: `suppressed` counted as `ok`, or an empty batch sent to the repository.
+#[test]
+fn candidates_all_within_the_cooldown_write_nothing_and_count_as_suppressed() {
+    let detector = ScriptedDetector::new(Some(vec![sig(1, Severity::Warning)]));
+    let repository = ScriptedRepository::knowing(HashMap::from([(pk(1), Severity::Warning)]));
+
+    let counted = tick(&detector, &repository);
+
+    assert!(repository.writes().is_empty());
+    assert_counted(&counted, "suppressed", None);
+}
+
+/// Mutation: `candidates` written instead of `to_emit`, a signal altered before the write, or the
+/// count taken from the candidates.
+#[test]
+fn only_the_retained_candidates_are_written_and_counted() {
+    let new_pool = sig(2, Severity::Warning);
+    let escalation = sig(3, Severity::Critical);
+    let detector = ScriptedDetector::new(Some(vec![
+        sig(1, Severity::Warning),
+        new_pool.clone(),
+        escalation.clone(),
+    ]));
+    let repository = ScriptedRepository::knowing(HashMap::from([
+        (pk(1), Severity::Warning),
+        (pk(3), Severity::Warning),
+    ]));
+
+    let counted = tick(&detector, &repository);
+
+    assert_eq!(repository.writes(), [vec![new_pool, escalation]]);
+    assert_counted(&counted, "ok", Some(2));
+}
+
+/// Mutation: `dedup_failed` and `persist_failed` swapped, or the signals counted before the write.
+#[test]
+fn a_failed_write_counts_no_signal_and_is_counted_under_its_reason() {
+    let signal = sig(1, Severity::Warning);
+    let detector = ScriptedDetector::new(Some(vec![signal.clone()]));
+    let repository = ScriptedRepository::new(Some(HashMap::new()), true);
+
+    let counted = tick(&detector, &repository);
+
+    assert_eq!(repository.writes(), [vec![signal]]);
+    assert_counted(&counted, "persist_failed", None);
 }
