@@ -25,7 +25,8 @@ context/src/
 │                      SolanaAccountClient (+ provider metrics; jupiter_price/
 │                      log.rs holds the client's log lines; infra.rs holds
 │                      the shared http_client and its timeouts; source_error.rs
-│                      turns a reqwest failure into a SourceError, URL stripped)
+│                      turns a reqwest failure into a SourceError, URL stripped;
+│                      scripted_provider.rs is the tests' local HTTP server)
 ├── bootstrap/       ← Config::load(), Daemon::connect — composition root, and the
 │                      stop: run() joins its three workers under the shared grace
 ├── error/           ← SourceError, WorkerError — shared by the layers

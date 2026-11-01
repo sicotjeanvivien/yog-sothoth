@@ -103,7 +103,8 @@ async fn past_a_hundred_addresses_every_batch_is_asked() {
     assert_eq!(sizes, [100, 1]);
 }
 
-/// Mutation: `error_for_status` removed. These clients have no rate-limit type: a 429 is `Http`.
+/// Mutation: `error_for_status` removed, or the URL, which holds the key, kept in the error. These
+/// clients have no rate-limit type: a 429 is `Http`.
 #[tokio::test]
 async fn a_refused_call_is_an_http_error() {
     for status in [500, 429] {
@@ -121,10 +122,12 @@ async fn a_refused_call_is_an_http_error() {
             1,
             "the request reached the server"
         );
+        let error = refused.expect_err("a refusal").to_string();
+        assert!(!error.contains("secret"), "{error}");
     }
 }
 
-/// An RPC error comes back as a 200: only the missing `result` tells.
+/// Mutation: a missing `result` read as no account: an RPC error comes back as a 200.
 #[tokio::test]
 async fn an_rpc_error_is_a_decode_error() {
     let body = json!({ "error": { "code": -32005, "message": "too many requests" } });
@@ -161,7 +164,7 @@ async fn a_failed_batch_fails_the_whole_call() {
     );
 }
 
-/// An answer shorter than the request loses the addresses past its end: absent, retried next cycle.
+/// Pinned as it is. Mutation: the answers matched to the addresses from the end.
 #[tokio::test]
 async fn a_short_answer_keeps_the_accounts_it_has() {
     let provider = ScriptedProvider::answering(vec![answer(vec![account(1)])]).await;

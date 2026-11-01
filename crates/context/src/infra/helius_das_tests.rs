@@ -344,8 +344,12 @@ fn das_response_ignores_unknown_fields() {
 
 // ── fetch_metadata: the calls, against a local server ───────────────────────────────
 
+fn asset_of(mint: Pubkey) -> serde_json::Value {
+    serde_json::json!({ "id": mint.to_string(), "token_info": { "decimals": 6 } })
+}
+
 fn asset(seed: u8) -> serde_json::Value {
-    serde_json::json!({ "id": pk(seed).to_string(), "token_info": { "decimals": 6 } })
+    asset_of(pk(seed))
 }
 
 fn answer(assets: Vec<serde_json::Value>) -> (u16, serde_json::Value) {
@@ -374,23 +378,32 @@ async fn the_request_asks_for_the_mints() {
     );
 }
 
-/// Mutation: the batch size raised past what Helius accepts, or a batch lost.
+/// Mutation: the batch size raised past what Helius accepts, or a batch sent twice, the mint past the
+/// first thousand then never asked.
 #[tokio::test]
 async fn past_a_thousand_mints_every_batch_is_asked() {
-    let wanted = vec![pk(1); 1_001];
-    let provider =
-        ScriptedProvider::answering(vec![answer(vec![asset(1)]), answer(vec![asset(2)])]).await;
+    let wanted: Vec<Pubkey> = (0..1_001).map(|_| Pubkey::new_unique()).collect();
+    let provider = ScriptedProvider::answering(vec![
+        answer(vec![asset_of(wanted[0])]),
+        answer(vec![asset_of(wanted[1_000])]),
+    ])
+    .await;
     let client = HeliusDasClient::new(provider.url.clone());
 
     let fetched = client.fetch_metadata(&wanted).await.expect("the metadata");
 
-    assert_eq!(mints(&fetched), [pk(1), pk(2)]);
-    let sizes: Vec<usize> = provider
-        .requests()
-        .iter()
-        .map(|request| request["params"]["ids"].as_array().expect("ids").len())
-        .collect();
-    assert_eq!(sizes, [1_000, 1]);
+    assert_eq!(mints(&fetched), [wanted[0], wanted[1_000]]);
+    let requests = provider.requests();
+    let ids = |request: usize| {
+        requests[request]["params"]["ids"]
+            .as_array()
+            .expect("ids")
+            .clone()
+    };
+    assert_eq!(requests.len(), 2);
+    assert_eq!(ids(0).len(), 1_000);
+    assert_eq!(ids(0)[0], wanted[0].to_string());
+    assert_eq!(ids(1), [wanted[1_000].to_string()]);
 }
 
 /// Mutation: a failed batch ending the call, which would lose the batches after it; or
