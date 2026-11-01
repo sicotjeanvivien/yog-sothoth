@@ -91,11 +91,14 @@ fn snapshotted(body: impl Future<Output = ()>) -> Snapshot {
 fn counter(snapshot: &Snapshot, name: &str, labels: &[(&str, &str)]) -> Option<u64> {
     snapshot.iter().find_map(|(key, _, _, value)| {
         let found = key.key().name() == name
-            && labels.iter().all(|(label, wanted)| {
-                key.key()
-                    .labels()
-                    .any(|l| l.key() == *label && l.value() == *wanted)
-            });
+            && [("protocol", PROTOCOL.as_str())]
+                .iter()
+                .chain(labels)
+                .all(|(label, wanted)| {
+                    key.key()
+                        .labels()
+                        .any(|l| l.key() == *label && l.value() == *wanted)
+                });
         match value {
             DebugValue::Counter(n) if found => Some(*n),
             _ => None,
@@ -123,12 +126,12 @@ fn failures_of(snapshot: &Snapshot, kind: &str) -> Option<u64> {
     )
 }
 
-pub(crate) fn inserts(calls: &Calls) -> usize {
+pub(crate) fn swaps_written(calls: &Calls) -> usize {
     calls
         .lock()
         .expect("the calls")
         .iter()
-        .filter(|call| call.starts_with("insert:"))
+        .filter(|call| **call == "insert:swap")
         .count()
 }
 
@@ -147,7 +150,7 @@ fn a_transaction_writes_every_event_and_exits_ok() {
     let calls = Calls::default();
     let counted = process(recording(&calls), double_swap());
 
-    assert_eq!(inserts(&calls), 2);
+    assert_eq!(swaps_written(&calls), 2);
     assert_eq!(entered(&counted), Some(1));
     assert_eq!(exited(&counted, "ok"), Some(1));
 }
@@ -161,7 +164,7 @@ fn a_failed_pool_write_does_not_stop_the_events_that_follow() {
         double_swap(),
     );
 
-    assert_eq!(inserts(&calls), 2);
+    assert_eq!(swaps_written(&calls), 2);
     assert_eq!(exited(&counted, "ok"), Some(1));
 }
 
@@ -174,7 +177,7 @@ fn a_transaction_without_an_event_writes_nothing_and_says_so() {
 
     let counted = process(recording(&calls), tx);
 
-    assert_eq!(inserts(&calls), 0);
+    assert_eq!(swaps_written(&calls), 0);
     assert_eq!(exited(&counted, "no_events"), Some(1));
     assert_eq!(exited(&counted, "ok"), None);
     assert_eq!(
@@ -193,7 +196,7 @@ fn an_unreadable_payload_is_counted_and_the_valid_events_are_written() {
 
     let counted = process(recording(&calls), tx);
 
-    assert_eq!(inserts(&calls), 2);
+    assert_eq!(swaps_written(&calls), 2);
     assert_eq!(exited(&counted, "ok"), Some(1));
     assert_eq!(failures_of(&counted, "borsh"), Some(1));
 }
@@ -205,7 +208,7 @@ fn a_transaction_with_only_unreadable_payloads_still_counts_its_failure() {
     let calls = Calls::default();
     let counted = process(recording(&calls), unreadable_only());
 
-    assert_eq!(inserts(&calls), 0);
+    assert_eq!(swaps_written(&calls), 0);
     assert_eq!(exited(&counted, "no_events"), Some(1));
     assert_eq!(failures_of(&counted, "borsh"), Some(1));
 }
@@ -220,7 +223,7 @@ fn an_unknown_discriminator_is_counted_with_its_code_and_the_valid_events_are_wr
 
     let counted = process(recording(&calls), tx);
 
-    assert_eq!(inserts(&calls), 2);
+    assert_eq!(swaps_written(&calls), 2);
     assert_eq!(exited(&counted, "ok"), Some(1));
     assert_eq!(
         counter(

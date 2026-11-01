@@ -1,7 +1,7 @@
 use super::*;
 use crate::application::services::meteora_persistor_fakes::Calls;
 use crate::application::services::processor_fixtures::{
-    double_swap, inserts, recording, unreadable_only,
+    double_swap, recording, swaps_written, unreadable_only,
 };
 use chrono::Utc;
 use metrics_util::debugging::{DebugValue, DebuggingRecorder};
@@ -119,9 +119,10 @@ async fn a_transaction_waits_for_a_free_place() {
     .expect("the semaphore stays open");
 }
 
-/// Mutation: `record_dropped` removed, or the stop no longer ending the wait for a place.
-#[test]
-fn a_transaction_given_up_at_the_stop_is_counted() {
+/// A transaction handed over once the stop is asked, a place being held or not: what it wrote, and
+/// the transactions counted as given up.
+fn handed_over_after_the_stop(place_held: bool) -> (usize, Option<DebugValue>) {
+    let calls = Calls::default();
     let recorder = DebuggingRecorder::new();
     let snapshotter = recorder.snapshotter();
     ::metrics::with_local_recorder(&recorder, || {
@@ -130,20 +131,24 @@ fn a_transaction_given_up_at_the_stop_is_counted() {
             .build()
             .expect("a runtime")
             .block_on(async {
-                let worker = IndexerWorker::new(recording(&Calls::default()), 1);
+                let worker = IndexerWorker::new(recording(&calls), 1);
                 let shutdown = CancellationToken::new();
-                let _held = Arc::clone(&worker.semaphore)
-                    .acquire_owned()
-                    .await
-                    .expect("permits are free");
+                let held = place_held.then(|| Arc::clone(&worker.semaphore));
+                let _held = match held {
+                    Some(semaphore) => Some(semaphore.acquire_owned().await.expect("free")),
+                    None => None,
+                };
                 shutdown.cancel();
+                let mut transaction = ingested(1);
+                transaction.transaction = double_swap();
                 tokio::time::timeout(
                     Duration::from_secs(5),
-                    worker.dispatch_one(ingested(1), 0, &shutdown),
+                    worker.dispatch_one(transaction, 0, &shutdown),
                 )
                 .await
                 .expect("the stop ends the wait")
                 .expect("a stop is no failure");
+                await_in_flight(&worker.semaphore, u32::from(!place_held)).await;
             })
     });
 
@@ -159,7 +164,22 @@ fn a_transaction_given_up_at_the_stop_is_counted() {
                     .any(|l| l.key() == "reason" && l.value() == "shutdown")
         })
         .map(|(_, _, _, value)| value);
-    assert_eq!(dropped, Some(DebugValue::Counter(1)));
+    (swaps_written(&calls), dropped)
+}
+
+/// Mutation: `record_dropped` removed, the stop no longer ending the wait for a place, or the place
+/// taken before the stop is read, which would start a write during the stop.
+#[test]
+fn a_transaction_given_up_at_the_stop_is_counted_and_not_written() {
+    for place_held in [true, false] {
+        let (written, dropped) = handed_over_after_the_stop(place_held);
+        assert_eq!(written, 0, "place held: {place_held}");
+        assert_eq!(
+            dropped,
+            Some(DebugValue::Counter(1)),
+            "place held: {place_held}"
+        );
+    }
 }
 
 /// Mutation: the loop ending at the first transaction.
@@ -183,5 +203,5 @@ async fn the_loop_goes_on_after_a_first_transaction() {
         .await
         .expect("the channel closing is no failure");
 
-    assert_eq!(inserts(&calls), 2);
+    assert_eq!(swaps_written(&calls), 2);
 }
