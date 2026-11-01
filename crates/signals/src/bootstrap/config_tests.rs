@@ -3,7 +3,7 @@ use std::sync::Mutex;
 
 use super::*;
 
-/// Held by `load_with` while it writes the environment; poison is stepped over, the panicking test
+/// Held by `load_with` while it writes and reads the environment; poison is stepped over, the panicking test
 /// having already failed.
 static ENV: Mutex<()> = Mutex::new(());
 
@@ -147,12 +147,16 @@ fn a_decimal_is_read_past_a_crlf_and_refused_when_unreadable() {
     );
 
     match load_with(&[("SIGNALS_FLOW_THRESHOLD", "abc")]) {
-        Err(ConfigError::InvalidValue { key, .. }) => assert_eq!(key, "SIGNALS_FLOW_THRESHOLD"),
+        Err(ConfigError::InvalidValue { key, expected, .. }) => {
+            assert_eq!(key, "SIGNALS_FLOW_THRESHOLD");
+            assert_eq!(expected, "a decimal number");
+        }
         other => panic!("expected a refusal, got {other:?}"),
     }
 }
 
-/// Mutation: one of the three `validate_ladder` removed, or quoting another detector's variable.
+/// Mutation: one of the three `validate_ladder` removed, quoting another detector's variable, or
+/// `decimal_var` refusing the value first.
 #[test]
 fn a_threshold_reaching_its_critical_is_refused_under_its_own_variable() {
     for (threshold_key, critical_key) in [
@@ -165,7 +169,10 @@ fn a_threshold_reaching_its_critical_is_refused_under_its_own_variable() {
     ] {
         for threshold in ["0.7", "0.8"] {
             match load_with(&[(threshold_key, threshold), (critical_key, "0.7")]) {
-                Err(ConfigError::InvalidValue { key, .. }) => assert_eq!(key, threshold_key),
+                Err(ConfigError::InvalidValue { key, expected, .. }) => {
+                    assert_eq!(key, threshold_key);
+                    assert!(expected.contains("Critical"), "{expected}");
+                }
                 other => panic!("{threshold_key}={threshold}: expected a refusal, got {other:?}"),
             }
         }
