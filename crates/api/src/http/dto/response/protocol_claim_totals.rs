@@ -54,3 +54,7 @@ impl From<ProtocolBucket<ClaimTotals>> for ProtocolClaimBucketResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/protocol_claim_totals_tests.rs"]
+mod tests;

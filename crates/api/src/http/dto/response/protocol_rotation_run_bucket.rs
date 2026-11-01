@@ -37,3 +37,7 @@ impl From<ProtocolBucket<RunSplit>> for ProtocolRotationRunBucketResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/protocol_rotation_run_bucket_tests.rs"]
+mod tests;

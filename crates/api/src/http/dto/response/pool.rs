@@ -54,3 +54,7 @@ impl From<PoolEntry> for PoolResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/pool_tests.rs"]
+mod tests;

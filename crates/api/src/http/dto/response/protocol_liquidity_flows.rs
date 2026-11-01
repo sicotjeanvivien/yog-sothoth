@@ -29,3 +29,7 @@ impl ProtocolLiquidityFlowsResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/protocol_liquidity_flows_tests.rs"]
+mod tests;

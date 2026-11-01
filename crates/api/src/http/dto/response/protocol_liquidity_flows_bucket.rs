@@ -26,3 +26,7 @@ impl From<ProtocolBucket<LiquidityFlows>> for ProtocolLiquidityFlowsBucketRespon
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/protocol_liquidity_flows_bucket_tests.rs"]
+mod tests;

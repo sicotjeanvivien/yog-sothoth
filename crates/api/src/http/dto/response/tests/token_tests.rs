@@ -182,3 +182,19 @@ fn price_provider_matches_the_domain() {
         assert_eq!(wire_tag(PriceProviderResponse::from(v)), v.as_str());
     }
 }
+
+/// Mutation: the price or its instant dropped, the source misnamed, or the confidence served.
+#[test]
+fn a_price_says_its_value_source_and_instant() {
+    let price = crate::testing::make_price(Pubkey::new_from_array([1; 32]));
+    let fetched_at = price.fetched_at;
+
+    assert_eq!(
+        serde_json::to_value(super::price_response::TokenPriceResponse::from(price)).unwrap(),
+        serde_json::json!({
+            "usd": "100",
+            "provider": "helius",
+            "fetchedAt": fetched_at,
+        })
+    );
+}

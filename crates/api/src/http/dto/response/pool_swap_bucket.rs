@@ -23,3 +23,7 @@ impl From<PoolSwapBucket> for PoolSwapBucketResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/pool_swap_bucket_tests.rs"]
+mod tests;

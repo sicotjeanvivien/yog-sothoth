@@ -54,3 +54,7 @@ impl From<ProtocolBucket<PositionChangeCounts>> for ProtocolPositionChangeBucket
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/protocol_position_change_totals_tests.rs"]
+mod tests;
