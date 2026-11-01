@@ -13,7 +13,7 @@ use crate::testing::{
     MockProtocolActivityRepo, MockSwapActivityRepo, MockTokenActivityRepo, at_october,
     frozen_hours_repo, make_frozen_hours, pk,
 };
-use yog_core::domain::{FrozenHours, TranchePeriod, WrittenTranches};
+use yog_core::domain::{FrozenHours, TokenActivity, TranchePeriod, WrittenTranches};
 
 fn service(repo: &Arc<MockSwapActivityRepo>) -> SwapActivityService {
     SwapActivityService::new(
@@ -270,4 +270,115 @@ async fn a_read_moved_back_has_no_previous_window() {
 
     assert!(totals.previous.is_none());
     assert_eq!(repo.reads.lock().unwrap().len(), 1);
+}
+
+/// Tranches begun half an hour ago: the last hour is not covered whole.
+fn late_tranches() -> WrittenTranches {
+    WrittenTranches {
+        first: tranches().through - chrono::TimeDelta::minutes(30),
+        through: tranches().through,
+    }
+}
+
+fn frozen_and_tranches(repo: &Arc<MockSwapActivityRepo>) -> SwapActivityService {
+    SwapActivityService::new(
+        Arc::new(MockProtocolActivityRepo::with_hours_and_tranches(
+            make_frozen_hours(),
+            tranches(),
+        )),
+        repo.clone(),
+        Arc::new(MockTokenActivityRepo::default()),
+    )
+}
+
+/// Mutation: the guard of the tokens' page forced either way — a 30-day ranking over seven days
+/// of facts served, or a week's never.
+#[tokio::test]
+async fn a_ranking_is_served_only_over_a_covered_window() {
+    let tokens = Arc::new(MockTokenActivityRepo {
+        ranked_at: Some(at_october(20, 12)),
+        items: vec![TokenActivity {
+            mint: pk(1),
+            metadata: None,
+            volume_usd: Decimal::from(5),
+            pools: 1,
+            pool_hours: 1,
+            pool_hours_valued: 1,
+        }],
+        ..MockTokenActivityRepo::default()
+    });
+    let svc = SwapActivityService::new(
+        frozen_hours_repo(Some(make_frozen_hours())),
+        Arc::new(MockSwapActivityRepo::default()),
+        tokens,
+    );
+    let count = async |window| match svc.list_token_activity(window, None, 10).await.unwrap() {
+        TokenActivityRead::Page(page) => page.items.items.len(),
+        TokenActivityRead::CursorExpired => panic!("no cursor, no expiry"),
+    };
+
+    assert_eq!(count(Window::Month).await, 0);
+    assert_eq!(count(Window::Week).await, 1);
+}
+
+/// Mutation: a tranche guard forced to true — an hour of half an hour's tranches summed or ranked
+/// as whole, protocol, pool or tokens.
+#[tokio::test]
+async fn an_hour_the_tranches_do_not_cover_is_not_read() {
+    let repo = Arc::new(MockSwapActivityRepo::default());
+    let tokens = Arc::new(MockTokenActivityRepo::default());
+    let svc = SwapActivityService::new(
+        Arc::new(MockProtocolActivityRepo::with_tranches(late_tranches())),
+        repo.clone(),
+        tokens.clone(),
+    );
+
+    let totals = svc.get_swap_totals(Window::Hour, None, None).await.unwrap();
+    let pool = svc.get_pool_swap_totals(Window::Hour, pk(1)).await.unwrap();
+    svc.list_token_activity(Window::Hour, None, 10)
+        .await
+        .unwrap();
+
+    assert!(totals.measured.items.is_empty() && pool.items.is_empty());
+    assert!(repo.tranche_reads.lock().unwrap().is_empty());
+    assert!(tokens.tranche_reads.lock().unwrap().is_empty());
+}
+
+/// Mutation: a guard of a pool's totals forced either way — thirty days summed over seven, or a
+/// covered period never read.
+#[tokio::test]
+async fn a_pools_totals_are_read_only_over_a_covered_period() {
+    let repo = Arc::new(MockSwapActivityRepo::default());
+    let svc = frozen_and_tranches(&repo);
+
+    svc.get_pool_swap_totals(Window::Month, pk(1))
+        .await
+        .unwrap();
+    assert!(repo.reads.lock().unwrap().is_empty());
+
+    svc.get_pool_swap_totals(Window::Week, pk(1)).await.unwrap();
+    svc.get_pool_swap_totals(Window::Hour, pk(1)).await.unwrap();
+
+    assert_eq!(repo.reads.lock().unwrap()[0].0, "pool_swap_totals");
+    assert_eq!(repo.tranche_reads.lock().unwrap()[0].0, "pool_swap_totals");
+}
+
+/// Mutation: a bar of a pool's series dropped — its last hour, or its hours, drawn empty.
+#[tokio::test]
+async fn a_pools_series_reads_the_buckets_of_its_interval() {
+    let repo = Arc::new(MockSwapActivityRepo::default());
+    let svc = frozen_and_tranches(&repo);
+
+    svc.list_pool_swap_series(Window::Hour, SeriesInterval::FiveMinutes, pk(1))
+        .await
+        .unwrap();
+    svc.list_pool_swap_series(Window::Week, SeriesInterval::Hour, pk(1))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.tranche_reads.lock().unwrap()[0].0,
+        "pool_swap_tranches"
+    );
+    assert_eq!(repo.reads.lock().unwrap()[0].0, "pool_swap_hourly");
 }

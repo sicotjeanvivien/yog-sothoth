@@ -32,7 +32,7 @@ use yog_core::{
         RewardChangeEventLookup, RewardClaimEvent, RewardClaimEventLookup, RotationRun,
         RotationRunCursor, RotationRunLookup, RotationRunOrder, RotationRunScope,
         RotationRunTotals, RunSplit, Severity, Signal, SignalCursor, SignalFeed, SignalFilter,
-        SignalRecord, SwapActivity, SwapActivityLookup, SwapEvent, SwapEventLookup,
+        SignalRecord, SwapActivity, SwapActivityLookup, SwapEvent, SwapEventLookup, TokenActivity,
         TokenActivityCursor, TokenActivityFeed, TokenActivityPage, TokenCursor, TokenEntry,
         TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceCursor, TokenPriceLookup,
         TranchePeriod, Window, WrittenTranches,
@@ -432,6 +432,7 @@ impl ProtocolActivityLookup for MockProtocolActivityRepo {
 #[derive(Default)]
 pub(crate) struct MockTokenActivityRepo {
     pub(crate) ranked_at: Option<DateTime<Utc>>,
+    pub(crate) items: Vec<TokenActivity>,
     pub(crate) reads: Mutex<Vec<Window>>,
     pub(crate) tranche_reads: Mutex<Vec<TranchePeriod>>,
 }
@@ -447,7 +448,10 @@ impl TokenActivityFeed for MockTokenActivityRepo {
         self.reads.lock().unwrap().push(window);
         Ok(self.ranked_at.map(|last_hour| TokenActivityPage {
             last_hour,
-            page: Page::empty(),
+            page: Page {
+                items: self.items.clone(),
+                ..Page::empty()
+            },
         }))
     }
     async fn list_in_tranches(
@@ -791,6 +795,7 @@ pub(crate) fn frozen_hours_repo(frozen: Option<FrozenHours>) -> Arc<MockProtocol
 /// A `SwapActivityLookup` that answers nothing and records the period and the scope of each read.
 #[derive(Default)]
 pub(crate) struct MockSwapActivityRepo {
+    pub(crate) totals: Vec<ProtocolSwapActivity>,
     pub(crate) widths: Mutex<Vec<TimeDelta>>,
     pub(crate) reads: Mutex<Vec<PeriodRead>>,
     pub(crate) tranche_reads: Mutex<Vec<(&'static str, TranchePeriod, Option<Protocol>)>>,
@@ -811,7 +816,7 @@ impl SwapActivityLookup for MockSwapActivityRepo {
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolSwapActivity>> {
         self.record("swap_totals", period, protocol);
-        Ok(vec![])
+        Ok(self.totals.clone())
     }
     async fn list_protocol_hourly(
         &self,
@@ -838,7 +843,7 @@ impl SwapActivityLookup for MockSwapActivityRepo {
     ) -> RepositoryResult<Vec<ProtocolSwapActivity>> {
         let read = ("swap_totals", *period, protocol);
         self.tranche_reads.lock().unwrap().push(read);
-        Ok(vec![])
+        Ok(self.totals.clone())
     }
     async fn list_protocol_tranches(
         &self,
@@ -895,9 +900,10 @@ impl SwapActivityLookup for MockSwapActivityRepo {
     }
 }
 
-/// A `PoolCreationsLookup` that answers nothing and records the width of each bucket read.
+/// A `PoolCreationsLookup` that answers nothing and records each read and each bucket's width.
 #[derive(Default)]
 pub(crate) struct MockPoolCreationsRepo {
+    pub(crate) reads: Mutex<Vec<&'static str>>,
     pub(crate) widths: Mutex<Vec<TimeDelta>>,
 }
 
@@ -908,6 +914,7 @@ impl PoolCreationsLookup for MockPoolCreationsRepo {
         _: &FrozenPeriod,
         _: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolPoolCreations>> {
+        self.reads.lock().unwrap().push("totals");
         Ok(vec![])
     }
     async fn list_hourly(
@@ -915,6 +922,7 @@ impl PoolCreationsLookup for MockPoolCreationsRepo {
         _: &FrozenPeriod,
         _: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBucket<PoolCreations>>> {
+        self.reads.lock().unwrap().push("hourly");
         Ok(vec![])
     }
     async fn list_buckets(
@@ -923,6 +931,7 @@ impl PoolCreationsLookup for MockPoolCreationsRepo {
         width: TimeDelta,
         _: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBucket<PoolCreations>>> {
+        self.reads.lock().unwrap().push("buckets");
         self.widths.lock().unwrap().push(width);
         Ok(vec![])
     }
@@ -931,6 +940,7 @@ impl PoolCreationsLookup for MockPoolCreationsRepo {
         _: &TranchePeriod,
         _: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolPoolCreations>> {
+        self.reads.lock().unwrap().push("totals_in_tranches");
         Ok(vec![])
     }
     async fn list_tranches(
@@ -938,6 +948,7 @@ impl PoolCreationsLookup for MockPoolCreationsRepo {
         _: &TranchePeriod,
         _: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolBucket<PoolCreations>>> {
+        self.reads.lock().unwrap().push("tranches");
         Ok(vec![])
     }
 }
@@ -1219,6 +1230,7 @@ impl LiquidityMoveLookup for MockLiquidityMoveRepo {
 /// A `ProtocolTvlLookup` that answers nothing and records the instant and the scope of each read.
 #[derive(Default)]
 pub(crate) struct MockProtocolTvlRepo {
+    pub(crate) latest: Vec<ProtocolTvl>,
     pub(crate) instants: Mutex<Vec<InstantRead>>,
     pub(crate) windows: Mutex<Vec<Window>>,
 }
@@ -1231,7 +1243,7 @@ impl ProtocolTvlLookup for MockProtocolTvlRepo {
         protocol: Option<Protocol>,
     ) -> RepositoryResult<Vec<ProtocolTvl>> {
         self.instants.lock().unwrap().push(("tvl", last, protocol));
-        Ok(vec![])
+        Ok(self.latest.clone())
     }
     async fn list_hourly(
         &self,

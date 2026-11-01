@@ -305,3 +305,83 @@ async fn a_series_keeps_its_coverage_and_opens_on_the_facts() {
     assert_eq!(period.covered_since(), at_october(20, 0));
     assert_eq!(period.opening_since(), at_october(13, 13));
 }
+
+/// Mutation: the hour's guard of the moves forced to true — a list over an hour the liquidity is
+/// measured from inside served as whole.
+#[tokio::test]
+async fn the_moves_of_an_hour_the_liquidity_does_not_cover_are_not_read() {
+    let tranches = WrittenTranches {
+        first: at_october(13, 13),
+        through: at_october(20, 12) + chrono::TimeDelta::minutes(40),
+    };
+    let repo = Arc::new(MockLiquidityMoveRepo {
+        since: Some(tranches.through - chrono::TimeDelta::minutes(30)),
+        ..MockLiquidityMoveRepo::default()
+    });
+    let hours = Arc::new(MockProtocolActivityRepo::with_tranches(tranches));
+    let svc = LiquidityMoveService::new(hours, repo.clone());
+
+    let moves = svc
+        .list_liquidity_moves(
+            Window::Hour,
+            LiquidityMoveList::every_kind(LiquidityMoveScope::Protocol(Protocol::MeteoraDammV2)),
+            Protocol::MeteoraDammV2,
+            LiquidityMoveOrder::Amount,
+            None,
+            5,
+        )
+        .await;
+
+    assert!(moves.is_ok_and(|moves| moves.items.items.is_empty()));
+    assert!(repo.tranche_reads.lock().unwrap().is_empty());
+}
+
+/// Mutation: the guard of the frozen totals forced to false — a covered week never read.
+#[tokio::test]
+async fn the_totals_of_a_covered_week_are_read() {
+    let repo = Arc::new(MockLiquidityMoveRepo {
+        since: Some(at_october(13, 13)),
+        ..MockLiquidityMoveRepo::default()
+    });
+
+    service(&repo)
+        .get_liquidity_totals(Window::Week, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+
+    assert_eq!(reads(&repo), ["liquidity_totals"]);
+}
+
+/// Mutation: a bar of the series dropped — its last hour, or its hours, drawn empty.
+#[tokio::test]
+async fn a_series_reads_the_buckets_of_its_interval() {
+    let repo = Arc::new(MockLiquidityMoveRepo {
+        since: Some(at_october(13, 13)),
+        ..MockLiquidityMoveRepo::default()
+    });
+    let hours = Arc::new(MockProtocolActivityRepo::with_hours_and_tranches(
+        make_frozen_hours(),
+        WrittenTranches {
+            first: at_october(13, 13),
+            through: at_october(20, 12) + chrono::TimeDelta::minutes(40),
+        },
+    ));
+    let svc = LiquidityMoveService::new(hours, repo.clone());
+
+    svc.list_liquidity_series(
+        Window::Hour,
+        SeriesInterval::FiveMinutes,
+        Protocol::MeteoraDammV2,
+    )
+    .await
+    .unwrap();
+    svc.list_liquidity_series(Window::Week, SeriesInterval::Hour, Protocol::MeteoraDammV2)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.tranche_reads.lock().unwrap()[0].0,
+        "liquidity_tranches"
+    );
+    assert_eq!(reads(&repo), ["liquidity_hourly"]);
+}

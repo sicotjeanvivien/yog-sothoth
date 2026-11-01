@@ -256,3 +256,17 @@ async fn a_series_says_the_first_instant_the_runs_split_a_bar() {
     assert_eq!(week.split_since, Some(at_october(19, 11)));
     assert_eq!(hour.split_since, Some(measured_since + RUN_GAP));
 }
+
+/// Mutation: the list's guard forced to true — a window the runs start inside listed as whole.
+#[tokio::test]
+async fn a_list_over_a_window_the_runs_do_not_cover_is_not_read() {
+    let repo = Arc::new(MockRotationRunRepo {
+        written_through: Some(minutes(at_october(20, 13), 20)),
+        measured_since: Some(at_october(20, 1)),
+        ..MockRotationRunRepo::default()
+    });
+
+    assert!(page_after(&repo, None).await.is_ok());
+
+    assert!(repo.lists.lock().unwrap().is_empty());
+}

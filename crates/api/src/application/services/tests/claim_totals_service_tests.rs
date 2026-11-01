@@ -163,3 +163,28 @@ async fn a_series_keeps_its_coverage_and_opens_on_the_facts() {
     assert_eq!(period.covered_since(), at_october(20, 0));
     assert_eq!(period.opening_since(), at_october(13, 13));
 }
+
+/// Mutation: the tranche guard forced either way — an hour the claims start inside summed as
+/// whole, or a covered hour never read.
+#[tokio::test]
+async fn the_claims_of_the_hour_are_read_only_when_they_cover_it() {
+    let through = at_october(20, 12) + TimeDelta::minutes(40);
+    let read = async |since| {
+        let repo = Arc::new(MockClaimTotalsRepo {
+            since: Some(since),
+            ..MockClaimTotalsRepo::default()
+        });
+        let hours = MockProtocolActivityRepo::with_tranches(WrittenTranches {
+            first: at_october(13, 13),
+            through,
+        });
+        ClaimTotalsService::new(Arc::new(hours), repo.clone())
+            .get_claim_totals(ClaimKind::Reward, Window::Hour, Protocol::MeteoraDammV2)
+            .await
+            .unwrap();
+        repo.tranche_reads.lock().unwrap().len()
+    };
+
+    assert_eq!(read(through - TimeDelta::minutes(30)).await, 0);
+    assert_eq!(read(at_october(14, 0)).await, 1);
+}
