@@ -6,7 +6,7 @@ use super::*;
 // which is why it is tested: a refusal nothing reaches is one nobody notices broken.
 
 #[test]
-fn a_pool_leaves_two_connections_for_the_reporter_and_the_coverage_writer() {
+fn a_pool_leaves_two_connections_for_the_reporter_and_the_slots_recorder() {
     assert_eq!(index_concurrency(10).unwrap(), 8);
     assert_eq!(index_concurrency(3).unwrap(), 1);
 }

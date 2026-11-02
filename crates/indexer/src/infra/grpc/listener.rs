@@ -7,6 +7,7 @@ mod connector;
 mod ending;
 mod log;
 mod retry_budget;
+mod slots_recorder;
 mod stall_clock;
 
 use std::{collections::HashSet, sync::Arc, time::Duration};
@@ -24,9 +25,9 @@ use crate::{
     infra::{
         Credential,
         grpc::{
-            coverage::{CoverageWriter, Observed, SessionCoverage},
             interceptor::CredentialInterceptor,
             metrics::{GrpcListenerMetrics, WAITING_PEAKS},
+            session::received_slots::{RangesToRecord, ReceivedSlots},
             subscription::build_request,
         },
     },
@@ -35,6 +36,7 @@ use crate::{
 use connector::Connector;
 use retry_budget::{Next, RetryBudget};
 
+pub(crate) use slots_recorder::{RECORD_PERIOD, SlotsRecorder};
 pub(crate) use stall_clock::STALL_TIMEOUT;
 
 /// Subscribes to a Yellowstone stream and turns it into timestamped transactions; what it
@@ -45,8 +47,8 @@ pub(crate) struct GrpcListener {
     /// Every address to subscribe to, with its protocol.
     watched: Mutex<HashSet<(Protocol, Pubkey)>>,
     max_attempts: u32,
-    /// What records the slots observed; `None` records nothing.
-    coverage: Option<CoverageWriter>,
+    /// What writes the slots the sessions received; `None` writes nothing.
+    recorder: Option<SlotsRecorder>,
 }
 
 impl GrpcListener {
@@ -55,13 +57,13 @@ impl GrpcListener {
             connector: Connector::new(endpoint, stall_timeout),
             watched: Mutex::new(HashSet::new()),
             max_attempts,
-            coverage: None,
+            recorder: None,
         }
     }
 
-    /// Record the slots each session observes, through `writer`.
-    pub(crate) fn with_coverage(mut self, writer: CoverageWriter) -> Self {
-        self.coverage = Some(writer);
+    /// Write the slots each session receives for good, through `recorder`.
+    pub(crate) fn with_slots_recorder(mut self, recorder: SlotsRecorder) -> Self {
+        self.recorder = Some(recorder);
         self
     }
 
@@ -94,23 +96,23 @@ impl GrpcListener {
         WAITING_PEAKS.export();
 
         // ⚠️ Stopped with the attempts, whatever ended them, this future dropped included: a
-        // writer outliving them would go on writing a range no session extends.
-        let observed = Observed::default();
-        let writer_stop = shutdown.child_token();
-        let _stop_writer_on_drop = writer_stop.clone().drop_guard();
-        let writer = self
-            .coverage
+        // recorder outliving them would go on writing a span no session extends.
+        let ranges = RangesToRecord::default();
+        let recorder_stop = shutdown.child_token();
+        let _stop_recorder_on_drop = recorder_stop.clone().drop_guard();
+        let recorder = self
+            .recorder
             .clone()
-            .map(|writer| tokio::spawn(writer.run(observed.clone(), writer_stop.clone())));
+            .map(|recorder| tokio::spawn(recorder.run(ranges.clone(), recorder_stop.clone())));
 
         let result = self
-            .attempts(&channel, &interceptor, &downstream, &observed, &shutdown)
+            .attempts(&channel, &interceptor, &downstream, &ranges, &shutdown)
             .await;
 
-        writer_stop.cancel();
-        if let Some(writer) = writer {
-            // A writer's panic stops nothing.
-            let _ = writer.await;
+        recorder_stop.cancel();
+        if let Some(recorder) = recorder {
+            // A recorder's panic stops nothing.
+            let _ = recorder.await;
         }
         result
     }
@@ -121,7 +123,7 @@ impl GrpcListener {
         channel: &tonic::transport::Endpoint,
         interceptor: &CredentialInterceptor,
         downstream: &mpsc::Sender<IngestedTransaction>,
-        observed: &Observed,
+        ranges: &RangesToRecord,
         shutdown: &CancellationToken,
     ) -> Result<(), GrpcListenerError> {
         let mut budget = RetryBudget::new(self.max_attempts);
@@ -134,7 +136,7 @@ impl GrpcListener {
             }
 
             let (request, protocols) = self.subscription(resume_from).await?;
-            let coverage = SessionCoverage::new(protocols, observed.clone());
+            let received_slots = ReceivedSlots::new(protocols, ranges.clone());
 
             let verdict = self
                 .connector
@@ -143,7 +145,7 @@ impl GrpcListener {
                     interceptor,
                     request,
                     downstream,
-                    coverage,
+                    received_slots,
                     shutdown,
                 )
                 .await

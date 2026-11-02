@@ -23,7 +23,7 @@ pub(super) fn spawn_source_task(
 }
 
 /// Connections the pool's other in-process users need while the indexer worker runs: the
-/// [`NetworkStatusReporter`]'s tick and the coverage writer's. `WatchedPoolService` runs once, before.
+/// [`NetworkStatusReporter`]'s tick and the slots recorder's. `WatchedPoolService` runs once, before.
 const CONNECTIONS_RESERVED: u32 = 2;
 
 /// The opened pool minus what is reserved; refuses a pool too small to reserve from.
@@ -33,7 +33,7 @@ pub(super) fn index_concurrency(max_connections: u32) -> anyhow::Result<usize> {
     anyhow::ensure!(
         max_connections > CONNECTIONS_RESERVED,
         "database pool holds {max_connections} connection(s), and {CONNECTIONS_RESERVED} must \
-         stay free for the network status reporter and the coverage writer — the indexer would \
+         stay free for the network status reporter and the slots recorder — the indexer would \
          have none left to persist with. Open the pool with more connections."
     );
     Ok((max_connections - CONNECTIONS_RESERVED) as usize)

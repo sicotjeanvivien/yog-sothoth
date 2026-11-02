@@ -149,18 +149,18 @@ const MARKS_ABANDONED: &str = "yog_indexer_grpc_resume_marks_abandoned_total";
 /// it names them. ⚠️ Kept across a reconnection until the new session's first message says.
 const BANK_ID_MISSING: &str = "yog_indexer_grpc_bank_id_missing";
 
-/// Ranges of observed slots written to `ingest_coverage`, by [`CoverageWrite`].
-const COVERAGE_WRITES: &str = "yog_indexer_grpc_coverage_writes_total";
+/// Spans of received slots written to `observed_slot_ranges`, by [`ObservedSlotsWrite`].
+const OBSERVED_SLOTS_WRITES: &str = "yog_indexer_grpc_observed_slots_writes_total";
 
-/// How a write of observed slots ended, for [`COVERAGE_WRITES`].
+/// How a write of received slots ended, for [`OBSERVED_SLOTS_WRITES`].
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum CoverageWrite {
+pub(crate) enum ObservedSlotsWrite {
     Written,
-    /// Not recorded; the next tick writes the range again.
+    /// Not written; the next tick writes the span again.
     Failed,
 }
 
-impl CoverageWrite {
+impl ObservedSlotsWrite {
     fn as_str(self) -> &'static str {
         match self {
             Self::Written => "written",
@@ -327,10 +327,10 @@ impl GrpcListenerMetrics {
              answer did not leave"
         );
         describe_counter!(
-            COVERAGE_WRITES,
-            "Ranges of observed slots written to ingest_coverage, labelled by \
-             outcome; a failed one leaves its slots declared missing until the \
-             next write"
+            OBSERVED_SLOTS_WRITES,
+            "Spans of received slots written to observed_slot_ranges, labelled \
+             by outcome; a failed one leaves its slots unwatched until the next \
+             write"
         );
         describe_gauge!(
             BANK_ID_MISSING,
@@ -367,8 +367,8 @@ impl GrpcListenerMetrics {
         counter!(MARKS_ABANDONED, "reason" => reason.as_str()).increment(1);
     }
 
-    pub(crate) fn record_coverage_write(outcome: CoverageWrite) {
-        counter!(COVERAGE_WRITES, "outcome" => outcome.as_str()).increment(1);
+    pub(crate) fn record_observed_slots_write(outcome: ObservedSlotsWrite) {
+        counter!(OBSERVED_SLOTS_WRITES, "outcome" => outcome.as_str()).increment(1);
     }
 
     pub(crate) fn record_bank_id_missing(missing: bool) {

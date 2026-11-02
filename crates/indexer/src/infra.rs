@@ -5,8 +5,8 @@ mod rpc;
 
 pub(crate) use endpoint::Credential;
 pub(crate) use grpc::{
-    COVERAGE_PERIOD, CoverageWriter, GrpcBufferMetrics, GrpcListener, GrpcListenerMetrics,
-    GrpcTransactionSource, STALL_TIMEOUT,
+    GrpcBufferMetrics, GrpcListener, GrpcListenerMetrics, GrpcTransactionSource, RECORD_PERIOD,
+    STALL_TIMEOUT, SlotsRecorder,
 };
 
 #[cfg(test)]

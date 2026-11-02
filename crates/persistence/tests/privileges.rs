@@ -153,14 +153,6 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     ("claim_protocol_fee_events", &[("yog_api", &["SELECT"])]),
     ("claim_reward_events", &[("yog_api", &["SELECT"])]),
     ("fund_reward_events", &[("yog_api", &["SELECT"])]),
-    (
-        "ingest_coverage",
-        &[
-            ("yog_api", &["SELECT"]),
-            ("yog_indexer", &["INSERT", "SELECT", "UPDATE"]),
-        ],
-    ),
-    ("ingest_coverage_gaps", &[("yog_api", &["SELECT"])]),
     ("initialize_reward_events", &[("yog_api", &["SELECT"])]),
     // Default privileges cover these reads in production: only this matrix sees them go missing.
     ("liquidity_events", &[("yog_api", &["SELECT"])]),
@@ -370,6 +362,13 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
         ],
     ),
     (
+        "observed_slot_ranges",
+        &[
+            ("yog_api", &["SELECT"]),
+            ("yog_indexer", &["INSERT", "SELECT", "UPDATE"]),
+        ],
+    ),
+    (
         "pool_current_state",
         &[
             ("yog_api", &["SELECT"]),
@@ -427,6 +426,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
             ("yog_signals", &["SELECT"]),
         ],
     ),
+    ("unobserved_slot_ranges", &[("yog_api", &["SELECT"])]),
     ("update_reward_duration_events", &[("yog_api", &["SELECT"])]),
     ("update_reward_funder_events", &[("yog_api", &["SELECT"])]),
     (

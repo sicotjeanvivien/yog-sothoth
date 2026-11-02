@@ -6,7 +6,6 @@ mod domain_event;
 mod event_cursor;
 mod event_position;
 mod freshness_status;
-mod ingest_coverage;
 mod insert_outcome;
 mod kept_prices;
 mod liquidity_change_event;
@@ -15,6 +14,7 @@ mod liquidity_moves;
 mod materialization_backlog;
 mod meteora;
 mod network_status;
+mod observed_slots;
 mod pool;
 mod pool_account;
 mod pool_change_event;
@@ -59,7 +59,6 @@ pub use domain_event::DomainEvent;
 pub use event_cursor::{EventCursor, EventScope};
 pub use event_position::{EventPosition, TransactionPosition};
 pub use freshness_status::{EventFreshnessRepository, FreshnessStatus};
-pub use ingest_coverage::{IngestCoverageRepository, ObservedSlots, SlotRange};
 pub use insert_outcome::InsertOutcome;
 pub use kept_prices::{KeptPrices, PRICE_MAX_AGE_LATEST};
 pub use liquidity_change_event::{LiquidityChangeEvent, LiquidityChangeEventLookup};
@@ -99,6 +98,7 @@ pub use meteora::{
     MeteoraDammV2WithdrawIneligibleRewardEventRepository, MeteoraDlmmPoolAccountProperties,
 };
 pub use network_status::{NetworkStatus, NetworkStatusLookup, NetworkStatusRepository};
+pub use observed_slots::{ObservedSlots, ObservedSlotsRepository};
 pub use pool::{
     Pool, PoolCatalog, PoolCursor, PoolEntry, PoolRepository, PoolScope, PoolValue, ProtocolPools,
 };

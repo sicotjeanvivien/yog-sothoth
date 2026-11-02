@@ -89,8 +89,8 @@ use tonic::Status;
 
 use crate::infra::grpc::{
     test_fixtures::{
-        PROTOCOL, RecordedCoverage, block_meta, ping, slot_finalized, transaction, unread_coverage,
-        unroutable_transaction,
+        PROTOCOL, WrittenSlots, block_meta, ping, received_slots_unwritten, slot_finalized,
+        transaction, unroutable_transaction,
     },
     test_geyser_server::{self, Action, ScriptedGeyserHandle, ScriptedSession},
 };
@@ -737,7 +737,7 @@ async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
             &interceptor,
             request,
             &downstream,
-            unread_coverage(),
+            received_slots_unwritten(),
             &CancellationToken::new(),
         ),
     )
@@ -794,7 +794,7 @@ async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
             &interceptor,
             request,
             &downstream,
-            unread_coverage(),
+            received_slots_unwritten(),
             &CancellationToken::new(),
         ),
     )
@@ -1272,23 +1272,23 @@ async fn a_shutdown_reaches_a_subscribe_that_is_never_answered() {
     );
 }
 
-// ── what the sessions observed ──────────────────────────────────────
+// ── what the sessions received for good ──────────────────────────────────────
 
-/// A writer period the tests can wait through.
-const COVERAGE_TICK: Duration = Duration::from_millis(20);
+/// A recorder period the tests can wait through.
+const RECORD_TICK: Duration = Duration::from_millis(20);
 
-/// A listener watching DAMM v2 whole, recording what it observes in memory.
-async fn covered_listener(
+/// A listener watching DAMM v2 whole, writing what it receives in memory.
+async fn recorded_listener(
     server: &ScriptedGeyserHandle,
     max_attempts: u32,
-) -> (Arc<GrpcListener>, Arc<RecordedCoverage>) {
-    let recorded = Arc::new(RecordedCoverage::default());
+) -> (Arc<GrpcListener>, Arc<WrittenSlots>) {
+    let recorded = Arc::new(WrittenSlots::default());
     let listener = GrpcListener::new(
         Endpoint::for_tests(server.url(), None),
         max_attempts,
         STALL_TIMEOUT,
     )
-    .with_coverage(CoverageWriter::new(recorded.clone(), COVERAGE_TICK));
+    .with_slots_recorder(SlotsRecorder::new(recorded.clone(), RECORD_TICK));
     listener.watch(PROTOCOL).await;
     (Arc::new(listener), recorded)
 }
@@ -1297,8 +1297,8 @@ fn timed_meta(slot: u64) -> Action {
     Action::send(block_meta(slot, Some(BLOCK_TIME + slot as i64)))
 }
 
-/// The widest range recorded per session, in the order the sessions started.
-fn sessions(recorded: &RecordedCoverage) -> Vec<(u64, u64)> {
+/// The widest span written per session, in the order the sessions started.
+fn sessions(recorded: &WrittenSlots) -> Vec<(u64, u64)> {
     let mut widest: Vec<(chrono::DateTime<chrono::Utc>, u64, u64)> = Vec::new();
     for row in recorded.rows() {
         match widest
@@ -1306,21 +1306,21 @@ fn sessions(recorded: &RecordedCoverage) -> Vec<(u64, u64)> {
             .find(|(key, _, _)| *key == row.session_started_at)
         {
             Some((_, from, to)) => {
-                *from = (*from).min(row.range.from());
-                *to = (*to).max(row.range.to());
+                *from = (*from).min(row.first_slot);
+                *to = (*to).max(row.last_slot);
             }
-            None => widest.push((row.session_started_at, row.range.from(), row.range.to())),
+            None => widest.push((row.session_started_at, row.first_slot, row.last_slot)),
         }
     }
     widest.sort();
     widest.into_iter().map(|(_, from, to)| (from, to)).collect()
 }
 
-/// Wait until the sessions recorded are `expected`, or the deadline.
-async fn wait_for_sessions(recorded: &RecordedCoverage, expected: &[(u64, u64)]) {
+/// Wait until the sessions written are `expected`, or the deadline.
+async fn wait_for_sessions(recorded: &WrittenSlots, expected: &[(u64, u64)]) {
     let waited = timeout(TEST_DEADLINE, async {
         while sessions(recorded) != expected {
-            tokio::time::sleep(COVERAGE_TICK).await;
+            tokio::time::sleep(RECORD_TICK).await;
         }
     })
     .await;
@@ -1331,9 +1331,9 @@ async fn wait_for_sessions(recorded: &RecordedCoverage, expected: &[(u64, u64)])
     );
 }
 
-/// Mutation: the session no longer feeding its coverage, or its high end no longer widened.
+/// Mutation: the session no longer counting what it receives, or its last slot no longer widened.
 #[tokio::test]
-async fn a_session_records_the_slots_it_saw_closed_skipped_ones_included() {
+async fn a_session_writes_the_slots_it_received_skipped_ones_included() {
     let server = test_geyser_server::start(vec![ScriptedSession::Stream(vec![
         timed_meta(10),
         timed_meta(11),
@@ -1344,7 +1344,7 @@ async fn a_session_records_the_slots_it_saw_closed_skipped_ones_included() {
         Action::Hold,
     ])])
     .await;
-    let (listener, recorded) = covered_listener(&server, 1).await;
+    let (listener, recorded) = recorded_listener(&server, 1).await;
     let (downstream, _consumer) = mpsc::channel(4);
     let shutdown = CancellationToken::new();
     let run = tokio::spawn(listener.run(downstream, shutdown.clone()));
@@ -1356,9 +1356,9 @@ async fn a_session_records_the_slots_it_saw_closed_skipped_ones_included() {
     run.await.expect("the listener ends").expect("on shutdown");
 }
 
-/// Mutation: one session key for the whole listener, so a reconnection extends the range before.
+/// Mutation: one session key for the whole listener, so a reconnection extends the span before.
 #[tokio::test]
-async fn each_connection_records_its_own_range() {
+async fn each_connection_writes_its_own_span() {
     let server = test_geyser_server::start(vec![
         ScriptedSession::Stream(vec![
             timed_meta(10),
@@ -1376,7 +1376,7 @@ async fn each_connection_records_its_own_range() {
         ]),
     ])
     .await;
-    let (listener, recorded) = covered_listener(&server, 2).await;
+    let (listener, recorded) = recorded_listener(&server, 2).await;
     let (downstream, _consumer) = mpsc::channel(4);
     let shutdown = CancellationToken::new();
     let run = tokio::spawn(listener.run(downstream, shutdown.clone()));
@@ -1387,9 +1387,9 @@ async fn each_connection_records_its_own_range() {
     run.await.expect("the listener ends").expect("on shutdown");
 }
 
-/// Mutation: the program-id filter removed, so a pool watched alone covers its protocol.
+/// Mutation: the program-id filter removed, so a pool watched alone watches its protocol.
 #[tokio::test]
-async fn only_a_protocol_watched_whole_is_covered() {
+async fn only_a_protocol_watched_whole_counts() {
     let pool = (PROTOCOL, Pubkey::new_from_array([7; 32]));
     let mut watched = HashSet::from([pool]);
     assert_eq!(&*whole_protocols(&watched), []);

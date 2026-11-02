@@ -18,11 +18,11 @@ use yellowstone_grpc_proto::prelude::{
 use yog_core::domain::Protocol;
 use yog_core::{
     RepositoryError, RepositoryResult,
-    domain::{IngestCoverageRepository, ObservedSlots},
+    domain::{ObservedSlots, ObservedSlotsRepository},
 };
 
 use super::{
-    coverage::{Observed, SessionCoverage},
+    session::received_slots::{RangesToRecord, ReceivedSlots},
     subscription::{BLOCK_META_FILTER, SLOT_FILTER},
 };
 
@@ -162,19 +162,19 @@ pub(super) fn update(filters: &[&str], oneof: UpdateOneof) -> SubscribeUpdate {
     }
 }
 
-/// A session's coverage that nobody reads.
-pub(super) fn unread_coverage() -> SessionCoverage {
-    SessionCoverage::new(Arc::from([PROTOCOL]), Observed::default())
+/// A session's received slots that nobody writes.
+pub(super) fn received_slots_unwritten() -> ReceivedSlots {
+    ReceivedSlots::new(Arc::from([PROTOCOL]), RangesToRecord::default())
 }
 
-/// The coverage journal in memory: what was recorded, and a switch that refuses every write.
+/// The observed slots in memory: what was written, and a switch that refuses every write.
 #[derive(Default)]
-pub(super) struct RecordedCoverage {
+pub(super) struct WrittenSlots {
     rows: Mutex<Vec<ObservedSlots>>,
     refusing: AtomicBool,
 }
 
-impl RecordedCoverage {
+impl WrittenSlots {
     pub(super) fn rows(&self) -> Vec<ObservedSlots> {
         self.rows.lock().unwrap().clone()
     }
@@ -185,7 +185,7 @@ impl RecordedCoverage {
 }
 
 #[async_trait]
-impl IngestCoverageRepository for RecordedCoverage {
+impl ObservedSlotsRepository for WrittenSlots {
     async fn record(&self, observed: &ObservedSlots) -> RepositoryResult<()> {
         if self.refusing.load(Ordering::SeqCst) {
             return Err(RepositoryError::Backend("refused by the test".to_string()));

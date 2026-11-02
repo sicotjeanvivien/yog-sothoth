@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO observed_slot_ranges AS r\n                (protocol, session_started_at, first_slot, last_slot,\n                 first_slot_at, last_slot_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, now())\n            ON CONFLICT (protocol, session_started_at) DO UPDATE\n            SET first_slot    = LEAST(r.first_slot, EXCLUDED.first_slot),\n                first_slot_at = CASE WHEN EXCLUDED.first_slot < r.first_slot\n                                     THEN EXCLUDED.first_slot_at ELSE r.first_slot_at END,\n                last_slot     = GREATEST(r.last_slot, EXCLUDED.last_slot),\n                last_slot_at  = CASE WHEN EXCLUDED.last_slot > r.last_slot\n                                     THEN EXCLUDED.last_slot_at ELSE r.last_slot_at END,\n                updated_at    = now()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Int8",
+        "Int8",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b4ea3257cf6ce4fd776b3356f0a6afcf2b2827f549bce2798d556f58fa4b70dc"
+}

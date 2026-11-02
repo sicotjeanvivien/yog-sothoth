@@ -28,7 +28,7 @@ indexer/src/
 ├── infra/grpc/            ← GrpcTransactionSource and the single stage behind
 │                            it: listener, subscription, session, credential
 │                            interceptor, protobuf adapter, slot/time buffer,
-│                            coverage (the slots observed, written)
+│                            the slots received for good, and their recorder
 │   ├── listener/          ← one module per responsibility: connector,
 │   │                        ending (+ verdict, resume mark), retry_budget,
 │   │                        stall_clock, log — listener.rs assembles them
@@ -321,7 +321,7 @@ is why it lives beside the fetch rather than beside the consumer.
 
 `IndexerWorker`'s cap is **not** a constant: it is the database pool's size
 minus the connections this process needs elsewhere (two, for the
-`NetworkStatusReporter` and the coverage writer), computed at startup by
+`NetworkStatusReporter` and the slots recorder), computed at startup by
 `bootstrap/daemon/tasks.rs::index_concurrency` and logged there. A task does not
 hold a connection while it persists — sqlx takes one per statement — but it issues
 one statement at a time, so *n* tasks put at most *n* in flight and the pool
@@ -384,38 +384,39 @@ than leaving a gap. Only the code is read, never the message. Each mark given
 up is a `warn!` (`gRPC resume mark abandoned`, with the slot and the code) and
 an increment of `yog_indexer_grpc_resume_marks_abandoned_total{reason}`.
 
-### What the stream observed (`infra/grpc/coverage.rs`)
+### The slots received, and the ranges nobody watched
 
 An empty slot range reads the same whether nothing happened or nobody was
-watching. So each session writes what it saw: in `ingest_coverage`, one row per
-session and per protocol watched whole, from the lowest to the highest slot a
-timed block-meta closed **below the session's resume point**, each end with its
-block time. A slot at or past that point would be asked again by a
-reconnection; if the replay were refused, its transactions would be lost, so it
-is not yet observed. A gap is **never
-written**: the view `ingest_coverage_gaps` is the complement of the ranges, so a
-process killed, a budget run out or a host restarted leaves one without anyone
-deciding it.
+watching. So the stream writes what it watched: in `observed_slot_ranges`, one
+row per session and per protocol watched whole, from the first to the last slot
+the session **received for good**, each with its block time. A range nobody
+watched is **never written**: the view `unobserved_slot_ranges` is the
+complement, so a process killed, a budget run out or a host restarted leaves one
+without anyone deciding it.
 
-- The range runs lowest to highest, not first to last: a replay delivers its
-  oldest slots last. A slot the network skipped does not cut it.
-- Each session keeps its own entry until its last range is recorded, so a
-  reconnection never overwrites the range before it.
-- A writer task, started and stopped with `GrpcListener::run`, records every
-  `COVERAGE_PERIOD` (60 s), and once more when it stops, **the ranges read at
-  the tick before**: a transaction released by its slot may still wait for the
-  persistor, so a cut declares a gap a little too wide, never too narrow. An
-  unchanged range is not written again; a failed write is counted, and the
-  range stays due for the next tick.
+- `session/received_slots.rs` — what a session received for good: the slots of
+  its timed block-metas **below its resume point**. A slot at or past that point
+  would be asked again by a reconnection; if the replay were refused, its
+  transactions would be lost, so it is not yet received. The span runs lowest to
+  highest, not first to last: a replay delivers its oldest slots last. A slot the
+  network skipped does not cut it. Each session keeps its own entry in
+  `RangesToRecord` until its last span is written, so a reconnection never
+  overwrites the span before it.
+- `listener/slots_recorder.rs` — `SlotsRecorder`, started and stopped with
+  `GrpcListener::run`, writes every `RECORD_PERIOD` (60 s), and once more when it
+  stops, **the spans read at the tick before**: a transaction released by its slot
+  may still wait for the persistor, so a cut declares an unwatched range a little
+  too wide, never too narrow. An unchanged span is not written again; a failed
+  write is counted, and the span stays due for the next tick.
 - Nothing is written under `INGEST_SCOPE=pools`: a protocol of which a few
-  pools are watched is not covered.
-- The journal is not the resume mark: `from_slot` stays the listener's own,
-  and a replay that overlaps the range before simply closes no gap.
-- Out of scope: a gap inside a live session (including a replay cut halfway,
-  whose range already spans it, and a transaction the slot/time buffer evicted,
-  counted in `yog_indexer_grpc_untimestamped_transactions_total`), the gap still
-  open between the last write and now, and the JSON-RPC path, which sees no slot
-  it did not ask for.
+  pools are watched is not watched whole.
+- The ranges are not the resume mark: `from_slot` stays the listener's own, and
+  a replay that overlaps the range before leaves nothing unwatched.
+- Out of scope: an unwatched range inside a live session (including a replay cut
+  halfway, whose span already covers it, and a transaction the slot/time buffer
+  evicted, counted in `yog_indexer_grpc_untimestamped_transactions_total`), the
+  range still open between the last write and now, and the JSON-RPC path, which
+  sees no slot it did not ask for.
 
 ## `TransactionProcessor` and its collaborators
 
@@ -601,8 +602,8 @@ histograms.
   values), `yog_indexer_grpc_ping_replies_unsent_total{reason}`,
   `yog_indexer_grpc_resume_marks_abandoned_total{reason}` (the refusing gRPC
   code; **each increment is a gap** between the mark and the live edge),
-  `yog_indexer_grpc_coverage_writes_total{outcome}` (`written`, `failed`: a
-  failed one leaves its slots declared missing until the next write) and
+  `yog_indexer_grpc_observed_slots_writes_total{outcome}` (`written`, `failed`:
+  a failed one leaves its slots unwatched until the next write) and
   `yog_indexer_grpc_stalls_total{site}`. ⚠️ **`stalls_total` is the only
   trace of a server that went silent without closing**: `site="stream"` for a
   stream that stopped delivering block-metas (before it, the sign was

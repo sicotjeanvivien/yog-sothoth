@@ -45,7 +45,7 @@ persistence/
 │   │   │                     measure is read over; the tokens by volume)
 │   │   ├── signal/, swap_flow/, liquidity_flow/, pool_price_snapshot/
 │   │   ├── token_metadata/, token_price/, network_status/, watched_pool/,
-│   │   │   ingest_coverage.rs (the slots each ingestion session observed)
+│   │   │   observed_slots.rs (the slots each ingestion session watched)
 │   │   ├── announcement/
 │   │   ├── materialization_backlog/ (reads `yog_cagg_materialization_backlog()`,
 │   │   │                     migration 013)
@@ -133,7 +133,7 @@ the newer DAMM v2 tables (position lifecycle, pool admin) are read
 per-protocol directly.
 
 Cross-protocol concepts stay generic, single-table: `pools`,
-`pool_current_state`, `watched_pools`, `network_status`, `ingest_coverage`, `token_metadata`,
+`pool_current_state`, `watched_pools`, `network_status`, `observed_slot_ranges`, `token_metadata`,
 `token_prices`, `token_last_price` — and `signals`, where the discrimination is two *columns*
 (`detector`, `protocol`), not per-anything tables: a signal is a uniform
 conclusion, not a heterogeneous event.

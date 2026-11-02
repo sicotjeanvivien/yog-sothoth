@@ -15,9 +15,9 @@ use crate::{
     },
     bootstrap::{Config, TransactionArrival},
     infra::{
-        COVERAGE_PERIOD, CoverageWriter, DispatcherMetrics, FetchMetrics, GrpcBufferMetrics,
-        GrpcListener, GrpcListenerMetrics, GrpcTransactionSource, RpcListener,
-        RpcTransactionSource, STALL_TIMEOUT, SignatureDispatcher, TransactionFetcher,
+        DispatcherMetrics, FetchMetrics, GrpcBufferMetrics, GrpcListener, GrpcListenerMetrics,
+        GrpcTransactionSource, RECORD_PERIOD, RpcListener, RpcTransactionSource, STALL_TIMEOUT,
+        SignatureDispatcher, SlotsRecorder, TransactionFetcher,
     },
 };
 use anyhow::Context;
@@ -30,12 +30,12 @@ use yog_core::{
     domain::{EventFreshnessRepository, Protocol},
 };
 use yog_persistence::{
-    Database, PgEventFreshnessRepository, PgIngestCoverageRepository,
-    PgMeteoraDammV2ClaimPositionFeeEventRepository, PgMeteoraDammV2ClaimProtocolFeeEventRepository,
-    PgMeteoraDammV2ClaimRewardEventRepository, PgMeteoraDammV2ClosePositionEventRepository,
-    PgMeteoraDammV2CreatePositionEventRepository, PgMeteoraDammV2FundRewardEventRepository,
-    PgMeteoraDammV2InitializePoolEventRepository, PgMeteoraDammV2InitializeRewardEventRepository,
-    PgMeteoraDammV2LiquidityEventRepository, PgMeteoraDammV2LockPositionEventRepository,
+    Database, PgEventFreshnessRepository, PgMeteoraDammV2ClaimPositionFeeEventRepository,
+    PgMeteoraDammV2ClaimProtocolFeeEventRepository, PgMeteoraDammV2ClaimRewardEventRepository,
+    PgMeteoraDammV2ClosePositionEventRepository, PgMeteoraDammV2CreatePositionEventRepository,
+    PgMeteoraDammV2FundRewardEventRepository, PgMeteoraDammV2InitializePoolEventRepository,
+    PgMeteoraDammV2InitializeRewardEventRepository, PgMeteoraDammV2LiquidityEventRepository,
+    PgMeteoraDammV2LockPositionEventRepository,
     PgMeteoraDammV2PermanentLockPositionEventRepository,
     PgMeteoraDammV2SetPoolStatusEventRepository, PgMeteoraDammV2SplitPositionEventRepository,
     PgMeteoraDammV2SwapEventRepository, PgMeteoraDammV2UpdatePoolFeesEventRepository,
@@ -43,7 +43,8 @@ use yog_persistence::{
     PgMeteoraDammV2UpdateRewardFunderEventRepository,
     PgMeteoraDammV2WithdrawDeadLiquidityRewardEventRepository,
     PgMeteoraDammV2WithdrawIneligibleRewardEventRepository, PgNetworkStatusRepository,
-    PgPoolCurrentStateRepository, PgPoolRepository, PgWatchedPoolRepository, PoolSettings,
+    PgObservedSlotsRepository, PgPoolCurrentStateRepository, PgPoolRepository,
+    PgWatchedPoolRepository, PoolSettings,
 };
 
 /// Connect to the database; the URL is a redacted secret, never logged.
@@ -89,15 +90,15 @@ fn init_rpc_source(
     )))
 }
 
-/// The delivering model: the listener is the source, and records the slots it observes. Nothing
+/// The delivering model: the listener is the source, and writes the slots it received. Nothing
 /// here can fail yet; the `Result` matches its sibling's.
 fn init_grpc_source(
     config: &Config,
     database: &Database,
 ) -> anyhow::Result<Arc<dyn TransactionSource>> {
-    let coverage = CoverageWriter::new(
-        Arc::new(PgIngestCoverageRepository::new(database.pool().clone())),
-        COVERAGE_PERIOD,
+    let recorder = SlotsRecorder::new(
+        Arc::new(PgObservedSlotsRepository::new(database.pool().clone())),
+        RECORD_PERIOD,
     );
     Ok(Arc::new(GrpcTransactionSource::new(Arc::new(
         GrpcListener::new(
@@ -105,7 +106,7 @@ fn init_grpc_source(
             config.worker_max_retries,
             STALL_TIMEOUT,
         )
-        .with_coverage(coverage),
+        .with_slots_recorder(recorder),
     ))))
 }
 

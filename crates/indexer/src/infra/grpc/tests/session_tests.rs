@@ -4,7 +4,11 @@
 
 use super::*;
 
-use super::{ping_answer::PING_REPLY_ID, slot_progress::REWIND_SLOTS};
+use super::{
+    ping_answer::PING_REPLY_ID,
+    received_slots::{RangesToRecord, ReceivedSlots},
+    slot_progress::REWIND_SLOTS,
+};
 
 use metrics_util::debugging::{DebugValue, DebuggingRecorder};
 use tokio_util::sync::CancellationToken;
@@ -13,9 +17,9 @@ use yellowstone_grpc_proto::prelude::{
 };
 
 use crate::infra::grpc::test_fixtures::{
-    PROTOCOL, Snapshot, at, block_meta, block_meta_in_bank, gauge_for, ping, slot_finalized,
-    slot_status, transaction, transaction_in_bank, transaction_update_with_signature,
-    unread_coverage, unroutable_transaction, update,
+    PROTOCOL, Snapshot, at, block_meta, block_meta_in_bank, gauge_for, ping,
+    received_slots_unwritten, slot_finalized, slot_status, transaction, transaction_in_bank,
+    transaction_update_with_signature, unroutable_transaction, update,
 };
 
 /// How many ping answers the harness's outbound half holds unread.
@@ -45,7 +49,12 @@ fn session_with(
     let (outbound_tx, outbound_rx) = mpsc::channel(HARNESS_OUTBOUND_CAPACITY);
     // Only ping answers are ever written here; the receiver is handed back to assert them.
     (
-        StreamSession::new(downstream_tx, outbound_tx, shutdown, unread_coverage()),
+        StreamSession::new(
+            downstream_tx,
+            outbound_tx,
+            shutdown,
+            received_slots_unwritten(),
+        ),
         downstream_rx,
         outbound_rx,
     )
@@ -715,35 +724,35 @@ async fn a_shutdown_reaches_a_session_parked_on_a_full_consumer() {
     );
 }
 
-// ── what the session observed ───────────────────────────────────────
+// ── what the session received for good ──────────────────────────────
 
-/// A session watching DAMM v2 whole, and where its coverage lands.
-fn observing_session() -> (StreamSession, crate::infra::grpc::coverage::Observed) {
-    let observed = crate::infra::grpc::coverage::Observed::default();
+/// A session watching DAMM v2 whole, and the ranges it publishes.
+fn receiving_session() -> (StreamSession, RangesToRecord) {
+    let ranges = RangesToRecord::default();
     let (downstream_tx, _downstream) = mpsc::channel(16);
     let (outbound_tx, _outbound) = mpsc::channel(HARNESS_OUTBOUND_CAPACITY);
-    let coverage = SessionCoverage::new(std::sync::Arc::from([PROTOCOL]), observed.clone());
+    let received = ReceivedSlots::new(std::sync::Arc::from([PROTOCOL]), ranges.clone());
     let session = StreamSession::new(
         downstream_tx,
         outbound_tx,
         CancellationToken::new(),
-        coverage,
+        received,
     );
-    (session, observed)
+    (session, ranges)
 }
 
-fn observed_span(observed: &crate::infra::grpc::coverage::Observed) -> Vec<(u64, u64)> {
-    observed
+fn spans(ranges: &RangesToRecord) -> Vec<(u64, u64)> {
+    ranges
         .snapshot()
         .values()
-        .map(|entry| (entry.range().from(), entry.range().to()))
+        .map(|range| range.span.slots())
         .collect()
 }
 
-/// Mutation: every block-meta fed to the session's coverage, timed or not.
+/// Mutation: every block-meta counted as received, timed or not.
 #[tokio::test]
-async fn only_a_timed_block_meta_widens_what_the_session_observed() {
-    let (mut session, observed) = observing_session();
+async fn only_a_timed_block_meta_counts_as_received() {
+    let (mut session, ranges) = receiving_session();
 
     for slot in [10, 11, 12] {
         session.handle(block_meta(slot, Some(1_700_000_000))).await;
@@ -751,13 +760,13 @@ async fn only_a_timed_block_meta_widens_what_the_session_observed() {
     session.handle(block_meta(20, None)).await;
     session.handle(block_meta(30, Some(1_700_000_030))).await;
 
-    assert_eq!(observed_span(&observed), [(10, 12)], "20 had no time");
+    assert_eq!(spans(&ranges), [(10, 12)], "20 had no time");
 }
 
-/// Mutation: the session handing its coverage the highest block-meta instead of its resume point.
+/// Mutation: the session handing over the highest block-meta instead of its resume point.
 #[tokio::test]
-async fn a_slot_whose_transaction_still_waits_is_not_yet_observed() {
-    let (mut session, observed) = observing_session();
+async fn a_slot_whose_transaction_still_waits_is_not_yet_received() {
+    let (mut session, ranges) = receiving_session();
 
     session.handle(transaction(18, &[PROTOCOL.as_str()])).await;
     for slot in 10..=20 {
@@ -767,7 +776,7 @@ async fn a_slot_whose_transaction_still_waits_is_not_yet_observed() {
     }
 
     assert_eq!(
-        observed_span(&observed),
+        spans(&ranges),
         [(10, 18 - REWIND_SLOTS - 1)],
         "18 waits for its status: a reconnection resumes before it"
     );

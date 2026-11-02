@@ -167,7 +167,7 @@ Migrations are **forward-only** (committed migrations never change; no `.down.sq
 | Role | Rights | Process |
 |---|---|---|
 | `yog_migrate` | DDL, owns schema | `yog-migrate` |
-| `yog_indexer` | writes event tables, `pools`, `pool_current_state`, `network_status`, `ingest_coverage` | indexer |
+| `yog_indexer` | writes event tables, `pools`, `pool_current_state`, `network_status`, `observed_slot_ranges` | indexer |
 | `yog_api` | writes nothing | api |
 | `yog_context` | writes `token_metadata`, `token_last_price`, pool-properties satellites and pool-property columns of `pools`; INSERT-only on `token_prices` | context |
 | `yog_signals` | INSERT (append-only) on `signals`; EXECUTE on `yog_cagg_materialization_backlog()` | signals |

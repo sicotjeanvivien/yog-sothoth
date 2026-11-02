@@ -3,7 +3,6 @@ mod announcement;
 mod claim_totals;
 mod event_freshness;
 mod helper;
-mod ingest_coverage;
 mod position_change_counts;
 
 mod discovered_tvl;
@@ -13,6 +12,7 @@ mod liquidity_moves;
 mod materialization_backlog;
 mod meteora;
 mod network_status;
+mod observed_slots;
 mod pool;
 mod pool_change_event;
 mod pool_creation_event;
@@ -41,7 +41,6 @@ pub use announcement::PgAnnouncementRepository;
 pub use claim_totals::PgClaimTotalsRepository;
 pub use discovered_tvl::PgDiscoveredTvlRepository;
 pub use event_freshness::PgEventFreshnessRepository;
-pub use ingest_coverage::PgIngestCoverageRepository;
 pub use liquidity_change_event::PgLiquidityChangeEventRepository;
 pub use liquidity_flow::PgLiquidityFlowRepository;
 pub use liquidity_moves::PgLiquidityMoveRepository;
@@ -61,6 +60,7 @@ pub use meteora::{
     PgMeteoraDammV2WithdrawIneligibleRewardEventRepository, PgMeteoraDlmmPoolPropertiesRepository,
 };
 pub use network_status::PgNetworkStatusRepository;
+pub use observed_slots::PgObservedSlotsRepository;
 pub use pool::PgPoolRepository;
 pub use pool_change_event::PgPoolChangeEventRepository;
 pub use pool_creation_event::PgPoolCreationEventRepository;
