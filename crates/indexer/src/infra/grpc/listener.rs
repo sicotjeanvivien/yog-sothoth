@@ -27,7 +27,8 @@ use crate::{
         grpc::{
             interceptor::CredentialInterceptor,
             metrics::{GrpcListenerMetrics, WAITING_PEAKS},
-            session::received_slots::{RangesToRecord, ReceivedSlots},
+            ranges_to_record::RangesToRecord,
+            session::received_slots::ReceivedSlots,
             subscription::build_request,
         },
     },

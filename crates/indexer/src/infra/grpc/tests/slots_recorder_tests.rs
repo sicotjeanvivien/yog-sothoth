@@ -9,23 +9,20 @@ use crate::infra::grpc::test_fixtures::{PROTOCOL, Snapshot, WrittenSlots, at};
 const PERIOD: Duration = Duration::from_secs(60);
 
 fn range(first: u64, last: u64, ended: bool) -> RangeToRecord {
-    let ranges = RangesToRecord::default();
-    let mut received = crate::infra::grpc::session::received_slots::ReceivedSlots::new(
-        Arc::from([PROTOCOL]),
-        ranges.clone(),
-    );
-    received.on_block_meta(first, at(first as i64), Some(u64::MAX));
-    received.on_block_meta(last, at(last as i64), Some(u64::MAX));
-    let mut range = ranges.snapshot().into_values().next().expect("a span");
-    range.ended = ended;
-    range
+    let mut span = ReceivedSpan::starting(first, at(first as i64));
+    span.include(last, at(last as i64));
+    RangeToRecord {
+        protocols: Arc::from([PROTOCOL]),
+        span,
+        ended,
+    }
 }
 
 fn spans(ranges: &RangesToRecord) -> Vec<(u64, u64)> {
     ranges
         .snapshot()
         .values()
-        .map(|range| range.span.slots())
+        .map(|range| (range.span.first().0, range.span.last().0))
         .collect()
 }
 

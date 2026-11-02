@@ -397,17 +397,20 @@ without anyone deciding it.
 - `session/received_slots.rs` — what a session received for good: the slots of
   its timed block-metas **below its resume point**. A slot at or past that point
   would be asked again by a reconnection; if the replay were refused, its
-  transactions would be lost, so it is not yet received. The span runs lowest to
-  highest, not first to last: a replay delivers its oldest slots last. A slot the
-  network skipped does not cut it. Each session keeps its own entry in
-  `RangesToRecord` until its last span is written, so a reconnection never
-  overwrites the span before it.
+  transactions would be lost, so it is not yet received.
+- `session/received_span.rs` — the span itself, lowest to highest slot, not first
+  to last: a replay delivers its oldest slots last. A slot the network skipped
+  does not cut it, and a slot already in it, either end included, changes nothing.
+- `ranges_to_record.rs` — the hand-over: each session leaves its latest span
+  there under its own entry, kept until its last span is written, so a
+  reconnection never overwrites the span before it.
 - `listener/slots_recorder.rs` — `SlotsRecorder`, started and stopped with
   `GrpcListener::run`, writes every `RECORD_PERIOD` (60 s), and once more when it
   stops, **the spans read at the tick before**: a transaction released by its slot
   may still wait for the persistor, so a cut declares an unwatched range a little
-  too wide, never too narrow. An unchanged span is not written again; a failed
-  write is counted, and the span stays due for the next tick.
+  too wide, never too narrow. It writes each span that changed, then forgets each
+  ended session whose last span is written; a failed write is counted, and the
+  span stays due for the next tick.
 - Nothing is written under `INGEST_SCOPE=pools`: a protocol of which a few
   pools are watched is not watched whole.
 - The ranges are not the resume mark: `from_slot` stays the listener's own, and

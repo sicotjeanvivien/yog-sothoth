@@ -8,6 +8,7 @@
 mod interceptor;
 mod listener;
 mod metrics;
+mod ranges_to_record;
 mod session;
 mod slot_timestamp_buffer;
 mod source;

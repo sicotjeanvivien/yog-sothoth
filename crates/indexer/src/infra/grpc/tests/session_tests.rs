@@ -5,9 +5,7 @@
 use super::*;
 
 use super::{
-    ping_answer::PING_REPLY_ID,
-    received_slots::{RangesToRecord, ReceivedSlots},
-    slot_progress::REWIND_SLOTS,
+    ping_answer::PING_REPLY_ID, received_slots::ReceivedSlots, slot_progress::REWIND_SLOTS,
 };
 
 use metrics_util::debugging::{DebugValue, DebuggingRecorder};
@@ -727,8 +725,11 @@ async fn a_shutdown_reaches_a_session_parked_on_a_full_consumer() {
 // ── what the session received for good ──────────────────────────────
 
 /// A session watching DAMM v2 whole, and the ranges it publishes.
-fn receiving_session() -> (StreamSession, RangesToRecord) {
-    let ranges = RangesToRecord::default();
+fn receiving_session() -> (
+    StreamSession,
+    crate::infra::grpc::ranges_to_record::RangesToRecord,
+) {
+    let ranges = crate::infra::grpc::ranges_to_record::RangesToRecord::default();
     let (downstream_tx, _downstream) = mpsc::channel(16);
     let (outbound_tx, _outbound) = mpsc::channel(HARNESS_OUTBOUND_CAPACITY);
     let received = ReceivedSlots::new(std::sync::Arc::from([PROTOCOL]), ranges.clone());
@@ -741,11 +742,11 @@ fn receiving_session() -> (StreamSession, RangesToRecord) {
     (session, ranges)
 }
 
-fn spans(ranges: &RangesToRecord) -> Vec<(u64, u64)> {
+fn spans(ranges: &crate::infra::grpc::ranges_to_record::RangesToRecord) -> Vec<(u64, u64)> {
     ranges
         .snapshot()
         .values()
-        .map(|range| range.span.slots())
+        .map(|range| (range.span.first().0, range.span.last().0))
         .collect()
 }
 

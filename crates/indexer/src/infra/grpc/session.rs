@@ -6,6 +6,7 @@ mod delivery;
 mod log;
 mod ping_answer;
 pub(super) mod received_slots;
+pub(super) mod received_span;
 mod slot_progress;
 
 use tokio::sync::mpsc;

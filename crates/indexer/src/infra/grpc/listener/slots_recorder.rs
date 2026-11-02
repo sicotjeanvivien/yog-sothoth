@@ -14,7 +14,8 @@ use yog_core::domain::ObservedSlotsRepository;
 
 use crate::infra::grpc::{
     metrics::{GrpcListenerMetrics, ObservedSlotsWrite},
-    session::received_slots::{RangeToRecord, RangesToRecord, ReceivedSpan},
+    ranges_to_record::{RangeToRecord, RangesToRecord},
+    session::received_span::ReceivedSpan,
 };
 
 use super::log;
@@ -58,25 +59,32 @@ impl SlotsRecorder {
         }
     }
 
-    /// Each span not yet written as it is; a failure is counted and stepped over, and the span
-    /// stays due for the next tick.
+    /// Write each span that changed since it was last written, then forget each ended session
+    /// whose last span is written. A failure is counted, and the span stays due for the next tick.
     async fn write(
         &self,
         due: &BTreeMap<DateTime<Utc>, RangeToRecord>,
         written: &mut HashMap<DateTime<Utc>, ReceivedSpan>,
         ranges: &RangesToRecord,
     ) {
-        for (&session, range) in due {
-            if written.get(&session) != Some(&range.span) {
-                if !self.record(session, range).await {
-                    continue;
-                }
+        let changed: Vec<_> = due
+            .iter()
+            .filter(|(session, range)| written.get(*session) != Some(&range.span))
+            .collect();
+        for (&session, range) in changed {
+            if self.record(session, range).await {
                 written.insert(session, range.span);
             }
-            if range.ended {
-                ranges.forget(session);
-                written.remove(&session);
-            }
+        }
+
+        let finished: Vec<DateTime<Utc>> = due
+            .iter()
+            .filter(|(session, range)| range.ended && written.get(*session) == Some(&range.span))
+            .map(|(&session, _)| session)
+            .collect();
+        for session in finished {
+            ranges.forget(session);
+            written.remove(&session);
         }
     }
 

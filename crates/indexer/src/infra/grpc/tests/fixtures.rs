@@ -22,7 +22,8 @@ use yog_core::{
 };
 
 use super::{
-    session::received_slots::{RangesToRecord, ReceivedSlots},
+    ranges_to_record::RangesToRecord,
+    session::received_slots::ReceivedSlots,
     subscription::{BLOCK_META_FILTER, SLOT_FILTER},
 };
 
