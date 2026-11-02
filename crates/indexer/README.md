@@ -320,8 +320,8 @@ is why it lives beside the fetch rather than beside the consumer.
 ### The consumer's bound, and how an operator changes it
 
 `IndexerWorker`'s cap is **not** a constant: it is the database pool's size
-minus the connections this process needs elsewhere (one, for the
-`NetworkStatusReporter`), computed at startup by
+minus the connections this process needs elsewhere (two, for the
+`NetworkStatusReporter` and the coverage writer), computed at startup by
 `bootstrap/daemon/tasks.rs::index_concurrency` and logged there. A task does not
 hold a connection while it persists — sqlx takes one per statement — but it issues
 one statement at a time, so *n* tasks put at most *n* in flight and the pool
@@ -329,7 +329,7 @@ one statement at a time, so *n* tasks put at most *n* in flight and the pool
 what breaks it. A pool too small to reserve from is refused at startup rather
 than clamped.
 
-With today's pool of 10 the bound is 9. ⚠️ **And it is not configurable**:
+With today's pool of 10 the bound is 8. ⚠️ **And it is not configurable**:
 `init_db` calls `Database::connect`, whose size is fixed, and no environment
 variable reaches `connect_with` and its `PoolSettings`. Raising the write concurrency therefore
 still takes a code change today — what changed is *which* change: sizing the
