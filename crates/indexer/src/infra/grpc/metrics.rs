@@ -156,7 +156,7 @@ const COVERAGE_WRITES: &str = "yog_indexer_grpc_coverage_writes_total";
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum CoverageWrite {
     Written,
-    /// Not recorded; the next tick writes the range again, wider.
+    /// Not recorded; the next tick writes the range again.
     Failed,
 }
 

@@ -389,25 +389,33 @@ an increment of `yog_indexer_grpc_resume_marks_abandoned_total{reason}`.
 An empty slot range reads the same whether nothing happened or nobody was
 watching. So each session writes what it saw: in `ingest_coverage`, one row per
 session and per protocol watched whole, from the lowest to the highest slot a
-timed block-meta closed, each end with its block time. A gap is **never
+timed block-meta closed **below the session's resume point**, each end with its
+block time. A slot at or past that point would be asked again by a
+reconnection; if the replay were refused, its transactions would be lost, so it
+is not yet observed. A gap is **never
 written**: the view `ingest_coverage_gaps` is the complement of the ranges, so a
 process killed, a budget run out or a host restarted leaves one without anyone
 deciding it.
 
 - The range runs lowest to highest, not first to last: a replay delivers its
   oldest slots last. A slot the network skipped does not cut it.
+- Each session keeps its own entry until its last range is recorded, so a
+  reconnection never overwrites the range before it.
 - A writer task, started and stopped with `GrpcListener::run`, records every
-  `COVERAGE_PERIOD` (60 s) **the range read at the tick before**: a transaction
-  whose block-meta came may still wait for the persistor, so a cut declares a
-  gap a little too wide, never too narrow. A failed write is counted and
-  stepped over.
+  `COVERAGE_PERIOD` (60 s), and once more when it stops, **the ranges read at
+  the tick before**: a transaction released by its slot may still wait for the
+  persistor, so a cut declares a gap a little too wide, never too narrow. An
+  unchanged range is not written again; a failed write is counted, and the
+  range stays due for the next tick.
 - Nothing is written under `INGEST_SCOPE=pools`: a protocol of which a few
   pools are watched is not covered.
 - The journal is not the resume mark: `from_slot` stays the listener's own,
   and a replay that overlaps the range before simply closes no gap.
 - Out of scope: a gap inside a live session (including a replay cut halfway,
-  whose range already spans it), the gap still open between the last write and
-  now, and the JSON-RPC path, which sees no slot it did not ask for.
+  whose range already spans it, and a transaction the slot/time buffer evicted,
+  counted in `yog_indexer_grpc_untimestamped_transactions_total`), the gap still
+  open between the last write and now, and the JSON-RPC path, which sees no slot
+  it did not ask for.
 
 ## `TransactionProcessor` and its collaborators
 

@@ -717,26 +717,58 @@ async fn a_shutdown_reaches_a_session_parked_on_a_full_consumer() {
 
 // ── what the session observed ───────────────────────────────────────
 
-/// Mutation: every block-meta fed to the session's coverage, timed or not.
-#[tokio::test]
-async fn only_a_timed_block_meta_widens_what_the_session_observed() {
-    let (publish, published) = tokio::sync::watch::channel(None);
-    let (downstream_tx, _downstream) = mpsc::channel(4);
+/// A session watching DAMM v2 whole, and where its coverage lands.
+fn observing_session() -> (StreamSession, crate::infra::grpc::coverage::Observed) {
+    let observed = crate::infra::grpc::coverage::Observed::default();
+    let (downstream_tx, _downstream) = mpsc::channel(16);
     let (outbound_tx, _outbound) = mpsc::channel(HARNESS_OUTBOUND_CAPACITY);
-    let coverage = SessionCoverage::new(std::sync::Arc::from([PROTOCOL]), publish);
-    let mut session = StreamSession::new(
+    let coverage = SessionCoverage::new(std::sync::Arc::from([PROTOCOL]), observed.clone());
+    let session = StreamSession::new(
         downstream_tx,
         outbound_tx,
         CancellationToken::new(),
         coverage,
     );
+    (session, observed)
+}
 
-    session.handle(block_meta(10, Some(1_700_000_000))).await;
-    session.handle(block_meta(12, None)).await;
+fn observed_span(observed: &crate::infra::grpc::coverage::Observed) -> Vec<(u64, u64)> {
+    observed
+        .snapshot()
+        .values()
+        .map(|entry| (entry.range().from(), entry.range().to()))
+        .collect()
+}
 
-    let seen = published
-        .borrow()
-        .clone()
-        .expect("the timed block-meta is published");
-    assert_eq!((seen.range().from(), seen.range().to()), (10, 10));
+/// Mutation: every block-meta fed to the session's coverage, timed or not.
+#[tokio::test]
+async fn only_a_timed_block_meta_widens_what_the_session_observed() {
+    let (mut session, observed) = observing_session();
+
+    for slot in [10, 11, 12] {
+        session.handle(block_meta(slot, Some(1_700_000_000))).await;
+    }
+    session.handle(block_meta(20, None)).await;
+    session.handle(block_meta(30, Some(1_700_000_030))).await;
+
+    assert_eq!(observed_span(&observed), [(10, 12)], "20 had no time");
+}
+
+/// Mutation: the session handing its coverage the highest block-meta instead of its resume point.
+#[tokio::test]
+async fn a_slot_whose_transaction_still_waits_is_not_yet_observed() {
+    let (mut session, observed) = observing_session();
+
+    session.handle(transaction(18, &[PROTOCOL.as_str()])).await;
+    for slot in 10..=20 {
+        session
+            .handle(block_meta(slot, Some(1_700_000_000 + slot as i64)))
+            .await;
+    }
+
+    assert_eq!(
+        observed_span(&observed),
+        [(10, 18 - REWIND_SLOTS - 1)],
+        "18 waits for its status: a reconnection resumes before it"
+    );
 }

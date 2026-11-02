@@ -12,7 +12,7 @@ mod stall_clock;
 use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use solana_pubkey::Pubkey;
-use tokio::sync::{Mutex, mpsc, watch};
+use tokio::sync::{Mutex, mpsc};
 use tokio_util::sync::CancellationToken;
 use yellowstone_grpc_proto::prelude::SubscribeRequest;
 use yog_bootstrap::Endpoint;
@@ -24,7 +24,7 @@ use crate::{
     infra::{
         Credential,
         grpc::{
-            coverage::{CoverageWriter, Published, SessionCoverage},
+            coverage::{CoverageWriter, Observed, SessionCoverage},
             interceptor::CredentialInterceptor,
             metrics::{GrpcListenerMetrics, WAITING_PEAKS},
             subscription::build_request,
@@ -93,22 +93,23 @@ impl GrpcListener {
         log::starting(self.connector.endpoint(), credential.name(), &request);
         WAITING_PEAKS.export();
 
-        // ⚠️ Stopped with the attempts, whatever ended them: a writer outliving them would go on
-        // writing a range no session extends.
-        let (publish, published) = watch::channel(None);
+        // ⚠️ Stopped with the attempts, whatever ended them, this future dropped included: a
+        // writer outliving them would go on writing a range no session extends.
+        let observed = Observed::default();
         let writer_stop = shutdown.child_token();
+        let _stop_writer_on_drop = writer_stop.clone().drop_guard();
         let writer = self
             .coverage
             .clone()
-            .map(|writer| tokio::spawn(writer.run(published, writer_stop.clone())));
+            .map(|writer| tokio::spawn(writer.run(observed.clone(), writer_stop.clone())));
 
         let result = self
-            .attempts(&channel, &interceptor, &downstream, &publish, &shutdown)
+            .attempts(&channel, &interceptor, &downstream, &observed, &shutdown)
             .await;
 
         writer_stop.cancel();
         if let Some(writer) = writer {
-            // A writer's panic stops nothing: what it lost is a range, which the next run writes.
+            // A writer's panic stops nothing.
             let _ = writer.await;
         }
         result
@@ -120,7 +121,7 @@ impl GrpcListener {
         channel: &tonic::transport::Endpoint,
         interceptor: &CredentialInterceptor,
         downstream: &mpsc::Sender<IngestedTransaction>,
-        publish: &Published,
+        observed: &Observed,
         shutdown: &CancellationToken,
     ) -> Result<(), GrpcListenerError> {
         let mut budget = RetryBudget::new(self.max_attempts);
@@ -132,8 +133,8 @@ impl GrpcListener {
                 return Ok(());
             }
 
-            let request = self.subscribe_request(resume_from).await?;
-            let coverage = SessionCoverage::new(self.whole_protocols().await, publish.clone());
+            let (request, protocols) = self.subscription(resume_from).await?;
+            let coverage = SessionCoverage::new(protocols, observed.clone());
 
             let verdict = self
                 .connector
@@ -162,15 +163,16 @@ impl GrpcListener {
         }
     }
 
-    /// The protocols watched whole, by program id: a pool watched alone does not cover its protocol.
-    async fn whole_protocols(&self) -> Arc<[Protocol]> {
-        self.watched
-            .lock()
-            .await
-            .iter()
-            .filter(|(protocol, address)| *address == protocol.program_id())
-            .map(|(protocol, _)| *protocol)
-            .collect()
+    /// The subscription, and the protocols it watches whole, read under one lock so they agree.
+    async fn subscription(
+        &self,
+        from_slot: Option<u64>,
+    ) -> Result<(SubscribeRequest, Arc<[Protocol]>), GrpcListenerError> {
+        let watched = self.watched.lock().await;
+        Ok((
+            build_request(&watched, from_slot)?,
+            whole_protocols(&watched),
+        ))
     }
 
     /// Build the subscription from what is watched right now.
@@ -180,6 +182,15 @@ impl GrpcListener {
     ) -> Result<SubscribeRequest, GrpcListenerError> {
         build_request(&*self.watched.lock().await, from_slot)
     }
+}
+
+/// The protocols watched whole, by program id: a pool watched alone does not cover its protocol.
+fn whole_protocols(watched: &HashSet<(Protocol, Pubkey)>) -> Arc<[Protocol]> {
+    watched
+        .iter()
+        .filter(|(protocol, address)| *address == protocol.program_id())
+        .map(|(protocol, _)| *protocol)
+        .collect()
 }
 
 /// Sleep, unless the shutdown token fires first.

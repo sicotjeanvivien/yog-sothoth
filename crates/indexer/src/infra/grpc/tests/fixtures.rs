@@ -10,7 +10,6 @@ use std::sync::{
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use tokio::sync::watch;
 use yellowstone_grpc_proto::prelude::{
     Message, SlotStatus, SubscribeUpdate, SubscribeUpdateBlockMeta, SubscribeUpdatePing,
     SubscribeUpdateSlot, SubscribeUpdateTransaction, SubscribeUpdateTransactionInfo, Transaction,
@@ -23,7 +22,7 @@ use yog_core::{
 };
 
 use super::{
-    coverage::SessionCoverage,
+    coverage::{Observed, SessionCoverage},
     subscription::{BLOCK_META_FILTER, SLOT_FILTER},
 };
 
@@ -165,7 +164,7 @@ pub(super) fn update(filters: &[&str], oneof: UpdateOneof) -> SubscribeUpdate {
 
 /// A session's coverage that nobody reads.
 pub(super) fn unread_coverage() -> SessionCoverage {
-    SessionCoverage::new(Arc::from([PROTOCOL]), watch::channel(None).0)
+    SessionCoverage::new(Arc::from([PROTOCOL]), Observed::default())
 }
 
 /// The coverage journal in memory: what was recorded, and a switch that refuses every write.

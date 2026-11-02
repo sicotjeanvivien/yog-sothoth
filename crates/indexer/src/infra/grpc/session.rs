@@ -103,10 +103,12 @@ impl StreamSession {
                 GrpcListenerMetrics::record_update(UpdateKind::BlockMeta);
                 self.received_data = true;
                 self.block_metas += 1;
-                if let Some(at) = block_time(&meta) {
-                    self.coverage.on_block_meta(meta.slot, at);
-                }
+                let timed = block_time(&meta).map(|at| (meta.slot, at));
                 let released = self.slots.on_block_meta(meta);
+                if let Some((slot, at)) = timed {
+                    self.coverage
+                        .on_block_meta(slot, at, self.slots.resume_from());
+                }
                 self.deliver_all(released).await
             }
             Some(UpdateOneof::Slot(status)) => {

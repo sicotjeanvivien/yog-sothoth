@@ -1339,6 +1339,8 @@ async fn a_session_records_the_slots_it_saw_closed_skipped_ones_included() {
         timed_meta(11),
         timed_meta(13),
         timed_meta(14),
+        timed_meta(15),
+        timed_meta(16),
         Action::Hold,
     ])])
     .await;
@@ -1347,7 +1349,8 @@ async fn a_session_records_the_slots_it_saw_closed_skipped_ones_included() {
     let shutdown = CancellationToken::new();
     let run = tokio::spawn(listener.run(downstream, shutdown.clone()));
 
-    wait_for_sessions(&recorded, &[(10, 14)]).await;
+    // The resume point is two slots under the highest, 14: 14 to 16 would be asked again.
+    wait_for_sessions(&recorded, &[(10, 13)]).await;
 
     shutdown.cancel();
     run.await.expect("the listener ends").expect("on shutdown");
@@ -1360,9 +1363,17 @@ async fn each_connection_records_its_own_range() {
         ScriptedSession::Stream(vec![
             timed_meta(10),
             timed_meta(11),
+            timed_meta(12),
+            timed_meta(13),
             Action::Fail(Status::unavailable("the provider restarted")),
         ]),
-        ScriptedSession::Stream(vec![timed_meta(20), timed_meta(21), Action::Hold]),
+        ScriptedSession::Stream(vec![
+            timed_meta(20),
+            timed_meta(21),
+            timed_meta(22),
+            timed_meta(23),
+            Action::Hold,
+        ]),
     ])
     .await;
     let (listener, recorded) = covered_listener(&server, 2).await;
@@ -1370,7 +1381,7 @@ async fn each_connection_records_its_own_range() {
     let shutdown = CancellationToken::new();
     let run = tokio::spawn(listener.run(downstream, shutdown.clone()));
 
-    wait_for_sessions(&recorded, &[(10, 11), (20, 21)]).await;
+    wait_for_sessions(&recorded, &[(10, 10), (20, 20)]).await;
 
     shutdown.cancel();
     run.await.expect("the listener ends").expect("on shutdown");
@@ -1379,12 +1390,10 @@ async fn each_connection_records_its_own_range() {
 /// Mutation: the program-id filter removed, so a pool watched alone covers its protocol.
 #[tokio::test]
 async fn only_a_protocol_watched_whole_is_covered() {
-    let listener = listener("http://127.0.0.1:1");
-    listener
-        .watch_pool(PROTOCOL, Pubkey::new_from_array([7; 32]))
-        .await;
-    assert_eq!(&*listener.whole_protocols().await, []);
+    let pool = (PROTOCOL, Pubkey::new_from_array([7; 32]));
+    let mut watched = HashSet::from([pool]);
+    assert_eq!(&*whole_protocols(&watched), []);
 
-    listener.watch(PROTOCOL).await;
-    assert_eq!(&*listener.whole_protocols().await, [PROTOCOL]);
+    watched.insert((PROTOCOL, PROTOCOL.program_id()));
+    assert_eq!(&*whole_protocols(&watched), [PROTOCOL]);
 }
