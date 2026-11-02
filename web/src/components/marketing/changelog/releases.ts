@@ -32,6 +32,39 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.8.0",
+    date: "2026-11-02",
+    summary: "The indexer now records which slots it watched, so a stretch it missed can be told apart from a quiet one.",
+    sections: [
+      {
+        kind: "features",
+        items: [
+          {
+            text: "Each gRPC ingestion session records the slots it received for good, with the chain's time at each end (observed_slot_ranges); the ranges nobody watched are their complement, read in unobserved_slot_ranges.",
+            technical: true,
+          },
+          {
+            text: "A database connection is kept for that writer: the indexer persists with 8 tasks instead of 9 on a pool of 10.",
+            technical: true,
+          },
+          {
+            text: "Tests now cover the event decoder's failure paths, the signal engine's cycle and settings, the alert pings, the token cursors, the transaction processing, the context's HTTP clients and the live signal stream.",
+            technical: true,
+          },
+        ],
+      },
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "pulldown-cmark, a build dependency of the gRPC code, moves to 0.13.6 (RUSTSEC-2026-0433).",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.7.2",
     date: "2026-11-01",
     summary: "Compressing old data during a database backup no longer stops the dashboard from reading for several minutes.",
