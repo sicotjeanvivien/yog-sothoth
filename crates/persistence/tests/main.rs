@@ -29,6 +29,7 @@ mod event_index_uniqueness;
 mod fee_split;
 mod fund_reward;
 mod implied_price_coverage;
+mod ingest_coverage;
 mod initialize_pool;
 mod initialize_reward;
 mod last_hour;

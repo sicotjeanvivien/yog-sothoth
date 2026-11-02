@@ -76,7 +76,8 @@ impl Daemon {
             .context("ingestion alarm database initialization failed")?;
         info!("ingestion alarm database initialized");
 
-        let source = init_source(&config).context("transaction source initialization failed")?;
+        let source =
+            init_source(&config, &database).context("transaction source initialization failed")?;
         info!("transaction source initialized: {}", config.ingest_stream);
 
         // Built here: the processor extracts with it, and the registration asks it what to watch.

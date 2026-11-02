@@ -19,13 +19,14 @@ use crate::{
 };
 
 use super::{
+    coverage::SessionCoverage,
     metrics::{DropReason, GrpcListenerMetrics, UpdateKind},
     subscription::protocol_of,
 };
 
 use delivery::Delivery;
 use ping_answer::PingAnswer;
-use slot_progress::{PendingTransaction, SlotProgress};
+use slot_progress::{PendingTransaction, SlotProgress, block_time};
 
 /// Why a session ended, or that it has not.
 #[derive(Debug, PartialEq, Eq)]
@@ -43,6 +44,7 @@ pub(super) enum SessionState {
 /// The state one subscription accumulates.
 pub(super) struct StreamSession {
     slots: SlotProgress,
+    coverage: SessionCoverage,
     delivery: Delivery,
     pings: PingAnswer,
     /// Whether a data message came off the stream; see [`Self::received_data`].
@@ -56,9 +58,11 @@ impl StreamSession {
         downstream: mpsc::Sender<IngestedTransaction>,
         outbound: mpsc::Sender<SubscribeRequest>,
         shutdown: CancellationToken,
+        coverage: SessionCoverage,
     ) -> Self {
         Self {
             slots: SlotProgress::new(),
+            coverage,
             delivery: Delivery::new(downstream, shutdown),
             pings: PingAnswer::new(outbound),
             received_data: false,
@@ -99,6 +103,9 @@ impl StreamSession {
                 GrpcListenerMetrics::record_update(UpdateKind::BlockMeta);
                 self.received_data = true;
                 self.block_metas += 1;
+                if let Some(at) = block_time(&meta) {
+                    self.coverage.on_block_meta(meta.slot, at);
+                }
                 let released = self.slots.on_block_meta(meta);
                 self.deliver_all(released).await
             }

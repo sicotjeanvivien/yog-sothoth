@@ -1,7 +1,7 @@
 //! Which slots a session has finished: when a transaction can leave, and where
 //! a reconnection resumes.
 
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
 use yellowstone_grpc_proto::prelude::{
     SlotStatus, SubscribeUpdateBlockMeta, SubscribeUpdateSlot, SubscribeUpdateTransaction,
 };
@@ -23,6 +23,12 @@ pub(super) const REWIND_SLOTS: u64 = 2;
 pub(super) struct PendingTransaction {
     pub(super) protocol: Protocol,
     pub(super) update: SubscribeUpdateTransaction,
+}
+
+/// A block-meta's block time; `None` when it carries none, or one out of range.
+pub(super) fn block_time(meta: &SubscribeUpdateBlockMeta) -> Option<DateTime<Utc>> {
+    meta.block_time
+        .and_then(|time| DateTime::from_timestamp(time.timestamp, 0))
 }
 
 /// The slots one session has seen, closed, or is still waiting on.
@@ -78,10 +84,7 @@ impl SlotProgress {
 
         // ⚠️ Nothing substitutes for a missing `block_time`: in every unique key and the partitioning
         // column, a plausible wrong value is one nothing will question. The bank is given up.
-        let Some(at) = meta
-            .block_time
-            .and_then(|time| DateTime::from_timestamp(time.timestamp, 0))
-        else {
+        let Some(at) = block_time(&meta) else {
             log::no_block_time(slot, bank);
             return self.buffer.on_slot_unresolvable(slot, bank);
         };

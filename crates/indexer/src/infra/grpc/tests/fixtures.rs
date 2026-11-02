@@ -3,15 +3,29 @@
 //! ⚠️ [`transaction_update`] must stay one the adapter accepts: a refused one is dropped before
 //! the consumer, and the full- and vanished-consumer tests would exercise nothing.
 
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+};
+
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use tokio::sync::watch;
 use yellowstone_grpc_proto::prelude::{
     Message, SlotStatus, SubscribeUpdate, SubscribeUpdateBlockMeta, SubscribeUpdatePing,
     SubscribeUpdateSlot, SubscribeUpdateTransaction, SubscribeUpdateTransactionInfo, Transaction,
     TransactionStatusMeta, UnixTimestamp, subscribe_update::UpdateOneof,
 };
 use yog_core::domain::Protocol;
+use yog_core::{
+    RepositoryError, RepositoryResult,
+    domain::{IngestCoverageRepository, ObservedSlots},
+};
 
-use super::subscription::{BLOCK_META_FILTER, SLOT_FILTER};
+use super::{
+    coverage::SessionCoverage,
+    subscription::{BLOCK_META_FILTER, SLOT_FILTER},
+};
 
 /// The one protocol with a working extractor.
 pub(super) const PROTOCOL: Protocol = Protocol::MeteoraDammV2;
@@ -146,5 +160,38 @@ pub(super) fn update(filters: &[&str], oneof: UpdateOneof) -> SubscribeUpdate {
         filters: filters.iter().map(|f| f.to_string()).collect(),
         update_oneof: Some(oneof),
         ..Default::default()
+    }
+}
+
+/// A session's coverage that nobody reads.
+pub(super) fn unread_coverage() -> SessionCoverage {
+    SessionCoverage::new(Arc::from([PROTOCOL]), watch::channel(None).0)
+}
+
+/// The coverage journal in memory: what was recorded, and a switch that refuses every write.
+#[derive(Default)]
+pub(super) struct RecordedCoverage {
+    rows: Mutex<Vec<ObservedSlots>>,
+    refusing: AtomicBool,
+}
+
+impl RecordedCoverage {
+    pub(super) fn rows(&self) -> Vec<ObservedSlots> {
+        self.rows.lock().unwrap().clone()
+    }
+
+    pub(super) fn refuse(&self, refusing: bool) {
+        self.refusing.store(refusing, Ordering::SeqCst);
+    }
+}
+
+#[async_trait]
+impl IngestCoverageRepository for RecordedCoverage {
+    async fn record(&self, observed: &ObservedSlots) -> RepositoryResult<()> {
+        if self.refusing.load(Ordering::SeqCst) {
+            return Err(RepositoryError::Backend("refused by the test".to_string()));
+        }
+        self.rows.lock().unwrap().push(observed.clone());
+        Ok(())
     }
 }

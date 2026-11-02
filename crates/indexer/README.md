@@ -27,7 +27,8 @@ indexer/src/
 ├── infra/refusal.rs       ← the wording both adapters refuse a source's gap with
 ├── infra/grpc/            ← GrpcTransactionSource and the single stage behind
 │                            it: listener, subscription, session, credential
-│                            interceptor, protobuf adapter, slot/time buffer
+│                            interceptor, protobuf adapter, slot/time buffer,
+│                            coverage (the slots observed, written)
 │   ├── listener/          ← one module per responsibility: connector,
 │   │                        ending (+ verdict, resume mark), retry_budget,
 │   │                        stall_clock, log — listener.rs assembles them
@@ -383,6 +384,31 @@ than leaving a gap. Only the code is read, never the message. Each mark given
 up is a `warn!` (`gRPC resume mark abandoned`, with the slot and the code) and
 an increment of `yog_indexer_grpc_resume_marks_abandoned_total{reason}`.
 
+### What the stream observed (`infra/grpc/coverage.rs`)
+
+An empty slot range reads the same whether nothing happened or nobody was
+watching. So each session writes what it saw: in `ingest_coverage`, one row per
+session and per protocol watched whole, from the lowest to the highest slot a
+timed block-meta closed, each end with its block time. A gap is **never
+written**: the view `ingest_coverage_gaps` is the complement of the ranges, so a
+process killed, a budget run out or a host restarted leaves one without anyone
+deciding it.
+
+- The range runs lowest to highest, not first to last: a replay delivers its
+  oldest slots last. A slot the network skipped does not cut it.
+- A writer task, started and stopped with `GrpcListener::run`, records every
+  `COVERAGE_PERIOD` (60 s) **the range read at the tick before**: a transaction
+  whose block-meta came may still wait for the persistor, so a cut declares a
+  gap a little too wide, never too narrow. A failed write is counted and
+  stepped over.
+- Nothing is written under `INGEST_SCOPE=pools`: a protocol of which a few
+  pools are watched is not covered.
+- The journal is not the resume mark: `from_slot` stays the listener's own,
+  and a replay that overlaps the range before simply closes no gap.
+- Out of scope: a gap inside a live session (including a replay cut halfway,
+  whose range already spans it), the gap still open between the last write and
+  now, and the JSON-RPC path, which sees no slot it did not ask for.
+
 ## `TransactionProcessor` and its collaborators
 
 `TransactionProcessor::process_transaction(protocol, &OnChainTransaction)`
@@ -566,7 +592,9 @@ histograms.
   `yog_indexer_grpc_pending_slot_lag_peak` (peaks since start, not current
   values), `yog_indexer_grpc_ping_replies_unsent_total{reason}`,
   `yog_indexer_grpc_resume_marks_abandoned_total{reason}` (the refusing gRPC
-  code; **each increment is a gap** between the mark and the live edge) and
+  code; **each increment is a gap** between the mark and the live edge),
+  `yog_indexer_grpc_coverage_writes_total{outcome}` (`written`, `failed`: a
+  failed one leaves its slots declared missing until the next write) and
   `yog_indexer_grpc_stalls_total{site}`. ⚠️ **`stalls_total` is the only
   trace of a server that went silent without closing**: `site="stream"` for a
   stream that stopped delivering block-metas (before it, the sign was

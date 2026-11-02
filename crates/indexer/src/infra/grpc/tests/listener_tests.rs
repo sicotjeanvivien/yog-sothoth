@@ -89,7 +89,8 @@ use tonic::Status;
 
 use crate::infra::grpc::{
     test_fixtures::{
-        PROTOCOL, block_meta, ping, slot_finalized, transaction, unroutable_transaction,
+        PROTOCOL, RecordedCoverage, block_meta, ping, slot_finalized, transaction, unread_coverage,
+        unroutable_transaction,
     },
     test_geyser_server::{self, Action, ScriptedGeyserHandle, ScriptedSession},
 };
@@ -736,6 +737,7 @@ async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
             &interceptor,
             request,
             &downstream,
+            unread_coverage(),
             &CancellationToken::new(),
         ),
     )
@@ -792,6 +794,7 @@ async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
             &interceptor,
             request,
             &downstream,
+            unread_coverage(),
             &CancellationToken::new(),
         ),
     )
@@ -1267,4 +1270,121 @@ async fn a_shutdown_reaches_a_subscribe_that_is_never_answered() {
         outcome.is_ok(),
         "a requested stop is a clean one: {outcome:?}"
     );
+}
+
+// ── what the sessions observed ──────────────────────────────────────
+
+/// A writer period the tests can wait through.
+const COVERAGE_TICK: Duration = Duration::from_millis(20);
+
+/// A listener watching DAMM v2 whole, recording what it observes in memory.
+async fn covered_listener(
+    server: &ScriptedGeyserHandle,
+    max_attempts: u32,
+) -> (Arc<GrpcListener>, Arc<RecordedCoverage>) {
+    let recorded = Arc::new(RecordedCoverage::default());
+    let listener = GrpcListener::new(
+        Endpoint::for_tests(server.url(), None),
+        max_attempts,
+        STALL_TIMEOUT,
+    )
+    .with_coverage(CoverageWriter::new(recorded.clone(), COVERAGE_TICK));
+    listener.watch(PROTOCOL).await;
+    (Arc::new(listener), recorded)
+}
+
+fn timed_meta(slot: u64) -> Action {
+    Action::send(block_meta(slot, Some(BLOCK_TIME + slot as i64)))
+}
+
+/// The widest range recorded per session, in the order the sessions started.
+fn sessions(recorded: &RecordedCoverage) -> Vec<(u64, u64)> {
+    let mut widest: Vec<(chrono::DateTime<chrono::Utc>, u64, u64)> = Vec::new();
+    for row in recorded.rows() {
+        match widest
+            .iter_mut()
+            .find(|(key, _, _)| *key == row.session_started_at)
+        {
+            Some((_, from, to)) => {
+                *from = (*from).min(row.range.from());
+                *to = (*to).max(row.range.to());
+            }
+            None => widest.push((row.session_started_at, row.range.from(), row.range.to())),
+        }
+    }
+    widest.sort();
+    widest.into_iter().map(|(_, from, to)| (from, to)).collect()
+}
+
+/// Wait until the sessions recorded are `expected`, or the deadline.
+async fn wait_for_sessions(recorded: &RecordedCoverage, expected: &[(u64, u64)]) {
+    let waited = timeout(TEST_DEADLINE, async {
+        while sessions(recorded) != expected {
+            tokio::time::sleep(COVERAGE_TICK).await;
+        }
+    })
+    .await;
+    assert!(
+        waited.is_ok(),
+        "recorded {:?}, expected {expected:?}",
+        sessions(recorded)
+    );
+}
+
+/// Mutation: the session no longer feeding its coverage, or its high end no longer widened.
+#[tokio::test]
+async fn a_session_records_the_slots_it_saw_closed_skipped_ones_included() {
+    let server = test_geyser_server::start(vec![ScriptedSession::Stream(vec![
+        timed_meta(10),
+        timed_meta(11),
+        timed_meta(13),
+        timed_meta(14),
+        Action::Hold,
+    ])])
+    .await;
+    let (listener, recorded) = covered_listener(&server, 1).await;
+    let (downstream, _consumer) = mpsc::channel(4);
+    let shutdown = CancellationToken::new();
+    let run = tokio::spawn(listener.run(downstream, shutdown.clone()));
+
+    wait_for_sessions(&recorded, &[(10, 14)]).await;
+
+    shutdown.cancel();
+    run.await.expect("the listener ends").expect("on shutdown");
+}
+
+/// Mutation: one session key for the whole listener, so a reconnection extends the range before.
+#[tokio::test]
+async fn each_connection_records_its_own_range() {
+    let server = test_geyser_server::start(vec![
+        ScriptedSession::Stream(vec![
+            timed_meta(10),
+            timed_meta(11),
+            Action::Fail(Status::unavailable("the provider restarted")),
+        ]),
+        ScriptedSession::Stream(vec![timed_meta(20), timed_meta(21), Action::Hold]),
+    ])
+    .await;
+    let (listener, recorded) = covered_listener(&server, 2).await;
+    let (downstream, _consumer) = mpsc::channel(4);
+    let shutdown = CancellationToken::new();
+    let run = tokio::spawn(listener.run(downstream, shutdown.clone()));
+
+    wait_for_sessions(&recorded, &[(10, 11), (20, 21)]).await;
+
+    shutdown.cancel();
+    run.await.expect("the listener ends").expect("on shutdown");
+}
+
+/// Mutation: the program-id filter removed, so a pool watched alone covers its protocol.
+#[tokio::test]
+async fn only_a_protocol_watched_whole_is_covered() {
+    let listener = listener("http://127.0.0.1:1");
+    listener
+        .watch_pool(PROTOCOL, Pubkey::new_from_array([7; 32]))
+        .await;
+    assert_eq!(&*listener.whole_protocols().await, []);
+
+    listener.watch(PROTOCOL).await;
+    assert_eq!(&*listener.whole_protocols().await, [PROTOCOL]);
 }

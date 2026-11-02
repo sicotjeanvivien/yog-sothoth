@@ -15,7 +15,7 @@ use yellowstone_grpc_proto::prelude::{
 use crate::infra::grpc::test_fixtures::{
     PROTOCOL, Snapshot, at, block_meta, block_meta_in_bank, gauge_for, ping, slot_finalized,
     slot_status, transaction, transaction_in_bank, transaction_update_with_signature,
-    unroutable_transaction, update,
+    unread_coverage, unroutable_transaction, update,
 };
 
 /// How many ping answers the harness's outbound half holds unread.
@@ -45,7 +45,7 @@ fn session_with(
     let (outbound_tx, outbound_rx) = mpsc::channel(HARNESS_OUTBOUND_CAPACITY);
     // Only ping answers are ever written here; the receiver is handed back to assert them.
     (
-        StreamSession::new(downstream_tx, outbound_tx, shutdown),
+        StreamSession::new(downstream_tx, outbound_tx, shutdown, unread_coverage()),
         downstream_rx,
         outbound_rx,
     )
@@ -713,4 +713,30 @@ async fn a_shutdown_reaches_a_session_parked_on_a_full_consumer() {
             .expect("no panic"),
         SessionState::ShutdownRequested
     );
+}
+
+// ── what the session observed ───────────────────────────────────────
+
+/// Mutation: every block-meta fed to the session's coverage, timed or not.
+#[tokio::test]
+async fn only_a_timed_block_meta_widens_what_the_session_observed() {
+    let (publish, published) = tokio::sync::watch::channel(None);
+    let (downstream_tx, _downstream) = mpsc::channel(4);
+    let (outbound_tx, _outbound) = mpsc::channel(HARNESS_OUTBOUND_CAPACITY);
+    let coverage = SessionCoverage::new(std::sync::Arc::from([PROTOCOL]), publish);
+    let mut session = StreamSession::new(
+        downstream_tx,
+        outbound_tx,
+        CancellationToken::new(),
+        coverage,
+    );
+
+    session.handle(block_meta(10, Some(1_700_000_000))).await;
+    session.handle(block_meta(12, None)).await;
+
+    let seen = published
+        .borrow()
+        .clone()
+        .expect("the timed block-meta is published");
+    assert_eq!((seen.range().from(), seen.range().to()), (10, 10));
 }

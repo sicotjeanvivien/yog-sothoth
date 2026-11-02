@@ -20,6 +20,7 @@ use crate::{
     infra::{
         endpoint::scheme,
         grpc::{
+            coverage::SessionCoverage,
             interceptor::CredentialInterceptor,
             metrics::{GrpcListenerMetrics, StallSite},
             session::{SessionState, StreamSession},
@@ -117,10 +118,11 @@ impl Connector {
         interceptor: &CredentialInterceptor,
         request: SubscribeRequest,
         downstream: &mpsc::Sender<IngestedTransaction>,
+        coverage: SessionCoverage,
         shutdown: &CancellationToken,
     ) -> Ending {
         match self.open(channel, interceptor, request, shutdown).await {
-            Ok(open) => self.read(open, downstream, shutdown).await,
+            Ok(open) => self.read(open, downstream, coverage, shutdown).await,
             Err(ending) => ending,
         }
     }
@@ -167,6 +169,7 @@ impl Connector {
         &self,
         open: OpenStream,
         downstream: &mpsc::Sender<IngestedTransaction>,
+        coverage: SessionCoverage,
         shutdown: &CancellationToken,
     ) -> Ending {
         let OpenStream {
@@ -174,7 +177,8 @@ impl Connector {
             mut stream,
             outbound,
         } = open;
-        let mut session = StreamSession::new(downstream.clone(), outbound, shutdown.clone());
+        let mut session =
+            StreamSession::new(downstream.clone(), outbound, shutdown.clone(), coverage);
         let mut clock = StallClock::new(self.stall_timeout);
 
         loop {

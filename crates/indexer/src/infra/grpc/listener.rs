@@ -12,7 +12,7 @@ mod stall_clock;
 use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use solana_pubkey::Pubkey;
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::{Mutex, mpsc, watch};
 use tokio_util::sync::CancellationToken;
 use yellowstone_grpc_proto::prelude::SubscribeRequest;
 use yog_bootstrap::Endpoint;
@@ -24,6 +24,7 @@ use crate::{
     infra::{
         Credential,
         grpc::{
+            coverage::{CoverageWriter, Published, SessionCoverage},
             interceptor::CredentialInterceptor,
             metrics::{GrpcListenerMetrics, WAITING_PEAKS},
             subscription::build_request,
@@ -44,6 +45,8 @@ pub(crate) struct GrpcListener {
     /// Every address to subscribe to, with its protocol.
     watched: Mutex<HashSet<(Protocol, Pubkey)>>,
     max_attempts: u32,
+    /// What records the slots observed; `None` records nothing.
+    coverage: Option<CoverageWriter>,
 }
 
 impl GrpcListener {
@@ -52,7 +55,14 @@ impl GrpcListener {
             connector: Connector::new(endpoint, stall_timeout),
             watched: Mutex::new(HashSet::new()),
             max_attempts,
+            coverage: None,
         }
+    }
+
+    /// Record the slots each session observes, through `writer`.
+    pub(crate) fn with_coverage(mut self, writer: CoverageWriter) -> Self {
+        self.coverage = Some(writer);
+        self
     }
 
     /// Watch a whole protocol: its program id goes into the filter.
@@ -83,6 +93,36 @@ impl GrpcListener {
         log::starting(self.connector.endpoint(), credential.name(), &request);
         WAITING_PEAKS.export();
 
+        // ⚠️ Stopped with the attempts, whatever ended them: a writer outliving them would go on
+        // writing a range no session extends.
+        let (publish, published) = watch::channel(None);
+        let writer_stop = shutdown.child_token();
+        let writer = self
+            .coverage
+            .clone()
+            .map(|writer| tokio::spawn(writer.run(published, writer_stop.clone())));
+
+        let result = self
+            .attempts(&channel, &interceptor, &downstream, &publish, &shutdown)
+            .await;
+
+        writer_stop.cancel();
+        if let Some(writer) = writer {
+            // A writer's panic stops nothing: what it lost is a range, which the next run writes.
+            let _ = writer.await;
+        }
+        result
+    }
+
+    /// Connect, read, and reconnect until the budget or the shutdown says stop.
+    async fn attempts(
+        &self,
+        channel: &tonic::transport::Endpoint,
+        interceptor: &CredentialInterceptor,
+        downstream: &mpsc::Sender<IngestedTransaction>,
+        publish: &Published,
+        shutdown: &CancellationToken,
+    ) -> Result<(), GrpcListenerError> {
         let mut budget = RetryBudget::new(self.max_attempts);
         let mut resume_from: Option<u64> = None;
 
@@ -93,10 +133,18 @@ impl GrpcListener {
             }
 
             let request = self.subscribe_request(resume_from).await?;
+            let coverage = SessionCoverage::new(self.whole_protocols().await, publish.clone());
 
             let verdict = self
                 .connector
-                .attempt(&channel, &interceptor, request, &downstream, &shutdown)
+                .attempt(
+                    channel,
+                    interceptor,
+                    request,
+                    downstream,
+                    coverage,
+                    shutdown,
+                )
                 .await
                 .verdict();
 
@@ -108,10 +156,21 @@ impl GrpcListener {
             resume_from = verdict.next_resume_from(resume_from);
 
             match budget.settle(verdict, resume_from) {
-                Next::Retry { after } => sleep_or_cancel(after, &shutdown).await,
+                Next::Retry { after } => sleep_or_cancel(after, shutdown).await,
                 Next::Stop(result) => return result,
             }
         }
+    }
+
+    /// The protocols watched whole, by program id: a pool watched alone does not cover its protocol.
+    async fn whole_protocols(&self) -> Arc<[Protocol]> {
+        self.watched
+            .lock()
+            .await
+            .iter()
+            .filter(|(protocol, address)| *address == protocol.program_id())
+            .map(|(protocol, _)| *protocol)
+            .collect()
     }
 
     /// Build the subscription from what is watched right now.

@@ -149,6 +149,26 @@ const MARKS_ABANDONED: &str = "yog_indexer_grpc_resume_marks_abandoned_total";
 /// it names them. ⚠️ Kept across a reconnection until the new session's first message says.
 const BANK_ID_MISSING: &str = "yog_indexer_grpc_bank_id_missing";
 
+/// Ranges of observed slots written to `ingest_coverage`, by [`CoverageWrite`].
+const COVERAGE_WRITES: &str = "yog_indexer_grpc_coverage_writes_total";
+
+/// How a write of observed slots ended, for [`COVERAGE_WRITES`].
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum CoverageWrite {
+    Written,
+    /// Not recorded; the next tick writes the range again, wider.
+    Failed,
+}
+
+impl CoverageWrite {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Written => "written",
+            Self::Failed => "failed",
+        }
+    }
+}
+
 /// What an update was, for [`UPDATES_RECEIVED`].
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum UpdateKind {
@@ -306,6 +326,12 @@ impl GrpcListenerMetrics {
             "Server pings that could not be answered, labelled by why the \
              answer did not leave"
         );
+        describe_counter!(
+            COVERAGE_WRITES,
+            "Ranges of observed slots written to ingest_coverage, labelled by \
+             outcome; a failed one leaves its slots declared missing until the \
+             next write"
+        );
         describe_gauge!(
             BANK_ID_MISSING,
             "1 when the stream's server names no bank, so each slot is paired \
@@ -339,6 +365,10 @@ impl GrpcListenerMetrics {
 
     pub(crate) fn record_mark_abandoned(reason: MarkRefusal) {
         counter!(MARKS_ABANDONED, "reason" => reason.as_str()).increment(1);
+    }
+
+    pub(crate) fn record_coverage_write(outcome: CoverageWrite) {
+        counter!(COVERAGE_WRITES, "outcome" => outcome.as_str()).increment(1);
     }
 
     pub(crate) fn record_bank_id_missing(missing: bool) {
