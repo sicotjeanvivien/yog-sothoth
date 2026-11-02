@@ -14,6 +14,7 @@ mod liquidity_moves;
 mod materialization_backlog;
 mod meteora;
 mod network_status;
+mod observed_slots;
 mod pool;
 mod pool_account;
 mod pool_change_event;
@@ -97,6 +98,7 @@ pub use meteora::{
     MeteoraDammV2WithdrawIneligibleRewardEventRepository, MeteoraDlmmPoolAccountProperties,
 };
 pub use network_status::{NetworkStatus, NetworkStatusLookup, NetworkStatusRepository};
+pub use observed_slots::{ObservedSlots, ObservedSlotsRepository};
 pub use pool::{
     Pool, PoolCatalog, PoolCursor, PoolEntry, PoolRepository, PoolScope, PoolValue, ProtocolPools,
 };

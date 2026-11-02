@@ -89,7 +89,8 @@ use tonic::Status;
 
 use crate::infra::grpc::{
     test_fixtures::{
-        PROTOCOL, block_meta, ping, slot_finalized, transaction, unroutable_transaction,
+        PROTOCOL, WrittenSlots, block_meta, ping, received_slots_unwritten, slot_finalized,
+        transaction, unroutable_transaction,
     },
     test_geyser_server::{self, Action, ScriptedGeyserHandle, ScriptedSession},
 };
@@ -736,6 +737,7 @@ async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
             &interceptor,
             request,
             &downstream,
+            received_slots_unwritten(),
             &CancellationToken::new(),
         ),
     )
@@ -792,6 +794,7 @@ async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
             &interceptor,
             request,
             &downstream,
+            received_slots_unwritten(),
             &CancellationToken::new(),
         ),
     )
@@ -1267,4 +1270,130 @@ async fn a_shutdown_reaches_a_subscribe_that_is_never_answered() {
         outcome.is_ok(),
         "a requested stop is a clean one: {outcome:?}"
     );
+}
+
+// ── what the sessions received for good ──────────────────────────────────────
+
+/// A recorder period the tests can wait through.
+const RECORD_TICK: Duration = Duration::from_millis(20);
+
+/// A listener watching DAMM v2 whole, writing what it receives in memory.
+async fn recorded_listener(
+    server: &ScriptedGeyserHandle,
+    max_attempts: u32,
+) -> (Arc<GrpcListener>, Arc<WrittenSlots>) {
+    let recorded = Arc::new(WrittenSlots::default());
+    let listener = GrpcListener::new(
+        Endpoint::for_tests(server.url(), None),
+        max_attempts,
+        STALL_TIMEOUT,
+    )
+    .with_slots_recorder(SlotsRecorder::new(recorded.clone(), RECORD_TICK));
+    listener.watch(PROTOCOL).await;
+    (Arc::new(listener), recorded)
+}
+
+fn timed_meta(slot: u64) -> Action {
+    Action::send(block_meta(slot, Some(BLOCK_TIME + slot as i64)))
+}
+
+/// The widest span written per session, in the order the sessions started.
+fn sessions(recorded: &WrittenSlots) -> Vec<(u64, u64)> {
+    let mut widest: Vec<(chrono::DateTime<chrono::Utc>, u64, u64)> = Vec::new();
+    for row in recorded.rows() {
+        match widest
+            .iter_mut()
+            .find(|(key, _, _)| *key == row.session_started_at)
+        {
+            Some((_, from, to)) => {
+                *from = (*from).min(row.first_slot);
+                *to = (*to).max(row.last_slot);
+            }
+            None => widest.push((row.session_started_at, row.first_slot, row.last_slot)),
+        }
+    }
+    widest.sort();
+    widest.into_iter().map(|(_, from, to)| (from, to)).collect()
+}
+
+/// Wait until the sessions written are `expected`, or the deadline.
+async fn wait_for_sessions(recorded: &WrittenSlots, expected: &[(u64, u64)]) {
+    let waited = timeout(TEST_DEADLINE, async {
+        while sessions(recorded) != expected {
+            tokio::time::sleep(RECORD_TICK).await;
+        }
+    })
+    .await;
+    assert!(
+        waited.is_ok(),
+        "recorded {:?}, expected {expected:?}",
+        sessions(recorded)
+    );
+}
+
+/// Mutation: the session no longer counting what it receives, or its last slot no longer widened.
+#[tokio::test]
+async fn a_session_writes_the_slots_it_received_skipped_ones_included() {
+    let server = test_geyser_server::start(vec![ScriptedSession::Stream(vec![
+        timed_meta(10),
+        timed_meta(11),
+        timed_meta(13),
+        timed_meta(14),
+        timed_meta(15),
+        timed_meta(16),
+        Action::Hold,
+    ])])
+    .await;
+    let (listener, recorded) = recorded_listener(&server, 1).await;
+    let (downstream, _consumer) = mpsc::channel(4);
+    let shutdown = CancellationToken::new();
+    let run = tokio::spawn(listener.run(downstream, shutdown.clone()));
+
+    // The resume point is two slots under the highest, 14: 14 to 16 would be asked again.
+    wait_for_sessions(&recorded, &[(10, 13)]).await;
+
+    shutdown.cancel();
+    run.await.expect("the listener ends").expect("on shutdown");
+}
+
+/// Mutation: one session key for the whole listener, so a reconnection extends the span before.
+#[tokio::test]
+async fn each_connection_writes_its_own_span() {
+    let server = test_geyser_server::start(vec![
+        ScriptedSession::Stream(vec![
+            timed_meta(10),
+            timed_meta(11),
+            timed_meta(12),
+            timed_meta(13),
+            Action::Fail(Status::unavailable("the provider restarted")),
+        ]),
+        ScriptedSession::Stream(vec![
+            timed_meta(20),
+            timed_meta(21),
+            timed_meta(22),
+            timed_meta(23),
+            Action::Hold,
+        ]),
+    ])
+    .await;
+    let (listener, recorded) = recorded_listener(&server, 2).await;
+    let (downstream, _consumer) = mpsc::channel(4);
+    let shutdown = CancellationToken::new();
+    let run = tokio::spawn(listener.run(downstream, shutdown.clone()));
+
+    wait_for_sessions(&recorded, &[(10, 10), (20, 20)]).await;
+
+    shutdown.cancel();
+    run.await.expect("the listener ends").expect("on shutdown");
+}
+
+/// Mutation: the program-id filter removed, so a pool watched alone watches its protocol.
+#[tokio::test]
+async fn only_a_protocol_watched_whole_counts() {
+    let pool = (PROTOCOL, Pubkey::new_from_array([7; 32]));
+    let mut watched = HashSet::from([pool]);
+    assert_eq!(&*whole_protocols(&watched), []);
+
+    watched.insert((PROTOCOL, PROTOCOL.program_id()));
+    assert_eq!(&*whole_protocols(&watched), [PROTOCOL]);
 }

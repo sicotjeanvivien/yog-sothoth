@@ -362,6 +362,13 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
         ],
     ),
     (
+        "observed_slot_ranges",
+        &[
+            ("yog_api", &["SELECT"]),
+            ("yog_indexer", &["INSERT", "SELECT", "UPDATE"]),
+        ],
+    ),
+    (
         "pool_current_state",
         &[
             ("yog_api", &["SELECT"]),
@@ -419,6 +426,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
             ("yog_signals", &["SELECT"]),
         ],
     ),
+    ("unobserved_slot_ranges", &[("yog_api", &["SELECT"])]),
     ("update_reward_duration_events", &[("yog_api", &["SELECT"])]),
     ("update_reward_funder_events", &[("yog_api", &["SELECT"])]),
     (

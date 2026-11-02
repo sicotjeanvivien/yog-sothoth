@@ -123,6 +123,9 @@ read without the account that deploys: `ssh yog-obs health`, `metrics` or `db`.
   another chunk ends as a success: `chunks_compression_overdue` is what sees the
   chunk it skipped, still uncompressed a day past its policy's age. Either one
   above 0 day after day is the alarm no daemon raises.
+  `unobserved_ranges_7d` and `unobserved_slots_7d` count the slot ranges the
+  ingestion did not watch, among those that ended in the last 7 days
+  (`unobserved_slot_ranges`); a deployment's own cut is one of them.
 
 Two barriers, each enough on its own to keep root out of reach:
 

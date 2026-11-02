@@ -5,6 +5,8 @@
 mod delivery;
 mod log;
 mod ping_answer;
+pub(super) mod received_slots;
+pub(super) mod received_span;
 mod slot_progress;
 
 use tokio::sync::mpsc;
@@ -25,7 +27,8 @@ use super::{
 
 use delivery::Delivery;
 use ping_answer::PingAnswer;
-use slot_progress::{PendingTransaction, SlotProgress};
+use received_slots::ReceivedSlots;
+use slot_progress::{PendingTransaction, SlotProgress, block_time};
 
 /// Why a session ended, or that it has not.
 #[derive(Debug, PartialEq, Eq)]
@@ -43,6 +46,7 @@ pub(super) enum SessionState {
 /// The state one subscription accumulates.
 pub(super) struct StreamSession {
     slots: SlotProgress,
+    received_slots: ReceivedSlots,
     delivery: Delivery,
     pings: PingAnswer,
     /// Whether a data message came off the stream; see [`Self::received_data`].
@@ -56,9 +60,11 @@ impl StreamSession {
         downstream: mpsc::Sender<IngestedTransaction>,
         outbound: mpsc::Sender<SubscribeRequest>,
         shutdown: CancellationToken,
+        received_slots: ReceivedSlots,
     ) -> Self {
         Self {
             slots: SlotProgress::new(),
+            received_slots,
             delivery: Delivery::new(downstream, shutdown),
             pings: PingAnswer::new(outbound),
             received_data: false,
@@ -99,7 +105,12 @@ impl StreamSession {
                 GrpcListenerMetrics::record_update(UpdateKind::BlockMeta);
                 self.received_data = true;
                 self.block_metas += 1;
+                let timed = block_time(&meta).map(|at| (meta.slot, at));
                 let released = self.slots.on_block_meta(meta);
+                if let Some((slot, at)) = timed {
+                    self.received_slots
+                        .on_block_meta(slot, at, self.slots.resume_from());
+                }
                 self.deliver_all(released).await
             }
             Some(UpdateOneof::Slot(status)) => {

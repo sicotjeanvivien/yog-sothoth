@@ -7,6 +7,7 @@ mod connector;
 mod ending;
 mod log;
 mod retry_budget;
+mod slots_recorder;
 mod stall_clock;
 
 use std::{collections::HashSet, sync::Arc, time::Duration};
@@ -26,6 +27,8 @@ use crate::{
         grpc::{
             interceptor::CredentialInterceptor,
             metrics::{GrpcListenerMetrics, WAITING_PEAKS},
+            ranges_to_record::RangesToRecord,
+            session::received_slots::ReceivedSlots,
             subscription::build_request,
         },
     },
@@ -34,6 +37,7 @@ use crate::{
 use connector::Connector;
 use retry_budget::{Next, RetryBudget};
 
+pub(crate) use slots_recorder::{RECORD_PERIOD, SlotsRecorder};
 pub(crate) use stall_clock::STALL_TIMEOUT;
 
 /// Subscribes to a Yellowstone stream and turns it into timestamped transactions; what it
@@ -44,6 +48,8 @@ pub(crate) struct GrpcListener {
     /// Every address to subscribe to, with its protocol.
     watched: Mutex<HashSet<(Protocol, Pubkey)>>,
     max_attempts: u32,
+    /// What writes the slots the sessions received; `None` writes nothing.
+    recorder: Option<SlotsRecorder>,
 }
 
 impl GrpcListener {
@@ -52,7 +58,14 @@ impl GrpcListener {
             connector: Connector::new(endpoint, stall_timeout),
             watched: Mutex::new(HashSet::new()),
             max_attempts,
+            recorder: None,
         }
+    }
+
+    /// Write the slots each session receives for good, through `recorder`.
+    pub(crate) fn with_slots_recorder(mut self, recorder: SlotsRecorder) -> Self {
+        self.recorder = Some(recorder);
+        self
     }
 
     /// Watch a whole protocol: its program id goes into the filter.
@@ -83,6 +96,37 @@ impl GrpcListener {
         log::starting(self.connector.endpoint(), credential.name(), &request);
         WAITING_PEAKS.export();
 
+        // ⚠️ Stopped with the attempts, whatever ended them, this future dropped included: a
+        // recorder outliving them would go on writing a span no session extends.
+        let ranges = RangesToRecord::default();
+        let recorder_stop = shutdown.child_token();
+        let _stop_recorder_on_drop = recorder_stop.clone().drop_guard();
+        let recorder = self
+            .recorder
+            .clone()
+            .map(|recorder| tokio::spawn(recorder.run(ranges.clone(), recorder_stop.clone())));
+
+        let result = self
+            .attempts(&channel, &interceptor, &downstream, &ranges, &shutdown)
+            .await;
+
+        recorder_stop.cancel();
+        if let Some(recorder) = recorder {
+            // A recorder's panic stops nothing.
+            let _ = recorder.await;
+        }
+        result
+    }
+
+    /// Connect, read, and reconnect until the budget or the shutdown says stop.
+    async fn attempts(
+        &self,
+        channel: &tonic::transport::Endpoint,
+        interceptor: &CredentialInterceptor,
+        downstream: &mpsc::Sender<IngestedTransaction>,
+        ranges: &RangesToRecord,
+        shutdown: &CancellationToken,
+    ) -> Result<(), GrpcListenerError> {
         let mut budget = RetryBudget::new(self.max_attempts);
         let mut resume_from: Option<u64> = None;
 
@@ -92,11 +136,19 @@ impl GrpcListener {
                 return Ok(());
             }
 
-            let request = self.subscribe_request(resume_from).await?;
+            let (request, protocols) = self.subscription(resume_from).await?;
+            let received_slots = ReceivedSlots::new(protocols, ranges.clone());
 
             let verdict = self
                 .connector
-                .attempt(&channel, &interceptor, request, &downstream, &shutdown)
+                .attempt(
+                    channel,
+                    interceptor,
+                    request,
+                    downstream,
+                    received_slots,
+                    shutdown,
+                )
                 .await
                 .verdict();
 
@@ -108,10 +160,22 @@ impl GrpcListener {
             resume_from = verdict.next_resume_from(resume_from);
 
             match budget.settle(verdict, resume_from) {
-                Next::Retry { after } => sleep_or_cancel(after, &shutdown).await,
+                Next::Retry { after } => sleep_or_cancel(after, shutdown).await,
                 Next::Stop(result) => return result,
             }
         }
+    }
+
+    /// The subscription, and the protocols it watches whole, read under one lock so they agree.
+    async fn subscription(
+        &self,
+        from_slot: Option<u64>,
+    ) -> Result<(SubscribeRequest, Arc<[Protocol]>), GrpcListenerError> {
+        let watched = self.watched.lock().await;
+        Ok((
+            build_request(&watched, from_slot)?,
+            whole_protocols(&watched),
+        ))
     }
 
     /// Build the subscription from what is watched right now.
@@ -121,6 +185,15 @@ impl GrpcListener {
     ) -> Result<SubscribeRequest, GrpcListenerError> {
         build_request(&*self.watched.lock().await, from_slot)
     }
+}
+
+/// The protocols watched whole, by program id: a pool watched alone does not cover its protocol.
+fn whole_protocols(watched: &HashSet<(Protocol, Pubkey)>) -> Arc<[Protocol]> {
+    watched
+        .iter()
+        .filter(|(protocol, address)| *address == protocol.program_id())
+        .map(|(protocol, _)| *protocol)
+        .collect()
 }
 
 /// Sleep, unless the shutdown token fires first.

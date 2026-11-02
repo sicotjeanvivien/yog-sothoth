@@ -4,6 +4,8 @@ use tracing::{info, warn};
 use yellowstone_grpc_proto::prelude::SubscribeRequest;
 use yog_bootstrap::Endpoint;
 
+use yog_core::{RepositoryError, domain::Protocol};
+
 use crate::infra::grpc::metrics::MarkRefusal;
 
 /// The configuration has been read and the first attempt is about to start.
@@ -62,4 +64,13 @@ pub(super) fn attempt_failed(attempt: u32, max: u32, error: &str, resume_from: O
 /// The server refused the request, and the mark it held is given up: a gap opens at `slot`.
 pub(super) fn mark_abandoned(slot: u64, reason: MarkRefusal) {
     warn!(slot, code = reason.as_str(), "gRPC resume mark abandoned");
+}
+
+/// A session's slots could not be written; the next tick writes them again.
+pub(super) fn slots_not_recorded(protocol: Protocol, error: &RepositoryError) {
+    warn!(
+        protocol = protocol.as_str(),
+        %error,
+        "could not write the slots received — retried at the next tick"
+    );
 }

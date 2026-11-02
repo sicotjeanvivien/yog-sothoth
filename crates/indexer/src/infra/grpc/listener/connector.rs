@@ -22,7 +22,7 @@ use crate::{
         grpc::{
             interceptor::CredentialInterceptor,
             metrics::{GrpcListenerMetrics, StallSite},
-            session::{SessionState, StreamSession},
+            session::{SessionState, StreamSession, received_slots::ReceivedSlots},
         },
     },
 };
@@ -117,10 +117,11 @@ impl Connector {
         interceptor: &CredentialInterceptor,
         request: SubscribeRequest,
         downstream: &mpsc::Sender<IngestedTransaction>,
+        received_slots: ReceivedSlots,
         shutdown: &CancellationToken,
     ) -> Ending {
         match self.open(channel, interceptor, request, shutdown).await {
-            Ok(open) => self.read(open, downstream, shutdown).await,
+            Ok(open) => self.read(open, downstream, received_slots, shutdown).await,
             Err(ending) => ending,
         }
     }
@@ -167,6 +168,7 @@ impl Connector {
         &self,
         open: OpenStream,
         downstream: &mpsc::Sender<IngestedTransaction>,
+        received_slots: ReceivedSlots,
         shutdown: &CancellationToken,
     ) -> Ending {
         let OpenStream {
@@ -174,7 +176,12 @@ impl Connector {
             mut stream,
             outbound,
         } = open;
-        let mut session = StreamSession::new(downstream.clone(), outbound, shutdown.clone());
+        let mut session = StreamSession::new(
+            downstream.clone(),
+            outbound,
+            shutdown.clone(),
+            received_slots,
+        );
         let mut clock = StallClock::new(self.stall_timeout);
 
         loop {

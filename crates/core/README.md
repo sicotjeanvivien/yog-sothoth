@@ -66,6 +66,8 @@ core/src/
 │   ├── unpriced_mints/    (UnpricedMints — which mints the price source
 │   │                       answered without a price, and when to ask again)
 │   ├── network_status/    (singleton snapshot)
+│   ├── observed_slots/    (ObservedSlots — the slots an ingestion session
+│   │                       watched; a range nobody watched is their complement, in SQL)
 │   ├── materialization_backlog/ (MaterializationBacklog — how long each
 │   │                       continuous aggregate's oldest raw row has waited,
 │   │                       and the lateness rule; the alarm's read model)

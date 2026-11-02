@@ -3,6 +3,12 @@
 //! ⚠️ [`transaction_update`] must stay one the adapter accepts: a refused one is dropped before
 //! the consumer, and the full- and vanished-consumer tests would exercise nothing.
 
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+};
+
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use yellowstone_grpc_proto::prelude::{
     Message, SlotStatus, SubscribeUpdate, SubscribeUpdateBlockMeta, SubscribeUpdatePing,
@@ -10,8 +16,16 @@ use yellowstone_grpc_proto::prelude::{
     TransactionStatusMeta, UnixTimestamp, subscribe_update::UpdateOneof,
 };
 use yog_core::domain::Protocol;
+use yog_core::{
+    RepositoryError, RepositoryResult,
+    domain::{ObservedSlots, ObservedSlotsRepository},
+};
 
-use super::subscription::{BLOCK_META_FILTER, SLOT_FILTER};
+use super::{
+    ranges_to_record::RangesToRecord,
+    session::received_slots::ReceivedSlots,
+    subscription::{BLOCK_META_FILTER, SLOT_FILTER},
+};
 
 /// The one protocol with a working extractor.
 pub(super) const PROTOCOL: Protocol = Protocol::MeteoraDammV2;
@@ -146,5 +160,38 @@ pub(super) fn update(filters: &[&str], oneof: UpdateOneof) -> SubscribeUpdate {
         filters: filters.iter().map(|f| f.to_string()).collect(),
         update_oneof: Some(oneof),
         ..Default::default()
+    }
+}
+
+/// A session's received slots that nobody writes.
+pub(super) fn received_slots_unwritten() -> ReceivedSlots {
+    ReceivedSlots::new(Arc::from([PROTOCOL]), RangesToRecord::default())
+}
+
+/// The observed slots in memory: what was written, and a switch that refuses every write.
+#[derive(Default)]
+pub(super) struct WrittenSlots {
+    rows: Mutex<Vec<ObservedSlots>>,
+    refusing: AtomicBool,
+}
+
+impl WrittenSlots {
+    pub(super) fn rows(&self) -> Vec<ObservedSlots> {
+        self.rows.lock().unwrap().clone()
+    }
+
+    pub(super) fn refuse(&self, refusing: bool) {
+        self.refusing.store(refusing, Ordering::SeqCst);
+    }
+}
+
+#[async_trait]
+impl ObservedSlotsRepository for WrittenSlots {
+    async fn record(&self, observed: &ObservedSlots) -> RepositoryResult<()> {
+        if self.refusing.load(Ordering::SeqCst) {
+            return Err(RepositoryError::Backend("refused by the test".to_string()));
+        }
+        self.rows.lock().unwrap().push(observed.clone());
+        Ok(())
     }
 }

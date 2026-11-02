@@ -156,6 +156,9 @@ SELECT 'jobs_last_run_failed', count(DISTINCT job_id) FROM timescaledb_informati
 SELECT 'chunks_compression_overdue', count(*) FROM timescaledb_information.chunks c
   JOIN timescaledb_information.jobs j ON j.hypertable_name = c.hypertable_name AND j.proc_name = 'policy_compression'
   WHERE NOT c.is_compressed AND c.range_end < now() - (j.config->>'compress_after')::interval - interval '1 day';
+SELECT 'unobserved_ranges_7d', count(*) FROM unobserved_slot_ranges WHERE seen_again_at > now() - interval '7 days';
+SELECT 'unobserved_slots_7d', coalesce(sum(last_slot - first_slot + 1), 0)
+  FROM unobserved_slot_ranges WHERE seen_again_at > now() - interval '7 days';
 SQL
   ) || rc=$?
   strict "$db_line" <<<"$out"

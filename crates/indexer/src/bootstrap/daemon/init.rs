@@ -16,8 +16,8 @@ use crate::{
     bootstrap::{Config, TransactionArrival},
     infra::{
         DispatcherMetrics, FetchMetrics, GrpcBufferMetrics, GrpcListener, GrpcListenerMetrics,
-        GrpcTransactionSource, RpcListener, RpcTransactionSource, STALL_TIMEOUT,
-        SignatureDispatcher, TransactionFetcher,
+        GrpcTransactionSource, RECORD_PERIOD, RpcListener, RpcTransactionSource, STALL_TIMEOUT,
+        SignatureDispatcher, SlotsRecorder, TransactionFetcher,
     },
 };
 use anyhow::Context;
@@ -43,7 +43,8 @@ use yog_persistence::{
     PgMeteoraDammV2UpdateRewardFunderEventRepository,
     PgMeteoraDammV2WithdrawDeadLiquidityRewardEventRepository,
     PgMeteoraDammV2WithdrawIneligibleRewardEventRepository, PgNetworkStatusRepository,
-    PgPoolCurrentStateRepository, PgPoolRepository, PgWatchedPoolRepository, PoolSettings,
+    PgObservedSlotsRepository, PgPoolCurrentStateRepository, PgPoolRepository,
+    PgWatchedPoolRepository, PoolSettings,
 };
 
 /// Connect to the database; the URL is a redacted secret, never logged.
@@ -57,10 +58,13 @@ pub(super) async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database
 
 /// Build the transaction source the configuration selects: the only place in the crate that
 /// names a concrete source.
-pub(super) fn init_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
+pub(super) fn init_source(
+    config: &Config,
+    database: &Database,
+) -> anyhow::Result<Arc<dyn TransactionSource>> {
     match &config.transaction_arrival {
         TransactionArrival::Fetched { from } => init_rpc_source(config, from),
-        TransactionArrival::Delivered => init_grpc_source(config),
+        TransactionArrival::Delivered => init_grpc_source(config, database),
     }
 }
 
@@ -86,15 +90,23 @@ fn init_rpc_source(
     )))
 }
 
-/// The delivering model: the listener is the source. Nothing here can fail yet; the `Result`
-/// matches its sibling's.
-fn init_grpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
+/// The delivering model: the listener is the source, and writes the slots it received. Nothing
+/// here can fail yet; the `Result` matches its sibling's.
+fn init_grpc_source(
+    config: &Config,
+    database: &Database,
+) -> anyhow::Result<Arc<dyn TransactionSource>> {
+    let recorder = SlotsRecorder::new(
+        Arc::new(PgObservedSlotsRepository::new(database.pool().clone())),
+        RECORD_PERIOD,
+    );
     Ok(Arc::new(GrpcTransactionSource::new(Arc::new(
         GrpcListener::new(
             config.ingest_stream.clone(),
             config.worker_max_retries,
             STALL_TIMEOUT,
-        ),
+        )
+        .with_slots_recorder(recorder),
     ))))
 }
 

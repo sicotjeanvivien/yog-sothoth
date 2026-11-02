@@ -4,7 +4,9 @@
 
 use super::*;
 
-use super::{ping_answer::PING_REPLY_ID, slot_progress::REWIND_SLOTS};
+use super::{
+    ping_answer::PING_REPLY_ID, received_slots::ReceivedSlots, slot_progress::REWIND_SLOTS,
+};
 
 use metrics_util::debugging::{DebugValue, DebuggingRecorder};
 use tokio_util::sync::CancellationToken;
@@ -13,9 +15,9 @@ use yellowstone_grpc_proto::prelude::{
 };
 
 use crate::infra::grpc::test_fixtures::{
-    PROTOCOL, Snapshot, at, block_meta, block_meta_in_bank, gauge_for, ping, slot_finalized,
-    slot_status, transaction, transaction_in_bank, transaction_update_with_signature,
-    unroutable_transaction, update,
+    PROTOCOL, Snapshot, at, block_meta, block_meta_in_bank, gauge_for, ping,
+    received_slots_unwritten, slot_finalized, slot_status, transaction, transaction_in_bank,
+    transaction_update_with_signature, unroutable_transaction, update,
 };
 
 /// How many ping answers the harness's outbound half holds unread.
@@ -45,7 +47,12 @@ fn session_with(
     let (outbound_tx, outbound_rx) = mpsc::channel(HARNESS_OUTBOUND_CAPACITY);
     // Only ping answers are ever written here; the receiver is handed back to assert them.
     (
-        StreamSession::new(downstream_tx, outbound_tx, shutdown),
+        StreamSession::new(
+            downstream_tx,
+            outbound_tx,
+            shutdown,
+            received_slots_unwritten(),
+        ),
         downstream_rx,
         outbound_rx,
     )
@@ -712,5 +719,66 @@ async fn a_shutdown_reaches_a_session_parked_on_a_full_consumer() {
             .expect("the wait must end when the token fires")
             .expect("no panic"),
         SessionState::ShutdownRequested
+    );
+}
+
+// ── what the session received for good ──────────────────────────────
+
+/// A session watching DAMM v2 whole, and the ranges it publishes.
+fn receiving_session() -> (
+    StreamSession,
+    crate::infra::grpc::ranges_to_record::RangesToRecord,
+) {
+    let ranges = crate::infra::grpc::ranges_to_record::RangesToRecord::default();
+    let (downstream_tx, _downstream) = mpsc::channel(16);
+    let (outbound_tx, _outbound) = mpsc::channel(HARNESS_OUTBOUND_CAPACITY);
+    let received = ReceivedSlots::new(std::sync::Arc::from([PROTOCOL]), ranges.clone());
+    let session = StreamSession::new(
+        downstream_tx,
+        outbound_tx,
+        CancellationToken::new(),
+        received,
+    );
+    (session, ranges)
+}
+
+fn spans(ranges: &crate::infra::grpc::ranges_to_record::RangesToRecord) -> Vec<(u64, u64)> {
+    ranges
+        .snapshot()
+        .values()
+        .map(|range| (range.span.first().0, range.span.last().0))
+        .collect()
+}
+
+/// Mutation: every block-meta counted as received, timed or not.
+#[tokio::test]
+async fn only_a_timed_block_meta_counts_as_received() {
+    let (mut session, ranges) = receiving_session();
+
+    for slot in [10, 11, 12] {
+        session.handle(block_meta(slot, Some(1_700_000_000))).await;
+    }
+    session.handle(block_meta(20, None)).await;
+    session.handle(block_meta(30, Some(1_700_000_030))).await;
+
+    assert_eq!(spans(&ranges), [(10, 12)], "20 had no time");
+}
+
+/// Mutation: the session handing over the highest block-meta instead of its resume point.
+#[tokio::test]
+async fn a_slot_whose_transaction_still_waits_is_not_yet_received() {
+    let (mut session, ranges) = receiving_session();
+
+    session.handle(transaction(18, &[PROTOCOL.as_str()])).await;
+    for slot in 10..=20 {
+        session
+            .handle(block_meta(slot, Some(1_700_000_000 + slot as i64)))
+            .await;
+    }
+
+    assert_eq!(
+        spans(&ranges),
+        [(10, 18 - REWIND_SLOTS - 1)],
+        "18 waits for its status: a reconnection resumes before it"
     );
 }

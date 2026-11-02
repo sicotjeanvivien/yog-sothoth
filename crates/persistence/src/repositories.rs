@@ -12,6 +12,7 @@ mod liquidity_moves;
 mod materialization_backlog;
 mod meteora;
 mod network_status;
+mod observed_slots;
 mod pool;
 mod pool_change_event;
 mod pool_creation_event;
@@ -59,6 +60,7 @@ pub use meteora::{
     PgMeteoraDammV2WithdrawIneligibleRewardEventRepository, PgMeteoraDlmmPoolPropertiesRepository,
 };
 pub use network_status::PgNetworkStatusRepository;
+pub use observed_slots::PgObservedSlotsRepository;
 pub use pool::PgPoolRepository;
 pub use pool_change_event::PgPoolChangeEventRepository;
 pub use pool_creation_event::PgPoolCreationEventRepository;
