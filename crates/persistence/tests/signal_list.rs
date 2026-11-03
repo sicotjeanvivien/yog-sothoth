@@ -167,36 +167,54 @@ async fn equal_timestamps_tie_break_on_id_desc(pool: PgPool) {
     assert!(page2.is_last);
 }
 
+/// Mutation: the live lens keyed on `triggered_at` again — the signal stamped earlier but
+/// inserted later is skipped.
 #[sqlx::test]
-async fn latest_cursor_and_newer_than_track_the_feed_tip(pool: PgPool) {
+async fn the_live_lens_follows_the_ids_not_the_timestamps(pool: PgPool) {
     let repo = PgSignalRepository::new(pool);
+    let day = Duration::days(1);
+    assert_eq!(repo.live_tip(day).await.unwrap(), None);
 
-    // Empty feed: no tip yet.
-    assert!(repo.latest_cursor().await.unwrap().is_none());
+    let now = Utc::now();
+    repo.insert_batch(&[signal(1, Severity::Warning, now - Duration::minutes(5))])
+        .await
+        .unwrap();
+    repo.insert_batch(&[signal(2, Severity::Warning, now - Duration::minutes(30))])
+        .await
+        .unwrap();
 
-    let base = seed_five(&repo).await;
+    assert_eq!(repo.live_tip(day).await.unwrap(), Some(2));
+    let after_one = repo.live_after(1, day, 10).await.unwrap();
+    assert_eq!(after_one.iter().map(|r| r.id).collect::<Vec<_>>(), vec![2]);
+    assert!(repo.live_after(2, day, 10).await.unwrap().is_empty());
+}
 
-    // The tip is the newest row.
-    let tip = repo.latest_cursor().await.unwrap().unwrap();
-    assert_eq!(tip.id, 5);
+/// Mutation: the lookback dropped from either query — the old signal becomes the tip, or comes.
+#[sqlx::test]
+async fn the_live_lens_reads_only_the_lookback(pool: PgPool) {
+    let repo = PgSignalRepository::new(pool);
+    let now = Utc::now();
+    repo.insert_batch(&[
+        signal(1, Severity::Warning, now - Duration::minutes(5)),
+        signal(1, Severity::Warning, now - Duration::days(2)),
+    ])
+    .await
+    .unwrap();
 
-    // Strictly after id 2: chronological (ASC) delivery of 3, 4, 5.
-    let after_two = yog_core::domain::SignalCursor {
-        triggered_at: base + Duration::seconds(2),
-        id: 2,
-    };
-    let delta = repo.newer_than(&after_two, 10).await.unwrap();
-    assert_eq!(
-        delta.iter().map(|r| r.id).collect::<Vec<_>>(),
-        vec![3, 4, 5]
-    );
+    let day = Duration::days(1);
+    assert_eq!(repo.live_tip(day).await.unwrap(), Some(1));
+    let all = repo.live_after(0, day, 10).await.unwrap();
+    assert_eq!(all.iter().map(|r| r.id).collect::<Vec<_>>(), vec![1]);
+}
 
-    // The limit caps the batch — the rest stays for the next poll.
-    let capped = repo.newer_than(&after_two, 2).await.unwrap();
+/// Mutation: the limit dropped — the whole tail comes in one batch.
+#[sqlx::test]
+async fn the_live_lens_caps_its_batch(pool: PgPool) {
+    let repo = PgSignalRepository::new(pool);
+    seed_five(&repo).await;
+
+    let capped = repo.live_after(2, Duration::days(1), 2).await.unwrap();
     assert_eq!(capped.iter().map(|r| r.id).collect::<Vec<_>>(), vec![3, 4]);
-
-    // Nothing is strictly after the tip.
-    assert!(repo.newer_than(&tip, 10).await.unwrap().is_empty());
 }
 
 #[sqlx::test]

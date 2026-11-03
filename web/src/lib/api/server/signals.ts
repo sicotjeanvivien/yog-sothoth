@@ -1,19 +1,24 @@
 /**
- * `GET /api/signals` on the server: the first page of the global feed, the SSE tail following.
+ * The first page of the signals on the server, every protocol's or one protocol's, the live
+ * stream following.
  */
 
 import { assertInBounds } from "../client/client-core";
+import { signalsPath } from "@/lib/signals/signal-paths";
+
 import { apiGet } from "../client/server";
 import {
   zListSignalsQuery,
   zListSignalsResponse,
   type PageResponseSignalResponse,
+  type ProtocolResponse,
 } from "../schema/zod.gen";
 
 const DEFAULT_LIMIT = 50;
 
 export type FetchSignalsParams = {
   limit?: number;
+  protocol?: ProtocolResponse;
 };
 
 /**
@@ -27,5 +32,5 @@ export async function fetchSignals(
 
   assertInBounds("limit", limit, zListSignalsQuery.shape.limit.unwrap());
 
-  return apiGet("/api/signals", { limit }, zListSignalsResponse);
+  return apiGet(signalsPath(params.protocol), { limit }, zListSignalsResponse);
 }

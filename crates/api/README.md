@@ -16,8 +16,8 @@ roles, the add-an-endpoint recipe), see [`crates/README.md`](../README.md).
 api/src/
 ├── bootstrap/
 │   ├── app_state.rs       ← build_app_state() — opens the pool, wires the repositories
-│   │                        into the services, and builds the signal broadcast with the
-│   │                        poller it returns, the stream slots and the work slots
+│   │                        into the services, and builds the live signals' broadcast with
+│   │                        the poller it returns, the live slots and the work slots
 │   ├── config.rs          ← Config::load() — env-driven
 │   └── serve.rs           ← serve() — the server and the poller, and their stop
 ├── application/
@@ -28,7 +28,8 @@ api/src/
 │   │                        PoolCreationsService, LiquidityMoveService, ClaimTotalsService,
 │   │                        ProtocolTvlService, DiscoveredTvlService), and period.rs,
 │   │                        the frozen period they all read over
-│   ├── signal_stream.rs   ← SignalStreamPoller (enriches once, feeds the SSE broadcast)
+│   ├── live_poller.rs     ← LivePoller, one per source of /api/live, and SignalsSource
+│   │                        (enriches once, feeds the signals' broadcast)
 │   ├── cache.rs           ← SharedCache (moka) and its named CachePolicy per use
 │   ├── enriched_token.rs  ← one token side of a pool, identity only
 │   └── enriched_signal.rs ← signal + embedded token pair of its pool
@@ -51,7 +52,7 @@ api/src/
 Services compose repository reads with cursor encoding and response DTO
 mapping; handlers are pure async functions taking axum extractors and
 returning `Result<Json<T>, ApiError>`. `AppState` holds the services and the
-few runtime handles the router and the handlers read (signal broadcast, stream
+few runtime handles the router and the handlers read (live signals' broadcast, live
 and work slots, health probe, stop token) — `Clone` is cheap. The services take repositories as
 `Arc<dyn Trait>`, so a service test swaps a `Pg*` repository for a mock from
 `testing.rs`.
@@ -115,7 +116,8 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/ingestion` | Our ingestion's freshness (`live` / `delayed` / `stale`) and its last indexed event |
 | `GET` | `/api/windows` | Every window, the shortest first: its bounds, `open`, `opensAt` and `late`, without reading a measure over it |
 | `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` filter); each item embeds its pool's token pair (`tokenA`/`tokenB`, `EmbeddedTokenResponse`), says what its value counts (`valueUnit`) and, on a flow imbalance, which token its swaps mostly take from the pool (`leansToward`) |
-| `GET` | `/api/signals/stream` | SSE stream of new signals (see below) |
+| `GET` | `/api/live?topics=signals` | SSE: the new items of the topics named, every protocol (see [The live stream](#the-live-stream)) |
+| `GET` | `/api/live/protocols/{protocol}?topics=signals` | The same, the protocol's only |
 | `GET` | `/api/protocols` | A page of every protocol of the domain, in the domain's order, and `poolsSeen` over all of them: observed by this build or not, pools seen — the catalogue, live; forward-only cursor |
 | `GET` | `/api/protocols/{protocol}` | The protocol's entry of the catalogue |
 | `GET` | `/api/pools`, `/api/protocols/{protocol}/pools`, `/api/tokens/{mint}/pools` | A page of pools, the most recently first seen first, forward-only cursor refused (400) under another list: identity, the token pair embedded, and the state now — last event, reserves, the value of each side and their TVL (`pool_current_tvl`); 404 for a mint without metadata |
@@ -325,9 +327,6 @@ instant a response reflects. The protocol is written `meteora_damm_v2` everywher
 path); fields in camelCase. A query key a route does not take is refused (400), never ignored:
 a filter dropped in silence would answer as if it had been applied.
 
-**Not yet following these rules**: `/api/signals/stream`, the live stream, until `/api/live`
-serves it.
-
 **Delay.** Every route but the probes and the live stream answers in under
 **2 s** in production, network included, at the heaviest its parameters allow,
 cold and warm. A route above 2 s in production is a bug.
@@ -380,34 +379,50 @@ regenerates the zod from it and fails on any difference with what is committed. 
 mounted with a literal path — `.route("/api/…")` serves it without a contract —
 fails `every_api_route_is_mounted_with_its_contract`.
 
-## The SSE signal stream
+## The live stream
 
-`/api/signals/stream` is fed by a single shared **`SignalStreamPoller`**, not
-by per-client DB queries:
+`/api/live` is the live end of the collections: a route's live form is `/api/live` followed
+by its REST path, its topics are the collections under that path, and a message is an item
+of its collection (rule 5). `/api/protocols/meteora_damm_v2/signals` is followed on
+`/api/live/protocols/meteora_damm_v2?topics=signals`. A topic adds a name to `topics`; a
+route is added only for a new kind of entity.
 
-- One application-level poller ticks every `API_SIGNAL_STREAM_POLL_SECS`
-  (default 3 s), reads signals strictly newer than its watermark
-  (`SignalFeed::newer_than`), and broadcasts them on a
-  `tokio::broadcast` channel to every connected client.
-- The watermark is re-anchored to the feed tip on (re)activation — a client
-  reconnecting never sees a replay. When `receiver_count() == 0` the DB query
-  is skipped and the watermark dropped, so an idle stream costs nothing and a
-  returning client gets no burst.
-- The handler emits each signal as an SSE event (`data` = the JSON
-  `SignalResponse`, `id` = the signal id) with a 15 s keep-alive; a lagged or
-  closed receiver ends the stream and the browser's `EventSource` reconnects.
-- The poller resolves each tick's token pairs **once**, in one batch
-  (`SignalService::enrich_batch`, the same code as the paginated feed), and
-  broadcasts the enriched signals behind an `Arc`: a stream does no database
-  work. Until September 2026 each stream enriched every signal itself, so N
-  open streams turned one signal into N rounds of lookups on a 10-connection
-  pool. If the enrichment fails, the signals go out with unresolved sides
-  rather than being dropped — delivering the alert beats decorating it.
-- At most `SSE_MAX_STREAMS` (200) streams are open at once; the next one is
-  refused with `503`. See [Capacity bounds](#capacity-bounds).
+- **One connection carries every topic it names**, and takes one of the `SSE_MAX_STREAMS`
+  (200) slots whatever their number; the next one is refused with `503`. See
+  [Capacity bounds](#capacity-bounds).
+- **`topics` is required.** Missing, empty, a name twice, or a topic not streamed: `400`,
+  saying which are. Served today: `signals`.
+- **Each message is named by its topic** (`event: signals`), its `data` the collection's
+  item (`SignalResponse`), with a 15 s keep-alive.
+- **Its `id` is an opaque cursor**: the id of the last item delivered for each topic of the
+  connection, base64 over JSON like the pagination cursors. A client keeps it whole and
+  reads nothing in it, so a resume by `Last-Event-ID` can be added without changing it.
+  Today no history is replayed and a `Last-Event-ID` sent is not read: after a drop, the
+  page refills the gap from the collection.
+- **A protocol's connection is filtered by the server**, on the items broadcast: no query
+  per connection.
+- **One poller per source**, a `LivePoller`, ticks every `API_SIGNAL_STREAM_POLL_SECS`
+  (default 3 s) and broadcasts on a `tokio::broadcast` channel to every connection on its
+  topic. A connection lagging past the channel's 256 messages, or whose source closed, is
+  ended, and the browser's `EventSource` reconnects.
+- **The poller walks its table by id**, the order of insertion: an item stamped before
+  another but inserted after still comes. ⚠️ An id is taken at insert, not at commit: a
+  slower insert can land below an id already read. The watermark therefore keeps the ids
+  it delivered above its floor and waits up to 10 s for a hole under them before passing
+  it — a rolled-back insert leaves one for good.
+- **It reads a bounded past**: the signals triggered within a day. The bound keeps the read
+  on the recent chunks (measured on the dump of 2 Nov. 2026: one chunk read, 0.15 ms to
+  anchor, 5 ms a tick); a signal inserted more than a day after its `triggered_at` is not
+  streamed, and the paginated feed lists it.
+- **The watermark is re-anchored at the tip** when someone connects after an idle spell:
+  when `receiver_count() == 0` the read is skipped and the watermark dropped, so an idle
+  source costs nothing and a returning client gets no burst.
+- **The signals are enriched once per tick**, in one batch (`SignalService::enrich_batch`,
+  the same code as the paginated feed), and broadcast behind an `Arc`: a connection does no
+  database work. If the enrichment fails, the signals go out with unresolved sides rather
+  than being dropped — delivering the alert beats decorating it.
 
-Poller failures are skip-and-log: a failed tick is logged and the next one
-proceeds.
+Poller failures are skip-and-log: a failed tick is logged and the next one proceeds.
 
 ## Stopping
 
@@ -419,7 +434,7 @@ outlives it.
 
 ⚠️ **A graceful shutdown alone would not stop this server.** It stops
 accepting, then waits for every open connection — and an SSE connection never
-ends on its own. The stream reads the same token (`signal_sse`, `take_until`)
+ends on its own. The stream reads the same token (`live_sse`, `take_until`)
 and closes when it fires; the browser's `EventSource` reconnects to the next
 instance by itself. Any other request in flight is answered before `serve`
 returns: once it does, `main` returns and the runtime takes every connection
@@ -443,7 +458,7 @@ Each bound is named once in
 | Bound | Value | Why |
 |---|---|---|
 | `STATEMENT_TIMEOUT` | 8 s | Postgres cancels a statement itself (`57014`): cutting the request client-side leaves its statement running |
-| `REQUEST_TIMEOUT` | 10 s | A request that has not produced its response is answered `503`. It bounds the response's production, not its body, so the signal stream is not cut |
+| `REQUEST_TIMEOUT` | 10 s | A request that has not produced its response is answered `503`. It bounds the response's production, not its body, so the live stream is not cut |
 | `WORK_SLOTS` | 6 | All expensive reads share 6 `WorkSlots` on a 10-connection pool: the slow route — `/api/signals` — and the cached computation below. With the signal poller's connection, the light routes always keep 3 |
 | `WORK_SLOT_WAIT` | 2 s | How long expensive work waits for a slot before `503` — enough for a page's own burst |
 | `SSE_MAX_STREAMS` | 200 | ~62 KiB an open stream; half of `MAX_CONNECTIONS`, so streams never take the connections ordinary requests need |
@@ -491,7 +506,7 @@ served as `application/problem+json`:
 | 400 | `Bad Request` | A query or path that does not parse, an empty value, invalid address, malformed cursor, limit out of range, mutually exclusive params |
 | 404 | `Not Found` | Token unknown, no such route |
 | 405 | `Method Not Allowed` | A method the route does not serve; carries `Allow` |
-| 503 | `Service Unavailable` | Over capacity: no work slot within 2 s, too many open signal streams, the request past its deadline, or the database out of connections or past `statement_timeout`. Carries `Retry-After`; see [Capacity bounds](#capacity-bounds) |
+| 503 | `Service Unavailable` | Over capacity: no work slot within 2 s, too many open live connections, the request past its deadline, or the database out of connections or past `statement_timeout`. Carries `Retry-After`; see [Capacity bounds](#capacity-bounds) |
 | 500 | `Internal Server Error` | DB failure, encoding bug. `detail` is always the generic message; the real cause is logged server-side under a `request_id` correlatable via the `x-request-id` response header |
 
 A parameter absent is not provided; present and empty (`?cursor=`), it is an

@@ -63,6 +63,11 @@ describe("tabForKey", () => {
     expect(tabForKey("2", ready("liquidity", "fees"))).toBeNull();
   });
 
+  // Mutation: the activity tab out of the shipped ones — its panel unreachable.
+  it("opens the activity tab, shipped, on 6", () => {
+    expect(tabForKey("6")).toBe("activity");
+  });
+
   it("does nothing on any other key", () => {
     const shipped = ready(...PROTOCOL_TABS);
     for (const key of ["0", "7", "12", "a", "Enter"]) {

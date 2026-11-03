@@ -40,6 +40,7 @@ export async function OverviewSignals() {
       <OverviewSignalsLive
         initial={initial}
         heading={<BlockHeading title={t("title")} info={t("info")} />}
+        tableLabel={t("tableLabel")}
       />
     </section>
   );

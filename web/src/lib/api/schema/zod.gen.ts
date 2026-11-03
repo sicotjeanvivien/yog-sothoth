@@ -1671,6 +1671,22 @@ export const zGetLiquidityTurnoverTotalsQuery = z.object({
 
 export const zGetLiquidityTurnoverTotalsResponse = zLiquidityTurnoverTotalsResponse;
 
+export const zLiveQuery = z.object({
+    topics: z.string().min(1)
+});
+
+export const zLiveResponse = z.string();
+
+export const zProtocolLivePath = z.object({
+    protocol: z.string()
+});
+
+export const zProtocolLiveQuery = z.object({
+    topics: z.string().min(1)
+});
+
+export const zProtocolLiveResponse = z.string();
+
 export const zGetNetworkResponse = zNetworkResponse;
 
 export const zListPoolChangesQuery = z.object({
@@ -2603,8 +2619,6 @@ export const zListSignalsQuery = z.object({
 });
 
 export const zListSignalsResponse = zPageResponseSignalResponse;
-
-export const zStreamSignalsResponse = z.string();
 
 export const zListSwapsQuery = z.object({
     window: z.enum([

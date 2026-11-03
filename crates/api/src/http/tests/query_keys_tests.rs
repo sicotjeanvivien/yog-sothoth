@@ -67,7 +67,7 @@ async fn answer(uri: &str) -> Option<(StatusCode, String, String)> {
 #[tokio::test]
 async fn every_route_refuses_a_key_it_does_not_take() {
     let routes = routes();
-    assert_eq!(routes.len(), 78, "one path per /api route");
+    assert_eq!(routes.len(), 79, "one path per /api route");
 
     let mut served = Vec::new();
     for (uri, _) in &routes {
@@ -102,7 +102,8 @@ async fn every_route_takes_every_key_it_documents() {
             if name == "cursor" {
                 continue;
             }
-            let Some(value) = valid_value(&parameter["schema"]) else {
+            let example = parameter["example"].as_str().map(str::to_string);
+            let Some(value) = valid_value(&parameter["schema"]).or(example) else {
                 refused.push(format!(
                     "{uri}: no valid value read from the schema of `{name}`"
                 ));

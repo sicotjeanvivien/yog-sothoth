@@ -28,8 +28,8 @@ describe("urlOf", () => {
 describe("curlOf", () => {
   // Mutations: the stream's curl without `-N`, which buffers; double quotes, where `!` expands.
   it("streams the events unbuffered, the URL single-quoted", () => {
-    expect(curlOf("https://x/api/signals/stream", true)).toBe(
-      "curl -N -H 'Accept: text/event-stream' 'https://x/api/signals/stream'",
+    expect(curlOf("https://x/api/live?topics=signals", true)).toBe(
+      "curl -N -H 'Accept: text/event-stream' 'https://x/api/live?topics=signals'",
     );
     expect(curlOf("https://x/api/swaps", false)).toBe("curl -s 'https://x/api/swaps'");
   });

@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * The Overview's latest signals, seeded by the server and kept live by `useSignalStream`:
- * severity, time, headline, and detector · protocol, with the stream-status dot.
+ * The latest signals, every protocol's or one protocol's, seeded by the server and kept live by
+ * `useLiveSignals`: severity, time, headline, and detector · protocol, with the stream-status dot.
  */
 
 import type { ReactNode } from "react";
@@ -15,8 +15,8 @@ import {
   LATEST_SIGNALS_COUNT,
   STATUS_DOT,
 } from "@/components/dashboard/signals/signal-display";
-import { useSignalStream } from "@/components/dashboard/signals/use-signal-stream";
-import type { SignalResponse } from "@/lib/api/schema/zod.gen";
+import { useLiveSignals } from "@/components/dashboard/signals/use-live-signals";
+import type { ProtocolResponse, SignalResponse } from "@/lib/api/schema/zod.gen";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatShortAddress } from "@/lib/format/format-short-address";
 
@@ -25,13 +25,17 @@ import { ROW_CLASS } from "./overview-layout";
 export function OverviewSignalsLive({
   initial,
   heading,
+  tableLabel,
+  protocol,
 }: {
   initial: readonly SignalResponse[];
   heading: ReactNode;
+  tableLabel: string;
+  protocol?: ProtocolResponse;
 }) {
   const t = useTranslations("Dashboard.Overview.signals");
   const tFeed = useTranslations("Dashboard.Signals.feed");
-  const { signals, status } = useSignalStream(initial);
+  const { signals, status } = useLiveSignals(initial, protocol);
   const latest = signals.slice(0, LATEST_SIGNALS_COUNT);
 
   return (
@@ -49,7 +53,7 @@ export function OverviewSignalsLive({
       {latest.length === 0 ? (
         <p className="py-6 text-[14px] text-dash-ink-2">{t("empty")}</p>
       ) : (
-        <div role="table" aria-label={t("tableLabel")}>
+        <div role="table" aria-label={tableLabel}>
           {latest.map((signal) => (
             <SignalRow key={signal.id} signal={signal} />
           ))}

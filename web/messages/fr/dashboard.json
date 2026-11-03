@@ -369,6 +369,13 @@
             "owners": "LP distincts actifs"
           }
         }
+      },
+      "activity": {
+        "signals": {
+          "title": "Signaux",
+          "info": "Des comportements inhabituels repérés automatiquement dans les pools de ce protocole. Ce sont des constats, pas des conseils.",
+          "tableLabel": "Derniers signaux du protocole"
+        }
       }
     },
     "BlockError": {

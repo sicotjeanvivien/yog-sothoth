@@ -18,8 +18,7 @@ use pair_token_response::PairTokenResponse;
 pub(super) use severity_response::SeverityResponse;
 use signal_value_unit_response::SignalValueUnitResponse;
 
-/// `GET /api/signals` item (and `GET /api/signals/stream` event — both
-/// endpoints emit exactly this object).
+/// `GET /api/signals` item, and the `data` of a `signals` event of `/api/live`.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SignalResponse {

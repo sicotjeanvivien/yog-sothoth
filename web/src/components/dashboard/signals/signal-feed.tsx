@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The live signal feed, seeded by the server page and kept live by `useSignalStream`; the
+ * The live signal feed, seeded by the server page and kept live by `useLiveSignals`; the
  * status dot keeps a broken stream from passing for a quiet one. Filters apply at render
  * time, leaving the stream and the merge untouched. One signal renders as `SignalCard`.
  */
@@ -16,7 +16,7 @@ import { filterSignals } from "@/lib/signals/filter-signals";
 import { SignalCard } from "./signal-card";
 import { STATUS_DOT } from "./signal-display";
 import { SignalFilters } from "./signal-filters";
-import { useSignalStream } from "./use-signal-stream";
+import { useLiveSignals } from "./use-live-signals";
 
 function toggled<T>(set: ReadonlySet<T>, value: T): ReadonlySet<T> {
   const next = new Set(set);
@@ -34,7 +34,7 @@ export function SignalFeed({
   initial: readonly SignalResponse[];
 }) {
   const t = useTranslations("Dashboard.Signals.feed");
-  const { signals, status } = useSignalStream(initial);
+  const { signals, status } = useLiveSignals(initial);
 
   const [activeSeverities, setActiveSeverities] = useState<
     ReadonlySet<SeverityResponse>

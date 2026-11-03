@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use solana_pubkey::Pubkey;
 
 use crate::tools::Page;
@@ -56,15 +56,15 @@ pub trait SignalFeed: Send + Sync {
         limit: i64,
     ) -> RepositoryResult<Page<SignalRecord>>;
 
-    /// The tip of the feed, `None` before any signal: a streaming consumer's
-    /// starting watermark.
-    async fn latest_cursor(&self) -> RepositoryResult<Option<SignalCursor>>;
+    /// The highest id among the signals triggered within `lookback`, `None` without one.
+    async fn live_tip(&self, lookback: Duration) -> RepositoryResult<Option<i64>>;
 
-    /// Signals strictly after `after`, oldest first, capped at `limit`.
-    /// ⚠️ Exactly `limit` rows may mean more are pending: the next poll drains them.
-    async fn newer_than(
+    /// Signals triggered within `lookback` with an id above `after_id`, by id, capped at `limit`.
+    /// ⚠️ By id, not by time: a signal stamped before another but inserted after still comes.
+    async fn live_after(
         &self,
-        after: &SignalCursor,
+        after_id: i64,
+        lookback: Duration,
         limit: i64,
     ) -> RepositoryResult<Vec<SignalRecord>>;
 }

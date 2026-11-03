@@ -18,6 +18,7 @@ import { GRID_CLASS } from "@/components/dashboard/overview/overview-layout";
 import { OverviewMode } from "@/components/dashboard/overview/overview-mode";
 import { OVERVIEW_ADVANCED_COOKIE } from "@/components/dashboard/overview/overview-mode-state";
 import { StaleBanner } from "@/components/dashboard/overview/overview-states";
+import { ActivityTab } from "@/components/dashboard/protocol/activity/activity-tab";
 import { FeesTab } from "@/components/dashboard/protocol/fees/fees-tab";
 import { LiquidityTab } from "@/components/dashboard/protocol/liquidity/liquidity-tab";
 import { PoolsTab } from "@/components/dashboard/protocol/pools/pools-tab";
@@ -105,6 +106,7 @@ export default async function DammV2Page({ params, searchParams }: ProtocolPageP
       {tab === "volume" && <VolumeTab period={period} protocol={PROTOCOL} />}
       {tab === "fees" && <FeesTab period={period} protocol={PROTOCOL} />}
       {tab === "pools" && <PoolsTab period={period} protocol={PROTOCOL} />}
+      {tab === "activity" && <ActivityTab protocol={PROTOCOL} />}
     </OverviewMode>
   );
 }

@@ -22,13 +22,13 @@ use yog_persistence::{
 
 use crate::application::{
     AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService,
-    LiquidityChangeEventService, LiquidityMoveService, LiquidityTurnoverService, NetworkService,
-    PoolChangeEventService, PoolCreationEventService, PoolCreationsService, PoolService,
-    PositionChangeCountsService, PositionChangeEventService, PositionFeeClaimEventService,
-    ProtocolCatalogService, ProtocolFeeClaimEventService, ProtocolTvlService,
-    RewardChangeEventService, RewardClaimEventService, RotationRunService, STREAM_CHANNEL_CAPACITY,
-    SignalService, SignalStreamPoller, SwapActivityService, SwapEventService, TokenService,
-    WindowsService, WorkSlots,
+    LIVE_CHANNEL_CAPACITY, LiquidityChangeEventService, LiquidityMoveService,
+    LiquidityTurnoverService, LivePoller, NetworkService, PoolChangeEventService,
+    PoolCreationEventService, PoolCreationsService, PoolService, PositionChangeCountsService,
+    PositionChangeEventService, PositionFeeClaimEventService, ProtocolCatalogService,
+    ProtocolFeeClaimEventService, ProtocolTvlService, RewardChangeEventService,
+    RewardClaimEventService, RotationRunService, SignalService, SignalsSource, SwapActivityService,
+    SwapEventService, TokenService, WindowsService, WorkSlots,
 };
 use crate::bootstrap::Config;
 use crate::http::{AppState, SSE_MAX_STREAMS, STATEMENT_TIMEOUT, WORK_SLOT_WAIT, WORK_SLOTS};
@@ -38,7 +38,7 @@ use anyhow::Context;
 pub(crate) async fn build_app_state(
     config: Config,
     shutdown: CancellationToken,
-) -> anyhow::Result<(AppState, SignalStreamPoller)> {
+) -> anyhow::Result<(AppState, LivePoller<SignalsSource>)> {
     let database = Database::connect_with(
         config.database_url.expose(),
         PoolSettings {
@@ -146,11 +146,13 @@ pub(crate) async fn build_app_state(
         token_metadata_repo.clone(),
     ));
 
-    let (signal_stream, _) = broadcast::channel(STREAM_CHANNEL_CAPACITY);
-    let signal_poller = SignalStreamPoller::new(
-        signal_repo.clone(),
-        signal_service.clone(),
-        signal_stream.clone(),
+    let (live_signals, _) = broadcast::channel(LIVE_CHANNEL_CAPACITY);
+    let signal_poller = LivePoller::new(
+        Arc::new(SignalsSource::new(
+            signal_repo.clone(),
+            signal_service.clone(),
+        )),
+        live_signals.clone(),
         config.signal_stream_poll,
     );
 
@@ -162,7 +164,7 @@ pub(crate) async fn build_app_state(
         windows_service,
         liquidity_turnover_service,
         signal_service,
-        signal_stream,
+        live_signals,
         stream_slots: Arc::new(Semaphore::new(SSE_MAX_STREAMS)),
         protocol_catalog_service: Arc::new(ProtocolCatalogService::new(
             pool_repo,

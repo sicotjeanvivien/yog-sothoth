@@ -76,7 +76,7 @@ pub(crate) fn app_state() -> AppState {
             Arc::new(PoolRepoOnce::with_pools(vec![])),
             Arc::new(MockMetadataRepo::empty()),
         )),
-        signal_stream: broadcast::channel(1).0,
+        live_signals: broadcast::channel(1).0,
         stream_slots: Arc::new(Semaphore::new(1)),
         protocol_catalog_service: Arc::new(ProtocolCatalogService::new(
             Arc::new(PoolCountsRepo::failing()),
@@ -664,8 +664,8 @@ pub(crate) fn make_network_status() -> NetworkStatus {
 
 pub(crate) struct MockSignalRepo {
     list: Mutex<Option<RepositoryResult<Page<SignalRecord>>>>,
-    latest_cursor: Mutex<Option<RepositoryResult<Option<SignalCursor>>>>,
-    newer_than: Mutex<Option<RepositoryResult<Vec<SignalRecord>>>>,
+    live_tip: Mutex<Option<RepositoryResult<Option<i64>>>>,
+    live_after: Mutex<Option<RepositoryResult<Vec<SignalRecord>>>>,
     /// The filter of each `list`.
     pub(crate) filters: Mutex<Vec<SignalFilter>>,
 }
@@ -674,8 +674,8 @@ impl MockSignalRepo {
     pub(crate) fn with_page(page: Page<SignalRecord>) -> Self {
         Self {
             list: Mutex::new(Some(Ok(page))),
-            latest_cursor: Mutex::new(None),
-            newer_than: Mutex::new(None),
+            live_tip: Mutex::new(None),
+            live_after: Mutex::new(None),
             filters: Mutex::new(vec![]),
         }
     }
@@ -685,21 +685,20 @@ impl MockSignalRepo {
     pub(crate) fn failing() -> Self {
         Self {
             list: Mutex::new(Some(Err(RepositoryError::Integrity("signal boom".into())))),
-            latest_cursor: Mutex::new(None),
-            newer_than: Mutex::new(None),
+            live_tip: Mutex::new(None),
+            live_after: Mutex::new(None),
             filters: Mutex::new(vec![]),
         }
     }
-    /// Seed the streaming lens (poller tests): what `latest_cursor` and
-    /// `newer_than` will yield, once each.
+    /// Seed the live lens (poller tests): what `live_tip` and `live_after` will yield, once each.
     pub(crate) fn feed(
-        latest_cursor: RepositoryResult<Option<SignalCursor>>,
-        newer_than: RepositoryResult<Vec<SignalRecord>>,
+        live_tip: RepositoryResult<Option<i64>>,
+        live_after: RepositoryResult<Vec<SignalRecord>>,
     ) -> Self {
         Self {
             list: Mutex::new(None),
-            latest_cursor: Mutex::new(Some(latest_cursor)),
-            newer_than: Mutex::new(Some(newer_than)),
+            live_tip: Mutex::new(Some(live_tip)),
+            live_after: Mutex::new(Some(live_after)),
             filters: Mutex::new(vec![]),
         }
     }
@@ -718,15 +717,16 @@ impl SignalFeed for MockSignalRepo {
         self.filters.lock().unwrap().push(filter);
         take(&self.list)
     }
-    async fn latest_cursor(&self) -> RepositoryResult<Option<SignalCursor>> {
-        take(&self.latest_cursor)
+    async fn live_tip(&self, _lookback: chrono::Duration) -> RepositoryResult<Option<i64>> {
+        take(&self.live_tip)
     }
-    async fn newer_than(
+    async fn live_after(
         &self,
-        _after: &SignalCursor,
+        _after_id: i64,
+        _lookback: chrono::Duration,
         _limit: i64,
     ) -> RepositoryResult<Vec<SignalRecord>> {
-        take(&self.newer_than)
+        take(&self.live_after)
     }
 }
 

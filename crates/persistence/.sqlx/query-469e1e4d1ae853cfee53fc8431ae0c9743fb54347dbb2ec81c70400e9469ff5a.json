@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT max(id) AS \"id\"\n            FROM signals\n            WHERE triggered_at >= now() - $1::BIGINT * INTERVAL '1 second'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "469e1e4d1ae853cfee53fc8431ae0c9743fb54347dbb2ec81c70400e9469ff5a"
+}

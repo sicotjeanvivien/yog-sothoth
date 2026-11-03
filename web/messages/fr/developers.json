@@ -37,6 +37,7 @@
       "tvl": "TVL",
       "signals": "Signaux",
       "announcements": "Annonces",
+      "live": "Direct",
       "byProtocol": "Par protocole",
       "byPool": "Par pool",
       "byToken": "Par token"

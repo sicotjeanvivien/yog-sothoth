@@ -158,9 +158,13 @@ The `/signals` dashboard page combines both consumers:
 
 - the first page of signals is fetched server-side (`fetchSignals`) and
   rendered by the Server Component;
-- the `useSignalStream` hook (`components/dashboard/signals/`) then
-  opens an `EventSource` directly on `GET /api/signals/stream` (SSE).
-  Each event is zod-parsed (malformed → warn + skip) and merged through
+- the `useLiveSignals` hook (`components/dashboard/signals/`) then
+  opens an `EventSource` directly on the `signals` topic of the API's live
+  stream, `GET /api/live?topics=signals` (SSE), and listens to its named
+  `signals` events — `onmessage` receives only unnamed ones. Given a
+  protocol, it opens `/api/live/protocols/{protocol}?topics=signals` and
+  refills from `/api/protocols/{protocol}/signals` instead (`lib/signals/
+  signal-paths.ts`). Each event is zod-parsed (malformed → warn + skip) and merged through
   the pure `mergeSignals` helper (`lib/signals/`): dedup by id, sort by
   `(triggeredAt, id)` descending, cap at 200 rows. On reconnection the
   hook refetches page 1 from the browser and reconciles by id, so a
@@ -397,6 +401,12 @@ could not be valued is not in that list; the chart counts it. In the advanced mo
 so the page is no longer, the positions' life cycle over the period, in one column: `position-changes/totals` for the positions opened, locked, split and closed, and the
 `owners` of `liquidity-moves/totals` for the distinct LPs; a period without a row reads "—"
 (`lifeCountOf`).
+
+**06 Live activity** — `protocol/activity/activity-tab.tsx`: the protocol's latest signals,
+whatever the period, from `/api/protocols/{protocol}/signals`, then those that arrive on
+`/api/live/protocols/{protocol}?topics=signals`, through the Overview's signal rows
+(`OverviewSignalsLive`, given the protocol). The other events of the protocol, live, are not
+shown yet.
 
 **Tabs** — `lib/protocol/tabs.ts` lists the six tabs of the canvas, in order;
 a tab joins the row when its content ships (`READY_TABS`), numbered by its
