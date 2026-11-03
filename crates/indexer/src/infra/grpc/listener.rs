@@ -111,8 +111,7 @@ impl GrpcListener {
             result
         };
 
-        // ⚠️ In this task, never spawned: its panic is the source's and stops the indexer;
-        // spawned, it died unseen while the ingestion went on.
+        // ⚠️ In this task, never spawned: its panic is the source's and stops the indexer.
         let (result, ()) = tokio::join!(attempts, recording);
         result
     }

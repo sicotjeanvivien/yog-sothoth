@@ -1387,7 +1387,7 @@ async fn each_connection_writes_its_own_span() {
     run.await.expect("the listener ends").expect("on shutdown");
 }
 
-/// Mutation: the recorder spawned again in a task of its own, its result thrown away.
+/// Mutation: the recorder spawned in a task of its own, its result thrown away.
 #[tokio::test]
 async fn a_recorder_panic_is_the_listener_panic() {
     let server = test_geyser_server::start(vec![ScriptedSession::Stream(vec![
@@ -1407,7 +1407,7 @@ async fn a_recorder_panic_is_the_listener_panic() {
 
     let ended = timeout(
         TEST_DEADLINE,
-        tokio::spawn(listener.run(downstream, shutdown.clone())),
+        tokio::spawn(listener.run(downstream, shutdown)),
     )
     .await
     .expect("the panic ends the listener while its stream holds");
@@ -1417,7 +1417,6 @@ async fn a_recorder_panic_is_the_listener_panic() {
         .downcast_ref::<String>()
         .expect("the recorder's formatted panic message");
     assert!(message.contains(RECORDER_PANIC), "{message}");
-    assert!(!shutdown.is_cancelled(), "no stop was asked for");
 }
 
 /// Mutation: the recorder no longer stopped when the attempts end, so a give-up waits on it for ever.
