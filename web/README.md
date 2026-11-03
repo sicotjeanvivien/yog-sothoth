@@ -620,7 +620,7 @@ web/
 │   ├── components/
 │   │   ├── feature-gate.tsx         # <FeatureGate flag="..."> wrapper
 │   │   ├── dashboard/               # per-page sections + shell, sidebar,
-│   │   │                            # signals (SignalFeed, useSignalStream),
+│   │   │                            # signals (SignalFeed, useLiveSignals),
 │   │   │                            # announcements
 │   │   ├── marketing/               # navbar, footer, per-page sections
 │   │   └── shared/                  # buttons, icons, popovers, …

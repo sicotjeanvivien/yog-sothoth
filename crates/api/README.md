@@ -396,8 +396,9 @@ route is added only for a new kind of entity.
   item (`SignalResponse`), with a 15 s keep-alive.
 - **Its `id` is an opaque cursor**: the id of the last item delivered for each topic of the
   connection, base64 over JSON like the pagination cursors. A client keeps it whole and
-  reads nothing in it, so a resume by `Last-Event-ID` can be added without changing it.
-  Today no history is replayed and a `Last-Event-ID` sent is not read: after a drop, the
+  reads nothing in it, so a resume by `Last-Event-ID` can be added without changing the
+  contract — what the cursor holds may change with it: an id filling a hole comes after a
+  higher one, so the last id alone cannot say where to resume. Today no history is replayed and a `Last-Event-ID` sent is not read: after a drop, the
   page refills the gap from the collection.
 - **A protocol's connection is filtered by the server**, on the items broadcast: no query
   per connection.

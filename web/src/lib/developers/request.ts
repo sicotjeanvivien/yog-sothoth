@@ -19,6 +19,12 @@ export function urlOf(base: string, endpoint: Endpoint, values: ParamValues): st
   return `${base}${path}${query.length ? `?${query.join("&")}` : ""}`;
 }
 
+/** The topics a live URL asks for: the names its events carry. */
+export function topicsOf(url: string): string[] {
+  const topics = new URL(url).searchParams.get("topics") ?? "";
+  return topics.split(",").filter((topic) => topic !== "");
+}
+
 /** ⚠️ Single quotes: a `!` that `encodeURIComponent` leaves would expand inside double ones. */
 export function curlOf(url: string, sse: boolean): string {
   return sse ? `curl -N -H 'Accept: text/event-stream' '${url}'` : `curl -s '${url}'`;

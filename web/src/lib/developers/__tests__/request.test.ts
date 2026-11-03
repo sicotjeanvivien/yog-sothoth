@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Endpoint } from "../contract";
-import { byteSize, curlOf, missingOf, pageValues, urlOf } from "../request";
+import { byteSize, curlOf, missingOf, pageValues, topicsOf, urlOf } from "../request";
 
 const endpoint = {
   path: "/api/tokens/{mint}/prices",
@@ -22,6 +22,20 @@ describe("urlOf", () => {
 
   it("keeps an empty path parameter named", () => {
     expect(urlOf("", endpoint, {})).toBe("/api/tokens/{mint}/prices");
+  });
+});
+
+describe("topicsOf", () => {
+  // Mutation: no topic read — the live panel listens to nothing, its events all named.
+  it("reads the topics a live URL asks for, encoded or not", () => {
+    expect(topicsOf("https://x/api/live?topics=signals%2Cliquidity-changes")).toEqual([
+      "signals",
+      "liquidity-changes",
+    ]);
+    expect(topicsOf("https://x/api/live/protocols/meteora_damm_v2?topics=signals")).toEqual([
+      "signals",
+    ]);
+    expect(topicsOf("https://x/api/live")).toEqual([]);
   });
 });
 

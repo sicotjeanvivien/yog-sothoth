@@ -468,10 +468,9 @@ pub(crate) fn decode_event_cursor(
 }
 
 /// Where a live connection stands: the id of the last item delivered, per topic. The `id` of each
-/// message, so that a resume by `Last-Event-ID` can be added without changing it.
+/// message; the client reads nothing in it, so what it holds may change.
 /// ⚠️ One position per topic: an item's own id would say nothing of the connection's other topics.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub(crate) struct LiveCursor(BTreeMap<String, i64>);
 
 impl LiveCursor {
