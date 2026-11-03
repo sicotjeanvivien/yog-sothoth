@@ -310,7 +310,10 @@ export function EndpointDetail({
             copied={t("detail.copied")}
           />
           {endpoint.sse ? (
-            <PrimaryButton onClick={stream.state === "off" ? stream.start : stream.stop}>
+            <PrimaryButton
+              disabled={stream.state === "off" && missing.length > 0}
+              onClick={stream.state === "off" ? stream.start : stream.stop}
+            >
               {stream.state === "off" ? t("request.listen") : t("request.stop")}
             </PrimaryButton>
           ) : (

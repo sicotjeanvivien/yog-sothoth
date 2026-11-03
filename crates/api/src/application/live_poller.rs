@@ -3,7 +3,7 @@
 //! LISTEN/NOTIFY: the table stays the only contract. ⚠️ Nothing is replayed: a page loads the
 //! history through the source's collection.
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::convert::Infallible;
 use std::future::Future;
 use std::sync::Arc;
@@ -53,21 +53,19 @@ pub(crate) trait LiveSource: Send + Sync + 'static {
 }
 
 /// Where a poller stands in its table: every id up to `floor` is settled, and those above it
-/// already delivered are kept so that a hole filled later is delivered without repeating them.
+/// already delivered are kept, with when they were read, so that a hole filled later is
+/// delivered without repeating them.
 #[derive(Debug)]
 pub(crate) struct LiveWatermark {
     floor: i64,
-    delivered: BTreeSet<i64>,
-    /// When the hole at `floor + 1` was first seen.
-    gap_since: Option<Instant>,
+    delivered: BTreeMap<i64, Instant>,
 }
 
 impl LiveWatermark {
     pub(crate) fn anchored(tip: i64) -> Self {
         Self {
             floor: tip,
-            delivered: BTreeSet::new(),
-            gap_since: None,
+            delivered: BTreeMap::new(),
         }
     }
 
@@ -75,34 +73,38 @@ impl LiveWatermark {
         self.floor
     }
 
-    /// The records not delivered yet, now counted as delivered.
-    pub(crate) fn fresh<R>(&mut self, records: Vec<R>, id_of: impl Fn(&R) -> i64) -> Vec<R> {
+    /// The records not delivered yet, now counted as delivered, read at `now`.
+    pub(crate) fn fresh<R>(
+        &mut self,
+        records: Vec<R>,
+        id_of: impl Fn(&R) -> i64,
+        now: Instant,
+    ) -> Vec<R> {
         records
             .into_iter()
             .filter(|record| {
                 let id = id_of(record);
-                id > self.floor && self.delivered.insert(id)
+                id > self.floor && self.delivered.insert(id, now).is_none()
             })
             .collect()
     }
 
-    /// Moves `floor` over the ids delivered without a hole, and over a hole older than `GAP_SETTLE`.
+    /// Moves `floor` over the ids delivered without a hole, and over a hole under an id read
+    /// `GAP_SETTLE` ago: each hole is dated by the id above it, not by when the floor reached it.
     pub(crate) fn settle(&mut self, now: Instant) {
         loop {
-            let before = self.floor;
-            while self.delivered.first() == Some(&(self.floor + 1)) {
+            while self
+                .delivered
+                .first_key_value()
+                .is_some_and(|(&id, _)| id == self.floor + 1)
+            {
                 self.delivered.pop_first();
                 self.floor += 1;
             }
-            if self.floor != before {
-                self.gap_since = None;
-            }
-            let Some(&next) = self.delivered.first() else {
-                self.gap_since = None;
+            let Some((&next, &read_at)) = self.delivered.first_key_value() else {
                 return;
             };
-            let since = *self.gap_since.get_or_insert(now);
-            if now.duration_since(since) < GAP_SETTLE {
+            if now.duration_since(read_at) < GAP_SETTLE {
                 return;
             }
             self.floor = next - 1;
@@ -192,8 +194,9 @@ pub(crate) async fn poll_once<S: LiveSource>(
         }
     };
 
-    let fresh = watermark.fresh(records, S::id_of);
-    watermark.settle(Instant::now());
+    let now = Instant::now();
+    let fresh = watermark.fresh(records, S::id_of, now);
+    watermark.settle(now);
     if fresh.is_empty() {
         return Some(watermark);
     }

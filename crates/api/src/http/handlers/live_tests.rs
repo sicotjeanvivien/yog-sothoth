@@ -183,16 +183,21 @@ async fn a_protocols_connection_carries_its_signals_only() {
 }
 
 /// Mutation: opening without taking a slot — of two slots, the third connection opens. Closing
-/// one lets the next client in.
+/// one lets the next client in. And the topics built before the slot is taken — the refused
+/// client subscribes too.
 #[tokio::test]
 async fn connections_past_the_cap_are_refused_until_one_closes() {
     let slots = Arc::new(Semaphore::new(2));
     let (feed, _) = broadcast::channel::<Arc<EnrichedSignal>>(8);
     let shutdown = CancellationToken::new();
+    let subscriptions = std::cell::Cell::new(0);
     let open = || {
         open_live(
             slots.clone(),
-            vec![signals_topic(feed.subscribe(), None)],
+            || {
+                subscriptions.set(subscriptions.get() + 1);
+                vec![signals_topic(feed.subscribe(), None)]
+            },
             shutdown.clone(),
         )
     };
@@ -208,6 +213,11 @@ async fn connections_past_the_cap_are_refused_until_one_closes() {
     assert_eq!(
         refused.headers()[header::CONTENT_TYPE],
         "application/problem+json"
+    );
+    assert_eq!(
+        subscriptions.get(),
+        2,
+        "the refused client never subscribes"
     );
 
     // The client leaves: its response, and the connection holding the slot, drop.

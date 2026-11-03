@@ -66,7 +66,7 @@ pub(crate) async fn live(
     let request = LiveRequest::parse(params, None)?;
     Ok(open_live(
         state.stream_slots.clone(),
-        topic_streams(&state, &request),
+        || topic_streams(&state, &request),
         state.shutdown.clone(),
     ))
 }
@@ -93,7 +93,7 @@ pub(crate) async fn protocol_live(
     let request = LiveRequest::parse(params, Some(protocol))?;
     Ok(open_live(
         state.stream_slots.clone(),
-        topic_streams(&state, &request),
+        || topic_streams(&state, &request),
         state.shutdown.clone(),
     ))
 }
@@ -137,16 +137,18 @@ pub(crate) fn signals_topic(
 }
 
 /// Opens a connection if a slot is free, or refuses with `503`; without `AppState`, so a test
-/// drives the cap.
+/// drives the cap. ⚠️ Subscribed only once the slot is held: a refused client would otherwise
+/// count as a listener, and wake an idle poller.
 pub(crate) fn open_live(
     slots: Arc<Semaphore>,
-    topics: Vec<TopicStream>,
+    subscribe: impl FnOnce() -> Vec<TopicStream>,
     shutdown: CancellationToken,
 ) -> Response {
     let Ok(slot) = slots.try_acquire_owned() else {
         return ApiError::Unavailable("too many open live connections; retry shortly")
             .into_response();
     };
+    let topics = subscribe();
     info!(topics = topics.len(), "live client connected");
     live_sse(topics, slot, shutdown).into_response()
 }
