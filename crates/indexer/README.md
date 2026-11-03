@@ -410,7 +410,9 @@ without anyone deciding it.
   may still wait for the persistor, so a cut declares an unwatched range a little
   too wide, never too narrow. It writes each span that changed, then forgets each
   ended session whose last span is written; a failed write is counted, and the
-  span stays due for the next tick.
+  span stays due for the next tick. A panic of the recorder ends `GrpcListener::run`
+  with `RecorderPanicked` and stops the indexer, which Docker restarts: ingesting on
+  without it would read, at the restart, as a range nobody watched.
 - Nothing is written under `INGEST_SCOPE=pools`: a protocol of which a few
   pools are watched is not watched whole.
 - The ranges are not the resume mark: `from_slot` stays the listener's own, and

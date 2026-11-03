@@ -89,8 +89,8 @@ use tonic::Status;
 
 use crate::infra::grpc::{
     test_fixtures::{
-        PROTOCOL, WrittenSlots, block_meta, ping, received_slots_unwritten, slot_finalized,
-        transaction, unroutable_transaction,
+        PROTOCOL, RECORDER_PANIC, WrittenSlots, block_meta, ping, received_slots_unwritten,
+        slot_finalized, transaction, unroutable_transaction,
     },
     test_geyser_server::{self, Action, ScriptedGeyserHandle, ScriptedSession},
 };
@@ -1385,6 +1385,68 @@ async fn each_connection_writes_its_own_span() {
 
     shutdown.cancel();
     run.await.expect("the listener ends").expect("on shutdown");
+}
+
+/// Mutation: the recorder awaited only once the attempts end, its panic thrown away.
+#[tokio::test]
+async fn a_recorder_panic_ends_the_listener_with_its_error() {
+    let server = test_geyser_server::start(vec![ScriptedSession::Stream(vec![
+        timed_meta(10),
+        timed_meta(11),
+        timed_meta(13),
+        timed_meta(14),
+        timed_meta(15),
+        timed_meta(16),
+        Action::Hold,
+    ])])
+    .await;
+    let (listener, recorded) = recorded_listener(&server, 1).await;
+    recorded.panic_on_write();
+    let (downstream, _consumer) = mpsc::channel(4);
+    let shutdown = CancellationToken::new();
+
+    let outcome = timeout(TEST_DEADLINE, listener.run(downstream, shutdown.clone()))
+        .await
+        .expect("the panic ends the listener while its stream holds");
+
+    match outcome {
+        Err(GrpcListenerError::RecorderPanicked { reason }) => {
+            assert!(reason.contains(RECORDER_PANIC), "{reason}");
+        }
+        other => panic!("expected the recorder's panic, got {other:?}"),
+    }
+    assert!(!shutdown.is_cancelled(), "no stop was asked for");
+}
+
+/// Mutation: a recorder that stopped read as a failure.
+#[tokio::test]
+async fn a_recorder_that_stopped_is_a_stop() {
+    assert!(recorder_end(tokio::spawn(async {}).await).is_ok());
+}
+
+/// Mutation: a panic read as a stop.
+#[tokio::test]
+async fn a_recorder_that_panicked_is_its_error() {
+    let joined = tokio::spawn(async {
+        panic!("{RECORDER_PANIC}");
+    })
+    .await;
+
+    match recorder_end(joined) {
+        Err(GrpcListenerError::RecorderPanicked { reason }) => {
+            assert!(reason.contains(RECORDER_PANIC), "{reason}");
+        }
+        other => panic!("expected the recorder's panic, got {other:?}"),
+    }
+}
+
+/// Mutation: a cancellation read as a panic.
+#[tokio::test]
+async fn a_recorder_cancelled_is_a_stop() {
+    let recorder = tokio::spawn(std::future::pending::<()>());
+    recorder.abort();
+
+    assert!(recorder_end(recorder.await).is_ok());
 }
 
 /// Mutation: the program-id filter removed, so a pool watched alone watches its protocol.

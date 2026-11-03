@@ -20,4 +20,8 @@ pub(crate) enum GrpcListenerError {
 
     #[error("gRPC stream gave up after {attempts} connection attempts: {last_error}")]
     RetriesExhausted { attempts: u32, last_error: String },
+
+    /// The slots recorder died: ingesting on would leave its ranges unwritten, a gap at the restart.
+    #[error("the slots recorder panicked: {reason}")]
+    RecorderPanicked { reason: String },
 }
