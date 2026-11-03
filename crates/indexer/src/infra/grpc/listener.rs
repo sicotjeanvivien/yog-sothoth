@@ -13,13 +13,10 @@ mod stall_clock;
 use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use solana_pubkey::Pubkey;
-use tokio::{
-    sync::{Mutex, mpsc},
-    task::JoinError,
-};
+use tokio::sync::{Mutex, mpsc};
 use tokio_util::sync::CancellationToken;
 use yellowstone_grpc_proto::prelude::SubscribeRequest;
-use yog_bootstrap::{Endpoint, TaskEnd};
+use yog_bootstrap::Endpoint;
 use yog_core::domain::Protocol;
 
 use crate::{
@@ -84,8 +81,8 @@ impl GrpcListener {
     }
 
     /// Open the stream, keep it open, and return `Ok(())` on shutdown or a departed consumer.
-    /// `Err` when the retry budget runs out or the recorder panics, or before the loop on a
-    /// configuration fault (bad header, unusable URL, empty subscription), which no retry repairs.
+    /// `Err` when the retry budget runs out, or before the loop on a configuration fault (bad
+    /// header, unusable URL, empty subscription), which no retry would repair.
     pub(crate) async fn run(
         self: Arc<Self>,
         downstream: mpsc::Sender<IngestedTransaction>,
@@ -99,34 +96,25 @@ impl GrpcListener {
         log::starting(self.connector.endpoint(), credential.name(), &request);
         WAITING_PEAKS.export();
 
-        // ⚠️ Stopped with the attempts, whatever ended them, this future dropped included: a
-        // recorder outliving them would go on writing a span no session extends.
         let ranges = RangesToRecord::default();
         let recorder_stop = shutdown.child_token();
-        let _stop_recorder_on_drop = recorder_stop.clone().drop_guard();
-        let recorder = self
-            .recorder
-            .clone()
-            .map(|recorder| tokio::spawn(recorder.run(ranges.clone(), recorder_stop.clone())));
-
-        let attempts = self.attempts(&channel, &interceptor, &downstream, &ranges, &shutdown);
-        let Some(mut recorder) = recorder else {
-            return attempts.await;
-        };
-        tokio::pin!(attempts);
-
-        let result = tokio::select! {
-            result = &mut attempts => result,
-            joined = &mut recorder => {
-                recorder_end(joined)?;
-                // Stopped by the shutdown, which ends the attempts too.
-                return attempts.await;
+        let recording = async {
+            if let Some(recorder) = self.recorder.clone() {
+                recorder.run(ranges.clone(), recorder_stop.clone()).await;
             }
         };
+        let attempts = async {
+            let result = self
+                .attempts(&channel, &interceptor, &downstream, &ranges, &shutdown)
+                .await;
+            recorder_stop.cancel();
+            result
+        };
 
-        recorder_stop.cancel();
-        let recorded = recorder_end(recorder.await);
-        result.and(recorded)
+        // ⚠️ In this task, never spawned: its panic is the source's and stops the indexer;
+        // spawned, it died unseen while the ingestion went on.
+        let (result, ()) = tokio::join!(attempts, recording);
+        result
     }
 
     /// Connect, read, and reconnect until the budget or the shutdown says stop.
@@ -205,20 +193,6 @@ fn whole_protocols(watched: &HashSet<(Protocol, Pubkey)>) -> Arc<[Protocol]> {
         .filter(|(protocol, address)| *address == protocol.program_id())
         .map(|(protocol, _)| *protocol)
         .collect()
-}
-
-/// How the recorder's task ended: only a panic is a failure.
-/// ⚠️ A cancellation is the runtime torn down around it, not a crash.
-fn recorder_end(joined: Result<(), JoinError>) -> Result<(), GrpcListenerError> {
-    match joined {
-        Ok(()) => Ok(()),
-        Err(error) => match TaskEnd::from(&error) {
-            TaskEnd::Panicked => Err(GrpcListenerError::RecorderPanicked {
-                reason: error.to_string(),
-            }),
-            TaskEnd::Cancelled => Ok(()),
-        },
-    }
 }
 
 /// Sleep, unless the shutdown token fires first.

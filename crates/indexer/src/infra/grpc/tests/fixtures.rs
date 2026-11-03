@@ -190,7 +190,7 @@ impl WrittenSlots {
     }
 }
 
-/// What the panicking switch says, for a test to find it in the listener's error.
+/// What the panicking switch says, for a test to find it in the listener's panic.
 pub(super) const RECORDER_PANIC: &str = "the recorder panicked by the test";
 
 #[async_trait]
