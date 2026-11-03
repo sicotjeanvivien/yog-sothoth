@@ -89,8 +89,8 @@ use tonic::Status;
 
 use crate::infra::grpc::{
     test_fixtures::{
-        PROTOCOL, WrittenSlots, block_meta, ping, received_slots_unwritten, slot_finalized,
-        transaction, unroutable_transaction,
+        PROTOCOL, RECORDER_PANIC, WrittenSlots, block_meta, ping, received_slots_unwritten,
+        slot_finalized, transaction, unroutable_transaction,
     },
     test_geyser_server::{self, Action, ScriptedGeyserHandle, ScriptedSession},
 };
@@ -1385,6 +1385,62 @@ async fn each_connection_writes_its_own_span() {
 
     shutdown.cancel();
     run.await.expect("the listener ends").expect("on shutdown");
+}
+
+/// Mutation: the recorder spawned in a task of its own, its result thrown away.
+#[tokio::test]
+async fn a_recorder_panic_is_the_listener_panic() {
+    let server = test_geyser_server::start(vec![ScriptedSession::Stream(vec![
+        timed_meta(10),
+        timed_meta(11),
+        timed_meta(13),
+        timed_meta(14),
+        timed_meta(15),
+        timed_meta(16),
+        Action::Hold,
+    ])])
+    .await;
+    let (listener, recorded) = recorded_listener(&server, 1).await;
+    recorded.panic_on_write();
+    let (downstream, _consumer) = mpsc::channel(4);
+    let shutdown = CancellationToken::new();
+
+    let ended = timeout(
+        TEST_DEADLINE,
+        tokio::spawn(listener.run(downstream, shutdown)),
+    )
+    .await
+    .expect("the panic ends the listener while its stream holds");
+
+    let panic = ended.expect_err("the listener panics").into_panic();
+    let message = panic
+        .downcast_ref::<String>()
+        .expect("the recorder's formatted panic message");
+    assert!(message.contains(RECORDER_PANIC), "{message}");
+}
+
+/// Mutation: the recorder no longer stopped when the attempts end, so a give-up waits on it for ever.
+#[tokio::test]
+async fn a_listener_that_gives_up_stops_its_recorder() {
+    let server =
+        test_geyser_server::start(vec![ScriptedSession::Stream(vec![Action::send(ping())])]).await;
+    let (listener, _recorded) = recorded_listener(&server, 1).await;
+    let (downstream, _consumer) = mpsc::channel(4);
+
+    let outcome = timeout(
+        TEST_DEADLINE,
+        listener.run(downstream, CancellationToken::new()),
+    )
+    .await
+    .expect("the give-up ends the listener, its recorder with it");
+
+    assert!(
+        matches!(
+            outcome,
+            Err(GrpcListenerError::RetriesExhausted { attempts: 1, .. })
+        ),
+        "{outcome:?}"
+    );
 }
 
 /// Mutation: the program-id filter removed, so a pool watched alone watches its protocol.

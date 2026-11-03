@@ -96,25 +96,23 @@ impl GrpcListener {
         log::starting(self.connector.endpoint(), credential.name(), &request);
         WAITING_PEAKS.export();
 
-        // ⚠️ Stopped with the attempts, whatever ended them, this future dropped included: a
-        // recorder outliving them would go on writing a span no session extends.
         let ranges = RangesToRecord::default();
         let recorder_stop = shutdown.child_token();
-        let _stop_recorder_on_drop = recorder_stop.clone().drop_guard();
-        let recorder = self
-            .recorder
-            .clone()
-            .map(|recorder| tokio::spawn(recorder.run(ranges.clone(), recorder_stop.clone())));
+        let recording = async {
+            if let Some(recorder) = self.recorder.clone() {
+                recorder.run(ranges.clone(), recorder_stop.clone()).await;
+            }
+        };
+        let attempts = async {
+            let result = self
+                .attempts(&channel, &interceptor, &downstream, &ranges, &shutdown)
+                .await;
+            recorder_stop.cancel();
+            result
+        };
 
-        let result = self
-            .attempts(&channel, &interceptor, &downstream, &ranges, &shutdown)
-            .await;
-
-        recorder_stop.cancel();
-        if let Some(recorder) = recorder {
-            // A recorder's panic stops nothing.
-            let _ = recorder.await;
-        }
+        // ⚠️ In this task, never spawned: its panic is the source's and stops the indexer.
+        let (result, ()) = tokio::join!(attempts, recording);
         result
     }
 

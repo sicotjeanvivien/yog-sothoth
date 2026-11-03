@@ -168,11 +168,12 @@ pub(super) fn received_slots_unwritten() -> ReceivedSlots {
     ReceivedSlots::new(Arc::from([PROTOCOL]), RangesToRecord::default())
 }
 
-/// The observed slots in memory: what was written, and a switch that refuses every write.
+/// The observed slots in memory: what was written, and switches that refuse or panic on every write.
 #[derive(Default)]
 pub(super) struct WrittenSlots {
     rows: Mutex<Vec<ObservedSlots>>,
     refusing: AtomicBool,
+    panicking: AtomicBool,
 }
 
 impl WrittenSlots {
@@ -183,11 +184,21 @@ impl WrittenSlots {
     pub(super) fn refuse(&self, refusing: bool) {
         self.refusing.store(refusing, Ordering::SeqCst);
     }
+
+    pub(super) fn panic_on_write(&self) {
+        self.panicking.store(true, Ordering::SeqCst);
+    }
 }
+
+/// What the panicking switch says, for a test to find it in the listener's panic.
+pub(super) const RECORDER_PANIC: &str = "the recorder panicked by the test";
 
 #[async_trait]
 impl ObservedSlotsRepository for WrittenSlots {
     async fn record(&self, observed: &ObservedSlots) -> RepositoryResult<()> {
+        if self.panicking.load(Ordering::SeqCst) {
+            panic!("{RECORDER_PANIC}");
+        }
         if self.refusing.load(Ordering::SeqCst) {
             return Err(RepositoryError::Backend("refused by the test".to_string()));
         }
