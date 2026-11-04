@@ -174,8 +174,7 @@ The `/signals` dashboard page combines both consumers:
 (`livePath`, `lib/live/live-topics.ts`), and the blocks subscribe to their topic
 through it: the API counts a connection, not a topic, against its 200 slots. A
 named event reaches only `addEventListener` (`onmessage` gets the unnamed ones).
-Any opening after the page's first is a gap, nothing being replayed: `onReopen`
-tells the subscribers. On the pages that have the advanced mode, `OverviewLive`
+Nothing is replayed: `onReopen` tells the subscribers of a gap. On the pages that have the advanced mode, `OverviewLive`
 picks the topics from it: `signals` in the simple mode, the eight on-chain
 collections too in the advanced (`pageTopics`) — switching reopens the
 connection, so the collections are polled only while the table shows.

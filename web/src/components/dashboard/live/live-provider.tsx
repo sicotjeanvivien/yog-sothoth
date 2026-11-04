@@ -30,7 +30,7 @@ type Live = {
   status: StreamStatus;
   /** Receives each parsed message of `topic`; returns the unsubscribe. */
   subscribe: (topic: LiveTopic, handler: Handler) => () => void;
-  /** Called at each opening after the first: the messages in between are lost. */
+  /** Called at an opening that follows a loss. */
   onReopen: (handler: () => void) => () => void;
 };
 
