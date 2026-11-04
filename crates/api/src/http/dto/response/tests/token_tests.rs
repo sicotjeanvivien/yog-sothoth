@@ -91,15 +91,16 @@ fn embedded_token_filters_its_logo() {
 
 #[test]
 fn falls_back_when_metadata_is_none() {
-    // Mutation: the fallback back to `decimals: 0` — a raw amount reads as whole tokens.
+    // Mutation: the fallback back to `decimals: 0`, or the key dropped when absent.
     let dto = EmbeddedTokenResponse::from_sources(Some(mint()), None);
     let j = to_json(&dto);
 
     assert_eq!(j["mint"], mint().to_string());
     assert!(j["symbol"].is_null());
     assert!(j["name"].is_null());
-    assert!(
-        j["decimals"].is_null(),
+    assert_eq!(
+        j.get("decimals"),
+        Some(&serde_json::Value::Null),
         "0 would read as a token without decimals"
     );
     assert!(j["logoUri"].is_null());
