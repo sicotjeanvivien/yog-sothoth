@@ -5,8 +5,8 @@ use solana_pubkey::Pubkey;
 use yog_core::{
     Page, RepositoryResult,
     domain::{
-        Pool, PoolCatalog, PoolCursor, PoolEntry, PoolScope, ProtocolPools, TokenCursor,
-        TokenEntry, TokenMetadata, TokenMetadataLookup,
+        LiveRecord, Pool, PoolCatalog, PoolCursor, PoolEntry, PoolScope, ProtocolPools,
+        TokenCursor, TokenEntry, TokenMetadata, TokenMetadataLookup,
     },
 };
 
@@ -222,8 +222,8 @@ async fn a_page_keeps_its_navigation_and_order_and_pairs_each_item() {
     assert_eq!(symbol(&paired.items[1]), (Some("SOL"), None));
 }
 
-/// Mutation: a creation's own mints dropped, or A and B exchanged — every new pool would
-/// come unpaired until yog-context resolves it, or with its sides swapped.
+/// Mutation: a creation's own mints dropped, as an event or as a live record, or A and B
+/// exchanged — every new pool comes unpaired until yog-context resolves it, or swapped.
 #[tokio::test]
 async fn a_pool_creation_carries_its_own_pair_in_order() {
     use chrono::Utc;
@@ -260,10 +260,18 @@ async fn a_pool_creation_carries_its_own_pair_in_order() {
         pool_fees_raw: Vec::new(),
     });
 
-    let pairs = f.pairs.of(std::slice::from_ref(&creation)).await.unwrap();
+    let live = [LiveRecord {
+        id: 7,
+        event: creation.clone(),
+    }];
 
-    let paired = Paired::of(creation, &pairs);
-    assert_eq!(paired.token_a.mint, Some(pk(10)));
-    assert_eq!(paired.token_b.mint, Some(pk(11)));
+    let pairs = f.pairs.of(std::slice::from_ref(&creation)).await.unwrap();
+    let live_pairs = f.pairs.of(&live).await.unwrap();
+
+    for pairs in [pairs, live_pairs] {
+        let paired = Paired::of(creation.clone(), &pairs);
+        assert_eq!(paired.token_a.mint, Some(pk(10)));
+        assert_eq!(paired.token_b.mint, Some(pk(11)));
+    }
     assert!(f.catalog.asked.lock().unwrap().is_empty());
 }

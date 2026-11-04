@@ -21,8 +21,7 @@ pub(crate) struct PoolCreationEventResponse {
     protocol: ProtocolResponse,
     #[schema(min_length = 1)]
     pool_address: String,
-    /// The pair it creates, its mints from the event: the rest nullable until yog-context
-    /// fetches their metadata.
+    /// The pair it creates, its mints from the event.
     token_a: EmbeddedTokenResponse,
     token_b: EmbeddedTokenResponse,
     #[schema(min_length = 1)]

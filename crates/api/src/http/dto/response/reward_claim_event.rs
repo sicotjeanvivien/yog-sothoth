@@ -17,7 +17,7 @@ pub(crate) struct RewardClaimEventResponse {
     protocol: ProtocolResponse,
     #[schema(min_length = 1)]
     pool_address: String,
-    /// The pool's token pair: every field nullable until yog-context resolves the pool.
+    /// The pool's token pair.
     token_a: EmbeddedTokenResponse,
     token_b: EmbeddedTokenResponse,
     #[schema(min_length = 1)]

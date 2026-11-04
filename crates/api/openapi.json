@@ -254,7 +254,7 @@
           },
           "tokenA": {
             "$ref": "#/components/schemas/EmbeddedTokenResponse",
-            "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+            "description": "The pool's token pair."
           },
           "tokenB": {
             "$ref": "#/components/schemas/EmbeddedTokenResponse"
@@ -1626,7 +1626,7 @@
                 },
                 "tokenA": {
                   "$ref": "#/components/schemas/EmbeddedTokenResponse",
-                  "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+                  "description": "The pool's token pair."
                 },
                 "tokenB": {
                   "$ref": "#/components/schemas/EmbeddedTokenResponse"
@@ -1716,7 +1716,7 @@
                 },
                 "tokenA": {
                   "$ref": "#/components/schemas/EmbeddedTokenResponse",
-                  "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+                  "description": "The pool's token pair."
                 },
                 "tokenB": {
                   "$ref": "#/components/schemas/EmbeddedTokenResponse"
@@ -1803,7 +1803,7 @@
                 },
                 "tokenA": {
                   "$ref": "#/components/schemas/EmbeddedTokenResponse",
-                  "description": "The pair it creates, its mints from the event: the rest nullable until yog-context\nfetches their metadata."
+                  "description": "The pair it creates, its mints from the event."
                 },
                 "tokenAMint": {
                   "minLength": 1,
@@ -1989,7 +1989,7 @@
                 },
                 "tokenA": {
                   "$ref": "#/components/schemas/EmbeddedTokenResponse",
-                  "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+                  "description": "The pool's token pair."
                 },
                 "tokenB": {
                   "$ref": "#/components/schemas/EmbeddedTokenResponse"
@@ -2083,7 +2083,7 @@
                 },
                 "tokenA": {
                   "$ref": "#/components/schemas/EmbeddedTokenResponse",
-                  "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+                  "description": "The pool's token pair."
                 },
                 "tokenB": {
                   "$ref": "#/components/schemas/EmbeddedTokenResponse"
@@ -2173,7 +2173,7 @@
                 },
                 "tokenA": {
                   "$ref": "#/components/schemas/EmbeddedTokenResponse",
-                  "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+                  "description": "The pool's token pair."
                 },
                 "tokenB": {
                   "$ref": "#/components/schemas/EmbeddedTokenResponse"
@@ -2258,7 +2258,7 @@
                 },
                 "tokenA": {
                   "$ref": "#/components/schemas/EmbeddedTokenResponse",
-                  "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+                  "description": "The pool's token pair."
                 },
                 "tokenB": {
                   "$ref": "#/components/schemas/EmbeddedTokenResponse"
@@ -2359,7 +2359,7 @@
                 },
                 "tokenA": {
                   "$ref": "#/components/schemas/EmbeddedTokenResponse",
-                  "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+                  "description": "The pool's token pair."
                 },
                 "tokenB": {
                   "$ref": "#/components/schemas/EmbeddedTokenResponse"
@@ -2865,7 +2865,7 @@
           },
           "tokenA": {
             "$ref": "#/components/schemas/EmbeddedTokenResponse",
-            "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+            "description": "The pool's token pair."
           },
           "tokenB": {
             "$ref": "#/components/schemas/EmbeddedTokenResponse"
@@ -3018,7 +3018,7 @@
           },
           "tokenA": {
             "$ref": "#/components/schemas/EmbeddedTokenResponse",
-            "description": "The pair it creates, its mints from the event: the rest nullable until yog-context\nfetches their metadata."
+            "description": "The pair it creates, its mints from the event."
           },
           "tokenAMint": {
             "minLength": 1,
@@ -3420,7 +3420,7 @@
           },
           "tokenA": {
             "$ref": "#/components/schemas/EmbeddedTokenResponse",
-            "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+            "description": "The pool's token pair."
           },
           "tokenB": {
             "$ref": "#/components/schemas/EmbeddedTokenResponse"
@@ -3480,7 +3480,7 @@
           },
           "tokenA": {
             "$ref": "#/components/schemas/EmbeddedTokenResponse",
-            "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+            "description": "The pool's token pair."
           },
           "tokenB": {
             "$ref": "#/components/schemas/EmbeddedTokenResponse"
@@ -3728,7 +3728,7 @@
           },
           "tokenA": {
             "$ref": "#/components/schemas/EmbeddedTokenResponse",
-            "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+            "description": "The pool's token pair."
           },
           "tokenB": {
             "$ref": "#/components/schemas/EmbeddedTokenResponse"
@@ -4542,7 +4542,7 @@
           },
           "tokenA": {
             "$ref": "#/components/schemas/EmbeddedTokenResponse",
-            "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+            "description": "The pool's token pair."
           },
           "tokenB": {
             "$ref": "#/components/schemas/EmbeddedTokenResponse"
@@ -4609,7 +4609,7 @@
           },
           "tokenA": {
             "$ref": "#/components/schemas/EmbeddedTokenResponse",
-            "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+            "description": "The pool's token pair."
           },
           "tokenB": {
             "$ref": "#/components/schemas/EmbeddedTokenResponse"
