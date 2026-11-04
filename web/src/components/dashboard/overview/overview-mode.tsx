@@ -2,7 +2,7 @@
 
 /**
  * The advanced mode: an attribute over the page that the `adv:` variant reads. ⚠️ The server
- * renders both modes' content; switching shows or hides it, and never fetches again.
+ * renders both modes' content; switching shows or hides it.
  */
 
 import {

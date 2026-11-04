@@ -6,12 +6,15 @@
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
+import { LiveProvider } from "@/components/dashboard/live/live-provider";
 import { PageError } from "@/components/dashboard/page-error";
 import { InfoPopover } from "@/components/shared/info-popover";
 import { SignalFeed } from "@/components/dashboard/signals/signal-feed";
 import { ApiClientError } from "@/lib/api/errors";
 import { fetchSignals } from "@/lib/api/server/signals";
 import { pageMetadata } from "@/lib/seo/page-metadata";
+
+const SIGNALS_ONLY = ["signals"] as const;
 
 type SignalsPageProps = {
   params: Promise<{ locale: string }>;
@@ -59,7 +62,9 @@ export default async function SignalsPage({ params }: SignalsPageProps) {
         <InfoPopover label={tShell("pageInfo")}>{t("description")}</InfoPopover>
       </header>
 
-      <SignalFeed initial={page.items} />
+      <LiveProvider topics={SIGNALS_ONLY}>
+        <SignalFeed initial={page.items} />
+      </LiveProvider>
     </>
   );
 }
