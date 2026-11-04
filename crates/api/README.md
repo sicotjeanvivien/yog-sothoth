@@ -16,10 +16,10 @@ roles, the add-an-endpoint recipe), see [`crates/README.md`](../README.md).
 api/src/
 ├── bootstrap/
 │   ├── app_state.rs       ← build_app_state() — opens the pool, wires the repositories
-│   │                        into the services, and builds the live signals' broadcast with
-│   │                        the poller it returns, the live slots and the work slots
+│   │                        into the services, and builds the live channels with
+│   │                        the pollers it returns, the live slots and the work slots
 │   ├── config.rs          ← Config::load() — env-driven
-│   └── serve.rs           ← serve() — the server and the poller, and their stop
+│   └── serve.rs           ← serve() — the server and the live pollers, and their stop
 ├── application/
 │   ├── services/          ← cross-protocol services at the root (SignalService,
 │   │                        TokenService, NetworkService, IngestionService,
@@ -30,8 +30,11 @@ api/src/
 │   │                        the frozen period they all read over
 │   ├── live.rs            ← LiveSource, what a table streamed on /api/live answers
 │   ├── live/poller.rs     ← LivePoller, one per source
+│   ├── live/pollers.rs    ← LivePollers, all of them as one task
+│   ├── live/channels.rs   ← LiveChannels, one broadcast per topic
 │   ├── live/watermark.rs  ← LiveWatermark, where a poller stands in its table
 │   ├── live/signals_source.rs ← SignalsSource (enriches once, feeds the signals' broadcast)
+│   ├── live/event_source.rs   ← EventSource, one table of an event collection
 │   ├── cache.rs           ← SharedCache (moka) and its named CachePolicy per use
 │   ├── enriched_token.rs  ← one token side of a pool, identity only
 │   └── enriched_signal.rs ← signal + embedded token pair of its pool
@@ -393,30 +396,45 @@ route is added only for a new kind of entity.
   (200) slots whatever their number; the next one is refused with `503`. See
   [Capacity bounds](#capacity-bounds).
 - **`topics` is required.** Missing, empty, a name twice, or a topic not streamed: `400`,
-  saying which are. Served today: `signals`.
-- **Each message is named by its topic** (`event: signals`), its `data` the collection's
-  item (`SignalResponse`), with a 15 s keep-alive.
-- **Its `id` is an opaque cursor**: the id of the last item delivered for each topic of the
-  connection, base64 over JSON like the pagination cursors. A client keeps it whole and
+  saying which are. Served: `signals`, and the on-chain event collections but `swaps` —
+  `liquidity-changes`, `pool-creations`, `position-changes`, `position-fee-claims`,
+  `protocol-fee-claims`, `reward-claims`, `reward-changes`, `pool-changes`. `swaps` is
+  refused: dozens a second would drown the page and the API.
+- **Each message is named by its topic** (`event: liquidity-changes`), its `data` the
+  collection's item (`LiquidityChangeEventResponse`, `SignalResponse`…), with a 15 s
+  keep-alive. Amounts are as indexed, in the token's units: no dollar value is streamed
+  (rule 7).
+- **Its `id` is an opaque cursor**: the id of the last item delivered for each source of the
+  connection — `signals`, or one table of a collection, since an id is unique in its table
+  only —, base64 over JSON like the pagination cursors. A client keeps it whole and
   reads nothing in it, so a resume by `Last-Event-ID` can be added without changing the
   contract — what the cursor holds may change with it: an id filling a hole comes after a
   higher one, so the last id alone cannot say where to resume. Today no history is replayed and a `Last-Event-ID` sent is not read: after a drop, the
   page refills the gap from the collection.
 - **A protocol's connection is filtered by the server**, on the items broadcast: no query
   per connection.
-- **One poller per source**, a `LivePoller`, ticks every `API_SIGNAL_STREAM_POLL_SECS`
-  (default 3 s) and broadcasts on a `tokio::broadcast` channel to every connection on its
-  topic. A connection lagging past the channel's 256 messages, or whose source closed, is
+- **One poller per source**, a `LivePoller`, ticks every `API_LIVE_POLL_SECS` (default 3 s)
+  and broadcasts on its topic's `tokio::broadcast` channel to every connection on it. A source
+  is a table: a collection written in several (`position-changes` in five, `reward-changes` in
+  six, `pool-changes` in two) has one poller per table, each with its own watermark, all
+  writing into the topic's channel — 19 pollers for DAMM v2, run as one task
+  (`LivePollers`). ⚠️ They read one at a time, sharing one slot: they take at most one of the
+  pool's 10 connections, which the capacity bounds below count on.
+- **A row that does not decode is logged and passed over**, its id counted as read: one bad
+  row does not hold its table until it leaves the lookback.
+- **A protocol's connection subscribes only to the collections written for it**: a topic none
+  of whose tables is the protocol's stays open and silent, without waking a poller. A connection lagging past the channel's 256 messages, or whose source closed, is
   ended, and the browser's `EventSource` reconnects.
 - **The poller walks its table by id**, the order of insertion: an item stamped before
   another but inserted after still comes. ⚠️ An id is taken at insert, not at commit: a
   slower insert can land below an id already read. The watermark therefore keeps the ids
   it delivered above its floor and waits up to 10 s for a hole under them before passing
   it — a rolled-back insert leaves one for good.
-- **It reads a bounded past**: the signals triggered within a day. The bound keeps the read
-  on the recent chunks (measured on the dump of 2 Nov. 2026: one chunk read, 0.15 ms to
-  anchor, 5 ms a tick); a signal inserted more than a day after its `triggered_at` is not
-  streamed, and the paginated feed lists it.
+- **It reads a bounded past**: the signals triggered, and the events stamped, within a day.
+  The bound keeps the read on the recent chunks (measured on the dump of 2 Nov. 2026: for the
+  signals one chunk read, 0.15 ms to anchor, 5 ms a tick; for `meteora_damm_v2_liquidity_events`
+  an index-only scan of one chunk, 0.3 ms to anchor and 1.7 ms for 200 rows, cold); an item
+  inserted more than a day after its instant is not streamed, and its collection lists it.
 - **The watermark is re-anchored at the tip** when someone connects after an idle spell:
   when `receiver_count() == 0` the read is skipped and the watermark dropped, so an idle
   source costs nothing and a returning client gets no burst.
@@ -431,7 +449,7 @@ Poller failures are skip-and-log: a failed tick is logged and the next one proce
 
 SIGTERM or Ctrl-C (`yog_bootstrap::shutdown_signal`) cancels one token, and
 `bootstrap::serve` stops the process the way the daemons stop theirs: the
-server with axum's `with_graceful_shutdown`, then the poller, both waited on
+server with axum's `with_graceful_shutdown`, then the live pollers, both waited on
 by `yog_bootstrap::Stop` within `SHUTDOWN_GRACE`, which names whichever
 outlives it.
 
@@ -462,7 +480,7 @@ Each bound is named once in
 |---|---|---|
 | `STATEMENT_TIMEOUT` | 8 s | Postgres cancels a statement itself (`57014`): cutting the request client-side leaves its statement running |
 | `REQUEST_TIMEOUT` | 10 s | A request that has not produced its response is answered `503`. It bounds the response's production, not its body, so the live stream is not cut |
-| `WORK_SLOTS` | 6 | All expensive reads share 6 `WorkSlots` on a 10-connection pool: the slow route — `/api/signals` — and the cached computation below. With the signal poller's connection, the light routes always keep 3 |
+| `WORK_SLOTS` | 6 | All expensive reads share 6 `WorkSlots` on a 10-connection pool: the slow route — `/api/signals` — and the cached computation below. With the live pollers' one connection, the light routes always keep 3 |
 | `WORK_SLOT_WAIT` | 2 s | How long expensive work waits for a slot before `503` — enough for a page's own burst |
 | `SSE_MAX_STREAMS` | 200 | ~62 KiB an open stream; half of `MAX_CONNECTIONS`, so streams never take the connections ordinary requests need |
 | `MAX_CONNECTIONS` | 400 | Connections held at once; the next wait in the kernel's accept queue (`CappedListener`). Capping streams was not enough: a burst of connections costs memory even when refused, and the allocator keeps the peak — 1000 at once got the process OOM-killed under 32 MiB with the stream cap in place. The `yog-api` image sets `MALLOC_ARENA_MAX=2`: without it glibc kept each burst's peak in a new arena (29.7 → 49 MiB → OOM over three rounds of 1000 opens); with it, twelve rounds level off at 44.1 MiB, inside the production `mem_limit`, raised to 64 MiB for it |
@@ -536,7 +554,7 @@ encoding of a JSON-serialized `*CursorWire` struct. Clients pass back the
 DATABASE_URL_API=postgresql://yog_api:...@localhost:5433/yog_sothoth
 API_BIND_ADDR=0.0.0.0:5000
 API_CORS_ALLOWED_ORIGINS=http://localhost:3000
-API_SIGNAL_STREAM_POLL_SECS=3
+API_LIVE_POLL_SECS=3
 ```
 
 CORS is locked to the configured dashboard origins — the browser calls this

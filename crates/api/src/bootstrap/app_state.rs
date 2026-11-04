@@ -23,7 +23,7 @@ use yog_persistence::{
 use crate::application::{
     AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService,
     LIVE_CHANNEL_CAPACITY, LiquidityChangeEventService, LiquidityMoveService,
-    LiquidityTurnoverService, LivePoller, NetworkService, PoolChangeEventService,
+    LiquidityTurnoverService, LiveChannels, LivePollers, NetworkService, PoolChangeEventService,
     PoolCreationEventService, PoolCreationsService, PoolService, PositionChangeCountsService,
     PositionChangeEventService, PositionFeeClaimEventService, ProtocolCatalogService,
     ProtocolFeeClaimEventService, ProtocolTvlService, RewardChangeEventService,
@@ -34,11 +34,11 @@ use crate::bootstrap::Config;
 use crate::http::{AppState, SSE_MAX_STREAMS, STATEMENT_TIMEOUT, WORK_SLOT_WAIT, WORK_SLOTS};
 use anyhow::Context;
 
-/// The handlers' state, and the poller that feeds it — for [`serve`](crate::bootstrap::serve()).
+/// The handlers' state, and the pollers that feed its live channels — for [`serve`](crate::bootstrap::serve()).
 pub(crate) async fn build_app_state(
     config: Config,
     shutdown: CancellationToken,
-) -> anyhow::Result<(AppState, LivePoller<SignalsSource>)> {
+) -> anyhow::Result<(AppState, LivePollers)> {
     let database = Database::connect_with(
         config.database_url.expose(),
         PoolSettings {
@@ -146,15 +146,40 @@ pub(crate) async fn build_app_state(
         token_metadata_repo.clone(),
     ));
 
-    let (live_signals, _) = broadcast::channel(LIVE_CHANNEL_CAPACITY);
-    let signal_poller = LivePoller::new(
+    let mut live_pollers = LivePollers::new(config.live_poll);
+    let (signals, _) = broadcast::channel(LIVE_CHANNEL_CAPACITY);
+    live_pollers.add(
         Arc::new(SignalsSource::new(
             signal_repo.clone(),
             signal_service.clone(),
         )),
-        live_signals.clone(),
-        config.signal_stream_poll,
+        signals.clone(),
     );
+    let live = LiveChannels {
+        signals,
+        liquidity_changes: live_pollers.add_collection(Arc::new(
+            PgLiquidityChangeEventRepository::new(db_pool.clone()),
+        )),
+        pool_creations: live_pollers.add_collection(Arc::new(PgPoolCreationEventRepository::new(
+            db_pool.clone(),
+        ))),
+        position_changes: live_pollers.add_collection(Arc::new(
+            PgPositionChangeEventRepository::new(db_pool.clone()),
+        )),
+        position_fee_claims: live_pollers.add_collection(Arc::new(
+            PgPositionFeeClaimEventRepository::new(db_pool.clone()),
+        )),
+        protocol_fee_claims: live_pollers.add_collection(Arc::new(
+            PgProtocolFeeClaimEventRepository::new(db_pool.clone()),
+        )),
+        reward_claims: live_pollers
+            .add_collection(Arc::new(PgRewardClaimEventRepository::new(db_pool.clone()))),
+        reward_changes: live_pollers.add_collection(Arc::new(PgRewardChangeEventRepository::new(
+            db_pool.clone(),
+        ))),
+        pool_changes: live_pollers
+            .add_collection(Arc::new(PgPoolChangeEventRepository::new(db_pool.clone()))),
+    };
 
     let work_slots = WorkSlots::new(WORK_SLOTS, WORK_SLOT_WAIT);
 
@@ -164,7 +189,7 @@ pub(crate) async fn build_app_state(
         windows_service,
         liquidity_turnover_service,
         signal_service,
-        live_signals,
+        live,
         stream_slots: Arc::new(Semaphore::new(SSE_MAX_STREAMS)),
         protocol_catalog_service: Arc::new(ProtocolCatalogService::new(
             pool_repo,
@@ -195,5 +220,5 @@ pub(crate) async fn build_app_state(
         health_checker: Arc::new(PgHealthChecker::new(db_pool)),
         shutdown,
     };
-    Ok((state, signal_poller))
+    Ok((state, live_pollers))
 }

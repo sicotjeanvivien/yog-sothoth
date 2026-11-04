@@ -18,3 +18,10 @@ pub trait PoolCreationEventLookup: Send + Sync {
         limit: i64,
     ) -> RepositoryResult<Page<PoolCreationEvent>>;
 }
+
+crate::domain::event_tables! {
+    /// The tables the pool creations are written in, one per protocol and event kind.
+    PoolCreationTable {
+        MeteoraDammV2 => (MeteoraDammV2, "meteora_damm_v2_initialize_pool_events"),
+    }
+}

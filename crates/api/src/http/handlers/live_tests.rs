@@ -3,13 +3,22 @@ use std::time::Duration;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
+use chrono::{TimeZone, Utc};
+use solana_signature::Signature;
 use tokio::sync::{Semaphore, broadcast};
 use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
-use yog_core::domain::Protocol;
+use yog_core::domain::{
+    LiquidityChangeEvent, LiquidityChangeTable, LiveRecord, MeteoraDammV2ClosePositionEvent,
+    MeteoraDammV2CreatePositionEvent, MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventKind,
+    MeteoraDammV2PositionChange, PositionChangeEvent, PositionChangeTable, Protocol,
+};
 
-use super::{SignalResponse, TopicStream, live_sse, open_live, signals_topic};
-use crate::application::{EnrichedSignal, EnrichedToken};
+use super::{
+    LiquidityChangeEventResponse, PositionChangeEventResponse, SignalResponse, TopicStream,
+    event_stream, events_topic, live_sse, open_live, signals_topic,
+};
+use crate::application::{EnrichedSignal, EnrichedToken, LiveEvent};
 use crate::http::{build_router, cursor::LiveCursor, dto::request::LiveTopic};
 use crate::testing::{app_state, get, make_metadata, make_signal_record, pk};
 
@@ -21,12 +30,11 @@ async fn a_connection_it_cannot_serve_is_refused_in_problem_details() {
         ("/api/live?topics=", "`topics` must not be empty"),
         (
             "/api/live?topics=swaps",
-            "`swaps` is not streamed; served: signals",
+            "`swaps` is not streamed; served: signals, liquidity-changes, pool-creations, \
+             position-changes, position-fee-claims, protocol-fee-claims, reward-claims, \
+             reward-changes, pool-changes",
         ),
-        (
-            "/api/live?topics=liquidity-changes",
-            "`liquidity-changes` is not streamed",
-        ),
+        ("/api/live?topics=signals,swaps", "`swaps` is not streamed"),
         ("/api/live?topics=signals,signals", "names `signals` twice"),
         ("/api/live?topics=signals,", "`` is not streamed"),
         ("/api/live?topics=signals&pool=x", "unknown field `pool`"),
@@ -46,12 +54,17 @@ async fn a_connection_it_cannot_serve_is_refused_in_problem_details() {
 /// read, so even one that decodes to nothing opens the stream.
 #[tokio::test]
 async fn a_served_connection_opens_whatever_its_last_event_id() {
+    const EVERY_TOPIC: &str = "signals,liquidity-changes,pool-creations,position-changes,\
+                               position-fee-claims,protocol-fee-claims,reward-claims,\
+                               reward-changes,pool-changes";
     for uri in [
-        "/api/live?topics=signals",
-        "/api/live/protocols/meteora_damm_v2?topics=signals",
+        "/api/live?topics=signals".to_string(),
+        "/api/live/protocols/meteora_damm_v2?topics=signals".to_string(),
+        format!("/api/live?topics={EVERY_TOPIC}"),
+        format!("/api/live/protocols/meteora_damm_v2?topics={EVERY_TOPIC}"),
     ] {
         let request = Request::builder()
-            .uri(uri)
+            .uri(&uri)
             .header("last-event-id", "not-a-cursor")
             .body(Body::empty())
             .unwrap();
@@ -150,7 +163,7 @@ async fn each_signal_comes_named_by_its_topic_with_the_connections_cursor() {
     for (event, signal) in events.iter().zip(&signals) {
         assert_eq!(field(event, "event"), "signals");
         let cursor = LiveCursor::decode(field(event, "id")).expect("an opaque cursor");
-        assert_eq!(cursor.position(LiveTopic::Signals), Some(signal.record.id));
+        assert_eq!(cursor.position("signals"), Some(signal.record.id));
         let data: serde_json::Value = serde_json::from_str(field(event, "data")).expect("JSON");
         let expected = serde_json::to_value(SignalResponse::from(signal.clone())).expect("JSON");
         assert_eq!(data, expected);
@@ -253,4 +266,212 @@ async fn a_closed_source_ends_the_connection_and_gives_its_slot_back() {
 
     assert_eq!(body, "");
     assert!(slot_back);
+}
+
+fn liquidity_change(seed: u8) -> LiquidityChangeEvent {
+    LiquidityChangeEvent::MeteoraDammV2(MeteoraDammV2LiquidityEvent {
+        pool_address: pk(seed),
+        signature: Signature::from([seed; 64]),
+        timestamp: Utc.with_ymd_and_hms(2026, 11, 4, 12, 0, 0).unwrap(),
+        slot: 9,
+        transaction_index: None,
+        event_index: 0,
+        liquidity_event_kind: MeteoraDammV2LiquidityEventKind::Add,
+        amount_a: 1,
+        amount_b: 2,
+        liquidity_delta: 3,
+        reserve_a_after: 4,
+        reserve_b_after: 5,
+        position: pk(seed + 1),
+        owner: pk(seed + 2),
+    })
+}
+
+/// The events broadcast by their tables, then the source closed.
+fn events_then_close<T: Copy, E>(
+    events: Vec<(T, i64, E)>,
+) -> broadcast::Receiver<Arc<LiveEvent<T, E>>> {
+    let (feed, receiver) = broadcast::channel(8);
+    for (table, id, event) in events {
+        let item = LiveEvent {
+            table,
+            record: LiveRecord { id, event },
+        };
+        assert!(feed.send(Arc::new(item)).is_ok(), "a subscriber");
+    }
+    receiver
+}
+
+fn liquidity_topic(
+    events: Vec<(LiquidityChangeTable, i64, LiquidityChangeEvent)>,
+    protocol: Option<Protocol>,
+) -> TopicStream {
+    event_stream::<_, _, LiquidityChangeEventResponse>(
+        LiveTopic::LiquidityChanges,
+        events_then_close(events),
+        protocol,
+    )
+}
+
+/// Mutation: the `id` reduced to the item's own — the last message of `signals,liquidity-changes`
+/// forgets the other topic's position. And the event left unnamed or not its collection's item.
+#[tokio::test]
+async fn an_event_comes_as_its_collections_item_and_the_cursor_keeps_every_topic() {
+    let event = liquidity_change(1);
+    let signals = vec![signals_topic(
+        broadcast_then_close(&[enriched(41, 1, Protocol::MeteoraDammV2)]),
+        None,
+    )];
+    let liquidity = liquidity_topic(
+        vec![(LiquidityChangeTable::MeteoraDammV2, 7, event.clone())],
+        None,
+    );
+
+    let (body, slot_back) = read_live(signals.into_iter().chain([liquidity]).collect()).await;
+
+    assert!(slot_back);
+    let events = events(&body);
+    assert_eq!(events.len(), 2, "{body}");
+    let change = events
+        .iter()
+        .find(|e| field(e, "event") == "liquidity-changes")
+        .expect("the liquidity change, named by its topic");
+    let data: serde_json::Value = serde_json::from_str(field(change, "data")).expect("JSON");
+    let expected = serde_json::to_value(LiquidityChangeEventResponse::from(event)).expect("JSON");
+    assert_eq!(data, expected);
+    let last = LiveCursor::decode(field(events[1], "id")).expect("an opaque cursor");
+    assert_eq!(last.position("signals"), Some(41));
+    assert_eq!(last.position("meteora_damm_v2_liquidity_events"), Some(7));
+}
+
+/// Mutation: the cursor kept per topic — two tables of `position-changes`, each at its own id 5,
+/// collapse into one position.
+#[tokio::test]
+async fn the_cursor_keeps_one_position_per_table() {
+    let at = Utc.with_ymd_and_hms(2026, 11, 4, 12, 0, 0).unwrap();
+    let open = MeteoraDammV2CreatePositionEvent {
+        pool_address: pk(1),
+        signature: Signature::from([1; 64]),
+        timestamp: at,
+        slot: 9,
+        transaction_index: None,
+        event_index: 0,
+        owner: pk(2),
+        position: pk(3),
+        position_nft_mint: pk(4),
+    };
+    let close = MeteoraDammV2ClosePositionEvent {
+        pool_address: pk(1),
+        signature: Signature::from([2; 64]),
+        timestamp: at,
+        slot: 9,
+        transaction_index: None,
+        event_index: 0,
+        owner: pk(2),
+        position: pk(3),
+        position_nft_mint: pk(4),
+    };
+    let topic = event_stream::<_, _, PositionChangeEventResponse>(
+        LiveTopic::PositionChanges,
+        events_then_close(vec![
+            (
+                PositionChangeTable::MeteoraDammV2Open,
+                5,
+                PositionChangeEvent::MeteoraDammV2(MeteoraDammV2PositionChange::Open(open)),
+            ),
+            (
+                PositionChangeTable::MeteoraDammV2Close,
+                6,
+                PositionChangeEvent::MeteoraDammV2(MeteoraDammV2PositionChange::Close(close)),
+            ),
+        ]),
+        None,
+    );
+
+    let (body, _) = read_live(vec![topic]).await;
+
+    let events = events(&body);
+    assert_eq!(events.len(), 2, "{body}");
+    assert!(
+        events
+            .iter()
+            .all(|e| field(e, "event") == "position-changes")
+    );
+    let last = LiveCursor::decode(field(events[1], "id")).expect("an opaque cursor");
+    assert_eq!(
+        last.position("meteora_damm_v2_create_position_events"),
+        Some(5)
+    );
+    assert_eq!(
+        last.position("meteora_damm_v2_close_position_events"),
+        Some(6)
+    );
+}
+
+/// Mutation: the protocol filter dropped from the events — DAMM v2's change reaches a DLMM
+/// connection.
+#[tokio::test]
+async fn a_protocols_connection_carries_its_events_only() {
+    let events = || vec![(LiquidityChangeTable::MeteoraDammV2, 7, liquidity_change(1))];
+
+    let (body, _) = read_live(vec![liquidity_topic(events(), Some(Protocol::MeteoraDlmm))]).await;
+    assert_eq!(body, "");
+
+    // The control: its own protocol's connection gets it.
+    let (body, _) = read_live(vec![liquidity_topic(
+        events(),
+        Some(Protocol::MeteoraDammV2),
+    )])
+    .await;
+    assert_eq!(self::events(&body).len(), 1, "{body}");
+}
+
+/// Mutation: a slot taken per topic — a connection on two topics fills a cap of two alone.
+#[tokio::test]
+async fn a_connection_takes_one_slot_whatever_its_topics() {
+    let slots = Arc::new(Semaphore::new(2));
+    let (signals, _) = broadcast::channel::<Arc<EnrichedSignal>>(8);
+    let (changes, _) =
+        broadcast::channel::<Arc<LiveEvent<LiquidityChangeTable, LiquidityChangeEvent>>>(8);
+
+    let response = open_live(
+        slots.clone(),
+        || {
+            vec![
+                signals_topic(signals.subscribe(), None),
+                events_topic::<_, _, LiquidityChangeEventResponse>(
+                    LiveTopic::LiquidityChanges,
+                    &changes,
+                    None,
+                ),
+            ]
+        },
+        CancellationToken::new(),
+    );
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(slots.available_permits(), 1);
+}
+
+/// Mutation: every topic subscribed whatever the protocol — a DLMM connection, which no
+/// `liquidity-changes` table is written for, keeps DAMM v2's poller reading.
+#[tokio::test]
+async fn a_protocol_without_a_table_in_the_collection_subscribes_to_nothing() {
+    let (changes, _) =
+        broadcast::channel::<Arc<LiveEvent<LiquidityChangeTable, LiquidityChangeEvent>>>(8);
+    let subscribe = |protocol| {
+        events_topic::<_, _, LiquidityChangeEventResponse>(
+            LiveTopic::LiquidityChanges,
+            &changes,
+            protocol,
+        )
+    };
+
+    let dlmm = subscribe(Some(Protocol::MeteoraDlmm));
+    assert_eq!(changes.receiver_count(), 0);
+
+    let damm = subscribe(Some(Protocol::MeteoraDammV2));
+    let every = subscribe(None);
+    assert_eq!(changes.receiver_count(), 2);
+    drop((dlmm, damm, every));
 }

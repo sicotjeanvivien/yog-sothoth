@@ -17,3 +17,10 @@ pub trait ProtocolFeeClaimEventLookup: Send + Sync {
         limit: i64,
     ) -> RepositoryResult<Page<ProtocolFeeClaimEvent>>;
 }
+
+crate::domain::event_tables! {
+    /// The tables the protocol fee claims are written in, one per protocol and event kind.
+    ProtocolFeeClaimTable {
+        MeteoraDammV2 => (MeteoraDammV2, "meteora_damm_v2_claim_protocol_fee_events"),
+    }
+}

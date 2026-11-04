@@ -6,19 +6,19 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 use yog_bootstrap::{Stop, handle_task_result};
 
-use crate::application::{LivePoller, SignalsSource};
+use crate::application::LivePollers;
 use crate::http::{CappedListener, IDLE_TIMEOUT, MAX_CONNECTIONS};
 
 const HTTP_SERVER: &str = "http server";
-const SIGNAL_POLLER: &str = "live signals poller";
+const LIVE_POLLERS: &str = "live pollers";
 
-/// Serves `router` and runs the poller until `shutdown`, then stops both within
+/// Serves `router` and runs the live pollers until `shutdown`, then stops both within
 /// [`yog_bootstrap::SHUTDOWN_GRACE`]. ⚠️ Graceful shutdown waits for every connection, and an SSE
 /// one never ends alone: it ends because its stream reads the same token (`live_sse`).
 pub(crate) async fn serve(
     listener: TcpListener,
     router: Router,
-    poller: LivePoller<SignalsSource>,
+    pollers: LivePollers,
     shutdown: CancellationToken,
 ) -> anyhow::Result<()> {
     let mut server_task = tokio::spawn(
@@ -29,13 +29,13 @@ pub(crate) async fn serve(
         .with_graceful_shutdown(shutdown.clone().cancelled_owned())
         .into_future(),
     );
-    let mut poller_task = tokio::spawn(poller.run(shutdown.clone()));
+    let mut poller_task = tokio::spawn(pollers.run(shutdown.clone()));
 
     // The cancellation arm carries no verdict; a task that failed can still be
     // stopping when it fires, and `Stop` collects its error afterwards.
     let (ended, first) = tokio::select! {
         result = &mut server_task => (Some(HTTP_SERVER), handle_task_result(result, HTTP_SERVER)),
-        result = &mut poller_task => (Some(SIGNAL_POLLER), handle_task_result(result, SIGNAL_POLLER)),
+        result = &mut poller_task => (Some(LIVE_POLLERS), handle_task_result(result, LIVE_POLLERS)),
         () = shutdown.cancelled() => {
             info!("cancellation received — stopping");
             (None, Ok(()))
@@ -46,10 +46,10 @@ pub(crate) async fn serve(
     shutdown.cancel();
 
     // The server first: it holds responses in flight, which are lost if cut.
-    // The poller only skips a read of the feed it would redo on restart.
+    // The pollers only skip a read of the tables they would redo on restart.
     let mut stop = Stop::new(first, ended);
     stop.settle(HTTP_SERVER, &mut server_task).await;
-    stop.settle(SIGNAL_POLLER, &mut poller_task).await;
+    stop.settle(LIVE_POLLERS, &mut poller_task).await;
     stop.finish()
 }
 

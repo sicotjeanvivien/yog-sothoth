@@ -1,10 +1,21 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,\n                   position, owner, fee_a_claimed, fee_b_claimed\n              FROM meteora_damm_v2_claim_position_fee_events\n             WHERE pool_address = $1 AND timestamp >= $2\n               AND timestamp <= COALESCE($3, 'infinity'::TIMESTAMPTZ)\n               AND (timestamp < COALESCE($3, 'infinity'::TIMESTAMPTZ)\n                    OR (signature, event_index) < ($4, $5))\n             ORDER BY timestamp DESC, signature DESC, event_index DESC\n             LIMIT $6\n            ",
+  "query": "\n            SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,\n                   position, owner, fee_a_claimed, fee_b_claimed\n              FROM meteora_damm_v2_claim_position_fee_events\n             WHERE timestamp >= $1\n               AND timestamp <= COALESCE($2, 'infinity'::TIMESTAMPTZ)\n               AND (timestamp < COALESCE($2, 'infinity'::TIMESTAMPTZ)\n                    OR (signature, event_index) < ($3, $4))\n             ORDER BY timestamp DESC, signature DESC, event_index DESC\n             LIMIT $5\n            ",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_claim_position_fee_events",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
         "name": "pool_address",
         "type_info": "Text",
         "origin": {
@@ -15,7 +26,7 @@
         }
       },
       {
-        "ordinal": 1,
+        "ordinal": 2,
         "name": "signature",
         "type_info": "Text",
         "origin": {
@@ -26,7 +37,7 @@
         }
       },
       {
-        "ordinal": 2,
+        "ordinal": 3,
         "name": "timestamp",
         "type_info": "Timestamptz",
         "origin": {
@@ -37,7 +48,7 @@
         }
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "name": "slot",
         "type_info": "Int8",
         "origin": {
@@ -48,7 +59,7 @@
         }
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "transaction_index",
         "type_info": "Int8",
         "origin": {
@@ -59,7 +70,7 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "event_index",
         "type_info": "Int4",
         "origin": {
@@ -70,7 +81,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "position",
         "type_info": "Text",
         "origin": {
@@ -81,7 +92,7 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "owner",
         "type_info": "Text",
         "origin": {
@@ -92,7 +103,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "fee_a_claimed",
         "type_info": "Int8",
         "origin": {
@@ -103,7 +114,7 @@
         }
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "fee_b_claimed",
         "type_info": "Int8",
         "origin": {
@@ -116,7 +127,6 @@
     ],
     "parameters": {
       "Left": [
-        "Text",
         "Timestamptz",
         "Timestamptz",
         "Text",
@@ -129,6 +139,7 @@
       false,
       false,
       false,
+      false,
       true,
       false,
       false,
@@ -137,5 +148,5 @@
       false
     ]
   },
-  "hash": "083e757a1f00bbbc54f670b4ad93828b82c1615b9b4f8b8415fd1635e162e073"
+  "hash": "337ac089e6a70c52cca363c4a14290b8376c565df6d8425a9c2612b8a9d53481"
 }

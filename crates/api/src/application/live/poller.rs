@@ -2,7 +2,7 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use tokio::sync::broadcast;
+use tokio::sync::{Semaphore, broadcast};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
@@ -17,6 +17,8 @@ pub(crate) struct LivePoller<S: LiveSource> {
     source: Arc<S>,
     sender: broadcast::Sender<Arc<S::Item>>,
     interval: Duration,
+    /// The pollers' one read at a time, shared by all of them.
+    reads: Arc<Semaphore>,
 }
 
 impl<S: LiveSource> LivePoller<S> {
@@ -24,11 +26,13 @@ impl<S: LiveSource> LivePoller<S> {
         source: Arc<S>,
         sender: broadcast::Sender<Arc<S::Item>>,
         interval: Duration,
+        reads: Arc<Semaphore>,
     ) -> Self {
         Self {
             source,
             sender,
             interval,
+            reads,
         }
     }
 
@@ -38,7 +42,7 @@ impl<S: LiveSource> LivePoller<S> {
         let mut ticker = tokio::time::interval(self.interval);
         // `None` = the watermark needs (re)anchoring at the table's tip.
         let mut watermark: Option<LiveWatermark> = None;
-        info!(source = S::NAME, interval = ?self.interval, "live poller started");
+        info!(source = self.source.name(), interval = ?self.interval, "live poller started");
 
         loop {
             tokio::select! {
@@ -61,7 +65,10 @@ impl<S: LiveSource> LivePoller<S> {
                 biased;
 
                 () = shutdown.cancelled() => break,
-                next = poll_once(self.source.as_ref(), &self.sender, watermark) => next,
+                next = async {
+                    let _read = self.reads.acquire().await;
+                    poll_once(self.source.as_ref(), &self.sender, watermark).await
+                } => next,
             };
         }
         Ok(())
@@ -80,7 +87,7 @@ pub(super) async fn poll_once<S: LiveSource>(
         None => match source.tip().await {
             Ok(tip) => LiveWatermark::anchored(tip.unwrap_or(0)),
             Err(e) => {
-                warn!(source = S::NAME, error = %e, "live poller: anchoring failed — skipping tick");
+                warn!(source = source.name(), error = %e, "live poller: anchoring failed — skipping tick");
                 return None;
             }
         },
@@ -89,7 +96,7 @@ pub(super) async fn poll_once<S: LiveSource>(
     let records = match source.after(watermark.floor(), POLL_BATCH_LIMIT).await {
         Ok(records) => records,
         Err(e) => {
-            warn!(source = S::NAME, error = %e, "live poller: read failed — skipping tick");
+            warn!(source = source.name(), error = %e, "live poller: read failed — skipping tick");
             return Some(watermark);
         }
     };

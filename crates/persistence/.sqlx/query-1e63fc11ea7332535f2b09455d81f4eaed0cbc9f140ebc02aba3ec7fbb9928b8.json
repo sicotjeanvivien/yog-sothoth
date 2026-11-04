@@ -1,10 +1,21 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,\n                   liquidity_event_kind, amount_a, amount_b, liquidity_delta, reserve_a_after,\n                   reserve_b_after, position, owner\n              FROM meteora_damm_v2_liquidity_events\n             WHERE timestamp >= $1\n               AND timestamp <= COALESCE($2, 'infinity'::TIMESTAMPTZ)\n               AND (timestamp < COALESCE($2, 'infinity'::TIMESTAMPTZ)\n                    OR (signature, event_index) < ($3, $4))\n             ORDER BY timestamp DESC, signature DESC, event_index DESC\n             LIMIT $5\n            ",
+  "query": "\n            SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,\n                   liquidity_event_kind, amount_a, amount_b, liquidity_delta, reserve_a_after,\n                   reserve_b_after, position, owner\n              FROM meteora_damm_v2_liquidity_events\n             WHERE timestamp >= $1\n               AND timestamp <= COALESCE($2, 'infinity'::TIMESTAMPTZ)\n               AND (timestamp < COALESCE($2, 'infinity'::TIMESTAMPTZ)\n                    OR (signature, event_index) < ($3, $4))\n             ORDER BY timestamp DESC, signature DESC, event_index DESC\n             LIMIT $5\n            ",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_liquidity_events",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
         "name": "pool_address",
         "type_info": "Text",
         "origin": {
@@ -15,7 +26,7 @@
         }
       },
       {
-        "ordinal": 1,
+        "ordinal": 2,
         "name": "signature",
         "type_info": "Text",
         "origin": {
@@ -26,7 +37,7 @@
         }
       },
       {
-        "ordinal": 2,
+        "ordinal": 3,
         "name": "timestamp",
         "type_info": "Timestamptz",
         "origin": {
@@ -37,7 +48,7 @@
         }
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "name": "slot",
         "type_info": "Int8",
         "origin": {
@@ -48,7 +59,7 @@
         }
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "transaction_index",
         "type_info": "Int8",
         "origin": {
@@ -59,7 +70,7 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "event_index",
         "type_info": "Int4",
         "origin": {
@@ -70,7 +81,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "liquidity_event_kind",
         "type_info": "Text",
         "origin": {
@@ -81,7 +92,7 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "amount_a",
         "type_info": "Int8",
         "origin": {
@@ -92,7 +103,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "amount_b",
         "type_info": "Int8",
         "origin": {
@@ -103,7 +114,7 @@
         }
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "liquidity_delta",
         "type_info": "Numeric",
         "origin": {
@@ -114,7 +125,7 @@
         }
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "reserve_a_after",
         "type_info": "Int8",
         "origin": {
@@ -125,7 +136,7 @@
         }
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "reserve_b_after",
         "type_info": "Int8",
         "origin": {
@@ -136,7 +147,7 @@
         }
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "position",
         "type_info": "Text",
         "origin": {
@@ -147,7 +158,7 @@
         }
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "owner",
         "type_info": "Text",
         "origin": {
@@ -172,6 +183,7 @@
       false,
       false,
       false,
+      false,
       true,
       false,
       false,
@@ -184,5 +196,5 @@
       false
     ]
   },
-  "hash": "750bd70efe5cce5f64fbf80849df74efce413512bf0d3cfa9528b33a28ba6ab0"
+  "hash": "1e63fc11ea7332535f2b09455d81f4eaed0cbc9f140ebc02aba3ec7fbb9928b8"
 }

@@ -5,13 +5,13 @@
 
 use std::sync::Arc;
 
-use tokio::sync::{Semaphore, broadcast};
+use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use yog_persistence::PgHealthChecker;
 
 use crate::application::{
-    AnnouncementService, ClaimTotalsService, DiscoveredTvlService, EnrichedSignal,
-    IngestionService, LiquidityChangeEventService, LiquidityMoveService, LiquidityTurnoverService,
+    AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService,
+    LiquidityChangeEventService, LiquidityMoveService, LiquidityTurnoverService, LiveChannels,
     NetworkService, PoolChangeEventService, PoolCreationEventService, PoolCreationsService,
     PoolService, PositionChangeCountsService, PositionChangeEventService,
     PositionFeeClaimEventService, ProtocolCatalogService, ProtocolFeeClaimEventService,
@@ -28,9 +28,9 @@ pub(crate) struct AppState {
     pub(crate) windows_service: Arc<WindowsService>,
     pub(crate) liquidity_turnover_service: Arc<LiquidityTurnoverService>,
     pub(crate) signal_service: Arc<SignalService>,
-    /// The `signals` topic of `/api/live`, fed by its
-    /// [`LivePoller`](crate::application::LivePoller); signals travel enriched.
-    pub(crate) live_signals: broadcast::Sender<Arc<EnrichedSignal>>,
+    /// One broadcast per topic of `/api/live`, fed by the
+    /// [`LivePollers`](crate::application::LivePollers).
+    pub(crate) live: LiveChannels,
     /// One permit per open `/api/live` connection, whatever its topics,
     /// [`SSE_MAX_STREAMS`](super::SSE_MAX_STREAMS) in all.
     pub(crate) stream_slots: Arc<Semaphore>,

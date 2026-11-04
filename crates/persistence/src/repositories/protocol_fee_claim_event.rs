@@ -4,9 +4,10 @@
 mod rows;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use rows::MeteoraDammV2ClaimProtocolFeeEventRow;
 use sqlx::PgPool;
+use yog_core::domain::{LiveEventFeed, LiveRecord, ProtocolFeeClaimTable};
 use yog_core::{
     Cursor, Page, RepositoryResult,
     domain::{
@@ -74,6 +75,68 @@ impl ProtocolFeeClaimEventLookup for PgProtocolFeeClaimEventRepository {
     }
 }
 
+#[async_trait]
+impl LiveEventFeed<ProtocolFeeClaimTable, ProtocolFeeClaimEvent>
+    for PgProtocolFeeClaimEventRepository
+{
+    async fn live_tip(
+        &self,
+        table: ProtocolFeeClaimTable,
+        lookback: Duration,
+    ) -> RepositoryResult<Option<i64>> {
+        match table {
+            ProtocolFeeClaimTable::MeteoraDammV2 => sqlx::query_scalar!(
+                r#"
+                SELECT max(id) AS "id"
+                  FROM meteora_damm_v2_claim_protocol_fee_events
+                 WHERE timestamp >= now() - $1::BIGINT * INTERVAL '1 second'
+                "#,
+                lookback.num_seconds(),
+            )
+            .fetch_one(&self.pool)
+            .await
+            .map_err(map_sqlx_error),
+        }
+    }
+
+    async fn live_after(
+        &self,
+        table: ProtocolFeeClaimTable,
+        after_id: i64,
+        lookback: Duration,
+        limit: i64,
+    ) -> RepositoryResult<Vec<LiveRecord<RepositoryResult<ProtocolFeeClaimEvent>>>> {
+        let rows = match table {
+            ProtocolFeeClaimTable::MeteoraDammV2 => sqlx::query_as!(
+                MeteoraDammV2ClaimProtocolFeeEventRow,
+                r#"
+                SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
+                       token_a_amount, token_b_amount
+                  FROM meteora_damm_v2_claim_protocol_fee_events
+                 WHERE id > $1
+                   AND timestamp >= now() - $2::BIGINT * INTERVAL '1 second'
+                 ORDER BY id
+                 LIMIT $3
+                "#,
+                after_id,
+                lookback.num_seconds(),
+                limit,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(map_sqlx_error)?,
+        };
+        Ok(rows
+            .into_iter()
+            .map(|row| LiveRecord {
+                id: row.id,
+                event: MeteoraDammV2ClaimProtocolFeeEvent::try_from(row)
+                    .map(ProtocolFeeClaimEvent::MeteoraDammV2),
+            })
+            .collect())
+    }
+}
+
 impl PgProtocolFeeClaimEventRepository {
     /// DAMM v2's claims after the key.
     async fn list_meteora_damm_v2(
@@ -85,7 +148,7 @@ impl PgProtocolFeeClaimEventRepository {
         sqlx::query_as!(
             MeteoraDammV2ClaimProtocolFeeEventRow,
             r#"
-            SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,
+            SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
                    token_a_amount, token_b_amount
               FROM meteora_damm_v2_claim_protocol_fee_events
              WHERE timestamp >= $1
@@ -117,7 +180,7 @@ impl PgProtocolFeeClaimEventRepository {
         sqlx::query_as!(
             MeteoraDammV2ClaimProtocolFeeEventRow,
             r#"
-            SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,
+            SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
                    token_a_amount, token_b_amount
               FROM meteora_damm_v2_claim_protocol_fee_events
              WHERE pool_address = $1 AND timestamp >= $2

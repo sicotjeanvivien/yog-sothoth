@@ -8,6 +8,7 @@ use crate::repositories::helper::{
 
 /// A row of `meteora_damm_v2_claim_position_fee_events`, as the lists read it.
 pub(super) struct MeteoraDammV2ClaimPositionFeeEventRow {
+    pub(super) id: i64,
     pub(super) pool_address: String,
     pub(super) signature: String,
     pub(super) timestamp: DateTime<Utc>,

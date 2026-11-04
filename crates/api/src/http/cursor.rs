@@ -1,7 +1,7 @@
 // The blob is URL-safe unpadded base64 over a JSON object.
 // ⚠️ Unknown fields refused: a cursor of another list holding every field of this one would
 // otherwise decode as one.
-use crate::http::{dto::request::LiveTopic, error::ApiError};
+use crate::http::error::ApiError;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -467,15 +467,15 @@ pub(crate) fn decode_event_cursor(
     })
 }
 
-/// Where a live connection stands: the id of the last item delivered, per topic. The `id` of each
-/// message; the client reads nothing in it, so what it holds may change.
-/// ⚠️ One position per topic: an item's own id would say nothing of the connection's other topics.
+/// Where a live connection stands: the id of the last item delivered, per source — a table, or
+/// `signals`. The `id` of each message; the client reads nothing in it, so what it holds may change.
+/// ⚠️ One position per source: an id is unique in its table only, and says nothing of the others.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct LiveCursor(BTreeMap<String, i64>);
 
 impl LiveCursor {
-    pub(crate) fn record(&mut self, topic: LiveTopic, id: i64) {
-        self.0.insert(topic.name().to_string(), id);
+    pub(crate) fn record(&mut self, source: &str, id: i64) {
+        self.0.insert(source.to_string(), id);
     }
 
     pub(crate) fn encode(&self) -> Result<String, serde_json::Error> {
@@ -488,8 +488,8 @@ impl LiveCursor {
     }
 
     #[cfg(test)]
-    pub(crate) fn position(&self, topic: LiveTopic) -> Option<i64> {
-        self.0.get(topic.name()).copied()
+    pub(crate) fn position(&self, source: &str) -> Option<i64> {
+        self.0.get(source).copied()
     }
 }
 

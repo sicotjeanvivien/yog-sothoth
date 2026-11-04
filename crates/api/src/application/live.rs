@@ -7,11 +7,17 @@ use std::future::Future;
 
 use yog_core::RepositoryResult;
 
+mod channels;
+mod event_source;
 mod poller;
+mod pollers;
 mod signals_source;
 mod watermark;
 
+pub(crate) use channels::{EventChannel, LiveChannels};
+pub(crate) use event_source::{EventSource, LiveEvent, LiveItem};
 pub(crate) use poller::LivePoller;
+pub(crate) use pollers::LivePollers;
 pub(crate) use signals_source::SignalsSource;
 
 /// Capacity of each source's broadcast channel. A connection lagging further gets `Lagged` and
@@ -24,7 +30,7 @@ pub(crate) trait LiveSource: Send + Sync + 'static {
     type Item: Send + Sync + 'static;
 
     /// Its name in the logs.
-    const NAME: &'static str;
+    fn name(&self) -> &'static str;
 
     /// The highest id there is, `None` on an empty table.
     fn tip(&self) -> impl Future<Output = RepositoryResult<Option<i64>>> + Send;

@@ -4,9 +4,10 @@
 mod rows;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use rows::MeteoraDammV2InitializePoolEventRow;
 use sqlx::PgPool;
+use yog_core::domain::{LiveEventFeed, LiveRecord, PoolCreationTable};
 use yog_core::{
     Cursor, Page, RepositoryResult,
     domain::{
@@ -71,6 +72,69 @@ impl PoolCreationEventLookup for PgPoolCreationEventRepository {
     }
 }
 
+#[async_trait]
+impl LiveEventFeed<PoolCreationTable, PoolCreationEvent> for PgPoolCreationEventRepository {
+    async fn live_tip(
+        &self,
+        table: PoolCreationTable,
+        lookback: Duration,
+    ) -> RepositoryResult<Option<i64>> {
+        match table {
+            PoolCreationTable::MeteoraDammV2 => sqlx::query_scalar!(
+                r#"
+                SELECT max(id) AS "id"
+                  FROM meteora_damm_v2_initialize_pool_events
+                 WHERE timestamp >= now() - $1::BIGINT * INTERVAL '1 second'
+                "#,
+                lookback.num_seconds(),
+            )
+            .fetch_one(&self.pool)
+            .await
+            .map_err(map_sqlx_error),
+        }
+    }
+
+    async fn live_after(
+        &self,
+        table: PoolCreationTable,
+        after_id: i64,
+        lookback: Duration,
+        limit: i64,
+    ) -> RepositoryResult<Vec<LiveRecord<RepositoryResult<PoolCreationEvent>>>> {
+        let rows = match table {
+            PoolCreationTable::MeteoraDammV2 => sqlx::query_as!(
+                MeteoraDammV2InitializePoolEventRow,
+                r#"
+                SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
+                       token_a_mint, token_b_mint, creator, payer, alpha_vault, sqrt_min_price,
+                       sqrt_max_price, sqrt_price, liquidity, activation_type, activation_point,
+                       collect_fee_mode, pool_type, token_a_flag, token_b_flag, token_a_amount,
+                       token_b_amount, total_amount_a, total_amount_b, pool_fees_raw
+                  FROM meteora_damm_v2_initialize_pool_events
+                 WHERE id > $1
+                   AND timestamp >= now() - $2::BIGINT * INTERVAL '1 second'
+                 ORDER BY id
+                 LIMIT $3
+                "#,
+                after_id,
+                lookback.num_seconds(),
+                limit,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(map_sqlx_error)?,
+        };
+        Ok(rows
+            .into_iter()
+            .map(|row| LiveRecord {
+                id: row.id,
+                event: MeteoraDammV2InitializePoolEvent::try_from(row)
+                    .map(PoolCreationEvent::MeteoraDammV2),
+            })
+            .collect())
+    }
+}
+
 impl PgPoolCreationEventRepository {
     /// DAMM v2's creations after the key.
     async fn list_meteora_damm_v2(
@@ -82,7 +146,7 @@ impl PgPoolCreationEventRepository {
         sqlx::query_as!(
             MeteoraDammV2InitializePoolEventRow,
             r#"
-            SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,
+            SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
                    token_a_mint, token_b_mint, creator, payer, alpha_vault, sqrt_min_price,
                    sqrt_max_price, sqrt_price, liquidity, activation_type, activation_point,
                    collect_fee_mode, pool_type, token_a_flag, token_b_flag, token_a_amount,

@@ -6,13 +6,14 @@ mod rows;
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use rows::{
     MeteoraDammV2ClosePositionEventRow, MeteoraDammV2CreatePositionEventRow,
     MeteoraDammV2LockPositionEventRow, MeteoraDammV2PermanentLockPositionEventRow,
     MeteoraDammV2SplitPositionEventRow,
 };
 use sqlx::PgPool;
+use yog_core::domain::{LiveEventFeed, LiveRecord, PositionChangeTable};
 use yog_core::{
     Cursor, Page, RepositoryResult,
     domain::{
@@ -27,6 +28,228 @@ use crate::repositories::helper::{
 
 pub struct PgPositionChangeEventRepository {
     pool: PgPool,
+}
+
+#[async_trait]
+impl LiveEventFeed<PositionChangeTable, PositionChangeEvent> for PgPositionChangeEventRepository {
+    async fn live_tip(
+        &self,
+        table: PositionChangeTable,
+        lookback: Duration,
+    ) -> RepositoryResult<Option<i64>> {
+        let lookback = lookback.num_seconds();
+        match table {
+            PositionChangeTable::MeteoraDammV2Open => {
+                sqlx::query_scalar!(
+                    r#"
+                    SELECT max(id) AS "id"
+                      FROM meteora_damm_v2_create_position_events
+                     WHERE timestamp >= now() - $1::BIGINT * INTERVAL '1 second'
+                    "#,
+                    lookback,
+                )
+                .fetch_one(&self.pool)
+                .await
+            }
+            PositionChangeTable::MeteoraDammV2Close => {
+                sqlx::query_scalar!(
+                    r#"
+                    SELECT max(id) AS "id"
+                      FROM meteora_damm_v2_close_position_events
+                     WHERE timestamp >= now() - $1::BIGINT * INTERVAL '1 second'
+                    "#,
+                    lookback,
+                )
+                .fetch_one(&self.pool)
+                .await
+            }
+            PositionChangeTable::MeteoraDammV2VestingLock => {
+                sqlx::query_scalar!(
+                    r#"
+                    SELECT max(id) AS "id"
+                      FROM meteora_damm_v2_lock_position_events
+                     WHERE timestamp >= now() - $1::BIGINT * INTERVAL '1 second'
+                    "#,
+                    lookback,
+                )
+                .fetch_one(&self.pool)
+                .await
+            }
+            PositionChangeTable::MeteoraDammV2PermanentLock => {
+                sqlx::query_scalar!(
+                    r#"
+                    SELECT max(id) AS "id"
+                      FROM meteora_damm_v2_permanent_lock_position_events
+                     WHERE timestamp >= now() - $1::BIGINT * INTERVAL '1 second'
+                    "#,
+                    lookback,
+                )
+                .fetch_one(&self.pool)
+                .await
+            }
+            PositionChangeTable::MeteoraDammV2Split => {
+                sqlx::query_scalar!(
+                    r#"
+                    SELECT max(id) AS "id"
+                      FROM meteora_damm_v2_split_position_events
+                     WHERE timestamp >= now() - $1::BIGINT * INTERVAL '1 second'
+                    "#,
+                    lookback,
+                )
+                .fetch_one(&self.pool)
+                .await
+            }
+        }
+        .map_err(map_sqlx_error)
+    }
+
+    async fn live_after(
+        &self,
+        table: PositionChangeTable,
+        after_id: i64,
+        lookback: Duration,
+        limit: i64,
+    ) -> RepositoryResult<Vec<LiveRecord<RepositoryResult<PositionChangeEvent>>>> {
+        let lookback = lookback.num_seconds();
+        let changes = match table {
+            PositionChangeTable::MeteoraDammV2Open => sqlx::query_as!(
+                MeteoraDammV2CreatePositionEventRow,
+                r#"
+                SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
+                       owner, position, position_nft_mint
+                  FROM meteora_damm_v2_create_position_events
+                 WHERE id > $1
+                   AND timestamp >= now() - $2::BIGINT * INTERVAL '1 second'
+                 ORDER BY id
+                 LIMIT $3
+                "#,
+                after_id,
+                lookback,
+                limit,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(map_sqlx_error)?
+            .into_iter()
+            .map(|row| {
+                let id = row.id;
+                (id, row.try_into().map(MeteoraDammV2PositionChange::Open))
+            })
+            .collect::<Vec<_>>(),
+            PositionChangeTable::MeteoraDammV2Close => sqlx::query_as!(
+                MeteoraDammV2ClosePositionEventRow,
+                r#"
+                SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
+                       owner, position, position_nft_mint
+                  FROM meteora_damm_v2_close_position_events
+                 WHERE id > $1
+                   AND timestamp >= now() - $2::BIGINT * INTERVAL '1 second'
+                 ORDER BY id
+                 LIMIT $3
+                "#,
+                after_id,
+                lookback,
+                limit,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(map_sqlx_error)?
+            .into_iter()
+            .map(|row| {
+                let id = row.id;
+                (id, row.try_into().map(MeteoraDammV2PositionChange::Close))
+            })
+            .collect::<Vec<_>>(),
+            PositionChangeTable::MeteoraDammV2VestingLock => sqlx::query_as!(
+                MeteoraDammV2LockPositionEventRow,
+                r#"
+                SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
+                       position, owner, vesting, cliff_point, period_frequency,
+                       cliff_unlock_liquidity, liquidity_per_period, number_of_period
+                  FROM meteora_damm_v2_lock_position_events
+                 WHERE id > $1
+                   AND timestamp >= now() - $2::BIGINT * INTERVAL '1 second'
+                 ORDER BY id
+                 LIMIT $3
+                "#,
+                after_id,
+                lookback,
+                limit,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(map_sqlx_error)?
+            .into_iter()
+            .map(|row| {
+                let id = row.id;
+                (id, row.try_into().map(MeteoraDammV2PositionChange::VestingLock))
+            })
+            .collect::<Vec<_>>(),
+            PositionChangeTable::MeteoraDammV2PermanentLock => sqlx::query_as!(
+                MeteoraDammV2PermanentLockPositionEventRow,
+                r#"
+                SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
+                       position, lock_liquidity_amount, total_permanent_locked_liquidity
+                  FROM meteora_damm_v2_permanent_lock_position_events
+                 WHERE id > $1
+                   AND timestamp >= now() - $2::BIGINT * INTERVAL '1 second'
+                 ORDER BY id
+                 LIMIT $3
+                "#,
+                after_id,
+                lookback,
+                limit,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(map_sqlx_error)?
+            .into_iter()
+            .map(|row| {
+                let id = row.id;
+                (id, row.try_into().map(MeteoraDammV2PositionChange::PermanentLock))
+            })
+            .collect::<Vec<_>>(),
+            PositionChangeTable::MeteoraDammV2Split => sqlx::query_as!(
+                MeteoraDammV2SplitPositionEventRow,
+                r#"
+                SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
+                       first_owner, second_owner, first_position, second_position, current_sqrt_price,
+                       split_permanent_locked_liquidity, split_unlocked_liquidity, split_vested_liquidity,
+                       split_fee_a, split_fee_b, split_reward_0, split_reward_1,
+                       first_unlocked_liquidity, first_permanent_locked_liquidity, first_vested_liquidity,
+                       first_fee_a, first_fee_b, first_reward_0, first_reward_1,
+                       second_unlocked_liquidity, second_permanent_locked_liquidity,
+                       second_vested_liquidity, second_fee_a, second_fee_b, second_reward_0,
+                       second_reward_1, num_unlocked_liquidity, num_permanent_locked_liquidity,
+                       num_fee_a, num_fee_b, num_reward_0, num_reward_1, num_inner_vesting_liquidity
+                  FROM meteora_damm_v2_split_position_events
+                 WHERE id > $1
+                   AND timestamp >= now() - $2::BIGINT * INTERVAL '1 second'
+                 ORDER BY id
+                 LIMIT $3
+                "#,
+                after_id,
+                lookback,
+                limit,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(map_sqlx_error)?
+            .into_iter()
+            .map(|row| {
+                let id = row.id;
+                (id, row.try_into().map(|e| MeteoraDammV2PositionChange::Split(Box::new(e))))
+            })
+            .collect::<Vec<_>>(),
+        };
+        Ok(changes
+            .into_iter()
+            .map(|(id, change)| LiveRecord {
+                id,
+                event: change.map(PositionChangeEvent::MeteoraDammV2),
+            })
+            .collect())
+    }
 }
 
 impl PgPositionChangeEventRepository {

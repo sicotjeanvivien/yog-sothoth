@@ -10,14 +10,41 @@ use crate::http::error::ApiError;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum LiveTopic {
     Signals,
+    LiquidityChanges,
+    PoolCreations,
+    PositionChanges,
+    PositionFeeClaims,
+    ProtocolFeeClaims,
+    RewardClaims,
+    RewardChanges,
+    PoolChanges,
 }
 
 impl LiveTopic {
-    const SERVED: [Self; 1] = [Self::Signals];
+    /// ⚠️ `swaps` is not one of them: dozens a second would drown both the page and the API.
+    const SERVED: [Self; 9] = [
+        Self::Signals,
+        Self::LiquidityChanges,
+        Self::PoolCreations,
+        Self::PositionChanges,
+        Self::PositionFeeClaims,
+        Self::ProtocolFeeClaims,
+        Self::RewardClaims,
+        Self::RewardChanges,
+        Self::PoolChanges,
+    ];
 
     pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Signals => "signals",
+            Self::LiquidityChanges => "liquidity-changes",
+            Self::PoolCreations => "pool-creations",
+            Self::PositionChanges => "position-changes",
+            Self::PositionFeeClaims => "position-fee-claims",
+            Self::ProtocolFeeClaims => "protocol-fee-claims",
+            Self::RewardClaims => "reward-claims",
+            Self::RewardChanges => "reward-changes",
+            Self::PoolChanges => "pool-changes",
         }
     }
 }
@@ -26,8 +53,9 @@ impl LiveTopic {
 #[derive(Debug, Deserialize, IntoParams)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct LiveParams {
-    /// The collections to receive, comma-separated: `signals`.
-    #[param(min_length = 1, example = "signals")]
+    /// The collections to receive, comma-separated: `signals` and the on-chain event
+    /// collections but `swaps` (`liquidity-changes`, `pool-creations`…).
+    #[param(min_length = 1, example = "signals,liquidity-changes")]
     pub(super) topics: String,
 }
 

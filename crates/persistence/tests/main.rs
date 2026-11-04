@@ -37,6 +37,7 @@ mod liquidity_change_events;
 mod liquidity_flow;
 mod liquidity_moves;
 mod liquidity_value;
+mod live_events;
 mod lock_position;
 mod observed_slots;
 mod overview_periods;
