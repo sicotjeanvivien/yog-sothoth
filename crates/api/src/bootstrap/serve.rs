@@ -6,19 +6,19 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 use yog_bootstrap::{Stop, handle_task_result};
 
-use crate::application::SignalStreamPoller;
+use crate::application::{LivePoller, SignalsSource};
 use crate::http::{CappedListener, IDLE_TIMEOUT, MAX_CONNECTIONS};
 
 const HTTP_SERVER: &str = "http server";
-const SIGNAL_POLLER: &str = "signal stream poller";
+const SIGNAL_POLLER: &str = "live signals poller";
 
 /// Serves `router` and runs the poller until `shutdown`, then stops both within
 /// [`yog_bootstrap::SHUTDOWN_GRACE`]. ⚠️ Graceful shutdown waits for every connection, and an SSE
-/// one never ends alone: it ends because its stream reads the same token (`signal_sse`).
+/// one never ends alone: it ends because its stream reads the same token (`live_sse`).
 pub(crate) async fn serve(
     listener: TcpListener,
     router: Router,
-    poller: SignalStreamPoller,
+    poller: LivePoller<SignalsSource>,
     shutdown: CancellationToken,
 ) -> anyhow::Result<()> {
     let mut server_task = tokio::spawn(

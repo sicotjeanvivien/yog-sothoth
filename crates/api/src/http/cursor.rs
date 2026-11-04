@@ -1,9 +1,10 @@
 // The blob is URL-safe unpadded base64 over a JSON object.
 // ⚠️ Unknown fields refused: a cursor of another list holding every field of this one would
 // otherwise decode as one.
-use crate::http::error::ApiError;
+use crate::http::{dto::request::LiveTopic, error::ApiError};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use rust_decimal::Decimal;
@@ -464,6 +465,32 @@ pub(crate) fn decode_event_cursor(
             .map_err(|_| ApiError::BadRequest("invalid cursor: malformed signature".to_string()))?,
         event_index: wire.event_index,
     })
+}
+
+/// Where a live connection stands: the id of the last item delivered, per topic. The `id` of each
+/// message; the client reads nothing in it, so what it holds may change.
+/// ⚠️ One position per topic: an item's own id would say nothing of the connection's other topics.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct LiveCursor(BTreeMap<String, i64>);
+
+impl LiveCursor {
+    pub(crate) fn record(&mut self, topic: LiveTopic, id: i64) {
+        self.0.insert(topic.name().to_string(), id);
+    }
+
+    pub(crate) fn encode(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_vec(self).map(|json| URL_SAFE_NO_PAD.encode(json))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn decode(raw: &str) -> Result<Self, ApiError> {
+        decode_b64_json(raw)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn position(&self, topic: LiveTopic) -> Option<i64> {
+        self.0.get(topic.name()).copied()
+    }
 }
 
 #[cfg(test)]

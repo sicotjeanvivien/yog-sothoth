@@ -10,6 +10,7 @@ import {
   curlOf,
   missingOf,
   pageValues,
+  topicsOf,
   urlOf,
   type ParamValues,
 } from "@/lib/developers/request";
@@ -182,14 +183,17 @@ function useStream(url: string) {
     sourceRef.current = source;
     source.onopen = () => setState("on");
     source.onerror = () => setState(source.readyState === EventSource.CLOSED ? "off" : "connecting");
-    source.onmessage = (event) => {
+    const receive = (event: MessageEvent) => {
       const entry = {
         at: new Date().toISOString().slice(11, 19),
         id: event.lastEventId,
-        data: event.data,
+        data: event.data as string,
       };
       setEvents((current) => [...current, entry].slice(-12));
     };
+    // ⚠️ `onmessage` only receives unnamed events: the live stream names each by its topic.
+    source.onmessage = receive;
+    for (const topic of topicsOf(url)) source.addEventListener(topic, receive);
   };
 
   useEffect(() => () => sourceRef.current?.close(), []);
@@ -306,7 +310,10 @@ export function EndpointDetail({
             copied={t("detail.copied")}
           />
           {endpoint.sse ? (
-            <PrimaryButton onClick={stream.state === "off" ? stream.start : stream.stop}>
+            <PrimaryButton
+              disabled={stream.state === "off" && missing.length > 0}
+              onClick={stream.state === "off" ? stream.start : stream.stop}
+            >
               {stream.state === "off" ? t("request.listen") : t("request.stop")}
             </PrimaryButton>
           ) : (

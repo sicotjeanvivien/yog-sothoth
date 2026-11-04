@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Endpoint } from "../contract";
-import { byteSize, curlOf, missingOf, pageValues, urlOf } from "../request";
+import { byteSize, curlOf, missingOf, pageValues, topicsOf, urlOf } from "../request";
 
 const endpoint = {
   path: "/api/tokens/{mint}/prices",
@@ -25,11 +25,25 @@ describe("urlOf", () => {
   });
 });
 
+describe("topicsOf", () => {
+  // Mutation: no topic read — the live panel listens to nothing, its events all named.
+  it("reads the topics a live URL asks for, encoded or not", () => {
+    expect(topicsOf("https://x/api/live?topics=signals%2Cliquidity-changes")).toEqual([
+      "signals",
+      "liquidity-changes",
+    ]);
+    expect(topicsOf("https://x/api/live/protocols/meteora_damm_v2?topics=signals")).toEqual([
+      "signals",
+    ]);
+    expect(topicsOf("https://x/api/live")).toEqual([]);
+  });
+});
+
 describe("curlOf", () => {
   // Mutations: the stream's curl without `-N`, which buffers; double quotes, where `!` expands.
   it("streams the events unbuffered, the URL single-quoted", () => {
-    expect(curlOf("https://x/api/signals/stream", true)).toBe(
-      "curl -N -H 'Accept: text/event-stream' 'https://x/api/signals/stream'",
+    expect(curlOf("https://x/api/live?topics=signals", true)).toBe(
+      "curl -N -H 'Accept: text/event-stream' 'https://x/api/live?topics=signals'",
     );
     expect(curlOf("https://x/api/swaps", false)).toBe("curl -s 'https://x/api/swaps'");
   });

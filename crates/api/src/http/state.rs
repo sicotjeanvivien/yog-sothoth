@@ -28,10 +28,10 @@ pub(crate) struct AppState {
     pub(crate) windows_service: Arc<WindowsService>,
     pub(crate) liquidity_turnover_service: Arc<LiquidityTurnoverService>,
     pub(crate) signal_service: Arc<SignalService>,
-    /// Live end of the signal feed, fed by the
-    /// [`SignalStreamPoller`](crate::application::SignalStreamPoller); signals travel enriched.
-    pub(crate) signal_stream: broadcast::Sender<Arc<EnrichedSignal>>,
-    /// One permit per open signal stream,
+    /// The `signals` topic of `/api/live`, fed by its
+    /// [`LivePoller`](crate::application::LivePoller); signals travel enriched.
+    pub(crate) live_signals: broadcast::Sender<Arc<EnrichedSignal>>,
+    /// One permit per open `/api/live` connection, whatever its topics,
     /// [`SSE_MAX_STREAMS`](super::SSE_MAX_STREAMS) in all.
     pub(crate) stream_slots: Arc<Semaphore>,
     /// The slots of every expensive read: the slow routes and the cached computations.

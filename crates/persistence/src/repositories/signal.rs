@@ -13,7 +13,7 @@ use crate::repositories::helper::{
     PageBuilder, QueryMode, convert_string_to_pubkey, map_sqlx_error, resolve_query_mode,
 };
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use rows::SignalRow;
 use solana_pubkey::Pubkey;
 use sqlx::{PgPool, QueryBuilder};
@@ -209,33 +209,30 @@ impl SignalFeed for PgSignalRepository {
         )
     }
 
-    async fn latest_cursor(&self) -> RepositoryResult<Option<SignalCursor>> {
-        let row = sqlx::query!(
+    async fn live_tip(&self, lookback: Duration) -> RepositoryResult<Option<i64>> {
+        let tip = sqlx::query_scalar!(
             r#"
-            SELECT triggered_at AS "triggered_at!", id AS "id!"
+            SELECT max(id) AS "id"
             FROM signals
-            ORDER BY triggered_at DESC, id DESC
-            LIMIT 1
+            WHERE triggered_at >= now() - $1::BIGINT * INTERVAL '1 second'
             "#,
+            lookback.num_seconds(),
         )
-        .fetch_optional(&self.pool)
+        .fetch_one(&self.pool)
         .await
         .map_err(map_sqlx_error)?;
 
-        Ok(row.map(|r| SignalCursor {
-            triggered_at: r.triggered_at,
-            id: r.id,
-        }))
+        Ok(tip)
     }
 
-    async fn newer_than(
+    async fn live_after(
         &self,
-        after: &SignalCursor,
+        after_id: i64,
+        lookback: Duration,
         limit: i64,
     ) -> RepositoryResult<Vec<SignalRecord>> {
         let capped = limit.clamp(1, MAX_PAGE_SIZE);
 
-        // ASC: a stream delivers chronologically, unlike the feed's DESC display.
         let rows: Vec<SignalRow> = sqlx::query_as!(
             SignalRow,
             r#"
@@ -243,13 +240,13 @@ impl SignalFeed for PgSignalRepository {
                    severity, value, threshold, message,
                    triggered_at
             FROM signals
-            WHERE triggered_at > $1
-               OR (triggered_at = $1 AND id > $2)
-            ORDER BY triggered_at ASC, id ASC
+            WHERE id > $1
+              AND triggered_at >= now() - $2::BIGINT * INTERVAL '1 second'
+            ORDER BY id ASC
             LIMIT $3
             "#,
-            after.triggered_at,
-            after.id,
+            after_id,
+            lookback.num_seconds(),
             capped,
         )
         .fetch_all(&self.pool)

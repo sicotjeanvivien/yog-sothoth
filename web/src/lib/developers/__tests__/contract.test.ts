@@ -74,8 +74,8 @@ describe("endpointsOf", () => {
     });
   });
 
-  it("marks the signal stream as server-sent events", () => {
-    expect(endpoints.filter((e) => e.sse).map((e) => e.id)).toEqual(["stream_signals"]);
+  it("marks the live stream as server-sent events", () => {
+    expect(endpoints.filter((e) => e.sse).map((e) => e.id)).toEqual(["live", "protocol_live"]);
   });
 });
 

@@ -40,7 +40,7 @@ pub(crate) const WORK_SLOTS: usize = 6;
 /// page's burst, short enough that a refused client learns it quickly.
 pub(crate) const WORK_SLOT_WAIT: Duration = Duration::from_secs(2);
 
-/// How many `/api/signals/stream` connections may be open at once: half of
+/// How many `/api/live` connections may be open at once: half of
 /// [`MAX_CONNECTIONS`], so streams never take the connections ordinary requests need.
 pub(crate) const SSE_MAX_STREAMS: usize = 200;
 

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, detector, protocol, pool_address,\n                   severity, value, threshold, message,\n                   triggered_at\n            FROM signals\n            WHERE triggered_at > $1\n               OR (triggered_at = $1 AND id > $2)\n            ORDER BY triggered_at ASC, id ASC\n            LIMIT $3\n            ",
+  "query": "\n            SELECT id, detector, protocol, pool_address,\n                   severity, value, threshold, message,\n                   triggered_at\n            FROM signals\n            WHERE id > $1\n              AND triggered_at >= now() - $2::BIGINT * INTERVAL '1 second'\n            ORDER BY id ASC\n            LIMIT $3\n            ",
   "describe": {
     "columns": [
       {
@@ -105,7 +105,7 @@
     ],
     "parameters": {
       "Left": [
-        "Timestamptz",
+        "Int8",
         "Int8",
         "Int8"
       ]
@@ -122,5 +122,5 @@
       false
     ]
   },
-  "hash": "a7ce1d2a93c590884974998da522bb2fcd59b4c4b2a69c393eaa31244310ceb1"
+  "hash": "d6db2016e438786ac3adbf36a834d470d5da50a67a3a60349cc9870fc16c37ab"
 }

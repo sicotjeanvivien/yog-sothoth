@@ -13,13 +13,13 @@ mod state;
 
 pub(crate) use state::AppState;
 
-/// The SSE response, mounted by the shutdown tests without the state it is
-/// normally read from.
+/// The SSE response and a topic's stream, mounted by the shutdown tests without the state they
+/// are normally read from.
 #[cfg(test)]
-pub(crate) use handlers::signals::signal_sse;
+pub(crate) use handlers::live::{live_sse, signals_topic};
 
 /// The bounds the bootstrap applies outside the router: the statement limit
-/// on the database connection, the cap on open signal streams, and the cap on
+/// on the database connection, the cap on open live connections, and the cap on
 /// connections.
 pub(crate) use middleware::capacity::{
     CappedListener, IDLE_TIMEOUT, MAX_CONNECTIONS, SSE_MAX_STREAMS, STATEMENT_TIMEOUT,
@@ -125,8 +125,9 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         .routes(routes!(handlers::network::get_network))
         .routes(routes!(handlers::ingestion::get_ingestion))
         .routes(routes!(handlers::windows::get_windows))
-        // The live feed is capped by its own slots, in the handler.
-        .routes(routes!(handlers::signals::stream_signals))
+        // The live stream is capped by its own slots, in the handler.
+        .routes(routes!(handlers::live::live))
+        .routes(routes!(handlers::live::protocol_live))
         .routes(routes!(handlers::token::get_token))
         .routes(routes!(handlers::token::list_tokens))
         .routes(routes!(handlers::token::list_token_prices))

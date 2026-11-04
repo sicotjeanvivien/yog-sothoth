@@ -9,6 +9,7 @@ pub(super) mod ingestion;
 pub(super) mod liquidity_changes;
 pub(super) mod liquidity_moves;
 pub(super) mod liquidity_turnover;
+pub(super) mod live;
 pub(super) mod network;
 pub(super) mod pool_changes;
 pub(super) mod pool_creations;

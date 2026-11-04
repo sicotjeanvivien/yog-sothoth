@@ -44,7 +44,7 @@ export const KNOWN_DETECTORS = new Set([
   "tvl_drain",
 ]);
 
-/** Shared by every `useSignalStream` consumer: a broken stream must never look quiet. */
+/** Shared by every `useLiveSignals` consumer: a broken stream must never look quiet. */
 export const STATUS_DOT: Record<
   "connecting" | "live" | "reconnecting",
   string

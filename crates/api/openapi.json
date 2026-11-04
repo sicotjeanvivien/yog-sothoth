@@ -2336,7 +2336,7 @@
           },
           "items": {
             "items": {
-              "description": "`GET /api/signals` item (and `GET /api/signals/stream` event — both\nendpoints emit exactly this object).",
+              "description": "`GET /api/signals` item, and the `data` of a `signals` event of `/api/live`.",
               "properties": {
                 "detector": {
                   "minLength": 1,
@@ -4916,7 +4916,7 @@
         "type": "string"
       },
       "SignalResponse": {
-        "description": "`GET /api/signals` item (and `GET /api/signals/stream` event — both\nendpoints emit exactly this object).",
+        "description": "`GET /api/signals` item, and the `data` of a `signals` event of `/api/live`.",
         "properties": {
           "detector": {
             "minLength": 1,
@@ -6540,6 +6540,97 @@
             "description": "A failure: RFC 9457 Problem Details."
           }
         }
+      }
+    },
+    "/api/live": {
+      "get": {
+        "description": "⚠️ At most `SSE_MAX_STREAMS` connections at once, whatever their topics, then `503`.",
+        "operationId": "live",
+        "parameters": [
+          {
+            "description": "The collections to receive, comma-separated: `signals`.",
+            "example": "signals",
+            "in": "query",
+            "name": "topics",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Server-sent events, each named by its topic: `signals` carries a `SignalResponse`. The `id` is an opaque cursor."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        },
+        "summary": "Live items of every protocol."
+      }
+    },
+    "/api/live/protocols/{protocol}": {
+      "get": {
+        "operationId": "protocol_live",
+        "parameters": [
+          {
+            "description": "The collections to receive, comma-separated: `signals`.",
+            "example": "signals",
+            "in": "query",
+            "name": "topics",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Server-sent events of the protocol, each named by its topic: `signals` carries a `SignalResponse`. The `id` is an opaque cursor."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        },
+        "summary": "Live items of one protocol: the same topics, filtered by the server."
       }
     },
     "/api/network": {
@@ -10579,35 +10670,6 @@
             "description": "A failure: RFC 9457 Problem Details."
           }
         }
-      }
-    },
-    "/api/signals/stream": {
-      "get": {
-        "description": "⚠️ A subscriber that lags past the broadcast capacity is dropped and its\nEventSource reconnects: a silent gap would hide alerts.\n⚠️ At most `SSE_MAX_STREAMS` streams at once, then `503` with `Retry-After`:\neach stream holds memory for as long as it lives.",
-        "operationId": "stream_signals",
-        "responses": {
-          "200": {
-            "content": {
-              "text/event-stream": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Server-sent events: each `data` is a `SignalResponse`."
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsResponse"
-                }
-              }
-            },
-            "description": "A failure: RFC 9457 Problem Details."
-          }
-        },
-        "summary": "Live tail of the signal feed as Server-Sent Events: new signals only, each a\n`SignalResponse` with its id as the event id. History comes from\n`GET /api/signals`, re-fetched on (re)connect."
       }
     },
     "/api/swaps": {

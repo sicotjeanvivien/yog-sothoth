@@ -13,7 +13,7 @@ pub(crate) struct Config {
     pub(crate) bind_addr: SocketAddr,
     /// Browser origins allowed to call the API: the dashboard's must be listed.
     pub(crate) cors_allowed_origins: Vec<HeaderValue>,
-    /// Cadence of the signal-stream poller feeding `/api/signals/stream`.
+    /// Cadence of the poller feeding the `signals` topic of `/api/live`.
     pub(crate) signal_stream_poll: Duration,
 }
 

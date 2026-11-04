@@ -369,6 +369,13 @@
             "owners": "Distinct active LPs"
           }
         }
+      },
+      "activity": {
+        "signals": {
+          "title": "Signals",
+          "info": "Unusual behaviour spotted automatically in this protocol's pools. These are findings, not advice.",
+          "tableLabel": "Latest signals of the protocol"
+        }
       }
     },
     "BlockError": {

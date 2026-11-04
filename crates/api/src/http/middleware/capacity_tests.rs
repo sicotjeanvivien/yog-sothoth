@@ -91,7 +91,7 @@ async fn a_request_past_its_deadline_is_a_503() {
     assert!(response.headers().contains_key(header::RETRY_AFTER));
 }
 
-/// The deadline bounds producing the response, not its body: `/api/signals/stream` lives on it.
+/// The deadline bounds producing the response, not its body: `/api/live` lives on it.
 #[tokio::test]
 async fn the_deadline_does_not_cut_a_streaming_body() {
     async fn streaming() -> Body {

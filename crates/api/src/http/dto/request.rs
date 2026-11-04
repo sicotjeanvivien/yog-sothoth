@@ -21,6 +21,7 @@ mod list_signals;
 mod list_token_activity;
 mod list_token_prices;
 mod list_tokens;
+mod live;
 mod no_query;
 mod window_param;
 
@@ -35,6 +36,7 @@ pub(crate) use list_signals::{ListSignalsRequest, SignalsParams};
 pub(crate) use list_token_activity::{ListTokenActivityRequest, TokenActivityParams};
 pub(crate) use list_token_prices::{ListTokenPricesRequest, TokenPricesParams};
 pub(crate) use list_tokens::{ListTokensRequest, TokensParams};
+pub(crate) use live::{LiveParams, LiveRequest, LiveTopic};
 pub(crate) use no_query::NoQuery;
 pub(crate) use window_param::{
     MeasureActivityParams, MeasureWindowParams, ReadingSeriesParams, SeriesParams, WindowParams,
