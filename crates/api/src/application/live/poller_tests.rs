@@ -1,22 +1,17 @@
-//! DB-free tests of the live pollers: the watermark alone, a tick on a scripted source, the
-//! loop's stops, and the signals source's enrichment.
+//! DB-free tests of the live poller: a tick on a scripted source, and the loop's stops.
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
-use yog_core::domain::Pool;
 use yog_core::{RepositoryError, RepositoryResult};
 
-use super::{GAP_SETTLE, LivePoller, LiveSource, LiveWatermark, SignalsSource, poll_once};
-use crate::application::{EnrichedSignal, SignalService};
-use crate::testing::{
-    MockMetadataRepo, MockSignalRepo, PoolRepoOnce, make_metadata, make_pool, make_signal_record,
-    pk,
-};
+use super::{LivePoller, poll_once};
+use crate::application::live::LiveSource;
+use crate::application::live::watermark::LiveWatermark;
 
 /// A source whose records are their ids, answering from a script; an exhausted script fails.
 #[derive(Default)]
@@ -81,70 +76,6 @@ impl LiveSource for ScriptedSource {
 
 fn received(rx: &mut broadcast::Receiver<Arc<i64>>) -> Vec<i64> {
     std::iter::from_fn(|| rx.try_recv().ok().map(|id| *id)).collect()
-}
-
-/// Mutation: `floor` moved to the highest id delivered — the 2 that commits after the 3 is lost.
-#[test]
-fn a_hole_filled_later_is_delivered_once() {
-    let now = Instant::now();
-    let mut watermark = LiveWatermark::anchored(0);
-
-    assert_eq!(watermark.fresh(vec![1, 3], |id| *id, now), vec![1, 3]);
-    watermark.settle(now);
-    assert_eq!(watermark.floor(), 1);
-
-    assert_eq!(watermark.fresh(vec![2, 3], |id| *id, now), vec![2]);
-    watermark.settle(now);
-    assert_eq!(watermark.floor(), 3);
-}
-
-/// Mutation: a hole waited for without limit — the floor never moves past a rolled-back id.
-#[test]
-fn a_hole_older_than_the_settle_is_passed() {
-    let start = Instant::now();
-    let mut watermark = LiveWatermark::anchored(0);
-    watermark.fresh(vec![1, 3], |id| *id, start);
-
-    watermark.settle(start);
-    watermark.settle(start + GAP_SETTLE - Duration::from_millis(1));
-    assert_eq!(watermark.floor(), 1, "still waiting for the 2");
-
-    watermark.settle(start + GAP_SETTLE);
-    assert_eq!(watermark.floor(), 3);
-}
-
-/// Mutation: a hole dated by the oldest id delivered — the hole at 3, under a 4 read late, passed
-/// on the clock of the 5 read early.
-#[test]
-fn a_hole_is_dated_by_the_id_read_above_it() {
-    let start = Instant::now();
-    let mut watermark = LiveWatermark::anchored(0);
-    watermark.fresh(vec![2, 5], |id| *id, start);
-    watermark.settle(start);
-
-    let later = start + GAP_SETTLE - Duration::from_secs(1);
-    watermark.fresh(vec![1, 4], |id| *id, later);
-    watermark.settle(later);
-    assert_eq!(watermark.floor(), 2);
-
-    watermark.settle(start + GAP_SETTLE + Duration::from_secs(1));
-    assert_eq!(
-        watermark.floor(),
-        2,
-        "the 4 above the hole at 3 was read two seconds ago"
-    );
-}
-
-/// Mutation: a hole dated when the floor reaches it — three holes seen together cost 30 s.
-#[test]
-fn holes_seen_together_are_passed_together() {
-    let start = Instant::now();
-    let mut watermark = LiveWatermark::anchored(10);
-    watermark.fresh(vec![12, 14, 16], |id| *id, start);
-    watermark.settle(start);
-
-    watermark.settle(start + GAP_SETTLE);
-    assert_eq!(watermark.floor(), 16);
 }
 
 #[tokio::test]
@@ -300,76 +231,4 @@ async fn a_stop_mid_tick_does_not_wait_for_the_tick() {
         .expect("the poller waited for its stuck tick")
         .unwrap()
         .unwrap();
-}
-
-/// An enricher whose catalog answers **one** batch lookup — a second call panics
-/// (`PoolRepoOnce`), which is what pins "one enrichment per tick".
-fn enricher(pools: Vec<Pool>, metadata: MockMetadataRepo) -> Arc<SignalService> {
-    Arc::new(SignalService::new(
-        Arc::new(MockSignalRepo::empty()),
-        Arc::new(PoolRepoOnce::with_pools(pools)),
-        Arc::new(metadata),
-    ))
-}
-
-fn symbol(token: &crate::application::EnrichedToken) -> Option<&str> {
-    token.metadata.as_ref().and_then(|m| m.symbol.as_deref())
-}
-
-/// Mutation: each record enriched on its own inside the send loop — three subscribers and
-/// two signals must cost one catalog lookup.
-#[tokio::test]
-async fn a_tick_of_signals_is_enriched_once_whatever_the_number_of_subscribers() {
-    let (mint_a, mint_b) = (pk(10), pk(11));
-    let pools = vec![
-        make_pool(pk(1), mint_a, mint_b),
-        make_pool(pk(2), mint_a, mint_b),
-    ];
-    let metadata = MockMetadataRepo::with(vec![
-        (mint_a, make_metadata(mint_a, "SOL")),
-        (mint_b, make_metadata(mint_b, "USDC")),
-    ]);
-    let feed = MockSignalRepo::feed(
-        Ok(None),
-        Ok(vec![
-            make_signal_record(10, pk(1)),
-            make_signal_record(11, pk(2)),
-        ]),
-    );
-    let source = SignalsSource::new(Arc::new(feed), enricher(pools, metadata));
-    let (tx, _) = broadcast::channel::<Arc<EnrichedSignal>>(8);
-    let mut subscribers: Vec<_> = (0..3).map(|_| tx.subscribe()).collect();
-
-    poll_once(&source, &tx, Some(LiveWatermark::anchored(9))).await;
-
-    for rx in &mut subscribers {
-        for expected_id in [10, 11] {
-            let signal = rx.try_recv().expect("every subscriber gets every signal");
-            assert_eq!(signal.record.id, expected_id);
-            assert_eq!(symbol(&signal.token_a), Some("SOL"));
-            assert_eq!(symbol(&signal.token_b), Some("USDC"));
-        }
-    }
-}
-
-/// Delivering beats decorating: when the enrichment fails, the signals still go out, bare,
-/// and the watermark still advances.
-#[tokio::test]
-async fn a_failed_enrichment_still_delivers_the_signals_bare() {
-    let feed = MockSignalRepo::feed(Ok(None), Ok(vec![make_signal_record(10, pk(1))]));
-    let failing = enricher(
-        vec![make_pool(pk(1), pk(10), pk(11))],
-        MockMetadataRepo::failing(),
-    );
-    let source = SignalsSource::new(Arc::new(feed), failing);
-    let (tx, mut rx) = broadcast::channel::<Arc<EnrichedSignal>>(8);
-
-    let watermark = poll_once(&source, &tx, Some(LiveWatermark::anchored(9)))
-        .await
-        .expect("kept");
-
-    assert_eq!(watermark.floor(), 10);
-    let signal = rx.try_recv().expect("the signal goes out bare");
-    assert_eq!(signal.record.id, 10);
-    assert_eq!(symbol(&signal.token_a), None);
 }

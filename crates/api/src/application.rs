@@ -1,13 +1,13 @@
 pub(crate) mod cache;
 mod enriched_signal;
 mod enriched_token;
-mod live_poller;
+mod live;
 mod services;
 mod work_slots;
 
 pub(crate) use enriched_signal::EnrichedSignal;
 pub(crate) use enriched_token::EnrichedToken;
-pub(crate) use live_poller::{LIVE_CHANNEL_CAPACITY, LivePoller, SignalsSource};
+pub(crate) use live::{LIVE_CHANNEL_CAPACITY, LivePoller, SignalsSource};
 pub(crate) use services::{
     AnnouncementService, Availability, ClaimTotalsService, DiscoveredTvlService,
     IngestionAggregate, IngestionService, LiquidityChangeEventService, LiquidityMoveService,

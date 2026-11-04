@@ -28,8 +28,10 @@ api/src/
 │   │                        PoolCreationsService, LiquidityMoveService, ClaimTotalsService,
 │   │                        ProtocolTvlService, DiscoveredTvlService), and period.rs,
 │   │                        the frozen period they all read over
-│   ├── live_poller.rs     ← LivePoller, one per source of /api/live, and SignalsSource
-│   │                        (enriches once, feeds the signals' broadcast)
+│   ├── live.rs            ← LiveSource, what a table streamed on /api/live answers
+│   ├── live/poller.rs     ← LivePoller, one per source
+│   ├── live/watermark.rs  ← LiveWatermark, where a poller stands in its table
+│   ├── live/signals_source.rs ← SignalsSource (enriches once, feeds the signals' broadcast)
 │   ├── cache.rs           ← SharedCache (moka) and its named CachePolicy per use
 │   ├── enriched_token.rs  ← one token side of a pool, identity only
 │   └── enriched_signal.rs ← signal + embedded token pair of its pool
