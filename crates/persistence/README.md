@@ -724,13 +724,14 @@ the same names, under `tests/`, hold the scopes, the window and the pages throug
 instants.
 
 **The same events, read live.** Each of these repositories also implements
-`LiveEventFeed` for `/api/live`: table by table, never merged, since an id is unique in its
-table only. Per table, `max(id)` and the rows past an id, by id, both bounded to the last
+`LiveEventFeed` for `/api/live`, in its `live.rs`: table by table, never merged, since an id
+is unique in its table only — a `match` with one line per table, each calling that table's
+pair of reads. Per table, `max(id)` and the rows past an id, by id, both bounded to the last
 `lookback` on `timestamp` — the bound that keeps them on the recent, uncompressed chunk, an
-index-only scan of its `(id, timestamp)` key. A collection of several tables reads the same
-columns as its page, one query per table. `tests/live_events.rs` plays one check on all 18
-DAMM v2 tables: an event inserted after another but stamped before still comes, the stale one
-does not, and the batch is cut by id.
+index-only scan of its `(id, timestamp)` key. Each read selects the same columns as the
+collection's page; `helper/live_records.rs` keeps a row that does not decode with its id.
+`tests/live_events.rs` plays one check on all 18 DAMM v2 tables: an event inserted after
+another but stamped before still comes, the stale one does not, and the batch is cut by id.
 
 **The announcements.** `announcement.rs` reads the list of every announcement
 (`list_entries`), whose status — upcoming, open or closed at the

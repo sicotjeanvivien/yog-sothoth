@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT max(id) AS \"id\"\n              FROM meteora_damm_v2_fund_reward_events\n             WHERE timestamp >= now() - $1::BIGINT * INTERVAL '1 second'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "aa39272a2f879a462ac8a68b2c3fe74a922622c759ecf55d863c239aa2f6cfd1"
+}

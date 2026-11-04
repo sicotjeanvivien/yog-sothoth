@@ -1,4 +1,5 @@
 mod event_page;
+mod live_records;
 mod pagination;
 mod parser;
 mod query_mod;
@@ -6,6 +7,7 @@ mod query_mod;
 pub(super) use event_page::{
     EventKey, MergedEventKey, finish_event_page, ids_of, in_key_order, instants_of,
 };
+pub(super) use live_records::live_records;
 pub(super) use pagination::PageBuilder;
 pub(super) use parser::{
     bind_protocol_filter, convert_bigdecimal_to_decimal, convert_bigdecimal_to_u128,

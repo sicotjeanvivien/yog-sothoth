@@ -5,13 +5,14 @@ mod discovered_tvl;
 mod domain_event;
 mod event_cursor;
 mod event_position;
+mod event_table;
 mod freshness_status;
 mod insert_outcome;
 mod kept_prices;
 mod liquidity_change_event;
 mod liquidity_flow;
 mod liquidity_moves;
-mod live_events;
+mod live_event_feed;
 mod materialization_backlog;
 mod meteora;
 mod network_status;
@@ -59,6 +60,8 @@ pub use discovered_tvl::{DiscoveredTvlLookup, ProtocolDiscoveredTvl};
 pub use domain_event::DomainEvent;
 pub use event_cursor::{EventCursor, EventScope};
 pub use event_position::{EventPosition, TransactionPosition};
+pub use event_table::EventTable;
+pub(crate) use event_table::event_tables;
 pub use freshness_status::{EventFreshnessRepository, FreshnessStatus};
 pub use insert_outcome::InsertOutcome;
 pub use kept_prices::{KeptPrices, PRICE_MAX_AGE_LATEST};
@@ -71,8 +74,7 @@ pub use liquidity_moves::{
     LiquidityMoveLock, LiquidityMoveLookup, LiquidityMoveOrder, LiquidityMoveScope,
     LiquidityTotals,
 };
-pub(crate) use live_events::event_tables;
-pub use live_events::{EventTable, LiveEventFeed, LiveRecord};
+pub use live_event_feed::{LiveEventFeed, LiveRecord};
 pub use materialization_backlog::{MaterializationBacklog, MaterializationBacklogRepository};
 pub use meteora::{
     MeteoraDammV2BaseFee, MeteoraDammV2ClaimPositionFeeEvent,

@@ -33,8 +33,9 @@ core/src/
 │   │                       or pool change is one of several events, MeteoraDammV2*Change;
 │   │                       EventScope, EventCursor and its window_start in event_cursor.rs;
 │   │                       each with its *Table, the tables it is written in)
-│   ├── live_events.rs     (EventTable, LiveRecord, LiveEventFeed — a collection read live,
-│   │                       table by table, by id)
+│   ├── event_table.rs     (EventTable and event_tables! — the tables a collection is written in)
+│   ├── live_event_feed.rs (LiveRecord, LiveEventFeed — a collection read live, table by table,
+│   │                       by id)
 │   ├── pool_creations/    (PoolCreations, by protocol — PoolCreationsLookup)
 │   ├── liquidity_moves/   (LiquidityMove and its LiquidityMoveLock, LiquidityFlows and
 │   │                       LiquidityTotals, its order,

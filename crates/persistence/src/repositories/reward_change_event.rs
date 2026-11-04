@@ -1,12 +1,13 @@
 //! PostgreSQL implementation of [`RewardChangeEventLookup`]: each protocol's reward event
 //! tables, merged into one list and read by scope.
 
+mod live;
 mod rows;
 
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use rows::{
     MeteoraDammV2FundRewardEventRow, MeteoraDammV2InitializeRewardEventRow,
     MeteoraDammV2UpdateRewardDurationEventRow, MeteoraDammV2UpdateRewardFunderEventRow,
@@ -14,7 +15,6 @@ use rows::{
     MeteoraDammV2WithdrawIneligibleRewardEventRow,
 };
 use sqlx::PgPool;
-use yog_core::domain::{LiveEventFeed, LiveRecord, RewardChangeTable};
 use yog_core::{
     Cursor, Page, RepositoryResult,
     domain::{
@@ -29,255 +29,6 @@ use crate::repositories::helper::{
 
 pub struct PgRewardChangeEventRepository {
     pool: PgPool,
-}
-
-#[async_trait]
-impl LiveEventFeed<RewardChangeTable, RewardChangeEvent> for PgRewardChangeEventRepository {
-    async fn live_tip(
-        &self,
-        table: RewardChangeTable,
-        lookback: Duration,
-    ) -> RepositoryResult<Option<i64>> {
-        let lookback = lookback.num_seconds();
-        match table {
-            RewardChangeTable::MeteoraDammV2Initialize => {
-                sqlx::query_scalar!(
-                    r#"
-                    SELECT max(id) AS "id"
-                      FROM meteora_damm_v2_initialize_reward_events
-                     WHERE timestamp >= now() - $1::BIGINT * INTERVAL '1 second'
-                    "#,
-                    lookback,
-                )
-                .fetch_one(&self.pool)
-                .await
-            }
-            RewardChangeTable::MeteoraDammV2Fund => {
-                sqlx::query_scalar!(
-                    r#"
-                    SELECT max(id) AS "id"
-                      FROM meteora_damm_v2_fund_reward_events
-                     WHERE timestamp >= now() - $1::BIGINT * INTERVAL '1 second'
-                    "#,
-                    lookback,
-                )
-                .fetch_one(&self.pool)
-                .await
-            }
-            RewardChangeTable::MeteoraDammV2DurationChange => {
-                sqlx::query_scalar!(
-                    r#"
-                    SELECT max(id) AS "id"
-                      FROM meteora_damm_v2_update_reward_duration_events
-                     WHERE timestamp >= now() - $1::BIGINT * INTERVAL '1 second'
-                    "#,
-                    lookback,
-                )
-                .fetch_one(&self.pool)
-                .await
-            }
-            RewardChangeTable::MeteoraDammV2FunderChange => {
-                sqlx::query_scalar!(
-                    r#"
-                    SELECT max(id) AS "id"
-                      FROM meteora_damm_v2_update_reward_funder_events
-                     WHERE timestamp >= now() - $1::BIGINT * INTERVAL '1 second'
-                    "#,
-                    lookback,
-                )
-                .fetch_one(&self.pool)
-                .await
-            }
-            RewardChangeTable::MeteoraDammV2IneligibleWithdrawal => {
-                sqlx::query_scalar!(
-                    r#"
-                    SELECT max(id) AS "id"
-                      FROM meteora_damm_v2_withdraw_ineligible_reward_events
-                     WHERE timestamp >= now() - $1::BIGINT * INTERVAL '1 second'
-                    "#,
-                    lookback,
-                )
-                .fetch_one(&self.pool)
-                .await
-            }
-            RewardChangeTable::MeteoraDammV2DeadLiquidityWithdrawal => {
-                sqlx::query_scalar!(
-                    r#"
-                    SELECT max(id) AS "id"
-                      FROM meteora_damm_v2_withdraw_dead_liquidity_reward_events
-                     WHERE timestamp >= now() - $1::BIGINT * INTERVAL '1 second'
-                    "#,
-                    lookback,
-                )
-                .fetch_one(&self.pool)
-                .await
-            }
-        }
-        .map_err(map_sqlx_error)
-    }
-
-    async fn live_after(
-        &self,
-        table: RewardChangeTable,
-        after_id: i64,
-        lookback: Duration,
-        limit: i64,
-    ) -> RepositoryResult<Vec<LiveRecord<RepositoryResult<RewardChangeEvent>>>> {
-        let lookback = lookback.num_seconds();
-        let changes = match table {
-            RewardChangeTable::MeteoraDammV2Initialize => sqlx::query_as!(
-                MeteoraDammV2InitializeRewardEventRow,
-                r#"
-                SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
-                       reward_mint, funder, creator, reward_index, reward_duration
-                  FROM meteora_damm_v2_initialize_reward_events
-                 WHERE id > $1
-                   AND timestamp >= now() - $2::BIGINT * INTERVAL '1 second'
-                 ORDER BY id
-                 LIMIT $3
-                "#,
-                after_id,
-                lookback,
-                limit,
-            )
-            .fetch_all(&self.pool)
-            .await
-            .map_err(map_sqlx_error)?
-            .into_iter()
-            .map(|row| {
-                let id = row.id;
-                (id, row.try_into().map(MeteoraDammV2RewardChange::Initialize))
-            })
-            .collect::<Vec<_>>(),
-            RewardChangeTable::MeteoraDammV2Fund => sqlx::query_as!(
-                MeteoraDammV2FundRewardEventRow,
-                r#"
-                SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
-                       funder, mint_reward, reward_index, amount, transfer_fee_excluded_amount_in, reward_duration_end, pre_reward_rate, post_reward_rate
-                  FROM meteora_damm_v2_fund_reward_events
-                 WHERE id > $1
-                   AND timestamp >= now() - $2::BIGINT * INTERVAL '1 second'
-                 ORDER BY id
-                 LIMIT $3
-                "#,
-                after_id,
-                lookback,
-                limit,
-            )
-            .fetch_all(&self.pool)
-            .await
-            .map_err(map_sqlx_error)?
-            .into_iter()
-            .map(|row| {
-                let id = row.id;
-                (id, row.try_into().map(MeteoraDammV2RewardChange::Fund))
-            })
-            .collect::<Vec<_>>(),
-            RewardChangeTable::MeteoraDammV2DurationChange => sqlx::query_as!(
-                MeteoraDammV2UpdateRewardDurationEventRow,
-                r#"
-                SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
-                       reward_index, old_reward_duration, new_reward_duration
-                  FROM meteora_damm_v2_update_reward_duration_events
-                 WHERE id > $1
-                   AND timestamp >= now() - $2::BIGINT * INTERVAL '1 second'
-                 ORDER BY id
-                 LIMIT $3
-                "#,
-                after_id,
-                lookback,
-                limit,
-            )
-            .fetch_all(&self.pool)
-            .await
-            .map_err(map_sqlx_error)?
-            .into_iter()
-            .map(|row| {
-                let id = row.id;
-                (id, row.try_into().map(MeteoraDammV2RewardChange::DurationChange))
-            })
-            .collect::<Vec<_>>(),
-            RewardChangeTable::MeteoraDammV2FunderChange => sqlx::query_as!(
-                MeteoraDammV2UpdateRewardFunderEventRow,
-                r#"
-                SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
-                       reward_index, old_funder, new_funder
-                  FROM meteora_damm_v2_update_reward_funder_events
-                 WHERE id > $1
-                   AND timestamp >= now() - $2::BIGINT * INTERVAL '1 second'
-                 ORDER BY id
-                 LIMIT $3
-                "#,
-                after_id,
-                lookback,
-                limit,
-            )
-            .fetch_all(&self.pool)
-            .await
-            .map_err(map_sqlx_error)?
-            .into_iter()
-            .map(|row| {
-                let id = row.id;
-                (id, row.try_into().map(MeteoraDammV2RewardChange::FunderChange))
-            })
-            .collect::<Vec<_>>(),
-            RewardChangeTable::MeteoraDammV2IneligibleWithdrawal => sqlx::query_as!(
-                MeteoraDammV2WithdrawIneligibleRewardEventRow,
-                r#"
-                SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
-                       reward_mint, amount
-                  FROM meteora_damm_v2_withdraw_ineligible_reward_events
-                 WHERE id > $1
-                   AND timestamp >= now() - $2::BIGINT * INTERVAL '1 second'
-                 ORDER BY id
-                 LIMIT $3
-                "#,
-                after_id,
-                lookback,
-                limit,
-            )
-            .fetch_all(&self.pool)
-            .await
-            .map_err(map_sqlx_error)?
-            .into_iter()
-            .map(|row| {
-                let id = row.id;
-                (id, row.try_into().map(MeteoraDammV2RewardChange::IneligibleWithdrawal))
-            })
-            .collect::<Vec<_>>(),
-            RewardChangeTable::MeteoraDammV2DeadLiquidityWithdrawal => sqlx::query_as!(
-                MeteoraDammV2WithdrawDeadLiquidityRewardEventRow,
-                r#"
-                SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
-                       reward_mint, amount
-                  FROM meteora_damm_v2_withdraw_dead_liquidity_reward_events
-                 WHERE id > $1
-                   AND timestamp >= now() - $2::BIGINT * INTERVAL '1 second'
-                 ORDER BY id
-                 LIMIT $3
-                "#,
-                after_id,
-                lookback,
-                limit,
-            )
-            .fetch_all(&self.pool)
-            .await
-            .map_err(map_sqlx_error)?
-            .into_iter()
-            .map(|row| {
-                let id = row.id;
-                (id, row.try_into().map(MeteoraDammV2RewardChange::DeadLiquidityWithdrawal))
-            })
-            .collect::<Vec<_>>(),
-        };
-        Ok(changes
-            .into_iter()
-            .map(|(id, change)| LiveRecord {
-                id,
-                event: change.map(RewardChangeEvent::MeteoraDammV2),
-            })
-            .collect())
-    }
 }
 
 impl PgRewardChangeEventRepository {

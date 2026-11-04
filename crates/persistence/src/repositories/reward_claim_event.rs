@@ -1,13 +1,13 @@
 //! PostgreSQL implementation of [`RewardClaimEventLookup`]: each protocol's reward claim
 //! table, read by scope.
 
+mod live;
 mod rows;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use rows::MeteoraDammV2ClaimRewardEventRow;
 use sqlx::PgPool;
-use yog_core::domain::{LiveEventFeed, LiveRecord, RewardClaimTable};
 use yog_core::{
     Cursor, Page, RepositoryResult,
     domain::{
@@ -71,66 +71,6 @@ impl RewardClaimEventLookup for PgRewardClaimEventRepository {
                 }))
             },
         ))
-    }
-}
-
-#[async_trait]
-impl LiveEventFeed<RewardClaimTable, RewardClaimEvent> for PgRewardClaimEventRepository {
-    async fn live_tip(
-        &self,
-        table: RewardClaimTable,
-        lookback: Duration,
-    ) -> RepositoryResult<Option<i64>> {
-        match table {
-            RewardClaimTable::MeteoraDammV2 => sqlx::query_scalar!(
-                r#"
-                SELECT max(id) AS "id"
-                  FROM meteora_damm_v2_claim_reward_events
-                 WHERE timestamp >= now() - $1::BIGINT * INTERVAL '1 second'
-                "#,
-                lookback.num_seconds(),
-            )
-            .fetch_one(&self.pool)
-            .await
-            .map_err(map_sqlx_error),
-        }
-    }
-
-    async fn live_after(
-        &self,
-        table: RewardClaimTable,
-        after_id: i64,
-        lookback: Duration,
-        limit: i64,
-    ) -> RepositoryResult<Vec<LiveRecord<RepositoryResult<RewardClaimEvent>>>> {
-        let rows = match table {
-            RewardClaimTable::MeteoraDammV2 => sqlx::query_as!(
-                MeteoraDammV2ClaimRewardEventRow,
-                r#"
-                SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
-                       position, owner, mint_reward, reward_index, total_reward
-                  FROM meteora_damm_v2_claim_reward_events
-                 WHERE id > $1
-                   AND timestamp >= now() - $2::BIGINT * INTERVAL '1 second'
-                 ORDER BY id
-                 LIMIT $3
-                "#,
-                after_id,
-                lookback.num_seconds(),
-                limit,
-            )
-            .fetch_all(&self.pool)
-            .await
-            .map_err(map_sqlx_error)?,
-        };
-        Ok(rows
-            .into_iter()
-            .map(|row| LiveRecord {
-                id: row.id,
-                event: MeteoraDammV2ClaimRewardEvent::try_from(row)
-                    .map(RewardClaimEvent::MeteoraDammV2),
-            })
-            .collect())
     }
 }
 

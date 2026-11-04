@@ -1,13 +1,13 @@
 //! PostgreSQL implementation of [`LiquidityChangeEventLookup`]: each protocol's liquidity event
 //! table, read by scope.
 
+mod live;
 mod rows;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use rows::MeteoraDammV2LiquidityEventRow;
 use sqlx::PgPool;
-use yog_core::domain::{LiquidityChangeTable, LiveEventFeed, LiveRecord};
 use yog_core::{
     Cursor, Page, RepositoryResult,
     domain::{
@@ -71,69 +71,6 @@ impl LiquidityChangeEventLookup for PgLiquidityChangeEventRepository {
                 }))
             },
         ))
-    }
-}
-
-#[async_trait]
-impl LiveEventFeed<LiquidityChangeTable, LiquidityChangeEvent>
-    for PgLiquidityChangeEventRepository
-{
-    async fn live_tip(
-        &self,
-        table: LiquidityChangeTable,
-        lookback: Duration,
-    ) -> RepositoryResult<Option<i64>> {
-        match table {
-            LiquidityChangeTable::MeteoraDammV2 => sqlx::query_scalar!(
-                r#"
-                SELECT max(id) AS "id"
-                  FROM meteora_damm_v2_liquidity_events
-                 WHERE timestamp >= now() - $1::BIGINT * INTERVAL '1 second'
-                "#,
-                lookback.num_seconds(),
-            )
-            .fetch_one(&self.pool)
-            .await
-            .map_err(map_sqlx_error),
-        }
-    }
-
-    async fn live_after(
-        &self,
-        table: LiquidityChangeTable,
-        after_id: i64,
-        lookback: Duration,
-        limit: i64,
-    ) -> RepositoryResult<Vec<LiveRecord<RepositoryResult<LiquidityChangeEvent>>>> {
-        let rows = match table {
-            LiquidityChangeTable::MeteoraDammV2 => sqlx::query_as!(
-                MeteoraDammV2LiquidityEventRow,
-                r#"
-                SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
-                       liquidity_event_kind, amount_a, amount_b, liquidity_delta, reserve_a_after,
-                       reserve_b_after, position, owner
-                  FROM meteora_damm_v2_liquidity_events
-                 WHERE id > $1
-                   AND timestamp >= now() - $2::BIGINT * INTERVAL '1 second'
-                 ORDER BY id
-                 LIMIT $3
-                "#,
-                after_id,
-                lookback.num_seconds(),
-                limit,
-            )
-            .fetch_all(&self.pool)
-            .await
-            .map_err(map_sqlx_error)?,
-        };
-        Ok(rows
-            .into_iter()
-            .map(|row| LiveRecord {
-                id: row.id,
-                event: MeteoraDammV2LiquidityEvent::try_from(row)
-                    .map(LiquidityChangeEvent::MeteoraDammV2),
-            })
-            .collect())
     }
 }
 

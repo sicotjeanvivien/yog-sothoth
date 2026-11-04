@@ -1,13 +1,13 @@
 //! PostgreSQL implementation of [`PositionFeeClaimEventLookup`]: each protocol's position fee claim
 //! table, read by scope.
 
+mod live;
 mod rows;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use rows::MeteoraDammV2ClaimPositionFeeEventRow;
 use sqlx::PgPool;
-use yog_core::domain::{LiveEventFeed, LiveRecord, PositionFeeClaimTable};
 use yog_core::{
     Cursor, Page, RepositoryResult,
     domain::{
@@ -72,68 +72,6 @@ impl PositionFeeClaimEventLookup for PgPositionFeeClaimEventRepository {
                 }))
             },
         ))
-    }
-}
-
-#[async_trait]
-impl LiveEventFeed<PositionFeeClaimTable, PositionFeeClaimEvent>
-    for PgPositionFeeClaimEventRepository
-{
-    async fn live_tip(
-        &self,
-        table: PositionFeeClaimTable,
-        lookback: Duration,
-    ) -> RepositoryResult<Option<i64>> {
-        match table {
-            PositionFeeClaimTable::MeteoraDammV2 => sqlx::query_scalar!(
-                r#"
-                SELECT max(id) AS "id"
-                  FROM meteora_damm_v2_claim_position_fee_events
-                 WHERE timestamp >= now() - $1::BIGINT * INTERVAL '1 second'
-                "#,
-                lookback.num_seconds(),
-            )
-            .fetch_one(&self.pool)
-            .await
-            .map_err(map_sqlx_error),
-        }
-    }
-
-    async fn live_after(
-        &self,
-        table: PositionFeeClaimTable,
-        after_id: i64,
-        lookback: Duration,
-        limit: i64,
-    ) -> RepositoryResult<Vec<LiveRecord<RepositoryResult<PositionFeeClaimEvent>>>> {
-        let rows = match table {
-            PositionFeeClaimTable::MeteoraDammV2 => sqlx::query_as!(
-                MeteoraDammV2ClaimPositionFeeEventRow,
-                r#"
-                SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
-                       position, owner, fee_a_claimed, fee_b_claimed
-                  FROM meteora_damm_v2_claim_position_fee_events
-                 WHERE id > $1
-                   AND timestamp >= now() - $2::BIGINT * INTERVAL '1 second'
-                 ORDER BY id
-                 LIMIT $3
-                "#,
-                after_id,
-                lookback.num_seconds(),
-                limit,
-            )
-            .fetch_all(&self.pool)
-            .await
-            .map_err(map_sqlx_error)?,
-        };
-        Ok(rows
-            .into_iter()
-            .map(|row| LiveRecord {
-                id: row.id,
-                event: MeteoraDammV2ClaimPositionFeeEvent::try_from(row)
-                    .map(PositionFeeClaimEvent::MeteoraDammV2),
-            })
-            .collect())
     }
 }
 
