@@ -5,7 +5,7 @@ import type { SignalResponse } from "@/lib/api/schema/zod.gen";
 import { formatSignalThreshold, formatSignalValue, leanedSymbolOf } from "../signal-display";
 
 function signal(overrides: Partial<SignalResponse>): SignalResponse {
-  const token = { mint: null, name: null, decimals: 0, logoUri: null };
+  const token = { mint: null, name: null, decimals: null, logoUri: null };
   return {
     id: 1,
     detector: "later_detector",
@@ -72,7 +72,7 @@ describe("leanedSymbolOf", () => {
 
   // Mutation: a fallback on the other token names one the swaps left.
   it("names none while the token is unresolved", () => {
-    const tokenA = { mint: null, name: null, decimals: 0, logoUri: null, symbol: null };
+    const tokenA = { mint: null, name: null, decimals: null, logoUri: null, symbol: null };
     expect(leanedSymbolOf(signal({ leansToward: "tokenA", tokenA }))).toBeNull();
   });
 });

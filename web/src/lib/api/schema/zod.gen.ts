@@ -49,7 +49,7 @@ export const zCoverageUnitResponse = z.enum(['poolHours', 'poolTranches']);
 export type CoverageUnitResponse = z.infer<typeof zCoverageUnitResponse>;
 
 export const zEmbeddedTokenResponse = z.object({
-    decimals: z.int().gte(0).lte(255),
+    decimals: z.int().gte(0).lte(255).nullable(),
     logoUri: z.url().nullable(),
     mint: z.string().nullable(),
     name: z.string().nullable(),

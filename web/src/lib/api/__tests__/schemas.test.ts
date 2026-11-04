@@ -150,7 +150,7 @@ function validSignal() {
       mint: null,
       symbol: null,
       name: null,
-      decimals: 0,
+      decimals: null,
       logoUri: null,
     },
     severity: "critical",
