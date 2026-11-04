@@ -30,7 +30,7 @@ persistence/
 │   │   ├── analytic/        (the analytic writer's cycle, and one module per
 │   │   │                     protocol for its facts — DAMM v2 today)
 │   │   ├── helper/          (pubkey/u64/u128 conversions, pagination helpers,
-│   │   │                     sqlx error mapping)
+│   │   │                     sqlx error mapping, live_records for the live reads)
 │   │   ├── meteora/damm_v2/ (per-event-kind event repositories — 19 today —
 │   │   │                     plus the cp-amm pool-properties satellite)
 │   │   ├── meteora/dlmm/    (the DLMM pool-properties satellite; no event
@@ -41,6 +41,9 @@ persistence/
 │   │   │   claim_totals.rs, position_change_counts.rs
 │   │   │                     (the produced resources the API reads by scope:
 │   │   │                     every protocol, one protocol, one pool)
+│   │   ├── swap_event/, liquidity_change_event/, pool_creation_event/, …, pool_change_event/
+│   │   │                     (the on-chain lists, paged; each `live.rs` reads them
+│   │   │                     live for /api/live, one function pair per table)
 │   │   ├── protocol_activity.rs, token_activity/ (the frozen hours every
 │   │   │                     measure is read over; the tokens by volume)
 │   │   ├── signal/, swap_flow/, liquidity_flow/, pool_price_snapshot/
