@@ -460,6 +460,54 @@
       },
       "readMore": "Read more",
       "dismiss": "Dismiss this announcement"
+    },
+    "Activity": {
+      "title": "Live activity · all protocols",
+      "titleProtocol": "Live activity",
+      "info": "What lands on chain, as it happens: liquidity, pool creations, positions, claims, rewards. No swaps, and no dollar amount; an amount is shown only when its token's decimals are known.",
+      "scope": "live · swaps excluded",
+      "tableLabel": "Live on-chain events",
+      "empty": "Waiting for the first event — the table fills up as they arrive.",
+      "gap": "Resumed at {at} — events may have been missed",
+      "columns": {
+        "time": "Time",
+        "protocol": "Protocol",
+        "kind": "Type",
+        "pool": "Pool",
+        "detail": "Detail"
+      },
+      "kind": {
+        "liquidity_add": "Liquidity added",
+        "liquidity_remove": "Liquidity removed",
+        "pool_creation": "Pool created",
+        "position_open": "Position opened",
+        "position_close": "Position closed",
+        "position_vesting_lock": "Vesting lock",
+        "position_permanent_lock": "Permanent lock",
+        "position_split": "Position split",
+        "position_change": "Position change",
+        "position_fee_claim": "Fees claimed",
+        "protocol_fee_claim": "Protocol fees claimed",
+        "reward_claim": "Reward claimed",
+        "reward_initialize": "Reward created",
+        "reward_fund": "Reward funded",
+        "reward_duration_change": "Reward duration changed",
+        "reward_funder_change": "Reward funder changed",
+        "reward_ineligible_withdrawal": "Ineligible reward withdrawn",
+        "reward_dead_liquidity_withdrawal": "Dead-liquidity reward withdrawn",
+        "reward_change": "Reward change",
+        "pool_status": "Pool status changed",
+        "pool_fees": "Pool fees changed",
+        "pool_change": "Pool change"
+      },
+      "role": {
+        "position": "pos",
+        "owner": "owner",
+        "creator": "creator",
+        "funder": "funder",
+        "reward": "reward",
+        "to": "→"
+      }
     }
   }
 }

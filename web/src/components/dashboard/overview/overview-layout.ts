@@ -11,7 +11,9 @@ export const CELL_CLASS =
 export const SPAN = {
   kpi: "col-span-6 dash-wide:col-span-3 adv:rail:col-span-4 adv:dash-wide:col-span-2",
   main: "col-span-12 dash-wide:col-span-8",
-  side: "col-span-12 dash-wide:col-span-4 dash-wide:row-span-3",
+  side: "col-span-12 dash-wide:col-span-4 dash-wide:row-span-3 adv:dash-wide:row-span-2",
+  /** Beside the live activity in the advanced mode, under the volume in the simple. */
+  tokens: "col-span-12 dash-wide:col-span-8 adv:dash-wide:col-span-4",
 } as const;
 
 export const MIN_HEIGHT = {
@@ -20,6 +22,8 @@ export const MIN_HEIGHT = {
   signals: "min-h-[420px]",
   volume: "min-h-[318px] adv:min-h-[434px]",
   tokens: "min-h-[530px] adv:min-h-[430px]",
+  /** The height of the row it shares; alone on a phone, it is as tall as its rows. */
+  activity: "dash-wide:min-h-[430px]",
 } as const;
 
 /** A block's heading row: its title and ⓘ, then what sits at its right. */

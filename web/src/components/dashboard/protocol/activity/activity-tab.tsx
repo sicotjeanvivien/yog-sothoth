@@ -1,11 +1,14 @@
 /**
  * The tab 06 of a protocol's page: its latest signals whatever the period, then those that
- * arrive, on the protocol's live stream. The seed fails on its own, as a `BlockError`.
+ * arrive, and in the advanced mode its live activity beside them, on one connection to the
+ * protocol's live stream. The seed fails on its own, as a `BlockError`.
  */
 
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 
+import { ActivityBlock } from "@/components/dashboard/activity/activity-block";
+import { OverviewLive } from "@/components/dashboard/live/overview-live";
 import { CELL_CLASS, GRID_CLASS, MIN_HEIGHT } from "@/components/dashboard/overview/overview-layout";
 import { BlockHeading } from "@/components/dashboard/overview/overview-parts";
 import { OverviewSignalsLive } from "@/components/dashboard/overview/overview-signals-live";
@@ -15,13 +18,20 @@ import { ApiClientError } from "@/lib/api/errors";
 import type { ProtocolResponse, SignalResponse } from "@/lib/api/schema/zod.gen";
 import { fetchSignals } from "@/lib/api/server/signals";
 
-const SPAN = "col-span-12";
+/** Beside the live activity in the advanced mode, so the tab is no taller there. */
+const SPAN = "col-span-12 adv:dash-wide:col-span-6";
 
 export async function ActivityTab({ protocol }: { protocol: ProtocolResponse }) {
   const t = await getTranslations("Dashboard.Protocol.activity.signals");
 
   return (
+    <OverviewLive protocol={protocol}>
     <div className={GRID_CLASS}>
+      <ActivityBlock
+        scope="protocol"
+        span="col-span-12 dash-wide:col-span-6"
+        minHeight={MIN_HEIGHT.activity}
+      />
       <Suspense
         fallback={
           <BlockSkeleton
@@ -35,6 +45,7 @@ export async function ActivityTab({ protocol }: { protocol: ProtocolResponse }) 
         <ProtocolSignals protocol={protocol} />
       </Suspense>
     </div>
+    </OverviewLive>
   );
 }
 
@@ -64,7 +75,6 @@ async function ProtocolSignals({ protocol }: { protocol: ProtocolResponse }) {
         initial={initial}
         heading={heading}
         tableLabel={t("tableLabel")}
-        protocol={protocol}
       />
     </section>
   );

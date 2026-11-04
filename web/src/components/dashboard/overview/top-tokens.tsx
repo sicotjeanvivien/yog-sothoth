@@ -29,7 +29,7 @@ const TOP_TOKENS = 10;
 
 const COLUMNS = "grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.6fr)]";
 
-const SECTION_CLASS = `${CELL_CLASS} ${SPAN.main} ${MIN_HEIGHT.tokens}`;
+const SECTION_CLASS = `${CELL_CLASS} ${SPAN.tokens} ${MIN_HEIGHT.tokens}`;
 
 export async function TopTokens({ period }: { period: Period }) {
   const t = await getTranslations("Dashboard.Overview");
@@ -105,7 +105,7 @@ export async function TopTokensPlaceholder({ period }: { period: Period }) {
   return (
     <BlockSkeleton
       title={t("tokens.title", { period: t(`period.short.${period}`) })}
-      span={SPAN.main}
+      span={SPAN.tokens}
       minHeight={MIN_HEIGHT.tokens}
       shape={{ rows: 11 }}
     />

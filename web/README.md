@@ -159,16 +159,26 @@ The `/signals` dashboard page combines both consumers:
 - the first page of signals is fetched server-side (`fetchSignals`) and
   rendered by the Server Component;
 - the `useLiveSignals` hook (`components/dashboard/signals/`) then
-  opens an `EventSource` directly on the `signals` topic of the API's live
-  stream, `GET /api/live?topics=signals` (SSE), and listens to its named
-  `signals` events — `onmessage` receives only unnamed ones. Given a
-  protocol, it opens `/api/live/protocols/{protocol}?topics=signals` and
+  listens to the `signals` topic of the page's one connection to the API's
+  live stream, `GET /api/live?topics=signals` (SSE). Under a protocol, the
+  connection is `/api/live/protocols/{protocol}?topics=…` and the hook
   refills from `/api/protocols/{protocol}/signals` instead (`lib/signals/
   signal-paths.ts`). Each event is zod-parsed (malformed → warn + skip) and merged through
   the pure `mergeSignals` helper (`lib/signals/`): dedup by id, sort by
   `(triggeredAt, id)` descending, cap at 200 rows. On reconnection the
   hook refetches page 1 from the browser and reconciles by id, so a
   connection gap never leaves holes in the feed.
+
+**One connection per page** — `components/dashboard/live/live-provider.tsx`:
+`LiveProvider` opens the page's single `EventSource` on every topic it shows
+(`livePath`, `lib/live/live-topics.ts`), and the blocks subscribe to their topic
+through it: the API counts a connection, not a topic, against its 200 slots. A
+named event reaches only `addEventListener` (`onmessage` gets the unnamed ones).
+Any opening after the page's first is a gap, nothing being replayed: `onReopen`
+tells the subscribers. On the pages that have the advanced mode, `OverviewLive`
+picks the topics from it: `signals` in the simple mode, the eight on-chain
+collections too in the advanced (`pageTopics`) — switching reopens the
+connection, so the collections are polled only while the table shows.
 
 Above the feed, **severity × detector filter chips** (`signal-filters.tsx`)
 narrow it locally: within a dimension the active values are OR'd, across
@@ -181,6 +191,18 @@ group explains what each detector means.
 
 The **Overview** shows the latest signals as rows of its own, kept live over the
 same SSE hook (see *Overview*).
+
+**Live activity** — `components/dashboard/activity/`, in the advanced mode of the
+Overview (every protocol's) and of tab 06 (the protocol's): the on-chain events
+but the swaps as they arrive — time, protocol on the Overview, kind, pool by pair,
+detail. It starts empty and says so: nothing is loaded first. Each message is
+zod-parsed as its collection's item (`toActivityItem`), then presented by
+`activityRow` (`lib/activity/`, pure and tested): amounts in units of their token
+(`formatTokenAmount`), never in dollars, and none while the token's `decimals` is
+`null` — a raw amount would read 10^decimals too large; a reward's only when its mint
+is one side of the pair. The feed keeps 50 rows, the latest first in their order of
+arrival, and shows 10, the height of its row; after a reopening it says that events
+may have been missed (`markGap`), rather than look whole.
 
 Signals render as cards: token pair (embedded `tokenA`/`tokenB` from the
 API, reusing `PoolPairCell`; short pool address while unresolved), a
@@ -330,7 +352,9 @@ the sections never changes. The server renders both modes; `OverviewMode` puts
 shows, hides and tightens, so switching fetches nothing. The switch writes the
 `yog_overview_advanced` cookie (one year, declared in `/privacy`), which the
 page reads for the first paint. Each block's `MIN_HEIGHT` has its advanced
-value, so its waiting slot keeps its size in both modes.
+value, so its waiting slot keeps its size in both modes. The live activity takes
+the canvas' third row: 8 columns beside the most traded tokens on 4, the signals
+spanning two rows instead of three, and the page no taller than in the simple mode.
 
 ## Protocol page
 
@@ -405,8 +429,8 @@ so the page is no longer, the positions' life cycle over the period, in one colu
 **06 Live activity** — `protocol/activity/activity-tab.tsx`: the protocol's latest signals,
 whatever the period, from `/api/protocols/{protocol}/signals`, then those that arrive on
 `/api/live/protocols/{protocol}?topics=signals`, through the Overview's signal rows
-(`OverviewSignalsLive`, given the protocol). The other events of the protocol, live, are not
-shown yet.
+(`OverviewSignalsLive`). In the advanced mode, the protocol's live activity sits beside
+them, each on half the width as in the canvas, on the same connection.
 
 **Tabs** — `lib/protocol/tabs.ts` lists the six tabs of the canvas, in order;
 a tab joins the row when its content ships (`READY_TABS`), numbered by its
@@ -621,7 +645,7 @@ web/
 │   │   ├── feature-gate.tsx         # <FeatureGate flag="..."> wrapper
 │   │   ├── dashboard/               # per-page sections + shell, sidebar,
 │   │   │                            # signals (SignalFeed, useLiveSignals),
-│   │   │                            # announcements
+│   │   │                            # live (LiveProvider), activity, announcements
 │   │   ├── marketing/               # navbar, footer, per-page sections
 │   │   └── shared/                  # buttons, icons, popovers, …
 │   ├── config/
@@ -632,7 +656,9 @@ web/
 │   │   ├── config/                  # zod-validated env (server + client)
 │   │   ├── coverage/                # volumeCoverage (pure, tested)
 │   │   ├── overview/                # period, chart, totals (pure, tested)
-│   │   ├── format/                  # pubkey, date, number formatters
+│   │   ├── activity/                # activityRow, the activity feed (pure, tested)
+│   │   ├── format/                  # pubkey, date, number, token-amount formatters
+│   │   ├── live/                    # the live topics and their one path
 │   │   └── signals/                 # mergeSignals, filterSignals (pure, tested)
 │   ├── types/
 │   │   └── env.d.ts                 # process.env type augmentation

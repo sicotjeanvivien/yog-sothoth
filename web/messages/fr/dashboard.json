@@ -460,6 +460,54 @@
       },
       "readMore": "En savoir plus",
       "dismiss": "Fermer cette annonce"
+    },
+    "Activity": {
+      "title": "Activité en direct · tous protocoles",
+      "titleProtocol": "Activité en direct",
+      "info": "Ce qui arrive sur la chaîne, au fil de l'eau : liquidité, créations de pools, positions, réclamations, récompenses. Les swaps n'y sont pas, ni aucun montant en dollars ; un montant n'est montré que si les décimales de son token sont connues.",
+      "scope": "en direct · hors swaps",
+      "tableLabel": "Événements on-chain en direct",
+      "empty": "En attente du premier événement — le tableau se remplit à mesure qu'ils arrivent.",
+      "gap": "Reprise à {at} — des événements ont pu manquer",
+      "columns": {
+        "time": "Heure",
+        "protocol": "Protocole",
+        "kind": "Type",
+        "pool": "Pool",
+        "detail": "Détail"
+      },
+      "kind": {
+        "liquidity_add": "Ajout de liquidité",
+        "liquidity_remove": "Retrait de liquidité",
+        "pool_creation": "Création de pool",
+        "position_open": "Ouverture de position",
+        "position_close": "Fermeture de position",
+        "position_vesting_lock": "Verrou avec échéancier",
+        "position_permanent_lock": "Verrou permanent",
+        "position_split": "Division de position",
+        "position_change": "Changement de position",
+        "position_fee_claim": "Réclamation de fees",
+        "protocol_fee_claim": "Fees du protocole réclamés",
+        "reward_claim": "Réclamation de récompense",
+        "reward_initialize": "Récompense créée",
+        "reward_fund": "Récompense alimentée",
+        "reward_duration_change": "Durée de récompense changée",
+        "reward_funder_change": "Financeur de récompense changé",
+        "reward_ineligible_withdrawal": "Récompense non éligible retirée",
+        "reward_dead_liquidity_withdrawal": "Récompense de liquidité morte retirée",
+        "reward_change": "Changement de récompense",
+        "pool_status": "Statut de pool changé",
+        "pool_fees": "Fees de pool changés",
+        "pool_change": "Changement de pool"
+      },
+      "role": {
+        "position": "pos",
+        "owner": "owner",
+        "creator": "créateur",
+        "funder": "financeur",
+        "reward": "récompense",
+        "to": "→"
+      }
     }
   }
 }

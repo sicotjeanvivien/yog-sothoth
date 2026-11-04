@@ -16,7 +16,7 @@ import {
   STATUS_DOT,
 } from "@/components/dashboard/signals/signal-display";
 import { useLiveSignals } from "@/components/dashboard/signals/use-live-signals";
-import type { ProtocolResponse, SignalResponse } from "@/lib/api/schema/zod.gen";
+import type { SignalResponse } from "@/lib/api/schema/zod.gen";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatShortAddress } from "@/lib/format/format-short-address";
 
@@ -26,16 +26,14 @@ export function OverviewSignalsLive({
   initial,
   heading,
   tableLabel,
-  protocol,
 }: {
   initial: readonly SignalResponse[];
   heading: ReactNode;
   tableLabel: string;
-  protocol?: ProtocolResponse;
 }) {
   const t = useTranslations("Dashboard.Overview.signals");
   const tFeed = useTranslations("Dashboard.Signals.feed");
-  const { signals, status } = useLiveSignals(initial, protocol);
+  const { signals, status } = useLiveSignals(initial);
   const latest = signals.slice(0, LATEST_SIGNALS_COUNT);
 
   return (
