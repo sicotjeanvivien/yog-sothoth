@@ -7,15 +7,21 @@ use std::future::Future;
 
 use yog_core::RepositoryResult;
 
+mod channels;
+mod event_source;
 mod poller;
+mod pollers;
 mod signals_source;
 mod watermark;
 
+pub(crate) use channels::{EventChannel, LiveChannels};
+pub(crate) use event_source::{EventSource, LiveEvent, LiveItem};
 pub(crate) use poller::LivePoller;
+pub(crate) use pollers::LivePollers;
 pub(crate) use signals_source::SignalsSource;
 
-/// Capacity of each source's broadcast channel. A connection lagging further gets `Lagged` and
-/// closes: the page reconnects and refetches rather than silently missing items.
+/// Capacity of a topic's broadcast channel, per source writing in it. A connection lagging
+/// further gets `Lagged` and closes: the page reconnects rather than silently missing items.
 pub(crate) const LIVE_CHANNEL_CAPACITY: usize = 256;
 
 /// A table `/api/live` streams: read by id, then made into the items it broadcasts.
@@ -24,9 +30,9 @@ pub(crate) trait LiveSource: Send + Sync + 'static {
     type Item: Send + Sync + 'static;
 
     /// Its name in the logs.
-    const NAME: &'static str;
+    fn name(&self) -> &'static str;
 
-    /// The highest id there is, `None` on an empty table.
+    /// The highest id there is, `None` without one.
     fn tip(&self) -> impl Future<Output = RepositoryResult<Option<i64>>> + Send;
 
     /// Records with an id above `after_id`, by id, at most `limit`.
@@ -38,6 +44,6 @@ pub(crate) trait LiveSource: Send + Sync + 'static {
 
     fn id_of(record: &Self::Record) -> i64;
 
-    /// The items to broadcast, one per record and in its order; it fails nothing.
+    /// The items to broadcast, in the records' order; it fails nothing.
     fn prepare(&self, records: Vec<Self::Record>) -> impl Future<Output = Vec<Self::Item>> + Send;
 }

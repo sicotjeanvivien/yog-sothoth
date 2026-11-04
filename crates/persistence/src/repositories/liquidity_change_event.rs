@@ -1,6 +1,7 @@
 //! PostgreSQL implementation of [`LiquidityChangeEventLookup`]: each protocol's liquidity event
 //! table, read by scope.
 
+mod live;
 mod rows;
 
 use async_trait::async_trait;
@@ -84,7 +85,7 @@ impl PgLiquidityChangeEventRepository {
         sqlx::query_as!(
             MeteoraDammV2LiquidityEventRow,
             r#"
-            SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,
+            SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
                    liquidity_event_kind, amount_a, amount_b, liquidity_delta, reserve_a_after,
                    reserve_b_after, position, owner
               FROM meteora_damm_v2_liquidity_events
@@ -117,7 +118,7 @@ impl PgLiquidityChangeEventRepository {
         sqlx::query_as!(
             MeteoraDammV2LiquidityEventRow,
             r#"
-            SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,
+            SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
                    liquidity_event_kind, amount_a, amount_b, liquidity_delta, reserve_a_after,
                    reserve_b_after, position, owner
               FROM meteora_damm_v2_liquidity_events

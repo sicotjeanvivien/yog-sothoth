@@ -7,7 +7,10 @@ mod work_slots;
 
 pub(crate) use enriched_signal::EnrichedSignal;
 pub(crate) use enriched_token::EnrichedToken;
-pub(crate) use live::{LIVE_CHANNEL_CAPACITY, LivePoller, SignalsSource};
+pub(crate) use live::{
+    EventChannel, LIVE_CHANNEL_CAPACITY, LiveChannels, LiveEvent, LiveItem, LivePollers,
+    SignalsSource,
+};
 pub(crate) use services::{
     AnnouncementService, Availability, ClaimTotalsService, DiscoveredTvlService,
     IngestionAggregate, IngestionService, LiquidityChangeEventService, LiquidityMoveService,

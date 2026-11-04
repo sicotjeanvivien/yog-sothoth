@@ -6548,8 +6548,8 @@
         "operationId": "live",
         "parameters": [
           {
-            "description": "The collections to receive, comma-separated: `signals`.",
-            "example": "signals",
+            "description": "The collections to receive, comma-separated: `signals` and the on-chain event\ncollections but `swaps` (`liquidity-changes`, `pool-creations`…).",
+            "example": "signals,liquidity-changes",
             "in": "query",
             "name": "topics",
             "required": true,
@@ -6568,7 +6568,7 @@
                 }
               }
             },
-            "description": "Server-sent events, each named by its topic: `signals` carries a `SignalResponse`. The `id` is an opaque cursor."
+            "description": "Server-sent events, each named by its topic and carrying an item of that collection: `signals` a `SignalResponse`, `liquidity-changes` a `LiquidityChangeEventResponse`, and so on. The `id` is an opaque cursor."
           },
           "default": {
             "content": {
@@ -6589,8 +6589,8 @@
         "operationId": "protocol_live",
         "parameters": [
           {
-            "description": "The collections to receive, comma-separated: `signals`.",
-            "example": "signals",
+            "description": "The collections to receive, comma-separated: `signals` and the on-chain event\ncollections but `swaps` (`liquidity-changes`, `pool-creations`…).",
+            "example": "signals,liquidity-changes",
             "in": "query",
             "name": "topics",
             "required": true,
@@ -6617,7 +6617,7 @@
                 }
               }
             },
-            "description": "Server-sent events of the protocol, each named by its topic: `signals` carries a `SignalResponse`. The `id` is an opaque cursor."
+            "description": "Server-sent events of the protocol, each named by its topic and carrying an item of that collection. The `id` is an opaque cursor."
           },
           "default": {
             "content": {

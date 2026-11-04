@@ -17,3 +17,10 @@ pub trait LiquidityChangeEventLookup: Send + Sync {
         limit: i64,
     ) -> RepositoryResult<Page<LiquidityChangeEvent>>;
 }
+
+crate::domain::event_tables! {
+    /// The tables the liquidity changes are written in, one per protocol and event kind.
+    LiquidityChangeTable {
+        MeteoraDammV2 => (MeteoraDammV2, "meteora_damm_v2_liquidity_events"),
+    }
+}

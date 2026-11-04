@@ -5,12 +5,14 @@ mod discovered_tvl;
 mod domain_event;
 mod event_cursor;
 mod event_position;
+mod event_table;
 mod freshness_status;
 mod insert_outcome;
 mod kept_prices;
 mod liquidity_change_event;
 mod liquidity_flow;
 mod liquidity_moves;
+mod live_event_feed;
 mod materialization_backlog;
 mod meteora;
 mod network_status;
@@ -58,16 +60,21 @@ pub use discovered_tvl::{DiscoveredTvlLookup, ProtocolDiscoveredTvl};
 pub use domain_event::DomainEvent;
 pub use event_cursor::{EventCursor, EventScope};
 pub use event_position::{EventPosition, TransactionPosition};
+pub use event_table::EventTable;
+pub(crate) use event_table::event_tables;
 pub use freshness_status::{EventFreshnessRepository, FreshnessStatus};
 pub use insert_outcome::InsertOutcome;
 pub use kept_prices::{KeptPrices, PRICE_MAX_AGE_LATEST};
-pub use liquidity_change_event::{LiquidityChangeEvent, LiquidityChangeEventLookup};
+pub use liquidity_change_event::{
+    LiquidityChangeEvent, LiquidityChangeEventLookup, LiquidityChangeTable,
+};
 pub use liquidity_flow::{LiquidityFlowRepository, PoolLiquidityFlow};
 pub use liquidity_moves::{
     LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveKind, LiquidityMoveList,
     LiquidityMoveLock, LiquidityMoveLookup, LiquidityMoveOrder, LiquidityMoveScope,
     LiquidityTotals,
 };
+pub use live_event_feed::{LiveEventFeed, LiveRecord};
 pub use materialization_backlog::{MaterializationBacklog, MaterializationBacklogRepository};
 pub use meteora::{
     MeteoraDammV2BaseFee, MeteoraDammV2ClaimPositionFeeEvent,
@@ -105,8 +112,10 @@ pub use pool::{
 pub use pool_account::{
     DecodedPoolAccount, PoolAccountProperties, PoolAccountResolver, PoolRegistryProperties,
 };
-pub use pool_change_event::{MeteoraDammV2PoolChange, PoolChangeEvent, PoolChangeEventLookup};
-pub use pool_creation_event::{PoolCreationEvent, PoolCreationEventLookup};
+pub use pool_change_event::{
+    MeteoraDammV2PoolChange, PoolChangeEvent, PoolChangeEventLookup, PoolChangeTable,
+};
+pub use pool_creation_event::{PoolCreationEvent, PoolCreationEventLookup, PoolCreationTable};
 pub use pool_creations::{PoolCreations, PoolCreationsLookup, ProtocolPoolCreations};
 pub use pool_current_state::{
     LastEventKind, PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert,
@@ -116,22 +125,27 @@ pub use pool_price_snapshot::{PoolPriceSnapshot, PoolPriceSnapshotRepository};
 pub use position_change_counts::{PositionChangeCounts, PositionChangeCountsLookup};
 pub use position_change_event::{
     MeteoraDammV2PositionChange, PositionChangeEvent, PositionChangeEventLookup,
+    PositionChangeTable,
 };
-pub use position_fee_claim_event::{PositionFeeClaimEvent, PositionFeeClaimEventLookup};
+pub use position_fee_claim_event::{
+    PositionFeeClaimEvent, PositionFeeClaimEventLookup, PositionFeeClaimTable,
+};
 pub use price_candidate::{
     PRICE_CANDIDATE_PARAMS, PriceCandidate, PriceCandidateClass, PriceCandidateParams,
 };
 pub use protocol::Protocol;
 pub use protocol_activity::ProtocolActivityLookup;
-pub use protocol_fee_claim_event::{ProtocolFeeClaimEvent, ProtocolFeeClaimEventLookup};
+pub use protocol_fee_claim_event::{
+    ProtocolFeeClaimEvent, ProtocolFeeClaimEventLookup, ProtocolFeeClaimTable,
+};
 pub use protocol_tvl::{
     LiquidityTurnover, ProtocolLiquidityTurnover, ProtocolTvl, ProtocolTvlChange,
     ProtocolTvlLookup, TvlChangeTotal, TvlReading,
 };
 pub use reward_change_event::{
-    MeteoraDammV2RewardChange, RewardChangeEvent, RewardChangeEventLookup,
+    MeteoraDammV2RewardChange, RewardChangeEvent, RewardChangeEventLookup, RewardChangeTable,
 };
-pub use reward_claim_event::{RewardClaimEvent, RewardClaimEventLookup};
+pub use reward_claim_event::{RewardClaimEvent, RewardClaimEventLookup, RewardClaimTable};
 pub use rotation_runs::{
     RotationRun, RotationRunCursor, RotationRunLookup, RotationRunOrder, RotationRunScope,
     RotationRunTotals, RunSplit, RunsFirstHour,

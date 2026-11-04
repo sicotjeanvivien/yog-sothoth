@@ -1,6 +1,7 @@
 //! PostgreSQL implementation of [`RewardChangeEventLookup`]: each protocol's reward event
 //! tables, merged into one list and read by scope.
 
+mod live;
 mod rows;
 
 use std::collections::HashMap;

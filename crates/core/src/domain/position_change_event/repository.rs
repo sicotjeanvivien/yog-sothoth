@@ -17,3 +17,14 @@ pub trait PositionChangeEventLookup: Send + Sync {
         limit: i64,
     ) -> RepositoryResult<Page<PositionChangeEvent>>;
 }
+
+crate::domain::event_tables! {
+    /// The tables the position changes are written in, one per protocol and event kind.
+    PositionChangeTable {
+        MeteoraDammV2Open => (MeteoraDammV2, "meteora_damm_v2_create_position_events"),
+        MeteoraDammV2Close => (MeteoraDammV2, "meteora_damm_v2_close_position_events"),
+        MeteoraDammV2VestingLock => (MeteoraDammV2, "meteora_damm_v2_lock_position_events"),
+        MeteoraDammV2PermanentLock => (MeteoraDammV2, "meteora_damm_v2_permanent_lock_position_events"),
+        MeteoraDammV2Split => (MeteoraDammV2, "meteora_damm_v2_split_position_events"),
+    }
+}

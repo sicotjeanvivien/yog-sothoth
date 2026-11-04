@@ -17,3 +17,10 @@ pub trait RewardClaimEventLookup: Send + Sync {
         limit: i64,
     ) -> RepositoryResult<Page<RewardClaimEvent>>;
 }
+
+crate::domain::event_tables! {
+    /// The tables the reward claims are written in, one per protocol and event kind.
+    RewardClaimTable {
+        MeteoraDammV2 => (MeteoraDammV2, "meteora_damm_v2_claim_reward_events"),
+    }
+}

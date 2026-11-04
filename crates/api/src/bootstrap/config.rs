@@ -4,8 +4,8 @@ use std::time::Duration;
 use axum::http::HeaderValue;
 use yog_bootstrap::{ConfigError, SecretUrl, duration_var, required, required_secret_url};
 
-/// How often the stream poller checks the feed, in seconds (`API_SIGNAL_STREAM_POLL_SECS`).
-const DEFAULT_SIGNAL_STREAM_POLL_SECS: u64 = 3;
+/// How often each poller of `/api/live` reads its table, in seconds (`API_LIVE_POLL_SECS`).
+const DEFAULT_LIVE_POLL_SECS: u64 = 3;
 
 #[derive(Clone)]
 pub(crate) struct Config {
@@ -13,8 +13,8 @@ pub(crate) struct Config {
     pub(crate) bind_addr: SocketAddr,
     /// Browser origins allowed to call the API: the dashboard's must be listed.
     pub(crate) cors_allowed_origins: Vec<HeaderValue>,
-    /// Cadence of the poller feeding the `signals` topic of `/api/live`.
-    pub(crate) signal_stream_poll: Duration,
+    /// Cadence of the pollers feeding `/api/live`.
+    pub(crate) live_poll: Duration,
 }
 
 impl Config {
@@ -35,9 +35,9 @@ impl Config {
             database_url: required_secret_url("DATABASE_URL_API")?,
             bind_addr,
             cors_allowed_origins,
-            signal_stream_poll: Duration::from_secs(duration_var(
-                "API_SIGNAL_STREAM_POLL_SECS",
-                DEFAULT_SIGNAL_STREAM_POLL_SECS,
+            live_poll: Duration::from_secs(duration_var(
+                "API_LIVE_POLL_SECS",
+                DEFAULT_LIVE_POLL_SECS,
             )?),
         })
     }

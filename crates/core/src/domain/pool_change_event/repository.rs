@@ -17,3 +17,11 @@ pub trait PoolChangeEventLookup: Send + Sync {
         limit: i64,
     ) -> RepositoryResult<Page<PoolChangeEvent>>;
 }
+
+crate::domain::event_tables! {
+    /// The tables the pool changes are written in, one per protocol and event kind.
+    PoolChangeTable {
+        MeteoraDammV2Status => (MeteoraDammV2, "meteora_damm_v2_set_pool_status_events"),
+        MeteoraDammV2Fees => (MeteoraDammV2, "meteora_damm_v2_update_pool_fees_events"),
+    }
+}

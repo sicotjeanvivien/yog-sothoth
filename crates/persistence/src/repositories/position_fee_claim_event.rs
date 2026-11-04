@@ -1,6 +1,7 @@
 //! PostgreSQL implementation of [`PositionFeeClaimEventLookup`]: each protocol's position fee claim
 //! table, read by scope.
 
+mod live;
 mod rows;
 
 use async_trait::async_trait;
@@ -85,7 +86,7 @@ impl PgPositionFeeClaimEventRepository {
         sqlx::query_as!(
             MeteoraDammV2ClaimPositionFeeEventRow,
             r#"
-            SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,
+            SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
                    position, owner, fee_a_claimed, fee_b_claimed
               FROM meteora_damm_v2_claim_position_fee_events
              WHERE timestamp >= $1
@@ -117,7 +118,7 @@ impl PgPositionFeeClaimEventRepository {
         sqlx::query_as!(
             MeteoraDammV2ClaimPositionFeeEventRow,
             r#"
-            SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,
+            SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
                    position, owner, fee_a_claimed, fee_b_claimed
               FROM meteora_damm_v2_claim_position_fee_events
              WHERE pool_address = $1 AND timestamp >= $2

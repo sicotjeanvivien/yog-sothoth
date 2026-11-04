@@ -1,10 +1,21 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,\n                   token_a_amount, token_b_amount\n              FROM meteora_damm_v2_claim_protocol_fee_events\n             WHERE pool_address = $1 AND timestamp >= $2\n               AND timestamp <= COALESCE($3, 'infinity'::TIMESTAMPTZ)\n               AND (timestamp < COALESCE($3, 'infinity'::TIMESTAMPTZ)\n                    OR (signature, event_index) < ($4, $5))\n             ORDER BY timestamp DESC, signature DESC, event_index DESC\n             LIMIT $6\n            ",
+  "query": "\n            SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,\n                   token_a_amount, token_b_amount\n              FROM meteora_damm_v2_claim_protocol_fee_events\n             WHERE pool_address = $1 AND timestamp >= $2\n               AND timestamp <= COALESCE($3, 'infinity'::TIMESTAMPTZ)\n               AND (timestamp < COALESCE($3, 'infinity'::TIMESTAMPTZ)\n                    OR (signature, event_index) < ($4, $5))\n             ORDER BY timestamp DESC, signature DESC, event_index DESC\n             LIMIT $6\n            ",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_claim_protocol_fee_events",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
         "name": "pool_address",
         "type_info": "Text",
         "origin": {
@@ -15,7 +26,7 @@
         }
       },
       {
-        "ordinal": 1,
+        "ordinal": 2,
         "name": "signature",
         "type_info": "Text",
         "origin": {
@@ -26,7 +37,7 @@
         }
       },
       {
-        "ordinal": 2,
+        "ordinal": 3,
         "name": "timestamp",
         "type_info": "Timestamptz",
         "origin": {
@@ -37,7 +48,7 @@
         }
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "name": "slot",
         "type_info": "Int8",
         "origin": {
@@ -48,7 +59,7 @@
         }
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "transaction_index",
         "type_info": "Int8",
         "origin": {
@@ -59,7 +70,7 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "event_index",
         "type_info": "Int4",
         "origin": {
@@ -70,7 +81,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "token_a_amount",
         "type_info": "Int8",
         "origin": {
@@ -81,7 +92,7 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "token_b_amount",
         "type_info": "Int8",
         "origin": {
@@ -107,11 +118,12 @@
       false,
       false,
       false,
+      false,
       true,
       false,
       false,
       false
     ]
   },
-  "hash": "b27ae539f601ea1a86f06aece4b857657db756b410bd102ea930727b5c1e3956"
+  "hash": "7538b150d69efec95d294d44525a92e0d5bfcb81cb037bad25d1d93c95b6d77e"
 }

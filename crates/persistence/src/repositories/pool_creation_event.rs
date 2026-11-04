@@ -1,6 +1,7 @@
 //! PostgreSQL implementation of [`PoolCreationEventLookup`]: each protocol's pool creation
 //! table, read by protocol.
 
+mod live;
 mod rows;
 
 use async_trait::async_trait;
@@ -82,7 +83,7 @@ impl PgPoolCreationEventRepository {
         sqlx::query_as!(
             MeteoraDammV2InitializePoolEventRow,
             r#"
-            SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,
+            SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
                    token_a_mint, token_b_mint, creator, payer, alpha_vault, sqrt_min_price,
                    sqrt_max_price, sqrt_price, liquidity, activation_type, activation_point,
                    collect_fee_mode, pool_type, token_a_flag, token_b_flag, token_a_amount,

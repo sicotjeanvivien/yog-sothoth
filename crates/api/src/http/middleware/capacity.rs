@@ -33,7 +33,7 @@ pub(crate) const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 pub(crate) const STATEMENT_TIMEOUT: Duration = Duration::from_secs(8);
 
 /// How much expensive database work may run at once ([`WorkSlots`]). ⚠️ Below the pool's
-/// [`yog_persistence::Database::DEFAULT_MAX_CONNECTIONS`]: with the signal poller's, the light routes keep 3.
+/// [`yog_persistence::Database::DEFAULT_MAX_CONNECTIONS`]: with the live pollers' one, the light routes keep 3.
 pub(crate) const WORK_SLOTS: usize = 6;
 
 /// How long expensive work waits for a slot before being refused: long enough for one

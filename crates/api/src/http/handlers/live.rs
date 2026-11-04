@@ -17,17 +17,20 @@ use futures_util::{
     future::ready,
     stream::{self, BoxStream},
 };
+use serde::Serialize;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, broadcast};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use yog_core::domain::Protocol;
+use yog_core::domain::{EventTable, Protocol};
 
-use crate::application::EnrichedSignal;
+use crate::application::{EnrichedSignal, EventChannel, LiveEvent, LiveItem};
 use crate::http::{
     AppState,
     cursor::LiveCursor,
     dto::{
-        SignalResponse,
+        LiquidityChangeEventResponse, PoolChangeEventResponse, PoolCreationEventResponse,
+        PositionChangeEventResponse, PositionFeeClaimEventResponse, ProtocolFeeClaimEventResponse,
+        RewardChangeEventResponse, RewardClaimEventResponse, SignalResponse,
         request::{LiveParams, LiveRequest, LiveTopic, parse_protocol},
     },
     error::ApiError,
@@ -36,6 +39,8 @@ use crate::http::{
 /// One item of a topic, its event still to be named and numbered by the connection.
 pub(crate) struct Delivery {
     topic: LiveTopic,
+    /// Where its id is counted: its table, or `signals`.
+    source: &'static str,
     id: i64,
     event: Result<Event, axum::Error>,
 }
@@ -53,8 +58,9 @@ pub(crate) type TopicStream = BoxStream<'static, Option<Delivery>>;
     params(LiveParams),
     responses((
         status = 200,
-        description = "Server-sent events, each named by its topic: `signals` carries a \
-                       `SignalResponse`. The `id` is an opaque cursor.",
+        description = "Server-sent events, each named by its topic and carrying an item of \
+                       that collection: `signals` a `SignalResponse`, `liquidity-changes` a \
+                       `LiquidityChangeEventResponse`, and so on. The `id` is an opaque cursor.",
         content_type = "text/event-stream",
         body = String
     ))
@@ -78,8 +84,8 @@ pub(crate) async fn live(
     params(LiveParams),
     responses((
         status = 200,
-        description = "Server-sent events of the protocol, each named by its topic: `signals` \
-                       carries a `SignalResponse`. The `id` is an opaque cursor.",
+        description = "Server-sent events of the protocol, each named by its topic and \
+                       carrying an item of that collection. The `id` is an opaque cursor.",
         content_type = "text/event-stream",
         body = String
     ))
@@ -100,13 +106,76 @@ pub(crate) async fn protocol_live(
 
 /// One subscription per topic asked for: a source nobody asked for keeps its poller idle.
 fn topic_streams(state: &AppState, request: &LiveRequest) -> Vec<TopicStream> {
+    let live = &state.live;
+    let protocol = request.protocol;
     request
         .topics
         .iter()
-        .map(|topic| match topic {
-            LiveTopic::Signals => signals_topic(state.live_signals.subscribe(), request.protocol),
+        .map(|&topic| match topic {
+            LiveTopic::Signals => signals_topic(live.signals.subscribe(), protocol),
+            LiveTopic::LiquidityChanges => events_topic::<_, _, LiquidityChangeEventResponse>(
+                topic,
+                &live.liquidity_changes,
+                protocol,
+            ),
+            LiveTopic::PoolCreations => events_topic::<_, _, PoolCreationEventResponse>(
+                topic,
+                &live.pool_creations,
+                protocol,
+            ),
+            LiveTopic::PositionChanges => events_topic::<_, _, PositionChangeEventResponse>(
+                topic,
+                &live.position_changes,
+                protocol,
+            ),
+            LiveTopic::PositionFeeClaims => events_topic::<_, _, PositionFeeClaimEventResponse>(
+                topic,
+                &live.position_fee_claims,
+                protocol,
+            ),
+            LiveTopic::ProtocolFeeClaims => events_topic::<_, _, ProtocolFeeClaimEventResponse>(
+                topic,
+                &live.protocol_fee_claims,
+                protocol,
+            ),
+            LiveTopic::RewardClaims => {
+                events_topic::<_, _, RewardClaimEventResponse>(topic, &live.reward_claims, protocol)
+            }
+            LiveTopic::RewardChanges => events_topic::<_, _, RewardChangeEventResponse>(
+                topic,
+                &live.reward_changes,
+                protocol,
+            ),
+            LiveTopic::PoolChanges => {
+                events_topic::<_, _, PoolChangeEventResponse>(topic, &live.pool_changes, protocol)
+            }
         })
         .collect()
+}
+
+/// The items of one broadcast, each made a delivery or passed over by `deliver`.
+fn topic_stream<I: Send + Sync + 'static>(
+    receiver: broadcast::Receiver<Arc<I>>,
+    deliver: impl Fn(&I) -> Option<Delivery> + Send + Sync + 'static,
+) -> TopicStream {
+    let deliver = Arc::new(deliver);
+    stream::unfold(Some(receiver), move |state| {
+        let deliver = deliver.clone();
+        async move {
+            let mut receiver = state?;
+            loop {
+                match receiver.recv().await {
+                    Ok(item) => {
+                        if let Some(delivery) = deliver(&item) {
+                            return Some((Some(delivery), Some(receiver)));
+                        }
+                    }
+                    Err(_) => return Some((None, None)),
+                }
+            }
+        }
+    })
+    .boxed()
 }
 
 /// The signals as they are broadcast, those of `protocol` only when one is given.
@@ -114,26 +183,59 @@ pub(crate) fn signals_topic(
     receiver: broadcast::Receiver<Arc<EnrichedSignal>>,
     protocol: Option<Protocol>,
 ) -> TopicStream {
-    stream::unfold(Some(receiver), move |state| async move {
-        let mut receiver = state?;
-        loop {
-            match receiver.recv().await {
-                Ok(signal) if protocol.is_none_or(|p| p == signal.record.signal.protocol) => {
-                    let delivery = Delivery {
-                        topic: LiveTopic::Signals,
-                        id: signal.record.id,
-                        // Enriched once by the poller: no database work here.
-                        event: Event::default()
-                            .json_data(SignalResponse::from(EnrichedSignal::clone(&signal))),
-                    };
-                    return Some((Some(delivery), Some(receiver)));
-                }
-                Ok(_) => {}
-                Err(_) => return Some((None, None)),
-            }
-        }
+    topic_stream(receiver, move |signal: &EnrichedSignal| {
+        protocol
+            .is_none_or(|p| p == signal.record.signal.protocol)
+            .then(|| Delivery {
+                topic: LiveTopic::Signals,
+                source: LiveTopic::Signals.name(),
+                id: signal.record.id,
+                // Enriched once by the poller: no database work here.
+                event: Event::default().json_data(SignalResponse::from(signal.clone())),
+            })
     })
-    .boxed()
+}
+
+/// A collection's topic for one connection. ⚠️ A protocol none of its tables is written for is
+/// not subscribed: its receiver would keep every table's poller reading for nothing.
+pub(crate) fn events_topic<T, E, R>(
+    topic: LiveTopic,
+    channel: &EventChannel<T, E>,
+    protocol: Option<Protocol>,
+) -> TopicStream
+where
+    T: EventTable,
+    E: LiveItem + Clone + Send + Sync + 'static,
+    R: From<E> + Serialize + 'static,
+{
+    if protocol.is_some_and(|p| T::ALL.iter().all(|table| table.protocol() != p)) {
+        return stream::pending().boxed();
+    }
+    event_stream::<T, E, R>(topic, channel.subscribe(), protocol)
+}
+
+/// A collection's events as they are broadcast, those of `protocol` only when one is given, each
+/// sent as an item of the collection.
+pub(crate) fn event_stream<T, E, R>(
+    topic: LiveTopic,
+    receiver: broadcast::Receiver<Arc<LiveEvent<T, E>>>,
+    protocol: Option<Protocol>,
+) -> TopicStream
+where
+    T: EventTable,
+    E: LiveItem + Clone + Send + Sync + 'static,
+    R: From<E> + Serialize + 'static,
+{
+    topic_stream(receiver, move |item: &LiveEvent<T, E>| {
+        protocol
+            .is_none_or(|p| p == item.record.event.protocol())
+            .then(|| Delivery {
+                topic,
+                source: item.table.name(),
+                id: item.record.id,
+                event: Event::default().json_data(R::from(item.record.event.clone())),
+            })
+    })
 }
 
 /// Opens a connection if a slot is free, or refuses with `503`; without `AppState`, so a test
@@ -166,7 +268,7 @@ pub(crate) fn live_sse(
         .scan(
             (LiveCursor::default(), slot),
             |(cursor, _slot), delivery| {
-                cursor.record(delivery.topic, delivery.id);
+                cursor.record(delivery.source, delivery.id);
                 let event = cursor.encode().map_err(axum::Error::new).and_then(|id| {
                     delivery
                         .event

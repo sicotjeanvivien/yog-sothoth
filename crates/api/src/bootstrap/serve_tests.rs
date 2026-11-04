@@ -13,22 +13,23 @@ use tokio_util::sync::CancellationToken;
 use yog_bootstrap::SHUTDOWN_GRACE;
 
 use super::serve;
-use crate::application::{LivePoller, SignalService, SignalsSource};
+use crate::application::{LivePollers, SignalService, SignalsSource};
 use crate::http::{live_sse, signals_topic};
 use crate::testing::{MockMetadataRepo, MockSignalRepo, PoolRepoOnce};
 
 /// A poller that reads the feed at most once: its first tick fires at once,
 /// usually before any client is connected, and the next one is an hour away.
-fn idle_poller() -> LivePoller<SignalsSource> {
+fn idle_pollers() -> LivePollers {
     let (sender, _) = broadcast::channel(8);
-    LivePoller::new(
+    let mut pollers = LivePollers::new(Duration::from_secs(3600));
+    pollers.add(
         Arc::new(SignalsSource::new(
             Arc::new(MockSignalRepo::feed(Ok(None), Ok(vec![]))),
             unused_signal_service(),
         )),
         sender,
-        Duration::from_secs(3600),
-    )
+    );
+    pollers
 }
 
 /// A signal service no test reaches: nothing is ever broadcast, so no event
@@ -51,7 +52,7 @@ async fn start(
 ) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    let handle = tokio::spawn(serve(listener, router, idle_poller(), shutdown.clone()));
+    let handle = tokio::spawn(serve(listener, router, idle_pollers(), shutdown.clone()));
     (addr, handle)
 }
 

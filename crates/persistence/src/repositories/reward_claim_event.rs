@@ -1,6 +1,7 @@
 //! PostgreSQL implementation of [`RewardClaimEventLookup`]: each protocol's reward claim
 //! table, read by scope.
 
+mod live;
 mod rows;
 
 use async_trait::async_trait;
@@ -84,7 +85,7 @@ impl PgRewardClaimEventRepository {
         sqlx::query_as!(
             MeteoraDammV2ClaimRewardEventRow,
             r#"
-            SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,
+            SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
                    position, owner, mint_reward, reward_index, total_reward
               FROM meteora_damm_v2_claim_reward_events
              WHERE timestamp >= $1
@@ -116,7 +117,7 @@ impl PgRewardClaimEventRepository {
         sqlx::query_as!(
             MeteoraDammV2ClaimRewardEventRow,
             r#"
-            SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,
+            SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,
                    position, owner, mint_reward, reward_index, total_reward
               FROM meteora_damm_v2_claim_reward_events
              WHERE pool_address = $1 AND timestamp >= $2

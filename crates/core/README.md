@@ -31,7 +31,11 @@ core/src/
 │   │                       (an enum per protocol over its own event type — the on-chain
 │   │                       lists, each with its *EventLookup; a DAMM v2 position, reward
 │   │                       or pool change is one of several events, MeteoraDammV2*Change;
-│   │                       EventScope, EventCursor and its window_start in event_cursor.rs)
+│   │                       EventScope, EventCursor and its window_start in event_cursor.rs;
+│   │                       each with its *Table, the tables it is written in)
+│   ├── event_table.rs     (EventTable and event_tables! — the tables a collection is written in)
+│   ├── live_event_feed.rs (LiveRecord, LiveEventFeed — a collection read live, table by table,
+│   │                       by id)
 │   ├── pool_creations/    (PoolCreations, by protocol — PoolCreationsLookup)
 │   ├── liquidity_moves/   (LiquidityMove and its LiquidityMoveLock, LiquidityFlows and
 │   │                       LiquidityTotals, its order,
@@ -281,7 +285,7 @@ Each domain aggregate that needs persistence declares a repository trait in its 
 
 At runtime, the connected Postgres role determines which methods actually succeed: calling `insert` from the api process fails with `permission denied` from Postgres itself, by design (see [Database roles](../README.md#database-roles)). Where a trait's write side and read side have disjoint consumers, the trait is split per consumer — one lens per process, same `Pg*` struct behind both. The write/owning side keeps the `*Repository` name; read lenses are named by intent, from a deliberately small vocabulary:
 
-- **`*Feed`** — a cursor-paginated listing in a fixed order (`SignalFeed` by time, `TokenActivityFeed` by volume).
+- **`*Feed`** — a cursor-paginated listing in a fixed order (`SignalFeed` by time, `TokenActivityFeed` by volume, `LiveEventFeed` by id, one table at a time).
 - **`*Lookup`** — point reads by key or of a projection (`TokenMetadataLookup`, `TokenPriceLookup`, `NetworkStatusLookup`, `ProtocolActivityLookup`, and the produced resources by scope: `SwapActivityLookup`, `PoolCreationsLookup`, `LiquidityMoveLookup`, `ClaimTotalsLookup`, `ProtocolTvlLookup`, `DiscoveredTvlLookup`).
 - **`PoolCatalog`** — the consultation surface of the pool registry (batch lookup + counts).
 - **`PoolAccountResolver`** — context's property-backfill lens, named by its capability.

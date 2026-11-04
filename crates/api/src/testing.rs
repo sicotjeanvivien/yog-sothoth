@@ -8,7 +8,7 @@ use solana_pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::sync::{Semaphore, broadcast};
+use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use yog_persistence::{PgHealthChecker, PgPool};
 
@@ -41,12 +41,12 @@ use yog_core::{
 
 use crate::application::{
     AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService,
-    LiquidityChangeEventService, LiquidityMoveService, LiquidityTurnoverService, NetworkService,
-    PoolChangeEventService, PoolCreationEventService, PoolCreationsService, PoolService,
-    PositionChangeCountsService, PositionChangeEventService, PositionFeeClaimEventService,
-    ProtocolCatalogService, ProtocolFeeClaimEventService, ProtocolTvlService,
-    RewardChangeEventService, RewardClaimEventService, RotationRunService, SignalService,
-    SwapActivityService, SwapEventService, TokenService, WindowsService, WorkSlots,
+    LiquidityChangeEventService, LiquidityMoveService, LiquidityTurnoverService, LiveChannels,
+    NetworkService, PoolChangeEventService, PoolCreationEventService, PoolCreationsService,
+    PoolService, PositionChangeCountsService, PositionChangeEventService,
+    PositionFeeClaimEventService, ProtocolCatalogService, ProtocolFeeClaimEventService,
+    ProtocolTvlService, RewardChangeEventService, RewardClaimEventService, RotationRunService,
+    SignalService, SwapActivityService, SwapEventService, TokenService, WindowsService, WorkSlots,
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
@@ -76,7 +76,7 @@ pub(crate) fn app_state() -> AppState {
             Arc::new(PoolRepoOnce::with_pools(vec![])),
             Arc::new(MockMetadataRepo::empty()),
         )),
-        live_signals: broadcast::channel(1).0,
+        live: LiveChannels::idle(),
         stream_slots: Arc::new(Semaphore::new(1)),
         protocol_catalog_service: Arc::new(ProtocolCatalogService::new(
             Arc::new(PoolCountsRepo::failing()),

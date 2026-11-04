@@ -17,3 +17,15 @@ pub trait RewardChangeEventLookup: Send + Sync {
         limit: i64,
     ) -> RepositoryResult<Page<RewardChangeEvent>>;
 }
+
+crate::domain::event_tables! {
+    /// The tables the reward changes are written in, one per protocol and event kind.
+    RewardChangeTable {
+        MeteoraDammV2Initialize => (MeteoraDammV2, "meteora_damm_v2_initialize_reward_events"),
+        MeteoraDammV2Fund => (MeteoraDammV2, "meteora_damm_v2_fund_reward_events"),
+        MeteoraDammV2DurationChange => (MeteoraDammV2, "meteora_damm_v2_update_reward_duration_events"),
+        MeteoraDammV2FunderChange => (MeteoraDammV2, "meteora_damm_v2_update_reward_funder_events"),
+        MeteoraDammV2IneligibleWithdrawal => (MeteoraDammV2, "meteora_damm_v2_withdraw_ineligible_reward_events"),
+        MeteoraDammV2DeadLiquidityWithdrawal => (MeteoraDammV2, "meteora_damm_v2_withdraw_dead_liquidity_reward_events"),
+    }
+}

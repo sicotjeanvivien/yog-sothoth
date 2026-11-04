@@ -30,7 +30,7 @@ persistence/
 │   │   ├── analytic/        (the analytic writer's cycle, and one module per
 │   │   │                     protocol for its facts — DAMM v2 today)
 │   │   ├── helper/          (pubkey/u64/u128 conversions, pagination helpers,
-│   │   │                     sqlx error mapping)
+│   │   │                     sqlx error mapping, live_records for the live reads)
 │   │   ├── meteora/damm_v2/ (per-event-kind event repositories — 19 today —
 │   │   │                     plus the cp-amm pool-properties satellite)
 │   │   ├── meteora/dlmm/    (the DLMM pool-properties satellite; no event
@@ -41,6 +41,9 @@ persistence/
 │   │   │   claim_totals.rs, position_change_counts.rs
 │   │   │                     (the produced resources the API reads by scope:
 │   │   │                     every protocol, one protocol, one pool)
+│   │   ├── swap_event/, liquidity_change_event/, pool_creation_event/, …, pool_change_event/
+│   │   │                     (the on-chain lists, paged; each `live.rs` reads them
+│   │   │                     live for /api/live, one function pair per table)
 │   │   ├── protocol_activity.rs, token_activity/ (the frozen hours every
 │   │   │                     measure is read over; the tokens by volume)
 │   │   ├── signal/, swap_flow/, liquidity_flow/, pool_price_snapshot/
@@ -722,6 +725,16 @@ each repository keeps its SQL. `position_fee_claim_event.rs`,
 `protocol_fee_claim_event.rs` and `reward_claim_event.rs` read one table each. The tests of
 the same names, under `tests/`, hold the scopes, the window and the pages through shared
 instants.
+
+**The same events, read live.** Each of these repositories also implements
+`LiveEventFeed` for `/api/live`, in its `live.rs`: table by table, never merged, since an id
+is unique in its table only — a `match` with one line per table, each calling that table's
+pair of reads. Per table, `max(id)` and the rows past an id, by id, both bounded to the last
+`lookback` on `timestamp` — the bound that keeps them on the recent, uncompressed chunk, an
+index-only scan of its `(id, timestamp)` key. Each read selects the same columns as the
+collection's page; `helper/live_records.rs` keeps a row that does not decode with its id.
+`tests/live_events.rs` plays one check on all 18 DAMM v2 tables: an event inserted after
+another but stamped before still comes, the stale one does not, and the batch is cut by id.
 
 **The announcements.** `announcement.rs` reads the list of every announcement
 (`list_entries`), whose status — upcoming, open or closed at the

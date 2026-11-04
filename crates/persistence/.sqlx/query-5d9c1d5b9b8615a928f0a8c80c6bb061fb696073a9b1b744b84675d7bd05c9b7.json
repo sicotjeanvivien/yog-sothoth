@@ -1,10 +1,21 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT pool_address, signature, timestamp, slot, transaction_index, event_index,\n                   position, owner, mint_reward, reward_index, total_reward\n              FROM meteora_damm_v2_claim_reward_events\n             WHERE timestamp >= $1\n               AND timestamp <= COALESCE($2, 'infinity'::TIMESTAMPTZ)\n               AND (timestamp < COALESCE($2, 'infinity'::TIMESTAMPTZ)\n                    OR (signature, event_index) < ($3, $4))\n             ORDER BY timestamp DESC, signature DESC, event_index DESC\n             LIMIT $5\n            ",
+  "query": "\n            SELECT id, pool_address, signature, timestamp, slot, transaction_index, event_index,\n                   position, owner, mint_reward, reward_index, total_reward\n              FROM meteora_damm_v2_claim_reward_events\n             WHERE id > $1\n               AND timestamp >= now() - $2::BIGINT * INTERVAL '1 second'\n             ORDER BY id\n             LIMIT $3\n            ",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_claim_reward_events",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
         "name": "pool_address",
         "type_info": "Text",
         "origin": {
@@ -15,7 +26,7 @@
         }
       },
       {
-        "ordinal": 1,
+        "ordinal": 2,
         "name": "signature",
         "type_info": "Text",
         "origin": {
@@ -26,7 +37,7 @@
         }
       },
       {
-        "ordinal": 2,
+        "ordinal": 3,
         "name": "timestamp",
         "type_info": "Timestamptz",
         "origin": {
@@ -37,7 +48,7 @@
         }
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "name": "slot",
         "type_info": "Int8",
         "origin": {
@@ -48,7 +59,7 @@
         }
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "transaction_index",
         "type_info": "Int8",
         "origin": {
@@ -59,7 +70,7 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "event_index",
         "type_info": "Int4",
         "origin": {
@@ -70,7 +81,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "position",
         "type_info": "Text",
         "origin": {
@@ -81,7 +92,7 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "owner",
         "type_info": "Text",
         "origin": {
@@ -92,7 +103,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "mint_reward",
         "type_info": "Text",
         "origin": {
@@ -103,7 +114,7 @@
         }
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "reward_index",
         "type_info": "Int2",
         "origin": {
@@ -114,7 +125,7 @@
         }
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "total_reward",
         "type_info": "Int8",
         "origin": {
@@ -127,14 +138,13 @@
     ],
     "parameters": {
       "Left": [
-        "Timestamptz",
-        "Timestamptz",
-        "Text",
-        "Int4",
+        "Int8",
+        "Int8",
         "Int8"
       ]
     },
     "nullable": [
+      false,
       false,
       false,
       false,
@@ -148,5 +158,5 @@
       false
     ]
   },
-  "hash": "88b067ccfc7b3c9e41644d7ffad6edf0b7d99fa512daf9c08b2671f1d0f9e25a"
+  "hash": "5d9c1d5b9b8615a928f0a8c80c6bb061fb696073a9b1b744b84675d7bd05c9b7"
 }

@@ -1,6 +1,7 @@
 //! PostgreSQL implementation of [`PositionChangeEventLookup`]: each protocol's position event
 //! tables, merged into one list and read by scope.
 
+mod live;
 mod rows;
 
 use std::collections::HashMap;

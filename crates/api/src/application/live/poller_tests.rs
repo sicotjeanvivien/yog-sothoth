@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use tokio::sync::broadcast;
+use tokio::sync::{Semaphore, broadcast};
 use tokio_util::sync::CancellationToken;
 use yog_core::{RepositoryError, RepositoryResult};
 
@@ -44,7 +44,9 @@ impl LiveSource for ScriptedSource {
     type Record = i64;
     type Item = i64;
 
-    const NAME: &'static str = "scripted";
+    fn name(&self) -> &'static str {
+        "scripted"
+    }
 
     async fn tip(&self) -> RepositoryResult<Option<i64>> {
         self.calls.fetch_add(1, Ordering::SeqCst);
@@ -72,6 +74,10 @@ impl LiveSource for ScriptedSource {
     async fn prepare(&self, records: Vec<i64>) -> Vec<i64> {
         records
     }
+}
+
+fn reads() -> Arc<Semaphore> {
+    Arc::new(Semaphore::new(1))
 }
 
 fn received(rx: &mut broadcast::Receiver<Arc<i64>>) -> Vec<i64> {
@@ -153,7 +159,7 @@ async fn nobody_listening_means_no_read() {
     let source = Arc::new(ScriptedSource::default());
     let (tx, rx) = broadcast::channel::<Arc<i64>>(8);
     drop(rx);
-    let poller = LivePoller::new(source.clone(), tx, Duration::from_millis(5));
+    let poller = LivePoller::new(source.clone(), tx, Duration::from_millis(5), reads());
     let shutdown = CancellationToken::new();
     let running = tokio::spawn(poller.run(shutdown.clone()));
 
@@ -173,6 +179,7 @@ async fn the_poller_stops_when_the_token_is_cancelled() {
         Arc::new(ScriptedSource::default()),
         tx,
         Duration::from_secs(3600),
+        reads(),
     );
     let shutdown = CancellationToken::new();
     let running = tokio::spawn(poller.run(shutdown.clone()));
@@ -195,7 +202,9 @@ impl LiveSource for StuckSource {
     type Record = i64;
     type Item = i64;
 
-    const NAME: &'static str = "stuck";
+    fn name(&self) -> &'static str {
+        "stuck"
+    }
 
     async fn tip(&self) -> RepositoryResult<Option<i64>> {
         std::future::pending().await
@@ -218,7 +227,12 @@ impl LiveSource for StuckSource {
 #[tokio::test]
 async fn a_stop_mid_tick_does_not_wait_for_the_tick() {
     let (tx, _subscriber) = broadcast::channel(8);
-    let poller = LivePoller::new(Arc::new(StuckSource), tx, Duration::from_millis(10));
+    let poller = LivePoller::new(
+        Arc::new(StuckSource),
+        tx,
+        Duration::from_millis(10),
+        reads(),
+    );
     let shutdown = CancellationToken::new();
     let running = tokio::spawn(poller.run(shutdown.clone()));
 

@@ -26,7 +26,7 @@ async fn main() -> anyhow::Result<()> {
         shutdown_token.cancel();
     });
 
-    let (app_state, signal_poller) = bootstrap::build_app_state(config.clone(), token.clone())
+    let (app_state, live_pollers) = bootstrap::build_app_state(config.clone(), token.clone())
         .await
         .inspect_err(|e| error!(error = ?e, "failed to build application state"))?;
 
@@ -34,7 +34,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .inspect_err(|e| error!(error = ?e, "failed to bind the API listener"))?;
     let router = http::build_router(app_state, config.cors_allowed_origins);
-    bootstrap::serve(listener, router, signal_poller, token)
+    bootstrap::serve(listener, router, live_pollers, token)
         .await
         .inspect_err(|e| error!(error = ?e, "fatal error in the API"))
 }

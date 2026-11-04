@@ -1,6 +1,7 @@
 //! PostgreSQL implementation of [`PoolChangeEventLookup`]: each protocol's pool status and fee
 //! event tables, merged into one list and read by scope.
 
+mod live;
 mod rows;
 
 use std::collections::HashMap;

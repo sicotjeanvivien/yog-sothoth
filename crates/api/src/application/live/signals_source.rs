@@ -28,7 +28,9 @@ impl LiveSource for SignalsSource {
     type Record = SignalRecord;
     type Item = EnrichedSignal;
 
-    const NAME: &'static str = "signals";
+    fn name(&self) -> &'static str {
+        "signals"
+    }
 
     async fn tip(&self) -> RepositoryResult<Option<i64>> {
         self.feed
