@@ -15,13 +15,13 @@ use yog_bootstrap::SHUTDOWN_GRACE;
 use super::serve;
 use crate::application::{LivePollers, SignalService, SignalsSource};
 use crate::http::{live_sse, signals_topic};
-use crate::testing::{MockMetadataRepo, MockSignalRepo, PoolRepoOnce};
+use crate::testing::MockSignalRepo;
 
 /// A poller that reads the feed at most once: its first tick fires at once,
 /// usually before any client is connected, and the next one is an hour away.
 fn idle_pollers() -> LivePollers {
     let (sender, _) = broadcast::channel(8);
-    let mut pollers = LivePollers::new(Duration::from_secs(3600));
+    let mut pollers = LivePollers::new(Duration::from_secs(3600), crate::testing::no_pairs());
     pollers.add(
         Arc::new(SignalsSource::new(
             Arc::new(MockSignalRepo::feed(Ok(None), Ok(vec![]))),
@@ -37,8 +37,7 @@ fn idle_pollers() -> LivePollers {
 fn unused_signal_service() -> Arc<SignalService> {
     Arc::new(SignalService::new(
         Arc::new(MockSignalRepo::empty()),
-        Arc::new(PoolRepoOnce::with_pools(vec![])),
-        Arc::new(MockMetadataRepo::empty()),
+        crate::testing::no_pairs(),
     ))
 }
 

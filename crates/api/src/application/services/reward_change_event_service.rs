@@ -8,13 +8,16 @@ use yog_core::{
     domain::{EventCursor, EventScope, RewardChangeEvent, RewardChangeEventLookup, Window},
 };
 
+use crate::application::{Paired, PoolPairs};
+
 pub(crate) struct RewardChangeEventService {
     events: Arc<dyn RewardChangeEventLookup>,
+    pairs: Arc<PoolPairs>,
 }
 
 impl RewardChangeEventService {
-    pub(crate) fn new(events: Arc<dyn RewardChangeEventLookup>) -> Self {
-        Self { events }
+    pub(crate) fn new(events: Arc<dyn RewardChangeEventLookup>, pairs: Arc<PoolPairs>) -> Self {
+        Self { events, pairs }
     }
 
     pub(crate) async fn list_events(
@@ -23,9 +26,10 @@ impl RewardChangeEventService {
         window: Window,
         cursor: Option<EventCursor>,
         limit: i64,
-    ) -> RepositoryResult<Page<RewardChangeEvent>> {
+    ) -> RepositoryResult<Page<Paired<RewardChangeEvent>>> {
         let from = EventCursor::window_start(cursor.as_ref(), window, Utc::now());
-        self.events.list_events(scope, from, cursor, limit).await
+        let page = self.events.list_events(scope, from, cursor, limit).await?;
+        self.pairs.page(page).await
     }
 }
 

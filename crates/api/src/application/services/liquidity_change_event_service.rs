@@ -8,13 +8,16 @@ use yog_core::{
     domain::{EventCursor, EventScope, LiquidityChangeEvent, LiquidityChangeEventLookup, Window},
 };
 
+use crate::application::{Paired, PoolPairs};
+
 pub(crate) struct LiquidityChangeEventService {
     events: Arc<dyn LiquidityChangeEventLookup>,
+    pairs: Arc<PoolPairs>,
 }
 
 impl LiquidityChangeEventService {
-    pub(crate) fn new(events: Arc<dyn LiquidityChangeEventLookup>) -> Self {
-        Self { events }
+    pub(crate) fn new(events: Arc<dyn LiquidityChangeEventLookup>, pairs: Arc<PoolPairs>) -> Self {
+        Self { events, pairs }
     }
 
     /// `scope`'s events over `window`, ending now on the first page; a later page keeps the
@@ -25,9 +28,10 @@ impl LiquidityChangeEventService {
         window: Window,
         cursor: Option<EventCursor>,
         limit: i64,
-    ) -> RepositoryResult<Page<LiquidityChangeEvent>> {
+    ) -> RepositoryResult<Page<Paired<LiquidityChangeEvent>>> {
         let from = EventCursor::window_start(cursor.as_ref(), window, Utc::now());
-        self.events.list_events(scope, from, cursor, limit).await
+        let page = self.events.list_events(scope, from, cursor, limit).await?;
+        self.pairs.page(page).await
     }
 }
 

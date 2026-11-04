@@ -1,19 +1,15 @@
 //! The signal feed: pagination of the detectors' signals, each composed with its pool's token
-//! pair through the catalog, metadata and price lenses. Pure domain.
+//! pair. Pure domain.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use solana_pubkey::Pubkey;
 use yog_core::{
     Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
-    domain::{
-        Pool, PoolCatalog, Protocol, Severity, SignalCursor, SignalFeed, SignalFilter,
-        SignalRecord, TokenMetadataLookup,
-    },
+    domain::{Protocol, Severity, SignalCursor, SignalFeed, SignalFilter, SignalRecord},
 };
 
-use crate::application::{EnrichedSignal, EnrichedToken};
+use crate::application::{EnrichedSignal, Paired, PoolPairs};
 
 /// Input to [`SignalService::list_signals`].
 pub(crate) struct SignalListParams {
@@ -26,24 +22,15 @@ pub(crate) struct SignalListParams {
     pub limit: i64,
 }
 
-/// Signal feed queries, over the [`SignalFeed`] lens and the two lenses of the token pair.
+/// Signal feed queries, over the [`SignalFeed`] lens and the pairs of their pools.
 pub(crate) struct SignalService {
     repo: Arc<dyn SignalFeed>,
-    pool_catalog: Arc<dyn PoolCatalog>,
-    token_metadata_repository: Arc<dyn TokenMetadataLookup>,
+    pairs: Arc<PoolPairs>,
 }
 
 impl SignalService {
-    pub(crate) fn new(
-        repo: Arc<dyn SignalFeed>,
-        pool_catalog: Arc<dyn PoolCatalog>,
-        token_metadata_repository: Arc<dyn TokenMetadataLookup>,
-    ) -> Self {
-        Self {
-            repo,
-            pool_catalog,
-            token_metadata_repository,
-        }
+    pub(crate) fn new(repo: Arc<dyn SignalFeed>, pairs: Arc<PoolPairs>) -> Self {
+        Self { repo, pairs }
     }
 
     /// Paginates the feed, each signal enriched with its pool's pair. An unknown or unresolved
@@ -92,15 +79,15 @@ impl SignalService {
         &self,
         records: Vec<SignalRecord>,
     ) -> RepositoryResult<Vec<EnrichedSignal>> {
-        let sides = self.resolve_pools(&records).await?;
-
+        let pairs = self.pairs.of(&records).await?;
         Ok(records
             .into_iter()
             .map(|record| {
-                let (token_a, token_b) = sides
-                    .get(&record.signal.pool_address)
-                    .cloned()
-                    .unwrap_or_else(|| (EnrichedToken::unresolved(), EnrichedToken::unresolved()));
+                let Paired {
+                    item: record,
+                    token_a,
+                    token_b,
+                } = Paired::of(record, &pairs);
                 EnrichedSignal {
                     record,
                     token_a,
@@ -108,50 +95,6 @@ impl SignalService {
                 }
             })
             .collect())
-    }
-
-    /// The token sides of every distinct pool of `records`, in one batch. An address the
-    /// catalog omits is absent from the map.
-    async fn resolve_pools(
-        &self,
-        records: &[SignalRecord],
-    ) -> RepositoryResult<HashMap<Pubkey, (EnrichedToken, EnrichedToken)>> {
-        let mut addresses: Vec<Pubkey> = records.iter().map(|r| r.signal.pool_address).collect();
-        addresses.sort_unstable();
-        addresses.dedup();
-        if addresses.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        let pools: HashMap<Pubkey, Pool> = self
-            .pool_catalog
-            .find_by_addresses(&addresses)
-            .await?
-            .into_iter()
-            .map(|pool| (pool.pool_address, pool))
-            .collect();
-
-        let mut sides = HashMap::with_capacity(pools.len());
-        for (address, pool) in &pools {
-            sides.insert(*address, self.enrich_sides(Some(pool)).await?);
-        }
-        Ok(sides)
-    }
-
-    /// Both sides of one pool; an unknown pool yields two unresolved sides.
-    async fn enrich_sides(
-        &self,
-        pool: Option<&Pool>,
-    ) -> RepositoryResult<(EnrichedToken, EnrichedToken)> {
-        let (mint_a, mint_b) = match pool {
-            Some(pool) => (pool.token_a_mint, pool.token_b_mint),
-            None => (None, None),
-        };
-        let metadata = self.token_metadata_repository.as_ref();
-        Ok((
-            EnrichedToken::resolve(mint_a, metadata).await?,
-            EnrichedToken::resolve(mint_b, metadata).await?,
-        ))
     }
 }
 

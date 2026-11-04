@@ -9,10 +9,10 @@ use yog_core::domain::{
 };
 
 use super::LiveEvent;
-use crate::application::EnrichedSignal;
+use crate::application::{EnrichedSignal, Paired};
 
 /// The broadcast of one event collection, written by the pollers of all its tables.
-pub(crate) type EventChannel<T, E> = broadcast::Sender<Arc<LiveEvent<T, E>>>;
+pub(crate) type EventChannel<T, E> = broadcast::Sender<Arc<LiveEvent<T, Paired<E>>>>;
 
 /// One broadcast per topic of `/api/live`. ⚠️ A topic's pollers read only while its channel
 /// has a receiver, so a connection subscribes only to the topics it names.

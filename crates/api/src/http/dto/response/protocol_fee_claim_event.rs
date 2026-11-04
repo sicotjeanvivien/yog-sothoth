@@ -7,6 +7,8 @@ use utoipa::ToSchema;
 use yog_core::domain::ProtocolFeeClaimEvent;
 
 use super::protocol::ProtocolResponse;
+use super::token::EmbeddedTokenResponse;
+use crate::application::Paired;
 use crate::http::dto::schema::{Count, U128String};
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -15,6 +17,9 @@ pub(crate) struct ProtocolFeeClaimEventResponse {
     protocol: ProtocolResponse,
     #[schema(min_length = 1)]
     pool_address: String,
+    /// The pool's token pair.
+    token_a: EmbeddedTokenResponse,
+    token_b: EmbeddedTokenResponse,
     #[schema(min_length = 1)]
     signature: String,
     event_index: u16,
@@ -27,13 +32,20 @@ pub(crate) struct ProtocolFeeClaimEventResponse {
     amount_b: String,
 }
 
-impl From<ProtocolFeeClaimEvent> for ProtocolFeeClaimEventResponse {
-    fn from(event: ProtocolFeeClaimEvent) -> Self {
+impl From<Paired<ProtocolFeeClaimEvent>> for ProtocolFeeClaimEventResponse {
+    fn from(paired: Paired<ProtocolFeeClaimEvent>) -> Self {
+        let Paired {
+            item: event,
+            token_a,
+            token_b,
+        } = paired;
         let protocol = event.protocol();
         match event {
             ProtocolFeeClaimEvent::MeteoraDammV2(e) => Self {
                 protocol: protocol.into(),
                 pool_address: e.pool_address.to_string(),
+                token_a: token_a.into(),
+                token_b: token_b.into(),
                 signature: e.signature.to_string(),
                 event_index: e.event_index,
                 slot: e.slot,

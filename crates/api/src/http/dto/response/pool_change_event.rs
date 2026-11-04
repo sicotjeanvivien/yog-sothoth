@@ -9,6 +9,8 @@ use utoipa::ToSchema;
 use yog_core::domain::PoolChangeEvent;
 
 use super::protocol::ProtocolResponse;
+use super::token::EmbeddedTokenResponse;
+use crate::application::Paired;
 use crate::http::dto::schema::Count;
 
 use meteora_damm_v2_response::PoolChangeEventMeteoraDammV2Response;
@@ -19,6 +21,9 @@ pub(crate) struct PoolChangeEventResponse {
     protocol: ProtocolResponse,
     #[schema(min_length = 1)]
     pool_address: String,
+    /// The pool's token pair.
+    token_a: EmbeddedTokenResponse,
+    token_b: EmbeddedTokenResponse,
     #[schema(min_length = 1)]
     signature: String,
     event_index: u16,
@@ -30,8 +35,13 @@ pub(crate) struct PoolChangeEventResponse {
     meteora_damm_v2: Option<PoolChangeEventMeteoraDammV2Response>,
 }
 
-impl From<PoolChangeEvent> for PoolChangeEventResponse {
-    fn from(event: PoolChangeEvent) -> Self {
+impl From<Paired<PoolChangeEvent>> for PoolChangeEventResponse {
+    fn from(paired: Paired<PoolChangeEvent>) -> Self {
+        let Paired {
+            item: event,
+            token_a,
+            token_b,
+        } = paired;
         let protocol = event.protocol();
         match event {
             PoolChangeEvent::MeteoraDammV2(change) => {
@@ -39,6 +49,8 @@ impl From<PoolChangeEvent> for PoolChangeEventResponse {
                 Self {
                     protocol: protocol.into(),
                     pool_address: change.pool_address().to_string(),
+                    token_a: token_a.into(),
+                    token_b: token_b.into(),
                     signature: signature.to_string(),
                     event_index,
                     slot: change.slot(),

@@ -10,11 +10,12 @@ use yog_core::domain::{
 };
 
 use super::PositionChangeEventResponse;
+use crate::testing::{met_sol_wire, on_met_sol};
 
 fn wire(change: MeteoraDammV2PositionChange) -> serde_json::Value {
-    serde_json::to_value(PositionChangeEventResponse::from(
+    serde_json::to_value(PositionChangeEventResponse::from(on_met_sol(
         PositionChangeEvent::MeteoraDammV2(change),
-    ))
+    )))
     .unwrap()
 }
 
@@ -37,6 +38,7 @@ fn common(wire: &serde_json::Value) -> serde_json::Value {
 fn expected_common(signature: Signature) -> serde_json::Value {
     json!({
         "protocol": "meteora_damm_v2", "poolAddress": key(1).to_string(),
+        "tokenA": met_sol_wire()["tokenA"], "tokenB": met_sol_wire()["tokenB"],
         "signature": signature.to_string(), "eventIndex": 2, "slot": 9,
         "at": "2026-10-25T12:00:00Z"
     })

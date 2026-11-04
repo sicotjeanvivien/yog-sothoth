@@ -155,6 +155,25 @@ impl TokenMetadataLookup for PgTokenMetadataRepository {
         row.map(TokenMetadata::try_from).transpose()
     }
 
+    async fn find_by_mints(&self, mints: &[Pubkey]) -> RepositoryResult<Vec<TokenMetadata>> {
+        let mints: Vec<String> = mints.iter().map(ToString::to_string).collect();
+        let rows = sqlx::query_as!(
+            TokenMetadataRow,
+            r#"
+            SELECT mint, symbol, name, decimals, logo_uri,
+                   metadata_provider, fetched_at, last_refresh_at
+            FROM token_metadata
+            WHERE mint = ANY($1::TEXT[])
+            "#,
+            &mints,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter().map(TokenMetadata::try_from).collect()
+    }
+
     async fn list_entries(
         &self,
         cursor: Option<TokenCursor>,

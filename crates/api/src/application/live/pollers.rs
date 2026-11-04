@@ -7,7 +7,8 @@ use tokio::sync::{Semaphore, broadcast};
 use tokio_util::sync::CancellationToken;
 use yog_core::domain::{EventTable, LiveEventFeed};
 
-use super::{EventSource, LIVE_CHANNEL_CAPACITY, LiveEvent, LivePoller, LiveSource};
+use super::{EventChannel, EventSource, LIVE_CHANNEL_CAPACITY, LivePoller, LiveSource};
+use crate::application::{OnPool, PoolPairs};
 
 type Start = Box<dyn FnOnce(CancellationToken) -> BoxFuture<'static, ()> + Send>;
 
@@ -16,14 +17,16 @@ type Start = Box<dyn FnOnce(CancellationToken) -> BoxFuture<'static, ()> + Send>
 pub(crate) struct LivePollers {
     interval: Duration,
     reads: Arc<Semaphore>,
+    pairs: Arc<PoolPairs>,
     starts: Vec<Start>,
 }
 
 impl LivePollers {
-    pub(crate) fn new(interval: Duration) -> Self {
+    pub(crate) fn new(interval: Duration, pairs: Arc<PoolPairs>) -> Self {
         Self {
             interval,
             reads: Arc::new(Semaphore::new(1)),
+            pairs,
             starts: Vec::new(),
         }
     }
@@ -40,14 +43,14 @@ impl LivePollers {
     }
 
     /// A collection's broadcast, with one poller per table writing into it.
-    pub(crate) fn add_collection<T: EventTable, E: Send + Sync + 'static>(
+    pub(crate) fn add_collection<T: EventTable, E: OnPool + Send + Sync + 'static>(
         &mut self,
         feed: Arc<dyn LiveEventFeed<T, E>>,
-    ) -> broadcast::Sender<Arc<LiveEvent<T, E>>> {
+    ) -> EventChannel<T, E> {
         let (sender, _) = broadcast::channel(LIVE_CHANNEL_CAPACITY * T::ALL.len());
         for &table in T::ALL {
             self.add(
-                Arc::new(EventSource::new(feed.clone(), table)),
+                Arc::new(EventSource::new(feed.clone(), table, self.pairs.clone())),
                 sender.clone(),
             );
         }

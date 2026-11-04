@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 
 use crate::domain::{
@@ -17,6 +18,12 @@ impl PositionChangeEvent {
     pub fn protocol(&self) -> Protocol {
         match self {
             Self::MeteoraDammV2(_) => Protocol::MeteoraDammV2,
+        }
+    }
+
+    pub fn pool_address(&self) -> Pubkey {
+        match self {
+            Self::MeteoraDammV2(e) => e.pool_address(),
         }
     }
 }

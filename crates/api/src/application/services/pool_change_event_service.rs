@@ -8,13 +8,16 @@ use yog_core::{
     domain::{EventCursor, EventScope, PoolChangeEvent, PoolChangeEventLookup, Window},
 };
 
+use crate::application::{Paired, PoolPairs};
+
 pub(crate) struct PoolChangeEventService {
     events: Arc<dyn PoolChangeEventLookup>,
+    pairs: Arc<PoolPairs>,
 }
 
 impl PoolChangeEventService {
-    pub(crate) fn new(events: Arc<dyn PoolChangeEventLookup>) -> Self {
-        Self { events }
+    pub(crate) fn new(events: Arc<dyn PoolChangeEventLookup>, pairs: Arc<PoolPairs>) -> Self {
+        Self { events, pairs }
     }
 
     pub(crate) async fn list_events(
@@ -23,9 +26,10 @@ impl PoolChangeEventService {
         window: Window,
         cursor: Option<EventCursor>,
         limit: i64,
-    ) -> RepositoryResult<Page<PoolChangeEvent>> {
+    ) -> RepositoryResult<Page<Paired<PoolChangeEvent>>> {
         let from = EventCursor::window_start(cursor.as_ref(), window, Utc::now());
-        self.events.list_events(scope, from, cursor, limit).await
+        let page = self.events.list_events(scope, from, cursor, limit).await?;
+        self.pairs.page(page).await
     }
 }
 

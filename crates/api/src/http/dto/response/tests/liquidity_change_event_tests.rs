@@ -7,6 +7,7 @@ use yog_core::domain::{
 };
 
 use super::LiquidityChangeEventResponse;
+use crate::testing::{met_sol_wire, on_met_sol};
 
 fn key(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
@@ -29,9 +30,9 @@ fn wire(kind: MeteoraDammV2LiquidityEventKind) -> serde_json::Value {
         position: key(10),
         owner: key(11),
     };
-    serde_json::to_value(LiquidityChangeEventResponse::from(
+    serde_json::to_value(LiquidityChangeEventResponse::from(on_met_sol(
         LiquidityChangeEvent::MeteoraDammV2(event),
-    ))
+    )))
     .unwrap()
 }
 
@@ -44,6 +45,8 @@ fn each_value_of_a_change_is_under_its_name() {
         json!({
             "protocol": Protocol::MeteoraDammV2.as_str(),
             "poolAddress": key(1).to_string(),
+            "tokenA": met_sol_wire()["tokenA"],
+            "tokenB": met_sol_wire()["tokenB"],
             "signature": Signature::from([2; 64]).to_string(),
             "eventIndex": 4,
             "slot": 3,

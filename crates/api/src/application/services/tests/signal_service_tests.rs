@@ -5,6 +5,7 @@ use std::sync::Arc;
 use yog_core::{PageDirection, RepositoryError};
 
 use super::super::{SignalListParams, SignalService};
+use crate::application::PoolPairs;
 use crate::testing::{
     MockMetadataRepo, MockSignalRepo, PoolRepoOnce, make_metadata, make_pool, make_signal_page,
     make_signal_record, pk,
@@ -28,7 +29,10 @@ fn service(
     pools: PoolRepoOnce,
     metadata: MockMetadataRepo,
 ) -> SignalService {
-    SignalService::new(Arc::new(signals), Arc::new(pools), Arc::new(metadata))
+    SignalService::new(
+        Arc::new(signals),
+        Arc::new(PoolPairs::new(Arc::new(pools), Arc::new(metadata))),
+    )
 }
 
 #[tokio::test]

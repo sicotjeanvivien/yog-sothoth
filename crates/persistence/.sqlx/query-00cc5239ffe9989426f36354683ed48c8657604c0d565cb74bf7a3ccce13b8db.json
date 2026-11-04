@@ -1,0 +1,112 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT mint, symbol, name, decimals, logo_uri,\n                   metadata_provider, fetched_at, last_refresh_at\n            FROM token_metadata\n            WHERE mint = ANY($1::TEXT[])\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mint",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "mint"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "symbol",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "symbol"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "decimals",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "decimals"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "logo_uri",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "logo_uri"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "metadata_provider",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "metadata_provider"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "fetched_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "fetched_at"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "last_refresh_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "last_refresh_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "00cc5239ffe9989426f36354683ed48c8657604c0d565cb74bf7a3ccce13b8db"
+}

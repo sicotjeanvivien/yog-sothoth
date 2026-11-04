@@ -6,7 +6,7 @@ use yog_core::domain::Pool;
 use super::SignalsSource;
 use crate::application::live::poller::poll_once;
 use crate::application::live::watermark::LiveWatermark;
-use crate::application::{EnrichedSignal, SignalService};
+use crate::application::{EnrichedSignal, PoolPairs, SignalService};
 use crate::testing::{
     MockMetadataRepo, MockSignalRepo, PoolRepoOnce, make_metadata, make_pool, make_signal_record,
     pk,
@@ -17,8 +17,10 @@ use crate::testing::{
 fn enricher(pools: Vec<Pool>, metadata: MockMetadataRepo) -> Arc<SignalService> {
     Arc::new(SignalService::new(
         Arc::new(MockSignalRepo::empty()),
-        Arc::new(PoolRepoOnce::with_pools(pools)),
-        Arc::new(metadata),
+        Arc::new(PoolPairs::new(
+            Arc::new(PoolRepoOnce::with_pools(pools)),
+            Arc::new(metadata),
+        )),
     ))
 }
 

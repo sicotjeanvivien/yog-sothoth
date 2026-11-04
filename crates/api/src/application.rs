@@ -2,6 +2,7 @@ pub(crate) mod cache;
 mod enriched_signal;
 mod enriched_token;
 mod live;
+mod pool_pairs;
 mod services;
 mod work_slots;
 
@@ -11,6 +12,7 @@ pub(crate) use live::{
     EventChannel, LIVE_CHANNEL_CAPACITY, LiveChannels, LiveEvent, LiveItem, LivePollers,
     SignalsSource,
 };
+pub(crate) use pool_pairs::{OnPool, Paired, PairsByPool, PoolPairs};
 pub(crate) use services::{
     AnnouncementService, Availability, ClaimTotalsService, DiscoveredTvlService,
     IngestionAggregate, IngestionService, LiquidityChangeEventService, LiquidityMoveService,

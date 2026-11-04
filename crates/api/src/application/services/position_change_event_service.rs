@@ -8,13 +8,16 @@ use yog_core::{
     domain::{EventCursor, EventScope, PositionChangeEvent, PositionChangeEventLookup, Window},
 };
 
+use crate::application::{Paired, PoolPairs};
+
 pub(crate) struct PositionChangeEventService {
     events: Arc<dyn PositionChangeEventLookup>,
+    pairs: Arc<PoolPairs>,
 }
 
 impl PositionChangeEventService {
-    pub(crate) fn new(events: Arc<dyn PositionChangeEventLookup>) -> Self {
-        Self { events }
+    pub(crate) fn new(events: Arc<dyn PositionChangeEventLookup>, pairs: Arc<PoolPairs>) -> Self {
+        Self { events, pairs }
     }
 
     pub(crate) async fn list_events(
@@ -23,9 +26,10 @@ impl PositionChangeEventService {
         window: Window,
         cursor: Option<EventCursor>,
         limit: i64,
-    ) -> RepositoryResult<Page<PositionChangeEvent>> {
+    ) -> RepositoryResult<Page<Paired<PositionChangeEvent>>> {
         let from = EventCursor::window_start(cursor.as_ref(), window, Utc::now());
-        self.events.list_events(scope, from, cursor, limit).await
+        let page = self.events.list_events(scope, from, cursor, limit).await?;
+        self.pairs.page(page).await
     }
 }
 

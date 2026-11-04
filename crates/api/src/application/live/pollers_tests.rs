@@ -13,7 +13,9 @@ use yog_core::domain::{
 };
 
 use super::LivePollers;
+use crate::application::Paired;
 use crate::application::live::{LIVE_CHANNEL_CAPACITY, LiveEvent};
+use crate::testing::no_pairs;
 
 /// A feed with no event, which records the tables anchored on.
 #[derive(Default)]
@@ -46,7 +48,7 @@ impl LiveEventFeed<PoolChangeTable, PoolChangeEvent> for AnchorsFeed {
 #[tokio::test]
 async fn every_table_of_a_collection_has_its_poller_on_the_topics_channel() {
     let feed = Arc::new(AnchorsFeed::default());
-    let mut pollers = LivePollers::new(Duration::from_secs(3600));
+    let mut pollers = LivePollers::new(Duration::from_secs(3600), no_pairs());
     let sender = pollers.add_collection(feed.clone());
     let _listener = sender.subscribe();
     let shutdown = CancellationToken::new();
@@ -108,7 +110,7 @@ impl LiveEventFeed<PoolChangeTable, PoolChangeEvent> for SlowFeed {
 #[tokio::test]
 async fn the_pollers_read_one_at_a_time() {
     let feed = Arc::new(SlowFeed::default());
-    let mut pollers = LivePollers::new(Duration::from_secs(3600));
+    let mut pollers = LivePollers::new(Duration::from_secs(3600), no_pairs());
     let sender = pollers.add_collection(feed.clone());
     let _listener = sender.subscribe();
     let shutdown = CancellationToken::new();
@@ -125,7 +127,7 @@ async fn the_pollers_read_one_at_a_time() {
 /// overflows it, and every connection on the topic ends.
 #[tokio::test]
 async fn a_collections_channel_holds_a_full_batch_of_each_table() {
-    let mut pollers = LivePollers::new(Duration::from_secs(3600));
+    let mut pollers = LivePollers::new(Duration::from_secs(3600), no_pairs());
     let sender = pollers.add_collection(Arc::new(AnchorsFeed::default()));
     let mut listener = sender.subscribe();
     let full = LIVE_CHANNEL_CAPACITY * PoolChangeTable::ALL.len();
@@ -135,8 +137,8 @@ async fn a_collections_channel_holds_a_full_batch_of_each_table() {
             table: PoolChangeTable::MeteoraDammV2Status,
             record: LiveRecord {
                 id: 1,
-                event: PoolChangeEvent::MeteoraDammV2(MeteoraDammV2PoolChange::Status(
-                    MeteoraDammV2SetPoolStatusEvent {
+                event: Paired::unpaired(PoolChangeEvent::MeteoraDammV2(
+                    MeteoraDammV2PoolChange::Status(MeteoraDammV2SetPoolStatusEvent {
                         pool_address: Pubkey::new_from_array([1; 32]),
                         signature: Signature::from([1; 64]),
                         timestamp: chrono::Utc::now(),
@@ -144,7 +146,7 @@ async fn a_collections_channel_holds_a_full_batch_of_each_table() {
                         transaction_index: None,
                         event_index: 0,
                         status: 0,
-                    },
+                    }),
                 )),
             },
         })

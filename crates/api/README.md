@@ -36,6 +36,7 @@ api/src/
 │   ├── live/signals_source.rs ← SignalsSource (enriches once, feeds the signals' broadcast)
 │   ├── live/event_source.rs   ← EventSource, one table of an event collection
 │   ├── cache.rs           ← SharedCache (moka) and its named CachePolicy per use
+│   ├── pool_pairs.rs      ← PoolPairs, the token pair of a batch's pools in two reads at most; Paired
 │   ├── enriched_token.rs  ← one token side of a pool, identity only
 │   └── enriched_signal.rs ← signal + embedded token pair of its pool
 ├── http/
@@ -129,14 +130,14 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/pools/{pool}` | The pool of the lists, and the properties of its protocol under the protocol's name (`meteoraDammV2`: fee shares, base-fee kind, the fee its curve charges now); 404 for a pool unknown |
 | `GET` | `/api/tokens` | A page of tokens, the most recently first fetched first, each as `/api/tokens/{mint}`, forward-only cursor |
 | `GET` | `/api/swaps`, `/api/protocols/{protocol}/swaps`, `/api/pools/{pool}/swaps` | A page of swaps, the most recent first, ties by signature then event index, over `?window=` (`24h` at the root and under a protocol, `7d` at most under a pool): direction, amounts and reserves after in raw units, and the protocol's own fields under its name (`meteoraDammV2`: price after, fees and their token) |
-| `GET` | `/api/liquidity-changes`, `/api/protocols/{protocol}/liquidity-changes`, `/api/pools/{pool}/liquidity-changes` | A page of liquidity added and removed, as the swaps: kind, amounts, reserves after, position, owner; `meteoraDammV2.liquidityDelta` |
-| `GET` | `/api/pool-creations`, `/api/protocols/{protocol}/pool-creations` | A page of pool creations, as the swaps: mints and creator; `meteoraDammV2`, the payer, price range and first price, liquidity, activation, fee and pool modes, amounts deposited, and `fees`, the fee parameters, decoded on read (`null` when the bytes do not decode) |
-| `GET` | `/api/position-changes`, `/api/protocols/{protocol}/position-changes`, `/api/pools/{pool}/position-changes` | A page of positions opened, closed, locked and split, as the swaps, every kind in one list; the change under the protocol's name, tagged by `kind` (`meteoraDammV2`: `open`, `close`, `vesting_lock`, `permanent_lock`, `split`, each with its own fields) |
-| `GET` | `/api/position-fee-claims`, `/api/protocols/{protocol}/position-fee-claims`, `/api/pools/{pool}/position-fee-claims` | A page of fees claimed by the positions, as the swaps: position, owner, fees A and B |
-| `GET` | `/api/protocol-fee-claims`, `/api/protocols/{protocol}/protocol-fee-claims`, `/api/pools/{pool}/protocol-fee-claims` | A page of protocol fees claimed, as the swaps: amounts A and B |
-| `GET` | `/api/reward-claims`, `/api/protocols/{protocol}/reward-claims`, `/api/pools/{pool}/reward-claims` | A page of rewards claimed by the positions, as the swaps: position, owner, reward mint and index, amount |
-| `GET` | `/api/reward-changes`, `/api/protocols/{protocol}/reward-changes`, `/api/pools/{pool}/reward-changes` | A page of rewards set up, funded, changed and withdrawn, as the position changes (`meteoraDammV2`: `initialize`, `fund`, `duration_change`, `funder_change`, `ineligible_withdrawal`, `dead_liquidity_withdrawal`) |
-| `GET` | `/api/pool-changes`, `/api/protocols/{protocol}/pool-changes`, `/api/pools/{pool}/pool-changes` | A page of pool status and fee changes, as the position changes (`meteoraDammV2`: `status`, the raw byte; `fees`, the operator and what the update changes, each field `unchanged` or set, decoded on read (`null` when the bytes do not decode)) |
+| `GET` | `/api/liquidity-changes`, `/api/protocols/{protocol}/liquidity-changes`, `/api/pools/{pool}/liquidity-changes` | A page of liquidity added and removed, as the swaps: kind, amounts, reserves after, position, owner, the pool's pair (`tokenA`/`tokenB`, as the signals); `meteoraDammV2.liquidityDelta` |
+| `GET` | `/api/pool-creations`, `/api/protocols/{protocol}/pool-creations` | A page of pool creations, as the swaps: mints and creator, the pair it creates (`tokenA`/`tokenB`, its mints from the event); `meteoraDammV2`, the payer, price range and first price, liquidity, activation, fee and pool modes, amounts deposited, and `fees`, the fee parameters, decoded on read (`null` when the bytes do not decode) |
+| `GET` | `/api/position-changes`, `/api/protocols/{protocol}/position-changes`, `/api/pools/{pool}/position-changes` | A page of positions opened, closed, locked and split, as the swaps, every kind in one list, the pool's pair; the change under the protocol's name, tagged by `kind` (`meteoraDammV2`: `open`, `close`, `vesting_lock`, `permanent_lock`, `split`, each with its own fields) |
+| `GET` | `/api/position-fee-claims`, `/api/protocols/{protocol}/position-fee-claims`, `/api/pools/{pool}/position-fee-claims` | A page of fees claimed by the positions, as the swaps: position, owner, fees A and B, the pool's pair |
+| `GET` | `/api/protocol-fee-claims`, `/api/protocols/{protocol}/protocol-fee-claims`, `/api/pools/{pool}/protocol-fee-claims` | A page of protocol fees claimed, as the swaps: amounts A and B, the pool's pair |
+| `GET` | `/api/reward-claims`, `/api/protocols/{protocol}/reward-claims`, `/api/pools/{pool}/reward-claims` | A page of rewards claimed by the positions, as the swaps: position, owner, reward mint and index, amount, the pool's pair |
+| `GET` | `/api/reward-changes`, `/api/protocols/{protocol}/reward-changes`, `/api/pools/{pool}/reward-changes` | A page of rewards set up, funded, changed and withdrawn, as the position changes, the pool's pair (`meteoraDammV2`: `initialize`, `fund`, `duration_change`, `funder_change`, `ineligible_withdrawal`, `dead_liquidity_withdrawal`) |
+| `GET` | `/api/pool-changes`, `/api/protocols/{protocol}/pool-changes`, `/api/pools/{pool}/pool-changes` | A page of pool status and fee changes, as the position changes, the pool's pair (`meteoraDammV2`: `status`, the raw byte; `fees`, the operator and what the update changes, each field `unchanged` or set, decoded on read (`null` when the bytes do not decode)) |
 | `GET` | `/api/tokens/{mint}/prices` | A page of the token's prices over `?window=`, the most recent first; the window ends at the first page, whose start the cursor carries, refused (400) for another mint; 404 for a mint without metadata |
 | `GET` | `/api/tokens/{mint}` | Token metadata + latest price (200 with `price: null` if no price yet) |
 | `GET` | `/api/announcements` | A page of every announcement, the latest start first, ties by id: kind, severity, message, link, window, and `status` — `upcoming`, `open` or `closed` at the request; `?status=` keeps one; forward-only cursor, refused (400) under another status |
@@ -439,10 +440,11 @@ route is added only for a new kind of entity.
 - **The watermark is re-anchored at the tip** when someone connects after an idle spell:
   when `receiver_count() == 0` the read is skipped and the watermark dropped, so an idle
   source costs nothing and a returning client gets no burst.
-- **The signals are enriched once per tick**, in one batch (`SignalService::enrich_batch`,
-  the same code as the paginated feed), and broadcast behind an `Arc`: a connection does no
-  database work. If the enrichment fails, the signals go out with unresolved sides rather
-  than being dropped — delivering the alert beats decorating it.
+- **Each tick's items are paired once**, in one batch (`PoolPairs`, the same code as the
+  paginated lists: the pools, then their mints' metadata, two reads at most), and
+  broadcast behind an `Arc`: a connection does no database work. If the pairing fails, the
+  items go out with unresolved sides rather than being dropped — delivering them beats
+  decorating them.
 
 Poller failures are skip-and-log: a failed tick is logged and the next one proceeds.
 
