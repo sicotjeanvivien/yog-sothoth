@@ -3,11 +3,17 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use async_trait::async_trait;
+use solana_pubkey::Pubkey;
+use solana_signature::Signature;
 use tokio_util::sync::CancellationToken;
 use yog_core::RepositoryResult;
-use yog_core::domain::{LiveEventFeed, LiveRecord, PoolChangeEvent, PoolChangeTable};
+use yog_core::domain::{
+    EventTable, LiveEventFeed, LiveRecord, MeteoraDammV2PoolChange,
+    MeteoraDammV2SetPoolStatusEvent, PoolChangeEvent, PoolChangeTable,
+};
 
 use super::LivePollers;
+use crate::application::live::{LIVE_CHANNEL_CAPACITY, LiveEvent};
 
 /// A feed with no event, which records the tables anchored on.
 #[derive(Default)]
@@ -113,4 +119,41 @@ async fn the_pollers_read_one_at_a_time() {
     running.await.unwrap().unwrap();
 
     assert_eq!(feed.most.load(Ordering::SeqCst), 1);
+}
+
+/// Mutation: a collection's channel sized for one table — a tick of every table at its batch cap
+/// overflows it, and every connection on the topic ends.
+#[tokio::test]
+async fn a_collections_channel_holds_a_full_batch_of_each_table() {
+    let mut pollers = LivePollers::new(Duration::from_secs(3600));
+    let sender = pollers.add_collection(Arc::new(AnchorsFeed::default()));
+    let mut listener = sender.subscribe();
+    let full = LIVE_CHANNEL_CAPACITY * PoolChangeTable::ALL.len();
+
+    let event = || {
+        Arc::new(LiveEvent {
+            table: PoolChangeTable::MeteoraDammV2Status,
+            record: LiveRecord {
+                id: 1,
+                event: PoolChangeEvent::MeteoraDammV2(MeteoraDammV2PoolChange::Status(
+                    MeteoraDammV2SetPoolStatusEvent {
+                        pool_address: Pubkey::new_from_array([1; 32]),
+                        signature: Signature::from([1; 64]),
+                        timestamp: chrono::Utc::now(),
+                        slot: 9,
+                        transaction_index: None,
+                        event_index: 0,
+                        status: 0,
+                    },
+                )),
+            },
+        })
+    };
+    for _ in 0..full {
+        assert!(sender.send(event()).is_ok());
+    }
+
+    for _ in 0..full {
+        assert!(listener.try_recv().is_ok(), "the listener keeps up");
+    }
 }

@@ -54,10 +54,8 @@ async fn insert(pool: &PgPool, insert: &Insert, seed: u8, ago: i64) -> i64 {
     query.fetch_one(pool).await.unwrap()
 }
 
-/// Mutation: a read ordered or bounded by the instant, the lookback dropped from either read, or
-/// the limit dropped — the event stamped earlier but inserted later is missed, the batch is cut
-/// in another order than the ids', the stale event becomes the tip or comes, or the tail comes
-/// whole.
+/// Mutation: a read ordered or bounded by the instant, a lookback or the limit dropped — the late
+/// event missed, the batch cut out of id order, the stale event read, or the tail read whole.
 async fn reads_by_id_within_the_lookback<T: EventTable + Debug, E>(
     admin: &PgPool,
     feed: &dyn LiveEventFeed<T, E>,

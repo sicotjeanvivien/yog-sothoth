@@ -419,12 +419,13 @@ route is added only for a new kind of entity.
   six, `pool-changes` in two) has one poller per table, each with its own watermark, all
   writing into the topic's channel — 19 pollers for DAMM v2, run as one task
   (`LivePollers`). ⚠️ They read one at a time, sharing one slot: they take at most one of the
-  pool's 10 connections, which the capacity bounds below count on.
+  pool's 10 connections, which the capacity bounds below count on. A topic's channel holds
+  256 messages per table writing in it: a connection lagging past them, or whose source
+  closed, is ended, and the browser's `EventSource` reconnects.
 - **A row that does not decode is logged and passed over**, its id counted as read: one bad
   row does not hold its table until it leaves the lookback.
 - **A protocol's connection subscribes only to the collections written for it**: a topic none
-  of whose tables is the protocol's stays open and silent, without waking a poller. A connection lagging past the channel's 256 messages, or whose source closed, is
-  ended, and the browser's `EventSource` reconnects.
+  of whose tables is the protocol's stays open and silent, without waking a poller.
 - **The poller walks its table by id**, the order of insertion: an item stamped before
   another but inserted after still comes. ⚠️ An id is taken at insert, not at commit: a
   slower insert can land below an id already read. The watermark therefore keeps the ids

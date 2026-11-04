@@ -44,7 +44,7 @@ impl LivePollers {
         &mut self,
         feed: Arc<dyn LiveEventFeed<T, E>>,
     ) -> broadcast::Sender<Arc<LiveEvent<T, E>>> {
-        let (sender, _) = broadcast::channel(LIVE_CHANNEL_CAPACITY);
+        let (sender, _) = broadcast::channel(LIVE_CHANNEL_CAPACITY * T::ALL.len());
         for &table in T::ALL {
             self.add(
                 Arc::new(EventSource::new(feed.clone(), table)),
