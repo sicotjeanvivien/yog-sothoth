@@ -21,7 +21,7 @@ function liquidity(kind: "add" | "remove", tokens = { tokenA: MET, tokenB: SOL }
 }
 
 describe("activityRow", () => {
-  // Mutation: A and B exchanged, or the raw amount shown — 2.5 MET read as 1.48K.
+  // Mutation: A and B exchanged, or the raw amount shown.
   it("gives a liquidity change its pair, signed amounts in units of each side, and its position", () => {
     const row = activityRow(liquidity("add"));
     expect(row.kind).toBe("liquidity_add");
@@ -81,9 +81,11 @@ describe("activityRow", () => {
     ).toEqual([{ type: "party", role: "creator", address: "5hTr…Wq1c" }]);
   });
 
-  // Mutation: the key without its topic — two collections' events of one instruction collapse.
-  it("keys a row by its topic, signature and index", () => {
-    expect(activityRow(liquidity("add")).key).toBe(`liquidity-changes:${BASE.signature}:0`);
+  // Mutation: the key without its topic or protocol — two events of one transaction collapse.
+  it("keys a row by its topic, protocol, signature and index", () => {
+    expect(activityRow(liquidity("add")).key).toBe(
+      `liquidity-changes:meteora_damm_v2:${BASE.signature}:0`,
+    );
   });
 });
 

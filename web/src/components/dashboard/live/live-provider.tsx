@@ -2,8 +2,8 @@
 
 /**
  * The page's one connection to `/api/live`: every block that streams subscribes to its topic here
- * instead of opening its own `EventSource`. ⚠️ Any opening after the page's first one leaves a
- * gap, since nothing is replayed: a new set of topics reopens, and `onReopen` fires.
+ * instead of opening its own `EventSource`. ⚠️ Nothing is replayed: after a failure or a new set
+ * of topics, the next opening leaves a gap, and `onReopen` fires.
  */
 
 import {
@@ -48,25 +48,28 @@ export function LiveProvider({
   const [status, setStatus] = useState<StreamStatus>("connecting");
   const handlers = useRef(new Map<LiveTopic, Set<Handler>>());
   const reopenHandlers = useRef(new Set<() => void>());
-  const openedOnce = useRef(false);
+  // ⚠️ A gap too: a failure before any opening, after the server rendered the first page.
+  const missed = useRef(false);
   const path = livePath(topics, protocol);
   const topicsKey = topics.join(",");
 
   useEffect(() => {
     const { NEXT_PUBLIC_YOG_API_URL } = loadClientEnv();
     const source = new EventSource(`${NEXT_PUBLIC_YOG_API_URL}${path}`);
+    let opened = false;
 
     source.onopen = () => {
       setStatus("live");
-      if (openedOnce.current) {
+      if (missed.current) {
         reopenHandlers.current.forEach((handler) => handler());
       }
-      openedOnce.current = true;
+      missed.current = false;
+      opened = true;
     };
 
     source.onerror = () => {
-      // EventSource reconnects on its own.
       setStatus("reconnecting");
+      missed.current = true;
     };
 
     for (const topic of new Set(topicsKey.split(",") as LiveTopic[])) {
@@ -85,8 +88,8 @@ export function LiveProvider({
 
     return () => {
       source.close();
-      // The next connection, on other topics, has not opened yet.
       setStatus("connecting");
+      missed.current ||= opened;
     };
   }, [path, topicsKey]);
 

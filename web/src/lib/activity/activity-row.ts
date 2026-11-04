@@ -208,9 +208,13 @@ function kindAndDetail(item: ActivityItem): KindAndDetail {
   }
 }
 
-/** The key a line keeps across renders: an event is one `(signature, index)` of its collection. */
-export function activityKey(topic: ActivityTopic, event: { signature: string; eventIndex: number }) {
-  return `${topic}:${event.signature}:${event.eventIndex}`;
+/** The key a line keeps across renders. ⚠️ `eventIndex` counts within one program: two protocols
+ * of a transaction can share it. */
+export function activityKey(
+  topic: ActivityTopic,
+  event: { protocol: ProtocolResponse; signature: string; eventIndex: number },
+) {
+  return `${topic}:${event.protocol}:${event.signature}:${event.eventIndex}`;
 }
 
 export function activityRow(item: ActivityItem): ActivityRow {

@@ -349,7 +349,7 @@ its ⓘ), the fees and active pools of each protocol, and the fees by hour or by
 day under the volume; cells, table rows and headings tighten, and the order of
 the sections never changes. The server renders both modes; `OverviewMode` puts
 `data-overview-advanced` over the page and the `adv:` variant (`globals.css`)
-shows, hides and tightens, so switching fetches nothing. The switch writes the
+shows, hides and tightens. The switch writes the
 `yog_overview_advanced` cookie (one year, declared in `/privacy`), which the
 page reads for the first paint. Each block's `MIN_HEIGHT` has its advanced
 value, so its waiting slot keeps its size in both modes. The live activity takes
@@ -428,7 +428,7 @@ so the page is no longer, the positions' life cycle over the period, in one colu
 
 **06 Live activity** — `protocol/activity/activity-tab.tsx`: the protocol's latest signals,
 whatever the period, from `/api/protocols/{protocol}/signals`, then those that arrive on
-`/api/live/protocols/{protocol}?topics=signals`, through the Overview's signal rows
+`/api/live/protocols/{protocol}?topics=…`, through the Overview's signal rows
 (`OverviewSignalsLive`). In the advanced mode, the protocol's live activity sits beside
 them, each on half the width as in the canvas, on the same connection.
 
