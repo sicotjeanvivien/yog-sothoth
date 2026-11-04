@@ -6,14 +6,14 @@ use chrono::{Duration, Utc};
 use yog_core::domain::{EventCursor, EventScope, Window};
 
 use super::RewardClaimEventService;
-use crate::testing::{MockRewardClaimEventRepo, ts};
+use crate::testing::{MockRewardClaimEventRepo, no_pairs, ts};
 
 /// Mutation: the window's start recomputed on every page — a later page's start slides with
 /// the clock and drops the reward claims between.
 #[tokio::test]
 async fn a_later_page_keeps_the_start_of_its_cursor() {
     let repo = Arc::new(MockRewardClaimEventRepo::default());
-    let svc = RewardClaimEventService::new(repo.clone());
+    let svc = RewardClaimEventService::new(repo.clone(), no_pairs());
     let cursor = EventCursor {
         scope: EventScope::All,
         from: ts(1_000),

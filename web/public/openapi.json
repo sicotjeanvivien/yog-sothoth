@@ -251,11 +251,20 @@
           },
           "slot": {
             "$ref": "#/components/schemas/Count"
+          },
+          "tokenA": {
+            "$ref": "#/components/schemas/EmbeddedTokenResponse",
+            "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+          },
+          "tokenB": {
+            "$ref": "#/components/schemas/EmbeddedTokenResponse"
           }
         },
         "required": [
           "protocol",
           "poolAddress",
+          "tokenA",
+          "tokenB",
           "signature",
           "eventIndex",
           "slot",
@@ -1614,11 +1623,20 @@
                 },
                 "slot": {
                   "$ref": "#/components/schemas/Count"
+                },
+                "tokenA": {
+                  "$ref": "#/components/schemas/EmbeddedTokenResponse",
+                  "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+                },
+                "tokenB": {
+                  "$ref": "#/components/schemas/EmbeddedTokenResponse"
                 }
               },
               "required": [
                 "protocol",
                 "poolAddress",
+                "tokenA",
+                "tokenB",
                 "signature",
                 "eventIndex",
                 "slot",
@@ -1695,11 +1713,20 @@
                 },
                 "slot": {
                   "$ref": "#/components/schemas/Count"
+                },
+                "tokenA": {
+                  "$ref": "#/components/schemas/EmbeddedTokenResponse",
+                  "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+                },
+                "tokenB": {
+                  "$ref": "#/components/schemas/EmbeddedTokenResponse"
                 }
               },
               "required": [
                 "protocol",
                 "poolAddress",
+                "tokenA",
+                "tokenB",
                 "signature",
                 "eventIndex",
                 "slot",
@@ -1774,9 +1801,16 @@
                 "slot": {
                   "$ref": "#/components/schemas/Count"
                 },
+                "tokenA": {
+                  "$ref": "#/components/schemas/EmbeddedTokenResponse",
+                  "description": "The pair it creates, its mints from the event: the rest nullable until yog-context\nfetches their metadata."
+                },
                 "tokenAMint": {
                   "minLength": 1,
                   "type": "string"
+                },
+                "tokenB": {
+                  "$ref": "#/components/schemas/EmbeddedTokenResponse"
                 },
                 "tokenBMint": {
                   "minLength": 1,
@@ -1786,6 +1820,8 @@
               "required": [
                 "protocol",
                 "poolAddress",
+                "tokenA",
+                "tokenB",
                 "signature",
                 "eventIndex",
                 "slot",
@@ -1950,11 +1986,20 @@
                 },
                 "slot": {
                   "$ref": "#/components/schemas/Count"
+                },
+                "tokenA": {
+                  "$ref": "#/components/schemas/EmbeddedTokenResponse",
+                  "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+                },
+                "tokenB": {
+                  "$ref": "#/components/schemas/EmbeddedTokenResponse"
                 }
               },
               "required": [
                 "protocol",
                 "poolAddress",
+                "tokenA",
+                "tokenB",
                 "signature",
                 "eventIndex",
                 "slot",
@@ -2035,11 +2080,20 @@
                 },
                 "slot": {
                   "$ref": "#/components/schemas/Count"
+                },
+                "tokenA": {
+                  "$ref": "#/components/schemas/EmbeddedTokenResponse",
+                  "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+                },
+                "tokenB": {
+                  "$ref": "#/components/schemas/EmbeddedTokenResponse"
                 }
               },
               "required": [
                 "protocol",
                 "poolAddress",
+                "tokenA",
+                "tokenB",
                 "signature",
                 "eventIndex",
                 "slot",
@@ -2116,11 +2170,20 @@
                 },
                 "slot": {
                   "$ref": "#/components/schemas/Count"
+                },
+                "tokenA": {
+                  "$ref": "#/components/schemas/EmbeddedTokenResponse",
+                  "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+                },
+                "tokenB": {
+                  "$ref": "#/components/schemas/EmbeddedTokenResponse"
                 }
               },
               "required": [
                 "protocol",
                 "poolAddress",
+                "tokenA",
+                "tokenB",
                 "signature",
                 "eventIndex",
                 "slot",
@@ -2192,11 +2255,20 @@
                 },
                 "slot": {
                   "$ref": "#/components/schemas/Count"
+                },
+                "tokenA": {
+                  "$ref": "#/components/schemas/EmbeddedTokenResponse",
+                  "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+                },
+                "tokenB": {
+                  "$ref": "#/components/schemas/EmbeddedTokenResponse"
                 }
               },
               "required": [
                 "protocol",
                 "poolAddress",
+                "tokenA",
+                "tokenB",
                 "signature",
                 "eventIndex",
                 "slot",
@@ -2284,11 +2356,20 @@
                 },
                 "slot": {
                   "$ref": "#/components/schemas/Count"
+                },
+                "tokenA": {
+                  "$ref": "#/components/schemas/EmbeddedTokenResponse",
+                  "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+                },
+                "tokenB": {
+                  "$ref": "#/components/schemas/EmbeddedTokenResponse"
                 }
               },
               "required": [
                 "protocol",
                 "poolAddress",
+                "tokenA",
+                "tokenB",
                 "signature",
                 "eventIndex",
                 "slot",
@@ -2781,11 +2862,20 @@
           },
           "slot": {
             "$ref": "#/components/schemas/Count"
+          },
+          "tokenA": {
+            "$ref": "#/components/schemas/EmbeddedTokenResponse",
+            "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+          },
+          "tokenB": {
+            "$ref": "#/components/schemas/EmbeddedTokenResponse"
           }
         },
         "required": [
           "protocol",
           "poolAddress",
+          "tokenA",
+          "tokenB",
           "signature",
           "eventIndex",
           "slot",
@@ -2926,9 +3016,16 @@
           "slot": {
             "$ref": "#/components/schemas/Count"
           },
+          "tokenA": {
+            "$ref": "#/components/schemas/EmbeddedTokenResponse",
+            "description": "The pair it creates, its mints from the event: the rest nullable until yog-context\nfetches their metadata."
+          },
           "tokenAMint": {
             "minLength": 1,
             "type": "string"
+          },
+          "tokenB": {
+            "$ref": "#/components/schemas/EmbeddedTokenResponse"
           },
           "tokenBMint": {
             "minLength": 1,
@@ -2938,6 +3035,8 @@
         "required": [
           "protocol",
           "poolAddress",
+          "tokenA",
+          "tokenB",
           "signature",
           "eventIndex",
           "slot",
@@ -3318,11 +3417,20 @@
           },
           "slot": {
             "$ref": "#/components/schemas/Count"
+          },
+          "tokenA": {
+            "$ref": "#/components/schemas/EmbeddedTokenResponse",
+            "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+          },
+          "tokenB": {
+            "$ref": "#/components/schemas/EmbeddedTokenResponse"
           }
         },
         "required": [
           "protocol",
           "poolAddress",
+          "tokenA",
+          "tokenB",
           "signature",
           "eventIndex",
           "slot",
@@ -3369,11 +3477,20 @@
           },
           "slot": {
             "$ref": "#/components/schemas/Count"
+          },
+          "tokenA": {
+            "$ref": "#/components/schemas/EmbeddedTokenResponse",
+            "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+          },
+          "tokenB": {
+            "$ref": "#/components/schemas/EmbeddedTokenResponse"
           }
         },
         "required": [
           "protocol",
           "poolAddress",
+          "tokenA",
+          "tokenB",
           "signature",
           "eventIndex",
           "slot",
@@ -3608,11 +3725,20 @@
           },
           "slot": {
             "$ref": "#/components/schemas/Count"
+          },
+          "tokenA": {
+            "$ref": "#/components/schemas/EmbeddedTokenResponse",
+            "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+          },
+          "tokenB": {
+            "$ref": "#/components/schemas/EmbeddedTokenResponse"
           }
         },
         "required": [
           "protocol",
           "poolAddress",
+          "tokenA",
+          "tokenB",
           "signature",
           "eventIndex",
           "slot",
@@ -4413,11 +4539,20 @@
           },
           "slot": {
             "$ref": "#/components/schemas/Count"
+          },
+          "tokenA": {
+            "$ref": "#/components/schemas/EmbeddedTokenResponse",
+            "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+          },
+          "tokenB": {
+            "$ref": "#/components/schemas/EmbeddedTokenResponse"
           }
         },
         "required": [
           "protocol",
           "poolAddress",
+          "tokenA",
+          "tokenB",
           "signature",
           "eventIndex",
           "slot",
@@ -4471,11 +4606,20 @@
           },
           "slot": {
             "$ref": "#/components/schemas/Count"
+          },
+          "tokenA": {
+            "$ref": "#/components/schemas/EmbeddedTokenResponse",
+            "description": "The pool's token pair: every field nullable until yog-context resolves the pool."
+          },
+          "tokenB": {
+            "$ref": "#/components/schemas/EmbeddedTokenResponse"
           }
         },
         "required": [
           "protocol",
           "poolAddress",
+          "tokenA",
+          "tokenB",
           "signature",
           "eventIndex",
           "slot",

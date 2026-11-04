@@ -9,6 +9,7 @@ use yog_core::domain::{
 };
 
 use super::LiveSource;
+use crate::application::{OnPool, Paired, PairsByPool, PoolPairs};
 
 /// How far back the events are read live, in seconds.
 /// ⚠️ An event stamped further back when inserted is never streamed: the bound is what keeps
@@ -48,21 +49,28 @@ live_items!(
     PoolChangeEvent
 );
 
-/// One table of an event collection, its events broadcast as they are read.
-pub(crate) struct EventSource<T, E> {
-    feed: Arc<dyn LiveEventFeed<T, E>>,
-    table: T,
-}
-
-impl<T, E> EventSource<T, E> {
-    pub(crate) fn new(feed: Arc<dyn LiveEventFeed<T, E>>, table: T) -> Self {
-        Self { feed, table }
+impl<I: LiveItem> LiveItem for Paired<I> {
+    fn protocol(&self) -> Protocol {
+        self.item.protocol()
     }
 }
 
-impl<T: EventTable, E: Send + Sync + 'static> LiveSource for EventSource<T, E> {
+/// One table of an event collection, its events broadcast with their pairs as they are read.
+pub(crate) struct EventSource<T, E> {
+    feed: Arc<dyn LiveEventFeed<T, E>>,
+    table: T,
+    pairs: Arc<PoolPairs>,
+}
+
+impl<T, E> EventSource<T, E> {
+    pub(crate) fn new(feed: Arc<dyn LiveEventFeed<T, E>>, table: T, pairs: Arc<PoolPairs>) -> Self {
+        Self { feed, table, pairs }
+    }
+}
+
+impl<T: EventTable, E: OnPool + Send + Sync + 'static> LiveSource for EventSource<T, E> {
     type Record = LiveRecord<RepositoryResult<E>>;
-    type Item = LiveEvent<T, E>;
+    type Item = LiveEvent<T, Paired<E>>;
 
     fn name(&self) -> &'static str {
         self.table.name()
@@ -94,18 +102,33 @@ impl<T: EventTable, E: Send + Sync + 'static> LiveSource for EventSource<T, E> {
     }
 
     /// A row that did not decode is logged and passed over: its id is counted as delivered.
-    async fn prepare(&self, records: Vec<LiveRecord<RepositoryResult<E>>>) -> Vec<LiveEvent<T, E>> {
-        records
+    /// On a failed pair the events still go out, unpaired: their collection pairs them again.
+    async fn prepare(
+        &self,
+        records: Vec<LiveRecord<RepositoryResult<E>>>,
+    ) -> Vec<LiveEvent<T, Paired<E>>> {
+        let decoded: Vec<LiveRecord<E>> = records
             .into_iter()
             .filter_map(|LiveRecord { id, event }| match event {
-                Ok(event) => Some(LiveEvent {
-                    table: self.table,
-                    record: LiveRecord { id, event },
-                }),
+                Ok(event) => Some(LiveRecord { id, event }),
                 Err(e) => {
                     warn!(table = self.table.name(), id, error = %e, "live event undecodable — skipped");
                     None
                 }
+            })
+            .collect();
+        let pairs = self.pairs.of(&decoded).await.unwrap_or_else(|e| {
+            warn!(table = self.table.name(), error = %e, "live events: pairs failed — emitting them unpaired");
+            PairsByPool::new()
+        });
+        decoded
+            .into_iter()
+            .map(|LiveRecord { id, event }| LiveEvent {
+                table: self.table,
+                record: LiveRecord {
+                    id,
+                    event: Paired::of(event, &pairs),
+                },
             })
             .collect()
     }

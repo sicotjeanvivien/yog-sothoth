@@ -9,6 +9,8 @@ use utoipa::ToSchema;
 use yog_core::domain::RewardChangeEvent;
 
 use super::protocol::ProtocolResponse;
+use super::token::EmbeddedTokenResponse;
+use crate::application::Paired;
 use crate::http::dto::schema::Count;
 
 use meteora_damm_v2_response::RewardChangeEventMeteoraDammV2Response;
@@ -19,6 +21,9 @@ pub(crate) struct RewardChangeEventResponse {
     protocol: ProtocolResponse,
     #[schema(min_length = 1)]
     pool_address: String,
+    /// The pool's token pair: every field nullable until yog-context resolves the pool.
+    token_a: EmbeddedTokenResponse,
+    token_b: EmbeddedTokenResponse,
     #[schema(min_length = 1)]
     signature: String,
     event_index: u16,
@@ -30,8 +35,13 @@ pub(crate) struct RewardChangeEventResponse {
     meteora_damm_v2: Option<RewardChangeEventMeteoraDammV2Response>,
 }
 
-impl From<RewardChangeEvent> for RewardChangeEventResponse {
-    fn from(event: RewardChangeEvent) -> Self {
+impl From<Paired<RewardChangeEvent>> for RewardChangeEventResponse {
+    fn from(paired: Paired<RewardChangeEvent>) -> Self {
+        let Paired {
+            item: event,
+            token_a,
+            token_b,
+        } = paired;
         let protocol = event.protocol();
         match event {
             RewardChangeEvent::MeteoraDammV2(change) => {
@@ -39,6 +49,8 @@ impl From<RewardChangeEvent> for RewardChangeEventResponse {
                 Self {
                     protocol: protocol.into(),
                     pool_address: change.pool_address().to_string(),
+                    token_a: token_a.into(),
+                    token_b: token_b.into(),
                     signature: signature.to_string(),
                     event_index,
                     slot: change.slot(),

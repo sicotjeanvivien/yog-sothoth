@@ -24,11 +24,11 @@ use crate::application::{
     AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService,
     LIVE_CHANNEL_CAPACITY, LiquidityChangeEventService, LiquidityMoveService,
     LiquidityTurnoverService, LiveChannels, LivePollers, NetworkService, PoolChangeEventService,
-    PoolCreationEventService, PoolCreationsService, PoolService, PositionChangeCountsService,
-    PositionChangeEventService, PositionFeeClaimEventService, ProtocolCatalogService,
-    ProtocolFeeClaimEventService, ProtocolTvlService, RewardChangeEventService,
-    RewardClaimEventService, RotationRunService, SignalService, SignalsSource, SwapActivityService,
-    SwapEventService, TokenService, WindowsService, WorkSlots,
+    PoolCreationEventService, PoolCreationsService, PoolPairs, PoolService,
+    PositionChangeCountsService, PositionChangeEventService, PositionFeeClaimEventService,
+    ProtocolCatalogService, ProtocolFeeClaimEventService, ProtocolTvlService,
+    RewardChangeEventService, RewardClaimEventService, RotationRunService, SignalService,
+    SignalsSource, SwapActivityService, SwapEventService, TokenService, WindowsService, WorkSlots,
 };
 use crate::bootstrap::Config;
 use crate::http::{AppState, SSE_MAX_STREAMS, STATEMENT_TIMEOUT, WORK_SLOT_WAIT, WORK_SLOTS};
@@ -67,6 +67,10 @@ pub(crate) async fn build_app_state(
         Arc::new(PgProtocolActivityRepository::new(db_pool.clone()));
     let token_activity_repo: Arc<dyn TokenActivityFeed> =
         Arc::new(PgTokenActivityRepository::new(db_pool.clone()));
+    let pairs = Arc::new(PoolPairs::new(
+        pool_repo.clone(),
+        token_metadata_repo.clone(),
+    ));
     let swap_activity_service = Arc::new(SwapActivityService::new(
         protocol_activity_repo.clone(),
         Arc::new(PgSwapActivityRepository::new(db_pool.clone())),
@@ -109,30 +113,38 @@ pub(crate) async fn build_app_state(
     let swap_event_service = Arc::new(SwapEventService::new(Arc::new(PgSwapEventRepository::new(
         db_pool.clone(),
     ))));
-    let liquidity_change_event_service = Arc::new(LiquidityChangeEventService::new(Arc::new(
-        PgLiquidityChangeEventRepository::new(db_pool.clone()),
-    )));
-    let pool_creation_event_service = Arc::new(PoolCreationEventService::new(Arc::new(
-        PgPoolCreationEventRepository::new(db_pool.clone()),
-    )));
-    let position_change_event_service = Arc::new(PositionChangeEventService::new(Arc::new(
-        PgPositionChangeEventRepository::new(db_pool.clone()),
-    )));
-    let reward_change_event_service = Arc::new(RewardChangeEventService::new(Arc::new(
-        PgRewardChangeEventRepository::new(db_pool.clone()),
-    )));
-    let pool_change_event_service = Arc::new(PoolChangeEventService::new(Arc::new(
-        PgPoolChangeEventRepository::new(db_pool.clone()),
-    )));
-    let position_fee_claim_event_service = Arc::new(PositionFeeClaimEventService::new(Arc::new(
-        PgPositionFeeClaimEventRepository::new(db_pool.clone()),
-    )));
-    let protocol_fee_claim_event_service = Arc::new(ProtocolFeeClaimEventService::new(Arc::new(
-        PgProtocolFeeClaimEventRepository::new(db_pool.clone()),
-    )));
-    let reward_claim_event_service = Arc::new(RewardClaimEventService::new(Arc::new(
-        PgRewardClaimEventRepository::new(db_pool.clone()),
-    )));
+    let liquidity_change_event_service = Arc::new(LiquidityChangeEventService::new(
+        Arc::new(PgLiquidityChangeEventRepository::new(db_pool.clone())),
+        pairs.clone(),
+    ));
+    let pool_creation_event_service = Arc::new(PoolCreationEventService::new(
+        Arc::new(PgPoolCreationEventRepository::new(db_pool.clone())),
+        pairs.clone(),
+    ));
+    let position_change_event_service = Arc::new(PositionChangeEventService::new(
+        Arc::new(PgPositionChangeEventRepository::new(db_pool.clone())),
+        pairs.clone(),
+    ));
+    let reward_change_event_service = Arc::new(RewardChangeEventService::new(
+        Arc::new(PgRewardChangeEventRepository::new(db_pool.clone())),
+        pairs.clone(),
+    ));
+    let pool_change_event_service = Arc::new(PoolChangeEventService::new(
+        Arc::new(PgPoolChangeEventRepository::new(db_pool.clone())),
+        pairs.clone(),
+    ));
+    let position_fee_claim_event_service = Arc::new(PositionFeeClaimEventService::new(
+        Arc::new(PgPositionFeeClaimEventRepository::new(db_pool.clone())),
+        pairs.clone(),
+    ));
+    let protocol_fee_claim_event_service = Arc::new(ProtocolFeeClaimEventService::new(
+        Arc::new(PgProtocolFeeClaimEventRepository::new(db_pool.clone())),
+        pairs.clone(),
+    ));
+    let reward_claim_event_service = Arc::new(RewardClaimEventService::new(
+        Arc::new(PgRewardClaimEventRepository::new(db_pool.clone())),
+        pairs.clone(),
+    ));
     let pool_service = Arc::new(PoolService::new(
         pool_repo.clone(),
         Arc::new(PgMeteoraDammV2PoolPropertiesRepository::new(
@@ -140,13 +152,9 @@ pub(crate) async fn build_app_state(
         )),
     ));
 
-    let signal_service = Arc::new(SignalService::new(
-        signal_repo.clone(),
-        pool_repo.clone(),
-        token_metadata_repo.clone(),
-    ));
+    let signal_service = Arc::new(SignalService::new(signal_repo.clone(), pairs.clone()));
 
-    let mut live_pollers = LivePollers::new(config.live_poll);
+    let mut live_pollers = LivePollers::new(config.live_poll, pairs);
     let (signals, _) = broadcast::channel(LIVE_CHANNEL_CAPACITY);
     live_pollers.add(
         Arc::new(SignalsSource::new(

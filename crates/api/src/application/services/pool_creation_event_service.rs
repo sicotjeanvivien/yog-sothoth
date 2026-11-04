@@ -8,13 +8,16 @@ use yog_core::{
     domain::{EventCursor, PoolCreationEvent, PoolCreationEventLookup, Protocol, Window},
 };
 
+use crate::application::{Paired, PoolPairs};
+
 pub(crate) struct PoolCreationEventService {
     events: Arc<dyn PoolCreationEventLookup>,
+    pairs: Arc<PoolPairs>,
 }
 
 impl PoolCreationEventService {
-    pub(crate) fn new(events: Arc<dyn PoolCreationEventLookup>) -> Self {
-        Self { events }
+    pub(crate) fn new(events: Arc<dyn PoolCreationEventLookup>, pairs: Arc<PoolPairs>) -> Self {
+        Self { events, pairs }
     }
 
     /// `protocol`'s creations (every protocol's for `None`) over `window`, ending now on the
@@ -26,9 +29,13 @@ impl PoolCreationEventService {
         window: Window,
         cursor: Option<EventCursor>,
         limit: i64,
-    ) -> RepositoryResult<Page<PoolCreationEvent>> {
+    ) -> RepositoryResult<Page<Paired<PoolCreationEvent>>> {
         let from = EventCursor::window_start(cursor.as_ref(), window, Utc::now());
-        self.events.list_events(protocol, from, cursor, limit).await
+        let page = self
+            .events
+            .list_events(protocol, from, cursor, limit)
+            .await?;
+        self.pairs.page(page).await
     }
 }
 

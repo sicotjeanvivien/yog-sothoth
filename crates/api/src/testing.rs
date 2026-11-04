@@ -43,7 +43,7 @@ use crate::application::{
     AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService,
     LiquidityChangeEventService, LiquidityMoveService, LiquidityTurnoverService, LiveChannels,
     NetworkService, PoolChangeEventService, PoolCreationEventService, PoolCreationsService,
-    PoolService, PositionChangeCountsService, PositionChangeEventService,
+    PoolPairs, PoolService, PositionChangeCountsService, PositionChangeEventService,
     PositionFeeClaimEventService, ProtocolCatalogService, ProtocolFeeClaimEventService,
     ProtocolTvlService, RewardChangeEventService, RewardClaimEventService, RotationRunService,
     SignalService, SwapActivityService, SwapEventService, TokenService, WindowsService, WorkSlots,
@@ -73,8 +73,7 @@ pub(crate) fn app_state() -> AppState {
         ))),
         signal_service: Arc::new(SignalService::new(
             Arc::new(MockSignalRepo::empty()),
-            Arc::new(PoolRepoOnce::with_pools(vec![])),
-            Arc::new(MockMetadataRepo::empty()),
+            no_pairs(),
         )),
         live: LiveChannels::idle(),
         stream_slots: Arc::new(Semaphore::new(1)),
@@ -119,30 +118,38 @@ pub(crate) fn app_state() -> AppState {
         swap_event_service: Arc::new(SwapEventService::new(
             Arc::new(MockSwapEventRepo::default()),
         )),
-        liquidity_change_event_service: Arc::new(LiquidityChangeEventService::new(Arc::new(
-            MockLiquidityChangeEventRepo::default(),
-        ))),
-        pool_creation_event_service: Arc::new(PoolCreationEventService::new(Arc::new(
-            MockPoolCreationEventRepo::default(),
-        ))),
-        position_change_event_service: Arc::new(PositionChangeEventService::new(Arc::new(
-            MockPositionChangeEventRepo::default(),
-        ))),
-        reward_change_event_service: Arc::new(RewardChangeEventService::new(Arc::new(
-            MockRewardChangeEventRepo::default(),
-        ))),
-        pool_change_event_service: Arc::new(PoolChangeEventService::new(Arc::new(
-            MockPoolChangeEventRepo::default(),
-        ))),
-        position_fee_claim_event_service: Arc::new(PositionFeeClaimEventService::new(Arc::new(
-            MockPositionFeeClaimEventRepo::default(),
-        ))),
-        protocol_fee_claim_event_service: Arc::new(ProtocolFeeClaimEventService::new(Arc::new(
-            MockProtocolFeeClaimEventRepo::default(),
-        ))),
-        reward_claim_event_service: Arc::new(RewardClaimEventService::new(Arc::new(
-            MockRewardClaimEventRepo::default(),
-        ))),
+        liquidity_change_event_service: Arc::new(LiquidityChangeEventService::new(
+            Arc::new(MockLiquidityChangeEventRepo::default()),
+            no_pairs(),
+        )),
+        pool_creation_event_service: Arc::new(PoolCreationEventService::new(
+            Arc::new(MockPoolCreationEventRepo::default()),
+            no_pairs(),
+        )),
+        position_change_event_service: Arc::new(PositionChangeEventService::new(
+            Arc::new(MockPositionChangeEventRepo::default()),
+            no_pairs(),
+        )),
+        reward_change_event_service: Arc::new(RewardChangeEventService::new(
+            Arc::new(MockRewardChangeEventRepo::default()),
+            no_pairs(),
+        )),
+        pool_change_event_service: Arc::new(PoolChangeEventService::new(
+            Arc::new(MockPoolChangeEventRepo::default()),
+            no_pairs(),
+        )),
+        position_fee_claim_event_service: Arc::new(PositionFeeClaimEventService::new(
+            Arc::new(MockPositionFeeClaimEventRepo::default()),
+            no_pairs(),
+        )),
+        protocol_fee_claim_event_service: Arc::new(ProtocolFeeClaimEventService::new(
+            Arc::new(MockProtocolFeeClaimEventRepo::default()),
+            no_pairs(),
+        )),
+        reward_claim_event_service: Arc::new(RewardClaimEventService::new(
+            Arc::new(MockRewardClaimEventRepo::default()),
+            no_pairs(),
+        )),
         pool_service: Arc::new(PoolService::new(
             Arc::new(PoolRepoOnce::with_pools(vec![])),
             Arc::new(MockDammV2PropertiesRepo::default()),
@@ -293,6 +300,50 @@ impl PoolCatalog for PoolRepoOnce {
     async fn find_entry(&self, _: &Pubkey) -> RepositoryResult<Option<PoolEntry>> {
         Ok(None)
     }
+}
+
+/// A `PoolCatalog` that knows `pools` and answers every batch of addresses.
+pub(crate) struct MockPoolCatalog {
+    pools: Vec<Pool>,
+}
+
+#[async_trait]
+impl PoolCatalog for MockPoolCatalog {
+    async fn counts_by_protocol(&self) -> RepositoryResult<Vec<ProtocolPools>> {
+        unreachable!("counts_by_protocol not used by PoolPairs")
+    }
+    async fn find_by_addresses(&self, addrs: &[Pubkey]) -> RepositoryResult<Vec<Pool>> {
+        Ok(self
+            .pools
+            .iter()
+            .filter(|p| addrs.contains(&p.pool_address))
+            .cloned()
+            .collect())
+    }
+    async fn list_entries(
+        &self,
+        _: PoolScope,
+        _: Option<PoolCursor>,
+        _: i64,
+    ) -> RepositoryResult<Page<PoolEntry>> {
+        unreachable!("list_entries not used by PoolPairs")
+    }
+    async fn find_entry(&self, _: &Pubkey) -> RepositoryResult<Option<PoolEntry>> {
+        unreachable!("find_entry not used by PoolPairs")
+    }
+}
+
+/// The pairs of `pools`, their tokens in `metadata`.
+pub(crate) fn pool_pairs(pools: Vec<Pool>, metadata: MockMetadataRepo) -> Arc<PoolPairs> {
+    Arc::new(PoolPairs::new(
+        Arc::new(MockPoolCatalog { pools }),
+        Arc::new(metadata),
+    ))
+}
+
+/// Pairs that know no pool: every item comes unresolved.
+pub(crate) fn no_pairs() -> Arc<PoolPairs> {
+    pool_pairs(Vec::new(), MockMetadataRepo::empty())
 }
 
 /// A `PoolCatalog` for `PoolService::get_pool`: it knows `entries` and answers them by address.
@@ -501,6 +552,15 @@ impl TokenMetadataLookup for MockMetadataRepo {
             return Err(RepositoryError::Integrity("metadata boom".into()));
         }
         Ok(self.by_mint.get(mint).cloned())
+    }
+    async fn find_by_mints(&self, mints: &[Pubkey]) -> RepositoryResult<Vec<TokenMetadata>> {
+        if self.fail {
+            return Err(RepositoryError::Integrity("metadata boom".into()));
+        }
+        Ok(mints
+            .iter()
+            .filter_map(|m| self.by_mint.get(m).cloned())
+            .collect())
     }
     async fn list_entries(
         &self,
@@ -1577,5 +1637,40 @@ impl RotationRunLookup for MockRotationRunRepo {
             .unwrap()
             .push((*period, runs_since));
         Ok(Vec::new())
+    }
+}
+
+/// `item` on a MET/SOL pool, both sides resolved.
+pub(crate) fn on_met_sol<I>(item: I) -> crate::application::Paired<I> {
+    let side = |seed, symbol| crate::application::EnrichedToken {
+        mint: Some(pk(seed)),
+        metadata: Some(make_metadata(pk(seed), symbol)),
+    };
+    crate::application::Paired {
+        item,
+        token_a: side(200, "MET"),
+        token_b: side(201, "SOL"),
+    }
+}
+
+/// The pair of [`on_met_sol`], as an item embeds it.
+pub(crate) fn met_sol_wire() -> serde_json::Value {
+    let side = |seed, symbol: &str| {
+        serde_json::json!({
+            "mint": pk(seed).to_string(), "symbol": symbol, "name": format!("{symbol} token"),
+            "decimals": 9, "logoUri": null
+        })
+    };
+    serde_json::json!({"tokenA": side(200, "MET"), "tokenB": side(201, "SOL")})
+}
+
+impl<I> crate::application::Paired<I> {
+    /// The item with two unresolved sides, as a test builds a response from an event.
+    pub(crate) fn unpaired(item: I) -> Self {
+        Self {
+            item,
+            token_a: crate::application::EnrichedToken::unresolved(),
+            token_b: crate::application::EnrichedToken::unresolved(),
+        }
     }
 }

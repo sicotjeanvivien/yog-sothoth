@@ -1,5 +1,5 @@
 //! `PgTokenMetadataRepository`: the two `list_missing_mints_*` feed yog-context's metadata
-//! worker, `list_price_candidates` its price worker.
+//! worker, `list_price_candidates` its price worker, `find_by_mints` the api's pairs.
 
 use super::helpers::{pk, price_at};
 use chrono::{DateTime, Duration, Utc};
@@ -8,7 +8,7 @@ use sqlx::PgPool;
 
 use yog_core::domain::{
     MISSING_MINT_DISCOVERY_WINDOW, PRICE_CANDIDATE_PARAMS, PriceCandidateClass,
-    TokenMetadataRepository,
+    TokenMetadataLookup, TokenMetadataRepository,
 };
 use yog_persistence::PgTokenMetadataRepository;
 
@@ -502,4 +502,22 @@ async fn a_low_value_is_judged_at_the_last_price_whatever_its_age(pool: PgPool) 
         class_of(&pool, &mint_a).await,
         PriceCandidateClass::LowValue
     );
+}
+
+/// Mutation: the batch read as the first mint only, or every row whatever the mints.
+#[sqlx::test]
+async fn find_by_mints_reads_each_mint_that_has_metadata(pool: PgPool) {
+    let (a, b, absent, other) = (pk(1), pk(2), pk(3), pk(4));
+    for mint in [a, b, other] {
+        insert_metadata(&pool, &mint.to_string()).await;
+    }
+    let repo = PgTokenMetadataRepository::new(pool);
+
+    let found = repo.find_by_mints(&[b, absent, a]).await.unwrap();
+
+    assert_eq!(
+        sorted(found.into_iter().map(|m| m.mint).collect()),
+        sorted(vec![a, b])
+    );
+    assert!(repo.find_by_mints(&[]).await.unwrap().is_empty());
 }

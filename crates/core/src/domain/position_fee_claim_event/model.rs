@@ -1,3 +1,5 @@
+use solana_pubkey::Pubkey;
+
 use crate::domain::{MeteoraDammV2ClaimPositionFeeEvent, Protocol};
 
 /// A position's fees claimed from its pool, under its protocol's own event.
@@ -10,6 +12,12 @@ impl PositionFeeClaimEvent {
     pub fn protocol(&self) -> Protocol {
         match self {
             Self::MeteoraDammV2(_) => Protocol::MeteoraDammV2,
+        }
+    }
+
+    pub fn pool_address(&self) -> Pubkey {
+        match self {
+            Self::MeteoraDammV2(e) => e.pool_address,
         }
     }
 }

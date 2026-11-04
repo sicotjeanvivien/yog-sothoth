@@ -8,13 +8,16 @@ use yog_core::{
     domain::{EventCursor, EventScope, PositionFeeClaimEvent, PositionFeeClaimEventLookup, Window},
 };
 
+use crate::application::{Paired, PoolPairs};
+
 pub(crate) struct PositionFeeClaimEventService {
     events: Arc<dyn PositionFeeClaimEventLookup>,
+    pairs: Arc<PoolPairs>,
 }
 
 impl PositionFeeClaimEventService {
-    pub(crate) fn new(events: Arc<dyn PositionFeeClaimEventLookup>) -> Self {
-        Self { events }
+    pub(crate) fn new(events: Arc<dyn PositionFeeClaimEventLookup>, pairs: Arc<PoolPairs>) -> Self {
+        Self { events, pairs }
     }
 
     pub(crate) async fn list_events(
@@ -23,9 +26,10 @@ impl PositionFeeClaimEventService {
         window: Window,
         cursor: Option<EventCursor>,
         limit: i64,
-    ) -> RepositoryResult<Page<PositionFeeClaimEvent>> {
+    ) -> RepositoryResult<Page<Paired<PositionFeeClaimEvent>>> {
         let from = EventCursor::window_start(cursor.as_ref(), window, Utc::now());
-        self.events.list_events(scope, from, cursor, limit).await
+        let page = self.events.list_events(scope, from, cursor, limit).await?;
+        self.pairs.page(page).await
     }
 }
 

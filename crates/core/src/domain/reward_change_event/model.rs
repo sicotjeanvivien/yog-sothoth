@@ -21,6 +21,12 @@ impl RewardChangeEvent {
             Self::MeteoraDammV2(_) => Protocol::MeteoraDammV2,
         }
     }
+
+    pub fn pool_address(&self) -> Pubkey {
+        match self {
+            Self::MeteoraDammV2(e) => e.pool_address(),
+        }
+    }
 }
 
 /// A DAMM v2 reward change: one of the six events that change a pool's reward.

@@ -309,7 +309,9 @@ export const zLiquidityChangeEventResponse = z.object({
     reserveAAfter: zU128String,
     reserveBAfter: zU128String,
     signature: z.string().min(1),
-    slot: zCount
+    slot: zCount,
+    tokenA: zEmbeddedTokenResponse,
+    tokenB: zEmbeddedTokenResponse
 });
 
 export type LiquidityChangeEventResponse = z.infer<typeof zLiquidityChangeEventResponse>;
@@ -557,7 +559,9 @@ export const zPageResponseLiquidityChangeEventResponse = z.object({
         reserveAAfter: zU128String,
         reserveBAfter: zU128String,
         signature: z.string().min(1),
-        slot: zCount
+        slot: zCount,
+        tokenA: zEmbeddedTokenResponse,
+        tokenB: zEmbeddedTokenResponse
     })),
     nextCursor: z.string().nullable(),
     prevCursor: z.string().nullable()
@@ -578,7 +582,9 @@ export const zPageResponsePositionFeeClaimEventResponse = z.object({
         position: z.string().min(1),
         protocol: zProtocolResponse,
         signature: z.string().min(1),
-        slot: zCount
+        slot: zCount,
+        tokenA: zEmbeddedTokenResponse,
+        tokenB: zEmbeddedTokenResponse
     })),
     nextCursor: z.string().nullable(),
     prevCursor: z.string().nullable()
@@ -597,7 +603,9 @@ export const zPageResponseProtocolFeeClaimEventResponse = z.object({
         poolAddress: z.string().min(1),
         protocol: zProtocolResponse,
         signature: z.string().min(1),
-        slot: zCount
+        slot: zCount,
+        tokenA: zEmbeddedTokenResponse,
+        tokenB: zEmbeddedTokenResponse
     })),
     nextCursor: z.string().nullable(),
     prevCursor: z.string().nullable()
@@ -619,7 +627,9 @@ export const zPageResponseRewardClaimEventResponse = z.object({
         rewardIndex: z.int().gte(0).lte(255),
         rewardMint: z.string().min(1),
         signature: z.string().min(1),
-        slot: zCount
+        slot: zCount,
+        tokenA: zEmbeddedTokenResponse,
+        tokenB: zEmbeddedTokenResponse
     })),
     nextCursor: z.string().nullable(),
     prevCursor: z.string().nullable()
@@ -648,7 +658,9 @@ export const zPageResponsePoolChangeEventResponse = z.object({
         poolAddress: z.string().min(1),
         protocol: zProtocolResponse,
         signature: z.string().min(1),
-        slot: zCount
+        slot: zCount,
+        tokenA: zEmbeddedTokenResponse,
+        tokenB: zEmbeddedTokenResponse
     })),
     nextCursor: z.string().nullable(),
     prevCursor: z.string().nullable()
@@ -663,7 +675,9 @@ export const zPoolChangeEventResponse = z.object({
     poolAddress: z.string().min(1),
     protocol: zProtocolResponse,
     signature: z.string().min(1),
-    slot: zCount
+    slot: zCount,
+    tokenA: zEmbeddedTokenResponse,
+    tokenB: zEmbeddedTokenResponse
 });
 
 export type PoolChangeEventResponse = z.infer<typeof zPoolChangeEventResponse>;
@@ -702,7 +716,9 @@ export const zPageResponsePoolCreationEventResponse = z.object({
         protocol: zProtocolResponse,
         signature: z.string().min(1),
         slot: zCount,
+        tokenA: zEmbeddedTokenResponse,
         tokenAMint: z.string().min(1),
+        tokenB: zEmbeddedTokenResponse,
         tokenBMint: z.string().min(1)
     })),
     nextCursor: z.string().nullable(),
@@ -720,7 +736,9 @@ export const zPoolCreationEventResponse = z.object({
     protocol: zProtocolResponse,
     signature: z.string().min(1),
     slot: zCount,
+    tokenA: zEmbeddedTokenResponse,
     tokenAMint: z.string().min(1),
+    tokenB: zEmbeddedTokenResponse,
     tokenBMint: z.string().min(1)
 });
 
@@ -756,7 +774,9 @@ export const zPageResponsePositionChangeEventResponse = z.object({
         poolAddress: z.string().min(1),
         protocol: zProtocolResponse,
         signature: z.string().min(1),
-        slot: zCount
+        slot: zCount,
+        tokenA: zEmbeddedTokenResponse,
+        tokenB: zEmbeddedTokenResponse
     })),
     nextCursor: z.string().nullable(),
     prevCursor: z.string().nullable()
@@ -771,7 +791,9 @@ export const zPositionChangeEventResponse = z.object({
     poolAddress: z.string().min(1),
     protocol: zProtocolResponse,
     signature: z.string().min(1),
-    slot: zCount
+    slot: zCount,
+    tokenA: zEmbeddedTokenResponse,
+    tokenB: zEmbeddedTokenResponse
 });
 
 export type PositionChangeEventResponse = z.infer<typeof zPositionChangeEventResponse>;
@@ -786,7 +808,9 @@ export const zPositionFeeClaimEventResponse = z.object({
     position: z.string().min(1),
     protocol: zProtocolResponse,
     signature: z.string().min(1),
-    slot: zCount
+    slot: zCount,
+    tokenA: zEmbeddedTokenResponse,
+    tokenB: zEmbeddedTokenResponse
 });
 
 export type PositionFeeClaimEventResponse = z.infer<typeof zPositionFeeClaimEventResponse>;
@@ -799,7 +823,9 @@ export const zProtocolFeeClaimEventResponse = z.object({
     poolAddress: z.string().min(1),
     protocol: zProtocolResponse,
     signature: z.string().min(1),
-    slot: zCount
+    slot: zCount,
+    tokenA: zEmbeddedTokenResponse,
+    tokenB: zEmbeddedTokenResponse
 });
 
 export type ProtocolFeeClaimEventResponse = z.infer<typeof zProtocolFeeClaimEventResponse>;
@@ -837,7 +863,9 @@ export const zPageResponseRewardChangeEventResponse = z.object({
         poolAddress: z.string().min(1),
         protocol: zProtocolResponse,
         signature: z.string().min(1),
-        slot: zCount
+        slot: zCount,
+        tokenA: zEmbeddedTokenResponse,
+        tokenB: zEmbeddedTokenResponse
     })),
     nextCursor: z.string().nullable(),
     prevCursor: z.string().nullable()
@@ -852,7 +880,9 @@ export const zRewardChangeEventResponse = z.object({
     poolAddress: z.string().min(1),
     protocol: zProtocolResponse,
     signature: z.string().min(1),
-    slot: zCount
+    slot: zCount,
+    tokenA: zEmbeddedTokenResponse,
+    tokenB: zEmbeddedTokenResponse
 });
 
 export type RewardChangeEventResponse = z.infer<typeof zRewardChangeEventResponse>;
@@ -868,7 +898,9 @@ export const zRewardClaimEventResponse = z.object({
     rewardIndex: z.int().gte(0).lte(255),
     rewardMint: z.string().min(1),
     signature: z.string().min(1),
-    slot: zCount
+    slot: zCount,
+    tokenA: zEmbeddedTokenResponse,
+    tokenB: zEmbeddedTokenResponse
 });
 
 export type RewardClaimEventResponse = z.infer<typeof zRewardClaimEventResponse>;

@@ -23,7 +23,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 use yog_core::domain::{EventTable, Protocol};
 
-use crate::application::{EnrichedSignal, EventChannel, LiveEvent, LiveItem};
+use crate::application::{EnrichedSignal, EventChannel, LiveEvent, LiveItem, Paired};
 use crate::http::{
     AppState,
     cursor::LiveCursor,
@@ -206,7 +206,7 @@ pub(crate) fn events_topic<T, E, R>(
 where
     T: EventTable,
     E: LiveItem + Clone + Send + Sync + 'static,
-    R: From<E> + Serialize + 'static,
+    R: From<Paired<E>> + Serialize + 'static,
 {
     if protocol.is_some_and(|p| T::ALL.iter().all(|table| table.protocol() != p)) {
         return stream::pending().boxed();
@@ -218,15 +218,15 @@ where
 /// sent as an item of the collection.
 pub(crate) fn event_stream<T, E, R>(
     topic: LiveTopic,
-    receiver: broadcast::Receiver<Arc<LiveEvent<T, E>>>,
+    receiver: broadcast::Receiver<Arc<LiveEvent<T, Paired<E>>>>,
     protocol: Option<Protocol>,
 ) -> TopicStream
 where
     T: EventTable,
     E: LiveItem + Clone + Send + Sync + 'static,
-    R: From<E> + Serialize + 'static,
+    R: From<Paired<E>> + Serialize + 'static,
 {
-    topic_stream(receiver, move |item: &LiveEvent<T, E>| {
+    topic_stream(receiver, move |item: &LiveEvent<T, Paired<E>>| {
         protocol
             .is_none_or(|p| p == item.record.event.protocol())
             .then(|| Delivery {

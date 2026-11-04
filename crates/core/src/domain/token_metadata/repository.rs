@@ -46,6 +46,9 @@ pub trait TokenMetadataLookup: Send + Sync {
     /// The metadata of a mint, `None` before its first fetch.
     async fn find_by_mint(&self, mint: &Pubkey) -> RepositoryResult<Option<TokenMetadata>>;
 
+    /// The metadata of every mint of `mints` that has one, in no order.
+    async fn find_by_mints(&self, mints: &[Pubkey]) -> RepositoryResult<Vec<TokenMetadata>>;
+
     /// A page of tokens, the most recently first fetched first, ties by mint descending,
     /// after `cursor`'s key; forward only.
     async fn list_entries(

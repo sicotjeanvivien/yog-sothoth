@@ -5,6 +5,7 @@ use solana_signature::Signature;
 use yog_core::domain::{MeteoraDammV2InitializePoolEvent, PoolCreationEvent};
 
 use super::PoolCreationEventResponse;
+use crate::testing::{met_sol_wire, on_met_sol};
 
 fn hex(text: &str) -> Vec<u8> {
     (0..text.len())
@@ -44,10 +45,12 @@ fn fees(raw: Vec<u8>) -> Option<serde_json::Value> {
         total_amount_b: 6,
         pool_fees_raw: raw,
     };
-    let wire = serde_json::to_value(PoolCreationEventResponse::from(
+    let wire = serde_json::to_value(PoolCreationEventResponse::from(on_met_sol(
         PoolCreationEvent::MeteoraDammV2(event),
-    ))
+    )))
     .unwrap();
+    assert_eq!(wire["tokenA"], met_sol_wire()["tokenA"]);
+    assert_eq!(wire["tokenB"], met_sol_wire()["tokenB"]);
     wire["meteoraDammV2"].get("fees").cloned()
 }
 

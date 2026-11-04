@@ -5,6 +5,7 @@ use solana_signature::Signature;
 use yog_core::domain::{MeteoraDammV2ClaimPositionFeeEvent, PositionFeeClaimEvent};
 
 use super::PositionFeeClaimEventResponse;
+use crate::testing::{met_sol_wire, on_met_sol};
 
 fn key(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
@@ -26,10 +27,12 @@ fn each_field_says_its_own_value() {
         fee_b_claimed: 4,
     };
 
-    let wire = serde_json::to_value(PositionFeeClaimEventResponse::from(
+    let wire = serde_json::to_value(PositionFeeClaimEventResponse::from(on_met_sol(
         PositionFeeClaimEvent::MeteoraDammV2(event),
-    ))
+    )))
     .unwrap();
+    assert_eq!(wire["tokenA"], met_sol_wire()["tokenA"]);
+    assert_eq!(wire["tokenB"], met_sol_wire()["tokenB"]);
 
     let k = |seed: u8| key(seed).to_string();
     let own: serde_json::Map<_, _> = ["position", "owner", "feeA", "feeB"]

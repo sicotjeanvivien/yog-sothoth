@@ -8,6 +8,7 @@ use yog_core::domain::{
 };
 
 use super::PoolChangeEventResponse;
+use crate::testing::{met_sol_wire, on_met_sol};
 
 fn key(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
@@ -28,15 +29,16 @@ fn common(wire: &serde_json::Value) -> serde_json::Value {
 fn expected_common(signature: Signature) -> serde_json::Value {
     json!({
         "protocol": "meteora_damm_v2", "poolAddress": key(1).to_string(),
+        "tokenA": met_sol_wire()["tokenA"], "tokenB": met_sol_wire()["tokenB"],
         "signature": signature.to_string(), "eventIndex": 2, "slot": 9,
         "at": "2026-10-25T12:00:00Z"
     })
 }
 
 fn block(change: MeteoraDammV2PoolChange) -> serde_json::Value {
-    let wire = serde_json::to_value(PoolChangeEventResponse::from(
+    let wire = serde_json::to_value(PoolChangeEventResponse::from(on_met_sol(
         PoolChangeEvent::MeteoraDammV2(change),
-    ))
+    )))
     .unwrap();
     assert_eq!(common(&wire), expected_common(Signature::from([2; 64])));
     wire["meteoraDammV2"].clone()

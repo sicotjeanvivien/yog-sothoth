@@ -16,6 +16,12 @@ impl PoolChangeEvent {
             Self::MeteoraDammV2(_) => Protocol::MeteoraDammV2,
         }
     }
+
+    pub fn pool_address(&self) -> Pubkey {
+        match self {
+            Self::MeteoraDammV2(e) => e.pool_address(),
+        }
+    }
 }
 
 /// A DAMM v2 pool change: its status set, or its fees updated by an operator.

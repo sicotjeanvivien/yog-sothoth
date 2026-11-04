@@ -6,14 +6,14 @@ use chrono::{Duration, Utc};
 use yog_core::domain::{EventCursor, EventScope, Window};
 
 use super::PoolCreationEventService;
-use crate::testing::{MockPoolCreationEventRepo, ts};
+use crate::testing::{MockPoolCreationEventRepo, no_pairs, ts};
 
 /// Mutation: the window's start recomputed on every page — a later page's start slides with
 /// the clock and drops the creations between.
 #[tokio::test]
 async fn a_later_page_keeps_the_start_of_its_cursor() {
     let repo = Arc::new(MockPoolCreationEventRepo::default());
-    let svc = PoolCreationEventService::new(repo.clone());
+    let svc = PoolCreationEventService::new(repo.clone(), no_pairs());
     let cursor = EventCursor {
         scope: EventScope::All,
         from: ts(1_000),

@@ -18,7 +18,7 @@ use super::{
     LiquidityChangeEventResponse, PositionChangeEventResponse, SignalResponse, TopicStream,
     event_stream, events_topic, live_sse, open_live, signals_topic,
 };
-use crate::application::{EnrichedSignal, EnrichedToken, LiveEvent};
+use crate::application::{EnrichedSignal, EnrichedToken, LiveEvent, Paired};
 use crate::http::{build_router, cursor::LiveCursor, dto::request::LiveTopic};
 use crate::testing::{app_state, get, make_metadata, make_signal_record, pk};
 
@@ -290,12 +290,15 @@ fn liquidity_change(seed: u8) -> LiquidityChangeEvent {
 /// The events broadcast by their tables, then the source closed.
 fn events_then_close<T: Copy, E>(
     events: Vec<(T, i64, E)>,
-) -> broadcast::Receiver<Arc<LiveEvent<T, E>>> {
+) -> broadcast::Receiver<Arc<LiveEvent<T, Paired<E>>>> {
     let (feed, receiver) = broadcast::channel(8);
     for (table, id, event) in events {
         let item = LiveEvent {
             table,
-            record: LiveRecord { id, event },
+            record: LiveRecord {
+                id,
+                event: Paired::unpaired(event),
+            },
         };
         assert!(feed.send(Arc::new(item)).is_ok(), "a subscriber");
     }
@@ -337,7 +340,9 @@ async fn an_event_comes_as_its_collections_item_and_the_cursor_keeps_every_topic
         .find(|e| field(e, "event") == "liquidity-changes")
         .expect("the liquidity change, named by its topic");
     let data: serde_json::Value = serde_json::from_str(field(change, "data")).expect("JSON");
-    let expected = serde_json::to_value(LiquidityChangeEventResponse::from(event)).expect("JSON");
+    let expected =
+        serde_json::to_value(LiquidityChangeEventResponse::from(Paired::unpaired(event)))
+            .expect("JSON");
     assert_eq!(data, expected);
     let last = LiveCursor::decode(field(events[1], "id")).expect("an opaque cursor");
     assert_eq!(last.position("signals"), Some(41));
@@ -432,7 +437,7 @@ async fn a_connection_takes_one_slot_whatever_its_topics() {
     let slots = Arc::new(Semaphore::new(2));
     let (signals, _) = broadcast::channel::<Arc<EnrichedSignal>>(8);
     let (changes, _) =
-        broadcast::channel::<Arc<LiveEvent<LiquidityChangeTable, LiquidityChangeEvent>>>(8);
+        broadcast::channel::<Arc<LiveEvent<LiquidityChangeTable, Paired<LiquidityChangeEvent>>>>(8);
 
     let response = open_live(
         slots.clone(),
@@ -458,7 +463,7 @@ async fn a_connection_takes_one_slot_whatever_its_topics() {
 #[tokio::test]
 async fn a_protocol_without_a_table_in_the_collection_subscribes_to_nothing() {
     let (changes, _) =
-        broadcast::channel::<Arc<LiveEvent<LiquidityChangeTable, LiquidityChangeEvent>>>(8);
+        broadcast::channel::<Arc<LiveEvent<LiquidityChangeTable, Paired<LiquidityChangeEvent>>>>(8);
     let subscribe = |protocol| {
         events_topic::<_, _, LiquidityChangeEventResponse>(
             LiveTopic::LiquidityChanges,

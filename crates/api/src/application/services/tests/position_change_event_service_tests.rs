@@ -6,14 +6,14 @@ use chrono::{Duration, Utc};
 use yog_core::domain::{EventCursor, EventScope, Window};
 
 use super::PositionChangeEventService;
-use crate::testing::{MockPositionChangeEventRepo, ts};
+use crate::testing::{MockPositionChangeEventRepo, no_pairs, ts};
 
 /// Mutation: the window's start recomputed on every page — a later page's start slides with
 /// the clock and drops the position changes between.
 #[tokio::test]
 async fn a_later_page_keeps_the_start_of_its_cursor() {
     let repo = Arc::new(MockPositionChangeEventRepo::default());
-    let svc = PositionChangeEventService::new(repo.clone());
+    let svc = PositionChangeEventService::new(repo.clone(), no_pairs());
     let cursor = EventCursor {
         scope: EventScope::All,
         from: ts(1_000),
