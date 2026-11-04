@@ -6,9 +6,10 @@ use yog_core::domain::Pool;
 use super::SignalsSource;
 use crate::application::live::poller::poll_once;
 use crate::application::live::watermark::LiveWatermark;
-use crate::application::{EnrichedSignal, SignalService};
+use crate::application::{EnrichedSignal, PoolPairs, SignalService};
 use crate::testing::{
-    MockMetadataRepo, MockSignalRepo, make_metadata, make_pool, make_signal_record, pk,
+    MockMetadataRepo, MockSignalRepo, PoolRepoOnce, make_metadata, make_pool, make_signal_record,
+    pk,
 };
 
 /// An enricher whose catalog answers **one** batch lookup — a second call panics
@@ -16,7 +17,10 @@ use crate::testing::{
 fn enricher(pools: Vec<Pool>, metadata: MockMetadataRepo) -> Arc<SignalService> {
     Arc::new(SignalService::new(
         Arc::new(MockSignalRepo::empty()),
-        crate::testing::pool_pairs(pools, metadata),
+        Arc::new(PoolPairs::new(
+            Arc::new(PoolRepoOnce::with_pools(pools)),
+            Arc::new(metadata),
+        )),
     ))
 }
 

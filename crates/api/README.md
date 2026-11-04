@@ -36,7 +36,7 @@ api/src/
 │   ├── live/signals_source.rs ← SignalsSource (enriches once, feeds the signals' broadcast)
 │   ├── live/event_source.rs   ← EventSource, one table of an event collection
 │   ├── cache.rs           ← SharedCache (moka) and its named CachePolicy per use
-│   ├── pool_pairs.rs      ← PoolPairs, the token pair of a batch's pools in two reads; Paired
+│   ├── pool_pairs.rs      ← PoolPairs, the token pair of a batch's pools in two reads at most; Paired
 │   ├── enriched_token.rs  ← one token side of a pool, identity only
 │   └── enriched_signal.rs ← signal + embedded token pair of its pool
 ├── http/
@@ -441,7 +441,7 @@ route is added only for a new kind of entity.
   when `receiver_count() == 0` the read is skipped and the watermark dropped, so an idle
   source costs nothing and a returning client gets no burst.
 - **Each tick's items are paired once**, in one batch (`PoolPairs`, the same code as the
-  paginated lists: the pools, then their mints' metadata, two reads whatever the batch), and
+  paginated lists: the pools, then their mints' metadata, two reads at most), and
   broadcast behind an `Arc`: a connection does no database work. If the pairing fails, the
   items go out with unresolved sides rather than being dropped — delivering them beats
   decorating them.

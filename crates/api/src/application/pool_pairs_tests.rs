@@ -221,3 +221,49 @@ async fn a_page_keeps_its_navigation_and_order_and_pairs_each_item() {
     assert_eq!(paired.items[0].token_a.mint, None);
     assert_eq!(symbol(&paired.items[1]), (Some("SOL"), None));
 }
+
+/// Mutation: a creation's own mints dropped, or A and B exchanged — every new pool would
+/// come unpaired until yog-context resolves it, or with its sides swapped.
+#[tokio::test]
+async fn a_pool_creation_carries_its_own_pair_in_order() {
+    use chrono::Utc;
+    use solana_signature::Signature;
+    use yog_core::domain::{MeteoraDammV2InitializePoolEvent, PoolCreationEvent};
+
+    let f = fixture(Vec::new(), Vec::new());
+    let creation = PoolCreationEvent::MeteoraDammV2(MeteoraDammV2InitializePoolEvent {
+        pool_address: pk(1),
+        signature: Signature::from([1; 64]),
+        timestamp: Utc::now(),
+        slot: 9,
+        transaction_index: None,
+        event_index: 0,
+        token_a_mint: pk(10),
+        token_b_mint: pk(11),
+        creator: pk(2),
+        payer: pk(3),
+        alpha_vault: pk(4),
+        sqrt_min_price: 1,
+        sqrt_max_price: 2,
+        sqrt_price: 1,
+        liquidity: 3,
+        activation_type: 0,
+        activation_point: 0,
+        collect_fee_mode: 0,
+        pool_type: 0,
+        token_a_flag: 0,
+        token_b_flag: 0,
+        token_a_amount: 0,
+        token_b_amount: 0,
+        total_amount_a: 0,
+        total_amount_b: 0,
+        pool_fees_raw: Vec::new(),
+    });
+
+    let pairs = f.pairs.of(std::slice::from_ref(&creation)).await.unwrap();
+
+    let paired = Paired::of(creation, &pairs);
+    assert_eq!(paired.token_a.mint, Some(pk(10)));
+    assert_eq!(paired.token_b.mint, Some(pk(11)));
+    assert!(f.catalog.asked.lock().unwrap().is_empty());
+}

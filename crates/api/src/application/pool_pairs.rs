@@ -108,7 +108,7 @@ impl PoolPairs {
         Self { pools, metadata }
     }
 
-    /// The pairs of `items`' pools, in two reads whatever their number. A pool the catalog
+    /// The pairs of `items`' pools, in two reads at most. A pool the catalog
     /// omits is absent from the map.
     pub(crate) async fn of<I: OnPool>(&self, items: &[I]) -> RepositoryResult<PairsByPool> {
         let mut mints: HashMap<Pubkey, (Option<Pubkey>, Option<Pubkey>)> = HashMap::new();
