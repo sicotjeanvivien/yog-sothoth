@@ -94,11 +94,14 @@
         "description": "A token, embedded in another resource's response.",
         "properties": {
           "decimals": {
-            "description": "Decimal precision.",
+            "description": "Decimal precision. `null` until yog-context fetches the mint's metadata.",
             "format": "u-int8",
             "maximum": 255,
             "minimum": 0,
-            "type": "integer"
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "logoUri": {
             "description": "Logo URL as returned by DAS. `null` unless it is `http` or `https`.",

@@ -22,8 +22,8 @@ pub(in crate::http::dto::response) struct EmbeddedTokenResponse {
     /// as `symbol`.
     name: Option<String>,
 
-    /// Decimal precision.
-    decimals: u8,
+    /// Decimal precision. `null` until yog-context fetches the mint's metadata.
+    decimals: Option<u8>,
 
     /// Logo URL as returned by DAS. `null` unless it is `http` or `https`.
     #[schema(format = "uri")]
@@ -38,8 +38,8 @@ impl EmbeddedTokenResponse {
         metadata: Option<TokenMetadata>,
     ) -> Self {
         let (symbol, name, decimals, logo_uri) = match metadata {
-            Some(m) => (m.symbol, m.name, m.decimals, logo_uri(m.logo_uri)),
-            None => (None, None, 0, None),
+            Some(m) => (m.symbol, m.name, Some(m.decimals), logo_uri(m.logo_uri)),
+            None => (None, None, None, None),
         };
 
         Self {
