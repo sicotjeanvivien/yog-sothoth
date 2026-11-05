@@ -171,9 +171,11 @@ The `/signals` dashboard page combines both consumers:
 
 **One connection per page** — `components/dashboard/live/live-provider.tsx`:
 `LiveProvider` opens the page's single `EventSource` on every topic it shows
-(`livePath`, `lib/live/live-topics.ts`), and the blocks subscribe to their topic
+(`livePath`, `lib/live/live-topics.ts`; `openLive`, `lib/live/live-connection.ts`), and the blocks subscribe to their topic
 through it: the API counts a connection, not a topic, against its 200 slots. A
 named event reaches only `addEventListener` (`onmessage` gets the unnamed ones).
+A refused connection (a `503` past the 200 slots, a proxy error while the API restarts) ends `CLOSED`, which
+the browser never retries: `openLive` reopens it after 5 to 60 s, never before the API's `Retry-After`, half of it random, doubling per refusal.
 Nothing is replayed: `onReopen` tells the subscribers of a gap. On the pages that have the advanced mode, `OverviewLive`
 picks the topics from it: `signals` in the simple mode, the eight on-chain
 collections too in the advanced (`pageTopics`) — switching reopens the
@@ -657,7 +659,7 @@ web/
 │   │   ├── overview/                # period, chart, totals (pure, tested)
 │   │   ├── activity/                # activityRow, the activity feed (pure, tested)
 │   │   ├── format/                  # pubkey, date, number, token-amount formatters
-│   │   ├── live/                    # the live topics and their one path
+│   │   ├── live/                    # the live topics, their one path, the reopened connection
 │   │   └── signals/                 # mergeSignals, filterSignals (pure, tested)
 │   ├── types/
 │   │   └── env.d.ts                 # process.env type augmentation
