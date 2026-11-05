@@ -57,18 +57,27 @@ impl PriceOracleDeviationDetector {
     }
 }
 
-/// Decode a snapshot's raw `sqrt_price` into a spot price (token B per token A, human units); a
-/// protocol without a decoder yields `None` and the pool is skipped.
-fn spot_price_a_in_b(snapshot: &PoolPriceSnapshot) -> Option<Decimal> {
+/// What a protocol's arm makes of a snapshot's `sqrt_price`.
+enum SpotPrice {
+    /// Token B per token A, human units.
+    Decoded(Decimal),
+    /// The decoder exists, the value does not decode: a zero, non-finite or underflowing price.
+    Undecodable,
+    NoDecoder,
+}
+
+/// Decode a snapshot's raw `sqrt_price` into a spot price with its protocol's decoder.
+fn spot_price_a_in_b(snapshot: &PoolPriceSnapshot) -> SpotPrice {
     match snapshot.protocol {
         Protocol::MeteoraDammV2 => yog_core::amm::damm_v2::sqrt_price_to_price_a_in_b(
             snapshot.sqrt_price,
             snapshot.decimals_a,
             snapshot.decimals_b,
-        ),
+        )
+        .map_or(SpotPrice::Undecodable, SpotPrice::Decoded),
         // No sqrt_price decoder for these yet — and the indexer does not
         // ingest them either, so no snapshot carries them today.
-        Protocol::MeteoraDlmm => None,
+        Protocol::MeteoraDlmm => SpotPrice::NoDecoder,
     }
 }
 
@@ -124,9 +133,16 @@ impl SignalDetector for PriceOracleDeviationDetector {
 
             // ⚠️ Apart from `undecodable`: a missing decoder for a whole protocol must not hide behind
             // a handful of pathological pairs.
-            let Some(spot) = spot_price_a_in_b(&snapshot) else {
-                DetectorMetrics::record_skipped(self.name(), SkipReason::NoDecoder);
-                continue;
+            let spot = match spot_price_a_in_b(&snapshot) {
+                SpotPrice::Decoded(spot) => spot,
+                SpotPrice::Undecodable => {
+                    DetectorMetrics::record_skipped(self.name(), SkipReason::Undecodable);
+                    continue;
+                }
+                SpotPrice::NoDecoder => {
+                    DetectorMetrics::record_skipped(self.name(), SkipReason::NoDecoder);
+                    continue;
+                }
             };
 
             let Some(deviation) = (spot - oracle).checked_div(oracle) else {

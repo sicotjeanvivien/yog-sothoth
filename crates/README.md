@@ -268,7 +268,7 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 
 ### 6. In `signals` and `web`
 
-- Give the protocol its arm in `spot_price_a_in_b` (`signals/src/application/detectors/price_oracle_deviation.rs`): its `sqrt_price` decoder, or `None` while it has none — its pools are then counted `no_decoder` (see [`signals/README.md`](./signals/README.md)), not dropped.
+- Give the protocol its arm in `spot_price_a_in_b` (`signals/src/application/detectors/price_oracle_deviation.rs`): its `sqrt_price` decoder, whose failure on a value is `SpotPrice::Undecodable`, or `SpotPrice::NoDecoder` while it has none — its pools are then counted `undecodable` or `no_decoder` (see [`signals/README.md`](./signals/README.md)), not dropped.
 - The flow-imbalance and TVL-drain detectors are built per protocol in `signals/src/bootstrap/daemon.rs`, each with its own settings. A new protocol has neither until it gets its own instances — a choice of thresholds, not a line to copy, and nothing asks for it.
 - Give it its label in `formatProtocolLabel` (`web/src/lib/format/format-protocol.ts`); once the contract is regenerated, `npm run typecheck` asks for it.
 - Its line in the dashboard menu, which is also the list the Overview's activity table and the About page show: its `ProductKey` (`web/src/components/dashboard/sidebar/sidebar-keys.ts`), its entry under its platform in `sidebar-nav.ts` with its label in `web/messages/*/dashboard.json`, and its protocol in `PROTOCOL_OF` (`web/src/components/dashboard/overview/protocol-activity.tsx`), which `npm run typecheck` asks for once the `ProductKey` exists. ⚠️ Nothing asks for its entry in the About page's `OBSERVED` (`web/src/components/marketing/about/about-scope.tsx`): without it, the page says "Soon".
@@ -297,7 +297,7 @@ There is no central registry. A protocol is added by writing isolated per-protoc
 | the `event_tables!` list of each on-chain collection's `*Table` (`core/src/domain/<collection>/repository.rs`) and the `match` of its `Pg*EventRepository`'s `live_tip`/`live_after` (`<collection>/live.rs`) | `core`, `persistence` | the protocol's tables streamed on `/api/live`, one poller each |
 | `PgRotationRunRepository::find_measured_since` | `persistence` | when the protocol's rotation runs are measured from (`None` while its writer does not draw them) |
 | `SwapEvent`, `LiquidityChangeEvent`, `PoolCreationEvent`, `PositionChangeEvent`, `PositionFeeClaimEvent`, `ProtocolFeeClaimEvent`, `RewardClaimEvent`, `RewardChangeEvent`, `PoolChangeEvent` and their `From` in `http/dto/response/` | `core`, `api` | the protocol's variant and its block in the on-chain lists |
-| `spot_price_a_in_b` (`application/detectors/price_oracle_deviation.rs`) | `signals` | `sqrt_price` → spot price, or `None` |
+| `spot_price_a_in_b` (`application/detectors/price_oracle_deviation.rs`) | `signals` | `sqrt_price` → `SpotPrice`: a price, undecodable, or no decoder |
 | `formatProtocolLabel` (`web/src/lib/format/format-protocol.ts`) | `web` | display label |
 
 The two-level enums (`DomainEvent`, `PoolAccountProperties`) and the switch of `formatProtocolLabel` are matched exhaustively, so adding a variant breaks the build, or the web's typecheck, at each site that must follow instead of silently dropping the protocol.
