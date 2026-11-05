@@ -11,8 +11,8 @@ the mechanism is written down.
 - `update.sh` — the update procedure, run on the server: `update.sh vX.Y.Z`,
   `update.sh --force vX.Y.Z`, `update.sh --check`. It detaches, pulls the
   version's images while the previous version serves, stops the daemons,
-  migrates, starts, checks, and once all is green removes the previous
-  version's images. Nothing is built on the server.
+  migrates, starts, checks, and once all is green removes the images the
+  previous version left without a name. Nothing is built on the server.
 - `pull-images.sh` — the pull: it refuses an image that is missing or labelled
   with another commit, before anything is stopped.
 - `deploy-entry.sh` — the forced command of the deployment key: the only three
@@ -211,12 +211,12 @@ makes the version impossible to roll back.
 
 ## Going back
 
-Deploy the previous version. Its images were removed by the deploy that
-replaced it: `update.sh` pulls them again from GHCR, checks the version out and
-runs the same sequence, unless the database holds a migration that version
-does not ship — it reads `_sqlx_migrations`, not git. It then refuses, naming the migrations,
-because the schema cannot go back with the code and the older binaries refuse
-a schema newer than theirs. Past an applied migration, the only way is forward
+Deploy the previous version. `update.sh` pulls its images again from GHCR — a
+green deploy removed them, and a red one left them without a name — checks the
+version out and runs the same sequence, unless the database holds a migration
+that version does not ship — it reads `_sqlx_migrations`, not git. It then
+refuses, naming the migrations, because the schema cannot go back with the code
+and the older binaries refuse a schema newer than theirs. Past an applied migration, the only way is forward
 — a fix, in a new version — or a restore (`crates/persistence/README.md`,
 *Backup and restore*).
 
