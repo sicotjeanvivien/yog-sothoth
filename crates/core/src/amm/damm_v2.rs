@@ -83,7 +83,10 @@ pub fn sqrt_price_to_price_a_in_b(
     if !price.is_finite() || price <= 0.0 {
         return None;
     }
-    Decimal::from_f64_retain(price).map(|d| d.normalize())
+    // ⚠️ A positive `f64` under `Decimal`'s smallest step (1e-28) converts to a zero `Decimal`.
+    Decimal::from_f64_retain(price)
+        .map(|d| d.normalize())
+        .filter(|d| !d.is_zero())
 }
 
 /// Amount net of a fee in bps, taken off the input.

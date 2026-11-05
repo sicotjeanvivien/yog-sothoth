@@ -156,6 +156,11 @@ carries: `yog-indexer`'s `infra::endpoint::credential` is the single place that
 turns the pair into something a client sends, as gRPC request metadata or as a
 WebSocket handshake header.
 
+⚠️ **Neither door checks the scheme.** A `wss://` written in one of the four
+HTTP endpoints starts cleanly, then every call fails (`builder error for url`),
+logged at each tick. Only `INGEST_STREAM_URL` has its scheme checked, by the
+listener that reads it (`yog-indexer`'s `infra::endpoint::scheme`).
+
 ⚠️ **What decides whether there is a header is those two variables and nothing
 else** — not `INGEST_SOURCE`. A door chosen on the transport was tried for a
 day and removed on review: it rested on "the WebSocket client cannot send one",

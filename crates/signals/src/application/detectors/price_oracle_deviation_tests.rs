@@ -194,3 +194,51 @@ async fn evaluates_each_pool_independently() {
     assert_eq!(signals[1].pool_address, pk(3));
     assert_eq!(signals[1].severity, Severity::Critical);
 }
+
+use crate::application::metrics_probe::{Snapshot, counter, snapshot as probe};
+
+fn probe_one_evaluation(snap: PoolPriceSnapshot, now: DateTime<Utc>) -> Snapshot {
+    let det = detector(vec![snap]);
+    probe(|| async move {
+        run_at(&det, now).await;
+    })
+}
+
+fn skipped(snap: &Snapshot, reason: &str) -> Option<u64> {
+    counter(
+        snap,
+        "yog_signals_skipped_total",
+        &[("detector", "price_oracle_deviation"), ("reason", reason)],
+    )
+}
+
+// Mutation: the DAMM v2 arm turns a `sqrt_price` that does not decode into `NoDecoder`.
+#[test]
+fn a_damm_v2_sqrt_price_that_does_not_decode_is_counted_undecodable() {
+    let now = Utc::now();
+    let snap = probe_one_evaluation(snapshot(1, now, 0, "1.0", "1.0"), now);
+
+    assert_eq!(skipped(&snap, "undecodable"), Some(1));
+    assert_eq!(skipped(&snap, "no_decoder"), None);
+}
+
+// Mutation: the decoder turns a price under `Decimal`'s precision into 0 — a Critical "spot 0" signal.
+#[test]
+fn a_damm_v2_price_below_decimal_precision_is_counted_undecodable() {
+    let now = Utc::now();
+    let snap = probe_one_evaluation(snapshot(1, now, 1, "1.0", "1.0"), now);
+
+    assert_eq!(skipped(&snap, "undecodable"), Some(1));
+}
+
+// Mutation: the DLMM arm, which has no decoder, answers `Undecodable`.
+#[test]
+fn a_protocol_without_a_decoder_is_counted_no_decoder() {
+    let now = Utc::now();
+    let mut dlmm = snapshot(1, now, SQRT_PRICE_ONE, "1.0", "1.0");
+    dlmm.protocol = Protocol::MeteoraDlmm;
+    let snap = probe_one_evaluation(dlmm, now);
+
+    assert_eq!(skipped(&snap, "no_decoder"), Some(1));
+    assert_eq!(skipped(&snap, "undecodable"), None);
+}

@@ -167,6 +167,12 @@ fn sqrt_price_zero_is_none() {
     assert!(sqrt_price_to_price_a_in_b(0, 9, 6).is_none());
 }
 
+// Mutation: no zero check after the conversion — a price under 1e-28 comes back as a fake 0.
+#[test]
+fn sqrt_price_below_decimal_precision_is_none() {
+    assert!(sqrt_price_to_price_a_in_b(1, 6, 6).is_none());
+}
+
 // ── Fee scheduler ────────────────────────────────────────────────────
 
 /// `28BDU1…`, a real mainnet `scheduler_linear` from the account fixtures:

@@ -264,7 +264,8 @@ declined to evaluate — `unpriced` (the window was not entirely valuable),
 `no_tvl` (current TVL unpriceable), `stale` (an input older than its freshness
 gate), `no_decoder` (no `sqrt_price` decoder shipped for that protocol —
 missing code, not a data problem), `undecodable` (an oracle ratio that will not
-compute). The labels are defined once, by the `SkipReason` enum in
+compute, or a `sqrt_price` its decoder cannot turn into a price). The labels
+are defined once, by the `SkipReason` enum in
 `application/detectors/metrics.rs`, and the counter's `# HELP` text is built from it — this list
 copies it for the reader, not for the code. Emitting nothing is the right answer
 to a pool we cannot value; staying *quiet* about how often that happens is not,
