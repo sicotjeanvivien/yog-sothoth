@@ -59,7 +59,8 @@
 #    falling, what remains is reported as a warning. The check fails on a
 #    count that never moves, on a plateau of 100 or more (yog-context takes
 #    the 100 oldest per tick, so they starve the rest), and on a count still
-#    falling at the deadline.
+#    falling at the deadline. All green, the images left without a name — the
+#    previous version's, untagged by pull-images.sh — are removed.
 #
 # If the migration fails, the script stops with the daemons DOWN. The images
 # already hold the new code, which must not run against the old schema. The
@@ -285,6 +286,13 @@ main() {
 
   log "summary: $from → $version (${new:0:7}), $(( migrations_after - migrations_before )) migration(s) applied, outage ${outage_secs}s"
   [ "$failed" -eq 0 ] || die "deployed, but a check failed (see above)"
+  local pruned
+  # ⚠️ Not `-a`: it drops every image without a container, yog-migrate's once its stopped one is gone.
+  if pruned=$(docker image prune -f 2>&1); then
+    log "previous version's images removed: ${pruned##*$'\n'}"
+  else
+    log "⚠️  image prune failed, the deploy stands: ${pruned##*$'\n'}"
+  fi
   log "✅ deployed and checked"
 }
 
