@@ -568,6 +568,17 @@ roles cannot CREATE or ALTER anything.
 Note: the migration suite is embedded at compile time (`sqlx::migrate!`) — a
 new `.sql` file requires rebuilding the binary to be picked up.
 
+⚠️ On a fresh, empty database with the TimescaleDB scheduler running,
+`yog-migrate bootstrap` (roles, migrations, allowlist) can stop on migration 7
+with `tuple concurrently deleted` (or `updated`): 007 drops the hourly swap
+aggregate and its job while the scheduler may be running the jobs the earlier
+migrations just created. It is intermittent: 5 bootstraps out of 12 on
+31 October 2026 with TimescaleDB 2.31.0, always on 007; the three of 10 August
+in [`migrations/README.md`](./migrations/README.md) all passed. 007 runs in one
+transaction, so it is rolled back whole and 1 to 6 stay applied: run
+`bootstrap` again, it resumes at 007. An existing database (a deploy, a dump
+restore) is already past 007 and never hits it.
+
 ## Migrations
 
 Forward-only: committed migrations never change, no `.down.sql`, rollback is a
