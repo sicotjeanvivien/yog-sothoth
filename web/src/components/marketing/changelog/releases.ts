@@ -32,6 +32,63 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.9.0",
+    date: "2026-11-05",
+    summary: "The live feed now carries the on-chain activity, not only the signals, and a page whose live connection is refused reopens it by itself.",
+    sections: [
+      {
+        kind: "features",
+        items: [
+          {
+            text: "In advanced mode, the Overview and the DAMM v2 Live activity tab show the on-chain events as they arrive: liquidity changes, pool creations, position changes, fee and reward claims, reward and pool changes.",
+            technical: false,
+          },
+          {
+            text: "The live stream moves to /api/live, for all protocols, and /api/live/protocols/{protocol}, for one; its topics are the signals and the eight on-chain event collections other than swaps. /api/signals/stream is removed: listen on /api/live?topics=signals instead.",
+            technical: true,
+          },
+          {
+            text: "The on-chain event collections and their live items embed the pool's token pair.",
+            technical: true,
+          },
+          {
+            text: "A page holds one connection to the live stream, whatever the number of feeds it shows.",
+            technical: true,
+          },
+        ],
+      },
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "A page whose live connection is refused, when the server is full or restarting, reopens it by itself and fills the gap, instead of staying frozen until it is reloaded.",
+            technical: false,
+          },
+          {
+            text: "An embedded token without metadata now says decimals: null instead of 0: a client must handle null.",
+            technical: true,
+          },
+          {
+            text: "The three swap lists announce only the windows they serve: 24h at the root and under a protocol, 24h and 7d under a pool. A window they refuse gets a 400 whose text names the ones they serve.",
+            technical: true,
+          },
+          {
+            text: "The oracle-deviation detector counts a DAMM v2 price that does not decode as undecodable, not no_decoder; a price below decimal precision can no longer raise a Critical signal at a spot price of 0.",
+            technical: true,
+          },
+          {
+            text: "A panic of the indexer's slot-range writer stops the indexer instead of going unnoticed.",
+            technical: true,
+          },
+          {
+            text: "A green deployment removes the images it left without a name.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.8.0",
     date: "2026-11-02",
     summary: "The indexer now records which slots it watched, so a stretch it missed can be told apart from a quiet one.",
