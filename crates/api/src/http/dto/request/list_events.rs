@@ -6,7 +6,7 @@ use serde::Deserialize;
 use utoipa::IntoParams;
 use yog_core::domain::{EventCursor, EventScope, Window};
 
-use super::window_param::WindowParam;
+use super::window_param::{EventsWindow, WindowParam};
 use crate::http::{
     cursor::{EventCollection, decode_event_cursor},
     error::ApiError,
@@ -14,11 +14,11 @@ use crate::http::{
 
 /// A window, ending at the first page, and forward-only cursor pagination.
 #[derive(Debug, Deserialize, IntoParams)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct EventsParams {
+#[serde(deny_unknown_fields, bound = "W: EventsWindow")]
+pub(crate) struct EventsParams<W: EventsWindow = WindowParam> {
     #[serde(default)]
     #[param(inline)]
-    window: WindowParam,
+    window: W,
     #[param(min_length = 1)]
     cursor: Option<String>,
     #[serde(default = "super::default_limit")]
@@ -38,25 +38,13 @@ pub(crate) struct ListEventsRequest {
 }
 
 impl ListEventsRequest {
-    /// `longest` is the widest window the list serves: a wider one is a 400.
-    pub(crate) fn parse(
-        params: EventsParams,
+    pub(crate) fn parse<W: EventsWindow>(
+        params: EventsParams<W>,
         collection: EventCollection,
         scope: EventScope,
-        longest: Window,
     ) -> Result<Self, ApiError> {
         super::validate_limit(params.limit)?;
         let window: Window = params.window.into();
-        if window.hours() > longest.hours() {
-            let advice = match scope {
-                EventScope::Pool(_) => "",
-                EventScope::All | EventScope::Protocol(_) => ": read it under a pool",
-            };
-            return Err(ApiError::BadRequest(format!(
-                "`window` beyond {} is not served for this list{advice}",
-                longest.as_str()
-            )));
-        }
         let cursor = params
             .cursor
             .as_deref()
@@ -68,7 +56,7 @@ impl ListEventsRequest {
         // ⚠️ The cursor's start is the client's to send: unchecked, a forged one reads past the
         // widest window the list serves.
         if let Some(c) = &cursor
-            && (c.at < c.from || c.from < Utc::now() - longest.duration() - CURSOR_WINDOW_MARGIN)
+            && (c.at < c.from || c.from < Utc::now() - W::LONGEST.duration() - CURSOR_WINDOW_MARGIN)
         {
             return Err(ApiError::BadRequest(
                 "invalid cursor: its window is not one this list serves".to_string(),
@@ -82,3 +70,7 @@ impl ListEventsRequest {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "tests/list_events_tests.rs"]
+mod tests;

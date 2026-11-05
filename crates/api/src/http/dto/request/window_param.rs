@@ -1,6 +1,6 @@
 //! The `window` and `offset` of a measure: the closed list of `Window`.
 
-use serde::Deserialize;
+use serde::{Deserialize, de::DeserializeOwned};
 use utoipa::{IntoParams, ToSchema};
 use yog_core::domain::Window;
 
@@ -26,6 +26,58 @@ impl From<WindowParam> for Window {
             WindowParam::Month => Window::Month,
         }
     }
+}
+
+/// The window of an event list, whose variants are the windows it serves: the contract, the refusal
+/// and the cursor's bound read this one type.
+pub(crate) trait EventsWindow: Into<Window> + Default + DeserializeOwned + ToSchema {
+    /// The widest window the list serves.
+    const LONGEST: Window;
+}
+
+impl EventsWindow for WindowParam {
+    const LONGEST: Window = Window::Month;
+}
+
+#[derive(Debug, Default, Deserialize, Clone, Copy, ToSchema)]
+pub(crate) enum DayWindowParam {
+    #[default]
+    #[serde(rename = "24h")]
+    Day,
+}
+
+impl From<DayWindowParam> for Window {
+    fn from(value: DayWindowParam) -> Self {
+        match value {
+            DayWindowParam::Day => Window::Day,
+        }
+    }
+}
+
+impl EventsWindow for DayWindowParam {
+    const LONGEST: Window = Window::Day;
+}
+
+#[derive(Debug, Default, Deserialize, Clone, Copy, ToSchema)]
+pub(crate) enum WeekWindowParam {
+    #[default]
+    #[serde(rename = "24h")]
+    Day,
+    #[serde(rename = "7d")]
+    Week,
+}
+
+impl From<WeekWindowParam> for Window {
+    fn from(value: WeekWindowParam) -> Self {
+        match value {
+            WeekWindowParam::Day => Window::Day,
+            WeekWindowParam::Week => Window::Week,
+        }
+    }
+}
+
+impl EventsWindow for WeekWindowParam {
+    const LONGEST: Window = Window::Week;
 }
 
 /// A measure over a window ending at the last frozen hour; 24 hours by default.

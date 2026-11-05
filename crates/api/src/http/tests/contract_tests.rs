@@ -94,6 +94,47 @@ fn the_moves_and_the_runs_list_every_window() {
     );
 }
 
+/// Mutation: a window added to a swaps list's type — `7d` at the root or under a protocol, `30d`
+/// under a pool — announced to the contract and served past what the list reads.
+#[test]
+fn every_event_list_announces_the_windows_it_serves() {
+    const COLLECTIONS: [&str; 9] = [
+        "swaps",
+        "liquidity-changes",
+        "pool-creations",
+        "position-changes",
+        "position-fee-claims",
+        "protocol-fee-claims",
+        "reward-claims",
+        "reward-changes",
+        "pool-changes",
+    ];
+    let doc = document();
+    let mut checked = 0;
+    for path in doc["paths"].as_object().expect("paths").keys() {
+        let Some(collection) = path.rsplit('/').next().filter(|c| COLLECTIONS.contains(c)) else {
+            continue;
+        };
+        let window = doc["paths"][path]["get"]["parameters"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|p| p["name"] == "window")
+            .map(|p| p["schema"]["enum"].clone());
+        let served = match (collection, path.starts_with("/api/pools/")) {
+            ("swaps", false) => json!(["24h"]),
+            ("swaps", true) => json!(["24h", "7d"]),
+            _ => json!(["24h", "7d", "30d"]),
+        };
+        assert_eq!(window, Some(served), "{path}");
+        checked += 1;
+    }
+    assert_eq!(
+        checked, 26,
+        "nine collections at the root and under a protocol, all but the creations under a pool"
+    );
+}
+
 /// Red when a route is mounted with a literal path — `Router::route`, or
 /// `OpenApiRouter::route`, which serves it without a contract — outside the probes.
 #[test]

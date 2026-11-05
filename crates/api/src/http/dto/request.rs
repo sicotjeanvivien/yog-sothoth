@@ -39,7 +39,8 @@ pub(crate) use list_tokens::{ListTokensRequest, TokensParams};
 pub(crate) use live::{LiveParams, LiveRequest, LiveTopic};
 pub(crate) use no_query::NoQuery;
 pub(crate) use window_param::{
-    MeasureActivityParams, MeasureWindowParams, ReadingSeriesParams, SeriesParams, WindowParams,
+    DayWindowParam, MeasureActivityParams, MeasureWindowParams, ReadingSeriesParams, SeriesParams,
+    WeekWindowParam, WindowParams,
 };
 
 const DEFAULT_LIMIT: i64 = 50;

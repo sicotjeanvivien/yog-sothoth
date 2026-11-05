@@ -66,7 +66,7 @@ describe("endpointsOf", () => {
   it("reads the parameters, path first", () => {
     const params = endpoint("list_pool_swaps").params;
     expect(params[0]).toMatchObject({ name: "pool", in: "path", required: true });
-    expect(params.find((p) => p.name === "window")?.enum).toEqual(["24h", "7d", "30d"]);
+    expect(params.find((p) => p.name === "window")?.enum).toEqual(["24h", "7d"]);
     expect(params.find((p) => p.name === "limit")).toMatchObject({
       type: "integer",
       min: 1,
