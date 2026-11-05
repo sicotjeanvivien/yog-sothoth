@@ -7993,7 +7993,6 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a list that serves 7 days at most.",
               "enum": [
                 "24h",
                 "7d"
@@ -10230,7 +10229,6 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a list that serves the last 24 hours only.",
               "enum": [
                 "24h"
               ],
@@ -10827,7 +10825,6 @@
             "name": "window",
             "required": false,
             "schema": {
-              "description": "The window of a list that serves the last 24 hours only.",
               "enum": [
                 "24h"
               ],

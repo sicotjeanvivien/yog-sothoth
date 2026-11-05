@@ -30,9 +30,7 @@ impl From<WindowParam> for Window {
 
 /// The window of an event list, whose variants are the windows it serves: the contract, the refusal
 /// and the cursor's bound read this one type.
-pub(crate) trait EventsWindow:
-    Into<Window> + Copy + Default + DeserializeOwned + ToSchema
-{
+pub(crate) trait EventsWindow: Into<Window> + Default + DeserializeOwned + ToSchema {
     /// The widest window the list serves.
     const LONGEST: Window;
 }
@@ -41,7 +39,6 @@ impl EventsWindow for WindowParam {
     const LONGEST: Window = Window::Month;
 }
 
-/// The window of a list that serves the last 24 hours only.
 #[derive(Debug, Default, Deserialize, Clone, Copy, ToSchema)]
 pub(crate) enum DayWindowParam {
     #[default]
@@ -61,7 +58,6 @@ impl EventsWindow for DayWindowParam {
     const LONGEST: Window = Window::Day;
 }
 
-/// The window of a list that serves 7 days at most.
 #[derive(Debug, Default, Deserialize, Clone, Copy, ToSchema)]
 pub(crate) enum WeekWindowParam {
     #[default]

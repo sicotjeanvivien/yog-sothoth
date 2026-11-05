@@ -45,7 +45,6 @@ impl ListEventsRequest {
     ) -> Result<Self, ApiError> {
         super::validate_limit(params.limit)?;
         let window: Window = params.window.into();
-        let longest = W::LONGEST;
         let cursor = params
             .cursor
             .as_deref()
@@ -57,7 +56,7 @@ impl ListEventsRequest {
         // ⚠️ The cursor's start is the client's to send: unchecked, a forged one reads past the
         // widest window the list serves.
         if let Some(c) = &cursor
-            && (c.at < c.from || c.from < Utc::now() - longest.duration() - CURSOR_WINDOW_MARGIN)
+            && (c.at < c.from || c.from < Utc::now() - W::LONGEST.duration() - CURSOR_WINDOW_MARGIN)
         {
             return Err(ApiError::BadRequest(
                 "invalid cursor: its window is not one this list serves".to_string(),
