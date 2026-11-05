@@ -44,7 +44,7 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "The live stream moves to /api/live: a scope's stream is /api/live followed by its REST path, and its topics are the collections under that path, the signals and the eight on-chain event collections other than swaps. /api/signals/stream is removed.",
+            text: "The live stream moves to /api/live, for all protocols, and /api/live/protocols/{protocol}, for one; its topics are the signals and the eight on-chain event collections other than swaps. /api/signals/stream is removed: listen on /api/live?topics=signals instead.",
             technical: true,
           },
           {
@@ -65,7 +65,7 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "An embedded token without metadata now says decimals: null instead of 0.",
+            text: "An embedded token without metadata now says decimals: null instead of 0: a client must handle null.",
             technical: true,
           },
           {
