@@ -91,6 +91,7 @@ main() {
 
   dc=(docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full)
   registry=ghcr.io/sicotjeanvivien
+  source=https://github.com/sicotjeanvivien/yog-sothoth
   db_daemons=(yog-indexer yog-context yog-signals yog-api yog-archive yog-analytic)
   services=(postgres "${db_daemons[@]}" yog-web)
   state=$(git rev-parse --absolute-git-dir)/yog-update
@@ -285,6 +286,13 @@ main() {
 
   log "summary: $from → $version (${new:0:7}), $(( migrations_after - migrations_before )) migration(s) applied, outage ${outage_secs}s"
   [ "$failed" -eq 0 ] || die "deployed, but a check failed (see above)"
+  local pruned
+  # ⚠️ Not `-a`: it drops every image without a container, yog-migrate's (`run --rm`) among them.
+  if pruned=$(docker image prune -f --filter "label=org.opencontainers.image.source=$source" 2>&1); then
+    log "unnamed images of ours pruned: ${pruned##*$'\n'}"
+  else
+    log "⚠️  image prune failed, the deploy stands: ${pruned##*$'\n'}"
+  fi
   log "✅ deployed and checked"
 }
 
