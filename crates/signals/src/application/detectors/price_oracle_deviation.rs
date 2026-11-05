@@ -61,7 +61,7 @@ impl PriceOracleDeviationDetector {
 enum SpotPrice {
     /// Token B per token A, human units.
     Decoded(Decimal),
-    /// The decoder exists, the value does not decode: a zero, non-finite or underflowing price.
+    /// The decoder exists, the value does not decode.
     Undecodable,
     NoDecoder,
 }
