@@ -175,7 +175,7 @@ The `/signals` dashboard page combines both consumers:
 through it: the API counts a connection, not a topic, against its 200 slots. A
 named event reaches only `addEventListener` (`onmessage` gets the unnamed ones).
 A refused connection (a `503` past the 200 slots, a proxy error while the API restarts) ends `CLOSED`, which
-the browser never retries: `openLive` reopens it after 2.5 to 60 s, half of it random, doubling per refusal.
+the browser never retries: `openLive` reopens it after 5 to 60 s, never before the API's `Retry-After`, half of it random, doubling per refusal.
 Nothing is replayed: `onReopen` tells the subscribers of a gap. On the pages that have the advanced mode, `OverviewLive`
 picks the topics from it: `signals` in the simple mode, the eight on-chain
 collections too in the advanced (`pageTopics`) — switching reopens the

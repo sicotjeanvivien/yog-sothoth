@@ -14,12 +14,12 @@ export type LiveHandlers = {
   onReopen: () => void;
 };
 
-const FIRST_DELAY_MS = 5_000;
+const FIRST_BASE_MS = 10_000;
 const MAX_DELAY_MS = 60_000;
 
-/** From 5 s, the API's `Retry-After`, doubled per refusal up to 60 s; the random half spreads the tabs. */
+/** 5 to 10 s, never before the API's `Retry-After`, doubled per refusal up to 30 to 60 s; half is random. */
 export function reopenDelayMs(refusals: number, random: number): number {
-  const base = Math.min(FIRST_DELAY_MS * 2 ** refusals, MAX_DELAY_MS);
+  const base = Math.min(FIRST_BASE_MS * 2 ** refusals, MAX_DELAY_MS);
   return base / 2 + (random * base) / 2;
 }
 

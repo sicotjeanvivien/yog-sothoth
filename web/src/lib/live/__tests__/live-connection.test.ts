@@ -17,7 +17,15 @@ class FakeEventSource {
     FakeEventSource.instances.push(this);
   }
 
-  addEventListener(): void {}
+  listeners = new Map<string, ((event: { data: string }) => void)[]>();
+
+  addEventListener(topic: string, listener: (event: { data: string }) => void): void {
+    this.listeners.set(topic, [...(this.listeners.get(topic) ?? []), listener]);
+  }
+
+  emit(topic: string, data: string): void {
+    this.listeners.get(topic)?.forEach((listener) => listener({ data }));
+  }
 
   close(): void {
     this.closed = true;
@@ -72,7 +80,7 @@ describe("a refused connection", () => {
     sources()[0]!.open();
     sources()[0]!.fail(FakeEventSource.CLOSED);
 
-    vi.advanceTimersByTime(4_999);
+    vi.advanceTimersByTime(9_999);
     expect(sources()).toHaveLength(1);
     vi.advanceTimersByTime(1);
     expect(sources()).toHaveLength(2);
@@ -86,18 +94,18 @@ describe("a refused connection", () => {
 describe("the reopening delay", () => {
   // Mutation: the base never doubles.
   it("doubles per consecutive refusal", () => {
-    expect([0, 1, 2, 3].map((n) => reopenDelayMs(n, 1))).toEqual([5_000, 10_000, 20_000, 40_000]);
+    expect([0, 1, 2].map((n) => reopenDelayMs(n, 1))).toEqual([10_000, 20_000, 40_000]);
   });
 
-  // Mutation: no cap — the fifth refusal would wait 80 s, the tenth over an hour.
+  // Mutation: no cap — the fourth refusal would wait 80 s, the tenth over an hour.
   it("is capped at 60 s", () => {
-    expect(reopenDelayMs(4, 1)).toBe(60_000);
+    expect(reopenDelayMs(3, 1)).toBe(60_000);
     expect(reopenDelayMs(30, 1)).toBe(60_000);
   });
 
   // Mutation: no random part — every tab refused together comes back at the same second.
   it("keeps a random half", () => {
-    expect(reopenDelayMs(0, 0)).toBe(2_500);
+    expect(reopenDelayMs(0, 0)).toBe(5_000);
     expect(reopenDelayMs(30, 0)).toBe(30_000);
   });
 
@@ -105,14 +113,14 @@ describe("the reopening delay", () => {
   it("starts over after an opening", () => {
     openLive(LIVE_URL, ["signals"], handlers(), false);
     sources()[0]!.fail(FakeEventSource.CLOSED);
-    vi.advanceTimersByTime(5_000);
-    sources()[1]!.fail(FakeEventSource.CLOSED);
     vi.advanceTimersByTime(10_000);
+    sources()[1]!.fail(FakeEventSource.CLOSED);
+    vi.advanceTimersByTime(20_000);
     expect(sources()).toHaveLength(3);
 
     sources()[2]!.open();
     sources()[2]!.fail(FakeEventSource.CLOSED);
-    vi.advanceTimersByTime(5_000);
+    vi.advanceTimersByTime(10_000);
     expect(sources()).toHaveLength(4);
   });
 });
@@ -146,4 +154,35 @@ it("hands the gap to the next connection", () => {
   openLive(LIVE_URL, ["signals"], h, true);
   last().open();
   expect(h.reopens).toBe(1);
+});
+
+// Mutations: no listener per topic, the wrong topic handed on, no status — the feed falls silent or stays "reconnecting".
+it("hands each topic's parsed events on, and the status", () => {
+  const events: [string, unknown][] = [];
+  const statuses: string[] = [];
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  openLive(
+    LIVE_URL,
+    ["signals", "pool-creations", "signals"],
+    {
+      onStatus: (status) => statuses.push(status),
+      onEvent: (topic, data) => events.push([topic, data]),
+      onReopen: () => {},
+    },
+    false,
+  );
+  const source = sources()[0]!;
+  source.open();
+  source.emit("signals", '{"id":1}');
+  source.emit("pool-creations", '{"id":2}');
+  source.emit("pool-creations", "not json");
+  source.emit("swaps", '{"id":3}');
+  source.fail(FakeEventSource.CONNECTING);
+
+  expect(events).toEqual([
+    ["signals", { id: 1 }],
+    ["pool-creations", { id: 2 }],
+  ]);
+  expect(warn).toHaveBeenCalledOnce();
+  expect(statuses).toEqual(["live", "reconnecting"]);
 });
