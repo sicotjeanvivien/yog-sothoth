@@ -2,7 +2,7 @@
 
 /**
  * The page's one connection to `/api/live`: every block that streams subscribes to its topic here
- * instead of opening its own `EventSource`. A new set of topics leaves a gap too, and `onReopen` fires.
+ * instead of opening its own `EventSource`.
  */
 
 import {

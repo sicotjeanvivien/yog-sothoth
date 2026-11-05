@@ -10,14 +10,13 @@ export type StreamStatus = "connecting" | "live" | "reconnecting";
 export type LiveHandlers = {
   onStatus: (status: StreamStatus) => void;
   onEvent: (topic: LiveTopic, data: unknown) => void;
-  /** Called at an opening that follows a loss. */
   onReopen: () => void;
 };
 
 const FIRST_BASE_MS = 10_000;
 const MAX_DELAY_MS = 60_000;
 
-/** 5 to 10 s, never before the API's `Retry-After`, doubled per refusal up to 30 to 60 s; half is random. */
+/** Never before the API's `Retry-After`. */
 export function reopenDelayMs(refusals: number, random: number): number {
   const base = Math.min(FIRST_BASE_MS * 2 ** refusals, MAX_DELAY_MS);
   return base / 2 + (random * base) / 2;

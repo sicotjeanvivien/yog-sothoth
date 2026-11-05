@@ -144,6 +144,21 @@ it("opens nothing once closed during the wait", () => {
   expect(sources()[0]!.closed).toBe(true);
 });
 
+// Mutations: a refusal before any opening counts as no loss — the signals rendered by the server are never refilled.
+it("counts a refusal before the first opening as a gap", () => {
+  const h = handlers();
+  const first = openLive(LIVE_URL, ["signals"], h, false);
+  sources()[0]!.fail(FakeEventSource.CLOSED);
+  vi.advanceTimersByTime(10_000);
+  last().open();
+  expect(h.reopens).toBe(1);
+
+  const second = openLive(LIVE_URL, ["signals"], handlers(), false);
+  last().fail(FakeEventSource.CLOSED);
+  expect(second.close()).toBe(true);
+  first.close();
+});
+
 // Mutation: `close` reports no gap after an opening — new topics would not refill what they missed.
 it("hands the gap to the next connection", () => {
   const first = openLive(LIVE_URL, ["signals"], handlers(), false);
