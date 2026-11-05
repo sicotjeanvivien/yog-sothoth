@@ -4,7 +4,7 @@ use axum::{
     Json,
     extract::{Path, Query, State},
 };
-use yog_core::domain::{EventScope, Window};
+use yog_core::domain::EventScope;
 
 use crate::http::{
     AppState,
@@ -30,12 +30,7 @@ pub(crate) async fn list_reward_claims(
     State(state): State<AppState>,
     Query(params): Query<EventsParams>,
 ) -> Result<Json<PageResponse<RewardClaimEventResponse>>, ApiError> {
-    let request = ListEventsRequest::parse(
-        params,
-        EventCollection::RewardClaims,
-        EventScope::All,
-        Window::Month,
-    )?;
+    let request = ListEventsRequest::parse(params, EventCollection::RewardClaims, EventScope::All)?;
     list_event_page(&state, request).await
 }
 
@@ -59,7 +54,6 @@ pub(crate) async fn list_protocol_reward_claims(
         params,
         EventCollection::RewardClaims,
         EventScope::Protocol(protocol),
-        Window::Month,
     )?;
     list_event_page(&state, request).await
 }
@@ -84,7 +78,6 @@ pub(crate) async fn list_pool_reward_claims(
         params,
         EventCollection::RewardClaims,
         EventScope::Pool(address),
-        Window::Month,
     )?;
     super::known_pool(&state, &pool).await?;
     list_event_page(&state, request).await

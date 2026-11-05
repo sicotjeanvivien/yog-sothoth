@@ -5,7 +5,7 @@ use axum::{
     Json,
     extract::{Path, Query, State},
 };
-use yog_core::domain::{EventScope, Window};
+use yog_core::domain::EventScope;
 
 use crate::http::{
     AppState,
@@ -31,12 +31,8 @@ pub(crate) async fn list_liquidity_changes(
     State(state): State<AppState>,
     Query(params): Query<EventsParams>,
 ) -> Result<Json<PageResponse<LiquidityChangeEventResponse>>, ApiError> {
-    let request = ListEventsRequest::parse(
-        params,
-        EventCollection::LiquidityChanges,
-        EventScope::All,
-        Window::Month,
-    )?;
+    let request =
+        ListEventsRequest::parse(params, EventCollection::LiquidityChanges, EventScope::All)?;
     list_event_page(&state, request).await
 }
 
@@ -60,7 +56,6 @@ pub(crate) async fn list_protocol_liquidity_changes(
         params,
         EventCollection::LiquidityChanges,
         EventScope::Protocol(protocol),
-        Window::Month,
     )?;
     list_event_page(&state, request).await
 }
@@ -85,7 +80,6 @@ pub(crate) async fn list_pool_liquidity_changes(
         params,
         EventCollection::LiquidityChanges,
         EventScope::Pool(address),
-        Window::Month,
     )?;
     super::known_pool(&state, &pool).await?;
     list_event_page(&state, request).await

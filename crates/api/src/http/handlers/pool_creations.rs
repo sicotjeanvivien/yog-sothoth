@@ -4,7 +4,7 @@ use axum::{
     Json,
     extract::{Path, Query, State},
 };
-use yog_core::domain::{EventScope, Protocol, Window};
+use yog_core::domain::{EventScope, Protocol};
 
 use crate::http::cursor::EventCollection;
 use crate::http::{
@@ -131,12 +131,8 @@ pub(crate) async fn list_pool_creations(
     State(state): State<AppState>,
     Query(params): Query<EventsParams>,
 ) -> Result<Json<PageResponse<PoolCreationEventResponse>>, ApiError> {
-    let request = ListEventsRequest::parse(
-        params,
-        EventCollection::PoolCreations,
-        EventScope::All,
-        Window::Month,
-    )?;
+    let request =
+        ListEventsRequest::parse(params, EventCollection::PoolCreations, EventScope::All)?;
     list_event_page(&state, request, None).await
 }
 
@@ -160,7 +156,6 @@ pub(crate) async fn list_protocol_pool_creations(
         params,
         EventCollection::PoolCreations,
         EventScope::Protocol(protocol),
-        Window::Month,
     )?;
     list_event_page(&state, request, Some(protocol)).await
 }

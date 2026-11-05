@@ -11,8 +11,9 @@ use crate::http::{
         SwapActivityResponse, SwapEventResponse, SwapSeriesResponse, SwapTotalsResponse,
         TokenActivityPageResponse,
         request::{
-            EventsParams, ListEventsRequest, ListTokenActivityRequest, MeasureActivityParams,
-            MeasureWindowParams, SeriesParams, TokenActivityParams, parse_pool, parse_protocol,
+            DayWindowParam, EventsParams, ListEventsRequest, ListTokenActivityRequest,
+            MeasureActivityParams, MeasureWindowParams, SeriesParams, TokenActivityParams,
+            WeekWindowParam, parse_pool, parse_protocol,
         },
     },
     error::ApiError,
@@ -21,7 +22,7 @@ use axum::{
     Json,
     extract::{Path, Query, State},
 };
-use yog_core::domain::{EventScope, Window};
+use yog_core::domain::EventScope;
 
 #[utoipa::path(
     get,
@@ -207,43 +208,41 @@ pub(crate) async fn list_swaps_by_token(
 #[utoipa::path(
     get,
     path = "/api/swaps",
-    params(EventsParams),
+    params(EventsParams<DayWindowParam>),
     responses((
         status = 200,
-        description = "A page of every protocol's swaps, the most recent first; the window ends at the first page.",
+        description = "A page of every protocol's swaps over 24 hours at most, the most recent first; the window ends at the first page. A pool's swaps go back 7 days.",
         body = PageResponse<SwapEventResponse>
     ))
 )]
 pub(crate) async fn list_swaps(
     State(state): State<AppState>,
-    Query(params): Query<EventsParams>,
+    Query(params): Query<EventsParams<DayWindowParam>>,
 ) -> Result<Json<PageResponse<SwapEventResponse>>, ApiError> {
-    let request =
-        ListEventsRequest::parse(params, EventCollection::Swaps, EventScope::All, Window::Day)?;
+    let request = ListEventsRequest::parse(params, EventCollection::Swaps, EventScope::All)?;
     list_event_page(&state, request).await
 }
 
 #[utoipa::path(
     get,
     path = "/api/protocols/{protocol}/swaps",
-    params(EventsParams),
+    params(EventsParams<DayWindowParam>),
     responses((
         status = 200,
-        description = "A page of the protocol's swaps, the most recent first; the window ends at the first page.",
+        description = "A page of the protocol's swaps over 24 hours at most, the most recent first; the window ends at the first page. A pool's swaps go back 7 days.",
         body = PageResponse<SwapEventResponse>
     ))
 )]
 pub(crate) async fn list_protocol_swaps(
     State(state): State<AppState>,
     Path(protocol): Path<String>,
-    Query(params): Query<EventsParams>,
+    Query(params): Query<EventsParams<DayWindowParam>>,
 ) -> Result<Json<PageResponse<SwapEventResponse>>, ApiError> {
     let protocol = parse_protocol(&protocol)?;
     let request = ListEventsRequest::parse(
         params,
         EventCollection::Swaps,
         EventScope::Protocol(protocol),
-        Window::Day,
     )?;
     list_event_page(&state, request).await
 }
@@ -251,7 +250,7 @@ pub(crate) async fn list_protocol_swaps(
 #[utoipa::path(
     get,
     path = "/api/pools/{pool}/swaps",
-    params(EventsParams),
+    params(EventsParams<WeekWindowParam>),
     responses((
         status = 200,
         description = "A page of the pool's swaps, the most recent first; the window ends at the first page.",
@@ -261,16 +260,12 @@ pub(crate) async fn list_protocol_swaps(
 pub(crate) async fn list_pool_swaps(
     State(state): State<AppState>,
     Path(pool): Path<String>,
-    Query(params): Query<EventsParams>,
+    // ⚠️ Raw swaps are kept 7 days (migration 014): a longer window would read a week as more.
+    Query(params): Query<EventsParams<WeekWindowParam>>,
 ) -> Result<Json<PageResponse<SwapEventResponse>>, ApiError> {
     let address = parse_pool(&pool)?;
-    let request = ListEventsRequest::parse(
-        params,
-        EventCollection::Swaps,
-        EventScope::Pool(address),
-        // ⚠️ Raw swaps are kept 7 days (migration 014): a longer window would read a week as more.
-        Window::Week,
-    )?;
+    let request =
+        ListEventsRequest::parse(params, EventCollection::Swaps, EventScope::Pool(address))?;
     super::known_pool(&state, &pool).await?;
     list_event_page(&state, request).await
 }

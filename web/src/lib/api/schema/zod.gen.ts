@@ -1975,11 +1975,7 @@ export const zListPoolSwapsPath = z.object({
 });
 
 export const zListPoolSwapsQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional(),
+    window: z.enum(['24h', '7d']).optional(),
     cursor: z.string().min(1).nullish(),
     limit: z.int().gte(1).lte(200).optional()
 });
@@ -2522,11 +2518,7 @@ export const zListProtocolSwapsPath = z.object({
 });
 
 export const zListProtocolSwapsQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional(),
+    window: z.enum(['24h']).optional(),
     cursor: z.string().min(1).nullish(),
     limit: z.int().gte(1).lte(200).optional()
 });
@@ -2653,11 +2645,7 @@ export const zListSignalsQuery = z.object({
 export const zListSignalsResponse = zPageResponseSignalResponse;
 
 export const zListSwapsQuery = z.object({
-    window: z.enum([
-        '24h',
-        '7d',
-        '30d'
-    ]).optional(),
+    window: z.enum(['24h']).optional(),
     cursor: z.string().min(1).nullish(),
     limit: z.int().gte(1).lte(200).optional()
 });

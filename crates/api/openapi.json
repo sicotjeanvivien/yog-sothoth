@@ -7993,10 +7993,10 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a list that serves 7 days at most.",
               "enum": [
                 "24h",
-                "7d",
-                "30d"
+                "7d"
               ],
               "type": "string"
             }
@@ -10230,10 +10230,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a list that serves the last 24 hours only.",
               "enum": [
-                "24h",
-                "7d",
-                "30d"
+                "24h"
               ],
               "type": "string"
             }
@@ -10279,7 +10278,7 @@
                 }
               }
             },
-            "description": "A page of the protocol's swaps, the most recent first; the window ends at the first page."
+            "description": "A page of the protocol's swaps over 24 hours at most, the most recent first; the window ends at the first page. A pool's swaps go back 7 days."
           },
           "default": {
             "content": {
@@ -10828,10 +10827,9 @@
             "name": "window",
             "required": false,
             "schema": {
+              "description": "The window of a list that serves the last 24 hours only.",
               "enum": [
-                "24h",
-                "7d",
-                "30d"
+                "24h"
               ],
               "type": "string"
             }
@@ -10869,7 +10867,7 @@
                 }
               }
             },
-            "description": "A page of every protocol's swaps, the most recent first; the window ends at the first page."
+            "description": "A page of every protocol's swaps over 24 hours at most, the most recent first; the window ends at the first page. A pool's swaps go back 7 days."
           },
           "default": {
             "content": {

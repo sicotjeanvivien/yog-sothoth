@@ -421,16 +421,19 @@ async fn a_next_page_of_the_day_is_served() {
     assert_eq!(status, StatusCode::OK, "{detail}");
 }
 
-/// Mutation: the advice to read under a pool given under a pool, where no list serves wider.
+/// Mutation: a swaps list typed wider than it reads — `7d` at the root, `30d` under a pool, served.
 #[tokio::test]
-async fn a_window_refused_under_a_pool_points_nowhere_else() {
+async fn a_window_refused_names_the_ones_the_list_serves() {
     let (status, _, at_root) = get("/api/swaps?window=7d").await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let (status, _, under_pool) = get(&format!("/api/pools/{}/swaps?window=30d", pk(1))).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 
-    assert!(at_root.contains("read it under a pool"), "{at_root}");
-    assert!(!under_pool.contains("under a pool"), "{under_pool}");
+    assert!(at_root.ends_with("expected `24h`"), "{at_root}");
+    assert!(
+        under_pool.ends_with("expected `24h` or `7d`"),
+        "{under_pool}"
+    );
 }
 
 /// Mutation: the handler not passing `offset` on — a healthy previous window said late, every read.
