@@ -127,13 +127,17 @@ jobs:
           for page in /en /en/overview /en/developers /fr/overview; do
             body=$(curl -sL --max-time 20 "http://localhost:3000${page}")
             if grep -q 0badc0de <<< "$body"; then echo "the key is in ${page}" >&2; found=1; fi
-            for script in $(grep -o '/_next/static/[^"]*\.js' <<< "$body" | sort -u); do
-              if curl -s "http://localhost:3000${script}" | grep -q 0badc0de; then
+            # ⚠️ Read into a variable, not piped to `grep -q`: under pipefail, curl's SIGPIPE
+            # would make a match read as none. The loop reads a substitution, not a pipe, to keep `found`.
+            while read -r script; do
+              js=$(curl -s "http://localhost:3000${script}")
+              if grep -q 0badc0de <<< "$js"; then
                 echo "the key is in ${script}, loaded by ${page}" >&2; found=1
               fi
-            done
+            done < <(grep -o '/_next/static/[^"]*\.js' <<< "$body" | sort -u || true)
           done
-          [ "$found" -eq 0 ] && echo "No page nor script carries the key."
+          if [ "$found" -ne 0 ]; then exit 1; fi
+          echo "No page nor script carries the key."
 
       - name: Cleanup
         if: always()
