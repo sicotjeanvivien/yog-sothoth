@@ -1,6 +1,7 @@
 use std::str::FromStr;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::fmt::MakeWriter;
 
 /// Install the rustls crypto provider; panics on failure.
 /// ⚠️ Once per binary, before the first TLS connection: rustls picks no provider
@@ -14,6 +15,18 @@ pub fn init_rustls() {
 /// Install the global tracing subscriber: JSON when `LOG_FORMAT=json`, text
 /// otherwise, filtered by `RUST_LOG` (default `info`). Once, at the top of `main`.
 pub fn init_tracing() {
+    init_tracing_on(std::io::stdout);
+}
+
+/// [`init_tracing`] on stderr, for a command whose stdout is its result.
+pub fn init_tracing_on_stderr() {
+    init_tracing_on(std::io::stderr);
+}
+
+fn init_tracing_on<W>(writer: W)
+where
+    W: for<'a> MakeWriter<'a> + Send + Sync + 'static,
+{
     // ⚠️ Both reads are trimmed: a CRLF `\r` turns `RUST_LOG=info` into a target
     // matching nothing, and the daemon logs nothing at all.
     let format = std::env::var("LOG_FORMAT").unwrap_or_default();
@@ -26,11 +39,13 @@ pub fn init_tracing() {
             .json()
             .with_current_span(true)
             .with_env_filter(filter)
+            .with_writer(writer)
             .init();
     } else {
         tracing_subscriber::fmt()
             .with_target(true)
             .with_env_filter(filter)
+            .with_writer(writer)
             .init();
     }
 }

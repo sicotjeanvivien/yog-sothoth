@@ -60,6 +60,7 @@ dotenvy = { workspace = true }
 
 # Misc
 async-trait = { workspace = true }
+getrandom = { workspace = true }
 chrono = { workspace = true }
 
 [dev-dependencies]

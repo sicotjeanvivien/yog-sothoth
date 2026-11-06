@@ -28,7 +28,7 @@ pub use error::ConfigError;
 pub use heartbeat::RecordingHeartbeat;
 #[cfg(feature = "heartbeat")]
 pub use heartbeat::{HealthchecksHeartbeat, Heartbeat, HeartbeatSettings};
-pub use runtime::{init_rustls, init_tracing};
+pub use runtime::{init_rustls, init_tracing, init_tracing_on_stderr};
 pub use secret::{SecretKey, SecretUrl};
 pub use shutdown::{
     SHUTDOWN_GRACE, Stop, TaskEnd, handle_task_result, report_overrun, shutdown_signal,

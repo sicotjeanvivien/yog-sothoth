@@ -166,7 +166,7 @@ Migrations are **forward-only** (committed migrations never change; no `.down.sq
 
 | Role | Rights | Process |
 |---|---|---|
-| `yog_migrate` | DDL, owns schema | `yog-migrate` |
+| `yog_migrate` | DDL, owns schema; the only writer of `api_clients` and `api_keys` | `yog-migrate` |
 | `yog_indexer` | writes event tables, `pools`, `pool_current_state`, `network_status`, `observed_slot_ranges` | indexer |
 | `yog_api` | writes nothing | api |
 | `yog_context` | writes `token_metadata`, `token_last_price`, pool-properties satellites and pool-property columns of `pools`; INSERT-only on `token_prices` | context |
@@ -198,4 +198,4 @@ cargo run -p yog-indexer
 
 ## Observability
 
-The four daemons expose Prometheus metrics on `:9000/metrics` (host-mapped: indexer 9000, context 9001, signals 9002, analytic 9003). The API uses RFC 9457 Problem Details (`application/problem+json`) for errors and correlates 500s via the `x-request-id` header. Collection endpoints use opaque base64 cursor pagination (`Page<T>`, default limit 50, hard cap 200).
+The four daemons and the API expose Prometheus metrics on `:9000/metrics` (host-mapped: indexer 9000, context 9001, signals 9002, analytic 9003, api 9004). The API uses RFC 9457 Problem Details (`application/problem+json`) for errors and correlates 500s via the `x-request-id` header. Collection endpoints use opaque base64 cursor pagination (`Page<T>`, default limit 50, hard cap 200).

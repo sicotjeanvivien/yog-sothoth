@@ -15,11 +15,11 @@ use yog_persistence::{PgHealthChecker, PgPool};
 use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
-        Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementKind, AnnouncementLookup,
-        AnnouncementSeverity, AnnouncementStatus, ClaimKind, ClaimTotals, ClaimTotalsLookup,
-        DiscoveredTvlLookup, EventCursor, EventFreshnessRepository, EventScope, FrozenHours,
-        FrozenPeriod, LiquidityChangeEvent, LiquidityChangeEventLookup, LiquidityFlows,
-        LiquidityMove, LiquidityMoveCursor, LiquidityMoveList, LiquidityMoveLookup,
+        ActiveKey, Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementKind,
+        AnnouncementLookup, AnnouncementSeverity, AnnouncementStatus, ApiKeyLookup, ClaimKind,
+        ClaimTotals, ClaimTotalsLookup, DiscoveredTvlLookup, EventCursor, EventFreshnessRepository,
+        EventScope, FrozenHours, FrozenPeriod, LiquidityChangeEvent, LiquidityChangeEventLookup,
+        LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveList, LiquidityMoveLookup,
         LiquidityMoveOrder, LiquidityTotals, MeteoraDammV2PoolProperties,
         MeteoraDammV2PoolPropertiesLookup, NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog,
         PoolChangeEvent, PoolChangeEventLookup, PoolCreationEvent, PoolCreationEventLookup,
@@ -40,7 +40,7 @@ use yog_core::{
 };
 
 use crate::application::{
-    AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService,
+    AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService, KeyRing,
     LiquidityChangeEventService, LiquidityMoveService, LiquidityTurnoverService, LiveChannels,
     NetworkService, PoolChangeEventService, PoolCreationEventService, PoolCreationsService,
     PoolPairs, PoolService, PositionChangeCountsService, PositionChangeEventService,
@@ -160,6 +160,7 @@ pub(crate) fn app_state() -> AppState {
             Arc::new(MockPriceRepo::empty()),
         )),
         announcement_service: Arc::new(AnnouncementService::new(Arc::new(MockAnnouncementRepo))),
+        key_ring: key_ring(vec![]),
         health_checker: Arc::new(PgHealthChecker::new(
             PgPool::connect_lazy("postgres://unused@127.0.0.1:1/unused")
                 .expect("a well-formed URL"),
@@ -654,6 +655,69 @@ impl AnnouncementLookup for MockAnnouncementRepo {
             ..Page::empty()
         })
     }
+}
+
+/// Every counter `f` recorded, by name and sorted labels.
+pub(crate) type Counters = Vec<(String, Vec<(String, String)>, u64)>;
+
+/// Run `f` on a current-thread runtime under a recorder of its own, and hand back its counters.
+/// ⚠️ Read once, after `f`: a snapshot resets every counter it reads to zero.
+pub(crate) fn recorded<T>(f: impl std::future::Future<Output = T>) -> (T, Counters) {
+    let recorder = metrics_util::debugging::DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+    let out = metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(f)
+    });
+    let counters = snapshotter
+        .snapshot()
+        .into_vec()
+        .into_iter()
+        .filter_map(|(key, _, _, value)| {
+            let metrics_util::debugging::DebugValue::Counter(n) = value else {
+                return None;
+            };
+            let mut labels: Vec<_> = key
+                .key()
+                .labels()
+                .map(|l| (l.key().to_string(), l.value().to_string()))
+                .collect();
+            labels.sort();
+            Some((key.key().name().to_string(), labels, n))
+        })
+        .collect();
+    (out, counters)
+}
+
+/// The value of counter `name` whose labels are exactly `labels`.
+pub(crate) fn counter(counters: &Counters, name: &str, labels: &[(&str, &str)]) -> Option<u64> {
+    let mut wanted: Vec<_> = labels
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+    wanted.sort();
+    counters
+        .iter()
+        .find(|(own_name, own, _)| own_name == name && *own == wanted)
+        .map(|(_, _, n)| *n)
+}
+
+/// The same keys on every read.
+struct FixedKeys(Vec<ActiveKey>);
+
+#[async_trait]
+impl ApiKeyLookup for FixedKeys {
+    async fn active_keys(&self) -> RepositoryResult<Vec<ActiveKey>> {
+        Ok(self.0.clone())
+    }
+}
+
+/// A ring holding `keys`, rereading the same ones.
+pub(crate) fn key_ring(keys: Vec<ActiveKey>) -> KeyRing {
+    KeyRing::with_keys(Arc::new(FixedKeys(keys.clone())), keys)
 }
 
 pub(crate) struct MockNetworkStatusRepo {

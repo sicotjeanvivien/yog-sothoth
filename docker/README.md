@@ -197,6 +197,23 @@ deployment key does that), open a shell, run free SQL. A reading that comes
 back often becomes a word of this script, reviewed in a pull request. To
 revoke it, delete its line in `/home/yog-obs/.ssh/authorized_keys`.
 
+## API keys
+
+A key is issued on the server, by the one-shot `yog-migrate` service, which
+passes its words on to the binary (`bootstrap` when there are none, as
+`update.sh` runs it):
+
+```bash
+cd /srv/yog-sothoth
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full \
+  run --rm -T yog-migrate create-api-key <client>     # or revoke-api-key <prefix>, list-api-keys
+```
+
+The key is printed once, on stdout: hand it to its client then, it is stored
+nowhere else. A revocation reaches `yog-api` at its next reread of the keys,
+every 10 s, for the requests that follow; a live stream already open is not cut. What a key is and how
+the api reads it: [`crates/api/README.md`](../crates/api/README.md#authentication).
+
 ## Avant de déployer
 
 Every pull request says, under **Avant de déployer** (the section of

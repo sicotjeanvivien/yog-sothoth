@@ -60,6 +60,11 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
     let (api, _contract) = api_routes(state.work_slots.clone()).split_for_parts();
 
     let app = api
+        // ⚠️ A route layer: it runs after routing, so the probes and an unknown path never reach it.
+        .route_layer(from_fn_with_state(
+            state.key_ring.clone(),
+            middleware::authentication::authenticate,
+        ))
         // Under the layers below: an unknown route is traced and request-id'd like any other.
         .fallback(no_such_route)
         // ⚠️ Innermost: `request_deadline` bounds its read of an error body.

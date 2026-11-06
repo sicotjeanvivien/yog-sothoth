@@ -50,12 +50,14 @@ persistence/
 │   │   ├── token_metadata/, token_price/, network_status/, watched_pool/,
 │   │   │   observed_slots.rs (the slots each ingestion session watched)
 │   │   ├── announcement/
+│   │   ├── api_key.rs (the API keys: ApiKeyRepository, the operator's, and ApiKeyLookup, the api's; rows.rs)
 │   │   ├── materialization_backlog/ (reads `yog_cagg_materialization_backlog()`,
 │   │   │                     migration 013)
 │   │   └── event_freshness.rs
 │   └── bin/
 │       ├── migrate.rs       ← yog-migrate binary (migrate / setup-roles /
-│       │                      seed-watched-pools / bootstrap)
+│       │                      seed-watched-pools / bootstrap / the API-key
+│       │                      commands)
 │       ├── migrate/
 │       │   ├── lint.rs      ← test-only: the rules yog-migrate imposes on the
 │       │   │                  migrations it applies (see below)
@@ -578,6 +580,26 @@ in [`migrations/README.md`](./migrations/README.md) all passed. 007 runs in one
 transaction, so it is rolled back whole and 1 to 6 stay applied: run
 `bootstrap` again, it resumes at 007. An existing database (a deploy, a dump
 restore) is already past 007 and never hits it.
+
+### API keys
+
+```bash
+cargo run -p yog-persistence --bin yog-migrate -- create-api-key <client>
+cargo run -p yog-persistence --bin yog-migrate -- revoke-api-key <prefix>
+cargo run -p yog-persistence --bin yog-migrate -- list-api-keys
+```
+
+All three connect with `DATABASE_URL_MIGRATE`: `yog_migrate` owns `api_clients`
+and `api_keys` (migration 052) and is the only role that writes them. Every
+runtime role reads them, as every table (and `yog-archive` dumps them): what
+they hold, a hash and a prefix, opens nothing without the key. `create-api-key` creates the client on its first key — its name 1 to 63 of
+`[a-z0-9-]`, since it becomes a metrics label — refuses a revoked client, draws the key from the OS random source (`getrandom`), stores
+its SHA-256 and its prefix, and prints the key **once**, alone on stdout: the
+logs of `yog-migrate` go to stderr, so `KEY=$(…)` captures the key whole. It is the one subcommand that is not idempotent: each run
+issues a new key. `list-api-keys` prints prefixes, clients and dates, never a
+key nor a hash. A revocation reaches the api at its ring's next reread, every 10 s, for
+the requests that follow; an open live stream is not cut
+([`api/README.md`](../api/README.md#authentication)).
 
 ## Migrations
 

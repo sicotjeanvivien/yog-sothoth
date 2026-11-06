@@ -149,6 +149,8 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
         ],
     ),
     ("announcements", &[("yog_api", &["SELECT"])]),
+    ("api_clients", &[("yog_api", &["SELECT"])]),
+    ("api_keys", &[("yog_api", &["SELECT"])]),
     ("claim_position_fee_events", &[("yog_api", &["SELECT"])]),
     ("claim_protocol_fee_events", &[("yog_api", &["SELECT"])]),
     ("claim_reward_events", &[("yog_api", &["SELECT"])]),

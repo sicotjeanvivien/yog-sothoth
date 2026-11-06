@@ -33,6 +33,10 @@ solana-signature = { workspace = true }
 # Shared-result cache
 moka = { workspace = true }
 
+# Prometheus on :9000, like the daemons
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
+
 # Misc
 anyhow = { workspace = true }
 tracing = { workspace = true }
@@ -44,6 +48,8 @@ url = { workspace = true }
 
 [dev-dependencies]
 async-trait = { workspace = true }
+# The `debugging` recorder, to read a counter in a test.
+metrics-util = { workspace = true, features = ["debugging"] }
 # `test-util`: `tokio::time::pause`/`advance`, to age the shared-result cache
 # without sleeping through its TTL.
 tokio = { workspace = true, features = ["test-util"] }

@@ -1,5 +1,6 @@
 mod analytic;
 mod announcements;
+mod auth;
 mod claim_totals;
 mod discovered_tvl;
 mod domain_event;
@@ -54,6 +55,10 @@ pub use analytic::{
 pub use announcements::{
     Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementKind, AnnouncementLookup,
     AnnouncementSeverity, AnnouncementStatus,
+};
+pub use auth::{
+    API_KEY_PREFIX_BYTES, API_KEY_SECRET_BYTES, ActiveKey, ApiClient, ApiKey, ApiKeyFormatError,
+    ApiKeyListing, ApiKeyLookup, ApiKeyRepository, is_client_name,
 };
 pub use claim_totals::{ClaimKind, ClaimTotals, ClaimTotalsLookup};
 pub use discovered_tvl::{DiscoveredTvlLookup, ProtocolDiscoveredTvl};

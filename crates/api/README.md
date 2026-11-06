@@ -19,7 +19,8 @@ api/src/
 │   │                        into the services, and builds the live channels with
 │   │                        the pollers it returns, the live slots and the work slots
 │   ├── config.rs          ← Config::load() — env-driven
-│   └── serve.rs           ← serve() — the server and the live pollers, and their stop
+│   ├── key_ring_reload.rs ← reload_key_ring(), the key ring reread every 10 s until the stop
+│   └── serve.rs           ← serve() — the server, the live pollers and the key ring, and their stop
 ├── application/
 │   ├── services/          ← cross-protocol services at the root (SignalService,
 │   │                        TokenService, NetworkService, IngestionService,
@@ -36,6 +37,9 @@ api/src/
 │   ├── live/signals_source.rs ← SignalsSource (enriches once, feeds the signals' broadcast)
 │   ├── live/event_source.rs   ← EventSource, one table of an event collection
 │   ├── cache.rs           ← SharedCache (moka) and its named CachePolicy per use
+│   ├── auth/key_ring.rs   ← KeyRing, every active API key in memory
+│   ├── auth/credential.rs ← identify(), the client an `Authorization` value names, or Unauthorized
+│   ├── metrics.rs         ← the Prometheus series, served on :9000
 │   ├── pool_pairs.rs      ← PoolPairs, the token pair of a batch's pools in two reads at most; Paired
 │   ├── enriched_token.rs  ← one token side of a pool, identity only
 │   └── enriched_signal.rs ← signal + embedded token pair of its pool
@@ -48,7 +52,8 @@ api/src/
 │   ├── cursor.rs          ← base64/JSON cursor codec
 │   ├── middleware.rs      ← CORS, security headers, request-id tracing,
 │   │                        capacity bounds (middleware/capacity.rs), every
-│   │                        error as Problem Details (middleware/problem_details.rs)
+│   │                        error as Problem Details (middleware/problem_details.rs),
+│   │                        who calls (middleware/authentication.rs)
 │   ├── state.rs           ← AppState — what every handler reads through `State`
 │   └── error.rs           ← ApiError, IntoResponse (RFC 9457, 503 + Retry-After)
 ├── testing.rs             ← test-only: fixtures and repository mocks
@@ -509,7 +514,52 @@ Measured with the pool ranking route behind the middleware: 30 parallel calls on
 cache gave 24 × `503` for a single computation, each waiter holding a slot.
 
 What this does not do: limit a client by IP or key. That is the edge's job in
-production, and the platform API's later.
+production, and the keys' next step (see [Authentication](#authentication)).
+
+## Authentication
+
+A client of the API presents its key in `Authorization: Bearer <key>`, never in
+the URL. A key reads `yog_<prefix>_<secret>`: 8 then 64 lowercase hex characters,
+the prefix naming it to an operator. Storage keeps its SHA-256 and its prefix
+alone (`api_clients`, `api_keys`, migration 052), and only `yog_migrate` writes
+them, through `yog-migrate create-api-key`, `revoke-api-key` and
+`list-api-keys` ([`persistence/README.md`](../persistence/README.md#api-keys)).
+The api reads, and may write nothing; every runtime role reads them too, and a
+hash opens nothing without its key.
+
+- **`KeyRing`** (`application/auth/key_ring.rs`) holds every key not revoked, of a
+  client not revoked, by hash. It is loaded at start — a failure stops the
+  process — and reread every `KEY_RING_RELOAD` (10 s) by a task of `serve`
+  (`bootstrap/key_ring_reload.rs`). A key
+  the ring does not hold never reaches the database, whatever the number
+  presented; the price is that a revocation takes effect within 10 s. A reread
+  that fails is logged and counted, and the ring keeps the keys it held — a
+  revoked key included, until a reread succeeds. A key is checked when a
+  request arrives: a live stream opened with it stays open after its revocation.
+- **`authenticate`** (`http/middleware/authentication.rs`) is a *route* layer on
+  every `/api` route: it runs after routing, so it knows the route template, and
+  the probes and an unknown path never reach it. It reads the header and counts;
+  `identify` (`application/auth/credential.rs`) decides.
+
+  | `Authorization` | What happens |
+  |---|---|
+  | absent | anonymous: the request passes |
+  | `Bearer` (any case) and a key the ring holds | its `ApiClient` is attached to the request, which passes |
+  | another scheme, a bearer that is no key, a key the ring does not hold | `401`, Problem Details, `WWW-Authenticate: Bearer` |
+
+  The `401` reads the same whatever the reason: it does not tell a revoked key
+  from a forged one. The reason is only counted.
+- **Nothing refuses an anonymous call yet.** They are counted, by route, so
+  that who calls the API without a key is known before it is closed.
+
+The series, on `:9000/metrics` (host-mapped to 9004 in dev, read through
+`observe.sh` in production):
+
+| Series | Labels |
+|---|---|
+| `yog_api_requests_total` | `client` — the client's name, or `anonymous`; `route` — the route template (`/api/pools/{pool}`) |
+| `yog_api_unauthorized_total` | `reason` — `scheme`, `malformed` or `unknown` |
+| `yog_api_key_ring_reloads_total` | `outcome` — `reloaded` or `failed` |
 
 ## Error responses
 
@@ -558,10 +608,14 @@ DATABASE_URL_API=postgresql://yog_api:...@localhost:5433/yog_sothoth
 API_BIND_ADDR=0.0.0.0:5000
 API_CORS_ALLOWED_ORIGINS=http://localhost:3000
 API_LIVE_POLL_SECS=3
+API_METRICS_ADDR=127.0.0.1:9004   # unset: 0.0.0.0:9000, the daemons' port
 ```
 
 CORS is locked to the configured dashboard origins — the browser calls this
 API directly (there is no BFF in front; see [`web/README.md`](../../web/README.md)).
+The metrics listen on `API_METRICS_ADDR`, `0.0.0.0:9000` when unset, as the
+daemons' in their containers; a native run sets it, since the compose daemons
+publish `127.0.0.1:9000` on the host.
 
 ## Run
 

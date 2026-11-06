@@ -1,4 +1,4 @@
-use super::parse_cors_origins;
+use super::{parse_cors_origins, parse_metrics_addr};
 use yog_bootstrap::ConfigError;
 
 #[test]
@@ -36,5 +36,29 @@ fn rejects_an_origin_with_invalid_header_bytes() {
     assert!(matches!(
         err,
         ConfigError::InvalidValue { ref key, .. } if key == "API_CORS_ALLOWED_ORIGINS"
+    ));
+}
+
+/// Mutation: the default moved off the daemons' port, which `observe.sh` reads.
+#[test]
+fn the_metrics_listen_on_the_daemons_port_by_default() {
+    assert_eq!(
+        parse_metrics_addr(None).unwrap().to_string(),
+        "0.0.0.0:9000"
+    );
+}
+
+#[test]
+fn the_metrics_listen_where_they_are_told() {
+    let addr = parse_metrics_addr(Some("127.0.0.1:9004".to_string())).unwrap();
+    assert_eq!(addr.to_string(), "127.0.0.1:9004");
+}
+
+#[test]
+fn rejects_a_metrics_address_that_is_no_socket_address() {
+    let err = parse_metrics_addr(Some("9004".to_string())).unwrap_err();
+    assert!(matches!(
+        err,
+        ConfigError::InvalidValue { ref key, .. } if key == "API_METRICS_ADDR"
     ));
 }

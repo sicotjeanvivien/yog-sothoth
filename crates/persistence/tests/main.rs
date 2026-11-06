@@ -14,6 +14,7 @@ mod analytic_rebuild;
 mod analytic_rotation_runs;
 mod analytic_writer;
 mod announcement_entries;
+mod api_keys;
 mod archive_role;
 mod cagg_materialization;
 mod cagg_retention;

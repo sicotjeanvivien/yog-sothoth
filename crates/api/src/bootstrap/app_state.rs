@@ -4,13 +4,14 @@ use tokio::sync::{Semaphore, broadcast};
 use tokio_util::sync::CancellationToken;
 use yog_core::application::extraction::ExtractionDispatcher;
 use yog_core::domain::{
-    AnnouncementLookup, EventFreshnessRepository, NetworkStatusLookup, PoolCatalog,
+    AnnouncementLookup, ApiKeyLookup, EventFreshnessRepository, NetworkStatusLookup, PoolCatalog,
     ProtocolActivityLookup, SignalFeed, TokenActivityFeed, TokenMetadataLookup, TokenPriceLookup,
 };
 use yog_persistence::{
-    Database, PgAnnouncementRepository, PgClaimTotalsRepository, PgDiscoveredTvlRepository,
-    PgEventFreshnessRepository, PgHealthChecker, PgLiquidityChangeEventRepository,
-    PgLiquidityMoveRepository, PgMeteoraDammV2PoolPropertiesRepository, PgNetworkStatusRepository,
+    Database, PgAnnouncementRepository, PgApiKeyRepository, PgClaimTotalsRepository,
+    PgDiscoveredTvlRepository, PgEventFreshnessRepository, PgHealthChecker,
+    PgLiquidityChangeEventRepository, PgLiquidityMoveRepository,
+    PgMeteoraDammV2PoolPropertiesRepository, PgNetworkStatusRepository,
     PgPoolChangeEventRepository, PgPoolCreationEventRepository, PgPoolCreationsRepository,
     PgPoolRepository, PgPositionChangeCountsRepository, PgPositionChangeEventRepository,
     PgPositionFeeClaimEventRepository, PgProtocolActivityRepository,
@@ -21,7 +22,7 @@ use yog_persistence::{
 };
 
 use crate::application::{
-    AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService,
+    AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService, KeyRing,
     LIVE_CHANNEL_CAPACITY, LiquidityChangeEventService, LiquidityMoveService,
     LiquidityTurnoverService, LiveChannels, LivePollers, NetworkService, PoolChangeEventService,
     PoolCreationEventService, PoolCreationsService, PoolPairs, PoolService,
@@ -34,11 +35,12 @@ use crate::bootstrap::Config;
 use crate::http::{AppState, SSE_MAX_STREAMS, STATEMENT_TIMEOUT, WORK_SLOT_WAIT, WORK_SLOTS};
 use anyhow::Context;
 
-/// The handlers' state, and the pollers that feed its live channels — for [`serve`](crate::bootstrap::serve()).
+/// The handlers' state, the pollers that feed its live channels, and the key ring that reloads
+/// itself — for [`serve`](crate::bootstrap::serve()).
 pub(crate) async fn build_app_state(
     config: Config,
     shutdown: CancellationToken,
-) -> anyhow::Result<(AppState, LivePollers)> {
+) -> anyhow::Result<(AppState, LivePollers, KeyRing)> {
     let database = Database::connect_with(
         config.database_url.expose(),
         PoolSettings {
@@ -191,6 +193,11 @@ pub(crate) async fn build_app_state(
 
     let work_slots = WorkSlots::new(WORK_SLOTS, WORK_SLOT_WAIT);
 
+    let api_key_repo: Arc<dyn ApiKeyLookup> = Arc::new(PgApiKeyRepository::new(db_pool.clone()));
+    let key_ring = KeyRing::load(api_key_repo)
+        .await
+        .context("failed to load the API keys")?;
+
     let state = AppState {
         network_service: Arc::new(NetworkService::new(network_status_repo)),
         ingestion_service: Arc::new(IngestionService::new(event_freshness_repo)),
@@ -225,8 +232,9 @@ pub(crate) async fn build_app_state(
         work_slots,
         token_service: Arc::new(TokenService::new(token_metadata_repo, token_price_repo)),
         announcement_service: Arc::new(AnnouncementService::new(announcement_repo)),
+        key_ring: key_ring.clone(),
         health_checker: Arc::new(PgHealthChecker::new(db_pool)),
         shutdown,
     };
-    Ok((state, live_pollers))
+    Ok((state, live_pollers, key_ring))
 }

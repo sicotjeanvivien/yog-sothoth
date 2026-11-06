@@ -116,6 +116,8 @@ rustls = { version = "0.23", features = ["ring"] }
 bs58 = "0.5"
 base64 = "0.23"
 sha2 = "0.11"
+# The OS random source, for the secret of an API key (`yog-migrate create-api-key`).
+getrandom = "0.4"
 rust_decimal = "1.43"
 
 # Axum
