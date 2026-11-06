@@ -160,6 +160,7 @@ pub(crate) fn app_state() -> AppState {
             Arc::new(MockPriceRepo::empty()),
         )),
         announcement_service: Arc::new(AnnouncementService::new(Arc::new(MockAnnouncementRepo))),
+        key_ring: crate::application::KeyRing::holding(vec![]),
         health_checker: Arc::new(PgHealthChecker::new(
             PgPool::connect_lazy("postgres://unused@127.0.0.1:1/unused")
                 .expect("a well-formed URL"),

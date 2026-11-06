@@ -120,8 +120,10 @@ const ALLOWED: &[(&str, usize, &str)] = &[
     ),
     (
         "crates/persistence/src/bin/migrate.rs",
-        1,
-        "sqlx owns the pool — argument of `Database::connect_for_provisioning`",
+        2,
+        "sqlx owns the pool — argument of `Database::connect_for_provisioning`; \
+         and `create-api-key` prints the key it issues, once, on stdout and never \
+         through `tracing`: handing it to its client is the key's one consumption",
     ),
     (
         "crates/signals/src/bootstrap/daemon.rs",

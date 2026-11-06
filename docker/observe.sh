@@ -41,13 +41,14 @@ exec 0</dev/null
 trap 'rc=$?; [ "$rc" -eq 0 ] || echo "reading_failed rc=$rc"' EXIT
 cd "$checkout"
 
-readonly daemons=(yog-indexer yog-context yog-signals yog-analytic)
+readonly daemons=(yog-indexer yog-context yog-signals yog-analytic yog-api)
 
 bounded() { timeout 60 "$@"; }
 dc() { bounded docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full "$@"; }
 
-# Every line printed matches one of these; the others are only counted.
-readonly metric_line='^yog_[a-z0-9_]+(\{[a-z_]+="[A-Za-z0-9_.:+-]*"(,[a-z_]+="[A-Za-z0-9_.:+-]*")*\})? (-?[0-9.e+-]+|NaN|[+-]Inf)$'
+# Every line printed matches one of these; the others are only counted. `/{}` let an API route
+# template through (`/api/pools/{pool}`): no space, quote nor backslash is ever kept.
+readonly metric_line='^yog_[a-z0-9_]+(\{[a-z_]+="[A-Za-z0-9_.:+/{}-]*"(,[a-z_]+="[A-Za-z0-9_.:+/{}-]*")*\})? (-?[0-9.e+-]+|NaN|[+-]Inf)$'
 readonly db_line='^[a-z0-9_]+ -?[a-z0-9_]+$'
 
 strict() { # <regex>: stdin's matching lines, then how many others were left out

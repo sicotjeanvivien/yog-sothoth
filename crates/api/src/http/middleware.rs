@@ -1,4 +1,5 @@
 //! HTTP middleware applied to every route: CORS and security headers.
+pub(crate) mod authentication;
 pub(crate) mod capacity;
 pub(super) mod problem_details;
 pub(crate) mod tracing;

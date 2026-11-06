@@ -1,13 +1,13 @@
 //! `yog-migrate`: provisions and migrates the database (subcommands in `USAGE`).
-//! `setup-roles` and `seed-watched-pools` connect with `DATABASE_URL_ADMIN`, `migrate` with
-//! `DATABASE_URL_MIGRATE`. ⚠️ The no-argument form must keep migrating: compose and every
+//! `setup-roles` and `seed-watched-pools` connect with `DATABASE_URL_ADMIN`, `migrate` and the
+//! API-key commands with `DATABASE_URL_MIGRATE`. ⚠️ The no-argument form must keep migrating: compose and every
 //! deploy script invoke it. It never creates the database.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 
 use yog_bootstrap::SecretUrl;
-use yog_core::domain::WatchedPoolRepository;
-use yog_persistence::{Database, PgWatchedPoolRepository};
+use yog_core::domain::{API_KEY_PREFIX_BYTES, API_KEY_SECRET_BYTES, ApiKey, WatchedPoolRepository};
+use yog_persistence::{Database, PgApiKeyRepository, PgWatchedPoolRepository};
 
 const SETUP_ROLES_SQL: &str = include_str!("scripts/setup_roles.sql");
 const SETUP_WATCHED_POOLS_SQL: &str = include_str!("scripts/setup_watched_pools.sql");
@@ -28,10 +28,19 @@ SUBCOMMANDS:
                             to and exits.                [DATABASE_URL_ADMIN]
     bootstrap               setup-roles, then migrate, then seed-watched-pools.
                                           [DATABASE_URL_ADMIN + _MIGRATE]
+    create-api-key <client> Issue a new key to <client>, created on its first
+                            key. The key is printed once, on stdout, and
+                            never stored: only its hash is.
+                                                       [DATABASE_URL_MIGRATE]
+    revoke-api-key <prefix> Revoke the key named by its prefix.
+                                                       [DATABASE_URL_MIGRATE]
+    list-api-keys           Every key: prefix, client, created, revoked.
+                                                       [DATABASE_URL_MIGRATE]
     help                    Show this message.
 
 The database itself is never created here — it must already exist.
-Every subcommand is idempotent and safe to re-run.";
+Every subcommand but create-api-key is idempotent and safe to re-run;
+create-api-key issues a new key on each run.";
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -46,6 +55,9 @@ async fn main() -> Result<()> {
         Some("setup-roles") => setup_roles().await,
         Some("seed-watched-pools") => seed_watched_pools().await,
         Some("bootstrap") => bootstrap().await,
+        Some("create-api-key") => create_api_key(&argument("<client>")?).await,
+        Some("revoke-api-key") => revoke_api_key(&argument("<prefix>")?).await,
+        Some("list-api-keys") => list_api_keys().await,
         Some("help" | "-h" | "--help") => {
             println!("{USAGE}");
             Ok(())
@@ -141,6 +153,74 @@ async fn bootstrap() -> Result<()> {
 
     tracing::info!("bootstrap complete");
     Ok(())
+}
+
+/// Issue a new key to `client`, as `yog_migrate`.
+async fn create_api_key(client: &str) -> Result<()> {
+    let database = connect("DATABASE_URL_MIGRATE", "the yog_migrate role").await?;
+
+    let mut prefix = [0u8; API_KEY_PREFIX_BYTES];
+    let mut secret = [0u8; API_KEY_SECRET_BYTES];
+    getrandom::fill(&mut prefix)
+        .and_then(|()| getrandom::fill(&mut secret))
+        .map_err(|e| anyhow!("the OS random source failed: {e}"))?;
+    let key = ApiKey::from_random(prefix, secret);
+
+    PgApiKeyRepository::new(database.pool_owned())
+        .create(client, &key)
+        .await
+        .context("failed to store the key")?;
+
+    tracing::info!(client, prefix = key.prefix(), "api key issued");
+    // ⚠️ On stdout alone, never through `tracing`: the key must not reach a log.
+    println!("{}", key.expose());
+    Ok(())
+}
+
+/// Revoke the key named by `prefix`, as `yog_migrate`.
+async fn revoke_api_key(prefix: &str) -> Result<()> {
+    let database = connect("DATABASE_URL_MIGRATE", "the yog_migrate role").await?;
+
+    let revoked = PgApiKeyRepository::new(database.pool_owned())
+        .revoke(prefix)
+        .await
+        .context("failed to revoke the key")?;
+    if !revoked {
+        bail!("no active key under prefix {prefix}");
+    }
+    tracing::info!(prefix, "api key revoked");
+    Ok(())
+}
+
+/// Every key, as `yog_migrate`: never a key, never a hash.
+async fn list_api_keys() -> Result<()> {
+    let database = connect("DATABASE_URL_MIGRATE", "the yog_migrate role").await?;
+
+    let keys = PgApiKeyRepository::new(database.pool_owned())
+        .list()
+        .await
+        .context("failed to list the keys")?;
+    for key in &keys {
+        let revoked = key
+            .revoked_at
+            .map_or_else(|| "active".to_string(), |at| format!("revoked {at}"));
+        println!(
+            "{} {} created {} {revoked}",
+            key.prefix, key.client, key.created_at
+        );
+    }
+    Ok(())
+}
+
+/// The subcommand's argument, which it cannot do without.
+fn argument(name: &str) -> Result<String> {
+    match std::env::args().nth(2) {
+        Some(value) if !value.trim().is_empty() => Ok(value),
+        _ => {
+            eprintln!("{USAGE}");
+            bail!("missing argument {name}")
+        }
+    }
 }
 
 /// Reads a connection URL, naming the role it must carry. Through

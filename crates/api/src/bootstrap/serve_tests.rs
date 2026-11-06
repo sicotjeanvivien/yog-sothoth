@@ -51,7 +51,13 @@ async fn start(
 ) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    let handle = tokio::spawn(serve(listener, router, idle_pollers(), shutdown.clone()));
+    let handle = tokio::spawn(serve(
+        listener,
+        router,
+        idle_pollers(),
+        crate::application::KeyRing::holding(vec![]),
+        shutdown.clone(),
+    ));
     (addr, handle)
 }
 

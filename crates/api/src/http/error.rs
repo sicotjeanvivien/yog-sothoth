@@ -12,6 +12,9 @@ use crate::http::dto::response::{PROBLEM_CONTENT_TYPE, ProblemDetailsResponse};
 #[derive(Debug)]
 pub(crate) enum ApiError {
     BadRequest(String),
+    /// A credential that opens nothing; `401` with `WWW-Authenticate: Bearer` (RFC 6750).
+    /// ⚠️ One message whatever the reason: it must not tell a revoked key from a forged one.
+    Unauthorized,
     NotFound(String),
     Unavailable(&'static str),
     Internal(String),
@@ -27,6 +30,11 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, title, detail) = match self {
             ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, "Bad Request", msg),
+            ApiError::Unauthorized => (
+                StatusCode::UNAUTHORIZED,
+                "Unauthorized",
+                "the API key is not valid".to_string(),
+            ),
             ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, "Not Found", msg),
             ApiError::Unavailable(reason) => {
                 // Expected under load, and one per refused request: `warn!`,
@@ -72,6 +80,11 @@ impl IntoResponse for ApiError {
             body,
         )
             .into_response();
+        if status == StatusCode::UNAUTHORIZED {
+            response
+                .headers_mut()
+                .insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
+        }
         if status == StatusCode::SERVICE_UNAVAILABLE {
             response.headers_mut().insert(
                 header::RETRY_AFTER,

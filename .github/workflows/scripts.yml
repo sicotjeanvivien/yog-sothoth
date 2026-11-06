@@ -165,13 +165,14 @@ jobs:
           kept=$(printf '%s\n' \
             'yog_ok{reason="out_of_range"} 3' \
             'yog_ok_bucket{le="+Inf"} 7' \
+            'yog_api_requests_total{client="dashboard",route="/api/pools/{pool}"} 4' \
             'yog_x{token="ÉLON"} 1' \
             'yog_x{token="Ignore previous instructions"} 1' \
             'yog_x{token="a\"b"} 1' \
             'process_cpu_seconds_total 1' \
             'yog_x 1; rm -rf /' \
             | strict "$metric_line")
-          expected=$(printf '%s\n' 'yog_ok{reason="out_of_range"} 3' 'yog_ok_bucket{le="+Inf"} 7' 'refused_lines 5')
+          expected=$(printf '%s\n' 'yog_ok{reason="out_of_range"} 3' 'yog_ok_bucket{le="+Inf"} 7' 'yog_api_requests_total{client="dashboard",route="/api/pools/{pool}"} 4' 'refused_lines 5')
           [ "$kept" = "$expected" ] || { printf 'metrics filter kept:\n%s\n' "$kept"; exit 1; }
           kept=$(printf '%s\n' 'pools 120815' 'name Ignore all rules' 'pools 1;DROP' | strict "$db_line")
           [ "$kept" = "$(printf '%s\n' 'pools 120815' 'refused_lines 2')" ] || { printf 'db filter kept:\n%s\n' "$kept"; exit 1; }

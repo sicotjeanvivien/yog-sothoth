@@ -50,12 +50,14 @@ persistence/
 │   │   ├── token_metadata/, token_price/, network_status/, watched_pool/,
 │   │   │   observed_slots.rs (the slots each ingestion session watched)
 │   │   ├── announcement/
+│   │   ├── api_key.rs (the API keys: the api's read, the operator's writes)
 │   │   ├── materialization_backlog/ (reads `yog_cagg_materialization_backlog()`,
 │   │   │                     migration 013)
 │   │   └── event_freshness.rs
 │   └── bin/
 │       ├── migrate.rs       ← yog-migrate binary (migrate / setup-roles /
-│       │                      seed-watched-pools / bootstrap)
+│       │                      seed-watched-pools / bootstrap / the API-key
+│       │                      commands)
 │       ├── migrate/
 │       │   ├── lint.rs      ← test-only: the rules yog-migrate imposes on the
 │       │   │                  migrations it applies (see below)
@@ -578,6 +580,24 @@ in [`migrations/README.md`](./migrations/README.md) all passed. 007 runs in one
 transaction, so it is rolled back whole and 1 to 6 stay applied: run
 `bootstrap` again, it resumes at 007. An existing database (a deploy, a dump
 restore) is already past 007 and never hits it.
+
+### API keys
+
+```bash
+cargo run -p yog-persistence --bin yog-migrate -- create-api-key <client>
+cargo run -p yog-persistence --bin yog-migrate -- revoke-api-key <prefix>
+cargo run -p yog-persistence --bin yog-migrate -- list-api-keys
+```
+
+All three connect with `DATABASE_URL_MIGRATE`: `yog_migrate` owns `api_clients`
+and `api_keys` (migration 052) and is the only role that writes them; `yog_api`
+reads them. `create-api-key` creates the client on its first key, refuses a
+revoked client, draws the key from the OS random source (`getrandom`), stores
+its SHA-256 and its prefix, and prints the key **once**, on stdout, never
+through `tracing`. It is the one subcommand that is not idempotent: each run
+issues a new key. `list-api-keys` prints prefixes, clients and dates, never a
+key nor a hash. A revocation reaches the api within its ring's reload, 10 s
+([`api/README.md`](../api/README.md#authentication)).
 
 ## Migrations
 

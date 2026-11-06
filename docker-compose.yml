@@ -115,7 +115,10 @@ services:
         rewrite() { echo "$$1" | sed 's|@localhost:5433/|@postgres:5432/|'; }
         export DATABASE_URL_MIGRATE="$$(rewrite "$$DATABASE_URL_MIGRATE")"
         export DATABASE_URL_ADMIN="$$(rewrite "$$DATABASE_URL_ADMIN")"
-        exec /usr/local/bin/yog-migrate bootstrap
+        # `run yog-migrate <subcommand> …` passes its words on; none is `bootstrap` (update.sh).
+        [ "$$#" -eq 0 ] && set -- bootstrap
+        exec /usr/local/bin/yog-migrate "$$@"
+      - yog-migrate
     depends_on:
       postgres:
         condition: service_healthy
@@ -247,6 +250,7 @@ services:
         exec /usr/local/bin/yog-api
     ports:
       - "5000:5000"
+      - "127.0.0.1:9004:9000"
     depends_on:
       postgres:
         condition: service_healthy

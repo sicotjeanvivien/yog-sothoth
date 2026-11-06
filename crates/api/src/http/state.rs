@@ -10,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 use yog_persistence::PgHealthChecker;
 
 use crate::application::{
-    AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService,
+    AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService, KeyRing,
     LiquidityChangeEventService, LiquidityMoveService, LiquidityTurnoverService, LiveChannels,
     NetworkService, PoolChangeEventService, PoolCreationEventService, PoolCreationsService,
     PoolService, PositionChangeCountsService, PositionChangeEventService,
@@ -57,6 +57,8 @@ pub(crate) struct AppState {
     pub(crate) reward_claim_event_service: Arc<RewardClaimEventService>,
     pub(crate) token_service: Arc<TokenService>,
     pub(crate) announcement_service: Arc<AnnouncementService>,
+    /// The keys the `/api` routes accept, read by the authentication layer.
+    pub(crate) key_ring: KeyRing,
     /// Infra probe, exposed directly: no application logic surrounds it.
     pub(crate) health_checker: Arc<PgHealthChecker>,
     /// Cancelled on stop. Only the SSE stream reads it: every other response ends on its own.
