@@ -63,16 +63,14 @@ async fn a_served_connection_opens_whatever_its_last_event_id() {
         format!("/api/live?topics={EVERY_TOPIC}"),
         format!("/api/live/protocols/meteora_damm_v2?topics={EVERY_TOPIC}"),
     ] {
+        let state = app_state();
         let request = Request::builder()
             .uri(&uri)
             .header("last-event-id", "not-a-cursor")
-            .header(header::AUTHORIZATION, live_bearer(&uri))
+            .header(header::AUTHORIZATION, live_bearer(&state, &uri))
             .body(Body::empty())
             .unwrap();
-        let response = build_router(app_state(), vec![])
-            .oneshot(request)
-            .await
-            .unwrap();
+        let response = build_router(state, vec![]).oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK, "{uri}");
         assert_eq!(
             response.headers()[header::CONTENT_TYPE],

@@ -116,9 +116,7 @@ rustls = { version = "0.23", features = ["ring"] }
 bs58 = "0.5"
 base64 = "0.23"
 sha2 = "0.11"
-# The signature of a live token (HS256), checked in constant time.
-hmac = "0.13"
-# The OS random source: the secret of an API key, the id of a live token.
+# The OS random source: the secret of an API key, a live token.
 getrandom = "0.4"
 rust_decimal = "1.43"
 

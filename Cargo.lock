@@ -6277,7 +6277,6 @@ dependencies = [
  "dotenvy",
  "futures-util",
  "getrandom 0.4.3",
- "hmac 0.13.0",
  "metrics",
  "metrics-exporter-prometheus",
  "metrics-util",

@@ -11,13 +11,11 @@ pub(crate) enum Unauthorized {
     Unknown,
     /// An API key presented to the live stream, which takes a live token only.
     KeyOnLive,
-    /// A bearer that is no live token: not three parts, another header, an unreadable payload.
+    /// A bearer that is no live token: not `ylt_` and 64 lowercase hex characters.
     TokenMalformed,
-    /// A live token whose signature is not the API's.
-    TokenSignature,
+    /// A live token the registry does not hold: never issued, already opened, or forgotten.
+    TokenUnknown,
     TokenExpired,
-    /// A live token already opened once.
-    TokenUsed,
     /// A live token for another path, or for fewer topics than asked.
     TokenScope,
 }
@@ -31,9 +29,8 @@ impl Unauthorized {
             Self::Unknown => "unknown",
             Self::KeyOnLive => "key_on_live",
             Self::TokenMalformed => "token_malformed",
-            Self::TokenSignature => "token_signature",
+            Self::TokenUnknown => "token_unknown",
             Self::TokenExpired => "token_expired",
-            Self::TokenUsed => "token_used",
             Self::TokenScope => "token_scope",
         }
     }

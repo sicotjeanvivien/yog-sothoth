@@ -240,8 +240,6 @@ services:
       API_BIND_ADDR: 0.0.0.0:5000
       API_CORS_ALLOWED_ORIGINS: ${API_CORS_ALLOWED_ORIGINS:-http://localhost:3000}
       API_LIVE_POLL_SECS: ${API_LIVE_POLL_SECS:-3}
-      # ⚠️ `:-`, not `:?`, as the web's key: unset, the API refuses to start, not compose.
-      API_LIVE_TOKEN_SECRET: ${API_LIVE_TOKEN_SECRET:-}
       RUST_LOG: ${RUST_LOG:-info,sqlx=warn}
       LOG_FORMAT: ${LOG_FORMAT:-text}
     entrypoint:

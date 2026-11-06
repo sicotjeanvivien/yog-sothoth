@@ -161,7 +161,7 @@ pub(crate) fn app_state() -> AppState {
         )),
         announcement_service: Arc::new(AnnouncementService::new(Arc::new(MockAnnouncementRepo))),
         key_ring: key_ring(vec![]),
-        live_tokens: crate::application::LiveTokens::new(LIVE_TOKEN_SECRET),
+        live_tokens: crate::application::LiveTokens::default(),
         health_checker: Arc::new(PgHealthChecker::new(
             PgPool::connect_lazy("postgres://unused@127.0.0.1:1/unused")
                 .expect("a well-formed URL"),
@@ -225,12 +225,13 @@ pub(crate) async fn head_on(state: AppState, request: Request<Body>) -> (StatusC
 
 /// `GET uri` on the live stream, opened by a live token for exactly that path and topics.
 pub(crate) async fn get_live(uri: &str) -> (StatusCode, String, String) {
+    let state = app_state();
     let request = Request::builder()
         .uri(uri)
-        .header(header::AUTHORIZATION, live_bearer(uri))
+        .header(header::AUTHORIZATION, live_bearer(&state, uri))
         .body(Body::empty())
         .unwrap();
-    let (status, headers, detail) = send_on(app_state(), request).await;
+    let (status, headers, detail) = send_on(state, request).await;
     let content_type = headers
         .get(header::CONTENT_TYPE)
         .and_then(|value| value.to_str().ok())
@@ -239,8 +240,8 @@ pub(crate) async fn get_live(uri: &str) -> (StatusCode, String, String) {
     (status, content_type, detail)
 }
 
-/// `Bearer` and a live token of [`app_state`] for the path and the topics of `uri`.
-pub(crate) fn live_bearer(uri: &str) -> String {
+/// `Bearer` and a live token issued by `state` for the path and the topics of `uri`.
+pub(crate) fn live_bearer(state: &AppState, uri: &str) -> String {
     let (path, query) = uri.split_once('?').unwrap_or((uri, ""));
     let topics = query
         .split('&')
@@ -253,7 +254,8 @@ pub(crate) fn live_bearer(uri: &str) -> String {
         path: path.to_string(),
         topics,
     };
-    let token = crate::application::LiveTokens::new(LIVE_TOKEN_SECRET)
+    let token = state
+        .live_tokens
         .issue("tests", &scope, Utc::now().timestamp())
         .expect("the OS random source");
     format!("Bearer {token}")
@@ -756,9 +758,6 @@ pub(crate) fn counter(counters: &Counters, name: &str, labels: &[(&str, &str)]) 
         .find(|(own_name, own, _)| own_name == name && *own == wanted)
         .map(|(_, _, n)| *n)
 }
-
-/// The key [`app_state`]'s live tokens are signed with.
-pub(crate) const LIVE_TOKEN_SECRET: &[u8] = b"the live token secret of the tests";
 
 /// The same keys on every read.
 struct FixedKeys(Vec<ActiveKey>);

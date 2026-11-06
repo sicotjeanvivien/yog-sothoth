@@ -233,7 +233,7 @@ pub(crate) async fn build_app_state(
         token_service: Arc::new(TokenService::new(token_metadata_repo, token_price_repo)),
         announcement_service: Arc::new(AnnouncementService::new(announcement_repo)),
         key_ring: key_ring.clone(),
-        live_tokens: LiveTokens::new(config.live_token_secret.expose().as_bytes()),
+        live_tokens: LiveTokens::default(),
         health_checker: Arc::new(PgHealthChecker::new(db_pool)),
         shutdown,
     };

@@ -15,16 +15,8 @@ const ALLOWED: &[(&str, usize, &str)] = &[
     ),
     (
         "crates/api/src/bootstrap/app_state.rs",
-        2,
-        "sqlx owns the pool — the URL is the argument of `Database::connect_with`; and \
-         the live tokens' signing key is the argument of `LiveTokens::new`, which keeps it \
-         inside its HMAC and never hands it back",
-    ),
-    (
-        "crates/api/src/bootstrap/config.rs",
         1,
-        "the length of `API_LIVE_TOKEN_SECRET` is checked at boot: the refusal says how many \
-         characters it holds, never what they are",
+        "sqlx owns the pool — the URL is the argument of `Database::connect_with`",
     ),
     (
         "crates/archive/src/infra/store.rs",
