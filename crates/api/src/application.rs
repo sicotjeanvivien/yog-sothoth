@@ -9,8 +9,8 @@ mod services;
 mod work_slots;
 
 pub(crate) use auth::{
-    KeyRing, LIVE_TOKEN_TTL_SECS, LiveScope, LiveTokens, ReloadOutcome, Unauthorized, identify,
-    identify_live,
+    IssueError, KeyRing, LIVE_TOKEN_TTL_SECS, LiveScope, LiveTokens, ReloadOutcome, Unauthorized,
+    identify, identify_live,
 };
 pub(crate) use enriched_signal::EnrichedSignal;
 pub(crate) use enriched_token::EnrichedToken;

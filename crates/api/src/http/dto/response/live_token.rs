@@ -1,4 +1,5 @@
-//! Response DTO for `POST /api/live-tokens`: the shape of OAuth 2.0's client credentials grant.
+//! Response DTO for `POST /api/live-tokens`: the fields of OAuth 2.0's client credentials grant,
+//! named in the API's camelCase (`accessToken`, not `access_token`).
 
 use serde::Serialize;
 use utoipa::ToSchema;

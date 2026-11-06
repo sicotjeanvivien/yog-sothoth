@@ -1,4 +1,5 @@
 mod credential;
+mod issue_error;
 mod key_ring;
 mod live_grant;
 mod live_scope;
@@ -8,6 +9,7 @@ mod reload_outcome;
 mod unauthorized;
 
 pub(crate) use credential::{identify, identify_live};
+pub(crate) use issue_error::IssueError;
 pub(crate) use key_ring::KeyRing;
 pub(crate) use live_scope::LiveScope;
 pub(crate) use live_tokens::{LIVE_TOKEN_TTL_SECS, LiveTokens};

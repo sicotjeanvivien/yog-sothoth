@@ -33,7 +33,7 @@ pub(crate) async fn authenticate_live(
         }
         Err(reason) => {
             ApiMetrics::record_unauthorized(reason);
-            ApiError::Unauthorized.into_response()
+            ApiError::LiveUnauthorized.into_response()
         }
     }
 }
@@ -48,18 +48,12 @@ fn client_of(
     identify_live(credential, asked, tokens, chrono::Utc::now().timestamp())
 }
 
-/// The scope an opening asks for: its path, and the topics of its query.
-/// ⚠️ Not validated here: a topic the stream does not serve is the handler's 400.
+/// The scope an opening asks for: its path, and the topics of its query, split as the handler
+/// splits them. ⚠️ Not validated here: a topic the stream does not serve is the handler's 400.
 fn asked(uri: &Uri) -> LiveScope {
     let topics = url::form_urlencoded::parse(uri.query().unwrap_or_default().as_bytes())
         .filter(|(key, _)| key == "topics")
-        .flat_map(|(_, value)| {
-            value
-                .split(',')
-                .filter(|t| !t.is_empty())
-                .map(str::to_string)
-                .collect::<Vec<_>>()
-        })
+        .flat_map(|(_, value)| value.split(',').map(str::to_string).collect::<Vec<_>>())
         .collect();
     LiveScope {
         path: uri.path().to_string(),

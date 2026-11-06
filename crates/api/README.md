@@ -129,7 +129,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/ingestion` | Our ingestion's freshness (`live` / `delayed` / `stale`) and its last indexed event |
 | `GET` | `/api/windows` | Every window, the shortest first: its bounds, `open`, `opensAt` and `late`, without reading a measure over it |
 | `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` filter); each item embeds its pool's token pair (`tokenA`/`tokenB`, `EmbeddedTokenResponse`), says what its value counts (`valueUnit`) and, on a flow imbalance, which token its swaps mostly take from the pool (`leansToward`) |
-| `POST` | `/api/live-tokens` | Against an API key, a live token for the stream the body names (`path`, `topics`): `accessToken`, `tokenType` (`Bearer`), `expiresIn` (30) — the shape of OAuth 2.0's client credentials grant |
+| `POST` | `/api/live-tokens` | Against an API key, a live token for the stream the body names (`path`, `topics`): `accessToken`, `tokenType` (`Bearer`), `expiresIn` (30) — the fields of OAuth 2.0's client credentials grant, in camelCase |
 | `GET` | `/api/live?topics=signals` | SSE, opened by a live token: the new items of the topics named, every protocol (see [The live stream](#the-live-stream)) |
 | `GET` | `/api/live/protocols/{protocol}?topics=signals` | The same, the protocol's only |
 | `GET` | `/api/protocols` | A page of every protocol of the domain, in the domain's order, and `poolsSeen` over all of them: observed by this build or not, pools seen — the catalogue, live; forward-only cursor |
@@ -572,8 +572,11 @@ reopening.
   carries nothing: it is a name in the registry, and nothing to sign.
 - **It opens once**: the opening takes it out of the registry. A token never
   issued, already opened or forgotten reads the same, `token_unknown`. Every
-  issue and opening forgets the expired ones, so the registry holds no more than
-  30 s of tokens. A restart forgets them all: a page asks for another anyway.
+  issue and opening forgets the expired ones, off the front of a queue in the
+  order they expire, so the registry holds no more than 30 s of tokens, and at
+  most `MAX_LIVE_TOKENS` (10 000): past it, `POST /api/live-tokens` answers
+  `503` with `Retry-After`. A restart forgets them all: a page asks for another
+  anyway.
 - **It opens its stream only**: the path exactly, its topics or fewer. The scope
   is checked before the token is taken out, so a token tried elsewhere still
   opens its own.
@@ -582,7 +585,8 @@ reopening.
 - **`authenticate_live`** (`http/middleware/live_authentication.rs`) is the live
   routes' route layer, in place of `authenticate`: the token is checked at the
   opening, and a stream open lives past its expiry. The opening is counted under
-  the token's client.
+  the token's client. Its `401` says the stream takes a live token, the same
+  whatever the reason, as the keys' says nothing of why.
 
 The series, on `:9000/metrics` (host-mapped to 9004 in dev, read through
 `observe.sh` in production):

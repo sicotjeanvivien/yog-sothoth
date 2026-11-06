@@ -84,6 +84,8 @@ export function openLive(
       return;
     }
     if (!response.ok || response.body === null) {
+      // The refusal's body is not read: released now, not held until it is collected.
+      void response.body?.cancel();
       reopenAfter(retryAfterMs(response));
       return;
     }

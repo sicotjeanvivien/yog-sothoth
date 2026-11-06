@@ -15,6 +15,8 @@ pub(crate) enum ApiError {
     /// A credential that opens nothing; `401` with `WWW-Authenticate: Bearer` (RFC 6750).
     /// ⚠️ One message whatever the reason: it must not tell a revoked key from a forged one.
     Unauthorized,
+    /// The live stream refused: it opens with a live token only, one message whatever the reason.
+    LiveUnauthorized,
     NotFound(String),
     Unavailable(&'static str),
     Internal(String),
@@ -34,6 +36,11 @@ impl IntoResponse for ApiError {
                 StatusCode::UNAUTHORIZED,
                 "Unauthorized",
                 "the API key is not valid".to_string(),
+            ),
+            ApiError::LiveUnauthorized => (
+                StatusCode::UNAUTHORIZED,
+                "Unauthorized",
+                "the live stream opens with a live token from POST /api/live-tokens".to_string(),
             ),
             ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, "Not Found", msg),
             ApiError::Unavailable(reason) => {

@@ -125,6 +125,18 @@ describe("a lost connection", () => {
     expect(calls).toHaveLength(2);
   });
 
+  // Mutation: the refusal's body left unread and open, holding its connection until collected.
+  it("releases the body of a refusal", async () => {
+    let cancelled = false;
+    const body = new ReadableStream({ cancel: () => void (cancelled = true) });
+    openLive(LIVE_URL, ["signals"], handlers(), false, token);
+    await settle();
+    calls[0]!.answer(new Response(body, { status: 401 }));
+    await settle();
+
+    expect(cancelled).toBe(true);
+  });
+
   // Mutation: a token refused by the dashboard's server stops the connection for good.
   it("reopens when no token could be had", async () => {
     let failing = true;

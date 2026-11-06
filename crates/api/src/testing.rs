@@ -247,7 +247,6 @@ pub(crate) fn live_bearer(state: &AppState, uri: &str) -> String {
         .split('&')
         .filter_map(|pair| pair.strip_prefix("topics="))
         .flat_map(|value| value.split(','))
-        .filter(|t| !t.is_empty())
         .map(str::to_string)
         .collect();
     let scope = crate::application::LiveScope {

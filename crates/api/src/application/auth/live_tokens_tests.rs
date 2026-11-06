@@ -142,3 +142,18 @@ fn a_bearer_of_another_form_is_malformed() {
         );
     }
 }
+
+/// Mutation: no cap, so a flood of token requests grows the registry for the 30 s of each.
+#[test]
+fn past_the_cap_a_token_is_refused_until_some_expire() {
+    let tokens = LiveTokens::default();
+    for _ in 0..MAX_LIVE_TOKENS {
+        tokens.issue("dashboard", &granted(), NOW).unwrap();
+    }
+
+    assert!(matches!(
+        tokens.issue("dashboard", &granted(), NOW + 1),
+        Err(IssueError::Full)
+    ));
+    assert!(tokens.issue("dashboard", &granted(), NOW + 30).is_ok());
+}

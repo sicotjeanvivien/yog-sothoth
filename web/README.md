@@ -48,13 +48,16 @@ that combines several routes is the API's, rule 11 of `crates/api/README.md`.
   stream, the network and ingestion poll — via `NEXT_PUBLIC_YOG_API_URL`;
   `yog-api`'s CORS layer authorises the dashboard origin. It holds no key: the
   live stream opens with a live token the page asks the server for
-  (`requestLiveToken`, a Server Action, `lib/live/live-token.ts`), which opens
-  that one stream once.
+  (`requestLiveToken`, `lib/live/live-token.ts`, through `POST /api/live-token`,
+  `app/api/live-token/route.ts`), which opens that one stream once.
 
-There used to be BFF route handlers under `app/api/` proxying the API
-for the browser. They were removed: pure proxies with no added value —
-their removal collapses one network hop, one error format, and one set
-of duplicated validations. Both runtimes share the same client core, so
+No route handler proxies the API for the browser: a proxy would add a hop,
+an error format and a set of validations, and nothing else. The one route
+handler, `POST /api/live-token`, proxies no data: it asks the API, with the
+dashboard's key, for the token of the stream the page is about to open, and
+hands the page that token alone. It is a fixed path rather than a Server
+Action, whose id each build changes: a tab left open across a deploy still gets
+the token it reopens with. Both runtimes share the same client core, so
 behaviour stays identical on either path.
 
 ## The API layer (`src/lib/api/`)
@@ -65,7 +68,7 @@ lib/api/
 │   ├── client-core.ts   # runtime-agnostic core: URL building, timeout +
 │   │                    # AbortController, error classification, RFC 9457
 │   │                    # envelope parsing, zod validation
-│   ├── server.ts        # apiGet(), apiPost() — the API with YOG_API_KEY
+│   ├── server.ts        # apiGet(), apiPost() — the API with YOG_API_KEY (server-only)
 │   └── browser.ts       # apiGetBrowser()     — reads NEXT_PUBLIC_YOG_API_URL
 ├── schema/zod.gen.ts    # generated: one zod schema and one type per wire
 │                        # shape, from crates/api/openapi.json — never edited

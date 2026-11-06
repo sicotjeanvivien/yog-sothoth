@@ -3,7 +3,7 @@
 use axum::{Extension, Json, body::Bytes, extract::State};
 use yog_core::domain::ApiClient;
 
-use crate::application::{Unauthorized, metrics::ApiMetrics};
+use crate::application::{IssueError, Unauthorized, metrics::ApiMetrics};
 use crate::http::{
     AppState,
     dto::{LiveTokenResponse, request::CreateLiveTokenBody},
@@ -16,7 +16,8 @@ use crate::http::{
     responses((
         status = 200,
         description = "A live token for the stream named, to present once, within `expiresIn` \
-                       seconds, as `Authorization: Bearer`. Without an API key: 401.",
+                       seconds, as `Authorization: Bearer`. Without an API key: 401; with too \
+                       many tokens waiting to be opened: 503.",
         body = LiveTokenResponse
     )),
     request_body = CreateLiveTokenBody,
@@ -35,7 +36,12 @@ pub(crate) async fn create_live_token(
     let token = state
         .live_tokens
         .issue(&client.name, &scope, chrono::Utc::now().timestamp())
-        .map_err(|e| ApiError::Internal(format!("the OS random source failed: {e}")))?;
+        .map_err(|e| match e {
+            IssueError::Full => ApiError::Unavailable("too many live tokens waiting to be opened"),
+            IssueError::Random(e) => {
+                ApiError::Internal(format!("the OS random source failed: {e}"))
+            }
+        })?;
     Ok(Json(LiveTokenResponse::bearer(token)))
 }
 

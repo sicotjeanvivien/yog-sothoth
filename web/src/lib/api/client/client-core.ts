@@ -33,7 +33,7 @@ export type RequestExtras = { authorization?: string; body?: unknown };
  * GETs an absolute URL, or POSTs `extras.body` to it, and validates the body against `schema`.
  * @throws ApiClientError on a timeout, a network failure, a non-2xx or a validation failure.
  */
-export async function apiGetWithUrl<T>(
+export async function apiRequestWithUrl<T>(
   url: string,
   schema: z.ZodType<T>,
   timeoutMs: number,

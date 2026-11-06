@@ -17,7 +17,7 @@ fn open(uri: &str, authorization: Option<String>) -> Request<Body> {
 /// request is built on the state it is sent to, whose registry issues its tokens.
 fn refused_for(request: impl FnOnce(&AppState) -> Request<Body>, reason: &str) {
     // ⚠️ The state is built inside the runtime: its pool needs one.
-    let ((status, headers, _), metrics) = recorded(async {
+    let ((status, headers, detail), metrics) = recorded(async {
         let state = app_state();
         let request = request(&state);
         send_on(state, request).await
@@ -25,6 +25,10 @@ fn refused_for(request: impl FnOnce(&AppState) -> Request<Body>, reason: &str) {
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(headers[header::WWW_AUTHENTICATE], "Bearer");
+    assert_eq!(
+        detail, "the live stream opens with a live token from POST /api/live-tokens",
+        "the same for every reason, and never about an API key"
+    );
     assert_eq!(
         counter(
             &metrics,
