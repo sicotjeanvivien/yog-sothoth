@@ -35,7 +35,7 @@ impl IntoResponse for ApiError {
             ApiError::Unauthorized => (
                 StatusCode::UNAUTHORIZED,
                 "Unauthorized",
-                "the API key is not valid".to_string(),
+                "a valid API key is required".to_string(),
             ),
             ApiError::LiveUnauthorized => (
                 StatusCode::UNAUTHORIZED,

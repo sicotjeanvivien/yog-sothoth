@@ -14,17 +14,20 @@ use crate::application::{LiveScope, Unauthorized};
 /// How long a live token opens its stream, in seconds.
 pub(crate) const LIVE_TOKEN_TTL_SECS: u32 = 30;
 
-/// The most tokens waiting to be opened: past it, a token is refused rather than memory spent.
-pub(crate) const MAX_LIVE_TOKENS: usize = 10_000;
+/// The most tokens a client may issue in [`LIVE_TOKEN_TTL_SECS`]: past it, that client is refused
+/// rather than memory spent, and the other clients keep theirs.
+pub(crate) const MAX_LIVE_TOKENS_PER_CLIENT: usize = 10_000;
 
 const MARKER: &str = "ylt_";
 const SECRET_BYTES: usize = 32;
 
-/// Each token not yet opened, by its SHA-256, and every token issued in the order it expires.
+/// Each token not yet opened, by its SHA-256; every token issued, in the order it expires, with
+/// its client; and how many each client issued that have not expired yet, opened or not.
 #[derive(Default)]
 struct Registry {
     grants: HashMap<[u8; 32], LiveGrant>,
-    expiries: VecDeque<(i64, [u8; 32])>,
+    expiries: VecDeque<(i64, [u8; 32], Arc<str>)>,
+    issued: HashMap<Arc<str>, usize>,
 }
 
 /// The tokens waiting to be opened, with what each grants. Clones share the registry.
@@ -41,22 +44,20 @@ impl LiveTokens {
         scope: &LiveScope,
         now: i64,
     ) -> Result<String, IssueError> {
-        let mut registry = self.registry();
-        registry.forget_expired(now);
-        if registry.grants.len() >= MAX_LIVE_TOKENS {
-            return Err(IssueError::Full);
-        }
         let mut secret = [0u8; SECRET_BYTES];
         getrandom::fill(&mut secret).map_err(IssueError::Random)?;
-        let token = format!(
-            "{MARKER}{}",
-            secret
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect::<String>()
-        );
+        let token = format!("{MARKER}{}", hex(&secret));
         let key = digest(&token);
         let expires = now + i64::from(LIVE_TOKEN_TTL_SECS);
+        let client: Arc<str> = client.into();
+
+        let mut registry = self.registry();
+        registry.forget_expired(now);
+        let issued = registry.issued.entry(client.clone()).or_default();
+        if *issued >= MAX_LIVE_TOKENS_PER_CLIENT {
+            return Err(IssueError::Full);
+        }
+        *issued += 1;
         registry.grants.insert(
             key,
             LiveGrant {
@@ -65,7 +66,7 @@ impl LiveTokens {
                 expires,
             },
         );
-        registry.expiries.push_back((expires, key));
+        registry.expiries.push_back((expires, key, client));
         Ok(token)
     }
 
@@ -110,16 +111,32 @@ impl LiveTokens {
 
 impl Registry {
     /// The tokens expired by `now`, opened or not, taken off the front: each call pays for those
-    /// it finds expired, not for the whole registry.
+    /// it finds expired, not for the whole registry. ⚠️ An opened token still counts to its
+    /// client until it expires: the cap bounds what a client issues, so the queue too.
     fn forget_expired(&mut self, now: i64) {
-        while let Some(&(expires, key)) = self.expiries.front() {
-            if expires > now {
+        while let Some((expires, _, _)) = self.expiries.front() {
+            if *expires > now {
                 break;
             }
-            self.expiries.pop_front();
+            let (_, key, client) = self.expiries.pop_front().expect("just read");
             self.grants.remove(&key);
+            if let Some(count) = self.issued.get_mut(&client) {
+                *count -= 1;
+                if *count == 0 {
+                    self.issued.remove(&client);
+                }
+            }
         }
     }
+}
+
+fn hex(bytes: &[u8]) -> String {
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    bytes
+        .iter()
+        .flat_map(|b| [DIGITS[usize::from(b >> 4)], DIGITS[usize::from(b & 0xf)]])
+        .map(char::from)
+        .collect()
 }
 
 fn digest(token: &str) -> [u8; 32] {

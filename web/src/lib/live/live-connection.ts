@@ -27,6 +27,15 @@ export function reopenDelayMs(refusals: number, random: number): number {
   return base / 2 + (random * base) / 2;
 }
 
+/** A `200` the stream can be read from: an `EventSource` refused any other content type. */
+function isEventStream(response: Response): boolean {
+  return (
+    response.ok &&
+    response.body !== null &&
+    (response.headers.get("content-type") ?? "").startsWith("text/event-stream")
+  );
+}
+
 /** The `Retry-After` of a refusal, in ms; 0 without one. */
 function retryAfterMs(response: Response): number {
   const seconds = Number(response.headers.get("retry-after"));
@@ -83,7 +92,7 @@ export function openLive(
       reopenAfter(0);
       return;
     }
-    if (!response.ok || response.body === null) {
+    if (!isEventStream(response) || response.body === null) {
       // The refusal's body is not read: released now, not held until it is collected.
       void response.body?.cancel();
       reopenAfter(retryAfterMs(response));

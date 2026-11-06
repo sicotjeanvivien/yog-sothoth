@@ -2,7 +2,7 @@
 //! without one is refused (401), an API key included.
 
 use axum::{
-    extract::{Request, State},
+    extract::{Query, Request, State},
     http::{HeaderValue, Uri, header},
     middleware::Next,
     response::{IntoResponse, Response},
@@ -11,21 +11,29 @@ use axum::{
 use super::authentication::route_of;
 use crate::{
     application::{LiveScope, LiveTokens, Unauthorized, identify_live, metrics::ApiMetrics},
-    http::error::ApiError,
+    http::{
+        dto::request::{LiveParams, LiveRequest},
+        error::ApiError,
+    },
 };
 
 /// Open the stream to the client of its live token, and count the opening under it.
+/// ⚠️ A query the handler refuses passes untouched: it answers its 400, opens nothing, and the
+/// token is not spent.
 pub(crate) async fn authenticate_live(
     State(tokens): State<LiveTokens>,
     request: Request,
     next: Next,
 ) -> Response {
+    let Some(asked) = asked(request.uri()) else {
+        return next.run(request).await;
+    };
     let route = route_of(&request);
     let opened = request
         .headers()
         .get(header::AUTHORIZATION)
         .ok_or(Unauthorized::Missing)
-        .and_then(|credential| client_of(credential, &asked(request.uri()), &tokens));
+        .and_then(|credential| client_of(credential, &asked, &tokens));
     match opened {
         Ok(client) => {
             ApiMetrics::record_request(&client, &route);
@@ -48,17 +56,19 @@ fn client_of(
     identify_live(credential, asked, tokens, chrono::Utc::now().timestamp())
 }
 
-/// The scope an opening asks for: its path, and the topics of its query, split as the handler
-/// splits them. ⚠️ Not validated here: a topic the stream does not serve is the handler's 400.
-fn asked(uri: &Uri) -> LiveScope {
-    let topics = url::form_urlencoded::parse(uri.query().unwrap_or_default().as_bytes())
-        .filter(|(key, _)| key == "topics")
-        .flat_map(|(_, value)| value.split(',').map(str::to_string).collect::<Vec<_>>())
-        .collect();
-    LiveScope {
+/// The scope an opening asks for: its path, and its topics as the handler reads them; `None` for a
+/// query the handler refuses.
+fn asked(uri: &Uri) -> Option<LiveScope> {
+    let Query(params) = Query::<LiveParams>::try_from_uri(uri).ok()?;
+    let request = LiveRequest::parse(params, None).ok()?;
+    Some(LiveScope {
         path: uri.path().to_string(),
-        topics,
-    }
+        topics: request
+            .topics
+            .iter()
+            .map(|t| t.name().to_string())
+            .collect(),
+    })
 }
 
 #[cfg(test)]

@@ -178,7 +178,7 @@ type StreamEvent = { at: string; id: string; data: string };
 
 /** The live tail: the visitor's key exchanged for a live token, then one `fetch` stream while
  *  listening, aborted on stop and on unmount. `refused` is the status that ended it, if any. */
-function useStream(base: string, url: string, apiKey: string) {
+function useStream(base: string, url: string, path: string, apiKey: string) {
   const [state, setState] = useState<"off" | "connecting" | "on">("off");
   const [events, setEvents] = useState<StreamEvent[]>([]);
   const [refused, setRefused] = useState<string | null>(null);
@@ -200,7 +200,7 @@ function useStream(base: string, url: string, apiKey: string) {
       const exchange = await fetch(`${base}/api/live-tokens`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authorization(apiKey) },
-        body: JSON.stringify({ path: new URL(url).pathname, topics: topicsOf(url) }),
+        body: JSON.stringify({ path, topics: topicsOf(url) }),
         signal: abort.signal,
       });
       if (!exchange.ok) {
@@ -213,7 +213,12 @@ function useStream(base: string, url: string, apiKey: string) {
         headers: { Accept: "text/event-stream", Authorization: `Bearer ${accessToken}` },
         signal: abort.signal,
       });
-      if (!response.ok || response.body === null) {
+      if (
+        !response.ok ||
+        response.body === null ||
+        !(response.headers.get("content-type") ?? "").startsWith("text/event-stream")
+      ) {
+        void response.body?.cancel();
         setRefused(`${response.status} ${response.statusText}`.trim());
         setState("off");
         return;
@@ -264,7 +269,8 @@ export function EndpointDetail({
   const [loading, setLoading] = useState(false);
   const url = urlOf(base, endpoint, values);
   const missing = missingOf(endpoint, values);
-  const stream = useStream(base, url, apiKey);
+  // ⚠️ The route's own path, as the API receives it: the base URL may carry a prefix of its own.
+  const stream = useStream(base, url, urlOf("", endpoint, values).split("?")[0] ?? "", apiKey);
   const [body, setBody] = useState(endpoint.body);
 
   const sendWith = async (next: ParamValues) => {

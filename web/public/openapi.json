@@ -6816,7 +6816,7 @@
                 }
               }
             },
-            "description": "A live token for the stream named, to present once, within `expiresIn` seconds, as `Authorization: Bearer`. Without an API key: 401; with too many tokens waiting to be opened: 503."
+            "description": "A live token for the stream named, to present once, within `expiresIn` seconds, as `Authorization: Bearer`. Without an API key: 401; past the 10 000 tokens a client may issue in 30 s: 503."
           },
           "default": {
             "content": {

@@ -104,3 +104,24 @@ async fn the_requests_stay_open_without_a_key() {
 
     assert_eq!(status, StatusCode::OK, "{detail}");
 }
+
+/// Mutation: the topics split apart from the handler's parse — a query it refuses spends the
+/// token, or reads as a 401 rather than its 400.
+#[tokio::test]
+async fn a_query_the_handler_refuses_is_its_400_and_spends_no_token() {
+    let state = app_state();
+    let bearer = live_bearer(&state, "/api/live?topics=signals");
+
+    let (refused, _, detail) = send_on(
+        state.clone(),
+        open(
+            "/api/live?topics=signals&topics=signals",
+            Some(bearer.clone()),
+        ),
+    )
+    .await;
+    let (opened, _) = head_on(state, open("/api/live?topics=signals", Some(bearer))).await;
+
+    assert_eq!(refused, StatusCode::BAD_REQUEST, "{detail}");
+    assert_eq!(opened, StatusCode::OK, "the token was not spent");
+}

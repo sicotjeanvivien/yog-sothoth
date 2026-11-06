@@ -143,17 +143,23 @@ fn a_bearer_of_another_form_is_malformed() {
     }
 }
 
-/// Mutation: no cap, so a flood of token requests grows the registry for the 30 s of each.
+/// Mutation: one cap for every client, so a flood under one key cuts the live stream of all;
+/// or a cap freed at the opening, so issue-and-open in a loop grows the expiry queue.
 #[test]
-fn past_the_cap_a_token_is_refused_until_some_expire() {
+fn past_its_cap_a_client_is_refused_and_the_others_are_not() {
     let tokens = LiveTokens::default();
-    for _ in 0..MAX_LIVE_TOKENS {
-        tokens.issue("dashboard", &granted(), NOW).unwrap();
+    for _ in 0..MAX_LIVE_TOKENS_PER_CLIENT {
+        let token = tokens.issue("flood", &granted(), NOW).unwrap();
+        tokens.open(&token, &granted(), NOW).unwrap();
     }
 
     assert!(matches!(
-        tokens.issue("dashboard", &granted(), NOW + 1),
+        tokens.issue("flood", &granted(), NOW + 1),
         Err(IssueError::Full)
     ));
-    assert!(tokens.issue("dashboard", &granted(), NOW + 30).is_ok());
+    assert!(tokens.issue("dashboard", &granted(), NOW + 1).is_ok());
+    assert!(
+        tokens.issue("flood", &granted(), NOW + 30).is_ok(),
+        "its first tokens expired"
+    );
 }

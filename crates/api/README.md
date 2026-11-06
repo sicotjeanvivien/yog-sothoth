@@ -573,9 +573,10 @@ reopening.
 - **It opens once**: the opening takes it out of the registry. A token never
   issued, already opened or forgotten reads the same, `token_unknown`. Every
   issue and opening forgets the expired ones, off the front of a queue in the
-  order they expire, so the registry holds no more than 30 s of tokens, and at
-  most `MAX_LIVE_TOKENS` (10 000): past it, `POST /api/live-tokens` answers
-  `503` with `Retry-After`. A restart forgets them all: a page asks for another
+  order they expire, so the registry holds no more than 30 s of tokens. A client
+  issues at most `MAX_LIVE_TOKENS_PER_CLIENT` (10 000) in 30 s, opened or not:
+  past it, `POST /api/live-tokens` answers that client `503` with `Retry-After`,
+  and the others keep theirs. A restart forgets them all: a page asks for another
   anyway.
 - **It opens its stream only**: the path exactly, its topics or fewer. The scope
   is checked before the token is taken out, so a token tried elsewhere still

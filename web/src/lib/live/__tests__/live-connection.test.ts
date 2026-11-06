@@ -137,6 +137,19 @@ describe("a lost connection", () => {
     expect(cancelled).toBe(true);
   });
 
+  // Mutation: any 200 read as the stream — an error page from a proxy shows "live" and streams nothing.
+  it("takes a 200 that is no event stream for a refusal", async () => {
+    const statuses: string[] = [];
+    openLive(LIVE_URL, ["signals"], { ...handlers(), onStatus: (s) => statuses.push(s) }, false, token);
+    await settle();
+    calls[0]!.answer(new Response("<html></html>", { status: 200, headers: { "content-type": "text/html" } }));
+    await settle();
+
+    expect(statuses).toEqual(["reconnecting"]);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(calls).toHaveLength(2);
+  });
+
   // Mutation: a token refused by the dashboard's server stops the connection for good.
   it("reopens when no token could be had", async () => {
     let failing = true;
