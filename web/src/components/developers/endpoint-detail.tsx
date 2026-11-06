@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { loadClientEnv } from "@/lib/config/client-env.schema";
 import type { Endpoint, EndpointParam } from "@/lib/developers/contract";
+import { createSseParser } from "@/lib/live/sse-parser";
 import {
   byteSize,
   curlOf,
@@ -47,11 +48,22 @@ function Prose({ text }: { text: string }) {
 const LABEL =
   "font-dash-mono text-[11px] font-medium tracking-[0.12em] text-dash-ink-3 uppercase";
 
-async function send(url: string): Promise<SendResult> {
+/** The visitor's key as `Authorization`, when given. */
+function authorization(apiKey: string): Record<string, string> {
+  return apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+}
+
+async function send(url: string, apiKey: string, body: string | null): Promise<SendResult> {
   const started = performance.now();
   try {
     const response = await fetch(url, {
-      headers: { Accept: "application/json" },
+      method: body === null ? "GET" : "POST",
+      headers: {
+        Accept: "application/json",
+        ...authorization(apiKey),
+        ...(body === null ? {} : { "Content-Type": "application/json" }),
+      },
+      ...(body === null ? {} : { body }),
       signal: AbortSignal.timeout(loadClientEnv().NEXT_PUBLIC_YOG_API_TIMEOUT_MS),
     });
     const text = await response.text();
@@ -164,41 +176,68 @@ function ParamRow({
 
 type StreamEvent = { at: string; id: string; data: string };
 
-/** The live tail: one `EventSource` while listening, closed on stop and on unmount. */
-function useStream(url: string) {
+/** The live tail: the visitor's key exchanged for a live token, then one `fetch` stream while
+ *  listening, aborted on stop and on unmount. `refused` is the status that ended it, if any. */
+function useStream(base: string, url: string, apiKey: string) {
   const [state, setState] = useState<"off" | "connecting" | "on">("off");
   const [events, setEvents] = useState<StreamEvent[]>([]);
-  const sourceRef = useRef<EventSource | null>(null);
+  const [refused, setRefused] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const stop = () => {
-    sourceRef.current?.close();
-    sourceRef.current = null;
+    abortRef.current?.abort();
+    abortRef.current = null;
     setState("off");
   };
 
-  const start = () => {
+  const start = async () => {
     setEvents([]);
+    setRefused(null);
     setState("connecting");
-    const source = new EventSource(url);
-    sourceRef.current = source;
-    source.onopen = () => setState("on");
-    source.onerror = () => setState(source.readyState === EventSource.CLOSED ? "off" : "connecting");
-    const receive = (event: MessageEvent) => {
-      const entry = {
-        at: new Date().toISOString().slice(11, 19),
-        id: event.lastEventId,
-        data: event.data as string,
-      };
-      setEvents((current) => [...current, entry].slice(-12));
-    };
-    // ⚠️ `onmessage` only receives unnamed events: the live stream names each by its topic.
-    source.onmessage = receive;
-    for (const topic of topicsOf(url)) source.addEventListener(topic, receive);
+    const abort = new AbortController();
+    abortRef.current = abort;
+    try {
+      const exchange = await fetch(`${base}/api/live-tokens`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authorization(apiKey) },
+        body: JSON.stringify({ path: new URL(url).pathname, topics: topicsOf(url) }),
+        signal: abort.signal,
+      });
+      if (!exchange.ok) {
+        setRefused(`${exchange.status} ${exchange.statusText}`.trim());
+        setState("off");
+        return;
+      }
+      const { accessToken } = (await exchange.json()) as { accessToken: string };
+      const response = await fetch(url, {
+        headers: { Accept: "text/event-stream", Authorization: `Bearer ${accessToken}` },
+        signal: abort.signal,
+      });
+      if (!response.ok || response.body === null) {
+        setRefused(`${response.status} ${response.statusText}`.trim());
+        setState("off");
+        return;
+      }
+      setState("on");
+      const parser = createSseParser((event) => {
+        const entry = { at: new Date().toISOString().slice(11, 19), id: event.id ?? "", data: event.data };
+        setEvents((current) => [...current, entry].slice(-12));
+      });
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parser.push(value);
+      }
+    } catch {
+      // Stopped, or the network dropped: either way the stream is over.
+    }
+    if (abortRef.current === abort) setState("off");
   };
 
-  useEffect(() => () => sourceRef.current?.close(), []);
+  useEffect(() => () => abortRef.current?.abort(), []);
 
-  return { state, events, start, stop };
+  return { state, events, refused, start, stop };
 }
 
 export function EndpointDetail({
@@ -208,6 +247,8 @@ export function EndpointDetail({
   onValues,
   result,
   onResult,
+  apiKey,
+  onApiKey,
 }: {
   endpoint: Endpoint;
   base: string;
@@ -215,19 +256,22 @@ export function EndpointDetail({
   onValues: (values: ParamValues) => void;
   result: SendResult | undefined;
   onResult: (result: SendResult) => void;
+  apiKey: string;
+  onApiKey: (apiKey: string) => void;
 }) {
   const t = useTranslations("Developers");
   const [tab, setTab] = useState<"response" | "schema">("response");
   const [loading, setLoading] = useState(false);
   const url = urlOf(base, endpoint, values);
   const missing = missingOf(endpoint, values);
-  const stream = useStream(url);
+  const stream = useStream(base, url, apiKey);
+  const [body, setBody] = useState(endpoint.body);
 
   const sendWith = async (next: ParamValues) => {
     onValues(next);
     setTab("response");
     setLoading(true);
-    onResult(await send(urlOf(base, endpoint, next)));
+    onResult(await send(urlOf(base, endpoint, next), apiKey, body));
     setLoading(false);
   };
 
@@ -291,6 +335,39 @@ export function EndpointDetail({
         </div>
       </div>
 
+      {body !== null && (
+        <div className="mt-6 border-t border-dash-rule pt-4">
+          <label htmlFor="ep-body" className={LABEL}>
+            {t("request.body")}
+          </label>
+          <textarea
+            id="ep-body"
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+            spellCheck={false}
+            rows={body.split("\n").length}
+            className="mt-2 w-full border border-dash-rule bg-dash-bg px-3 py-2 font-dash-mono text-[12px] text-dash-ink"
+          />
+        </div>
+      )}
+
+      <div className="mt-6 border-t border-dash-rule pt-4">
+        <label htmlFor="ep-key" className={LABEL}>
+          {t("key.label")}
+        </label>
+        <input
+          id="ep-key"
+          type="password"
+          autoComplete="off"
+          spellCheck={false}
+          value={apiKey}
+          onChange={(event) => onApiKey(event.target.value.trim())}
+          placeholder="yog_…"
+          className="mt-2 w-full max-w-[560px] border border-dash-rule bg-dash-bg px-3 py-2 font-dash-mono text-[12px] text-dash-ink"
+        />
+        <p className="mt-1.5 text-[12px] text-dash-ink-3">{t("key.hint")}</p>
+      </div>
+
       <div className="mt-5 flex flex-col gap-3 border border-dash-rule bg-dash-bg px-4 py-3.5">
         <div className="flex min-w-0 items-baseline gap-2.5">
           <span className="flex-none font-dash-mono text-[11px] font-semibold text-dash-up">
@@ -305,14 +382,14 @@ export function EndpointDetail({
             </span>
           )}
           <CopyButton
-            text={curlOf(url, endpoint.sse)}
+            text={curlOf(url, { sse: endpoint.sse, body, keyed: apiKey !== "" })}
             label={t("request.copyCurl")}
             copied={t("detail.copied")}
           />
           {endpoint.sse ? (
             <PrimaryButton
-              disabled={stream.state === "off" && missing.length > 0}
-              onClick={stream.state === "off" ? stream.start : stream.stop}
+              disabled={stream.state === "off" && (missing.length > 0 || apiKey === "")}
+              onClick={stream.state === "off" ? () => void stream.start() : stream.stop}
             >
               {stream.state === "off" ? t("request.listen") : t("request.stop")}
             </PrimaryButton>
@@ -409,7 +486,13 @@ export function EndpointDetail({
           >
             {stream.events.length === 0 && (
               <span className="text-dash-ink-3">
-                {stream.state === "off" ? t("stream.idle") : t("stream.waiting")}
+                {stream.refused
+                  ? t("stream.refused", { status: stream.refused })
+                  : stream.state !== "off"
+                    ? t("stream.waiting")
+                    : apiKey === ""
+                      ? t("stream.keyRequired")
+                      : t("stream.idle")}
               </span>
             )}
             {[...stream.events].reverse().map((event, i) => (

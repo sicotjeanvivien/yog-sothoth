@@ -2,44 +2,44 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { openLive, reopenDelayMs, type LiveHandlers } from "../live-connection";
 
-class FakeEventSource {
-  static readonly CONNECTING = 0;
-  static readonly OPEN = 1;
-  static readonly CLOSED = 2;
-  static instances: FakeEventSource[] = [];
+/** One `fetch` the connection made, answered by the test. */
+type Call = {
+  url: string;
+  authorization: string | null;
+  signal: AbortSignal;
+  answer: (response: Response) => void;
+  stream?: ReadableStreamDefaultController<Uint8Array>;
+};
 
-  readyState = FakeEventSource.CONNECTING;
-  onopen: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-  closed = false;
+let calls: Call[] = [];
+let issued = 0;
 
-  constructor(readonly url: string) {
-    FakeEventSource.instances.push(this);
-  }
+function fakeFetch(url: string, init: RequestInit): Promise<Response> {
+  return new Promise((resolve) => {
+    calls.push({
+      url,
+      authorization: new Headers(init.headers).get("authorization"),
+      signal: init.signal!,
+      answer: resolve,
+    });
+  });
+}
 
-  listeners = new Map<string, ((event: { data: string }) => void)[]>();
+/** A token per call, numbered, so two openings show two tokens. */
+const token = () => Promise.resolve(`token-${++issued}`);
 
-  addEventListener(topic: string, listener: (event: { data: string }) => void): void {
-    this.listeners.set(topic, [...(this.listeners.get(topic) ?? []), listener]);
-  }
+/** Answer `call` with an open stream. */
+function accept(call: Call): void {
+  const body = new ReadableStream<Uint8Array>({
+    start: (controller) => {
+      call.stream = controller;
+    },
+  });
+  call.answer(new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } }));
+}
 
-  emit(topic: string, data: string): void {
-    this.listeners.get(topic)?.forEach((listener) => listener({ data }));
-  }
-
-  close(): void {
-    this.closed = true;
-  }
-
-  open(): void {
-    this.readyState = FakeEventSource.OPEN;
-    this.onopen?.();
-  }
-
-  fail(readyState: number): void {
-    this.readyState = readyState;
-    this.onerror?.();
-  }
+function send(call: Call, text: string): void {
+  call.stream!.enqueue(new TextEncoder().encode(text));
 }
 
 const LIVE_URL = "http://api.test/api/live?topics=signals";
@@ -56,12 +56,14 @@ function handlers(): LiveHandlers & { reopens: number } {
   return h;
 }
 
-const sources = () => FakeEventSource.instances;
-const last = () => sources()[sources().length - 1]!;
+/** Let the connection's promises settle. */
+const settle = () => vi.advanceTimersByTimeAsync(0);
+const last = () => calls[calls.length - 1]!;
 
 beforeEach(() => {
-  FakeEventSource.instances = [];
-  vi.stubGlobal("EventSource", FakeEventSource);
+  calls = [];
+  issued = 0;
+  vi.stubGlobal("fetch", fakeFetch);
   vi.useFakeTimers();
   vi.spyOn(Math, "random").mockReturnValue(1);
 });
@@ -72,22 +74,68 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// Mutation: `onerror` never reopens — the page stays frozen until it is reloaded.
-describe("a refused connection", () => {
-  it("reopens on the same URL after the delay, and that opening fills the gap", () => {
-    const h = handlers();
-    openLive(LIVE_URL, ["signals"], h, false);
-    sources()[0]!.open();
-    sources()[0]!.fail(FakeEventSource.CLOSED);
+// Mutation: the token asked once and reused — the API refuses its second opening.
+it("opens with a live token in Authorization, a fresh one at each opening", async () => {
+  openLive(LIVE_URL, ["signals"], handlers(), false, token);
+  await settle();
+  expect(calls[0]!.url).toBe(LIVE_URL);
+  expect(calls[0]!.authorization).toBe("Bearer token-1");
 
-    vi.advanceTimersByTime(9_999);
-    expect(sources()).toHaveLength(1);
-    vi.advanceTimersByTime(1);
-    expect(sources()).toHaveLength(2);
+  accept(calls[0]!);
+  await settle();
+  calls[0]!.stream!.close();
+  await vi.advanceTimersByTimeAsync(10_000);
+
+  expect(calls).toHaveLength(2);
+  expect(calls[1]!.authorization).toBe("Bearer token-2");
+});
+
+// Mutation: a stream that ends is not reopened — the page stays frozen until it is reloaded.
+describe("a lost connection", () => {
+  it("reopens on the same URL after the delay, and that opening fills the gap", async () => {
+    const h = handlers();
+    openLive(LIVE_URL, ["signals"], h, false, token);
+    await settle();
+    accept(calls[0]!);
+    await settle();
+    calls[0]!.stream!.close();
+    await settle();
+
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(calls).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(calls).toHaveLength(2);
     expect(last().url).toBe(LIVE_URL);
 
-    last().open();
+    accept(last());
+    await settle();
     expect(h.reopens).toBe(1);
+  });
+
+  // Mutation: a refusal reopened at once — every tab hammers a full API.
+  it("waits the refusal's Retry-After when it is longer than the delay", async () => {
+    openLive(LIVE_URL, ["signals"], handlers(), false, token);
+    await settle();
+    calls[0]!.answer(new Response("full", { status: 503, headers: { "retry-after": "120" } }));
+    await settle();
+
+    await vi.advanceTimersByTimeAsync(119_999);
+    expect(calls).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(calls).toHaveLength(2);
+  });
+
+  // Mutation: a token refused by the dashboard's server stops the connection for good.
+  it("reopens when no token could be had", async () => {
+    let failing = true;
+    const flaky = () => (failing ? Promise.reject(new Error("down")) : token());
+    openLive(LIVE_URL, ["signals"], handlers(), false, flaky);
+    await settle();
+    expect(calls).toHaveLength(0);
+
+    failing = false;
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(calls).toHaveLength(1);
   });
 });
 
@@ -110,69 +158,80 @@ describe("the reopening delay", () => {
   });
 
   // Mutation: an opening does not reset the count — a later refusal waits as if the first ones had just happened.
-  it("starts over after an opening", () => {
-    openLive(LIVE_URL, ["signals"], handlers(), false);
-    sources()[0]!.fail(FakeEventSource.CLOSED);
-    vi.advanceTimersByTime(10_000);
-    sources()[1]!.fail(FakeEventSource.CLOSED);
-    vi.advanceTimersByTime(20_000);
-    expect(sources()).toHaveLength(3);
+  it("starts over after an opening", async () => {
+    openLive(LIVE_URL, ["signals"], handlers(), false, token);
+    await settle();
+    calls[0]!.answer(new Response("", { status: 503 }));
+    await vi.advanceTimersByTimeAsync(10_000);
+    calls[1]!.answer(new Response("", { status: 503 }));
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(calls).toHaveLength(3);
 
-    sources()[2]!.open();
-    sources()[2]!.fail(FakeEventSource.CLOSED);
-    vi.advanceTimersByTime(10_000);
-    expect(sources()).toHaveLength(4);
+    accept(calls[2]!);
+    await settle();
+    calls[2]!.stream!.close();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(calls).toHaveLength(4);
   });
 });
 
-// Mutation: reopen on every error — a second connection beside the one the browser is already retrying.
-it("leaves a CONNECTING error to the browser's own retry", () => {
-  openLive(LIVE_URL, ["signals"], handlers(), false);
-  sources()[0]!.open();
-  sources()[0]!.fail(FakeEventSource.CONNECTING);
-  vi.runAllTimers();
-  expect(sources()).toHaveLength(1);
+// Mutation: `close` leaves the request or the timer — an unmounted page, or the old topics, keep a connection.
+describe("close", () => {
+  it("aborts the open request", async () => {
+    const connection = openLive(LIVE_URL, ["signals"], handlers(), false, token);
+    await settle();
+    connection.close();
+    expect(calls[0]!.signal.aborted).toBe(true);
+  });
+
+  it("opens nothing once closed during the wait", async () => {
+    const connection = openLive(LIVE_URL, ["signals"], handlers(), false, token);
+    await settle();
+    calls[0]!.answer(new Response("", { status: 503 }));
+    await settle();
+    connection.close();
+    await vi.runAllTimersAsync();
+    expect(calls).toHaveLength(1);
+  });
 });
 
-// Mutation: `close` leaves the timer — an unmounted page, or the old topics, reconnect behind its back.
-it("opens nothing once closed during the wait", () => {
-  const connection = openLive(LIVE_URL, ["signals"], handlers(), false);
-  sources()[0]!.fail(FakeEventSource.CLOSED);
-  connection.close();
-  vi.runAllTimers();
-  expect(sources()).toHaveLength(1);
-  expect(sources()[0]!.closed).toBe(true);
-});
-
-// Mutations: a refusal before any opening counts as no loss — the signals rendered by the server are never refilled.
-it("counts a refusal before the first opening as a gap", () => {
+// Mutation: a refusal before any opening counts as no loss — the next connection would not mark the gap.
+it("counts a refusal before the first opening as a gap", async () => {
   const h = handlers();
-  const first = openLive(LIVE_URL, ["signals"], h, false);
-  sources()[0]!.fail(FakeEventSource.CLOSED);
-  vi.advanceTimersByTime(10_000);
-  last().open();
+  const first = openLive(LIVE_URL, ["signals"], h, false, token);
+  await settle();
+  calls[0]!.answer(new Response("", { status: 503 }));
+  await vi.advanceTimersByTimeAsync(10_000);
+  accept(last());
+  await settle();
   expect(h.reopens).toBe(1);
-
-  const second = openLive(LIVE_URL, ["signals"], handlers(), false);
-  last().fail(FakeEventSource.CLOSED);
-  expect(second.close()).toBe(true);
   first.close();
+
+  const second = openLive(LIVE_URL, ["signals"], handlers(), false, token);
+  await settle();
+  last().answer(new Response("", { status: 503 }));
+  await settle();
+  expect(second.close()).toBe(true);
 });
 
-// Mutation: `close` reports no gap after an opening — new topics would not refill what they missed.
-it("hands the gap to the next connection", () => {
-  const first = openLive(LIVE_URL, ["signals"], handlers(), false);
-  sources()[0]!.open();
+// Mutation: `close` reports no gap after an opening — the next connection would not mark it.
+it("hands the gap to the next connection", async () => {
+  const first = openLive(LIVE_URL, ["signals"], handlers(), false, token);
+  await settle();
+  accept(calls[0]!);
+  await settle();
   expect(first.close()).toBe(true);
 
   const h = handlers();
-  openLive(LIVE_URL, ["signals"], h, true);
-  last().open();
+  openLive(LIVE_URL, ["signals"], h, true, token);
+  await settle();
+  accept(last());
+  await settle();
   expect(h.reopens).toBe(1);
 });
 
-// Mutations: no listener per topic, the wrong topic handed on, no status — the feed falls silent or stays "reconnecting".
-it("hands each topic's parsed events on, and the status", () => {
+// Mutations: no dispatch per topic, the wrong topic handed on, no status — the feed falls silent or stays "reconnecting".
+it("hands each topic's parsed events on, and the status", async () => {
   const events: [string, unknown][] = [];
   const statuses: string[] = [];
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -185,14 +244,18 @@ it("hands each topic's parsed events on, and the status", () => {
       onReopen: () => {},
     },
     false,
+    token,
   );
-  const source = sources()[0]!;
-  source.open();
-  source.emit("signals", '{"id":1}');
-  source.emit("pool-creations", '{"id":2}');
-  source.emit("pool-creations", "not json");
-  source.emit("swaps", '{"id":3}');
-  source.fail(FakeEventSource.CONNECTING);
+  await settle();
+  const call = calls[0]!;
+  accept(call);
+  await settle();
+  send(call, 'event: signals\ndata: {"id":1}\n\n');
+  send(call, 'event: pool-creations\ndata: {"id":2}\n\nevent: pool-creations\ndata: not json\n\n');
+  send(call, 'event: swaps\ndata: {"id":3}\n\n: keep-alive\n\n');
+  await settle();
+  call.stream!.close();
+  await settle();
 
   expect(events).toEqual([
     ["signals", { id: 1 }],

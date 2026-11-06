@@ -1,6 +1,6 @@
 /**
- * The API contract read for the developers page: each operation, its parameters and the
- * fields of its 200 response.
+ * The API contract read for the developers page: each operation, its parameters, the example
+ * of its request body, and the fields of its 200 response.
  */
 
 export type Schema = {
@@ -17,6 +17,7 @@ export type Schema = {
   oneOf?: Schema[];
   anyOf?: Schema[];
   allOf?: Schema[];
+  example?: unknown;
 };
 
 type Parameter = {
@@ -32,6 +33,7 @@ type Operation = {
   summary?: string;
   description?: string;
   parameters?: Parameter[];
+  requestBody?: { content?: Record<string, { schema: Schema }> };
   responses: Record<
     string,
     { description?: string; content?: Record<string, { schema: Schema }> }
@@ -83,6 +85,7 @@ const FAMILY_OF_SEGMENT: Record<string, Family> = {
   signals: "signals",
   announcements: "announcements",
   live: "live",
+  "live-tokens": "live",
   protocols: "byProtocol",
   pools: "byPool",
   tokens: "byToken",
@@ -123,6 +126,8 @@ export type Endpoint = {
   summary: string | null;
   description: string | null;
   params: EndpointParam[];
+  /** The request body, as the examples of its fields write it; `null` for a `GET`. */
+  body: string | null;
   responseDescription: string | null;
   schemaName: string | null;
   contentType: string;
@@ -237,6 +242,17 @@ function fieldsOf(s: Schema, spec: OpenApi, prefix: string, depth: number): Resp
   });
 }
 
+/** A JSON body made of the examples of `op`'s request fields, or `null` without a body. */
+function bodyOf(op: Operation, spec: OpenApi): string | null {
+  const media = Object.values(op.requestBody?.content ?? {})[0];
+  if (!media) return null;
+  const object = objectOf(media.schema, spec);
+  const example = Object.fromEntries(
+    Object.entries(object?.properties ?? {}).map(([name, s]) => [name, s.example ?? null]),
+  );
+  return JSON.stringify(example, null, 2);
+}
+
 function paramOf(p: Parameter, spec: OpenApi): EndpointParam {
   const schema = resolve(unwrapNull(p.schema).schema, spec);
   return {
@@ -269,6 +285,7 @@ export function endpointsOf(spec: OpenApi): [Endpoint, ...Endpoint[]] {
         params: (op.parameters ?? [])
           .map((p) => paramOf(p, spec))
           .sort((a, b) => PARAM_ORDER[a.in] - PARAM_ORDER[b.in]),
+        body: bodyOf(op, spec),
         responseDescription: ok?.description ?? null,
         schemaName: schema?.$ref ? refName(schema.$ref) : schema ? typeLabel(schema, spec) : null,
         contentType,

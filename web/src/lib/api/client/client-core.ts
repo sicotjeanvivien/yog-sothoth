@@ -26,21 +26,29 @@ function formatZodIssues(error: z.ZodError): string[] {
   });
 }
 
+/** What a call adds to its `GET`: an `Authorization`, or a JSON body to `POST`. */
+export type RequestExtras = { authorization?: string; body?: unknown };
+
 /**
- * GETs an absolute URL and validates the body against `schema`.
+ * GETs an absolute URL, or POSTs `extras.body` to it, and validates the body against `schema`.
  * @throws ApiClientError on a timeout, a network failure, a non-2xx or a validation failure.
  */
 export async function apiGetWithUrl<T>(
   url: string,
   schema: z.ZodType<T>,
   timeoutMs: number,
+  extras: RequestExtras = {},
 ): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (extras.authorization !== undefined) headers["Authorization"] = extras.authorization;
+  if (extras.body !== undefined) headers["Content-Type"] = "application/json";
 
   let response: Response;
   try {
     response = await fetch(url, {
-      method: "GET",
-      headers: { Accept: "application/json" },
+      method: extras.body === undefined ? "GET" : "POST",
+      headers,
+      ...(extras.body === undefined ? {} : { body: JSON.stringify(extras.body) }),
       signal: AbortSignal.timeout(timeoutMs),
       cache: "no-store",
     });

@@ -240,6 +240,8 @@ services:
       API_BIND_ADDR: 0.0.0.0:5000
       API_CORS_ALLOWED_ORIGINS: ${API_CORS_ALLOWED_ORIGINS:-http://localhost:3000}
       API_LIVE_POLL_SECS: ${API_LIVE_POLL_SECS:-3}
+      # ⚠️ `:-`, not `:?`, as the web's key: unset, the API refuses to start, not compose.
+      API_LIVE_TOKEN_SECRET: ${API_LIVE_TOKEN_SECRET:-}
       RUST_LOG: ${RUST_LOG:-info,sqlx=warn}
       LOG_FORMAT: ${LOG_FORMAT:-text}
     entrypoint:
@@ -392,12 +394,16 @@ services:
         NEXT_PUBLIC_YOG_API_URL: ${NEXT_PUBLIC_YOG_API_URL:-http://localhost:5000}
     environment:
       NODE_ENV: production
-      # The URL Server Components call, inside the compose network. The name
-      # is the one web/src/lib/config/server-env.schema.ts reads — a test
+      # Where the server calls the API, with its key: inside the compose network,
+      # where the browser's localhost:5000 would be this container. The names
+      # are the ones web/src/lib/config/server-env.schema.ts reads — a test
       # (web/src/lib/config/__tests__/compose-env.test.ts) runs that schema
       # against this block, because a wrong name here is a 500 on every data
       # page and nothing else.
-      YOG_API_INTERNAL_URL: http://yog-api:5000
+      YOG_API_URL: http://yog-api:5000
+      # ⚠️ `:-`, not `:?`: a `:?` stops every compose command, the `compose run yog-migrate`
+      # that creates the key included. Unset, the web refuses its first data page instead.
+      YOG_API_KEY: ${YOG_API_KEY:-}
     ports:
       - "3000:3000"
     depends_on:

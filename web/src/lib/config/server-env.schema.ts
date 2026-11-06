@@ -8,14 +8,21 @@ import * as z from "zod";
 /** Only what server code reads, so a misconfiguration fails fast. */
 const ServerEnvSchema = z.object({
   /**
-   * yog-api's internal URL, for server-side code; never sent to the browser, which uses the
-   * public gateway. `http://yog-api:5000` in Docker, `http://127.0.0.1:5000` outside.
+   * The dashboard's API key, sent by server code as `Authorization: Bearer`; never in the
+   * browser. Issued by `yog-migrate create-api-key dashboard`.
    */
-  YOG_API_INTERNAL_URL: z
-    .url({ message: "YOG_API_INTERNAL_URL must be a valid URL" })
-    .refine((u) => !u.endsWith("/"), {
-      message: "YOG_API_INTERNAL_URL must not end with a trailing slash",
-    }),
+  YOG_API_KEY: z.string().regex(/^yog_[0-9a-f]{8}_[0-9a-f]{64}$/, {
+    message: "YOG_API_KEY must be an API key (yog-migrate create-api-key)",
+  }),
+
+  /**
+   * Where server code calls the API, with the key; unset, the browser's `NEXT_PUBLIC_YOG_API_URL`.
+   * ⚠️ Set in the dev compose only, where `localhost` is the web container itself.
+   */
+  YOG_API_URL: z
+    .url({ message: "YOG_API_URL must be a valid URL" })
+    .refine((u) => !u.endsWith("/"), { message: "YOG_API_URL must not end with a trailing slash" })
+    .optional(),
 
   /** Timeout of server-side yog-api calls, in ms; 5000 by default. */
   YOG_API_TIMEOUT_MS: z.coerce

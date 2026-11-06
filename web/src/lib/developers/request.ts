@@ -25,9 +25,30 @@ export function topicsOf(url: string): string[] {
   return topics.split(",").filter((topic) => topic !== "");
 }
 
-/** ⚠️ Single quotes: a `!` that `encodeURIComponent` leaves would expand inside double ones. */
-export function curlOf(url: string, sse: boolean): string {
-  return sse ? `curl -N -H 'Accept: text/event-stream' '${url}'` : `curl -s '${url}'`;
+/** `json` on one line; as typed while it does not parse yet. */
+function compact(json: string): string {
+  try {
+    return JSON.stringify(JSON.parse(json));
+  } catch {
+    return json;
+  }
+}
+
+/** How the page sends a request: `keyed` when the visitor gave a key. */
+export type CurlRequest = { sse: boolean; body: string | null; keyed: boolean };
+
+/** ⚠️ Single quotes around the URL and the body, where a `!` would expand; double ones around
+ *  `Authorization`, so that the shell reads the visitor's variable: the key itself is never written. */
+export function curlOf(url: string, request: CurlRequest): string {
+  if (request.sse) {
+    return `curl -N -H 'Accept: text/event-stream' -H "Authorization: Bearer $YOG_LIVE_TOKEN" '${url}'`;
+  }
+  const key = request.keyed || request.body !== null ? ` -H "Authorization: Bearer $YOG_API_KEY"` : "";
+  if (request.body !== null) {
+    const body = compact(request.body).replaceAll("'", "'\\''");
+    return `curl -s -X POST${key} -H 'Content-Type: application/json' -d '${body}' '${url}'`;
+  }
+  return `curl -s${key} '${url}'`;
 }
 
 /**

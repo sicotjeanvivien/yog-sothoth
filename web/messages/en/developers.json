@@ -65,7 +65,8 @@
       "send": "Send",
       "sending": "Sending…",
       "listen": "Listen to the stream",
-      "stop": "Stop"
+      "stop": "Stop",
+      "body": "Request body"
     },
     "tabs": {
       "label": "Result",
@@ -89,7 +90,9 @@
       "events": "{count, plural, =0 {0 events} one {# event} other {# events}}",
       "log": "Events received",
       "idle": "Click “Listen to the stream” to receive new signals live.",
-      "waiting": "Connected. Only new signals arrive here; the history comes from GET /api/signals."
+      "waiting": "Connected. Only new signals arrive here; the history comes from GET /api/signals.",
+      "refused": "Refused: {status}.",
+      "keyRequired": "The live stream opens with a key: enter yours above."
     },
     "schema": {
       "returns": "Type returned:",
@@ -101,6 +104,10 @@
       "legend": "field always present in the response.",
       "errorTitle": "On error",
       "error": "Body application/problem+json (RFC 9457): type, title, status, detail. Clients rely on title."
+    },
+    "key": {
+      "label": "API key",
+      "hint": "Kept in this tab only, sent as Authorization: Bearer. Without a key, only the open routes answer; the live stream needs one."
     }
   }
 }

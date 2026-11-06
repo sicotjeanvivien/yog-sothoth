@@ -6,9 +6,11 @@
 import { describe, expect, it } from "vitest";
 import { parseServerEnv } from "../server-env.schema";
 
+const KEY = "yog_01020304_abababababababababababababababababababababababababababababababab";
+
 function validInput(): Record<string, string | undefined> {
   return {
-    YOG_API_INTERNAL_URL: "http://127.0.0.1:3001",
+    YOG_API_KEY: KEY,
   };
 }
 
@@ -16,7 +18,7 @@ describe("parseServerEnv — happy path", () => {
   it("parses a minimal valid input and applies the timeout default", () => {
     const env = parseServerEnv(validInput());
 
-    expect(env.YOG_API_INTERNAL_URL).toBe("http://127.0.0.1:3001");
+    expect(env.YOG_API_KEY).toBe(KEY);
     expect(env.YOG_API_TIMEOUT_MS).toBe(5000);
   });
 
@@ -29,30 +31,19 @@ describe("parseServerEnv — happy path", () => {
     expect(env.YOG_API_TIMEOUT_MS).toBe(12000);
   });
 
-  it("accepts an https URL", () => {
-    const env = parseServerEnv({
-      YOG_API_INTERNAL_URL: "https://api.yog-sothoth.fr",
-    });
-
-    expect(env.YOG_API_INTERNAL_URL).toBe("https://api.yog-sothoth.fr");
-  });
 });
 
 describe("parseServerEnv — failure modes", () => {
-  it("rejects a missing base URL", () => {
-    expect(() => parseServerEnv({})).toThrow(/YOG_API_INTERNAL_URL/);
+  it("rejects a missing key", () => {
+    expect(() => parseServerEnv({})).toThrow(/YOG_API_KEY/);
   });
 
-  it("rejects a base URL that is not a URL", () => {
-    expect(() =>
-      parseServerEnv({ YOG_API_INTERNAL_URL: "not-a-url" }),
-    ).toThrow(/YOG_API_INTERNAL_URL must be a valid URL/);
-  });
-
-  it("rejects a base URL that ends with a trailing slash", () => {
-    expect(() =>
-      parseServerEnv({ YOG_API_INTERNAL_URL: "http://127.0.0.1:3001/" }),
-    ).toThrow(/trailing slash/);
+  // Mutation: any string taken as the key — a typo would only show as 401s at the first page.
+  it("rejects a key that is not an API key", () => {
+    expect(() => parseServerEnv({ YOG_API_KEY: "secret" })).toThrow(
+      /YOG_API_KEY must be an API key/,
+    );
+    expect(() => parseServerEnv({ YOG_API_KEY: KEY.toUpperCase() })).toThrow(/YOG_API_KEY/);
   });
 
   it("rejects a negative timeout", () => {
@@ -86,7 +77,7 @@ describe("parseServerEnv — failure modes", () => {
     let caught: unknown = null;
     try {
       parseServerEnv({
-        YOG_API_INTERNAL_URL: "not-a-url",
+        YOG_API_KEY: "secret",
         YOG_API_TIMEOUT_MS: "-1",
       });
     } catch (e) {
@@ -95,7 +86,7 @@ describe("parseServerEnv — failure modes", () => {
 
     expect(caught).toBeInstanceOf(Error);
     const message = (caught as Error).message;
-    expect(message).toMatch(/YOG_API_INTERNAL_URL/);
+    expect(message).toMatch(/YOG_API_KEY/);
     expect(message).toMatch(/YOG_API_TIMEOUT_MS/);
   });
 });

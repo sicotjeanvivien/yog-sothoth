@@ -2,7 +2,7 @@
 
 /**
  * The page's one connection to `/api/live`: every block that streams subscribes to its topic here
- * instead of opening its own `EventSource`.
+ * instead of opening its own connection.
  */
 
 import {
@@ -19,7 +19,8 @@ import {
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
 import { loadClientEnv } from "@/lib/config/client-env.schema";
 import { openLive, type StreamStatus } from "@/lib/live/live-connection";
-import { livePath, type LiveTopic } from "@/lib/live/live-topics";
+import { requestLiveToken } from "@/lib/live/live-token";
+import { livePath, liveScopePath, type LiveTopic } from "@/lib/live/live-topics";
 
 type Handler = (data: unknown) => void;
 
@@ -48,26 +49,29 @@ export function LiveProvider({
   const reopenHandlers = useRef(new Set<() => void>());
   const missed = useRef(false);
   const path = livePath(topics, protocol);
+  const scopePath = liveScopePath(protocol);
   const topicsKey = topics.join(",");
 
   useEffect(() => {
     const { NEXT_PUBLIC_YOG_API_URL } = loadClientEnv();
+    const opened = topicsKey.split(",") as LiveTopic[];
     const connection = openLive(
       `${NEXT_PUBLIC_YOG_API_URL}${path}`,
-      topicsKey.split(",") as LiveTopic[],
+      opened,
       {
         onStatus: setStatus,
         onEvent: (topic, data) => handlers.current.get(topic)?.forEach((handler) => handler(data)),
         onReopen: () => reopenHandlers.current.forEach((handler) => handler()),
       },
       missed.current,
+      () => requestLiveToken(scopePath, opened),
     );
 
     return () => {
       missed.current = connection.close();
       setStatus("connecting");
     };
-  }, [path, topicsKey]);
+  }, [path, scopePath, topicsKey]);
 
   const subscribe = useCallback((topic: LiveTopic, handler: Handler) => {
     const set = handlers.current.get(topic) ?? new Set<Handler>();

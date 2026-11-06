@@ -28,8 +28,8 @@ impl ApiMetrics {
         );
         describe_counter!(
             UNAUTHORIZED,
-            "Requests refused for their credential, labelled by reason: scheme, \
-             malformed or unknown"
+            "Requests refused for their credential, labelled by reason: an API key's \
+             (missing, scheme, malformed, unknown) or a live token's (key_on_live, token_*)"
         );
         describe_counter!(
             KEY_RING_RELOADS,

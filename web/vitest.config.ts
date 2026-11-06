@@ -29,6 +29,12 @@ export default defineConfig({
         replacement: `${resolve(__dirname, "messages")}/`,
       },
       { find: "@", replacement: resolve(__dirname, "src") },
+      // ⚠️ The marker's own no-op, as Next resolves it on the server: a test has no client
+      // boundary to guard, and `next build` still fails a client import of a server module.
+      {
+        find: /^server-only$/,
+        replacement: resolve(__dirname, "node_modules/server-only/empty.js"),
+      },
     ],
   },
 });

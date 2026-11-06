@@ -65,7 +65,8 @@
       "send": "Envoyer",
       "sending": "Envoi…",
       "listen": "Écouter le flux",
-      "stop": "Arrêter"
+      "stop": "Arrêter",
+      "body": "Corps de la requête"
     },
     "tabs": {
       "label": "Résultat",
@@ -89,7 +90,9 @@
       "events": "{count, plural, =0 {0 événement} one {# événement} other {# événements}}",
       "log": "Événements reçus",
       "idle": "Cliquez sur « Écouter le flux » pour recevoir les nouveaux signaux en direct.",
-      "waiting": "Connecté. Seuls les nouveaux signaux arrivent ici ; l'historique vient de GET /api/signals."
+      "waiting": "Connecté. Seuls les nouveaux signaux arrivent ici ; l'historique vient de GET /api/signals.",
+      "refused": "Refusé : {status}.",
+      "keyRequired": "Le direct s’ouvre avec une clé : saisissez la vôtre ci-dessus."
     },
     "schema": {
       "returns": "Type renvoyé :",
@@ -101,6 +104,10 @@
       "legend": "champ toujours présent dans la réponse.",
       "errorTitle": "En cas d'erreur",
       "error": "Corps application/problem+json (RFC 9457) : type, title, status, detail. Les clients se basent sur title."
+    },
+    "key": {
+      "label": "Clé d’API",
+      "hint": "Gardée dans cet onglet seulement, envoyée en Authorization: Bearer. Sans clé, seules les routes ouvertes répondent ; le direct en demande une."
     }
   }
 }

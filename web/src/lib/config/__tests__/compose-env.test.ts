@@ -20,6 +20,21 @@ interface WebService {
   build?: { args?: Record<string, string> };
 }
 
+/** A value of the server's `.env`, where the compose interpolates one (`${YOG_API_KEY:?…}`). */
+const FROM_DOT_ENV: Record<string, string> = {
+  YOG_API_KEY: `yog_01020304_${"ab".repeat(32)}`,
+};
+
+/** `environment` as the container receives it, an interpolated value read from the `.env`. */
+function resolved(environment: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(environment).map(([name, value]) => [
+      name,
+      value.startsWith("${") ? (FROM_DOT_ENV[name] ?? value) : value,
+    ]),
+  );
+}
+
 function webService(): WebService {
   const compose = parse(readRepoFile("docker-compose.yml"));
   return compose.services["yog-web"];
@@ -27,7 +42,7 @@ function webService(): WebService {
 
 describe("docker-compose.yml — the yog-web service", () => {
   it("gives the server every variable its schema requires, under that name", () => {
-    const environment = webService().environment ?? {};
+    const environment = resolved(webService().environment ?? {});
 
     expect(() => parseServerEnv(environment)).not.toThrow();
   });

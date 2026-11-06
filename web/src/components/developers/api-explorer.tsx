@@ -28,6 +28,8 @@ export function ApiExplorer({
     () => new Set(FAMILIES.filter((f) => f !== endpoints[0].family)),
   );
   const [listOpen, setListOpen] = useState(false);
+  // ⚠️ Held in this component's state only: never in storage, gone with the tab.
+  const [apiKey, setApiKey] = useState("");
 
   const endpoint = endpoints.find((e) => e.id === selected) ?? endpoints[0];
 
@@ -69,6 +71,8 @@ export function ApiExplorer({
         onValues={(next) => setValues((all) => ({ ...all, [endpoint.id]: next }))}
         result={results[endpoint.id]}
         onResult={(result) => setResults((all) => ({ ...all, [endpoint.id]: result }))}
+        apiKey={apiKey}
+        onApiKey={setApiKey}
       />
     </div>
   );

@@ -38,7 +38,8 @@ api/src/
 │   ├── live/event_source.rs   ← EventSource, one table of an event collection
 │   ├── cache.rs           ← SharedCache (moka) and its named CachePolicy per use
 │   ├── auth/key_ring.rs   ← KeyRing, every active API key in memory
-│   ├── auth/credential.rs ← identify(), the client an `Authorization` value names, or Unauthorized
+│   ├── auth/credential.rs ← identify(), identify_live(): the client an `Authorization` value names, or Unauthorized
+│   ├── auth/live_token.rs ← LiveTokens, the HS256 live tokens signed and opened once (auth/consumed.rs)
 │   ├── metrics.rs         ← the Prometheus series, served on :9000
 │   ├── pool_pairs.rs      ← PoolPairs, the token pair of a batch's pools in two reads at most; Paired
 │   ├── enriched_token.rs  ← one token side of a pool, identity only
@@ -53,7 +54,8 @@ api/src/
 │   ├── middleware.rs      ← CORS, security headers, request-id tracing,
 │   │                        capacity bounds (middleware/capacity.rs), every
 │   │                        error as Problem Details (middleware/problem_details.rs),
-│   │                        who calls (middleware/authentication.rs)
+│   │                        who calls (middleware/authentication.rs; the live
+│   │                        stream's, middleware/live_authentication.rs)
 │   ├── state.rs           ← AppState — what every handler reads through `State`
 │   └── error.rs           ← ApiError, IntoResponse (RFC 9457, 503 + Retry-After)
 ├── testing.rs             ← test-only: fixtures and repository mocks
@@ -127,7 +129,8 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/ingestion` | Our ingestion's freshness (`live` / `delayed` / `stale`) and its last indexed event |
 | `GET` | `/api/windows` | Every window, the shortest first: its bounds, `open`, `opensAt` and `late`, without reading a measure over it |
 | `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` filter); each item embeds its pool's token pair (`tokenA`/`tokenB`, `EmbeddedTokenResponse`), says what its value counts (`valueUnit`) and, on a flow imbalance, which token its swaps mostly take from the pool (`leansToward`) |
-| `GET` | `/api/live?topics=signals` | SSE: the new items of the topics named, every protocol (see [The live stream](#the-live-stream)) |
+| `POST` | `/api/live-tokens` | Against an API key, a live token for the stream the body names (`path`, `topics`): `accessToken`, `tokenType` (`Bearer`), `expiresIn` (30) — the shape of OAuth 2.0's client credentials grant |
+| `GET` | `/api/live?topics=signals` | SSE, opened by a live token: the new items of the topics named, every protocol (see [The live stream](#the-live-stream)) |
 | `GET` | `/api/live/protocols/{protocol}?topics=signals` | The same, the protocol's only |
 | `GET` | `/api/protocols` | A page of every protocol of the domain, in the domain's order, and `poolsSeen` over all of them: observed by this build or not, pools seen — the catalogue, live; forward-only cursor |
 | `GET` | `/api/protocols/{protocol}` | The protocol's entry of the catalogue |
@@ -209,7 +212,8 @@ at the end of this section.
      `signals`;
    - **service resources**, the state and the messages of the service: `network` and
      `ingestion`, singletons each at `/api/<singleton>`, `windows`, the closed list of the windows, unpaginated,
-     and `announcements`.
+     `announcements`, and `live-tokens`, the one created rather than read (`POST`): a token that
+     opens one stream of `/api/live` once ([Authentication](#authentication)).
 
    A name says what is observed, never an image or a category (`activity`, `stats`,
    `metrics`, `analytics`). An on-chain collection takes the name of the on-chain event
@@ -398,6 +402,9 @@ of its collection (rule 5). `/api/protocols/meteora_damm_v2/signals` is followed
 `/api/live/protocols/meteora_damm_v2?topics=signals`. A topic adds a name to `topics`; a
 route is added only for a new kind of entity.
 
+- **It opens with a live token only**, `Authorization: Bearer <token>` from
+  `POST /api/live-tokens`; an API key is refused here (`401`), as no token is
+  ([Authentication](#authentication)). One opening spends the token.
 - **One connection carries every topic it names**, and takes one of the `SSE_MAX_STREAMS`
   (200) slots whatever their number; the next one is refused with `503`. See
   [Capacity bounds](#capacity-bounds).
@@ -549,8 +556,32 @@ hash opens nothing without its key.
 
   The `401` reads the same whatever the reason: it does not tell a revoked key
   from a forged one. The reason is only counted.
-- **Nothing refuses an anonymous call yet.** They are counted, by route, so
-  that who calls the API without a key is known before it is closed.
+- **Nothing refuses an anonymous request yet**, but the live stream. They are
+  counted, by route, so that who calls the API without a key is known before it
+  is closed.
+
+**The live token** opens `/api/live`, which takes no key: a browser cannot hold
+one, and the stream's slots are counted. A client asks for one with its key —
+`POST /api/live-tokens`, `{"path": "/api/live/protocols/meteora_damm_v2",
+"topics": ["signals"]}` — just before it opens the stream, and again before each
+reopening.
+
+- **`LiveTokens`** (`application/auth/live_token.rs`) signs it as an HS256 JWT
+  with `API_LIVE_TOKEN_SECRET`: `sub` the client, `path` and `topics` the
+  stream, `jti` 128 random bits, `exp` 30 s after `iat`, fixed. One header is
+  accepted, compared as text: `alg` is never read from a token. A JWT rather
+  than an id kept in memory, so that a token survives a restart.
+- **It opens once.** The ids opened are kept until their token expires
+  (`application/auth/consumed.rs`), so the registry holds no more than 30 s of
+  tokens. They are lost at a restart: during the 30 s after one, a token
+  already spent opens again.
+- **It opens its stream only**: the path exactly, its topics or fewer. The scope
+  is checked before the id is spent, so a token tried elsewhere still opens its
+  own.
+- **`authenticate_live`** (`http/middleware/live_authentication.rs`) is the live
+  routes' route layer, in place of `authenticate`: the token is checked at the
+  opening, and a stream open lives past its expiry. The opening is counted under
+  the token's client.
 
 The series, on `:9000/metrics` (host-mapped to 9004 in dev, read through
 `observe.sh` in production):
@@ -558,7 +589,7 @@ The series, on `:9000/metrics` (host-mapped to 9004 in dev, read through
 | Series | Labels |
 |---|---|
 | `yog_api_requests_total` | `client` — the client's name, or `anonymous`; `route` — the route template (`/api/pools/{pool}`) |
-| `yog_api_unauthorized_total` | `reason` — `scheme`, `malformed` or `unknown` |
+| `yog_api_unauthorized_total` | `reason` — `missing` (no `Authorization` on the live stream or a live token asked without a key), `scheme`, `malformed`, `unknown`; on the live stream, `key_on_live`, `token_malformed`, `token_signature`, `token_expired`, `token_used`, `token_scope` |
 | `yog_api_key_ring_reloads_total` | `outcome` — `reloaded` or `failed` |
 
 ## Error responses
@@ -609,13 +640,18 @@ API_BIND_ADDR=0.0.0.0:5000
 API_CORS_ALLOWED_ORIGINS=http://localhost:3000
 API_LIVE_POLL_SECS=3
 API_METRICS_ADDR=127.0.0.1:9004   # unset: 0.0.0.0:9000, the daemons' port
+API_LIVE_TOKEN_SECRET=...         # 32 characters at least: openssl rand -hex 32
 ```
 
 CORS is locked to the configured dashboard origins — the browser calls this
 API directly (there is no BFF in front; see [`web/README.md`](../../web/README.md)).
 The metrics listen on `API_METRICS_ADDR`, `0.0.0.0:9000` when unset, as the
 daemons' in their containers; a native run sets it, since the compose daemons
-publish `127.0.0.1:9000` on the host.
+publish `127.0.0.1:9000` on the host. `API_LIVE_TOKEN_SECRET` signs the live
+tokens; shorter than 32 characters, the API refuses to start, and the refusal
+says its length, never it. CORS admits `GET`, `POST` and `Authorization`: the
+developers page sends a visitor's key from their browser, and exchanges it for
+a live token.
 
 ## Run
 

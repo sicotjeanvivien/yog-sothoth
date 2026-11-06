@@ -40,12 +40,28 @@ describe("topicsOf", () => {
 });
 
 describe("curlOf", () => {
-  // Mutations: the stream's curl without `-N`, which buffers; double quotes, where `!` expands.
-  it("streams the events unbuffered, the URL single-quoted", () => {
-    expect(curlOf("https://x/api/live?topics=signals", true)).toBe(
-      "curl -N -H 'Accept: text/event-stream' 'https://x/api/live?topics=signals'",
+  const rest = { sse: false, body: null, keyed: false };
+
+  // Mutations: the stream's curl without `-N`, which buffers, or without its token.
+  it("streams the events unbuffered, with a live token, the URL single-quoted", () => {
+    expect(curlOf("https://x/api/live?topics=signals", { ...rest, sse: true })).toBe(
+      `curl -N -H 'Accept: text/event-stream' -H "Authorization: Bearer $YOG_LIVE_TOKEN" 'https://x/api/live?topics=signals'`,
     );
-    expect(curlOf("https://x/api/swaps", false)).toBe("curl -s 'https://x/api/swaps'");
+  });
+
+  // Mutation: the key written into the command — copied, it would land in a shell history or a ticket.
+  it("names the key by a variable, and only when one was given", () => {
+    expect(curlOf("https://x/api/swaps", rest)).toBe("curl -s 'https://x/api/swaps'");
+    expect(curlOf("https://x/api/swaps", { ...rest, keyed: true })).toBe(
+      `curl -s -H "Authorization: Bearer $YOG_API_KEY" 'https://x/api/swaps'`,
+    );
+  });
+
+  // Mutation: the body left out, or quoted so that the shell reads into it.
+  it("POSTs the body, compacted and single-quoted, with the key it needs", () => {
+    expect(curlOf("https://x/api/live-tokens", { ...rest, body: '{\n  "path": "/api/live"\n}' })).toBe(
+      `curl -s -X POST -H "Authorization: Bearer $YOG_API_KEY" -H 'Content-Type: application/json' -d '{"path":"/api/live"}' 'https://x/api/live-tokens'`,
+    );
   });
 });
 

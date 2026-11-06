@@ -27,7 +27,11 @@ export function pageTopics(advanced: boolean): readonly LiveTopic[] {
 }
 
 /** Every protocol's stream, `/api/live`, or one protocol's, under `/api/live/protocols/{protocol}`. */
+export function liveScopePath(protocol?: ProtocolResponse): string {
+  return protocol === undefined ? "/api/live" : `/api/live/protocols/${protocol}`;
+}
+
+/** The stream's path and its `topics`, as it is opened. */
 export function livePath(topics: readonly LiveTopic[], protocol?: ProtocolResponse): string {
-  const scope = protocol === undefined ? "/api/live" : `/api/live/protocols/${protocol}`;
-  return `${scope}?topics=${topics.join(",")}`;
+  return `${liveScopePath(protocol)}?topics=${topics.join(",")}`;
 }

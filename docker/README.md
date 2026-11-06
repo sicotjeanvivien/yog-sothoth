@@ -214,6 +214,16 @@ nowhere else. A revocation reaches `yog-api` at its next reread of the keys,
 every 10 s, for the requests that follow; a live stream already open is not cut. What a key is and how
 the api reads it: [`crates/api/README.md`](../crates/api/README.md#authentication).
 
+**The dashboard is a client too.** Its key, issued as above for the client
+`dashboard`, goes in the server's `.env` as `YOG_API_KEY`; `yog-web` calls
+`https://$YOG_API_DOMAIN` with it, as any client, and exchanges it for the
+live tokens its pages open the stream with. The API signs those tokens with
+`API_LIVE_TOKEN_SECRET`, 32 characters at least (`openssl rand -hex 32`), also
+in the `.env`; changing it voids the tokens of the last 30 s, nothing more.
+Neither is required by the compose, which would then refuse the `compose run`
+that creates the key: unset, `yog-api` refuses to start, and `yog-web` refuses
+its data pages.
+
 ## Avant de déployer
 
 Every pull request says, under **Avant de déployer** (the section of

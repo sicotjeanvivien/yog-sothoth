@@ -202,6 +202,9 @@ services:
   yog-web:
     image: yog-web:prod
     build: !reset null
+    # The public address, as any client: the dashboard has no way in the others lack.
+    environment:
+      YOG_API_URL: https://${YOG_API_DOMAIN:?set it in the server's .env (e.g. api.yog-scope.xyz)}
     ports: !reset []
     networks: [default, edge]
     mem_limit: 128m
