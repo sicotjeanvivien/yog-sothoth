@@ -210,7 +210,8 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full \
 ```
 
 The key is printed once, on stdout: hand it to its client then, it is stored
-nowhere else. A revocation reaches `yog-api` within 10 s. What a key is and how
+nowhere else. A revocation reaches `yog-api` at its next reread of the keys,
+every 10 s, for the requests that follow; a live stream already open is not cut. What a key is and how
 the api reads it: [`crates/api/README.md`](../crates/api/README.md#authentication).
 
 ## Avant de déployer

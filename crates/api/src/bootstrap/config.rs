@@ -2,15 +2,24 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use axum::http::HeaderValue;
-use yog_bootstrap::{ConfigError, SecretUrl, duration_var, required, required_secret_url};
+use yog_bootstrap::{
+    ConfigError, SecretUrl, duration_var, optional, required, required_secret_url,
+};
 
 /// How often each poller of `/api/live` reads its table, in seconds (`API_LIVE_POLL_SECS`).
 const DEFAULT_LIVE_POLL_SECS: u64 = 3;
+
+/// Where the metrics listen without `API_METRICS_ADDR`: the daemons' port, in their containers.
+const DEFAULT_METRICS_ADDR: SocketAddr =
+    SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 9000);
 
 #[derive(Clone)]
 pub(crate) struct Config {
     pub(crate) database_url: SecretUrl,
     pub(crate) bind_addr: SocketAddr,
+    /// Where the Prometheus exporter listens.
+    /// ⚠️ Set for a native run: the compose daemons publish `127.0.0.1:9000` on the host.
+    pub(crate) metrics_addr: SocketAddr,
     /// Browser origins allowed to call the API: the dashboard's must be listed.
     pub(crate) cors_allowed_origins: Vec<HeaderValue>,
     /// Cadence of the pollers feeding `/api/live`.
@@ -34,6 +43,7 @@ impl Config {
         Ok(Self {
             database_url: required_secret_url("DATABASE_URL_API")?,
             bind_addr,
+            metrics_addr: parse_metrics_addr(optional("API_METRICS_ADDR"))?,
             cors_allowed_origins,
             live_poll: Duration::from_secs(duration_var(
                 "API_LIVE_POLL_SECS",
@@ -41,6 +51,17 @@ impl Config {
             )?),
         })
     }
+}
+
+/// Parses `API_METRICS_ADDR`; absent is [`DEFAULT_METRICS_ADDR`].
+fn parse_metrics_addr(raw: Option<String>) -> Result<SocketAddr, ConfigError> {
+    raw.map_or(Ok(DEFAULT_METRICS_ADDR), |raw| {
+        raw.parse().map_err(|_| ConfigError::InvalidValue {
+            key: "API_METRICS_ADDR".to_string(),
+            value: raw,
+            expected: "a host:port socket address (e.g. 127.0.0.1:9004)",
+        })
+    })
 }
 
 /// Parses `API_CORS_ALLOWED_ORIGINS`: full origins, comma-separated, blanks skipped. An empty

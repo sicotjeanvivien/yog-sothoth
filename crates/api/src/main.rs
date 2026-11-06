@@ -15,10 +15,10 @@ async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     yog_bootstrap::init_tracing();
 
-    init_metrics().inspect_err(|e| error!(error = ?e, "failed to install the metrics exporter"))?;
-
     let config = bootstrap::Config::load()
         .inspect_err(|e| error!(error = ?e, "failed to load configuration"))?;
+    init_metrics(config.metrics_addr)
+        .inspect_err(|e| error!(error = ?e, "failed to install the metrics exporter"))?;
 
     // ⚠️ Under `docker compose stop` this process is PID 1: without a SIGTERM handler it
     // ignores the signal and Docker kills it ten seconds later.
@@ -43,10 +43,10 @@ async fn main() -> anyhow::Result<()> {
         .inspect_err(|e| error!(error = ?e, "fatal error in the API"))
 }
 
-/// Prometheus on `:9000`, as the daemons: `observe.sh` reads it through the compose network.
-fn init_metrics() -> anyhow::Result<()> {
+/// Prometheus on `addr`, `:9000` in a container as the daemons: `observe.sh` reads it there.
+fn init_metrics(addr: std::net::SocketAddr) -> anyhow::Result<()> {
     PrometheusBuilder::new()
-        .with_http_listener(([0, 0, 0, 0], 9000))
+        .with_http_listener(addr)
         .install()
         .map_err(|e| anyhow::anyhow!("failed to install Prometheus exporter: {e}"))?;
     application::metrics::ApiMetrics::register_descriptions();

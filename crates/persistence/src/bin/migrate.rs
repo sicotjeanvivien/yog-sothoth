@@ -218,10 +218,16 @@ async fn list_api_keys() -> Result<()> {
     Ok(())
 }
 
-/// The subcommand's argument, which it cannot do without.
+/// The subcommand's one argument. ⚠️ A word too many is refused: `create-api-key acme corp`
+/// would otherwise issue a key to `acme`, and a key cannot be taken back but by revoking it.
 fn argument(name: &str) -> Result<String> {
-    match std::env::args().nth(2) {
-        Some(value) if !value.trim().is_empty() => Ok(value),
+    let mut words = std::env::args().skip(2);
+    match (words.next(), words.next()) {
+        (Some(value), None) if !value.trim().is_empty() => Ok(value),
+        (_, Some(_)) => {
+            eprintln!("{USAGE}");
+            bail!("one argument {name}, not several")
+        }
         _ => {
             eprintln!("{USAGE}");
             bail!("missing argument {name}")

@@ -54,9 +54,13 @@ pub(crate) async fn authenticate(
     next.run(request).await
 }
 
-/// The token of a `Bearer` credential. ⚠️ The scheme is case-insensitive (RFC 9110 §11.1).
+/// The token of a `Bearer` credential, empty when it carries none.
+/// ⚠️ The scheme is case-insensitive (RFC 9110 §11.1).
 fn bearer(value: &str) -> Option<&str> {
-    let (scheme, token) = value.split_once(' ')?;
+    let value = value.trim();
+    let (scheme, token) = value
+        .split_once(|c: char| c.is_ascii_whitespace())
+        .unwrap_or((value, ""));
     scheme.eq_ignore_ascii_case("bearer").then(|| token.trim())
 }
 

@@ -530,7 +530,9 @@ hash opens nothing without its key.
   process — and reread every `KEY_RING_RELOAD` (10 s) by a task of `serve`. A key
   the ring does not hold never reaches the database, whatever the number
   presented; the price is that a revocation takes effect within 10 s. A reread
-  that fails is logged and counted, and the ring keeps the keys it held.
+  that fails is logged and counted, and the ring keeps the keys it held — a
+  revoked key included, until a reread succeeds. A key is checked when a
+  request arrives: a live stream opened with it stays open after its revocation.
 - **`authenticate`** (`http/middleware/authentication.rs`) is a *route* layer on
   every `/api` route: it runs after routing, so it knows the route template, and
   the probes and an unknown path never reach it.
@@ -602,11 +604,14 @@ DATABASE_URL_API=postgresql://yog_api:...@localhost:5433/yog_sothoth
 API_BIND_ADDR=0.0.0.0:5000
 API_CORS_ALLOWED_ORIGINS=http://localhost:3000
 API_LIVE_POLL_SECS=3
+API_METRICS_ADDR=127.0.0.1:9004   # unset: 0.0.0.0:9000, the daemons' port
 ```
 
 CORS is locked to the configured dashboard origins — the browser calls this
 API directly (there is no BFF in front; see [`web/README.md`](../../web/README.md)).
-The metrics listen on `0.0.0.0:9000`, fixed, as the daemons'.
+The metrics listen on `API_METRICS_ADDR`, `0.0.0.0:9000` when unset, as the
+daemons' in their containers; a native run sets it, since the compose daemons
+publish `127.0.0.1:9000` on the host.
 
 ## Run
 

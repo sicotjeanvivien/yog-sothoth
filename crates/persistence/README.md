@@ -597,7 +597,8 @@ they hold, a hash and a prefix, opens nothing without the key. `create-api-key` 
 its SHA-256 and its prefix, and prints the key **once**, alone on stdout: the
 logs of `yog-migrate` go to stderr, so `KEY=$(…)` captures the key whole. It is the one subcommand that is not idempotent: each run
 issues a new key. `list-api-keys` prints prefixes, clients and dates, never a
-key nor a hash. A revocation reaches the api within its ring's reload, 10 s
+key nor a hash. A revocation reaches the api at its ring's next reread, every 10 s, for
+the requests that follow; an open live stream is not cut
 ([`api/README.md`](../api/README.md#authentication)).
 
 ## Migrations

@@ -194,6 +194,13 @@ fn a_bearer_that_is_no_api_key_is_refused() {
     refused_for("Bearer not-a-key", "malformed");
 }
 
+/// Mutation: the scheme split on a single space only, so these read as another scheme.
+#[test]
+fn a_bearer_without_a_token_or_after_a_tab_is_malformed_not_another_scheme() {
+    refused_for("Bearer", "malformed");
+    refused_for("Bearer\tnot-a-key", "malformed");
+}
+
 #[test]
 fn a_key_the_ring_does_not_hold_is_refused() {
     refused_for(&format!("Bearer {}", key(2).expose()), "unknown");
