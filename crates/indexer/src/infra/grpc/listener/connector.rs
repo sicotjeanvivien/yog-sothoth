@@ -154,7 +154,7 @@ impl Connector {
         }
 
         let stream = self.subscribe(&mut client, outbound_rx, shutdown).await?;
-        log::subscribed(request.from_slot);
+        log::subscribed();
 
         Ok(OpenStream {
             _client: client,
@@ -203,11 +203,7 @@ impl Connector {
                 // may be the block-meta that resets the clock — is read first.
                 _ = tokio::time::sleep(clock.remaining()) => {
                     GrpcListenerMetrics::record_stall(StallSite::Stream);
-                    return self.stalled(
-                        StallSite::Stream,
-                        session.received_data(),
-                        session.resume_from(),
-                    );
+                    return self.stalled(StallSite::Stream, session.received_data());
                 }
             }
         }
@@ -233,14 +229,13 @@ impl Connector {
         };
         let Ok(subscribed) = subscribed else {
             GrpcListenerMetrics::record_stall(StallSite::Subscribe);
-            return Err(self.stalled(StallSite::Subscribe, false, None));
+            return Err(self.stalled(StallSite::Subscribe, false));
         };
 
         let url = self.endpoint.url();
         match subscribed {
             Ok(response) => Ok(response.into_inner()),
-            // ⚠️ A `Status` is not proof a server spoke: tonic builds one when our transport gives
-            // way. Asked only here: once `subscribe` is answered, the server has seen `from_slot`.
+            // ⚠️ A `Status` is not proof a server spoke: tonic builds one when our transport gives way.
             Err(status) if !reached_the_service(&status) => Err(Ending::Unreachable {
                 error: url.scrub(&format!("subscribe: {status}")),
             }),
@@ -248,9 +243,7 @@ impl Connector {
             // request — scrubbed like every other third-party string.
             Err(status) => Err(Ending::Failed {
                 error: url.scrub(&format!("subscribe: {status}")),
-                code: status.code(),
                 delivered: false,
-                resume_from: None,
             }),
         }
     }
@@ -273,24 +266,20 @@ impl Connector {
             }
             Ok(None) => Some(Ending::StreamClosed {
                 delivered: session.received_data(),
-                resume_from: session.resume_from(),
             }),
             Err(status) => Some(Ending::Failed {
                 error: self.endpoint.url().scrub(&format!("stream: {status}")),
-                code: status.code(),
                 delivered: session.received_data(),
-                resume_from: session.resume_from(),
             }),
         }
     }
 
     /// The [`Ending::Stalled`] of an attempt; the caller counts it by site. Not logged here: the
-    /// budget logs every ending once, with the mark it will use.
-    fn stalled(&self, site: StallSite, delivered: bool, resume_from: Option<u64>) -> Ending {
+    /// budget logs every ending once.
+    fn stalled(&self, site: StallSite, delivered: bool) -> Ending {
         Ending::Stalled {
             error: format!("stalled: {} for {:?}", site.describe(), self.stall_timeout),
             delivered,
-            resume_from,
         }
     }
 }

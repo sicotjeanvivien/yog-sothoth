@@ -99,7 +99,7 @@ pub(super) fn transaction_update_with_signature(
 /// ⚠️ `subscription_tests` keeps its own literal: `protocol_of`'s contract is any unknown name.
 pub(super) const UNROUTABLE_FILTER: &str = "a_filter_no_protocol_claims";
 
-/// A transaction the pipeline cannot route: delivery with nothing to resume from.
+/// A transaction the pipeline cannot route: delivery that settles nothing.
 /// ⚠️ A conformant server never sends it (`build_request` names filters `Protocol::as_str`): it is
 /// non-conformant on purpose, not evidence of frequency.
 pub(super) fn unroutable_transaction(slot: u64) -> SubscribeUpdate {

@@ -429,7 +429,7 @@ fn a_slot_left_behind_by_the_stream_is_dropped() {
 }
 
 /// ⚠️ A fork's slot whose meta never comes is never accompanied by 256 others: only a distance
-/// from the head ends it, or it stays the resume point for ever.
+/// from the head ends it, or it holds the settled slots back for ever.
 #[test]
 fn an_orphan_slot_does_not_pin_the_buffer_for_ever() {
     let mut buffer = buffer(); // window of 3 slots
@@ -445,8 +445,8 @@ fn an_orphan_slot_does_not_pin_the_buffer_for_ever() {
     assert_eq!(
         buffer.oldest_pending_slot(),
         None,
-        "the orphan was let go when the stream left it behind — otherwise every \
-         reconnection would ask to replay from it"
+        "the orphan was let go when the stream left it behind — otherwise no \
+         later slot would ever be settled"
     );
 }
 
@@ -733,7 +733,7 @@ fn giving_up_on_a_slot_never_overwrites_a_time_already_known() {
     );
 }
 
-/// Where a break should resume from: the oldest slot whose payloads are still waiting.
+/// What a cut destroys starts at the oldest slot whose payloads are still waiting.
 #[test]
 fn the_oldest_pending_slot_is_the_one_that_was_not_finished() {
     let mut buffer = buffer();
@@ -745,7 +745,7 @@ fn the_oldest_pending_slot_is_the_one_that_was_not_finished() {
     assert_eq!(
         buffer.oldest_pending_slot(),
         Some(11),
-        "oldest by slot, not by arrival — the replay has to cover both"
+        "oldest by slot, not by arrival — a cut destroys both"
     );
 
     buffer.close(11, at(100));
@@ -795,7 +795,7 @@ fn the_pending_count_tracks_every_way_in_and_out() {
 }
 
 /// ⚠️ The window applies on every path that moves the head: on a quiet stream only block-metas
-/// arrive, and a stale slot would survive to become the resume point.
+/// arrive, and a stale slot would survive to hold the settled slots back.
 #[test]
 fn a_stale_slot_is_evicted_by_block_metas_alone() {
     let mut buffer = buffer(); // window of 3 slots

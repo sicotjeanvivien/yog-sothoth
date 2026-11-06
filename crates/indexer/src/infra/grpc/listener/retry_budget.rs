@@ -1,5 +1,4 @@
-//! Whether to try again after an attempt, and how long to wait first; the resume mark is
-//! [`Verdict::next_resume_from`]'s, read from the same [`Verdict`].
+//! Whether to try again after an attempt, and how long to wait first.
 
 use std::time::Duration;
 
@@ -38,10 +37,10 @@ impl RetryBudget {
         }
     }
 
-    /// Count one attempt and decide what follows its `verdict`; `resume_from` is only logged.
+    /// Count one attempt and decide what follows its `verdict`.
     /// ⚠️ A stream that delivered is churn whatever ended it, a GOAWAY being ordinary; one that
     /// delivered nothing is charged, or an exhausted quota would redial a billed provider for ever.
-    pub(super) fn settle(&mut self, verdict: Verdict, resume_from: Option<u64>) -> Next {
+    pub(super) fn settle(&mut self, verdict: Verdict) -> Next {
         self.attempt += 1;
 
         match verdict {
@@ -54,13 +53,11 @@ impl RetryBudget {
                 Next::Stop(Ok(()))
             }
             Verdict::Delivered { error, .. } => {
-                log::resubscribing(self.attempt, error.as_deref(), resume_from);
+                log::resubscribing(self.attempt, error.as_deref());
                 self.churn()
             }
-            Verdict::Refused { error, .. }
-            | Verdict::ServerFailed { error }
-            | Verdict::Unanswered { error } => {
-                log::attempt_failed(self.attempt, self.max_attempts, &error, resume_from);
+            Verdict::ServerFailed { error } | Verdict::Unanswered { error } => {
+                log::attempt_failed(self.attempt, self.max_attempts, &error);
                 self.charge(error)
             }
         }

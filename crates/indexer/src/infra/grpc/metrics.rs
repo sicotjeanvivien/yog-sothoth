@@ -139,11 +139,7 @@ const DOWNSTREAM_FULL: &str = "yog_indexer_grpc_downstream_full_total";
 const PING_REPLIES_UNSENT: &str = "yog_indexer_grpc_ping_replies_unsent_total";
 
 /// Attempts ended because the server said nothing for the stall timeout, by [`StallSite`].
-/// ⚠️ A stall retried with a mark is a billed replay.
 const STALLS: &str = "yog_indexer_grpc_stalls_total";
-
-/// Resume marks given up because the server refused the request, by [`MarkRefusal`].
-const MARKS_ABANDONED: &str = "yog_indexer_grpc_resume_marks_abandoned_total";
 
 /// 1 when the current session's server names no bank, so slots are paired by slot alone; 0 when
 /// it names them. ⚠️ Kept across a reconnection until the new session's first message says.
@@ -269,24 +265,6 @@ impl StallSite {
     }
 }
 
-/// The gRPC code a server refused the request with, for [`MARKS_ABANDONED`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum MarkRefusal {
-    InvalidArgument,
-    OutOfRange,
-    NotFound,
-}
-
-impl MarkRefusal {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::InvalidArgument => "invalid_argument",
-            Self::OutOfRange => "out_of_range",
-            Self::NotFound => "not_found",
-        }
-    }
-}
-
 pub struct GrpcListenerMetrics;
 
 impl GrpcListenerMetrics {
@@ -315,11 +293,6 @@ impl GrpcListenerMetrics {
             "Attempts ended because the server said nothing for the stall \
              timeout, labelled by where: no answer to subscribe, or no \
              block-meta on an open stream"
-        );
-        describe_counter!(
-            MARKS_ABANDONED,
-            "Resume marks given up because the server refused the request, \
-             labelled by its gRPC code; each one leaves slots never indexed"
         );
         describe_counter!(
             PING_REPLIES_UNSENT,
@@ -361,10 +334,6 @@ impl GrpcListenerMetrics {
 
     pub(crate) fn record_stall(site: StallSite) {
         counter!(STALLS, "site" => site.as_str()).increment(1);
-    }
-
-    pub(crate) fn record_mark_abandoned(reason: MarkRefusal) {
-        counter!(MARKS_ABANDONED, "reason" => reason.as_str()).increment(1);
     }
 
     pub(crate) fn record_observed_slots_write(outcome: ObservedSlotsWrite) {

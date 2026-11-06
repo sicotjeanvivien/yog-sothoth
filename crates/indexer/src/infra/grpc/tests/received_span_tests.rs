@@ -14,7 +14,7 @@ fn a_later_slot_widens_the_last_slot_with_its_time() {
     assert_eq!(span.last(), (14, at(2)));
 }
 
-/// Mutation: the first slot taken from the first one to arrive, as a replay delivers it.
+/// Mutation: the first slot taken from the first one to arrive.
 #[test]
 fn an_earlier_slot_arriving_late_widens_the_first_slot() {
     let mut span = ReceivedSpan::starting(20, at(9));

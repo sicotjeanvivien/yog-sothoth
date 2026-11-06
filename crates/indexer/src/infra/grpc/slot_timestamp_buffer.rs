@@ -18,7 +18,7 @@ use waiting_slots::WaitingSlots;
 
 /// How far behind the stream a slot may wait for its block-meta: a ceiling, not an estimate.
 /// ⚠️ A distance from the head, not a count: a fork's slot whose meta never comes would otherwise
-/// stay oldest pending for ever, and every reconnection would replay from it.
+/// stay oldest pending for ever, and no later slot would ever count as received.
 pub(crate) const MAX_PENDING_SLOTS: u64 = 256;
 
 /// How many payloads may be held across all pending slots: bounding slots does not bound memory.
@@ -155,8 +155,8 @@ impl<T> SlotTimestampBuffer<T> {
         }
     }
 
-    /// The oldest slot still waiting for an instant: its payloads die with the buffer, so a
-    /// reconnection resumes there.
+    /// The oldest slot still waiting for an instant: its payloads die with the buffer, so it is
+    /// not settled.
     pub(crate) fn oldest_pending_slot(&self) -> Option<u64> {
         self.waiting.oldest()
     }

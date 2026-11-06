@@ -64,7 +64,7 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
     listener.watch_pool(Protocol::MeteoraDammV2, pool).await;
 
     let request = listener
-        .subscribe_request(None)
+        .subscribe_request()
         .await
         .expect("two addresses are watched");
 
@@ -80,9 +80,6 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 }
 
 // ── the retry rules, against a scripted server ──────────────────────
-//
-// ⚠️ One entanglement: a mark given up or kept needs one first, so breaking the errored stream's
-// mark reddens more tests than its owner.
 
 use tokio::{net::TcpListener, time::timeout};
 use tonic::Status;
@@ -90,7 +87,7 @@ use tonic::Status;
 use crate::infra::grpc::{
     test_fixtures::{
         PROTOCOL, RECORDER_PANIC, WrittenSlots, block_meta, ping, received_slots_unwritten,
-        slot_finalized, transaction, unroutable_transaction,
+        slot_finalized, transaction,
     },
     test_geyser_server::{self, Action, ScriptedGeyserHandle, ScriptedSession},
 };
@@ -124,14 +121,9 @@ async fn listener_with_stall(
 }
 
 /// A transaction of `slot`, carrying the filter name that makes it routable.
-/// ⚠️ A name that is no protocol drops it before the buffer, and the resumption tests assert nothing.
+/// ⚠️ A name that is no protocol drops it before the buffer, and a slot it holds open settles.
 fn routable(slot: u64) -> Action {
     Action::send(transaction(slot, &[PROTOCOL.as_str()]))
-}
-
-/// A transaction of `slot` the pipeline cannot route: delivered, with nothing to resume from.
-fn unroutable(slot: u64) -> Action {
-    Action::send(unroutable_transaction(slot))
 }
 
 /// A `http://` URL nothing listens on, the only way to a refused dial in this process; a port
@@ -269,17 +261,18 @@ async fn a_stream_that_delivered_before_breaking_restarts_the_budget() {
     );
 }
 
-/// ⚠️ A TCP reset and a GOAWAY cut the same block in the same place: the error arm carries the mark too.
-/// Mutation this is written against: `on_message`'s `Err(status)` ending handing back
-/// `resume_from: None` instead of `session.resume_from()`.
+/// ⚠️ A replay can fall behind the chain for good: a cut, an error or a clean close, mid-block,
+/// resubscribes live. Mutation this is written against: an attempt asking for a `from_slot`.
 #[tokio::test]
-async fn an_error_mid_block_resumes_from_the_slot_that_was_cut() {
+async fn a_cut_mid_block_resubscribes_live() {
     let server = test_geyser_server::start(vec![
         // Slot 10's transaction, then the stream breaks with the slot still open.
         ScriptedSession::Stream(vec![
             routable(10),
             Action::Fail(Status::unavailable("the connection was reset")),
         ]),
+        // Slot 20's transaction, then a clean end of stream with the slot still open.
+        ScriptedSession::Stream(vec![routable(20)]),
         ScriptedSession::closes_empty(),
     ])
     .await;
@@ -292,14 +285,13 @@ async fn an_error_mid_block_resumes_from_the_slot_that_was_cut() {
             .run(downstream, CancellationToken::new()),
     )
     .await
-    .expect("one empty close after the churn exhausts a budget of one");
+    .expect("one empty close after two churns exhausts a budget of one");
 
     assert!(outcome.is_err(), "{outcome:?}");
     assert_eq!(
         server.resume_points(),
-        vec![None, Some(8)],
-        "a stream that broke mid-block must ask for slot 10 again, rewound by \
-         two — exactly like one that closed there"
+        vec![None, None, None],
+        "slots 10 and 20 were cut open, and no attempt asks for them again"
     );
 }
 
@@ -341,272 +333,15 @@ async fn a_stream_that_delivered_before_closing_cleanly_restarts_the_budget() {
     );
 }
 
-/// ⚠️ The buffer dies with the session, so slot 10 without its block-meta is asked for again.
-/// Mutation this is written against: `on_message`'s `Ok(None)` ending handing back
-/// `resume_from: None` instead of `session.resume_from()`.
-#[tokio::test]
-async fn a_break_mid_block_resumes_from_the_slot_that_was_cut() {
-    let server = test_geyser_server::start(vec![
-        // Slot 10's transaction, then the stream ends with the slot still open.
-        ScriptedSession::Stream(vec![routable(10)]),
-        ScriptedSession::closes_empty(),
-    ])
-    .await;
-    let (downstream, _consumer) = mpsc::channel(4);
-
-    let outcome = timeout(
-        TEST_DEADLINE,
-        listener_for(&server, 1)
-            .await
-            .run(downstream, CancellationToken::new()),
-    )
-    .await
-    .expect("one empty close after the churn exhausts a budget of one");
-
-    assert!(outcome.is_err(), "{outcome:?}");
-    assert_eq!(
-        server.resume_points(),
-        vec![None, Some(8)],
-        "the second attempt must ask for slot 10 again, rewound by two — asking \
-         for 11 would drop exactly what the break destroyed"
-    );
-}
-
-/// ⚠️ An absent mark is not zero: an unroutable delivery leaves `resume_from() == None`.
-/// Mutation this is written against: `next_resume_from`'s `Delivered` arm returning `*mark`
-/// instead of `mark.or(held)`; the first attempt's mark is scaffolding.
-#[tokio::test]
-async fn an_attempt_with_nothing_to_resume_from_keeps_the_mark_we_hold() {
-    let server = test_geyser_server::start(vec![
-        // Slot 10's transaction and then a break: the mark is 10 rewound by two.
-        ScriptedSession::Stream(vec![
-            routable(10),
-            Action::Fail(Status::unavailable("the connection was reset")),
-        ]),
-        // Delivery the pipeline cannot route, then a clean close: no mark of its own.
-        ScriptedSession::Stream(vec![unroutable(20)]),
-        ScriptedSession::closes_empty(),
-    ])
-    .await;
-    let (downstream, _consumer) = mpsc::channel(4);
-
-    let outcome = timeout(
-        TEST_DEADLINE,
-        listener_for(&server, 1)
-            .await
-            .run(downstream, CancellationToken::new()),
-    )
-    .await
-    .expect("one empty close after two churn endings exhausts a budget of one");
-
-    assert!(outcome.is_err(), "{outcome:?}");
-    // The whole vector is safe here: no budget rule changes these three resume points.
-    assert_eq!(
-        server.resume_points(),
-        vec![None, Some(8), Some(8)],
-        "the unroutable transaction gave that session nothing to resume from; \
-         it must not take slot 8 away from the attempt after it"
-    );
-}
-
-/// A session that delivers slot 10 and breaks: the mark is 8 when the next attempt starts.
-fn leaves_the_mark_at_8() -> ScriptedSession {
-    ScriptedSession::Stream(vec![
-        routable(10),
-        Action::Fail(Status::unavailable("the provider restarted")),
-    ])
-}
-
-/// The `from_slot` the attempt after `ending` asks for, the mark being 8 when `ending` begins.
-async fn mark_after(ending: ScriptedSession) -> Option<u64> {
-    let server = test_geyser_server::start(vec![
-        leaves_the_mark_at_8(),
-        ending,
-        ScriptedSession::closes_empty(),
-    ])
-    .await;
-    let (downstream, _consumer) = mpsc::channel(4);
-
-    let outcome = timeout(
-        TEST_DEADLINE,
-        listener_for(&server, 2)
-            .await
-            .run(downstream, CancellationToken::new()),
-    )
-    .await
-    .expect("two attempts that deliver nothing exhaust a budget of two");
-
-    assert!(outcome.is_err(), "{outcome:?}");
-    let resume_points = server.resume_points();
-    assert_eq!(
-        resume_points.get(..2),
-        Some([None, Some(8)].as_slice()),
-        "scaffolding: the ending under test must start with the mark at 8"
-    );
-    assert_eq!(resume_points.len(), 3, "{resume_points:?}");
-    resume_points[2]
-}
-
 fn refuses_subscribe(status: Status) -> ScriptedSession {
     ScriptedSession::Refuse(status)
 }
 
-/// Accepts `subscribe`, then ends the stream with `status` before sending anything.
-fn fails_before_delivering(status: Status) -> ScriptedSession {
-    ScriptedSession::Stream(vec![Action::Fail(status)])
-}
-
-// Mutation the next five are written against: `refusal_of` answering `Some` for every code.
-
-#[tokio::test]
-async fn an_expired_key_keeps_the_mark() {
-    assert_eq!(
-        mark_after(refuses_subscribe(Status::unauthenticated(
-            "the key expired"
-        )))
-        .await,
-        Some(8),
-        "a credential says nothing of slot 8: the attempt after asks for it again"
-    );
-}
-
-#[tokio::test]
-async fn a_denied_permission_keeps_the_mark() {
-    assert_eq!(
-        mark_after(refuses_subscribe(Status::permission_denied(
-            "not on this plan"
-        )))
-        .await,
-        Some(8)
-    );
-}
-
-#[tokio::test]
-async fn an_exhausted_quota_keeps_the_mark() {
-    assert_eq!(
-        mark_after(refuses_subscribe(Status::resource_exhausted(
-            "quota reached"
-        )))
-        .await,
-        Some(8)
-    );
-}
-
-#[tokio::test]
-async fn an_unavailable_server_keeps_the_mark() {
-    assert_eq!(
-        mark_after(refuses_subscribe(Status::unavailable("draining"))).await,
-        Some(8)
-    );
-}
-
-#[tokio::test]
-async fn a_provider_incident_keeps_the_mark() {
-    assert_eq!(
-        mark_after(refuses_subscribe(Status::internal("backend error"))).await,
-        Some(8)
-    );
-}
-
-// Mutation the next three are written against: `refusal_of` answering `None` for every code.
-
-/// ⚠️ The slot may be past retention: the next attempt starts live, never decided on error text.
-#[tokio::test]
-async fn an_invalid_argument_gives_the_mark_up() {
-    assert_eq!(
-        mark_after(refuses_subscribe(Status::invalid_argument("bad from_slot"))).await,
-        None,
-        "the request itself was refused: asking for slot 8 again would be refused again"
-    );
-}
-
-#[tokio::test]
-async fn an_out_of_range_gives_the_mark_up() {
-    assert_eq!(
-        mark_after(refuses_subscribe(Status::out_of_range("slot 8 is gone"))).await,
-        None
-    );
-}
-
-#[tokio::test]
-async fn a_not_found_gives_the_mark_up() {
-    assert_eq!(
-        mark_after(refuses_subscribe(Status::not_found("slot 8 is gone"))).await,
-        None
-    );
-}
-
-/// ⚠️ The reference server refuses a slot past retention here, on an accepted stream.
-/// Mutation this is written against: `on_message`'s `Err(status)` arm losing `code`'s meaning,
-/// e.g. passing a fixed `Code::Internal`.
-#[tokio::test]
-async fn a_stream_failing_out_of_range_before_delivering_gives_the_mark_up() {
-    assert_eq!(
-        mark_after(fails_before_delivering(Status::out_of_range(
-            "broadcast from 8 is not available, last available: 9"
-        )))
-        .await,
-        None
-    );
-}
-
-/// Mutation this is written against: `on_message`'s `Err(status)` arm passing a fixed refusal
-/// code, e.g. `Code::InvalidArgument`.
-#[tokio::test]
-async fn a_stream_failing_internal_before_delivering_keeps_the_mark() {
-    assert_eq!(
-        mark_after(fails_before_delivering(Status::internal("backend error"))).await,
-        Some(8),
-        "an accepted stream proves the server saw slot 8, not that it refused it"
-    );
-}
-
-/// ⚠️ tonic builds its own `OUT_OF_RANGE` for an oversized message, which a replay can meet.
-/// Mutation this is written against: `Ending::verdict` reading the code before `delivered`.
-#[tokio::test]
-async fn a_stream_failing_out_of_range_after_delivering_keeps_its_mark() {
-    let server = test_geyser_server::start(vec![
-        leaves_the_mark_at_8(),
-        ScriptedSession::Stream(vec![
-            routable(12),
-            Action::Fail(Status::out_of_range("message too large")),
-        ]),
-        ScriptedSession::closes_empty(),
-    ])
-    .await;
-    let (downstream, _consumer) = mpsc::channel(4);
-
-    let outcome = timeout(
-        TEST_DEADLINE,
-        listener_for(&server, 1)
-            .await
-            .run(downstream, CancellationToken::new()),
-    )
-    .await
-    .expect("one empty close after two churns exhausts a budget of one");
-
-    assert!(outcome.is_err(), "{outcome:?}");
-    assert_eq!(
-        server.resume_points(),
-        vec![None, Some(8), Some(10)],
-        "a stream that delivered was accepted: its own mark stands, refusal code or not"
-    );
-}
-
-/// ⚠️ An exhausted quota can look exactly like this, with no code to read.
-/// Mutation this is written against: `Ending::verdict` classing `StreamClosed { delivered: false }`
-/// as `Refused`.
-#[tokio::test]
-async fn a_clean_close_that_delivered_nothing_keeps_the_mark() {
-    assert_eq!(mark_after(ScriptedSession::closes_empty()).await, Some(8));
-}
-
-/// The price of keeping the mark: a server refusing it under another code stops the indexer.
+/// A server refusing every subscription stops the indexer rather than be redialled for ever.
 /// Mutation this is written against: `settle` handing `ServerFailed` to `churn`.
 #[tokio::test]
-async fn a_kept_mark_refused_for_ever_exhausts_the_budget() {
+async fn a_server_refusing_for_ever_exhausts_the_budget() {
     let server = test_geyser_server::start(vec![
-        leaves_the_mark_at_8(),
         refuses_subscribe(Status::unauthenticated("the key expired")),
         refuses_subscribe(Status::unauthenticated("the key expired")),
         refuses_subscribe(Status::unauthenticated("the key expired")),
@@ -633,81 +368,14 @@ async fn a_kept_mark_refused_for_ever_exhausts_the_budget() {
         ),
         other => panic!("three refusals must exhaust a budget of three: {other:?}"),
     }
-    assert_eq!(
-        server.resume_points(),
-        vec![None, Some(8), Some(8), Some(8)],
-        "every attempt asks for slot 8: the indexer stops rather than leave a gap"
-    );
+    assert_eq!(server.requests().len(), 3);
 }
 
-/// Not `#[tokio::test]`: it reads the counter. Mutation this is written against: removing the
-/// increment (0), or counting a refusal with no mark held (2).
-#[test]
-fn a_mark_given_up_is_counted_once_by_its_code() {
-    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
-
-    let recorder = DebuggingRecorder::new();
-    let snapshotter = recorder.snapshotter();
-
-    let server = metrics::with_local_recorder(&recorder, || {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("current-thread runtime")
-            .block_on(async {
-                let server = test_geyser_server::start(vec![
-                    // No mark yet: nothing is given up.
-                    fails_before_delivering(Status::out_of_range("no mark to refuse")),
-                    leaves_the_mark_at_8(),
-                    fails_before_delivering(Status::out_of_range("slot 8 is gone")),
-                    ScriptedSession::closes_empty(),
-                ])
-                .await;
-                let (downstream, _consumer) = mpsc::channel(4);
-
-                let outcome = timeout(
-                    TEST_DEADLINE,
-                    listener_for(&server, 2)
-                        .await
-                        .run(downstream, CancellationToken::new()),
-                )
-                .await
-                .expect("the budget must run out");
-                assert!(outcome.is_err(), "{outcome:?}");
-                server
-            })
-    });
-
-    assert_eq!(server.resume_points(), vec![None, None, Some(8), None]);
-
-    let abandoned: Vec<_> = snapshotter
-        .snapshot()
-        .into_vec()
-        .into_iter()
-        .filter(|(key, _, _, _)| {
-            key.key().name() == "yog_indexer_grpc_resume_marks_abandoned_total"
-        })
-        .map(|(key, _, _, value)| {
-            let reason = key
-                .key()
-                .labels()
-                .find(|l| l.key() == "reason")
-                .map(|l| l.value().to_string());
-            (reason, value)
-        })
-        .collect();
-    assert_eq!(
-        abandoned,
-        vec![(Some("out_of_range".to_string()), DebugValue::Counter(1))],
-        "one mark was given up, under the code that refused it"
-    );
-}
-
-/// ⚠️ A refused dial produces nothing, like an empty close, but no one refused `from_slot`.
+/// ⚠️ A refused dial produces nothing, like an empty close, but nobody answered it.
 /// Mutation this owns: `Connector::open`'s `connect()` failure returning `Ending::Failed`; driven
 /// at `attempt`, since `run` would need a port dead for one attempt only, a timing assertion.
 #[tokio::test]
-async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
+async fn a_failure_before_contact_is_unreachable_at_the_dial() {
     let listener = GrpcListener::new(
         Endpoint::for_tests(&a_closed_port().await, None),
         1,
@@ -723,9 +391,8 @@ async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
         .connector
         .channel_endpoint()
         .expect("a plaintext loopback URL is a gRPC endpoint");
-    // The attempt asks for slot 8, the mark a previous break left.
     let request = listener
-        .subscribe_request(Some(8))
+        .subscribe_request()
         .await
         .expect("one protocol is watched");
     let (downstream, _consumer) = mpsc::channel(4);
@@ -756,20 +423,13 @@ async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
         error.starts_with("connect:"),
         "the dial is the site that gave way, and an operator reads which one: {error}"
     );
-
-    assert_eq!(
-        outcome.verdict().next_resume_from(Some(8)),
-        Some(8),
-        "nothing was asked of anyone, so slot 8 was refused by no one: the \
-         attempt after this one must ask for it again"
-    );
 }
 
-/// ⚠️ tonic maps our own broken connection into a `Status` too, which looks like a refused replay.
+/// ⚠️ tonic maps our own broken connection into a `Status` too, which looks like the server's.
 /// Mutation this owns: `Connector::subscribe` losing its `reached_the_service` guard, so every
 /// `Status` counts as the server's answer.
 #[tokio::test]
-async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
+async fn a_connection_cut_before_the_server_answered_is_unreachable() {
     let port = CuttingPort::bind().await;
     let listener = GrpcListener::new(Endpoint::for_tests(&port.url, None), 1, STALL_TIMEOUT);
     listener.watch(PROTOCOL).await;
@@ -782,7 +442,7 @@ async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
         .channel_endpoint()
         .expect("a plaintext loopback URL is a gRPC endpoint");
     let request = listener
-        .subscribe_request(Some(8))
+        .subscribe_request()
         .await
         .expect("one protocol is watched");
     let (downstream, _consumer) = mpsc::channel(4);
@@ -813,18 +473,11 @@ async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
         error.starts_with("subscribe:"),
         "the RPC is where a cut connection surfaces, and the log must say so: {error}"
     );
-
-    assert_eq!(
-        outcome.verdict().next_resume_from(Some(8)),
-        Some(8),
-        "a `Status` our own transport produced is nobody's verdict on slot 8: \
-         the attempt after this one must ask for it again"
-    );
 }
 
 /// ⚠️ Charged, not churn, or a dead endpoint would be redialled once a second for ever.
 /// Mutation this is written against: `Ending::verdict` classing `Unreachable` as
-/// `Delivered { mark: None }`; it only hangs, so the deadline is the assertion.
+/// `Delivered { error: None }`; it only hangs, so the deadline is the assertion.
 #[tokio::test]
 async fn a_dial_that_never_connects_spends_the_budget() {
     let url = a_closed_port().await;
@@ -994,10 +647,10 @@ async fn run_until_subscribed(
 }
 
 /// ⚠️ A server can stop delivering and keep the connection (`rpcpool/yellowstone-grpc` #25, #175).
-/// Mutation this is written against: removing the stall arm of `Connector::read`'s `select!`, or
-/// `stalled` handing back `resume_from: None`. Not `#[tokio::test]`: it reads the counter.
+/// Mutation this is written against: removing the stall arm of `Connector::read`'s `select!`.
+/// Not `#[tokio::test]`: it reads the counter.
 #[test]
-fn a_stalled_stream_is_resubscribed_at_its_mark() {
+fn a_stalled_stream_is_resubscribed_live() {
     use metrics_util::debugging::{DebugValue, DebuggingRecorder};
 
     let recorder = DebuggingRecorder::new();
@@ -1022,9 +675,8 @@ fn a_stalled_stream_is_resubscribed_at_its_mark() {
 
     assert_eq!(
         server.resume_points(),
-        vec![None, Some(8)],
-        "the stalled session closed slot 10, so the next one asks for it again, \
-         rewound — a stall is churn, and keeps the mark"
+        vec![None, None],
+        "a stall is churn, and the next session starts live"
     );
 
     // At least one: the second session holds too, and a late stop on a loaded runner stalls it as well.
@@ -1097,35 +749,42 @@ async fn pings_do_not_keep_a_stalled_stream_alive() {
     )
     .await;
 
-    assert_eq!(server.resume_points(), vec![None, Some(8)]);
+    assert_eq!(server.resume_points(), vec![None, None]);
 }
 
-/// A slow but live stream is not restarted.
+/// A slow but live stream is not restarted; how far its span reaches says where it was cut.
 /// Mutation this is written against: never resetting the clock, so it measures the session's age.
 #[tokio::test]
 async fn a_slow_but_live_stream_is_not_restarted() {
     let mut actions = Vec::new();
     for slot in 10..30 {
-        actions.push(Action::send(block_meta(slot, Some(BLOCK_TIME))));
+        actions.push(timed_meta(slot));
         actions.push(Action::Wait(TEST_STALL / 6));
     }
     actions.push(Action::Fail(Status::unavailable("the scripted break")));
 
-    let server = run_until_subscribed(
-        vec![
-            ScriptedSession::Stream(actions),
-            ScriptedSession::Stream(vec![Action::Hold]),
-        ],
-        2,
-    )
+    let server = test_geyser_server::start(vec![
+        ScriptedSession::Stream(actions),
+        ScriptedSession::Stream(vec![Action::Hold]),
+    ])
     .await;
+    let recorded = Arc::new(WrittenSlots::default());
+    let listener = GrpcListener::new(
+        Endpoint::for_tests(server.url(), None),
+        STALL_TEST_ATTEMPTS,
+        TEST_STALL,
+    )
+    .with_slots_recorder(SlotsRecorder::new(recorded.clone(), RECORD_TICK));
+    listener.watch(PROTOCOL).await;
+    let (downstream, _consumer) = mpsc::channel(4);
+    let shutdown = CancellationToken::new();
+    let run = tokio::spawn(Arc::new(listener).run(downstream, shutdown.clone()));
 
-    assert_eq!(
-        server.resume_points(),
-        vec![None, Some(27)],
-        "the first session must have run to its scripted break, slot 29 — an \
-         earlier mark means it was cut as stalled while block-metas were arriving"
-    );
+    // Slot 29, the scripted break, settles up to 26: a span ending earlier was cut as stalled.
+    wait_for_sessions(&recorded, &[(10, 26)]).await;
+
+    shutdown.cancel();
+    run.await.expect("the listener ends").expect("on shutdown");
 }
 
 /// A stream that stalls having delivered nothing spends the retry budget.
@@ -1162,36 +821,10 @@ async fn a_stall_that_delivered_nothing_spends_the_budget() {
     assert_eq!(server.requests().len(), 2);
 }
 
-/// ⚠️ A stall is no refusal: the decision to stop waiting is ours, so the mark is kept.
-/// Mutation this is written against: `Ending::verdict` classing a stall that delivered nothing as
-/// `Refused`.
-#[tokio::test]
-async fn a_stall_that_delivered_nothing_keeps_the_mark() {
-    let server = run_until_subscribed(
-        vec![
-            ScriptedSession::Stream(vec![
-                Action::send(block_meta(10, Some(BLOCK_TIME))),
-                Action::Hold,
-            ]),
-            ScriptedSession::Stream(vec![Action::Hold]),
-            ScriptedSession::Stream(vec![Action::Hold]),
-        ],
-        3,
-    )
-    .await;
-
-    assert_eq!(
-        server.resume_points(),
-        vec![None, Some(8), Some(8)],
-        "the silent second attempt is no verdict on slot 10 — the third asks again"
-    );
-}
-
 /// ⚠️ A front end with a wedged backend never sends headers, and the stream clock never starts.
-/// Mutation this is written against: `subscribe` awaited without the timeout, or the timeout
-/// giving the mark up.
+/// Mutation this is written against: `subscribe` awaited without the timeout.
 #[tokio::test]
-async fn a_subscribe_that_is_never_answered_is_bounded_and_keeps_the_mark() {
+async fn a_subscribe_that_is_never_answered_is_bounded() {
     let server = run_until_subscribed(
         vec![
             ScriptedSession::Stream(vec![
@@ -1205,7 +838,7 @@ async fn a_subscribe_that_is_never_answered_is_bounded_and_keeps_the_mark() {
     )
     .await;
 
-    assert_eq!(server.resume_points(), vec![None, Some(8), Some(8)]);
+    assert_eq!(server.resume_points(), vec![None, None, None]);
 }
 
 /// Mutation this is written against: the subscribe site not counting its stall.
@@ -1349,8 +982,33 @@ async fn a_session_writes_the_slots_it_received_skipped_ones_included() {
     let shutdown = CancellationToken::new();
     let run = tokio::spawn(listener.run(downstream, shutdown.clone()));
 
-    // The resume point is two slots under the highest, 14: 14 to 16 would be asked again.
+    // Settled stops two slots under the highest, at 14: a cut could still lose 14 to 16.
     wait_for_sessions(&recorded, &[(10, 13)]).await;
+
+    shutdown.cancel();
+    run.await.expect("the listener ends").expect("on shutdown");
+}
+
+/// ⚠️ Nothing replays a cut: the slot whose transaction it destroyed must be in no range.
+/// Mutation this is written against: `settled_below` answering from the highest block-meta.
+#[tokio::test]
+async fn a_cut_leaves_the_slot_it_destroyed_in_no_range() {
+    let mut first = vec![routable(15)];
+    first.extend((10..=20).map(timed_meta));
+    first.push(Action::Fail(Status::unavailable("the provider restarted")));
+    let server = test_geyser_server::start(vec![
+        // Slot 15's transaction waits for its status when the stream breaks.
+        ScriptedSession::Stream(first),
+        ScriptedSession::Stream((30..=34).map(timed_meta).chain([Action::Hold]).collect()),
+    ])
+    .await;
+    let (listener, recorded) = recorded_listener(&server, 2).await;
+    let (downstream, _consumer) = mpsc::channel(4);
+    let shutdown = CancellationToken::new();
+    let run = tokio::spawn(listener.run(downstream, shutdown.clone()));
+
+    // Slot 15 holds the first session two slots under it, at 13; the second settles below 32.
+    wait_for_sessions(&recorded, &[(10, 12), (30, 31)]).await;
 
     shutdown.cancel();
     run.await.expect("the listener ends").expect("on shutdown");

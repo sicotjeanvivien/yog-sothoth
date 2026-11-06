@@ -2,8 +2,8 @@
 //! In data order: `listener` (connection, retries), `subscription` (the request), `session` (one
 //! update, and the slots it received for good), `slot_timestamp_buffer` (a slot's `block_time`),
 //! `transaction_adapter`; `source` is public.
-//! ⚠️ Tested only against a scripted server (`test_geyser_server`): TLS, keep-alive, ping answers
-//! and `from_slot` semantics are unproven until a run against a real provider.
+//! ⚠️ Tested only against a scripted server (`test_geyser_server`): TLS, keep-alive and ping
+//! answers are unproven until a run against a real provider.
 
 mod interceptor;
 mod listener;

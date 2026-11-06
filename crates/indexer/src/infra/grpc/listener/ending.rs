@@ -1,12 +1,7 @@
-//! How one connection ended, what that ending is worth, and what it does to the
-//! resume mark.
+//! How one connection ended, and what that ending is worth.
 
-use tonic::Code;
-
-use crate::infra::grpc::metrics::MarkRefusal;
-
-/// How one connection ended. Stream endings carry `resume_from` and `delivered` (whether data
-/// came off the stream); what an ending is worth is [`Ending::verdict`]'s alone.
+/// How one connection ended. Stream endings carry `delivered` (whether data came off the
+/// stream); what an ending is worth is [`Ending::verdict`]'s alone.
 pub(super) enum Ending {
     ShutdownRequested,
     DownstreamClosed,
@@ -18,25 +13,20 @@ pub(super) enum Ending {
     },
     StreamClosed {
         delivered: bool,
-        resume_from: Option<u64>,
     },
     Failed {
         error: String,
-        /// The `Status` code, the server's or the one tonic built for our transport.
-        code: Code,
         delivered: bool,
-        resume_from: Option<u64>,
     },
     /// The server said nothing for [`STALL_TIMEOUT`](super::stall_clock::STALL_TIMEOUT), and this
     /// listener ended the attempt.
     Stalled {
         error: String,
         delivered: bool,
-        resume_from: Option<u64>,
     },
 }
 
-/// What an ending is worth — decided once, read by every rule that follows an attempt.
+/// What an ending is worth — decided once, read by the retry budget.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Verdict {
     /// A stop was requested.
@@ -45,14 +35,9 @@ pub(super) enum Verdict {
     ConsumerGone,
     /// The stream delivered before it ended. `error` is `None` for a clean
     /// close, and says what broke or stalled otherwise.
-    Delivered {
-        mark: Option<u64>,
-        error: Option<String>,
-    },
-    /// The server refused the request itself: the one verdict that gives the mark up.
-    Refused { error: String, reason: MarkRefusal },
-    /// The server answered and gave nothing back, for a reason the request does not cause:
-    /// credentials, quota, an incident, or a close with nothing sent.
+    Delivered { error: Option<String> },
+    /// The server answered and gave nothing back: a refusal, credentials, quota, an incident, or
+    /// a close with nothing sent.
     ServerFailed { error: String },
     /// Nobody answered the request: the service was unreachable, or silent.
     Unanswered { error: String },
@@ -60,93 +45,34 @@ pub(super) enum Verdict {
 
 impl Ending {
     /// What this ending is worth.
-    /// ⚠️ A stall is no refusal: one that delivered nothing is silence, and keeps the mark.
     pub(super) fn verdict(self) -> Verdict {
         match self {
             Ending::ShutdownRequested => Verdict::ShutdownRequested,
             Ending::DownstreamClosed => Verdict::ConsumerGone,
             Ending::Unreachable { error } => Verdict::Unanswered { error },
 
-            Ending::StreamClosed {
-                delivered: true,
-                resume_from,
-            } => Verdict::Delivered {
-                mark: resume_from,
-                error: None,
-            },
-            Ending::StreamClosed {
-                delivered: false, ..
-            } => Verdict::ServerFailed {
+            Ending::StreamClosed { delivered: true } => Verdict::Delivered { error: None },
+            Ending::StreamClosed { delivered: false } => Verdict::ServerFailed {
                 error: "stream closed without delivering anything".to_string(),
             },
 
             Ending::Failed {
                 error,
                 delivered: true,
-                resume_from,
-                ..
-            } => Verdict::Delivered {
-                mark: resume_from,
-                error: Some(error),
-            },
+            } => Verdict::Delivered { error: Some(error) },
             Ending::Failed {
                 error,
-                code,
                 delivered: false,
-                ..
-            } => match refusal_of(code) {
-                Some(reason) => Verdict::Refused { error, reason },
-                None => Verdict::ServerFailed { error },
-            },
+            } => Verdict::ServerFailed { error },
 
             Ending::Stalled {
                 error,
                 delivered: true,
-                resume_from,
-            } => Verdict::Delivered {
-                mark: resume_from,
-                error: Some(error),
-            },
+            } => Verdict::Delivered { error: Some(error) },
             Ending::Stalled {
                 error,
                 delivered: false,
-                ..
             } => Verdict::Unanswered { error },
         }
-    }
-}
-
-impl Verdict {
-    /// The mark the loop `held` that [`Self::next_resume_from`] drops, and why.
-    pub(super) fn abandoned_mark(&self, held: Option<u64>) -> Option<(u64, MarkRefusal)> {
-        match (self, held, self.next_resume_from(held)) {
-            (Verdict::Refused { reason, .. }, Some(slot), None) => Some((slot, *reason)),
-            _ => None,
-        }
-    }
-
-    /// Where the next attempt resumes from, given the mark the loop already `held`.
-    /// ⚠️ No floor: a replay breaking before the buffer drains rewinds `REWIND_SLOTS` each round and
-    /// the churn resets the budget, so `from_slot` can walk back without bound.
-    pub(super) fn next_resume_from(&self, held: Option<u64>) -> Option<u64> {
-        match self {
-            // ⚠️ An absent mark is not zero (an unroutable transaction never enters the buffer).
-            Verdict::Delivered { mark, .. } => mark.or(held),
-            Verdict::Refused { .. } => None,
-            Verdict::ServerFailed { .. }
-            | Verdict::Unanswered { .. }
-            | Verdict::ShutdownRequested
-            | Verdict::ConsumerGone => held,
-        }
-    }
-}
-
-/// Whether a code says the request itself is at fault, which alone gives the mark up.
-fn refusal_of(code: Code) -> Option<MarkRefusal> {
-    match code {
-        Code::InvalidArgument => Some(MarkRefusal::InvalidArgument),
-        Code::OutOfRange => Some(MarkRefusal::OutOfRange),
-        Code::NotFound => Some(MarkRefusal::NotFound),
-        _ => None,
     }
 }

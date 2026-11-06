@@ -1,7 +1,7 @@
 //! The Yellowstone connection: one stream, and what to do when it breaks. `connector` makes one
 //! attempt, `ending` judges how it ended, `retry_budget` decides whether to try again.
 //! ⚠️ `listener_tests` drives `run` against a scripted server: it proves this client against our
-//! model of the server, never TLS, keep-alive, ping answers or `from_slot` on a real provider.
+//! model of the server, never TLS, keep-alive or ping answers on a real provider.
 
 mod connector;
 mod ending;
@@ -25,10 +25,8 @@ use crate::{
     infra::{
         Credential,
         grpc::{
-            interceptor::CredentialInterceptor,
-            metrics::{GrpcListenerMetrics, WAITING_PEAKS},
-            ranges_to_record::RangesToRecord,
-            session::received_slots::ReceivedSlots,
+            interceptor::CredentialInterceptor, metrics::WAITING_PEAKS,
+            ranges_to_record::RangesToRecord, session::received_slots::ReceivedSlots,
             subscription::build_request,
         },
     },
@@ -91,7 +89,7 @@ impl GrpcListener {
         let credential = Credential::new(self.connector.endpoint().header())?;
         let interceptor = CredentialInterceptor::new(&credential)?;
         let channel = self.connector.channel_endpoint()?;
-        let request = self.subscribe_request(None).await?;
+        let request = self.subscribe_request().await?;
 
         log::starting(self.connector.endpoint(), credential.name(), &request);
         WAITING_PEAKS.export();
@@ -117,6 +115,8 @@ impl GrpcListener {
     }
 
     /// Connect, read, and reconnect until the budget or the shutdown says stop.
+    /// ⚠️ Every attempt subscribes live, never from a slot: a replay can fall behind the chain for
+    /// good, and what a cut loses stays out of the observed ranges.
     async fn attempts(
         &self,
         channel: &tonic::transport::Endpoint,
@@ -126,7 +126,6 @@ impl GrpcListener {
         shutdown: &CancellationToken,
     ) -> Result<(), GrpcListenerError> {
         let mut budget = RetryBudget::new(self.max_attempts);
-        let mut resume_from: Option<u64> = None;
 
         loop {
             if shutdown.is_cancelled() {
@@ -134,7 +133,7 @@ impl GrpcListener {
                 return Ok(());
             }
 
-            let (request, protocols) = self.subscription(resume_from).await?;
+            let (request, protocols) = self.subscription().await?;
             let received_slots = ReceivedSlots::new(protocols, ranges.clone());
 
             let verdict = self
@@ -150,14 +149,7 @@ impl GrpcListener {
                 .await
                 .verdict();
 
-            if let Some((slot, reason)) = verdict.abandoned_mark(resume_from) {
-                log::mark_abandoned(slot, reason);
-                GrpcListenerMetrics::record_mark_abandoned(reason);
-            }
-            // ⚠️ The only place `resume_from` is written; the mark rule and the budget read the one verdict.
-            resume_from = verdict.next_resume_from(resume_from);
-
-            match budget.settle(verdict, resume_from) {
+            match budget.settle(verdict) {
                 Next::Retry { after } => sleep_or_cancel(after, shutdown).await,
                 Next::Stop(result) => return result,
             }
@@ -165,23 +157,14 @@ impl GrpcListener {
     }
 
     /// The subscription, and the protocols it watches whole, read under one lock so they agree.
-    async fn subscription(
-        &self,
-        from_slot: Option<u64>,
-    ) -> Result<(SubscribeRequest, Arc<[Protocol]>), GrpcListenerError> {
+    async fn subscription(&self) -> Result<(SubscribeRequest, Arc<[Protocol]>), GrpcListenerError> {
         let watched = self.watched.lock().await;
-        Ok((
-            build_request(&watched, from_slot)?,
-            whole_protocols(&watched),
-        ))
+        Ok((build_request(&watched)?, whole_protocols(&watched)))
     }
 
     /// Build the subscription from what is watched right now.
-    async fn subscribe_request(
-        &self,
-        from_slot: Option<u64>,
-    ) -> Result<SubscribeRequest, GrpcListenerError> {
-        build_request(&*self.watched.lock().await, from_slot)
+    async fn subscribe_request(&self) -> Result<SubscribeRequest, GrpcListenerError> {
+        build_request(&*self.watched.lock().await)
     }
 }
 

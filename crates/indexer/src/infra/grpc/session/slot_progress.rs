@@ -1,5 +1,5 @@
-//! Which slots a session has finished: when a transaction can leave, and where
-//! a reconnection resumes.
+//! Which slots a session has finished: when a transaction can leave, and which slots are
+//! settled.
 
 use chrono::{DateTime, Utc};
 use yellowstone_grpc_proto::prelude::{
@@ -14,10 +14,10 @@ use crate::infra::grpc::{
 
 use super::log;
 
-/// How many slots a reconnection asks for again, on top of what this session did not finish.
-/// ⚠️ A deliberate overlap: a block-meta closing slot N does not promise all of N's transactions
-/// arrived; a row asked twice is skipped by the unique keys, a row never asked is a silent hole.
-pub(super) const REWIND_SLOTS: u64 = 2;
+/// How many slots below the oldest unfinished one are not settled yet.
+/// ⚠️ A block-meta closing slot N does not promise all of N's transactions arrived: counting N as
+/// received when a cut destroys the rest would hide a hole.
+pub(super) const HELD_BACK_SLOTS: u64 = 2;
 
 /// A transaction waiting for its slot's block time, untranslated: `from_grpc` needs the instant.
 pub(super) struct PendingTransaction {
@@ -31,9 +31,8 @@ pub(super) fn block_time(meta: &SubscribeUpdateBlockMeta) -> Option<DateTime<Utc
         .and_then(|time| DateTime::from_timestamp(time.timestamp, 0))
 }
 
-/// The slots one session has seen, closed, or is still waiting on.
-/// ⚠️ Dies with its session: a replay delivers the oldest slots last, so a buffer holding the
-/// pre-cut backlog would evict each replayed arrival; [`Self::resume_from`] asks for them again.
+/// The slots one session has seen, closed, or is still waiting on. Dies with its session: what it
+/// still holds at a cut is lost, and stays out of the received slots.
 pub(super) struct SlotProgress {
     buffer: SlotTimestampBuffer<PendingTransaction>,
     /// The highest slot a block-meta closed. Advanced by block-metas alone: a
@@ -128,14 +127,14 @@ impl SlotProgress {
         }
     }
 
-    /// Where a reconnection should resume from, or `None` when nothing arrived.
+    /// The slots below this one are settled, or `None` when nothing arrived.
     /// ⚠️ The oldest slot not finished (oldest pending, else the last closed), not the highest
-    /// seen, rewound by [`REWIND_SLOTS`]: resuming past it would skip what the break destroyed.
-    pub(super) fn resume_from(&self) -> Option<u64> {
+    /// seen, less [`HELD_BACK_SLOTS`]: past it, a cut can still destroy a slot's transactions.
+    pub(super) fn settled_below(&self) -> Option<u64> {
         let unfinished = self
             .buffer
             .oldest_pending_slot()
             .or(self.highest_meta_slot)?;
-        Some(unfinished.saturating_sub(REWIND_SLOTS))
+        Some(unfinished.saturating_sub(HELD_BACK_SLOTS))
     }
 }

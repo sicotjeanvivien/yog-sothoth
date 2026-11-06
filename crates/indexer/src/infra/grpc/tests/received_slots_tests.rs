@@ -4,7 +4,7 @@ use super::*;
 
 use crate::infra::grpc::test_fixtures::{PROTOCOL, at};
 
-/// Past every slot these tests close: nothing waits for a reconnection.
+/// Past every slot these tests close: all of them are settled.
 const FAR: Option<u64> = Some(1_000);
 
 fn spans(ranges: &RangesToRecord) -> Vec<(u64, u64)> {
@@ -28,16 +28,20 @@ fn each_received_block_meta_widens_the_session_span_skipped_slots_included() {
     assert_eq!(spans(&ranges), [(10, 14)]);
 }
 
-/// Mutation: the resume point ignored, so a slot a refused replay would lose counts as received.
+/// Mutation: `settled_below` ignored, so a slot a cut would lose counts as received.
 #[test]
-fn a_slot_at_or_past_the_resume_point_waits_until_the_point_passes_it() {
+fn a_slot_not_settled_yet_waits_until_it_is() {
     let ranges = RangesToRecord::default();
     let mut received = ReceivedSlots::new(Arc::from([PROTOCOL]), ranges.clone());
 
     for slot in 10..=14 {
         received.on_block_meta(slot, at(slot as i64), Some(13));
     }
-    assert_eq!(spans(&ranges), [(10, 12)], "13 and 14 would be asked again");
+    assert_eq!(
+        spans(&ranges),
+        [(10, 12)],
+        "a cut could still lose 13 and 14"
+    );
 
     received.on_block_meta(15, at(15), Some(16));
     assert_eq!(spans(&ranges), [(10, 15)]);

@@ -2,27 +2,23 @@
 
 use super::*;
 
-use crate::infra::grpc::metrics::MarkRefusal;
-
 const MAX: u32 = 5;
 
 fn failed_empty() -> Verdict {
-    Verdict::Refused {
+    Verdict::ServerFailed {
         error: "refused".to_string(),
-        reason: MarkRefusal::InvalidArgument,
     }
 }
 
 fn broke_after_delivering() -> Verdict {
     Verdict::Delivered {
-        mark: Some(8),
         error: Some("reset".to_string()),
     }
 }
 
 /// One attempt, settled.
 fn attempt(budget: &mut RetryBudget, verdict: Verdict) -> Next {
-    budget.settle(verdict, None)
+    budget.settle(verdict)
 }
 
 fn waits(next: Next) -> Duration {

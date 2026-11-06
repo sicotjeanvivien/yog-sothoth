@@ -105,7 +105,7 @@ impl<T> WaitingSlots<T> {
         self.enforce_bounds();
     }
 
-    /// The oldest slot still waiting, if any: the one a reconnection resumes from.
+    /// The oldest slot still waiting, if any: the one the session's settled slots stop under.
     pub(super) fn oldest(&self) -> Option<u64> {
         self.pending.first_key_value().map(|(slot, _)| *slot)
     }
@@ -148,7 +148,7 @@ impl<T> WaitingSlots<T> {
 
     /// Evict until both bounds hold.
     /// ⚠️ Called by every operation that moves the head, never left to a caller: block-metas alone
-    /// move it on a quiet stream, and a stale slot would become the resume point.
+    /// move it on a quiet stream, and a stale slot would hold the settled slots back.
     fn enforce_bounds(&mut self) {
         // ⚠️ Before evicting: afterwards a peak never exceeds its bound, and the overshoot is lost.
         self.peaks.record(self.count, self.oldest_lag());

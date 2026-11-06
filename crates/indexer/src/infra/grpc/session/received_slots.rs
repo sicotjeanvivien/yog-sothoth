@@ -1,5 +1,5 @@
-//! What one session counts as received for good: the slots of its timed block-metas below its
-//! resume point, left in `RangesToRecord` for the recorder.
+//! What one session counts as received for good: the slots of its timed block-metas below what it
+//! has settled, left in `RangesToRecord` for the recorder.
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -16,7 +16,7 @@ pub(in crate::infra::grpc) struct ReceivedSlots {
     /// The protocols watched whole; a protocol watched pool by pool is not watched.
     protocols: Arc<[Protocol]>,
     span: Option<ReceivedSpan>,
-    /// Timed block-metas at or past the resume point: a reconnection would ask for them again.
+    /// Timed block-metas not settled yet: a cut would lose them.
     not_yet: BTreeMap<u64, DateTime<Utc>>,
     ranges: RangesToRecord,
 }
@@ -32,23 +32,23 @@ impl ReceivedSlots {
         }
     }
 
-    /// A block-meta closed `slot` at `at`; `resume_from` is where a reconnection would start now.
-    /// ⚠️ Only slots below `resume_from` count: one at or past it may still lose transactions to
-    /// a cut whose replay is refused, and an unwatched range declared too narrow is not allowed.
+    /// A block-meta closed `slot` at `at`; the slots below `settled_below` are settled now.
+    /// ⚠️ Only those count: one at or past it may still lose transactions to a cut, and an
+    /// unwatched range declared too narrow is not allowed.
     pub(in crate::infra::grpc) fn on_block_meta(
         &mut self,
         slot: u64,
         at: DateTime<Utc>,
-        resume_from: Option<u64>,
+        settled_below: Option<u64>,
     ) {
         if self.protocols.is_empty() {
             return;
         }
         self.not_yet.insert(slot, at);
-        let Some(resume_from) = resume_from else {
+        let Some(settled_below) = settled_below else {
             return;
         };
-        let still_not_yet = self.not_yet.split_off(&resume_from);
+        let still_not_yet = self.not_yet.split_off(&settled_below);
         let received = std::mem::replace(&mut self.not_yet, still_not_yet);
         if received.is_empty() {
             return;

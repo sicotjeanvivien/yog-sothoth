@@ -15,7 +15,7 @@ fn damm_v2_program() -> (Protocol, Pubkey) {
 }
 
 fn request(watched: &[(Protocol, Pubkey)]) -> SubscribeRequest {
-    build_request(&watched.iter().copied().collect(), None).expect("something is watched")
+    build_request(&watched.iter().copied().collect()).expect("something is watched")
 }
 
 // ── the two flags nothing else will remind us of ────────────────────
@@ -125,20 +125,9 @@ fn watched_pools_are_grouped_by_protocol() {
 #[test]
 fn nothing_watched_is_refused_rather_than_subscribed_empty() {
     assert!(matches!(
-        build_request(&HashSet::new(), None),
+        build_request(&HashSet::new()),
         Err(GrpcListenerError::NoSubscriptionTargets)
     ));
-}
-
-/// `from_slot` is carried through untouched; its semantics are the server's.
-#[test]
-fn from_slot_is_carried_only_when_given() {
-    assert_eq!(request(&[damm_v2_program()]).from_slot, None);
-
-    let resumed = build_request(&HashSet::from([damm_v2_program()]), Some(1_234))
-        .expect("something is watched");
-
-    assert_eq!(resumed.from_slot, Some(1_234));
 }
 
 // ── reading the protocol back ───────────────────────────────────────
