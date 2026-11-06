@@ -8,10 +8,12 @@
 
 import { useState } from "react";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import type { SeverityResponse, SignalResponse } from "@/lib/api/schema/zod.gen";
+import { formatUtcClock } from "@/lib/format/date";
 import { filterSignals } from "@/lib/signals/filter-signals";
+import { withGaps } from "@/lib/signals/signal-gaps";
 
 import { SignalCard } from "./signal-card";
 import { STATUS_DOT } from "./signal-display";
@@ -34,7 +36,8 @@ export function SignalFeed({
   initial: readonly SignalResponse[];
 }) {
   const t = useTranslations("Dashboard.Signals.feed");
-  const { signals, status } = useLiveSignals(initial);
+  const locale = useLocale();
+  const { signals, gaps, status } = useLiveSignals(initial);
 
   const [activeSeverities, setActiveSeverities] = useState<
     ReadonlySet<SeverityResponse>
@@ -97,9 +100,15 @@ export function SignalFeed({
             </div>
           ) : (
             <ul className="flex flex-col gap-2">
-              {filtered.map((signal) => (
-                <SignalCard key={signal.id} signal={signal} />
-              ))}
+              {withGaps(filtered, gaps).map((row) =>
+                row.type === "gap" ? (
+                  <li key={row.key} className="px-4 py-1 font-dash-mono text-[12px] text-slate-400">
+                    {t("gap", { at: formatUtcClock(row.at, locale) })}
+                  </li>
+                ) : (
+                  <SignalCard key={row.signal.id} signal={row.signal} />
+                ),
+              )}
             </ul>
           )}
         </>

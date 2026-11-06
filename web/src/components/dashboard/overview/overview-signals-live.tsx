@@ -17,6 +17,8 @@ import {
 } from "@/components/dashboard/signals/signal-display";
 import { useLiveSignals } from "@/components/dashboard/signals/use-live-signals";
 import type { SignalResponse } from "@/lib/api/schema/zod.gen";
+import { withGaps } from "@/lib/signals/signal-gaps";
+import { formatUtcClock } from "@/lib/format/date";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatShortAddress } from "@/lib/format/format-short-address";
 
@@ -33,8 +35,10 @@ export function OverviewSignalsLive({
 }) {
   const t = useTranslations("Dashboard.Overview.signals");
   const tFeed = useTranslations("Dashboard.Signals.feed");
-  const { signals, status } = useLiveSignals(initial);
-  const latest = signals.slice(0, LATEST_SIGNALS_COUNT);
+  const locale = useLocale();
+  const { signals, gaps, status } = useLiveSignals(initial);
+  // ⚠️ A gap takes a row of its own, as in the live activity: the block keeps its height.
+  const rows = withGaps(signals, gaps).slice(0, LATEST_SIGNALS_COUNT);
 
   return (
     <>
@@ -48,13 +52,21 @@ export function OverviewSignalsLive({
         </span>
       </div>
 
-      {latest.length === 0 ? (
+      {rows.length === 0 ? (
         <p className="py-6 text-[14px] text-dash-ink-2">{t("empty")}</p>
       ) : (
         <div role="table" aria-label={tableLabel}>
-          {latest.map((signal) => (
-            <SignalRow key={signal.id} signal={signal} />
-          ))}
+          {rows.map((row) =>
+            row.type === "gap" ? (
+              <div key={row.key} role="row" className={`${ROW_CLASS} grid-cols-1`}>
+                <div role="cell" className="font-dash-mono text-[11px] text-dash-ink-3">
+                  {tFeed("gap", { at: formatUtcClock(row.at, locale) })}
+                </div>
+              </div>
+            ) : (
+              <SignalRow key={row.signal.id} signal={row.signal} />
+            ),
+          )}
         </div>
       )}
     </>

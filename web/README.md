@@ -168,8 +168,11 @@ The `/signals` dashboard page combines both consumers:
   connection is `/api/live/protocols/{protocol}?topics=…`. Each event is zod-parsed
   (malformed → warn + skip) and merged through the pure `mergeSignals` helper
   (`lib/signals/`): dedup by id, sort by `(triggeredAt, id)` descending, cap at 200
-  rows. The feed is live, without history: a gap left by a reconnection stays, and
-  the signals of the past are another page's.
+  rows. The feed is live, without history: a reconnection replays nothing, so the
+  hook keeps the instant of each reopening and `withGaps` (`lib/signals/signal-gaps.ts`)
+  writes a row there, among the signals sorted by time — "resumed at…", as the live
+  activity does — rather than a feed that looks whole. The signals of the past are
+  another page's.
 
 **One connection per page** — `components/dashboard/live/live-provider.tsx`:
 `LiveProvider` opens the page's single connection on every topic it shows

@@ -12,6 +12,7 @@ import { useLive } from "@/components/dashboard/live/live-provider";
 import { STATUS_DOT } from "@/components/dashboard/signals/signal-display";
 import { addEvent, markGap, type FeedRow } from "@/lib/activity/activity-feed";
 import { activityRow, toActivityItem, type ActivityRow, type DetailPart } from "@/lib/activity/activity-row";
+import { formatUtcClock } from "@/lib/format/date";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { ACTIVITY_TOPICS } from "@/lib/live/live-topics";
 
@@ -113,7 +114,7 @@ function EventRow({
   return (
     <div role="row" className={`${ROW_CLASS} ${columns}`}>
       <div role="cell" className="font-dash-mono text-[12px] text-dash-ink-2 tabular-nums">
-        <time dateTime={row.at}>{formatTime(row.at, locale)}</time>
+        <time dateTime={row.at}>{formatUtcClock(row.at, locale)}</time>
       </div>
       {withProtocol && (
         <div role="cell" className="truncate text-[13px] text-dash-ink-2">
@@ -158,19 +159,8 @@ function GapRow({ at }: { at: string }) {
   return (
     <div role="row" className={`${ROW_CLASS} grid-cols-1`}>
       <div role="cell" className="font-dash-mono text-[11px] text-dash-ink-3">
-        {t("gap", { at: formatTime(at, locale) })}
+        {t("gap", { at: formatUtcClock(at, locale) })}
       </div>
     </div>
   );
-}
-
-/** "21:14:05", in UTC like the signals and the charts. */
-function formatTime(iso: string, locale: string): string {
-  return new Intl.DateTimeFormat(locale, {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-    timeZone: "UTC",
-  }).format(new Date(iso));
 }

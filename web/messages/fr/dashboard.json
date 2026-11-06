@@ -440,7 +440,8 @@
         },
         "detail": {
           "threshold": "Seuil"
-        }
+        },
+        "gap": "Reprise à {at} — des signaux ont pu manquer"
       }
     },
     "Beta": {

@@ -84,3 +84,14 @@ export function formatUtcMoment(input: string | Date, locale: FormatLocale): str
   }).format(date);
   return `${text} UTC`;
 }
+
+/** "21:14:05", in UTC like the signals and the charts: the time of a live row. */
+export function formatUtcClock(iso: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+    timeZone: "UTC",
+  }).format(new Date(iso));
+}

@@ -440,7 +440,8 @@
         },
         "detail": {
           "threshold": "Threshold"
-        }
+        },
+        "gap": "Resumed at {at} — signals may have been missed"
       }
     },
     "Beta": {
