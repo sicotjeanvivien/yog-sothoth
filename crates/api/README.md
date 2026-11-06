@@ -19,6 +19,7 @@ api/src/
 │   │                        into the services, and builds the live channels with
 │   │                        the pollers it returns, the live slots and the work slots
 │   ├── config.rs          ← Config::load() — env-driven
+│   ├── key_ring_reload.rs ← reload_key_ring(), the key ring reread every 10 s until the stop
 │   └── serve.rs           ← serve() — the server, the live pollers and the key ring, and their stop
 ├── application/
 │   ├── services/          ← cross-protocol services at the root (SignalService,
@@ -36,7 +37,8 @@ api/src/
 │   ├── live/signals_source.rs ← SignalsSource (enriches once, feeds the signals' broadcast)
 │   ├── live/event_source.rs   ← EventSource, one table of an event collection
 │   ├── cache.rs           ← SharedCache (moka) and its named CachePolicy per use
-│   ├── api_keys.rs        ← KeyRing, every active API key in memory, reloaded every 10 s
+│   ├── auth/key_ring.rs   ← KeyRing, every active API key in memory
+│   ├── auth/credential.rs ← identify(), the client an `Authorization` value names, or Unauthorized
 │   ├── metrics.rs         ← the Prometheus series, served on :9000
 │   ├── pool_pairs.rs      ← PoolPairs, the token pair of a batch's pools in two reads at most; Paired
 │   ├── enriched_token.rs  ← one token side of a pool, identity only
@@ -525,9 +527,10 @@ them, through `yog-migrate create-api-key`, `revoke-api-key` and
 The api reads, and may write nothing; every runtime role reads them too, and a
 hash opens nothing without its key.
 
-- **`KeyRing`** (`application/api_keys.rs`) holds every key not revoked, of a
+- **`KeyRing`** (`application/auth/key_ring.rs`) holds every key not revoked, of a
   client not revoked, by hash. It is loaded at start — a failure stops the
-  process — and reread every `KEY_RING_RELOAD` (10 s) by a task of `serve`. A key
+  process — and reread every `KEY_RING_RELOAD` (10 s) by a task of `serve`
+  (`bootstrap/key_ring_reload.rs`). A key
   the ring does not hold never reaches the database, whatever the number
   presented; the price is that a revocation takes effect within 10 s. A reread
   that fails is logged and counted, and the ring keeps the keys it held — a
@@ -535,7 +538,8 @@ hash opens nothing without its key.
   request arrives: a live stream opened with it stays open after its revocation.
 - **`authenticate`** (`http/middleware/authentication.rs`) is a *route* layer on
   every `/api` route: it runs after routing, so it knows the route template, and
-  the probes and an unknown path never reach it.
+  the probes and an unknown path never reach it. It reads the header and counts;
+  `identify` (`application/auth/credential.rs`) decides.
 
   | `Authorization` | What happens |
   |---|---|

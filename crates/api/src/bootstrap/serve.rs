@@ -6,7 +6,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 use yog_bootstrap::{Stop, handle_task_result};
 
-use crate::application::{KEY_RING_RELOAD, KeyRing, LivePollers};
+use super::key_ring_reload::{KEY_RING_RELOAD, reload_key_ring};
+use crate::application::{KeyRing, LivePollers};
 use crate::http::{CappedListener, IDLE_TIMEOUT, MAX_CONNECTIONS};
 
 const HTTP_SERVER: &str = "http server";
@@ -32,7 +33,8 @@ pub(crate) async fn serve(
         .into_future(),
     );
     let mut poller_task = tokio::spawn(pollers.run(shutdown.clone()));
-    let mut key_ring_task = tokio::spawn(key_ring.run(KEY_RING_RELOAD, shutdown.clone()));
+    let mut key_ring_task =
+        tokio::spawn(reload_key_ring(key_ring, KEY_RING_RELOAD, shutdown.clone()));
 
     // The cancellation arm carries no verdict; a task that failed can still be
     // stopping when it fires, and `Stop` collects its error afterwards.

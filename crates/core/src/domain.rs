@@ -1,6 +1,6 @@
 mod analytic;
 mod announcements;
-mod api_clients;
+mod auth;
 mod claim_totals;
 mod discovered_tvl;
 mod domain_event;
@@ -56,7 +56,7 @@ pub use announcements::{
     Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementKind, AnnouncementLookup,
     AnnouncementSeverity, AnnouncementStatus,
 };
-pub use api_clients::{
+pub use auth::{
     API_KEY_PREFIX_BYTES, API_KEY_SECRET_BYTES, ActiveKey, ApiClient, ApiKey, ApiKeyFormatError,
     ApiKeyLookup, is_client_name,
 };

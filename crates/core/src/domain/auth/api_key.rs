@@ -1,34 +1,10 @@
-//! A client of the API and the key it presents: storage only ever sees the key's hash.
+//! The key a client presents: storage only ever sees its hash.
 
 use std::fmt;
 
 use sha2::{Digest, Sha256};
-use thiserror::Error;
 
-/// What a key is attached to, and what its calls are counted under.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ApiClient {
-    pub id: i64,
-    pub name: String,
-}
-
-/// Whether `name` may name a client: 1 to 63 of `[a-z0-9-]`, a letter or a digit first.
-/// ⚠️ It becomes a metrics label, which `observe.sh` prints only in that alphabet.
-pub fn is_client_name(name: &str) -> bool {
-    let bytes = name.as_bytes();
-    (1..=63).contains(&bytes.len())
-        && bytes[0] != b'-'
-        && bytes
-            .iter()
-            .all(|&b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-}
-
-/// A key the API accepts: its hash, and the client it opens the API to.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ActiveKey {
-    pub hash: [u8; 32],
-    pub client: ApiClient,
-}
+use crate::domain::ApiKeyFormatError;
 
 pub const API_KEY_PREFIX_BYTES: usize = 4;
 pub const API_KEY_SECRET_BYTES: usize = 32;
@@ -40,21 +16,6 @@ const MARKER: &str = "yog_";
 #[derive(Clone, PartialEq, Eq)]
 pub struct ApiKey {
     text: String,
-}
-
-/// Why a presented string is not an API key.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
-pub enum ApiKeyFormatError {
-    #[error("an API key starts with `yog_`")]
-    Marker,
-    #[error("an API key is `yog_<prefix>_<secret>`")]
-    Parts,
-    #[error("the prefix of an API key is {} hex characters", API_KEY_PREFIX_BYTES * 2)]
-    PrefixLength,
-    #[error("the secret of an API key is {} hex characters", API_KEY_SECRET_BYTES * 2)]
-    SecretLength,
-    #[error("an API key is lowercase hex after its marker")]
-    NotLowerHex,
 }
 
 impl ApiKey {
@@ -115,5 +76,5 @@ fn is_lower_hex(byte: u8) -> bool {
 }
 
 #[cfg(test)]
-#[path = "model_tests.rs"]
+#[path = "api_key_tests.rs"]
 mod tests;

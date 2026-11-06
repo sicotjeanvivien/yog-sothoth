@@ -9,7 +9,7 @@ use axum::{
 };
 use metrics_util::debugging::{DebugValue, DebuggingRecorder, Snapshotter};
 use tower::ServiceExt;
-use yog_core::domain::{ActiveKey, ApiClient};
+use yog_core::domain::{ActiveKey, ApiClient, ApiKey};
 
 use super::*;
 
@@ -18,7 +18,7 @@ fn key(byte: u8) -> ApiKey {
 }
 
 fn ring() -> KeyRing {
-    KeyRing::holding(vec![ActiveKey {
+    crate::testing::key_ring(vec![ActiveKey {
         hash: key(1).hash(),
         client: ApiClient {
             id: 7,
@@ -141,15 +141,6 @@ fn a_known_key_attaches_its_client_and_counts_under_it() {
     );
 }
 
-/// Mutation: the scheme compared case-sensitively (RFC 9110 §11.1 makes it insensitive).
-#[test]
-fn the_bearer_scheme_is_read_in_any_case() {
-    let bearer = format!("bEaReR {}", key(1).expose());
-    let (answer, _) = recorded(send(echo(), "/echo/42", Some(&bearer)));
-
-    assert_eq!(answer.body, "dashboard");
-}
-
 /// A refusal, its reason counted and nothing else said: 401, `WWW-Authenticate: Bearer`, one text.
 fn refused_for(authorization: &str, reason: &str) -> String {
     let (answer, metrics) = recorded(send(echo(), "/echo/42", Some(authorization)));
@@ -192,13 +183,6 @@ fn another_scheme_is_refused() {
 #[test]
 fn a_bearer_that_is_no_api_key_is_refused() {
     refused_for("Bearer not-a-key", "malformed");
-}
-
-/// Mutation: the scheme split on a single space only, so these read as another scheme.
-#[test]
-fn a_bearer_without_a_token_or_after_a_tab_is_malformed_not_another_scheme() {
-    refused_for("Bearer", "malformed");
-    refused_for("Bearer\tnot-a-key", "malformed");
 }
 
 #[test]

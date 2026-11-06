@@ -1,12 +1,15 @@
 //! Postgres implementation of `ApiKeyLookup`, and the operator's writes, which `yog-migrate`
 //! alone calls under `yog_migrate`: the api reads, and may write nothing.
 
+mod rows;
+
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use rows::ActiveKeyRow;
+pub use rows::ApiKeyListing;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryError, RepositoryResult,
-    domain::{ActiveKey, ApiClient, ApiKey, ApiKeyLookup},
+    domain::{ActiveKey, ApiKey, ApiKeyLookup},
 };
 
 use crate::repositories::helper::map_sqlx_error;
@@ -14,15 +17,6 @@ use crate::repositories::helper::map_sqlx_error;
 #[derive(Clone)]
 pub struct PgApiKeyRepository {
     pool: PgPool,
-}
-
-/// A key as an operator lists it: never the key, never its hash.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ApiKeyListing {
-    pub prefix: String,
-    pub client: String,
-    pub created_at: DateTime<Utc>,
-    pub revoked_at: Option<DateTime<Utc>>,
 }
 
 impl PgApiKeyRepository {
@@ -97,7 +91,8 @@ impl PgApiKeyRepository {
 #[async_trait]
 impl ApiKeyLookup for PgApiKeyRepository {
     async fn active_keys(&self) -> RepositoryResult<Vec<ActiveKey>> {
-        let rows = sqlx::query!(
+        let rows = sqlx::query_as!(
+            ActiveKeyRow,
             r#"
             SELECT k.key_hash, c.id AS client_id, c.name AS client_name
               FROM api_keys k
@@ -110,22 +105,6 @@ impl ApiKeyLookup for PgApiKeyRepository {
         .await
         .map_err(map_sqlx_error)?;
 
-        rows.into_iter()
-            .map(|row| {
-                let hash: [u8; 32] = row.key_hash.as_slice().try_into().map_err(|_| {
-                    RepositoryError::Integrity(format!(
-                        "an api key hash of {} bytes",
-                        row.key_hash.len()
-                    ))
-                })?;
-                Ok(ActiveKey {
-                    hash,
-                    client: ApiClient {
-                        id: row.client_id,
-                        name: row.client_name,
-                    },
-                })
-            })
-            .collect()
+        rows.into_iter().map(ActiveKey::try_from).collect()
     }
 }

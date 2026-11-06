@@ -1,4 +1,4 @@
-mod api_keys;
+mod auth;
 pub(crate) mod cache;
 mod enriched_signal;
 mod enriched_token;
@@ -8,7 +8,7 @@ mod pool_pairs;
 mod services;
 mod work_slots;
 
-pub(crate) use api_keys::{KEY_RING_RELOAD, KeyRing};
+pub(crate) use auth::{KeyRing, ReloadOutcome, Unauthorized, identify};
 pub(crate) use enriched_signal::EnrichedSignal;
 pub(crate) use enriched_token::EnrichedToken;
 pub(crate) use live::{

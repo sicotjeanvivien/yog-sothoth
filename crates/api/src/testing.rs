@@ -15,11 +15,11 @@ use yog_persistence::{PgHealthChecker, PgPool};
 use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
-        Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementKind, AnnouncementLookup,
-        AnnouncementSeverity, AnnouncementStatus, ClaimKind, ClaimTotals, ClaimTotalsLookup,
-        DiscoveredTvlLookup, EventCursor, EventFreshnessRepository, EventScope, FrozenHours,
-        FrozenPeriod, LiquidityChangeEvent, LiquidityChangeEventLookup, LiquidityFlows,
-        LiquidityMove, LiquidityMoveCursor, LiquidityMoveList, LiquidityMoveLookup,
+        ActiveKey, Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementKind,
+        AnnouncementLookup, AnnouncementSeverity, AnnouncementStatus, ApiKeyLookup, ClaimKind,
+        ClaimTotals, ClaimTotalsLookup, DiscoveredTvlLookup, EventCursor, EventFreshnessRepository,
+        EventScope, FrozenHours, FrozenPeriod, LiquidityChangeEvent, LiquidityChangeEventLookup,
+        LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveList, LiquidityMoveLookup,
         LiquidityMoveOrder, LiquidityTotals, MeteoraDammV2PoolProperties,
         MeteoraDammV2PoolPropertiesLookup, NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog,
         PoolChangeEvent, PoolChangeEventLookup, PoolCreationEvent, PoolCreationEventLookup,
@@ -40,7 +40,7 @@ use yog_core::{
 };
 
 use crate::application::{
-    AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService,
+    AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService, KeyRing,
     LiquidityChangeEventService, LiquidityMoveService, LiquidityTurnoverService, LiveChannels,
     NetworkService, PoolChangeEventService, PoolCreationEventService, PoolCreationsService,
     PoolPairs, PoolService, PositionChangeCountsService, PositionChangeEventService,
@@ -160,7 +160,7 @@ pub(crate) fn app_state() -> AppState {
             Arc::new(MockPriceRepo::empty()),
         )),
         announcement_service: Arc::new(AnnouncementService::new(Arc::new(MockAnnouncementRepo))),
-        key_ring: crate::application::KeyRing::holding(vec![]),
+        key_ring: key_ring(vec![]),
         health_checker: Arc::new(PgHealthChecker::new(
             PgPool::connect_lazy("postgres://unused@127.0.0.1:1/unused")
                 .expect("a well-formed URL"),
@@ -655,6 +655,21 @@ impl AnnouncementLookup for MockAnnouncementRepo {
             ..Page::empty()
         })
     }
+}
+
+/// The same keys on every read.
+struct FixedKeys(Vec<ActiveKey>);
+
+#[async_trait]
+impl ApiKeyLookup for FixedKeys {
+    async fn active_keys(&self) -> RepositoryResult<Vec<ActiveKey>> {
+        Ok(self.0.clone())
+    }
+}
+
+/// A ring holding `keys`, rereading the same ones.
+pub(crate) fn key_ring(keys: Vec<ActiveKey>) -> KeyRing {
+    KeyRing::with_keys(Arc::new(FixedKeys(keys.clone())), keys)
 }
 
 pub(crate) struct MockNetworkStatusRepo {

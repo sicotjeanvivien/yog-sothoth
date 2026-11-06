@@ -3,16 +3,16 @@
 
 use axum::{
     extract::{MatchedPath, Request, State},
-    http::header,
+    http::{HeaderValue, header},
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use yog_core::domain::ApiKey;
+use yog_core::domain::ApiClient;
 
 use crate::{
     application::{
-        KeyRing,
-        metrics::{ANONYMOUS, ApiMetrics, Unauthorized},
+        KeyRing, Unauthorized, identify,
+        metrics::{ANONYMOUS, ApiMetrics},
     },
     http::error::ApiError,
 };
@@ -34,14 +34,7 @@ pub(crate) async fn authenticate(
         return next.run(request).await;
     };
 
-    let client = match credential
-        .to_str()
-        .ok()
-        .and_then(bearer)
-        .ok_or(Unauthorized::Scheme)
-        .and_then(|token| ApiKey::parse(token).map_err(|_| Unauthorized::Malformed))
-        .and_then(|key| ring.client_of(&key).ok_or(Unauthorized::Unknown))
-    {
+    let client = match client_of(credential, &ring) {
         Ok(client) => client,
         Err(reason) => {
             ApiMetrics::record_unauthorized(reason);
@@ -54,14 +47,10 @@ pub(crate) async fn authenticate(
     next.run(request).await
 }
 
-/// The token of a `Bearer` credential, empty when it carries none.
-/// ⚠️ The scheme is case-insensitive (RFC 9110 §11.1).
-fn bearer(value: &str) -> Option<&str> {
-    let value = value.trim();
-    let (scheme, token) = value
-        .split_once(|c: char| c.is_ascii_whitespace())
-        .unwrap_or((value, ""));
-    scheme.eq_ignore_ascii_case("bearer").then(|| token.trim())
+/// The client `credential` names; a header that is not text names no scheme.
+fn client_of(credential: &HeaderValue, ring: &KeyRing) -> Result<ApiClient, Unauthorized> {
+    let credential = credential.to_str().map_err(|_| Unauthorized::Scheme)?;
+    identify(credential, ring)
 }
 
 #[cfg(test)]

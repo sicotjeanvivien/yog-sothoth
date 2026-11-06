@@ -55,7 +55,7 @@ async fn start(
         listener,
         router,
         idle_pollers(),
-        crate::application::KeyRing::holding(vec![]),
+        crate::testing::key_ring(vec![]),
         shutdown.clone(),
     ));
     (addr, handle)
