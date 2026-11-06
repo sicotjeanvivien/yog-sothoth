@@ -27,7 +27,6 @@ fn a_written_key_parses_back_to_itself() {
 }
 
 /// Mutation: the hash taken over the secret alone, or over anything but the whole key.
-/// The expected value is SHA-256 of `TEXT`, computed outside this code.
 #[test]
 fn the_hash_is_the_sha256_of_the_whole_key() {
     let hash = ApiKey::parse(TEXT).expect("a valid key").hash();
@@ -92,4 +91,35 @@ fn a_key_with_a_non_hex_character_is_refused() {
         ApiKey::parse(&tampered),
         Err(ApiKeyFormatError::NotLowerHex)
     );
+}
+
+// The client's name, one rule per case.
+
+/// Mutation: a rule of `is_client_name` dropped.
+#[test]
+fn a_client_name_is_lowercase_letters_digits_and_dashes() {
+    assert!(is_client_name("dashboard"));
+    assert!(is_client_name("acme-2"));
+    assert!(is_client_name(&"a".repeat(63)));
+}
+
+#[test]
+fn an_empty_client_name_is_refused() {
+    assert!(!is_client_name(""));
+}
+
+#[test]
+fn a_client_name_past_63_characters_is_refused() {
+    assert!(!is_client_name(&"a".repeat(64)));
+}
+
+#[test]
+fn a_client_name_starting_with_a_dash_is_refused() {
+    assert!(!is_client_name("-acme"));
+}
+
+#[test]
+fn a_client_name_with_an_uppercase_letter_or_a_space_is_refused() {
+    assert!(!is_client_name("Acme"));
+    assert!(!is_client_name("acme corp"));
 }

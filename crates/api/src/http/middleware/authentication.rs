@@ -1,6 +1,5 @@
 //! Who calls: the client of an `Authorization: Bearer` key, or nobody. A request without a key
 //! passes, counted as `anonymous`; a key that opens nothing is refused (401).
-//! ⚠️ A route layer: it runs after routing, so the route template is known and a probe is not one.
 
 use axum::{
     extract::{MatchedPath, Request, State},

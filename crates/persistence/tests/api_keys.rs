@@ -8,7 +8,9 @@ use yog_core::{
 };
 use yog_persistence::PgApiKeyRepository;
 
-use super::helpers::{INSUFFICIENT_PRIVILEGE, setup_roles_and_connect_as, sqlstate};
+use super::helpers::{
+    CHECK_VIOLATION, INSUFFICIENT_PRIVILEGE, setup_roles_and_connect_as, sqlstate,
+};
 
 fn key(byte: u8) -> ApiKey {
     ApiKey::from_random([byte; 4], [byte; 32])
@@ -116,4 +118,22 @@ async fn yog_api_cannot_write_a_key(pool: PgPool) {
 
     assert_eq!(sqlstate(&refused), INSUFFICIENT_PRIVILEGE);
     assert!(refused.to_string().contains("api_clients"), "{refused}");
+}
+
+/// Mutation: the CHECK on `api_clients.name` dropped, so a name no metrics filter prints is stored.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_client_name_outside_its_alphabet_is_refused_by_the_table(pool: PgPool) {
+    let refused = PgApiKeyRepository::new(pool.clone())
+        .create("Acme Corp", &key(1))
+        .await;
+
+    assert!(
+        matches!(refused, Err(RepositoryError::Backend(_))),
+        "{refused:?}"
+    );
+    let refused = sqlx::query("INSERT INTO api_clients (name) VALUES ('Acme Corp')")
+        .execute(&pool)
+        .await
+        .expect_err("outside [a-z0-9-]");
+    assert_eq!(sqlstate(&refused), CHECK_VIOLATION);
 }

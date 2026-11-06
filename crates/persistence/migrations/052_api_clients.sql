@@ -2,9 +2,10 @@
 -- alone, with a prefix an operator can name it by; only yog_migrate writes, through
 -- `yog-migrate create-api-key` and `revoke-api-key`.
 
+-- ⚠️ The name becomes a metrics label: `is_client_name` (yog-core) and this CHECK say the same.
 CREATE TABLE api_clients (
     id         BIGSERIAL   PRIMARY KEY,
-    name       TEXT        NOT NULL UNIQUE,
+    name       TEXT        NOT NULL UNIQUE CHECK (name ~ '^[a-z0-9][a-z0-9-]{0,62}$'),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     revoked_at TIMESTAMPTZ NULL
 );

@@ -590,11 +590,12 @@ cargo run -p yog-persistence --bin yog-migrate -- list-api-keys
 ```
 
 All three connect with `DATABASE_URL_MIGRATE`: `yog_migrate` owns `api_clients`
-and `api_keys` (migration 052) and is the only role that writes them; `yog_api`
-reads them. `create-api-key` creates the client on its first key, refuses a
-revoked client, draws the key from the OS random source (`getrandom`), stores
-its SHA-256 and its prefix, and prints the key **once**, on stdout, never
-through `tracing`. It is the one subcommand that is not idempotent: each run
+and `api_keys` (migration 052) and is the only role that writes them. Every
+runtime role reads them, as every table (and `yog-archive` dumps them): what
+they hold, a hash and a prefix, opens nothing without the key. `create-api-key` creates the client on its first key — its name 1 to 63 of
+`[a-z0-9-]`, since it becomes a metrics label — refuses a revoked client, draws the key from the OS random source (`getrandom`), stores
+its SHA-256 and its prefix, and prints the key **once**, alone on stdout: the
+logs of `yog-migrate` go to stderr, so `KEY=$(…)` captures the key whole. It is the one subcommand that is not idempotent: each run
 issues a new key. `list-api-keys` prints prefixes, clients and dates, never a
 key nor a hash. A revocation reaches the api within its ring's reload, 10 s
 ([`api/README.md`](../api/README.md#authentication)).

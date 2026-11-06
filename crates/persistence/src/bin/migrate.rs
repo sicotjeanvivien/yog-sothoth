@@ -6,7 +6,9 @@
 use anyhow::{Context, Result, anyhow, bail};
 
 use yog_bootstrap::SecretUrl;
-use yog_core::domain::{API_KEY_PREFIX_BYTES, API_KEY_SECRET_BYTES, ApiKey, WatchedPoolRepository};
+use yog_core::domain::{
+    API_KEY_PREFIX_BYTES, API_KEY_SECRET_BYTES, ApiKey, WatchedPoolRepository, is_client_name,
+};
 use yog_persistence::{Database, PgApiKeyRepository, PgWatchedPoolRepository};
 
 const SETUP_ROLES_SQL: &str = include_str!("scripts/setup_roles.sql");
@@ -46,7 +48,8 @@ create-api-key issues a new key on each run.";
 async fn main() -> Result<()> {
     yog_bootstrap::init_rustls();
     dotenvy::dotenv().ok();
-    yog_bootstrap::init_tracing();
+    // ⚠️ On stderr: `create-api-key` prints its key alone on stdout, so `KEY=$(…)` captures it whole.
+    yog_bootstrap::init_tracing_on_stderr();
 
     // Hand-rolled: a few subcommands and no flags do not justify an argument-parsing dependency.
     let command = std::env::args().nth(1);
@@ -157,6 +160,9 @@ async fn bootstrap() -> Result<()> {
 
 /// Issue a new key to `client`, as `yog_migrate`.
 async fn create_api_key(client: &str) -> Result<()> {
+    if !is_client_name(client) {
+        bail!("a client is named by 1 to 63 of [a-z0-9-], a letter or a digit first: {client:?}");
+    }
     let database = connect("DATABASE_URL_MIGRATE", "the yog_migrate role").await?;
 
     let mut prefix = [0u8; API_KEY_PREFIX_BYTES];
@@ -172,7 +178,7 @@ async fn create_api_key(client: &str) -> Result<()> {
         .context("failed to store the key")?;
 
     tracing::info!(client, prefix = key.prefix(), "api key issued");
-    // ⚠️ On stdout alone, never through `tracing`: the key must not reach a log.
+    // ⚠️ Never through `tracing`: the key must not reach a log.
     println!("{}", key.expose());
     Ok(())
 }

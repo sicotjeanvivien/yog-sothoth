@@ -65,7 +65,12 @@ impl KeyRing {
                 () = shutdown.cancelled() => return Ok(()),
                 () = tokio::time::sleep(period) => {}
             }
-            match self.reload().await {
+            // ⚠️ Raced too: a read waiting on a saturated pool would otherwise hold the stop.
+            let reloaded = tokio::select! {
+                () = shutdown.cancelled() => return Ok(()),
+                reloaded = self.reload() => reloaded,
+            };
+            match reloaded {
                 Ok(()) => ApiMetrics::record_key_ring_reload(KeyRingReload::Reloaded),
                 Err(error) => {
                     warn!(%error, "api keys not reloaded — the ring keeps the keys it held");

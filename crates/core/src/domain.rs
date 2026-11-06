@@ -58,7 +58,7 @@ pub use announcements::{
 };
 pub use api_clients::{
     API_KEY_PREFIX_BYTES, API_KEY_SECRET_BYTES, ActiveKey, ApiClient, ApiKey, ApiKeyFormatError,
-    ApiKeyLookup,
+    ApiKeyLookup, is_client_name,
 };
 pub use claim_totals::{ClaimKind, ClaimTotals, ClaimTotalsLookup};
 pub use discovered_tvl::{DiscoveredTvlLookup, ProtocolDiscoveredTvl};

@@ -522,7 +522,8 @@ the prefix naming it to an operator. Storage keeps its SHA-256 and its prefix
 alone (`api_clients`, `api_keys`, migration 052), and only `yog_migrate` writes
 them, through `yog-migrate create-api-key`, `revoke-api-key` and
 `list-api-keys` ([`persistence/README.md`](../persistence/README.md#api-keys)).
-The api reads, and may write nothing.
+The api reads, and may write nothing; every runtime role reads them too, and a
+hash opens nothing without its key.
 
 - **`KeyRing`** (`application/api_keys.rs`) holds every key not revoked, of a
   client not revoked, by hash. It is loaded at start — a failure stops the

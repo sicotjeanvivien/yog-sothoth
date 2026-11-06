@@ -12,6 +12,17 @@ pub struct ApiClient {
     pub name: String,
 }
 
+/// Whether `name` may name a client: 1 to 63 of `[a-z0-9-]`, a letter or a digit first.
+/// ⚠️ It becomes a metrics label, which `observe.sh` prints only in that alphabet.
+pub fn is_client_name(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    (1..=63).contains(&bytes.len())
+        && bytes[0] != b'-'
+        && bytes
+            .iter()
+            .all(|&b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+}
+
 /// A key the API accepts: its hash, and the client it opens the API to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActiveKey {
