@@ -1,5 +1,5 @@
-//! What one session counts as received for good: the slots of its timed block-metas below what it
-//! has settled, left in `RangesToRecord` for the recorder.
+//! What one session counts as received for good: the slots of its timed block-metas past its first
+//! ones and below what it has settled, left in `RangesToRecord` for the recorder.
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -8,7 +8,7 @@ use yog_core::domain::Protocol;
 
 use crate::infra::grpc::ranges_to_record::{RangeToRecord, RangesToRecord};
 
-use super::received_span::ReceivedSpan;
+use super::{received_span::ReceivedSpan, slot_progress::HELD_BACK_SLOTS};
 
 /// What one session has received for good.
 pub(in crate::infra::grpc) struct ReceivedSlots {
@@ -16,6 +16,9 @@ pub(in crate::infra::grpc) struct ReceivedSlots {
     /// The protocols watched whole; a protocol watched pool by pool is not watched.
     protocols: Arc<[Protocol]>,
     span: Option<ReceivedSpan>,
+    /// The lowest slot this session may count: its first block-meta's, plus [`HELD_BACK_SLOTS`].
+    /// ⚠️ A live subscription can join mid-slot, after some of that slot's transactions were sent.
+    counted_from: Option<u64>,
     /// Timed block-metas not settled yet: a cut would lose them.
     not_yet: BTreeMap<u64, DateTime<Utc>>,
     ranges: RangesToRecord,
@@ -27,6 +30,7 @@ impl ReceivedSlots {
             started_at: Utc::now(),
             protocols,
             span: None,
+            counted_from: None,
             not_yet: BTreeMap::new(),
             ranges,
         }
@@ -44,7 +48,12 @@ impl ReceivedSlots {
         if self.protocols.is_empty() {
             return;
         }
-        self.not_yet.insert(slot, at);
+        let counted_from = *self
+            .counted_from
+            .get_or_insert(slot.saturating_add(HELD_BACK_SLOTS));
+        if slot >= counted_from {
+            self.not_yet.insert(slot, at);
+        }
         let Some(settled_below) = settled_below else {
             return;
         };

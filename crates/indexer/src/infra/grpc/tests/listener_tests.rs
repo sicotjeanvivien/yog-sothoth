@@ -790,7 +790,7 @@ async fn a_slow_but_live_stream_is_not_restarted() {
     let run = tokio::spawn(Arc::new(listener).run(downstream, shutdown.clone()));
 
     // Slot 29, the scripted break, settles up to 26: a span ending earlier was cut as stalled.
-    wait_for_sessions(&recorded, &[(10, 26)]).await;
+    wait_for_sessions(&recorded, &[(12, 26)]).await;
 
     shutdown.cancel();
     run.await.expect("the listener ends").expect("on shutdown");
@@ -979,10 +979,12 @@ async fn a_session_writes_the_slots_it_received_skipped_ones_included() {
     let server = test_geyser_server::start(vec![ScriptedSession::Stream(vec![
         timed_meta(10),
         timed_meta(11),
+        timed_meta(12),
         timed_meta(13),
-        timed_meta(14),
         timed_meta(15),
         timed_meta(16),
+        timed_meta(17),
+        timed_meta(18),
         Action::Hold,
     ])])
     .await;
@@ -991,24 +993,25 @@ async fn a_session_writes_the_slots_it_received_skipped_ones_included() {
     let shutdown = CancellationToken::new();
     let run = tokio::spawn(listener.run(downstream, shutdown.clone()));
 
-    // Settled stops two slots under the highest, at 14: a cut could still lose 14 to 16.
-    wait_for_sessions(&recorded, &[(10, 13)]).await;
+    // 10 and 11 open the session; settled stops two under the highest, at 16; 14 was skipped.
+    wait_for_sessions(&recorded, &[(12, 15)]).await;
 
     shutdown.cancel();
     run.await.expect("the listener ends").expect("on shutdown");
 }
 
-/// ⚠️ Nothing replays a cut: the slot whose transaction it destroyed must be in no range.
-/// Mutation this is written against: `settled_below` answering from the highest block-meta.
+/// ⚠️ Nothing replays a cut: the slots it can have cut short, on both sides, must be in no range.
+/// Mutation this is written against: `settled_below` answering from the highest block-meta, or a
+/// session counting its first slots.
 #[tokio::test]
-async fn a_cut_leaves_the_slot_it_destroyed_in_no_range() {
+async fn a_cut_leaves_the_slots_it_cut_short_in_no_range() {
     let mut first = vec![routable(15)];
     first.extend((10..=20).map(timed_meta));
     first.push(Action::Fail(Status::unavailable("the provider restarted")));
     let server = test_geyser_server::start(vec![
         // Slot 15's transaction waits for its status when the stream breaks.
         ScriptedSession::Stream(first),
-        ScriptedSession::Stream((30..=34).map(timed_meta).chain([Action::Hold]).collect()),
+        ScriptedSession::Stream((30..=36).map(timed_meta).chain([Action::Hold]).collect()),
     ])
     .await;
     let (listener, recorded) = recorded_listener(&server, 2).await;
@@ -1016,8 +1019,9 @@ async fn a_cut_leaves_the_slot_it_destroyed_in_no_range() {
     let shutdown = CancellationToken::new();
     let run = tokio::spawn(listener.run(downstream, shutdown.clone()));
 
-    // Slot 15 holds the first session two slots under it, at 13; the second settles below 32.
-    wait_for_sessions(&recorded, &[(10, 12), (30, 31)]).await;
+    // Each session counts from its first slot plus two; slot 15 holds the first one under 13,
+    // and the second one, live, settles below 34.
+    wait_for_sessions(&recorded, &[(12, 12), (32, 33)]).await;
 
     shutdown.cancel();
     run.await.expect("the listener ends").expect("on shutdown");
@@ -1027,20 +1031,13 @@ async fn a_cut_leaves_the_slot_it_destroyed_in_no_range() {
 #[tokio::test]
 async fn each_connection_writes_its_own_span() {
     let server = test_geyser_server::start(vec![
-        ScriptedSession::Stream(vec![
-            timed_meta(10),
-            timed_meta(11),
-            timed_meta(12),
-            timed_meta(13),
-            Action::Fail(Status::unavailable("the provider restarted")),
-        ]),
-        ScriptedSession::Stream(vec![
-            timed_meta(20),
-            timed_meta(21),
-            timed_meta(22),
-            timed_meta(23),
-            Action::Hold,
-        ]),
+        ScriptedSession::Stream(
+            (10..=15)
+                .map(timed_meta)
+                .chain([Action::Fail(Status::unavailable("the provider restarted"))])
+                .collect(),
+        ),
+        ScriptedSession::Stream((20..=25).map(timed_meta).chain([Action::Hold]).collect()),
     ])
     .await;
     let (listener, recorded) = recorded_listener(&server, 2).await;
@@ -1048,7 +1045,7 @@ async fn each_connection_writes_its_own_span() {
     let shutdown = CancellationToken::new();
     let run = tokio::spawn(listener.run(downstream, shutdown.clone()));
 
-    wait_for_sessions(&recorded, &[(10, 10), (20, 20)]).await;
+    wait_for_sessions(&recorded, &[(12, 12), (22, 22)]).await;
 
     shutdown.cancel();
     run.await.expect("the listener ends").expect("on shutdown");

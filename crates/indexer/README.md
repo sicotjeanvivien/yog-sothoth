@@ -373,8 +373,9 @@ again.
 ⚠️ **Every attempt subscribes live, never with `from_slot`.** A replay from the
 last slot a session finished can advance slower than the chain, and then never
 catches up while the stream still reads as live; only a restart ended it. So a
-cut costs what the session had not settled, and that loss is written down
-rather than asked for again: it reads as a range nobody watched (below).
+cut costs what the session had not settled, and the first slots of the next
+one, which may have started before it joined; that loss is written down rather
+than asked for again: it reads as a range nobody watched (below).
 
 ### The slots received, and the ranges nobody watched
 
@@ -391,6 +392,9 @@ without anyone deciding it.
   not finished, less `HELD_BACK_SLOTS` (2), since a block-meta does not promise
   all of its slot's transactions arrived. Past that, a cut can still destroy a
   slot's transactions and nothing asks for them again, so it is not yet received.
+  The other side too: a session counts from its first block-meta's slot plus
+  `HELD_BACK_SLOTS`, since a live subscription can join a slot whose first
+  transactions were already sent.
 - `session/received_span.rs` — the span itself, lowest to highest slot, not first
   to last: a block-meta can follow a higher slot's. A slot the network skipped
   does not cut it, and a slot already in it, either end included, changes nothing.
@@ -409,7 +413,7 @@ without anyone deciding it.
 - Nothing is written under `INGEST_SCOPE=pools`: a protocol of which a few
   pools are watched is not watched whole.
 - A cut leaves an unwatched range, from the last slot the session settled to the
-  first one the next session, subscribed live, receives.
+  first one the next session, subscribed live, counts.
 - Out of scope: an unwatched range inside a live session (a transaction the
   slot/time buffer evicted, counted in
   `yog_indexer_grpc_untimestamped_transactions_total`), the

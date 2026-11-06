@@ -751,13 +751,17 @@ fn spans(ranges: &crate::infra::grpc::ranges_to_record::RangesToRecord) -> Vec<(
 async fn only_a_timed_block_meta_counts_as_received() {
     let (mut session, ranges) = receiving_session();
 
-    for slot in [10, 11, 12] {
+    for slot in 10..=14 {
         session.handle(block_meta(slot, Some(1_700_000_000))).await;
     }
     session.handle(block_meta(20, None)).await;
     session.handle(block_meta(30, Some(1_700_000_030))).await;
 
-    assert_eq!(spans(&ranges), [(10, 12)], "20 had no time");
+    assert_eq!(
+        spans(&ranges),
+        [(10 + HELD_BACK_SLOTS, 14)],
+        "20 had no time"
+    );
 }
 
 /// Mutation: the session handing over the highest block-meta instead of what it has settled.
@@ -774,7 +778,7 @@ async fn a_slot_whose_transaction_still_waits_is_not_yet_received() {
 
     assert_eq!(
         spans(&ranges),
-        [(10, 18 - HELD_BACK_SLOTS - 1)],
+        [(10 + HELD_BACK_SLOTS, 18 - HELD_BACK_SLOTS - 1)],
         "18 waits for its status: a cut would lose it"
     );
 }
