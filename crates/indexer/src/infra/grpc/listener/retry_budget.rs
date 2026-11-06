@@ -52,7 +52,7 @@ impl RetryBudget {
                 log::stopping_consumer_gone();
                 Next::Stop(Ok(()))
             }
-            Verdict::Delivered { error, .. } => {
+            Verdict::Delivered { error } => {
                 log::resubscribing(self.attempt, error.as_deref());
                 self.churn()
             }

@@ -64,8 +64,9 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
     listener.watch_pool(Protocol::MeteoraDammV2, pool).await;
 
     let request = listener
-        .subscribe_request()
+        .subscription()
         .await
+        .map(|(request, _)| request)
         .expect("two addresses are watched");
 
     let mut expected = vec![
@@ -287,9 +288,15 @@ async fn a_cut_mid_block_resubscribes_live() {
     .await
     .expect("one empty close after two churns exhausts a budget of one");
 
-    assert!(outcome.is_err(), "{outcome:?}");
+    assert!(
+        matches!(
+            outcome,
+            Err(GrpcListenerError::RetriesExhausted { attempts: 1, .. })
+        ),
+        "the two cuts are churn, the empty close is the one charge: {outcome:?}"
+    );
     assert_eq!(
-        server.resume_points(),
+        server.requested_from_slots(),
         vec![None, None, None],
         "slots 10 and 20 were cut open, and no attempt asks for them again"
     );
@@ -392,8 +399,9 @@ async fn a_failure_before_contact_is_unreachable_at_the_dial() {
         .channel_endpoint()
         .expect("a plaintext loopback URL is a gRPC endpoint");
     let request = listener
-        .subscribe_request()
+        .subscription()
         .await
+        .map(|(request, _)| request)
         .expect("one protocol is watched");
     let (downstream, _consumer) = mpsc::channel(4);
 
@@ -442,8 +450,9 @@ async fn a_connection_cut_before_the_server_answered_is_unreachable() {
         .channel_endpoint()
         .expect("a plaintext loopback URL is a gRPC endpoint");
     let request = listener
-        .subscribe_request()
+        .subscription()
         .await
+        .map(|(request, _)| request)
         .expect("one protocol is watched");
     let (downstream, _consumer) = mpsc::channel(4);
 
@@ -674,7 +683,7 @@ fn a_stalled_stream_is_resubscribed_live() {
     });
 
     assert_eq!(
-        server.resume_points(),
+        server.requested_from_slots(),
         vec![None, None],
         "a stall is churn, and the next session starts live"
     );
@@ -749,7 +758,7 @@ async fn pings_do_not_keep_a_stalled_stream_alive() {
     )
     .await;
 
-    assert_eq!(server.resume_points(), vec![None, None]);
+    assert_eq!(server.requested_from_slots(), vec![None, None]);
 }
 
 /// A slow but live stream is not restarted; how far its span reaches says where it was cut.
@@ -838,7 +847,7 @@ async fn a_subscribe_that_is_never_answered_is_bounded() {
     )
     .await;
 
-    assert_eq!(server.resume_points(), vec![None, None, None]);
+    assert_eq!(server.requested_from_slots(), vec![None, None, None]);
 }
 
 /// Mutation this is written against: the subscribe site not counting its stall.

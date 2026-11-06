@@ -89,7 +89,7 @@ impl GrpcListener {
         let credential = Credential::new(self.connector.endpoint().header())?;
         let interceptor = CredentialInterceptor::new(&credential)?;
         let channel = self.connector.channel_endpoint()?;
-        let request = self.subscribe_request().await?;
+        let (request, _) = self.subscription().await?;
 
         log::starting(self.connector.endpoint(), credential.name(), &request);
         WAITING_PEAKS.export();
@@ -160,11 +160,6 @@ impl GrpcListener {
     async fn subscription(&self) -> Result<(SubscribeRequest, Arc<[Protocol]>), GrpcListenerError> {
         let watched = self.watched.lock().await;
         Ok((build_request(&watched)?, whole_protocols(&watched)))
-    }
-
-    /// Build the subscription from what is watched right now.
-    async fn subscribe_request(&self) -> Result<SubscribeRequest, GrpcListenerError> {
-        build_request(&*self.watched.lock().await)
     }
 }
 
