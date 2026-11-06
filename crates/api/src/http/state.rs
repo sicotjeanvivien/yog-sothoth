@@ -12,8 +12,8 @@ use yog_persistence::PgHealthChecker;
 use crate::application::{
     AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService, KeyRing,
     LiquidityChangeEventService, LiquidityMoveService, LiquidityTurnoverService, LiveChannels,
-    NetworkService, PoolChangeEventService, PoolCreationEventService, PoolCreationsService,
-    PoolService, PositionChangeCountsService, PositionChangeEventService,
+    LiveTokens, NetworkService, PoolChangeEventService, PoolCreationEventService,
+    PoolCreationsService, PoolService, PositionChangeCountsService, PositionChangeEventService,
     PositionFeeClaimEventService, ProtocolCatalogService, ProtocolFeeClaimEventService,
     ProtocolTvlService, RewardChangeEventService, RewardClaimEventService, RotationRunService,
     SignalService, SwapActivityService, SwapEventService, TokenService, WindowsService, WorkSlots,
@@ -59,6 +59,8 @@ pub(crate) struct AppState {
     pub(crate) announcement_service: Arc<AnnouncementService>,
     /// The keys the `/api` routes accept, read by the authentication layer.
     pub(crate) key_ring: KeyRing,
+    /// Signs the live tokens and opens each once, read by the live stream's layer.
+    pub(crate) live_tokens: LiveTokens,
     /// Infra probe, exposed directly: no application logic surrounds it.
     pub(crate) health_checker: Arc<PgHealthChecker>,
     /// Cancelled on stop. Only the SSE stream reads it: every other response ends on its own.

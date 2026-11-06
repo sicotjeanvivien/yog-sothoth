@@ -24,8 +24,8 @@ use yog_persistence::{
 use crate::application::{
     AnnouncementService, ClaimTotalsService, DiscoveredTvlService, IngestionService, KeyRing,
     LIVE_CHANNEL_CAPACITY, LiquidityChangeEventService, LiquidityMoveService,
-    LiquidityTurnoverService, LiveChannels, LivePollers, NetworkService, PoolChangeEventService,
-    PoolCreationEventService, PoolCreationsService, PoolPairs, PoolService,
+    LiquidityTurnoverService, LiveChannels, LivePollers, LiveTokens, NetworkService,
+    PoolChangeEventService, PoolCreationEventService, PoolCreationsService, PoolPairs, PoolService,
     PositionChangeCountsService, PositionChangeEventService, PositionFeeClaimEventService,
     ProtocolCatalogService, ProtocolFeeClaimEventService, ProtocolTvlService,
     RewardChangeEventService, RewardClaimEventService, RotationRunService, SignalService,
@@ -233,6 +233,7 @@ pub(crate) async fn build_app_state(
         token_service: Arc::new(TokenService::new(token_metadata_repo, token_price_repo)),
         announcement_service: Arc::new(AnnouncementService::new(announcement_repo)),
         key_ring: key_ring.clone(),
+        live_tokens: LiveTokens::new(config.live_token_secret.expose().as_bytes()),
         health_checker: Arc::new(PgHealthChecker::new(db_pool)),
         shutdown,
     };

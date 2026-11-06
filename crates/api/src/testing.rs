@@ -161,6 +161,7 @@ pub(crate) fn app_state() -> AppState {
         )),
         announcement_service: Arc::new(AnnouncementService::new(Arc::new(MockAnnouncementRepo))),
         key_ring: key_ring(vec![]),
+        live_tokens: crate::application::LiveTokens::new(LIVE_TOKEN_SECRET),
         health_checker: Arc::new(PgHealthChecker::new(
             PgPool::connect_lazy("postgres://unused@127.0.0.1:1/unused")
                 .expect("a well-formed URL"),
@@ -186,6 +187,14 @@ pub(crate) async fn call_on(
         .uri(uri)
         .body(Body::empty())
         .unwrap();
+    send_on(state, request).await
+}
+
+/// `request` through the whole router on `state`, answered as [`call_on`] answers.
+pub(crate) async fn send_on(
+    state: AppState,
+    request: Request<Body>,
+) -> (StatusCode, HeaderMap, String) {
     let response = build_router(state, vec![]).oneshot(request).await.unwrap();
     let (parts, body) = response.into_parts();
     let body = axum::body::to_bytes(body, usize::MAX).await.unwrap();
@@ -205,6 +214,49 @@ pub(crate) async fn get(uri: &str) -> (StatusCode, String, String) {
         .unwrap_or_default()
         .to_string();
     (status, content_type, detail)
+}
+
+/// `request` through the whole router on `state`: its status and headers, the body left unread
+/// — a live stream's never ends.
+pub(crate) async fn head_on(state: AppState, request: Request<Body>) -> (StatusCode, HeaderMap) {
+    let response = build_router(state, vec![]).oneshot(request).await.unwrap();
+    (response.status(), response.headers().clone())
+}
+
+/// `GET uri` on the live stream, opened by a live token for exactly that path and topics.
+pub(crate) async fn get_live(uri: &str) -> (StatusCode, String, String) {
+    let request = Request::builder()
+        .uri(uri)
+        .header(header::AUTHORIZATION, live_bearer(uri))
+        .body(Body::empty())
+        .unwrap();
+    let (status, headers, detail) = send_on(app_state(), request).await;
+    let content_type = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_string();
+    (status, content_type, detail)
+}
+
+/// `Bearer` and a live token of [`app_state`] for the path and the topics of `uri`.
+pub(crate) fn live_bearer(uri: &str) -> String {
+    let (path, query) = uri.split_once('?').unwrap_or((uri, ""));
+    let topics = query
+        .split('&')
+        .filter_map(|pair| pair.strip_prefix("topics="))
+        .flat_map(|value| value.split(','))
+        .filter(|t| !t.is_empty())
+        .map(str::to_string)
+        .collect();
+    let scope = crate::application::LiveScope {
+        path: path.to_string(),
+        topics,
+    };
+    let token = crate::application::LiveTokens::new(LIVE_TOKEN_SECRET)
+        .issue("tests", &scope, Utc::now().timestamp())
+        .expect("the OS random source");
+    format!("Bearer {token}")
 }
 
 /// Deterministic pubkey from a single byte, for readable tests.
@@ -704,6 +756,9 @@ pub(crate) fn counter(counters: &Counters, name: &str, labels: &[(&str, &str)]) 
         .find(|(own_name, own, _)| own_name == name && *own == wanted)
         .map(|(_, _, n)| *n)
 }
+
+/// The key [`app_state`]'s live tokens are signed with.
+pub(crate) const LIVE_TOKEN_SECRET: &[u8] = b"the live token secret of the tests";
 
 /// The same keys on every read.
 struct FixedKeys(Vec<ActiveKey>);

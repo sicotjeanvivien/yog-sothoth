@@ -5,8 +5,8 @@ pub(crate) mod response;
 
 pub(crate) use response::{
     AnnouncementEntryResponse, IngestionResponse, LiquidityChangeEventResponse,
-    LiquidityMoveResponse, LiquidityTurnoverTotalsResponse, NetworkResponse, PageResponse,
-    PoolChangeEventResponse, PoolCreationEventResponse, PoolCreationTotalsResponse,
+    LiquidityMoveResponse, LiquidityTurnoverTotalsResponse, LiveTokenResponse, NetworkResponse,
+    PageResponse, PoolChangeEventResponse, PoolCreationEventResponse, PoolCreationTotalsResponse,
     PoolDetailResponse, PoolResponse, PoolSwapBucketResponse, PositionChangeEventResponse,
     PositionFeeClaimEventResponse, ProtocolCatalogPageResponse, ProtocolCatalogResponse,
     ProtocolClaimBucketResponse, ProtocolClaimTotalsResponse, ProtocolDiscoveredTvlResponse,

@@ -201,7 +201,7 @@ fn file_name(path: &Path) -> String {
 fn every_api_route_is_in_the_document() {
     let doc = document();
     let paths = doc["paths"].as_object().expect("paths");
-    assert_eq!(paths.len(), 79, "{:?}", paths.keys().collect::<Vec<_>>());
+    assert_eq!(paths.len(), 80, "{:?}", paths.keys().collect::<Vec<_>>());
 }
 
 /// A document of one schema, as `finish` receives it.
@@ -341,8 +341,8 @@ fn an_option_is_omitted_exactly_when_declared_absent() {
     assert!(unpaired.is_empty(), "{unpaired:?}");
 }
 
-/// Red when a schema is named without `Response` and is not one of the wire
-/// forms `dto/schema.rs` declares.
+/// Red when a schema is named neither `Response` nor `Body` (a request's) and is not one of
+/// the wire forms `dto/schema.rs` declares.
 #[test]
 fn every_schema_is_a_response_or_a_wire_form() {
     let schema_rs = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/http/dto/schema.rs");
@@ -356,11 +356,15 @@ fn every_schema_is_a_response_or_a_wire_form() {
         .as_object()
         .expect("schemas")
         .keys()
-        .filter(|name| !name.ends_with("Response") && !forms.contains(&name.as_str()))
+        .filter(|name| {
+            !name.ends_with("Response")
+                && !name.ends_with("Body")
+                && !forms.contains(&name.as_str())
+        })
         .collect();
     assert!(
         misnamed.is_empty(),
-        "name these `*Response`, or declare them as wire forms in dto/schema.rs: {misnamed:?}"
+        "name these `*Response` or `*Body`, or declare them as wire forms in dto/schema.rs: {misnamed:?}"
     );
 }
 
@@ -369,7 +373,11 @@ fn every_schema_is_a_response_or_a_wire_form() {
 fn every_operation_answers_its_failures_as_problem_details() {
     let doc = document();
     for (path, item) in doc["paths"].as_object().expect("paths") {
-        let content = item["get"]["responses"]["default"]["content"]
+        let operation = item
+            .get("get")
+            .or_else(|| item.get("post"))
+            .expect("an operation");
+        let content = operation["responses"]["default"]["content"]
             .as_object()
             .expect("content");
         assert_eq!(
@@ -438,7 +446,7 @@ fn every_handler_declares_the_body_and_query_it_has() {
             checked += 1;
         }
     }
-    assert_eq!(checked, 79, "one #[utoipa::path] per /api route");
+    assert_eq!(checked, 80, "one #[utoipa::path] per /api route");
     assert!(drift.is_empty(), "{drift:?}");
 }
 

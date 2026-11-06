@@ -3,8 +3,12 @@ use std::time::Duration;
 
 use axum::http::HeaderValue;
 use yog_bootstrap::{
-    ConfigError, SecretUrl, duration_var, optional, required, required_secret_url,
+    ConfigError, SecretKey, SecretUrl, duration_var, optional, required, required_secret_key,
+    required_secret_url,
 };
+
+/// The fewest characters `API_LIVE_TOKEN_SECRET` may hold: `openssl rand -hex 32` writes 64.
+const MIN_LIVE_TOKEN_SECRET: usize = 32;
 
 /// How often each poller of `/api/live` reads its table, in seconds (`API_LIVE_POLL_SECS`).
 const DEFAULT_LIVE_POLL_SECS: u64 = 3;
@@ -24,6 +28,8 @@ pub(crate) struct Config {
     pub(crate) cors_allowed_origins: Vec<HeaderValue>,
     /// Cadence of the pollers feeding `/api/live`.
     pub(crate) live_poll: Duration,
+    /// The key the live tokens are signed with.
+    pub(crate) live_token_secret: SecretKey,
 }
 
 impl Config {
@@ -49,8 +55,24 @@ impl Config {
                 "API_LIVE_POLL_SECS",
                 DEFAULT_LIVE_POLL_SECS,
             )?),
+            live_token_secret: check_live_token_secret(required_secret_key(
+                "API_LIVE_TOKEN_SECRET",
+            )?)?,
         })
     }
+}
+
+/// `secret`, or an error when it is too short to sign with; ⚠️ the error says its length, never it.
+fn check_live_token_secret(secret: SecretKey) -> Result<SecretKey, ConfigError> {
+    let length = secret.expose().chars().count();
+    if length < MIN_LIVE_TOKEN_SECRET {
+        return Err(ConfigError::InvalidValue {
+            key: "API_LIVE_TOKEN_SECRET".to_string(),
+            value: format!("{length} characters"),
+            expected: "at least 32 characters (openssl rand -hex 32)",
+        });
+    }
+    Ok(secret)
 }
 
 /// Parses `API_METRICS_ADDR`; absent is [`DEFAULT_METRICS_ADDR`].

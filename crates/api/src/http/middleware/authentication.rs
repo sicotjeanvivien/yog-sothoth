@@ -23,11 +23,7 @@ pub(crate) async fn authenticate(
     mut request: Request,
     next: Next,
 ) -> Response {
-    let route = request
-        .extensions()
-        .get::<MatchedPath>()
-        .map_or("unmatched", MatchedPath::as_str)
-        .to_string();
+    let route = route_of(&request);
 
     let Some(credential) = request.headers().get(header::AUTHORIZATION) else {
         ApiMetrics::record_request(ANONYMOUS, &route);
@@ -45,6 +41,15 @@ pub(crate) async fn authenticate(
     ApiMetrics::record_request(&client.name, &route);
     request.extensions_mut().insert(client);
     next.run(request).await
+}
+
+/// The route template `request` matched, as the requests are counted under.
+pub(super) fn route_of(request: &Request) -> String {
+    request
+        .extensions()
+        .get::<MatchedPath>()
+        .map_or("unmatched", MatchedPath::as_str)
+        .to_string()
 }
 
 /// The client `credential` names; a header that is not text names no scheme.

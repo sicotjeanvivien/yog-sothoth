@@ -5,7 +5,10 @@
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use utoipa::openapi::{ComponentsBuilder, InfoBuilder, OpenApiBuilder};
+use utoipa::openapi::{
+    ComponentsBuilder, InfoBuilder, OpenApiBuilder,
+    security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
+};
 use utoipa_axum::router::OpenApiRouter;
 
 use crate::application::WorkSlots;
@@ -23,6 +26,10 @@ pub(crate) fn document() -> Value {
         .components(Some(
             ComponentsBuilder::new()
                 .schema_from::<ProblemDetailsResponse>()
+                .security_scheme(
+                    "bearer",
+                    SecurityScheme::Http(HttpBuilder::new().scheme(HttpAuthScheme::Bearer).build()),
+                )
                 .build(),
         ))
         .build();

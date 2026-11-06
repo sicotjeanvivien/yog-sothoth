@@ -1,5 +1,5 @@
-use super::{parse_cors_origins, parse_metrics_addr};
-use yog_bootstrap::ConfigError;
+use super::{check_live_token_secret, parse_cors_origins, parse_metrics_addr};
+use yog_bootstrap::{ConfigError, SecretKey};
 
 #[test]
 fn parses_a_single_origin() {
@@ -61,4 +61,21 @@ fn rejects_a_metrics_address_that_is_no_socket_address() {
         err,
         ConfigError::InvalidValue { ref key, .. } if key == "API_METRICS_ADDR"
     ));
+}
+
+/// Mutation: the length unchecked, so a key a few characters long signs the live tokens.
+#[test]
+fn rejects_a_live_token_secret_too_short_to_sign_with() {
+    let err = check_live_token_secret(SecretKey::for_tests("a".repeat(31))).unwrap_err();
+
+    assert!(matches!(
+        err,
+        ConfigError::InvalidValue { ref key, ref value, .. }
+            if key == "API_LIVE_TOKEN_SECRET" && value == "31 characters"
+    ));
+}
+
+#[test]
+fn accepts_a_live_token_secret_of_32_characters() {
+    assert!(check_live_token_secret(SecretKey::for_tests("a".repeat(32))).is_ok());
 }

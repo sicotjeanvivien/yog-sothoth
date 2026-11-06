@@ -7,7 +7,7 @@ use axum::http::StatusCode;
 use serde_json::Value;
 
 use super::document;
-use crate::testing::{get, pk};
+use crate::testing::{get, get_live, pk};
 
 /// A key no route takes.
 const UNKNOWN: &str = "yog_unknown_key";
@@ -17,7 +17,7 @@ const UNKNOWN: &str = "yog_unknown_key";
 const PATIENCE: Duration = Duration::from_secs(2);
 
 /// Each `GET` path of the document, its path parameters filled with a valid value, and its
-/// documented query parameters.
+/// documented query parameters; `POST /api/live-tokens` takes a body and no query.
 fn routes() -> Vec<(String, Vec<Value>)> {
     let doc = document();
     let pool = pk(1).to_string();
@@ -25,6 +25,7 @@ fn routes() -> Vec<(String, Vec<Value>)> {
         .as_object()
         .expect("the document has paths")
         .iter()
+        .filter(|(_, item)| item.get("get").is_some())
         .map(|(path, item)| {
             let uri = path
                 .replace("{protocol}", "meteora_damm_v2")
@@ -57,9 +58,17 @@ fn valid_value(schema: &Value) -> Option<String> {
         .find_map(valid_value)
 }
 
-/// The answer to `uri`, or `None` when it is still answering after [`PATIENCE`].
+/// The answer to `uri`, or `None` when it is still answering after [`PATIENCE`]; the live stream
+/// is opened with a token for `uri`, so that its query is what answers.
 async fn answer(uri: &str) -> Option<(StatusCode, String, String)> {
-    tokio::time::timeout(PATIENCE, get(uri)).await.ok()
+    let call = async {
+        if uri.starts_with("/api/live?") || uri.starts_with("/api/live/") {
+            get_live(uri).await
+        } else {
+            get(uri).await
+        }
+    };
+    tokio::time::timeout(PATIENCE, call).await.ok()
 }
 
 /// Against `deny_unknown_fields` removed from one parameter struct, or `NoQuery` from one

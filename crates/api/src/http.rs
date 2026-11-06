@@ -49,7 +49,7 @@ use crate::http::middleware::tracing::{
     GenerateRequestId, REQUEST_ID_HEADER, make_request_span, on_failure, on_request, on_response,
 };
 
-/// The probes (`/healthz`, `/readyz`, untraced, their own JSON) merged with [`api_routes`],
+/// The probes (`/healthz`, `/readyz`, untraced, their own JSON) merged with [`rest_routes`] and [`live_routes`],
 /// traced, request-id'd, bounded by [`REQUEST_TIMEOUT`] and answering every error as Problem
 /// Details; both get the security and CORS headers. The bounds are in [`middleware::capacity`].
 pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValue>) -> Router {
@@ -57,14 +57,19 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
         .route("/healthz", get(handlers::health::healthz))
         .route("/readyz", get(handlers::health::readyz));
 
-    let (api, _contract) = api_routes(state.work_slots.clone()).split_for_parts();
+    let (rest, _) = rest_routes(state.work_slots.clone()).split_for_parts();
+    let (live, _) = live_routes().split_for_parts();
 
-    let app = api
-        // ⚠️ A route layer: it runs after routing, so the probes and an unknown path never reach it.
+    // ⚠️ Route layers: they run after routing, so the probes and an unknown path never reach them.
+    let app = rest
         .route_layer(from_fn_with_state(
             state.key_ring.clone(),
             middleware::authentication::authenticate,
         ))
+        .merge(live.route_layer(from_fn_with_state(
+            state.live_tokens.clone(),
+            middleware::live_authentication::authenticate_live,
+        )))
         // Under the layers below: an unknown route is traced and request-id'd like any other.
         .fallback(no_such_route)
         // ⚠️ Innermost: `request_deadline` bounds its read of an error body.
@@ -106,7 +111,20 @@ async fn no_such_route() -> ApiError {
 /// Every `/api` route, each mounted with its contract (`#[utoipa::path]`). The
 /// committed OpenAPI document is read from this same list, so a route cannot be
 /// served without being declared.
+#[cfg(test)]
 fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
+    rest_routes(work_slots).merge(live_routes())
+}
+
+/// The live stream, opened by a live token only, and capped by its own slots, in the handler.
+fn live_routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(handlers::live::live))
+        .routes(routes!(handlers::live::protocol_live))
+}
+
+/// The requests: every `/api` route but the live stream, identified by their API key.
+fn rest_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
     // ⚠️ `/api/protocols` is slow too, but stays out: its computation takes a slot
     // inside the cache, so its waiters hold none.
     let slotted = OpenApiRouter::new()
@@ -130,9 +148,7 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         .routes(routes!(handlers::network::get_network))
         .routes(routes!(handlers::ingestion::get_ingestion))
         .routes(routes!(handlers::windows::get_windows))
-        // The live stream is capped by its own slots, in the handler.
-        .routes(routes!(handlers::live::live))
-        .routes(routes!(handlers::live::protocol_live))
+        .routes(routes!(handlers::live_tokens::create_live_token))
         .routes(routes!(handlers::token::get_token))
         .routes(routes!(handlers::token::list_tokens))
         .routes(routes!(handlers::token::list_token_prices))

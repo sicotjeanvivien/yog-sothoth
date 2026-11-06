@@ -49,12 +49,13 @@ pub(crate) struct Delivery {
 /// ends the whole connection: a silent gap in one topic would pass for a quiet feed.
 pub(crate) type TopicStream = BoxStream<'static, Option<Delivery>>;
 
-/// Live items of every protocol.
+/// Live items of every protocol, opened by a live token (`POST /api/live-tokens`), never a key.
 ///
 /// ⚠️ At most `SSE_MAX_STREAMS` connections at once, whatever their topics, then `503`.
 #[utoipa::path(
     get,
     path = "/api/live",
+    security(("bearer" = [])),
     params(LiveParams),
     responses((
         status = 200,
@@ -81,6 +82,7 @@ pub(crate) async fn live(
 #[utoipa::path(
     get,
     path = "/api/live/protocols/{protocol}",
+    security(("bearer" = [])),
     params(LiveParams),
     responses((
         status = 200,

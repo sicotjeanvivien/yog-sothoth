@@ -20,7 +20,7 @@ use super::{
 };
 use crate::application::{EnrichedSignal, EnrichedToken, LiveEvent, Paired};
 use crate::http::{build_router, cursor::LiveCursor, dto::request::LiveTopic};
-use crate::testing::{app_state, get, make_metadata, make_signal_record, pk};
+use crate::testing::{app_state, get_live, live_bearer, make_metadata, make_signal_record, pk};
 
 /// Mutation: a topic the stream does not serve accepted — the connection opens and stays silent.
 #[tokio::test]
@@ -43,7 +43,7 @@ async fn a_connection_it_cannot_serve_is_refused_in_problem_details() {
             "unknown protocol: raydium",
         ),
     ] {
-        let (status, content_type, detail) = get(uri).await;
+        let (status, content_type, detail) = get_live(uri).await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}: {detail}");
         assert_eq!(content_type, "application/problem+json", "{uri}");
         assert!(detail.contains(reason), "{uri}: {detail}");
@@ -66,6 +66,7 @@ async fn a_served_connection_opens_whatever_its_last_event_id() {
         let request = Request::builder()
             .uri(&uri)
             .header("last-event-id", "not-a-cursor")
+            .header(header::AUTHORIZATION, live_bearer(&uri))
             .body(Body::empty())
             .unwrap();
         let response = build_router(app_state(), vec![])

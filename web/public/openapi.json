@@ -90,6 +90,33 @@
         ],
         "type": "string"
       },
+      "CreateLiveTokenBody": {
+        "additionalProperties": false,
+        "description": "The live stream a token is asked for, as it will be opened.",
+        "properties": {
+          "path": {
+            "description": "A path of the live stream: `/api/live`, or `/api/live/protocols/{protocol}`.",
+            "example": "/api/live/protocols/meteora_damm_v2",
+            "type": "string"
+          },
+          "topics": {
+            "description": "The topics the stream will carry, as `topics` names them on `/api/live`.",
+            "example": [
+              "signals",
+              "liquidity-changes"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "path",
+          "topics"
+        ],
+        "type": "object"
+      },
       "EmbeddedTokenResponse": {
         "description": "A token, embedded in another resource's response.",
         "properties": {
@@ -457,6 +484,31 @@
           }
         ],
         "description": "`liquidity-turnover/totals`: `total` is every volume over every TVL, not a sum of the rows'."
+      },
+      "LiveTokenResponse": {
+        "description": "A live token, to present once as `Authorization: Bearer` on the stream it names.",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "expiresIn": {
+            "description": "Seconds the token opens its stream for, from now.",
+            "format": "u-int32",
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "tokenType": {
+            "description": "Always `Bearer`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accessToken",
+          "tokenType",
+          "expiresIn"
+        ],
+        "type": "object"
       },
       "MeteoraDammV2BaseFeeResponse": {
         "description": "The base fee, named by the `mode` cp-amm writes; a scheduler of 0 periods never moves.",
@@ -6471,6 +6523,12 @@
         ],
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
     }
   },
   "info": {
@@ -6728,7 +6786,54 @@
             "description": "A failure: RFC 9457 Problem Details."
           }
         },
-        "summary": "Live items of every protocol."
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Live items of every protocol, opened by a live token (`POST /api/live-tokens`), never a key."
+      }
+    },
+    "/api/live-tokens": {
+      "post": {
+        "operationId": "create_live_token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLiveTokenBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveTokenResponse"
+                }
+              }
+            },
+            "description": "A live token for the stream named, to present once, within `expiresIn` seconds, as `Authorization: Bearer`. Without an API key: 401."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/api/live/protocols/{protocol}": {
@@ -6777,6 +6882,11 @@
             "description": "A failure: RFC 9457 Problem Details."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "summary": "Live items of one protocol: the same topics, filtered by the server."
       }
     },

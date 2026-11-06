@@ -10,6 +10,7 @@ use yog_core::domain::Protocol;
 
 use crate::http::error::ApiError;
 
+mod create_live_token;
 mod get_token;
 mod list_announcements;
 mod list_events;
@@ -25,6 +26,7 @@ mod live;
 mod no_query;
 mod window_param;
 
+pub(crate) use create_live_token::CreateLiveTokenBody;
 pub(crate) use get_token::GetTokenRequest;
 pub(crate) use list_announcements::{AnnouncementsParams, ListAnnouncementsRequest};
 pub(crate) use list_events::{EventsParams, ListEventsRequest};

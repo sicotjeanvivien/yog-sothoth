@@ -48,6 +48,13 @@ export const zCoverageUnitResponse = z.enum(['poolHours', 'poolTranches']);
 
 export type CoverageUnitResponse = z.infer<typeof zCoverageUnitResponse>;
 
+export const zCreateLiveTokenBody = z.object({
+    path: z.string(),
+    topics: z.array(z.string())
+});
+
+export type CreateLiveTokenBody = z.infer<typeof zCreateLiveTokenBody>;
+
 export const zEmbeddedTokenResponse = z.object({
     decimals: z.int().gte(0).lte(255).nullable(),
     logoUri: z.url().nullable(),
@@ -101,6 +108,14 @@ export const zLiquidityMoveLockResponse = z.enum([
 ]);
 
 export type LiquidityMoveLockResponse = z.infer<typeof zLiquidityMoveLockResponse>;
+
+export const zLiveTokenResponse = z.object({
+    accessToken: z.string(),
+    expiresIn: z.int().gte(0).lte(4294967295),
+    tokenType: z.string()
+});
+
+export type LiveTokenResponse = z.infer<typeof zLiveTokenResponse>;
 
 export const zMeteoraDammV2BpsChangeResponse = z.union([
     z.object({
@@ -1708,6 +1723,10 @@ export const zLiveQuery = z.object({
 });
 
 export const zLiveResponse = z.string();
+
+export const zCreateLiveTokenBody2 = zCreateLiveTokenBody;
+
+export const zCreateLiveTokenResponse = zLiveTokenResponse;
 
 export const zProtocolLivePath = z.object({
     protocol: z.string()
