@@ -1,5 +1,3 @@
-use std::future::Future;
-
 use axum::{
     Extension, Router,
     body::Body,
@@ -7,11 +5,11 @@ use axum::{
     middleware::from_fn_with_state,
     routing::get,
 };
-use metrics_util::debugging::{DebugValue, DebuggingRecorder, Snapshotter};
 use tower::ServiceExt;
 use yog_core::domain::{ActiveKey, ApiClient, ApiKey};
 
 use super::*;
+use crate::testing::{counter, recorded};
 
 fn key(byte: u8) -> ApiKey {
     ApiKey::from_random([byte; 4], [byte; 32])
@@ -46,6 +44,11 @@ struct Answer {
 }
 
 async fn send(router: Router, path: &str, authorization: Option<&str>) -> Answer {
+    let value = authorization.map(|v| HeaderValue::from_str(v).expect("a header value"));
+    send_header(router, path, value).await
+}
+
+async fn send_header(router: Router, path: &str, authorization: Option<HeaderValue>) -> Answer {
     let mut request = Request::builder().uri(path);
     if let Some(value) = authorization {
         request = request.header(header::AUTHORIZATION, value);
@@ -64,46 +67,6 @@ async fn send(router: Router, path: &str, authorization: Option<&str>) -> Answer
         www_authenticate,
         body: String::from_utf8_lossy(&body).into_owned(),
     }
-}
-
-/// Run `f` on a current-thread runtime under a recorder of its own, and hand back its snapshot.
-fn recorded<T>(f: impl Future<Output = T>) -> (T, Snapshotter) {
-    let recorder = DebuggingRecorder::new();
-    let snapshotter = recorder.snapshotter();
-    let out = metrics::with_local_recorder(&recorder, || {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(f)
-    });
-    (out, snapshotter)
-}
-
-/// The value of counter `name` whose labels are exactly `labels`.
-fn counter(snapshotter: &Snapshotter, name: &str, labels: &[(&str, &str)]) -> Option<u64> {
-    snapshotter
-        .snapshot()
-        .into_vec()
-        .into_iter()
-        .find(|(key, _, _, _)| {
-            let mut own: Vec<_> = key
-                .key()
-                .labels()
-                .map(|l| (l.key().to_string(), l.value().to_string()))
-                .collect();
-            own.sort();
-            let mut wanted: Vec<_> = labels
-                .iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect();
-            wanted.sort();
-            key.key().name() == name && own == wanted
-        })
-        .and_then(|(_, _, _, value)| match value {
-            DebugValue::Counter(n) => Some(n),
-            _ => None,
-        })
 }
 
 /// Mutation: a request without a key refused, or counted under its path rather than its route.
@@ -183,6 +146,23 @@ fn another_scheme_is_refused() {
 #[test]
 fn a_bearer_that_is_no_api_key_is_refused() {
     refused_for("Bearer not-a-key", "malformed");
+}
+
+/// Mutation: a header that is not text read as a bearer that is no key.
+#[test]
+fn a_header_that_is_not_text_is_another_scheme() {
+    let value = HeaderValue::from_bytes(b"Bearer \xff").expect("obs-text is a header value");
+    let (answer, metrics) = recorded(send_header(echo(), "/echo/42", Some(value)));
+
+    assert_eq!(answer.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        counter(
+            &metrics,
+            "yog_api_unauthorized_total",
+            &[("reason", "scheme")]
+        ),
+        Some(1)
+    );
 }
 
 #[test]

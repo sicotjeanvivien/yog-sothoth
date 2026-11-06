@@ -657,6 +657,54 @@ impl AnnouncementLookup for MockAnnouncementRepo {
     }
 }
 
+/// Every counter `f` recorded, by name and sorted labels.
+pub(crate) type Counters = Vec<(String, Vec<(String, String)>, u64)>;
+
+/// Run `f` on a current-thread runtime under a recorder of its own, and hand back its counters.
+/// ⚠️ Read once, after `f`: a snapshot resets every counter it reads to zero.
+pub(crate) fn recorded<T>(f: impl std::future::Future<Output = T>) -> (T, Counters) {
+    let recorder = metrics_util::debugging::DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+    let out = metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(f)
+    });
+    let counters = snapshotter
+        .snapshot()
+        .into_vec()
+        .into_iter()
+        .filter_map(|(key, _, _, value)| {
+            let metrics_util::debugging::DebugValue::Counter(n) = value else {
+                return None;
+            };
+            let mut labels: Vec<_> = key
+                .key()
+                .labels()
+                .map(|l| (l.key().to_string(), l.value().to_string()))
+                .collect();
+            labels.sort();
+            Some((key.key().name().to_string(), labels, n))
+        })
+        .collect();
+    (out, counters)
+}
+
+/// The value of counter `name` whose labels are exactly `labels`.
+pub(crate) fn counter(counters: &Counters, name: &str, labels: &[(&str, &str)]) -> Option<u64> {
+    let mut wanted: Vec<_> = labels
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+    wanted.sort();
+    counters
+        .iter()
+        .find(|(own_name, own, _)| own_name == name && *own == wanted)
+        .map(|(_, _, n)| *n)
+}
+
 /// The same keys on every read.
 struct FixedKeys(Vec<ActiveKey>);
 

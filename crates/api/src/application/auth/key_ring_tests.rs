@@ -77,3 +77,28 @@ async fn a_failed_reload_keeps_the_keys_held() {
         "the ring kept what it held"
     );
 }
+
+/// Mutation: a reread left uncounted, or counted under the other outcome.
+#[test]
+fn a_reload_is_counted_by_its_outcome() {
+    let (_, metrics) = crate::testing::recorded(async {
+        let ring = ring_reading(vec![
+            Ok(vec![]),
+            Ok(vec![]),
+            Err(RepositoryError::Backend("down".to_string())),
+        ])
+        .await;
+        ring.reload().await;
+        ring.reload().await;
+    });
+
+    let reloads = |outcome| {
+        crate::testing::counter(
+            &metrics,
+            "yog_api_key_ring_reloads_total",
+            &[("outcome", outcome)],
+        )
+    };
+    assert_eq!(reloads("reloaded"), Some(1));
+    assert_eq!(reloads("failed"), Some(1));
+}
