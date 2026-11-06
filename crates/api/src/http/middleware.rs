@@ -38,3 +38,7 @@ pub(super) fn cors_layer(allowed_origins: Vec<HeaderValue>) -> CorsLayer {
         .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
         .expose_headers([HeaderName::from_static(REQUEST_ID_HEADER)])
 }
+
+#[cfg(test)]
+#[path = "middleware/cors_tests.rs"]
+mod tests;
