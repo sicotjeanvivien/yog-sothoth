@@ -39,7 +39,7 @@ mod watched_pool;
 
 pub use analytic::PgAnalyticRepository;
 pub use announcement::PgAnnouncementRepository;
-pub use api_key::{ApiKeyListing, PgApiKeyRepository};
+pub use api_key::PgApiKeyRepository;
 pub use claim_totals::PgClaimTotalsRepository;
 pub use discovered_tvl::PgDiscoveredTvlRepository;
 pub use event_freshness::PgEventFreshnessRepository;

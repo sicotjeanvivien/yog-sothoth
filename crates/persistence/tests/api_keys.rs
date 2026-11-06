@@ -4,7 +4,7 @@
 use sqlx::PgPool;
 use yog_core::{
     RepositoryError,
-    domain::{ApiKey, ApiKeyLookup},
+    domain::{ApiKey, ApiKeyLookup, ApiKeyRepository},
 };
 use yog_persistence::PgApiKeyRepository;
 

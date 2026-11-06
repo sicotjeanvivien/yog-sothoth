@@ -1,15 +1,14 @@
-//! Postgres implementation of `ApiKeyLookup`, and the operator's writes, which `yog-migrate`
-//! alone calls under `yog_migrate`: the api reads, and may write nothing.
+//! Postgres implementation of `ApiKeyRepository`, which `yog-migrate` alone calls under
+//! `yog_migrate`, and of `ApiKeyLookup`: the api reads, and may write nothing.
 
 mod rows;
 
 use async_trait::async_trait;
-use rows::ActiveKeyRow;
-pub use rows::ApiKeyListing;
+use rows::{ActiveKeyRow, ApiKeyListingRow};
 use sqlx::PgPool;
 use yog_core::{
     RepositoryError, RepositoryResult,
-    domain::{ActiveKey, ApiKey, ApiKeyLookup},
+    domain::{ActiveKey, ApiKey, ApiKeyListing, ApiKeyLookup, ApiKeyRepository},
 };
 
 use crate::repositories::helper::map_sqlx_error;
@@ -23,10 +22,11 @@ impl PgApiKeyRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+}
 
-    /// Store `key` for `client`, creating the client on its first key.
-    /// ⚠️ A revoked client is refused: its key would be stored and never accepted.
-    pub async fn create(&self, client: &str, key: &ApiKey) -> RepositoryResult<()> {
+#[async_trait]
+impl ApiKeyRepository for PgApiKeyRepository {
+    async fn create(&self, client: &str, key: &ApiKey) -> RepositoryResult<()> {
         let mut tx = self.pool.begin().await.map_err(map_sqlx_error)?;
 
         let owner = sqlx::query!(
@@ -59,8 +59,7 @@ impl PgApiKeyRepository {
         tx.commit().await.map_err(map_sqlx_error)
     }
 
-    /// Revoke the key named by `prefix`; `false` when no key under it was still active.
-    pub async fn revoke(&self, prefix: &str) -> RepositoryResult<bool> {
+    async fn revoke(&self, prefix: &str) -> RepositoryResult<bool> {
         let revoked = sqlx::query!(
             "UPDATE api_keys SET revoked_at = now() WHERE prefix = $1 AND revoked_at IS NULL",
             prefix,
@@ -71,10 +70,9 @@ impl PgApiKeyRepository {
         Ok(revoked.rows_affected() == 1)
     }
 
-    /// Every key, revoked or not, the newest first.
-    pub async fn list(&self) -> RepositoryResult<Vec<ApiKeyListing>> {
-        sqlx::query_as!(
-            ApiKeyListing,
+    async fn list(&self) -> RepositoryResult<Vec<ApiKeyListing>> {
+        let rows = sqlx::query_as!(
+            ApiKeyListingRow,
             r#"
             SELECT k.prefix, c.name AS client, k.created_at, k.revoked_at
               FROM api_keys k
@@ -84,7 +82,9 @@ impl PgApiKeyRepository {
         )
         .fetch_all(&self.pool)
         .await
-        .map_err(map_sqlx_error)
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows.into_iter().map(ApiKeyListing::from).collect())
     }
 }
 

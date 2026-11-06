@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use yog_core::{
     RepositoryError,
-    domain::{ActiveKey, ApiClient},
+    domain::{ActiveKey, ApiClient, ApiKeyListing},
 };
 
 /// A key not revoked, of a client not revoked. A hash of another size than 32 bytes is an
@@ -30,13 +30,23 @@ impl TryFrom<ActiveKeyRow> for ActiveKey {
     }
 }
 
-/// A key as an operator lists it: never the key, never its hash.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ApiKeyListing {
-    pub prefix: String,
-    pub client: String,
-    pub created_at: DateTime<Utc>,
-    pub revoked_at: Option<DateTime<Utc>>,
+/// A key as an operator lists it.
+pub(super) struct ApiKeyListingRow {
+    pub(super) prefix: String,
+    pub(super) client: String,
+    pub(super) created_at: DateTime<Utc>,
+    pub(super) revoked_at: Option<DateTime<Utc>>,
+}
+
+impl From<ApiKeyListingRow> for ApiKeyListing {
+    fn from(row: ApiKeyListingRow) -> Self {
+        Self {
+            prefix: row.prefix,
+            client: row.client,
+            created_at: row.created_at,
+            revoked_at: row.revoked_at,
+        }
+    }
 }
 
 #[cfg(test)]

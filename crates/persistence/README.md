@@ -50,7 +50,7 @@ persistence/
 │   │   ├── token_metadata/, token_price/, network_status/, watched_pool/,
 │   │   │   observed_slots.rs (the slots each ingestion session watched)
 │   │   ├── announcement/
-│   │   ├── api_key.rs (the API keys: the api's read, the operator's writes)
+│   │   ├── api_key.rs (the API keys: ApiKeyRepository, the operator's, and ApiKeyLookup, the api's; rows.rs)
 │   │   ├── materialization_backlog/ (reads `yog_cagg_materialization_backlog()`,
 │   │   │                     migration 013)
 │   │   └── event_freshness.rs

@@ -7,7 +7,8 @@ use anyhow::{Context, Result, anyhow, bail};
 
 use yog_bootstrap::SecretUrl;
 use yog_core::domain::{
-    API_KEY_PREFIX_BYTES, API_KEY_SECRET_BYTES, ApiKey, WatchedPoolRepository, is_client_name,
+    API_KEY_PREFIX_BYTES, API_KEY_SECRET_BYTES, ApiKey, ApiKeyRepository, WatchedPoolRepository,
+    is_client_name,
 };
 use yog_persistence::{Database, PgApiKeyRepository, PgWatchedPoolRepository};
 
@@ -163,7 +164,7 @@ async fn create_api_key(client: &str) -> Result<()> {
     if !is_client_name(client) {
         bail!("a client is named by 1 to 63 of [a-z0-9-], a letter or a digit first: {client:?}");
     }
-    let database = connect("DATABASE_URL_MIGRATE", "the yog_migrate role").await?;
+    let keys = api_keys().await?;
 
     let mut prefix = [0u8; API_KEY_PREFIX_BYTES];
     let mut secret = [0u8; API_KEY_SECRET_BYTES];
@@ -172,8 +173,7 @@ async fn create_api_key(client: &str) -> Result<()> {
         .map_err(|e| anyhow!("the OS random source failed: {e}"))?;
     let key = ApiKey::from_random(prefix, secret);
 
-    PgApiKeyRepository::new(database.pool_owned())
-        .create(client, &key)
+    keys.create(client, &key)
         .await
         .context("failed to store the key")?;
 
@@ -185,9 +185,8 @@ async fn create_api_key(client: &str) -> Result<()> {
 
 /// Revoke the key named by `prefix`, as `yog_migrate`.
 async fn revoke_api_key(prefix: &str) -> Result<()> {
-    let database = connect("DATABASE_URL_MIGRATE", "the yog_migrate role").await?;
-
-    let revoked = PgApiKeyRepository::new(database.pool_owned())
+    let revoked = api_keys()
+        .await?
         .revoke(prefix)
         .await
         .context("failed to revoke the key")?;
@@ -200,9 +199,8 @@ async fn revoke_api_key(prefix: &str) -> Result<()> {
 
 /// Every key, as `yog_migrate`: never a key, never a hash.
 async fn list_api_keys() -> Result<()> {
-    let database = connect("DATABASE_URL_MIGRATE", "the yog_migrate role").await?;
-
-    let keys = PgApiKeyRepository::new(database.pool_owned())
+    let keys = api_keys()
+        .await?
         .list()
         .await
         .context("failed to list the keys")?;
@@ -216,6 +214,12 @@ async fn list_api_keys() -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// The API keys, through their contract, as `yog_migrate`.
+async fn api_keys() -> Result<Box<dyn ApiKeyRepository>> {
+    let database = connect("DATABASE_URL_MIGRATE", "the yog_migrate role").await?;
+    Ok(Box::new(PgApiKeyRepository::new(database.pool_owned())))
 }
 
 /// The subcommand's one argument. ⚠️ A word too many is refused: `create-api-key acme corp`
