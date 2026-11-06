@@ -262,8 +262,7 @@ async fn a_stream_that_delivered_before_breaking_restarts_the_budget() {
     );
 }
 
-/// ⚠️ A replay can fall behind the chain for good: a cut, an error or a clean close, mid-block,
-/// resubscribes live. Mutation this is written against: an attempt asking for a `from_slot`.
+/// Mutation this is written against: an attempt asking for a `from_slot`.
 #[tokio::test]
 async fn a_cut_mid_block_resubscribes_live() {
     let server = test_geyser_server::start(vec![
@@ -1000,7 +999,6 @@ async fn a_session_writes_the_slots_it_received_skipped_ones_included() {
     run.await.expect("the listener ends").expect("on shutdown");
 }
 
-/// ⚠️ Nothing replays a cut: the slots it can have cut short, on both sides, must be in no range.
 /// Mutation this is written against: `settled_below` answering from the highest block-meta, or a
 /// session counting its first slots.
 #[tokio::test]

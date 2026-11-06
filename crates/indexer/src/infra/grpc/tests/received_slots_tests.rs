@@ -35,7 +35,6 @@ fn each_received_block_meta_widens_the_session_span_skipped_slots_included() {
     );
 }
 
-/// ⚠️ A live subscription can join mid-slot, so the first slot can miss transactions sent before it.
 /// Mutation: every timed block-meta counted, the first ones of the session included.
 #[test]
 fn the_first_slots_of_a_session_are_not_counted() {
