@@ -1,5 +1,5 @@
 //! One subscription's state, and what each update does to it: pure state and channels, no wire.
-//! `slot_progress` decides when a transaction leaves and where a reconnection resumes, `delivery`
+//! `slot_progress` decides when a transaction leaves and which slots are settled, `delivery`
 //! hands it on under back-pressure, `ping_answer` answers server pings.
 
 mod delivery;
@@ -85,11 +85,6 @@ impl StreamSession {
         self.block_metas
     }
 
-    /// Where a reconnection should resume from, or `None` when nothing arrived.
-    pub(super) fn resume_from(&self) -> Option<u64> {
-        self.slots.resume_from()
-    }
-
     /// Take one update off the stream; failures are per-update and stepped over, and only the
     /// consumer disappearing or a shutdown ends the session.
     pub(super) async fn handle(&mut self, update: SubscribeUpdate) -> SessionState {
@@ -109,7 +104,7 @@ impl StreamSession {
                 let released = self.slots.on_block_meta(meta);
                 if let Some((slot, at)) = timed {
                     self.received_slots
-                        .on_block_meta(slot, at, self.slots.resume_from());
+                        .on_block_meta(slot, at, self.slots.settled_below());
                 }
                 self.deliver_all(released).await
             }
@@ -163,7 +158,7 @@ impl StreamSession {
         for resolved in released {
             match self.delivery.deliver(resolved.payload, resolved.at).await {
                 SessionState::Open => {}
-                // The rest of the batch dies with the buffer; `resume_from` asks for it again.
+                // The rest of the batch dies with the session: only a stop ends a delivery.
                 ended => return ended,
             }
         }

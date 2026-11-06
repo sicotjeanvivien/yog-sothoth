@@ -3,7 +3,7 @@
 use chrono::{DateTime, Utc};
 
 /// First and last slot received for good, with their block times.
-/// ⚠️ Lowest and highest, not first and last to arrive: a replay delivers its oldest slots last.
+/// ⚠️ Lowest and highest, not first and last to arrive: a block-meta can follow a higher slot's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::infra::grpc) struct ReceivedSpan {
     first: u64,

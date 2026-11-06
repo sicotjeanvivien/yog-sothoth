@@ -6,8 +6,6 @@ use yog_bootstrap::Endpoint;
 
 use yog_core::{RepositoryError, domain::Protocol};
 
-use crate::infra::grpc::metrics::MarkRefusal;
-
 /// The configuration has been read and the first attempt is about to start.
 pub(super) fn starting(endpoint: &Endpoint, header: Option<&str>, request: &SubscribeRequest) {
     info!(
@@ -24,8 +22,8 @@ pub(super) fn starting(endpoint: &Endpoint, header: Option<&str>, request: &Subs
 }
 
 /// The server answered `subscribe`.
-pub(super) fn subscribed(from_slot: Option<u64>) {
-    info!(from_slot = ?from_slot, "subscribed to the Yellowstone stream");
+pub(super) fn subscribed() {
+    info!("subscribed to the Yellowstone stream");
 }
 
 pub(super) fn stopping_on_shutdown() {
@@ -38,32 +36,16 @@ pub(super) fn stopping_consumer_gone() {
 
 /// A stream that delivered ended: cleanly when there is no `error`, broken or
 /// stalled otherwise.
-pub(super) fn resubscribing(attempt: u32, error: Option<&str>, resume_from: Option<u64>) {
+pub(super) fn resubscribing(attempt: u32, error: Option<&str>) {
     match error {
         None => warn!(attempt, "gRPC stream closed — resubscribing"),
-        Some(error) => warn!(
-            attempt,
-            error = %error,
-            resume_from = ?resume_from,
-            "gRPC stream broke — resubscribing"
-        ),
+        Some(error) => warn!(attempt, error = %error, "gRPC stream broke — resubscribing"),
     }
 }
 
 /// An attempt that delivered nothing is charged to the budget.
-pub(super) fn attempt_failed(attempt: u32, max: u32, error: &str, resume_from: Option<u64>) {
-    warn!(
-        attempt,
-        max,
-        error = %error,
-        resume_from = ?resume_from,
-        "gRPC stream attempt failed"
-    );
-}
-
-/// The server refused the request, and the mark it held is given up: a gap opens at `slot`.
-pub(super) fn mark_abandoned(slot: u64, reason: MarkRefusal) {
-    warn!(slot, code = reason.as_str(), "gRPC resume mark abandoned");
+pub(super) fn attempt_failed(attempt: u32, max: u32, error: &str) {
+    warn!(attempt, max, error = %error, "gRPC stream attempt failed");
 }
 
 /// A session's slots could not be written; the next tick writes them again.

@@ -25,7 +25,6 @@ pub(crate) const SLOT_FILTER: &str = "slots";
 /// ⚠️ `vote: Some(false)` and `failed: Some(false)` are load-bearing: the adapter reads neither.
 pub(crate) fn build_request(
     watched: &HashSet<(Protocol, Pubkey)>,
-    from_slot: Option<u64>,
 ) -> Result<SubscribeRequest, GrpcListenerError> {
     let includes = account_includes(watched);
 
@@ -67,7 +66,6 @@ pub(crate) fn build_request(
         )]),
         // Same commitment as the WebSocket path, so switching source does not switch settledness.
         commitment: Some(CommitmentLevel::Finalized as i32),
-        from_slot,
         ..Default::default()
     })
 }

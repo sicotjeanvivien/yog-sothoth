@@ -5,7 +5,7 @@
 use super::*;
 
 use super::{
-    ping_answer::PING_REPLY_ID, received_slots::ReceivedSlots, slot_progress::REWIND_SLOTS,
+    ping_answer::PING_REPLY_ID, received_slots::ReceivedSlots, slot_progress::HELD_BACK_SLOTS,
 };
 
 use metrics_util::debugging::{DebugValue, DebuggingRecorder};
@@ -379,10 +379,10 @@ async fn a_full_downstream_slows_the_stream_instead_of_dropping() {
         .expect("the second waited for room; dropping it here is the defect");
     assert_eq!(second.transaction.position.slot, 10);
 
-    // Slot 10 was closed by its block-meta: the `highest_meta_slot` branch of `resume_from`, rewound.
+    // Slot 10 was closed by its block-meta: the `highest_meta_slot` branch of `settled_below`.
     assert_eq!(
-        handling.await.expect("no panic").resume_from(),
-        Some(10 - REWIND_SLOTS)
+        handling.await.expect("no panic").slots.settled_below(),
+        Some(10 - HELD_BACK_SLOTS)
     );
 }
 
@@ -410,8 +410,8 @@ async fn a_closed_downstream_ends_the_session() {
 
 // ── keep-alive ──────────────────────────────────────────────────────
 
-/// ⚠️ A ping is answered with a request whose only field is `ping`: a `from_slot` would re-issue
-/// the replay on every ping, a filter would describe a subscription anew.
+/// ⚠️ A ping is answered with a request whose only field is `ping`: a filter would describe a
+/// subscription anew.
 #[tokio::test]
 async fn a_ping_is_answered_with_a_bare_ping() {
     let (mut session, _downstream, mut outbound) = session(4);
@@ -423,10 +423,6 @@ async fn a_ping_is_answered_with_a_bare_ping() {
         .expect("a server ping must be answered — a provider may close a silent client");
     assert!(outbound.try_recv().is_err(), "exactly one answer per ping");
 
-    assert_eq!(
-        answer.from_slot, None,
-        "a `from_slot` on the answer would re-issue the replay on every ping"
-    );
     assert!(
         answer.accounts.is_empty()
             && answer.slots.is_empty()
@@ -437,7 +433,7 @@ async fn a_ping_is_answered_with_a_bare_ping() {
             && answer.entry.is_empty(),
         "a filter on the answer describes a subscription — the answer must carry none: {answer:?}"
     );
-    // The net under the two above: every other field, current or future, stays at its default.
+    // The net under the one above: every other field, current or future, stays at its default.
     assert_eq!(
         answer,
         SubscribeRequest {
@@ -447,22 +443,22 @@ async fn a_ping_is_answered_with_a_bare_ping() {
     );
 }
 
-/// A ping during a replay leaves the session's resume point and pending payload as they were.
+/// A ping leaves what the session has settled and its pending payload as they were.
 /// ⚠️ This guards `handle`'s `Ping` arm; an answer's damage is [`a_ping_is_answered_with_a_bare_ping`]'s.
 #[tokio::test]
-async fn a_ping_during_a_replay_leaves_it_alone() {
+async fn a_ping_leaves_the_session_alone() {
     let (mut session, mut downstream, mut outbound) = session(4);
 
     session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
-    assert_eq!(session.resume_from(), Some(10 - REWIND_SLOTS));
+    assert_eq!(session.slots.settled_below(), Some(10 - HELD_BACK_SLOTS));
 
     assert_eq!(session.handle(ping()).await, SessionState::Open);
 
     assert!(outbound.try_recv().is_ok(), "the ping is answered");
     assert_eq!(
-        session.resume_from(),
-        Some(10 - REWIND_SLOTS),
-        "a ping does not move the resume point"
+        session.slots.settled_below(),
+        Some(10 - HELD_BACK_SLOTS),
+        "a ping settles nothing"
     );
     assert!(
         downstream.try_recv().is_err(),
@@ -569,45 +565,45 @@ async fn a_pong_changes_nothing() {
     );
 }
 
-// ── resuming ────────────────────────────────────────────────────────
+// ── settling ────────────────────────────────────────────────────────
 
-/// ⚠️ The resume point is the oldest slot not finished, not the highest seen: a mid-block break
+/// ⚠️ Settled stops at the oldest slot not finished, not the highest seen: a mid-block break
 /// leaves payloads in the buffer, which dies with the session.
 #[tokio::test]
-async fn the_resume_point_is_the_oldest_slot_the_session_did_not_finish() {
+async fn settled_stops_at_the_oldest_slot_the_session_did_not_finish() {
     let (mut session, _downstream, _outbound) = session(4);
 
-    assert_eq!(session.resume_from(), None, "nothing arrived yet");
+    assert_eq!(session.slots.settled_below(), None, "nothing arrived yet");
 
     // Slot 10 is closed by its block-meta: finished.
     session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
     session.handle(slot_finalized(10, None)).await;
     session.handle(block_meta(10, Some(1_700_000_000))).await;
     assert_eq!(
-        session.resume_from(),
-        Some(10 - REWIND_SLOTS),
-        "the last closed slot, rewound — a block-meta does not promise its \
+        session.slots.settled_below(),
+        Some(10 - HELD_BACK_SLOTS),
+        "the last closed slot, held back — a block-meta does not promise its \
          slot's transactions have all arrived"
     );
 
     // Slot 12 arrives and is still in flight when the break comes.
     session.handle(transaction(12, &[PROTOCOL.as_str()])).await;
     assert_eq!(
-        session.resume_from(),
-        Some(12 - REWIND_SLOTS),
-        "slot 12's payloads die with this session, so the replay must cover \
-         them — asking for 13 would drop them silently"
+        session.slots.settled_below(),
+        Some(12 - HELD_BACK_SLOTS),
+        "slot 12's payloads die with this session, so it is not settled — \
+         settling it would hide their loss"
     );
 }
 
-/// The rewind must not underflow near genesis.
+/// The held-back slots must not underflow near genesis.
 #[tokio::test]
-async fn the_rewind_saturates_instead_of_wrapping() {
+async fn the_held_back_slots_saturate_instead_of_wrapping() {
     let (mut session, _downstream, _outbound) = session(4);
 
     session.handle(transaction(1, &[PROTOCOL.as_str()])).await;
 
-    assert_eq!(session.resume_from(), Some(0));
+    assert_eq!(session.slots.settled_below(), Some(0));
 }
 
 /// ⚠️ Only data separates churn from a refusal: servers ping right after `subscribe`, so counting
@@ -675,10 +671,10 @@ async fn only_a_block_meta_moves_the_block_meta_count() {
     );
 }
 
-/// ⚠️ An unroutable transaction is delivery with nothing to resume from: the premise of the
-/// listener's keep-the-mark rule, pinned here so its loss reddens this test.
+/// ⚠️ An unroutable transaction is delivery that settles nothing: the budget is not charged, and
+/// no slot counts as received.
 #[tokio::test]
-async fn an_unroutable_transaction_is_delivery_with_nothing_to_resume_from() {
+async fn an_unroutable_transaction_is_delivery_that_settles_nothing() {
     let (mut session, _downstream, _outbound) = session(4);
 
     session.handle(unroutable_transaction(10)).await;
@@ -689,7 +685,7 @@ async fn an_unroutable_transaction_is_delivery_with_nothing_to_resume_from() {
          be charged for this session"
     );
     assert_eq!(
-        session.resume_from(),
+        session.slots.settled_below(),
         None,
         "it never reached the buffer, so this session finished no slot and \
          left none pending"
@@ -755,16 +751,20 @@ fn spans(ranges: &crate::infra::grpc::ranges_to_record::RangesToRecord) -> Vec<(
 async fn only_a_timed_block_meta_counts_as_received() {
     let (mut session, ranges) = receiving_session();
 
-    for slot in [10, 11, 12] {
+    for slot in 10..=14 {
         session.handle(block_meta(slot, Some(1_700_000_000))).await;
     }
     session.handle(block_meta(20, None)).await;
     session.handle(block_meta(30, Some(1_700_000_030))).await;
 
-    assert_eq!(spans(&ranges), [(10, 12)], "20 had no time");
+    assert_eq!(
+        spans(&ranges),
+        [(10 + HELD_BACK_SLOTS, 14)],
+        "20 had no time"
+    );
 }
 
-/// Mutation: the session handing over the highest block-meta instead of its resume point.
+/// Mutation: the session handing over the highest block-meta instead of what it has settled.
 #[tokio::test]
 async fn a_slot_whose_transaction_still_waits_is_not_yet_received() {
     let (mut session, ranges) = receiving_session();
@@ -778,7 +778,7 @@ async fn a_slot_whose_transaction_still_waits_is_not_yet_received() {
 
     assert_eq!(
         spans(&ranges),
-        [(10, 18 - REWIND_SLOTS - 1)],
-        "18 waits for its status: a reconnection resumes before it"
+        [(10 + HELD_BACK_SLOTS, 18 - HELD_BACK_SLOTS - 1)],
+        "18 waits for its status: a cut would lose it"
     );
 }

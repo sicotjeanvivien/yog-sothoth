@@ -30,7 +30,7 @@ indexer/src/
 │                            interceptor, protobuf adapter, slot/time buffer,
 │                            the slots received for good, and their recorder
 │   ├── listener/          ← one module per responsibility: connector,
-│   │                        ending (+ verdict, resume mark), retry_budget,
+│   │                        ending (+ verdict), retry_budget,
 │   │                        stall_clock, log — listener.rs assembles them
 │   ├── session/           ← slot_progress, delivery, ping_answer, log —
 │   │                        session.rs only routes each update to them
@@ -134,9 +134,8 @@ Filling it is this crate's job, one module per source:
   each bound since start: `yog_indexer_grpc_pending_payloads_peak` and
   `yog_indexer_grpc_pending_slot_lag_peak`. They are peaks because a scrape
   would miss a burst. They are process-wide because the buffer dies with its
-  session. The gRPC listener exports them, at 0 until they rise. The lag peak
-  includes a reconnection's replay, which arrives behind a live head, and the
-  slot bound has to hold that too. The payload peak stops one past its bound;
+  session. The gRPC listener exports them, at 0 until they rise. The payload
+  peak stops one past its bound;
   `yog_indexer_grpc_untimestamped_transactions_total` says what a crossing
   cost.
 
@@ -180,21 +179,17 @@ the test that the wiring was complete, and it named three things that were
 genuinely unreachable. Since 16 September 2026 the **retry rule** is covered:
 `tests/geyser_server.rs` serves a test-written script over loopback, and every
 ending of a stream has a test that goes red when it changes its answer to which
-ending restarts the retry budget, which charges it, and what the next attempt
-asks for — the budget being `RetryBudget::settle`, and the resume point
-`Verdict::next_resume_from` (with `Verdict::abandoned_mark`, the mark it gives
-up), all reading the one `Ending::verdict`. One ending
-is guarded from two sides: what an attempt that never reached the service costs the retry budget is
-driven through `run`, against a port with nothing behind it, while what it does
-to the resume mark is driven one level down at `Connector::attempt` — observing
-a mark being *kept* needs a delivered session to make one first, against a
-server that must be unreachable for the attempt after. The two decisions only a
+ending restarts the retry budget and which charges it — the budget being
+`RetryBudget::settle`, reading the one `Ending::verdict` — and the attempts
+after a cut are asserted to subscribe live. An attempt that never reached the
+service is driven through `run`, against a port with nothing behind it, for
+what it costs the budget, and one level down at `Connector::attempt`, for the
+site its error names. The two decisions only a
 duration shows from `run` — the backoff reset after a churn, and the stall clock
 ignoring time spent on a full consumer — are tested on the values of
 `RetryBudget` and `StallClock`.
 What remains untested is what needs a *real* server: TLS, keep-alive, the
-connect timeout, whether a provider honours `from_slot` the way this code
-assumes, and whether it takes the ping-only answer the session sends to each
+connect timeout, and whether it takes the ping-only answer the session sends to each
 of its pings the way the reference server does. The first run against a real
 provider is where they meet one. For the ping answer, the `pong` count keeping
 pace with the `ping` count is what will say so: its shape is tested on the
@@ -203,9 +198,9 @@ local test sees an answer cross the wire.
 
 ⚠️ And **none of it has met a real server.** Every local test drives either pure
 state, a message this repository built itself, or a server this repository
-scripted — so TLS, keep-alive, the answer to server pings and the exact
-semantics of `from_slot` are written and reviewed and unproven until the first
-run against a real provider, which needs an API key.
+scripted — so TLS, keep-alive and the answer to server pings are written and
+reviewed and unproven until the first run against a real provider, which needs
+an API key.
 
 **What an adapter owes**, and how it is held to it: the order of the payloads it
 produces becomes the persisted `event_index`, part of the unique key of every
@@ -370,19 +365,17 @@ One ending is not the server's: a stream that stops delivering block-metas and
 stays open, or a `subscribe` that is never answered. Neither the HTTP/2
 keep-alive nor Yellowstone's pings would notice, so after `STALL_TIMEOUT`
 (30 s, the threshold Alchemy gives) of waiting the listener ends the attempt
-itself. The mark is kept even when the attempt delivered nothing: silence is
-not a refusal, and the retry budget is what bounds a server that never speaks
+itself. A stall that delivered nothing is charged to the budget, like a server
+that answers and delivers nothing — a refusal, credentials, quota, a clean close
+with nothing sent: the retry budget is what bounds a server that never speaks
 again.
 
-The same holds for a server that answers and delivers nothing: the mark is
-given up only when the `Status` code says the request itself is at fault —
-`INVALID_ARGUMENT`, `OUT_OF_RANGE` (Yellowstone's answer to a slot past
-retention, sent on the accepted stream) or `NOT_FOUND`. Every other code, and a
-clean close with nothing sent, keeps it and is charged to the budget, so a
-provider that refuses `from_slot` under another code stops the indexer rather
-than leaving a gap. Only the code is read, never the message. Each mark given
-up is a `warn!` (`gRPC resume mark abandoned`, with the slot and the code) and
-an increment of `yog_indexer_grpc_resume_marks_abandoned_total{reason}`.
+⚠️ **Every attempt subscribes live, never with `from_slot`.** A replay from the
+last slot a session finished can advance slower than the chain, and then never
+catches up while the stream still reads as live; only a restart ended it. So a
+cut costs what the session had not settled, and the first slots of the next
+one, which may have started before it joined; that loss is written down rather
+than asked for again: it reads as a range nobody watched (below).
 
 ### The slots received, and the ranges nobody watched
 
@@ -395,11 +388,15 @@ complement, so a process killed, a budget run out or a host restarted leaves one
 without anyone deciding it.
 
 - `session/received_slots.rs` — what a session received for good: the slots of
-  its timed block-metas **below its resume point**. A slot at or past that point
-  would be asked again by a reconnection; if the replay were refused, its
-  transactions would be lost, so it is not yet received.
+  its timed block-metas **below what it has settled** — the oldest slot it has
+  not finished, less `HELD_BACK_SLOTS` (2), since a block-meta does not promise
+  all of its slot's transactions arrived. Past that, a cut can still destroy a
+  slot's transactions and nothing asks for them again, so it is not yet received.
+  The other side too: a session counts from its first block-meta's slot plus
+  `HELD_BACK_SLOTS`, since a live subscription can join a slot whose first
+  transactions were already sent.
 - `session/received_span.rs` — the span itself, lowest to highest slot, not first
-  to last: a replay delivers its oldest slots last. A slot the network skipped
+  to last: a block-meta can follow a higher slot's. A slot the network skipped
   does not cut it, and a slot already in it, either end included, changes nothing.
 - `ranges_to_record.rs` — the hand-over: each session leaves its latest span
   there under its own entry, kept until its last span is written, so a
@@ -415,11 +412,11 @@ without anyone deciding it.
   it. Ingesting on without it would read, at the restart, as a range nobody watched.
 - Nothing is written under `INGEST_SCOPE=pools`: a protocol of which a few
   pools are watched is not watched whole.
-- The ranges are not the resume mark: `from_slot` stays the listener's own, and
-  a replay that overlaps the range before leaves nothing unwatched.
-- Out of scope: an unwatched range inside a live session (including a replay cut
-  halfway, whose span already covers it, and a transaction the slot/time buffer
-  evicted, counted in `yog_indexer_grpc_untimestamped_transactions_total`), the
+- A cut leaves an unwatched range, from the last slot the session settled to the
+  first one the next session, subscribed live, counts.
+- Out of scope: an unwatched range inside a live session (a transaction the
+  slot/time buffer evicted, counted in
+  `yog_indexer_grpc_untimestamped_transactions_total`), the
   range still open between the last write and now, and the JSON-RPC path, which
   sees no slot it did not ask for.
 
@@ -605,8 +602,6 @@ histograms.
   `yog_indexer_grpc_pending_payloads_peak` and
   `yog_indexer_grpc_pending_slot_lag_peak` (peaks since start, not current
   values), `yog_indexer_grpc_ping_replies_unsent_total{reason}`,
-  `yog_indexer_grpc_resume_marks_abandoned_total{reason}` (the refusing gRPC
-  code; **each increment is a gap** between the mark and the live edge),
   `yog_indexer_grpc_observed_slots_writes_total{outcome}` (`written`, `failed`:
   a failed one leaves its slots unwatched until the next write) and
   `yog_indexer_grpc_stalls_total{site}`. ⚠️ **`stalls_total` is the only
@@ -614,10 +609,9 @@ histograms.
   stream that stopped delivering block-metas (before it, the sign was
   `kind="block_meta"` going flat while `kind="ping"` kept rising),
   `site="subscribe"` for a subscription never answered. Each increment is a
-  reconnection, and a billed `from_slot` replay when there is a mark. A steady
-  `site="stream"` rate means a provider that replays and then goes quiet at the
-  live edge: that stall delivered, so it restarts the budget and never stops
-  the indexer.
+  reconnection, and so a range nobody watched. A steady `site="stream"` rate
+  means a provider that goes quiet at the live edge: that stall delivered, so it
+  restarts the budget and never stops the indexer.
 - **Worker counter** — `yog_indexer_ingested_dropped_total{reason}`: delivered
   transactions the consumer never processed, `shutdown` for the one in hand and
   `shutdown_queued` for what was still in the channel. It mirrors the fetch

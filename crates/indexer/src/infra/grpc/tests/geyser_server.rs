@@ -235,7 +235,7 @@ impl ScriptedGeyserHandle {
     }
 
     /// The `from_slot` of each attempt, in order.
-    pub(super) fn resume_points(&self) -> Vec<Option<u64>> {
+    pub(super) fn requested_from_slots(&self) -> Vec<Option<u64>> {
         self.requests()
             .iter()
             .map(|request| request.from_slot)

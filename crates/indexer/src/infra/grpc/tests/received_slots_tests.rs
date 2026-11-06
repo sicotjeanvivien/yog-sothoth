@@ -2,9 +2,12 @@
 
 use super::*;
 
-use crate::infra::grpc::test_fixtures::{PROTOCOL, at};
+use crate::infra::grpc::{
+    session::slot_progress::HELD_BACK_SLOTS,
+    test_fixtures::{PROTOCOL, at},
+};
 
-/// Past every slot these tests close: nothing waits for a reconnection.
+/// Past every slot these tests close: all of them are settled.
 const FAR: Option<u64> = Some(1_000);
 
 fn spans(ranges: &RangesToRecord) -> Vec<(u64, u64)> {
@@ -21,26 +24,51 @@ fn each_received_block_meta_widens_the_session_span_skipped_slots_included() {
     let ranges = RangesToRecord::default();
     let mut received = ReceivedSlots::new(Arc::from([PROTOCOL]), ranges.clone());
 
-    for slot in [10, 11, 13, 14] {
+    for slot in [10, 12, 13, 15, 16] {
         received.on_block_meta(slot, at(slot as i64), FAR);
     }
 
-    assert_eq!(spans(&ranges), [(10, 14)]);
+    assert_eq!(
+        spans(&ranges),
+        [(12, 16)],
+        "14 was skipped, 10 is held back"
+    );
 }
 
-/// Mutation: the resume point ignored, so a slot a refused replay would lose counts as received.
+/// Mutation: every timed block-meta counted, the first ones of the session included.
 #[test]
-fn a_slot_at_or_past_the_resume_point_waits_until_the_point_passes_it() {
+fn the_first_slots_of_a_session_are_not_counted() {
+    let ranges = RangesToRecord::default();
+    let mut received = ReceivedSlots::new(Arc::from([PROTOCOL]), ranges.clone());
+
+    for slot in 10..=14 {
+        received.on_block_meta(slot, at(slot as i64), FAR);
+    }
+
+    assert_eq!(
+        spans(&ranges),
+        [(10 + HELD_BACK_SLOTS, 14)],
+        "10 may have started before the session, and 11 is the block-meta margin"
+    );
+}
+
+/// Mutation: `settled_below` ignored, so a slot a cut would lose counts as received.
+#[test]
+fn a_slot_not_settled_yet_waits_until_it_is() {
     let ranges = RangesToRecord::default();
     let mut received = ReceivedSlots::new(Arc::from([PROTOCOL]), ranges.clone());
 
     for slot in 10..=14 {
         received.on_block_meta(slot, at(slot as i64), Some(13));
     }
-    assert_eq!(spans(&ranges), [(10, 12)], "13 and 14 would be asked again");
+    assert_eq!(
+        spans(&ranges),
+        [(12, 12)],
+        "a cut could still lose 13 and 14"
+    );
 
     received.on_block_meta(15, at(15), Some(16));
-    assert_eq!(spans(&ranges), [(10, 15)]);
+    assert_eq!(spans(&ranges), [(12, 15)]);
 }
 
 /// Mutation: the empty-protocols guard removed, so a pool watched alone claims its protocol.
