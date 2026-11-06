@@ -49,7 +49,7 @@ describe("curlOf", () => {
     );
   });
 
-  // Mutation: the key written into the command — copied, it would land in a shell history or a ticket.
+  // Mutation: the key written into the command — copied, it would land in a shell history or a bug report.
   it("names the key by a variable, and only when one was given", () => {
     expect(curlOf("https://x/api/swaps", rest)).toBe("curl -s 'https://x/api/swaps'");
     expect(curlOf("https://x/api/swaps", { ...rest, keyed: true })).toBe(
