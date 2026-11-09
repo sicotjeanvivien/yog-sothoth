@@ -24,20 +24,22 @@ use crate::application::{EnrichedSignal, EnrichedToken, LiveEvent, Paired};
 use crate::http::{build_router, cursor::LiveCursor, dto::request::LiveTopic};
 use crate::testing::{app_state, make_metadata, make_signal_record, pk};
 
-/// `uri` sent through the router with a ticket its registry issued, as a client opens the stream.
-async fn opened_with_a_ticket(uri: &str) -> Response {
+/// `uri` sent through the router with a ticket its registry issued, as a client opens the stream,
+/// and `last_event_id` if any.
+async fn opened_with_a_ticket(uri: &str, last_event_id: Option<&str>) -> Response {
     let state = app_state();
     let client = ApiClient {
         id: 1,
         name: "dashboard".to_string(),
     };
     let (ticket, _) = state.ticket_registry.issue(client).expect("random bytes");
-    let request = Request::builder()
+    let mut request = Request::builder()
         .uri(uri)
-        .header(header::AUTHORIZATION, format!("Bearer {}", ticket.expose()))
-        .header("last-event-id", "not-a-cursor")
-        .body(Body::empty())
-        .unwrap();
+        .header(header::AUTHORIZATION, format!("Bearer {}", ticket.expose()));
+    if let Some(id) = last_event_id {
+        request = request.header("last-event-id", id);
+    }
+    let request = request.body(Body::empty()).unwrap();
     build_router(state, vec![]).oneshot(request).await.unwrap()
 }
 
@@ -62,7 +64,7 @@ async fn a_connection_it_cannot_serve_is_refused_in_problem_details() {
             "unknown protocol: raydium",
         ),
     ] {
-        let response = opened_with_a_ticket(uri).await;
+        let response = opened_with_a_ticket(uri, None).await;
         let status = response.status();
         let content_type = response.headers()[header::CONTENT_TYPE].clone();
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
@@ -88,7 +90,7 @@ async fn a_served_connection_opens_whatever_its_last_event_id() {
         format!("/api/live?topics={EVERY_TOPIC}"),
         format!("/api/live/protocols/meteora_damm_v2?topics={EVERY_TOPIC}"),
     ] {
-        let response = opened_with_a_ticket(&uri).await;
+        let response = opened_with_a_ticket(&uri, Some("not-a-cursor")).await;
         assert_eq!(response.status(), StatusCode::OK, "{uri}");
         assert_eq!(
             response.headers()[header::CONTENT_TYPE],

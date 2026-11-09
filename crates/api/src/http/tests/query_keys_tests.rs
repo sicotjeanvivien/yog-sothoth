@@ -155,6 +155,10 @@ async fn every_route_takes_every_key_it_documents() {
                 {
                     refused.push(format!("{request}: {detail}"));
                 }
+                // ⚠️ A refused credential never read the query: it proves nothing about the key.
+                Some((StatusCode::UNAUTHORIZED, _, detail)) => {
+                    refused.push(format!("{request}: its credential refused: {detail}"));
+                }
                 Some(_) => {}
                 None => refused.push(format!("{request}: no answer within {PATIENCE:?}")),
             }

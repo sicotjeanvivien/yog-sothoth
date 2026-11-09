@@ -545,8 +545,8 @@ hash opens nothing without its key.
   presented; the price is that a revocation takes effect within 10 s. A reread
   that fails is logged and counted, and the ring keeps the keys it held — a
   revoked key included, until a reread succeeds. A key is checked when a
-  request arrives: a live stream opened with it stays open after its revocation,
-  and a ticket drawn with it still opens one within its lifetime.
+  request arrives: a live stream opened with a ticket drawn from it stays open after
+  its revocation, and such a ticket still opens one within its lifetime.
 - **`authenticate`** (`http/middleware/authentication.rs`) is a *route* layer on
   every `/api` route but the live stream: it runs after routing, so it knows the
   route template, and the probes and an unknown path never reach it. It reads the
@@ -560,7 +560,7 @@ hash opens nothing without its key.
 
 - **`require_api_key`** (`http/middleware/require_api_key.rs`), under `authenticate` on
   `POST /api/auth/tickets` alone, refuses a request no key has named a client for.
-- **Nothing refuses an anonymous call yet** on the REST routes. They are counted,
+- **Nothing refuses an anonymous call yet** on the read routes. They are counted,
   by route, so that who calls the API without a key is known before it is closed.
 
 ### Tickets
