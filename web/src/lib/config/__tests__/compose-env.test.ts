@@ -28,8 +28,11 @@ function webService(): WebService {
 describe("docker-compose.yml — the yog-web service", () => {
   it("gives the server every variable its schema requires, under that name", () => {
     const environment = webService().environment ?? {};
+    // ⚠️ The key comes from the host's `.env`: the block only names it, so a test key stands in.
+    expect(environment["YOG_API_KEY"]).toBe("${YOG_API_KEY:-}");
+    const resolved = { ...environment, YOG_API_KEY: `yog_0badc0de_${"a".repeat(64)}` };
 
-    expect(() => parseServerEnv(environment)).not.toThrow();
+    expect(() => parseServerEnv(resolved)).not.toThrow();
   });
 
   it("declares in web/Dockerfile every build argument it passes", () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Endpoint } from "../contract";
-import { byteSize, curlOf, missingOf, pageValues, topicsOf, urlOf } from "../request";
+import { byteSize, curlOf, missingOf, pageValues, urlOf } from "../request";
 
 const endpoint = {
   path: "/api/tokens/{mint}/prices",
@@ -25,33 +25,25 @@ describe("urlOf", () => {
   });
 });
 
-describe("topicsOf", () => {
-  // Mutation: no topic read — the live panel listens to nothing, its events all named.
-  it("reads the topics a live URL asks for, encoded or not", () => {
-    expect(topicsOf("https://x/api/live?topics=signals%2Cliquidity-changes")).toEqual([
-      "signals",
-      "liquidity-changes",
-    ]);
-    expect(topicsOf("https://x/api/live/protocols/meteora_damm_v2?topics=signals")).toEqual([
-      "signals",
-    ]);
-    expect(topicsOf("https://x/api/live")).toEqual([]);
-  });
-});
-
 describe("curlOf", () => {
-  // Mutations: the stream's curl without `-N`, which buffers; double quotes, where `!` expands.
-  it("streams the events unbuffered, the URL single-quoted", () => {
+  // Mutations: the stream's curl without `-N`, which buffers; double quotes around the URL, where `!` expands.
+  it("streams the events unbuffered, with the ticket, the URL single-quoted", () => {
     expect(curlOf("https://x/api/live?topics=signals", true, "GET")).toBe(
-      "curl -N -H 'Accept: text/event-stream' 'https://x/api/live?topics=signals'",
+      `curl -N -H 'Accept: text/event-stream' -H "Authorization: Bearer $TICKET" 'https://x/api/live?topics=signals'`,
     );
-    expect(curlOf("https://x/api/swaps", false, "GET")).toBe("curl -s 'https://x/api/swaps'");
+  });
+
+  // Mutation: the header single-quoted, so the copied command sends `$YOG_API_KEY` itself.
+  it("sends the key from the shell's variable, double-quoted", () => {
+    expect(curlOf("https://x/api/swaps", false, "GET")).toBe(
+      `curl -s -H "Authorization: Bearer $YOG_API_KEY" 'https://x/api/swaps'`,
+    );
   });
 
   // Mutation: the method left out, so the copied command sends a `GET` the route refuses.
   it("names a method other than GET", () => {
     expect(curlOf("https://x/api/auth/tickets", false, "POST")).toBe(
-      "curl -s -X POST 'https://x/api/auth/tickets'",
+      `curl -s -X POST -H "Authorization: Bearer $YOG_API_KEY" 'https://x/api/auth/tickets'`,
     );
   });
 });

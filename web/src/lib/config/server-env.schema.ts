@@ -1,6 +1,6 @@
 /**
- * The server-only environment. ⚠️ No `server-only` directive here, so vitest can import it:
- * the directive lives in `server-env.ts`.
+ * The server-only environment, checked at start-up by `instrumentation.ts`. ⚠️ No `server-only`
+ * directive here, so vitest can import it: the API client that reads it carries it.
  */
 
 import * as z from "zod";
@@ -8,13 +8,20 @@ import * as z from "zod";
 /** Only what server code reads, so a misconfiguration fails fast. */
 const ServerEnvSchema = z.object({
   /**
-   * yog-api's internal URL, for server-side code; never sent to the browser, which uses the
-   * public gateway. `http://yog-api:5000` in Docker, `http://127.0.0.1:5000` outside.
+   * yog-api's URL for server-side code. It differs from the browser's only in the dev compose,
+   * where `localhost` is the web container: `http://yog-api:5000` there.
    */
-  YOG_API_INTERNAL_URL: z
-    .url({ message: "YOG_API_INTERNAL_URL must be a valid URL" })
+  YOG_API_URL: z
+    .url({ message: "YOG_API_URL must be a valid URL" })
     .refine((u) => !u.endsWith("/"), {
-      message: "YOG_API_INTERNAL_URL must not end with a trailing slash",
+      message: "YOG_API_URL must not end with a trailing slash",
+    }),
+
+  /** The dashboard's API key, sent on every server-side call; never prefixed `NEXT_PUBLIC_`. */
+  YOG_API_KEY: z
+    .string({ message: "YOG_API_KEY is required: create it with `yog-migrate create-api-key`" })
+    .regex(/^yog_[0-9a-f]{8}_[0-9a-f]{64}$/, {
+      message: "YOG_API_KEY must read yog_<8 hex>_<64 hex>",
     }),
 
   /** Timeout of server-side yog-api calls, in ms; 5000 by default. */

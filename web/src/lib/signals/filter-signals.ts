@@ -3,19 +3,23 @@
  * filter: an alert feed's default must never hide anything.
  */
 
-import type { SeverityResponse, SignalResponse } from "@/lib/api/schema/zod.gen";
+import type { SeverityResponse } from "@/lib/api/schema/zod.gen";
 
+import type { SignalFeedRow } from "./merge-signals";
+
+/** ⚠️ A gap row passes every filter: a filtered feed still shows where the stream was cut. */
 export function filterSignals(
-  signals: readonly SignalResponse[],
+  rows: readonly SignalFeedRow[],
   activeSeverities: ReadonlySet<SeverityResponse>,
   activeDetectors: ReadonlySet<string>,
-): readonly SignalResponse[] {
+): readonly SignalFeedRow[] {
   if (activeSeverities.size === 0 && activeDetectors.size === 0) {
-    return signals;
+    return rows;
   }
-  return signals.filter(
-    (signal) =>
-      (activeSeverities.size === 0 || activeSeverities.has(signal.severity)) &&
-      (activeDetectors.size === 0 || activeDetectors.has(signal.detector)),
+  return rows.filter(
+    (row) =>
+      row.type === "gap" ||
+      ((activeSeverities.size === 0 || activeSeverities.has(row.signal.severity)) &&
+        (activeDetectors.size === 0 || activeDetectors.has(row.signal.detector))),
   );
 }

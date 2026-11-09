@@ -2,7 +2,7 @@
 
 /**
  * The page's one connection to `/api/live`: every block that streams subscribes to its topic here
- * instead of opening its own `EventSource`.
+ * instead of opening its own stream.
  */
 
 import {
@@ -15,16 +15,17 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { unstable_isUnrecognizedActionError } from "next/navigation";
 
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
 import { loadClientEnv } from "@/lib/config/client-env.schema";
 import { openLive, type StreamStatus } from "@/lib/live/live-connection";
 import { livePath, type LiveTopic } from "@/lib/live/live-topics";
+import { requestTicket } from "@/lib/live/request-ticket";
 
 type Handler = (data: unknown) => void;
 
 type Live = {
-  protocol: ProtocolResponse | undefined;
   status: StreamStatus;
   /** Receives each parsed message of `topic`; returns the unsubscribe. */
   subscribe: (topic: LiveTopic, handler: Handler) => () => void;
@@ -61,6 +62,15 @@ export function LiveProvider({
         onReopen: () => reopenHandlers.current.forEach((handler) => handler()),
       },
       missed.current,
+      async () => {
+        try {
+          return await requestTicket();
+        } catch (error) {
+          // ⚠️ A page from before a web deployment calls an action the new build no longer has.
+          if (unstable_isUnrecognizedActionError(error)) window.location.reload();
+          throw error;
+        }
+      },
     );
 
     return () => {
@@ -86,8 +96,8 @@ export function LiveProvider({
   }, []);
 
   const live = useMemo(
-    () => ({ protocol, status, subscribe, onReopen }),
-    [protocol, status, subscribe, onReopen],
+    () => ({ status, subscribe, onReopen }),
+    [status, subscribe, onReopen],
   );
 
   return <LiveContext.Provider value={live}>{children}</LiveContext.Provider>;

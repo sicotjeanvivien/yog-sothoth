@@ -44,6 +44,8 @@
 # Variables this file requires (each refuses the command when unset):
 #   POSTGRES_PASSWORD  the admin password of the Postgres container
 #   YOG_WEB_DOMAIN     the dashboard's host name, e.g. yog-scope.xyz
+#   YOG_API_DOMAIN     the API's host name, e.g. api.yog-scope.xyz, which the
+#                      dashboard's server calls
 #   DATABASE_URL_ARCHIVE, ARCHIVE_STORE_URL, ARCHIVE_STORE_BUCKET,
 #   ARCHIVE_STORE_REGION, ARCHIVE_STORE_ACCESS_KEY, ARCHIVE_STORE_SECRET_KEY,
 #   ARCHIVE_HEARTBEAT_URL
@@ -204,6 +206,10 @@ services:
     build: !reset null
     ports: !reset []
     networks: [default, edge]
+    environment:
+      # The public address, like the browser's: the key opens no shortcut on
+      # the internal network.
+      YOG_API_URL: https://${YOG_API_DOMAIN:?set it in the server's .env (e.g. api.yog-scope.xyz)}
     mem_limit: 128m
 
   # The backup daemon: a pg_dump every six hours, streamed to the bucket and

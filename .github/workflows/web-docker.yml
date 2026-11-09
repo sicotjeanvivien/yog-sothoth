@@ -82,11 +82,17 @@ jobs:
         # Detached run so the smoke test can probe it. Naming the
         # container makes the cleanup step deterministic regardless
         # of whether the smoke test passes or fails.
+        # The server stops at start-up without its two variables. The key is a witness: the next
+        # steps check that no page hands it to the browser.
         run: |
           docker run --rm --detach \
             --name yog-web-smoke \
             --publish 3000:3000 \
+            --env YOG_API_URL=http://localhost:5000 \
+            --env YOG_API_KEY="$WITNESS_KEY" \
             yog-sothoth-web:ci
+        env:
+          WITNESS_KEY: yog_0badc0de_deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
 
       - name: Wait for readiness
         # Poll the locale-prefixed root for up to 30 seconds. The
@@ -113,6 +119,27 @@ jobs:
           curl -fsS http://localhost:3000/en > /dev/null
           curl -fsS http://localhost:3000/fr > /dev/null
           echo "Both /en and /fr respond with 2xx."
+
+      - name: Verify the key stays on the server
+        # The pages that read the API with the key, rendered (the API is absent, so their data
+        # blocks fail): the witness must appear in none of them, nor in a script they load.
+        run: |
+          set -euo pipefail
+          found=0
+          for page in /en /fr /en/signals /en/developers; do
+            body=$(curl -sL --max-time 20 "http://localhost:3000${page}")
+            if grep -q 0badc0de <<< "$body"; then echo "the key is in ${page}" >&2; found=1; fi
+            # ⚠️ Read into a variable, not piped to `grep -q`: under pipefail, curl's SIGPIPE
+            # would make a match read as none. The loop reads a substitution, not a pipe, to keep `found`.
+            while read -r script; do
+              js=$(curl -s "http://localhost:3000${script}")
+              if grep -q 0badc0de <<< "$js"; then
+                echo "the key is in ${script}, loaded by ${page}" >&2; found=1
+              fi
+            done < <(grep -o '/_next/static/[^"]*\.js' <<< "$body" | sort -u || true)
+          done
+          if [ "$found" -ne 0 ]; then exit 1; fi
+          echo "No page nor script carries the key."
 
       - name: Cleanup
         if: always()

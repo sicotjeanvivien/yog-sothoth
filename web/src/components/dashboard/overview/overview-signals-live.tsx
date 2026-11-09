@@ -2,7 +2,8 @@
 
 /**
  * The latest signals, every protocol's or one protocol's, seeded by the server and kept live by
- * `useLiveSignals`: severity, time, headline, and detector · protocol, with the stream-status dot.
+ * `useLiveSignals`: severity, time, headline, and detector · protocol, with the stream-status dot
+ * and a gap row at each reopening, counted among the rows shown.
  */
 
 import type { ReactNode } from "react";
@@ -17,6 +18,7 @@ import {
 } from "@/components/dashboard/signals/signal-display";
 import { useLiveSignals } from "@/components/dashboard/signals/use-live-signals";
 import type { SignalResponse } from "@/lib/api/schema/zod.gen";
+import { formatUtcTime } from "@/lib/format/date";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatShortAddress } from "@/lib/format/format-short-address";
 
@@ -33,8 +35,8 @@ export function OverviewSignalsLive({
 }) {
   const t = useTranslations("Dashboard.Overview.signals");
   const tFeed = useTranslations("Dashboard.Signals.feed");
-  const { signals, status } = useLiveSignals(initial);
-  const latest = signals.slice(0, LATEST_SIGNALS_COUNT);
+  const { rows, status } = useLiveSignals(initial);
+  const latest = rows.slice(0, LATEST_SIGNALS_COUNT);
 
   return (
     <>
@@ -52,9 +54,13 @@ export function OverviewSignalsLive({
         <p className="py-6 text-[14px] text-dash-ink-2">{t("empty")}</p>
       ) : (
         <div role="table" aria-label={tableLabel}>
-          {latest.map((signal) => (
-            <SignalRow key={signal.id} signal={signal} />
-          ))}
+          {latest.map((row) =>
+            row.type === "gap" ? (
+              <SignalGapRow key={row.key} at={row.at} />
+            ) : (
+              <SignalRow key={row.key} signal={row.signal} />
+            ),
+          )}
         </div>
       )}
     </>
@@ -95,6 +101,18 @@ function SignalRow({ signal }: { signal: SignalResponse }) {
         <div className="mt-0.5 truncate font-dash-mono text-[11px] text-dash-ink-3">
           {signal.detector} · {formatProtocolLabel(signal.protocol)}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SignalGapRow({ at }: { at: string }) {
+  const tFeed = useTranslations("Dashboard.Signals.feed");
+  const locale = useLocale();
+  return (
+    <div role="row" className={`${ROW_CLASS} grid-cols-1`}>
+      <div role="cell" className="font-dash-mono text-[11px] text-dash-ink-3">
+        {tFeed("gap", { at: formatUtcTime(at, locale) })}
       </div>
     </div>
   );

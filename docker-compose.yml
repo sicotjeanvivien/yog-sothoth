@@ -392,12 +392,17 @@ services:
         NEXT_PUBLIC_YOG_API_URL: ${NEXT_PUBLIC_YOG_API_URL:-http://localhost:5000}
     environment:
       NODE_ENV: production
-      # The URL Server Components call, inside the compose network. The name
-      # is the one web/src/lib/config/server-env.schema.ts reads — a test
+      # The URL the web server calls, inside the compose network: `localhost`
+      # here is this container. The names are the ones
+      # web/src/lib/config/server-env.schema.ts reads — a test
       # (web/src/lib/config/__tests__/compose-env.test.ts) runs that schema
-      # against this block, because a wrong name here is a 500 on every data
-      # page and nothing else.
-      YOG_API_INTERNAL_URL: http://yog-api:5000
+      # against this block, because a wrong name stops the server at start-up.
+      YOG_API_URL: http://yog-api:5000
+      # The dashboard's own key, sent on every server-side call. `:-`, not
+      # `:?`: a `:?` would refuse every compose command, the
+      # `run yog-migrate create-api-key` that creates the key included. The web
+      # server refuses to start without it.
+      YOG_API_KEY: ${YOG_API_KEY:-}
     ports:
       - "3000:3000"
     depends_on:

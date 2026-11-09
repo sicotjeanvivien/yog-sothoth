@@ -426,7 +426,7 @@ route is added only for a new kind of entity.
   reads nothing in it, so a resume by `Last-Event-ID` can be added without changing the
   contract — what the cursor holds may change with it: an id filling a hole comes after a
   higher one, so the last id alone cannot say where to resume. Today no history is replayed and a `Last-Event-ID` sent is not read: after a drop, the
-  page refills the gap from the collection.
+  dashboard marks the gap with a row where events may have been missed.
 - **A protocol's connection is filtered by the server**, on the items broadcast: no query
   per connection.
 - **One poller per source**, a `LivePoller`, ticks every `API_LIVE_POLL_SECS` (default 3 s)
@@ -437,7 +437,7 @@ route is added only for a new kind of entity.
   (`LivePollers`). ⚠️ They read one at a time, sharing one slot: they take at most one of the
   pool's 10 connections, which the capacity bounds below count on. A topic's channel holds
   256 messages per table writing in it: a connection lagging past them, or whose source
-  closed, is ended, and the browser's `EventSource` reconnects.
+  closed, is ended, and the client reopens it with a new ticket.
 - **A row that does not decode is logged and passed over**, its id counted as read: one bad
   row does not hold its table until it leaves the lookback.
 - **A protocol's connection subscribes only to the collections written for it**: a topic none
@@ -474,8 +474,8 @@ outlives it.
 ⚠️ **A graceful shutdown alone would not stop this server.** It stops
 accepting, then waits for every open connection — and an SSE connection never
 ends on its own. The stream reads the same token (`live_sse`, `take_until`)
-and closes when it fires; the browser's `EventSource` reconnects to the next
-instance by itself. Any other request in flight is answered before `serve`
+and closes when it fires; the dashboard reopens it on the next instance, with a
+new ticket. Any other request in flight is answered before `serve`
 returns: once it does, `main` returns and the runtime takes every connection
 task with it.
 
@@ -664,6 +664,8 @@ API_METRICS_ADDR=127.0.0.1:9004   # unset: 0.0.0.0:9000, the daemons' port
 
 CORS is locked to the configured dashboard origins — the browser calls this
 API directly (there is no BFF in front; see [`web/README.md`](../../web/README.md)).
+It exposes `x-request-id` and `Retry-After`, the only response headers a browser
+reads past the safelisted ones.
 The metrics listen on `API_METRICS_ADDR`, `0.0.0.0:9000` when unset, as the
 daemons' in their containers; a native run sets it, since the compose daemons
 publish `127.0.0.1:9000` on the host.

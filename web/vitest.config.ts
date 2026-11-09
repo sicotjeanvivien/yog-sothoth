@@ -23,6 +23,11 @@ export default defineConfig({
   },
   resolve: {
     alias: [
+      // ⚠️ `server-only` throws outside a React Server build: its own empty module stands in.
+      {
+        find: /^server-only$/,
+        replacement: resolve(__dirname, "node_modules/server-only/empty.js"),
+      },
       { find: /^@\/i18n\//, replacement: `${resolve(__dirname, "i18n")}/` },
       {
         find: /^@\/messages\//,

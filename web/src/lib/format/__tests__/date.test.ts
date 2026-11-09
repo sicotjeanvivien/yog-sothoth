@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatAbsolute, formatRelative, formatUtcMoment } from "../date";
+import { formatAbsolute, formatRelative, formatUtcMoment, formatUtcTime } from "../date";
 
 // Away from any daylight-saving edge.
 const NOW = new Date("2026-05-12T15:00:00Z");
@@ -77,5 +77,13 @@ describe("formatUtcMoment", () => {
 
   it("returns null on an invalid date", () => {
     expect(formatUtcMoment("not a date", "en")).toBeNull();
+  });
+});
+
+describe("formatUtcTime", () => {
+  // Mutation: the time zone dropped, or the seconds.
+  it("reads the instant in UTC, to the second, in both locales", () => {
+    expect(formatUtcTime("2026-07-02T21:14:05+02:00", "fr")).toBe("19:14:05");
+    expect(formatUtcTime("2026-07-02T21:14:05+02:00", "en")).toBe("19:14:05");
   });
 });
