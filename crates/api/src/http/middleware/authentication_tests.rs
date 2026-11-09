@@ -120,7 +120,7 @@ fn refused_for(authorization: &str, reason: &str) -> String {
         counter(
             &metrics,
             "yog_api_unauthorized_total",
-            &[("reason", reason)]
+            &[("credential", "key"), ("reason", reason)]
         ),
         Some(1)
     );
@@ -159,7 +159,7 @@ fn a_header_that_is_not_text_is_another_scheme() {
         counter(
             &metrics,
             "yog_api_unauthorized_total",
-            &[("reason", "scheme")]
+            &[("credential", "key"), ("reason", "scheme")]
         ),
         Some(1)
     );

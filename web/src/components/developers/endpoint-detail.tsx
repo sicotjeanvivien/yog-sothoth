@@ -47,10 +47,12 @@ function Prose({ text }: { text: string }) {
 const LABEL =
   "font-dash-mono text-[11px] font-medium tracking-[0.12em] text-dash-ink-3 uppercase";
 
-async function send(url: string): Promise<SendResult> {
+/** One request of the route, with the method the contract declares. */
+export async function send(url: string, method: string): Promise<SendResult> {
   const started = performance.now();
   try {
     const response = await fetch(url, {
+      method,
       headers: { Accept: "application/json" },
       signal: AbortSignal.timeout(loadClientEnv().NEXT_PUBLIC_YOG_API_TIMEOUT_MS),
     });
@@ -227,7 +229,7 @@ export function EndpointDetail({
     onValues(next);
     setTab("response");
     setLoading(true);
-    onResult(await send(urlOf(base, endpoint, next)));
+    onResult(await send(urlOf(base, endpoint, next), endpoint.method));
     setLoading(false);
   };
 
@@ -305,7 +307,7 @@ export function EndpointDetail({
             </span>
           )}
           <CopyButton
-            text={curlOf(url, endpoint.sse)}
+            text={curlOf(url, endpoint.sse, endpoint.method)}
             label={t("request.copyCurl")}
             copied={t("detail.copied")}
           />

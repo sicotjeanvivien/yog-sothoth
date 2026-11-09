@@ -31,7 +31,7 @@ use std::net::SocketAddr;
 use axum::{
     Router,
     http::HeaderValue,
-    middleware::{from_fn_with_state, map_response},
+    middleware::{from_fn, from_fn_with_state, map_response},
     routing::get,
 };
 use tower_http::{
@@ -41,7 +41,7 @@ use tower_http::{
 use tracing::info;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::application::WorkSlots;
+use crate::application::{KeyRing, TicketRegistry, WorkSlots};
 use crate::http::error::ApiError;
 
 use crate::http::middleware::capacity::{REQUEST_TIMEOUT, request_deadline, work_slot_limit};
@@ -57,14 +57,14 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
         .route("/healthz", get(handlers::health::healthz))
         .route("/readyz", get(handlers::health::readyz));
 
-    let (api, _contract) = api_routes(state.work_slots.clone()).split_for_parts();
+    let (api, _contract) = api_routes(
+        state.work_slots.clone(),
+        state.key_ring.clone(),
+        state.ticket_registry.clone(),
+    )
+    .split_for_parts();
 
     let app = api
-        // ⚠️ A route layer: it runs after routing, so the probes and an unknown path never reach it.
-        .route_layer(from_fn_with_state(
-            state.key_ring.clone(),
-            middleware::authentication::authenticate,
-        ))
         // Under the layers below: an unknown route is traced and request-id'd like any other.
         .fallback(no_such_route)
         // ⚠️ Innermost: `request_deadline` bounds its read of an error body.
@@ -103,10 +103,14 @@ async fn no_such_route() -> ApiError {
     ApiError::NotFound("no such route".to_string())
 }
 
-/// Every `/api` route, each mounted with its contract (`#[utoipa::path]`). The
-/// committed OpenAPI document is read from this same list, so a route cannot be
-/// served without being declared.
-fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
+/// Every `/api` route, each mounted with its contract (`#[utoipa::path]`) and the credential it
+/// takes: a key, or a ticket for the live stream. The committed OpenAPI document is read from this
+/// same list, so a route cannot be served without being declared.
+fn api_routes(
+    work_slots: WorkSlots,
+    key_ring: KeyRing,
+    ticket_registry: TicketRegistry,
+) -> OpenApiRouter<AppState> {
     // ⚠️ `/api/protocols` is slow too, but stays out: its computation takes a slot
     // inside the cache, so its waiters hold none.
     let slotted = OpenApiRouter::new()
@@ -114,6 +118,21 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         .routes(routes!(handlers::signals::list_protocol_signals))
         .routes(routes!(handlers::signals::list_pool_signals))
         .route_layer(from_fn_with_state(work_slots, work_slot_limit));
+
+    // ⚠️ Route layers run after routing: the probes and an unknown path never reach them.
+    let live = OpenApiRouter::new()
+        // The live stream is capped by its own slots, in the handler.
+        .routes(routes!(handlers::live::live))
+        .routes(routes!(handlers::live::protocol_live))
+        .route_layer(from_fn_with_state(
+            ticket_registry,
+            middleware::ticket_authentication::authenticate_ticket,
+        ));
+
+    // Under `authenticate`, added below, which attaches the client this layer requires.
+    let tickets = OpenApiRouter::new()
+        .routes(routes!(handlers::tickets::create_ticket))
+        .route_layer(from_fn(middleware::require_api_key::require_api_key));
 
     OpenApiRouter::new()
         .routes(routes!(
@@ -130,9 +149,6 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
         .routes(routes!(handlers::network::get_network))
         .routes(routes!(handlers::ingestion::get_ingestion))
         .routes(routes!(handlers::windows::get_windows))
-        // The live stream is capped by its own slots, in the handler.
-        .routes(routes!(handlers::live::live))
-        .routes(routes!(handlers::live::protocol_live))
         .routes(routes!(handlers::token::get_token))
         .routes(routes!(handlers::token::list_tokens))
         .routes(routes!(handlers::token::list_token_prices))
@@ -258,6 +274,13 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
             handlers::pool_discoveries::get_protocol_pool_discovery_totals
         ))
         .merge(slotted)
+        .merge(tickets)
+        // ⚠️ Every route merged above takes a key; the live stream, merged after, does not.
+        .route_layer(from_fn_with_state(
+            key_ring,
+            middleware::authentication::authenticate,
+        ))
+        .merge(live)
 }
 
 /// Binds the listener before anything is spawned: a port in use is a startup error, not a

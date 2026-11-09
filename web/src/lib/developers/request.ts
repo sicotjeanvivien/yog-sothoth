@@ -26,8 +26,9 @@ export function topicsOf(url: string): string[] {
 }
 
 /** ⚠️ Single quotes: a `!` that `encodeURIComponent` leaves would expand inside double ones. */
-export function curlOf(url: string, sse: boolean): string {
-  return sse ? `curl -N -H 'Accept: text/event-stream' '${url}'` : `curl -s '${url}'`;
+export function curlOf(url: string, sse: boolean, method: string): string {
+  if (sse) return `curl -N -H 'Accept: text/event-stream' '${url}'`;
+  return method === "GET" ? `curl -s '${url}'` : `curl -s -X ${method} '${url}'`;
 }
 
 /**

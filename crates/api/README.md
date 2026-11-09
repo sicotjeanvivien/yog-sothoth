@@ -38,7 +38,9 @@ api/src/
 │   ├── live/event_source.rs   ← EventSource, one table of an event collection
 │   ├── cache.rs           ← SharedCache (moka) and its named CachePolicy per use
 │   ├── auth/key_ring.rs   ← KeyRing, every active API key in memory
-│   ├── auth/credential.rs ← identify(), the client an `Authorization` value names, or Unauthorized
+│   ├── auth/ticket_registry.rs ← TicketRegistry, the tickets issued and not yet used, in memory
+│   ├── auth/credential.rs ← identify() and identify_ticket(), the client an `Authorization`
+│   │                        value names, or Unauthorized
 │   ├── metrics.rs         ← the Prometheus series, served on :9000
 │   ├── pool_pairs.rs      ← PoolPairs, the token pair of a batch's pools in two reads at most; Paired
 │   ├── enriched_token.rs  ← one token side of a pool, identity only
@@ -53,7 +55,8 @@ api/src/
 │   ├── middleware.rs      ← CORS, security headers, request-id tracing,
 │   │                        capacity bounds (middleware/capacity.rs), every
 │   │                        error as Problem Details (middleware/problem_details.rs),
-│   │                        who calls (middleware/authentication.rs)
+│   │                        who calls (middleware/authentication.rs, require_api_key.rs,
+│   │                        ticket_authentication.rs)
 │   ├── state.rs           ← AppState — what every handler reads through `State`
 │   └── error.rs           ← ApiError, IntoResponse (RFC 9457, 503 + Retry-After)
 ├── testing.rs             ← test-only: fixtures and repository mocks
@@ -127,7 +130,8 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/ingestion` | Our ingestion's freshness (`live` / `delayed` / `stale`) and its last indexed event |
 | `GET` | `/api/windows` | Every window, the shortest first: its bounds, `open`, `opensAt` and `late`, without reading a measure over it |
 | `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` filter); each item embeds its pool's token pair (`tokenA`/`tokenB`, `EmbeddedTokenResponse`), says what its value counts (`valueUnit`) and, on a flow imbalance, which token its swaps mostly take from the pool (`leansToward`) |
-| `GET` | `/api/live?topics=signals` | SSE: the new items of the topics named, every protocol (see [The live stream](#the-live-stream)) |
+| `POST` | `/api/auth/tickets` | A ticket for the key's client, `{ticket, expiresAt}`: it opens one connection to the live stream, once, within 30 s; `401` without a key (see [Tickets](#tickets)) |
+| `GET` | `/api/live?topics=signals` | SSE: the new items of the topics named, every protocol (see [The live stream](#the-live-stream)); a ticket, or nothing until the stream is closed to anonymous callers |
 | `GET` | `/api/live/protocols/{protocol}?topics=signals` | The same, the protocol's only |
 | `GET` | `/api/protocols` | A page of every protocol of the domain, in the domain's order, and `poolsSeen` over all of them: observed by this build or not, pools seen — the catalogue, live; forward-only cursor |
 | `GET` | `/api/protocols/{protocol}` | The protocol's entry of the catalogue |
@@ -224,7 +228,8 @@ at the end of this section.
    `/api/<collection>/{id}`, one item; `/api/<entities>/{id}/<collection>`, the collection
    restricted to that entity (`/api/protocols/meteora_damm_v2/swaps`). **Two for the live
    stream**, under its own prefix (rule 5): `/api/live`, every protocol;
-   `/api/live/<entities>/{id}`, one entity. An entity is always in the path, never a filter
+   `/api/live/<entities>/{id}`, one entity. **One for an access**, under its own prefix
+   (rule 12): `/api/auth/<entities>`. An entity is always in the path, never a filter
    parameter. An identifier is a key of the data — a base58 key, a protocol name, a signal's
    or an announcement's id — and never a reserved word (rule 4) nor `live`.
 3. **A collection returns its items**, cursor-paginated (`Page<T>`: `?limit=`, 50 by default,
@@ -305,6 +310,11 @@ at the end of this section.
     arithmetic over the fields of one response, and the presentation (format, layout, colours,
     labels, ⓘ). What a route serves, it reads in the contract. The dashboard does not hold to this
     yet in full: what it still decides is being moved here.
+12. **An access has its own prefix, `/api/auth`**: obtaining a right to the API is neither reading
+    the data nor following it, and the prefix says it before anything else, as `/api/live` says the
+    stream. What follows names what the client obtains, a plural in kebab-case (`tickets`), asked
+    for with a `POST` and the client's key; it is not a resource of rule 1, and the rules of the
+    data (windows, cursors, cuts) do not apply to it.
 
 **What a window says of itself.** Every measure and every list read over a produced period carries `open`, `opensAt` and `late`,
 judged in one place. `open`: the service opens this window, its facts covering it whole; it says
@@ -535,30 +545,71 @@ hash opens nothing without its key.
   presented; the price is that a revocation takes effect within 10 s. A reread
   that fails is logged and counted, and the ring keeps the keys it held — a
   revoked key included, until a reread succeeds. A key is checked when a
-  request arrives: a live stream opened with it stays open after its revocation.
+  request arrives: a live stream opened with it stays open after its revocation,
+  and a ticket drawn with it still opens one within its lifetime.
 - **`authenticate`** (`http/middleware/authentication.rs`) is a *route* layer on
-  every `/api` route: it runs after routing, so it knows the route template, and
-  the probes and an unknown path never reach it. It reads the header and counts;
-  `identify` (`application/auth/credential.rs`) decides.
+  every `/api` route but the live stream: it runs after routing, so it knows the
+  route template, and the probes and an unknown path never reach it. It reads the
+  header and counts; `identify` (`application/auth/credential.rs`) decides.
 
   | `Authorization` | What happens |
   |---|---|
-  | absent | anonymous: the request passes |
+  | absent | anonymous: the request passes — but on `POST /api/auth/tickets`, refused by `require_api_key` |
   | `Bearer` (any case) and a key the ring holds | its `ApiClient` is attached to the request, which passes |
-  | another scheme, a bearer that is no key, a key the ring does not hold | `401`, Problem Details, `WWW-Authenticate: Bearer` |
+  | another scheme, a bearer that is no key, a key the ring does not hold | `401` |
 
-  The `401` reads the same whatever the reason: it does not tell a revoked key
-  from a forged one. The reason is only counted.
-- **Nothing refuses an anonymous call yet.** They are counted, by route, so
-  that who calls the API without a key is known before it is closed.
+- **`require_api_key`** (`http/middleware/require_api_key.rs`), under `authenticate` on
+  `POST /api/auth/tickets` alone, refuses a request no key has named a client for.
+- **Nothing refuses an anonymous call yet**, on the REST routes nor on the live
+  stream. They are counted, by route, so that who calls the API without a key is
+  known before it is closed.
+
+### Tickets
+
+The live stream takes no key: a browser cannot hold one, and the stream's
+`SSE_MAX_STREAMS` slots are counted. A client exchanges its key for a **ticket**
+at `POST /api/auth/tickets` (rule 12), and opens the stream with it, in
+`Authorization: Bearer <ticket>`. A ticket reads `yogt_<secret>`, 64 lowercase
+hex characters (`Ticket`, `core`); it names no stream, opens one connection, once,
+within `TICKET_LIFETIME` (30 s) of its issue. The answer is `{ticket, expiresAt}`.
+
+- **`TicketRegistry`** (`application/auth/ticket_registry.rs`) holds the tickets
+  issued, by hash, with their client, in the process: a restart forgets
+  them, as it already cuts every stream, and a second instance of the API would
+  not know the first's. `redeem` takes a ticket out as it reads it, so a second
+  use finds nothing. Every ticket lives as long, so the order of issue is the
+  order of expiry: each issue drops the expired ones from the oldest, up to the
+  first still valid. Nothing limits their issue yet.
+- **`authenticate_ticket`** (`http/middleware/ticket_authentication.rs`) is the
+  live stream's route layer, `identify_ticket` deciding.
+
+  | `Authorization` | What happens |
+  |---|---|
+  | absent | anonymous: the stream opens |
+  | `Bearer` and a ticket issued, unused, within its lifetime | the ticket is used up, its client attached; a `400` or a `503` that follows loses it |
+  | another scheme, a key, a bearer that is no ticket, a ticket unknown (never issued or used), expired | `401` |
+
+### Refusals
+
+A `401` is Problem Details with `WWW-Authenticate: Bearer`, and reads one text
+per credential, whatever the reason:
+
+- a key: ``a valid API key is required: send it as `Authorization: Bearer <key>` ``;
+- a ticket: ``a valid ticket is required: request one at `POST /api/auth/tickets` with your API key``.
+
+It says what the route takes, which the contract declares anyway (the `apiKey`
+and `ticket` schemes), never why a credential is refused: it does not tell a
+revoked key from a forged one, nor a used ticket from one never issued. The
+reason is only counted.
 
 The series, on `:9000/metrics` (host-mapped to 9004 in dev, read through
 `observe.sh` in production):
 
 | Series | Labels |
 |---|---|
-| `yog_api_requests_total` | `client` — the client's name, or `anonymous`; `route` — the route template (`/api/pools/{pool}`) |
-| `yog_api_unauthorized_total` | `reason` — `scheme`, `malformed` or `unknown` |
+| `yog_api_requests_total` | `client` — the client's name, a ticket's on the live stream, or `anonymous`; `route` — the route template (`/api/pools/{pool}`) |
+| `yog_api_unauthorized_total` | `credential` — `key` or `ticket`; `reason` — `missing`, `scheme`, `malformed`, `unknown` or `expired` (a key presented to the live stream is a `malformed` ticket; an expired ticket an issue has already forgotten is `unknown`) |
+| `yog_api_tickets_issued_total` | `client` |
 | `yog_api_key_ring_reloads_total` | `outcome` — `reloaded` or `failed` |
 
 ## Error responses

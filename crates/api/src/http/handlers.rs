@@ -25,6 +25,7 @@ pub(super) mod reward_claims;
 pub(super) mod rotation_runs;
 pub(super) mod signals;
 pub(super) mod swaps;
+pub(super) mod tickets;
 pub(super) mod token;
 pub(super) mod tvl;
 pub(super) mod windows;

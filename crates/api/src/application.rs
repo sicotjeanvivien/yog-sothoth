@@ -8,7 +8,11 @@ mod pool_pairs;
 mod services;
 mod work_slots;
 
-pub(crate) use auth::{KeyRing, ReloadOutcome, Unauthorized, identify};
+#[cfg(test)]
+pub(crate) use auth::TICKET_LIFETIME;
+pub(crate) use auth::{
+    CredentialKind, KeyRing, ReloadOutcome, TicketRegistry, Unauthorized, identify, identify_ticket,
+};
 pub(crate) use enriched_signal::EnrichedSignal;
 pub(crate) use enriched_token::EnrichedToken;
 pub(crate) use live::{

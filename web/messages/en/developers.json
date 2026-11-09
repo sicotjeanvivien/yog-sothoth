@@ -37,6 +37,7 @@
       "tvl": "TVL",
       "signals": "Signals",
       "announcements": "Announcements",
+      "auth": "Access",
       "live": "Live stream",
       "byProtocol": "By protocol",
       "byPool": "By pool",

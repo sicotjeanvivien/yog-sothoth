@@ -5,6 +5,7 @@ use std::fmt;
 use sha2::{Digest, Sha256};
 
 use crate::domain::ApiKeyFormatError;
+use crate::domain::auth::credential_text::{is_lower_hex, lower_hex};
 
 pub const API_KEY_PREFIX_BYTES: usize = 4;
 pub const API_KEY_SECRET_BYTES: usize = 32;
@@ -65,14 +66,6 @@ impl fmt::Debug for ApiKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "ApiKey({MARKER}{}_…)", self.prefix())
     }
-}
-
-fn lower_hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
-
-fn is_lower_hex(byte: u8) -> bool {
-    byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)
 }
 
 #[cfg(test)]

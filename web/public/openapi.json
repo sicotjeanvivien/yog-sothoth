@@ -5538,6 +5538,25 @@
         ],
         "description": "The swaps over `from..asOf`: `coverageUnit` is what their coverage counts."
       },
+      "TicketResponse": {
+        "description": "A ticket for one connection to the live stream, sent as `Authorization: Bearer <ticket>`.",
+        "properties": {
+          "expiresAt": {
+            "description": "When it stops opening anything, if still unused.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "ticket": {
+            "description": "`yogt_` and 64 lowercase hex characters; it opens one stream, once.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket",
+          "expiresAt"
+        ],
+        "type": "object"
+      },
       "TokenActivityPageResponse": {
         "allOf": [
           {
@@ -6471,6 +6490,18 @@
         ],
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "apiKey": {
+        "bearerFormat": "yog_<prefix>_<secret>",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "ticket": {
+        "bearerFormat": "yogt_<secret>",
+        "scheme": "bearer",
+        "type": "http"
+      }
     }
   },
   "info": {
@@ -6550,6 +6581,39 @@
             "description": "A failure: RFC 9457 Problem Details."
           }
         }
+      }
+    },
+    "/api/auth/tickets": {
+      "post": {
+        "operationId": "create_ticket",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponse"
+                }
+              }
+            },
+            "description": "A single-use ticket for one connection to the live stream."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "A failure: RFC 9457 Problem Details."
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "A ticket for the key's client: it opens one connection to `/api/live`, once."
       }
     },
     "/api/ingestion": {
@@ -6728,6 +6792,12 @@
             "description": "A failure: RFC 9457 Problem Details."
           }
         },
+        "security": [
+          {},
+          {
+            "ticket": []
+          }
+        ],
         "summary": "Live items of every protocol."
       }
     },
@@ -6777,6 +6847,12 @@
             "description": "A failure: RFC 9457 Problem Details."
           }
         },
+        "security": [
+          {},
+          {
+            "ticket": []
+          }
+        ],
         "summary": "Live items of one protocol: the same topics, filtered by the server."
       }
     },

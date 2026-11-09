@@ -285,6 +285,13 @@ export const zSwapEventFeeTokenResponse = z.enum(['a', 'b']);
 
 export type SwapEventFeeTokenResponse = z.infer<typeof zSwapEventFeeTokenResponse>;
 
+export const zTicketResponse = z.object({
+    expiresAt: z.iso.datetime({ offset: true }),
+    ticket: z.string()
+});
+
+export type TicketResponse = z.infer<typeof zTicketResponse>;
+
 export const zU128String = z.string().regex(/^\d+$/);
 
 export type U128String = z.infer<typeof zU128String>;
@@ -1677,6 +1684,8 @@ export const zListAnnouncementsQuery = z.object({
 });
 
 export const zListAnnouncementsResponse = zPageResponseAnnouncementEntryResponse;
+
+export const zCreateTicketResponse = zTicketResponse;
 
 export const zGetIngestionResponse = zIngestionResponse;
 

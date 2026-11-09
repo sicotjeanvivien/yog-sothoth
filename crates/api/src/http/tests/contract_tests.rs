@@ -201,7 +201,7 @@ fn file_name(path: &Path) -> String {
 fn every_api_route_is_in_the_document() {
     let doc = document();
     let paths = doc["paths"].as_object().expect("paths");
-    assert_eq!(paths.len(), 79, "{:?}", paths.keys().collect::<Vec<_>>());
+    assert_eq!(paths.len(), 80, "{:?}", paths.keys().collect::<Vec<_>>());
 }
 
 /// A document of one schema, as `finish` receives it.
@@ -368,21 +368,29 @@ fn every_schema_is_a_response_or_a_wire_form() {
 #[test]
 fn every_operation_answers_its_failures_as_problem_details() {
     let doc = document();
+    let mut checked = 0;
     for (path, item) in doc["paths"].as_object().expect("paths") {
-        let content = item["get"]["responses"]["default"]["content"]
-            .as_object()
-            .expect("content");
-        assert_eq!(
-            content.keys().collect::<Vec<_>>(),
-            [PROBLEM_CONTENT_TYPE],
-            "{path}"
-        );
-        assert_eq!(
-            content[PROBLEM_CONTENT_TYPE]["schema"]["$ref"],
-            "#/components/schemas/ProblemDetailsResponse",
-            "{path}"
-        );
+        for (method, operation) in item.as_object().expect("a path item") {
+            if !super::HTTP_METHODS.contains(&method.as_str()) {
+                continue;
+            }
+            let content = operation["responses"]["default"]["content"]
+                .as_object()
+                .expect("content");
+            assert_eq!(
+                content.keys().collect::<Vec<_>>(),
+                [PROBLEM_CONTENT_TYPE],
+                "{method} {path}"
+            );
+            assert_eq!(
+                content[PROBLEM_CONTENT_TYPE]["schema"]["$ref"],
+                "#/components/schemas/ProblemDetailsResponse",
+                "{method} {path}"
+            );
+            checked += 1;
+        }
     }
+    assert_eq!(checked, 80, "one operation per /api route");
 }
 
 /// Red when a response has no `description`, which OpenAPI 3.1 requires.
@@ -438,7 +446,7 @@ fn every_handler_declares_the_body_and_query_it_has() {
             checked += 1;
         }
     }
-    assert_eq!(checked, 79, "one #[utoipa::path] per /api route");
+    assert_eq!(checked, 80, "one #[utoipa::path] per /api route");
     assert!(drift.is_empty(), "{drift:?}");
 }
 
@@ -460,4 +468,31 @@ fn generic_of<'a>(text: &'a str, wrapper: &str) -> Option<&'a str> {
         }
     }
     None
+}
+
+/// Mutation: a scheme dropped, the ticket route's key made optional, or the live stream's
+/// anonymous access dropped before the stream is closed to it.
+#[test]
+fn the_document_says_which_credential_each_route_takes() {
+    let doc = document();
+    let schemes = &doc["components"]["securitySchemes"];
+    assert_eq!(schemes["apiKey"]["scheme"], "bearer");
+    assert_eq!(schemes["ticket"]["scheme"], "bearer");
+
+    assert_eq!(
+        doc["paths"]["/api/auth/tickets"]["post"]["security"],
+        json!([{ "apiKey": [] }])
+    );
+    for live in ["/api/live", "/api/live/protocols/{protocol}"] {
+        assert_eq!(
+            doc["paths"][live]["get"]["security"],
+            json!([{}, { "ticket": [] }]),
+            "{live}"
+        );
+    }
+    assert!(
+        doc["paths"]["/api/signals"]["get"]
+            .get("security")
+            .is_none()
+    );
 }
