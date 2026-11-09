@@ -545,7 +545,8 @@ hash opens nothing without its key.
   presented; the price is that a revocation takes effect within 10 s. A reread
   that fails is logged and counted, and the ring keeps the keys it held — a
   revoked key included, until a reread succeeds. A key is checked when a
-  request arrives: a live stream opened with it stays open after its revocation.
+  request arrives: a live stream opened with it stays open after its revocation,
+  and a ticket drawn with it still opens one within its lifetime.
 - **`authenticate`** (`http/middleware/authentication.rs`) is a *route* layer on
   every `/api` route but the live stream: it runs after routing, so it knows the
   route template, and the probes and an unknown path never reach it. It reads the
@@ -572,14 +573,13 @@ at `POST /api/auth/tickets` (rule 12), and opens the stream with it, in
 hex characters (`Ticket`, `core`); it names no stream, opens one connection, once,
 within `TICKET_LIFETIME` (30 s) of its issue. The answer is `{ticket, expiresAt}`.
 
-- **`TicketRegistry`** (`application/auth/ticket_registry.rs`) holds the tickets of
-  the last 30 s by hash, with their client, in the process: a restart forgets
+- **`TicketRegistry`** (`application/auth/ticket_registry.rs`) holds the tickets
+  issued, by hash, with their client, in the process: a restart forgets
   them, as it already cuts every stream, and a second instance of the API would
   not know the first's. `redeem` takes a ticket out as it reads it, so a second
   use finds nothing. Every ticket lives as long, so the order of issue is the
   order of expiry: each issue drops the expired ones from the oldest, up to the
-  first still valid, at constant cost. The registry holds the tickets of the last
-  30 s only, and as many as were asked for: nothing limits their issue yet.
+  first still valid. Nothing limits their issue yet.
 - **`authenticate_ticket`** (`http/middleware/ticket_authentication.rs`) is the
   live stream's route layer, `identify_ticket` deciding.
 

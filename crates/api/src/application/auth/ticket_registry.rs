@@ -28,7 +28,7 @@ struct Held {
     in_issue_order: VecDeque<([u8; 32], Instant)>,
 }
 
-/// Every ticket issued in the last [`TICKET_LIFETIME`], by hash, with its client.
+/// The tickets issued, by hash, with their client.
 #[derive(Clone, Default)]
 pub(crate) struct TicketRegistry {
     held: Arc<Mutex<Held>>,
@@ -46,6 +46,7 @@ impl TicketRegistry {
         let hash = ticket.hash();
         let now = Instant::now();
         let expires = now + TICKET_LIFETIME;
+        let expires_at = Utc::now() + TICKET_LIFETIME;
         let name = client.name.clone();
         {
             let mut held = self.held();
@@ -54,7 +55,7 @@ impl TicketRegistry {
             held.in_issue_order.push_back((hash, expires));
         }
         ApiMetrics::record_ticket_issued(&name);
-        Ok((ticket, Utc::now() + TICKET_LIFETIME))
+        Ok((ticket, expires_at))
     }
 
     /// The client of `ticket`, which this uses up: a second call finds nothing.
