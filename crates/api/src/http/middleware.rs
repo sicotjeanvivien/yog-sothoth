@@ -36,7 +36,7 @@ pub(super) fn cors_layer(allowed_origins: Vec<HeaderValue>) -> CorsLayer {
         .allow_origin(AllowOrigin::list(allowed_origins))
         .allow_methods([Method::GET, Method::POST])
         .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
-        // ⚠️ A browser reads no other response header: `x-request-id` to report, `Retry-After` to wait.
+        // ⚠️ Past the safelisted headers, a browser reads only these: `x-request-id`, `Retry-After`.
         .expose_headers([
             HeaderName::from_static(REQUEST_ID_HEADER),
             header::RETRY_AFTER,
