@@ -35,7 +35,9 @@ export async function openSseStream(
     return { kind: "unreachable", error };
   }
 
-  if (response.status !== 200 || response.body === null) {
+  // ⚠️ A 200 that is no stream (a proxy's page) is a refusal: read as open, it resets the backoff.
+  const isStream = response.headers.get("Content-Type")?.startsWith("text/event-stream") ?? false;
+  if (response.status !== 200 || !isStream || response.body === null) {
     return {
       kind: "refused",
       status: response.status,

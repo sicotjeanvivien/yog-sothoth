@@ -28,11 +28,14 @@ export function mergeSignals(
   return sorted([...byKey.values()]).slice(0, cap);
 }
 
-/** A gap at `at`, only over signals already shown and never with no signal since the last one. */
-export function markSignalGap(rows: readonly SignalFeedRow[], at: string): readonly SignalFeedRow[] {
+/** A gap at `now`, only over signals already shown and never with no signal since the last one. */
+export function markSignalGap(rows: readonly SignalFeedRow[], now: string): readonly SignalFeedRow[] {
   if (!rows.some((row) => row.type === "signal")) {
     return rows;
   }
+  // ⚠️ `now` is the browser's clock, the signals the server's: a late clock must not sink the gap
+  // below a signal shown before the cut, which a tie would rank above it.
+  const at = new Date(Math.max(Date.parse(now), ...rows.map((row) => timeOf(row) + 1))).toISOString();
   const gap: SignalFeedRow = { type: "gap", key: `gap:${at}`, at };
   const next = sorted([...rows, gap]);
   const below = next[next.indexOf(gap) + 1];

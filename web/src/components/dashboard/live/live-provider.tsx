@@ -15,6 +15,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { unstable_isUnrecognizedActionError } from "next/navigation";
 
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
 import { loadClientEnv } from "@/lib/config/client-env.schema";
@@ -61,7 +62,15 @@ export function LiveProvider({
         onReopen: () => reopenHandlers.current.forEach((handler) => handler()),
       },
       missed.current,
-      requestTicket,
+      async () => {
+        try {
+          return await requestTicket();
+        } catch (error) {
+          // ⚠️ A page from before a web deployment calls an action the new build no longer has.
+          if (unstable_isUnrecognizedActionError(error)) window.location.reload();
+          throw error;
+        }
+      },
     );
 
     return () => {

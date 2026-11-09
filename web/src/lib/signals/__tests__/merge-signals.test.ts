@@ -93,6 +93,12 @@ describe("markSignalGap", () => {
     expect(shape(mergeSignals(feed, [signal(2, at)]))).toEqual([2, "gap 10:00:05", 1]);
   });
 
+  // Mutation: the browser's time taken as is — a clock running late sinks the gap below signals seen before the cut.
+  it("never ranks the gap below a signal already shown, whatever the browser's clock", () => {
+    const feed = rows(signal(1, "2026-07-02T10:00:01Z"), signal(2, "2026-07-02T10:00:20Z"));
+    expect(shape(markSignalGap(feed, "2026-07-02T10:00:05Z"))).toEqual(["gap 10:00:20", 2, 1]);
+  });
+
   // Mutation: the empty-feed guard removed.
   it("marks nothing on an empty feed", () => {
     expect(markSignalGap([], "2026-07-02T10:00:05Z")).toEqual([]);

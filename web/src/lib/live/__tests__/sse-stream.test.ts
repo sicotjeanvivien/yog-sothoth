@@ -14,6 +14,10 @@ function body(...chunks: string[]): ReadableStream<Uint8Array> {
   });
 }
 
+function stream(chunks: ReadableStream<Uint8Array>): Response {
+  return new Response(chunks, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+}
+
 function stubFetch(response: Response | Error) {
   const fetched = vi.fn(async () => {
     if (response instanceof Error) throw response;
@@ -35,7 +39,7 @@ afterEach(() => {
 
 // Mutation: the ticket put in the URL, or left out — the API refuses, and a URL is logged.
 it("sends the ticket in the Authorization header, not in the URL", async () => {
-  const fetched = stubFetch(new Response(body(), { status: 200 }));
+  const fetched = stubFetch(stream(body()));
   await read().end;
   expect(fetched).toHaveBeenCalledWith(
     URL_,
@@ -47,7 +51,7 @@ it("sends the ticket in the Authorization header, not in the URL", async () => {
 
 // Mutations: a chunk read as a whole event; the stream's end not reported.
 it("hands on each event of a body cut anywhere, then reports the stream closed", async () => {
-  stubFetch(new Response(body("event: sig", "nals\ndata: {\"id\":1}\n", "\nevent: signals\ndata: 2\n\n"), { status: 200 }));
+  stubFetch(stream(body("event: sig", "nals\ndata: {\"id\":1}\n", "\nevent: signals\ndata: 2\n\n")));
   const opened = vi.fn();
   const { events, end } = read(opened);
 
@@ -70,6 +74,14 @@ it("reports a refusal with its status, body and Retry-After, without opening", a
     body: '{"detail":"full"}',
     retryAfterMs: 5_000,
   });
+  expect(opened).not.toHaveBeenCalled();
+});
+
+// Mutation: any 200 read as a stream — a proxy's page resets the backoff and is retried every 1-3 s.
+it("reports a 200 that is no event stream as a refusal, without opening", async () => {
+  stubFetch(new Response("<html>maintenance</html>", { status: 200, headers: { "Content-Type": "text/html" } }));
+  const opened = vi.fn();
+  expect(await read(opened).end).toMatchObject({ kind: "refused", status: 200, body: "<html>maintenance</html>" });
   expect(opened).not.toHaveBeenCalled();
 });
 

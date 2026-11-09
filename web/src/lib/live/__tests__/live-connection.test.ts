@@ -34,7 +34,7 @@ class FakeStream {
 
   open(): void {
     const body = new ReadableStream<Uint8Array>({ start: (c) => void (this.body = c) });
-    this.answer(new Response(body, { status: 200 }));
+    this.answer(new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } }));
   }
 
   refused(status: number, headers: Record<string, string> = {}): void {

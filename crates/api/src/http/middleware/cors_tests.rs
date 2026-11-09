@@ -2,7 +2,7 @@ use axum::{
     Router,
     body::Body,
     http::{HeaderMap, HeaderValue, Method, Request, header},
-    routing::post,
+    routing::{get, post},
 };
 use tower::ServiceExt;
 
@@ -62,4 +62,24 @@ async fn another_origin_is_not_allowed() {
         allowed(DASHBOARD).await,
         Some(HeaderValue::from_static(DASHBOARD))
     );
+}
+
+/// Mutation: `Retry-After` left unexposed, so a refused page reads none and may come back too soon.
+#[tokio::test]
+async fn a_browser_may_read_the_retry_after_of_a_refusal() {
+    let router = Router::new()
+        .route("/api/live", get(|| async { "" }))
+        .layer(cors_layer(vec![HeaderValue::from_static(DASHBOARD)]));
+    let request = Request::builder()
+        .uri("/api/live")
+        .header(header::ORIGIN, DASHBOARD)
+        .body(Body::empty())
+        .unwrap();
+    let response = router.oneshot(request).await.unwrap();
+
+    let exposed = response.headers()[header::ACCESS_CONTROL_EXPOSE_HEADERS]
+        .to_str()
+        .unwrap()
+        .to_ascii_lowercase();
+    assert!(exposed.contains("retry-after"), "{exposed}");
 }
