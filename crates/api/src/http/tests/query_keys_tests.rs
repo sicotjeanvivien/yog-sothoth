@@ -25,6 +25,8 @@ fn routes() -> Vec<(String, Vec<Value>)> {
         .as_object()
         .expect("the document has paths")
         .iter()
+        // ⚠️ A `POST` is not sent here: these tests read the query a `GET` documents.
+        .filter(|(_, item)| item.get("get").is_some())
         .map(|(path, item)| {
             let uri = path
                 .replace("{protocol}", "meteora_damm_v2")
@@ -67,7 +69,7 @@ async fn answer(uri: &str) -> Option<(StatusCode, String, String)> {
 #[tokio::test]
 async fn every_route_refuses_a_key_it_does_not_take() {
     let routes = routes();
-    assert_eq!(routes.len(), 79, "one path per /api route");
+    assert_eq!(routes.len(), 79, "one path per `GET` /api route");
 
     let mut served = Vec::new();
     for (uri, _) in &routes {

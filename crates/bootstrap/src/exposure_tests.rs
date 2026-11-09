@@ -19,6 +19,12 @@ const ALLOWED: &[(&str, usize, &str)] = &[
         "sqlx owns the pool — the URL is the argument of `Database::connect_with`",
     ),
     (
+        "crates/api/src/http/dto/response/ticket.rs",
+        1,
+        "the ticket's only consumer is its client — the body of `POST /api/auth/tickets` \
+         is the one place it is handed over, once; the registry keeps its hash alone",
+    ),
+    (
         "crates/archive/src/infra/store.rs",
         2,
         "object_store owns the S3 signing — the access key id and the secret \

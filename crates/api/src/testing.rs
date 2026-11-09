@@ -46,7 +46,8 @@ use crate::application::{
     PoolPairs, PoolService, PositionChangeCountsService, PositionChangeEventService,
     PositionFeeClaimEventService, ProtocolCatalogService, ProtocolFeeClaimEventService,
     ProtocolTvlService, RewardChangeEventService, RewardClaimEventService, RotationRunService,
-    SignalService, SwapActivityService, SwapEventService, TokenService, WindowsService, WorkSlots,
+    SignalService, SwapActivityService, SwapEventService, TicketRegistry, TokenService,
+    WindowsService, WorkSlots,
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
@@ -161,6 +162,7 @@ pub(crate) fn app_state() -> AppState {
         )),
         announcement_service: Arc::new(AnnouncementService::new(Arc::new(MockAnnouncementRepo))),
         key_ring: key_ring(vec![]),
+        ticket_registry: TicketRegistry::default(),
         health_checker: Arc::new(PgHealthChecker::new(
             PgPool::connect_lazy("postgres://unused@127.0.0.1:1/unused")
                 .expect("a well-formed URL"),

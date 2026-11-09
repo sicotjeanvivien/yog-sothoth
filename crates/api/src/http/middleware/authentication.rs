@@ -11,7 +11,7 @@ use yog_core::domain::ApiClient;
 
 use crate::{
     application::{
-        KeyRing, Unauthorized, identify,
+        CredentialKind, KeyRing, Unauthorized, identify,
         metrics::{ANONYMOUS, ApiMetrics},
     },
     http::error::ApiError,
@@ -37,8 +37,8 @@ pub(crate) async fn authenticate(
     let client = match client_of(credential, &ring) {
         Ok(client) => client,
         Err(reason) => {
-            ApiMetrics::record_unauthorized(reason);
-            return ApiError::Unauthorized.into_response();
+            ApiMetrics::record_unauthorized(CredentialKind::ApiKey, reason);
+            return ApiError::Unauthorized(CredentialKind::ApiKey).into_response();
         }
     };
 

@@ -16,7 +16,8 @@ use crate::application::{
     PoolService, PositionChangeCountsService, PositionChangeEventService,
     PositionFeeClaimEventService, ProtocolCatalogService, ProtocolFeeClaimEventService,
     ProtocolTvlService, RewardChangeEventService, RewardClaimEventService, RotationRunService,
-    SignalService, SwapActivityService, SwapEventService, TokenService, WindowsService, WorkSlots,
+    SignalService, SwapActivityService, SwapEventService, TicketRegistry, TokenService,
+    WindowsService, WorkSlots,
 };
 
 /// The services and the runtime handles the router and handlers read. Handlers never reach a
@@ -59,6 +60,8 @@ pub(crate) struct AppState {
     pub(crate) announcement_service: Arc<AnnouncementService>,
     /// The keys the `/api` routes accept, read by the authentication layer.
     pub(crate) key_ring: KeyRing,
+    /// The tickets issued and not yet used, which open the live stream.
+    pub(crate) ticket_registry: TicketRegistry,
     /// Infra probe, exposed directly: no application logic surrounds it.
     pub(crate) health_checker: Arc<PgHealthChecker>,
     /// Cancelled on stop. Only the SSE stream reads it: every other response ends on its own.

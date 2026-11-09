@@ -2,6 +2,8 @@
 pub(crate) mod authentication;
 pub(crate) mod capacity;
 pub(super) mod problem_details;
+pub(crate) mod require_api_key;
+pub(crate) mod ticket_authentication;
 pub(crate) mod tracing;
 
 use axum::http::{HeaderName, HeaderValue, Method, header};
@@ -27,12 +29,17 @@ pub(super) fn frame_options_layer() -> SetResponseHeaderLayer<HeaderValue> {
     )
 }
 
-/// CORS, limited to the origins of `API_CORS_ALLOWED_ORIGINS` and to `GET`; `x-request-id` is
-/// exposed so the browser can report it. A caller sending no `Origin` is unaffected.
+/// CORS, limited to the origins of `API_CORS_ALLOWED_ORIGINS`, to `GET` and to the `POST` of a
+/// ticket; `Authorization` carries a key or a ticket, `x-request-id` is exposed so the browser can
+/// report it. A caller sending no `Origin` is unaffected.
 pub(super) fn cors_layer(allowed_origins: Vec<HeaderValue>) -> CorsLayer {
     CorsLayer::new()
         .allow_origin(AllowOrigin::list(allowed_origins))
-        .allow_methods([Method::GET])
-        .allow_headers([header::CONTENT_TYPE])
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
         .expose_headers([HeaderName::from_static(REQUEST_ID_HEADER)])
 }
+
+#[cfg(test)]
+#[path = "middleware/cors_tests.rs"]
+mod cors_tests;

@@ -5,10 +5,13 @@
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use utoipa::openapi::{ComponentsBuilder, InfoBuilder, OpenApiBuilder};
+use utoipa::openapi::{
+    ComponentsBuilder, InfoBuilder, OpenApiBuilder,
+    security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
+};
 use utoipa_axum::router::OpenApiRouter;
 
-use crate::application::WorkSlots;
+use crate::application::{TicketRegistry, WorkSlots};
 use crate::http::dto::response::{PROBLEM_CONTENT_TYPE, ProblemDetailsResponse};
 
 /// The document as committed: the routes' declarations, then [`finish`].
@@ -23,16 +26,32 @@ pub(crate) fn document() -> Value {
         .components(Some(
             ComponentsBuilder::new()
                 .schema_from::<ProblemDetailsResponse>()
+                .security_scheme("apiKey", bearer("yog_<prefix>_<secret>"))
+                .security_scheme("ticket", bearer("yogt_<secret>"))
                 .build(),
         ))
         .build();
-    let routes = super::api_routes(WorkSlots::new(1, Duration::ZERO));
+    let routes = super::api_routes(
+        WorkSlots::new(1, Duration::ZERO),
+        crate::testing::key_ring(vec![]),
+        TicketRegistry::default(),
+    );
     let declared = OpenApiRouter::with_openapi(base)
         .merge(routes)
         .into_openapi();
     let mut doc = serde_json::to_value(declared).expect("the OpenAPI document serialises");
     finish(&mut doc);
     doc
+}
+
+/// An `Authorization: Bearer` credential, written as `format`.
+fn bearer(format: &str) -> SecurityScheme {
+    SecurityScheme::Http(
+        HttpBuilder::new()
+            .scheme(HttpAuthScheme::Bearer)
+            .bearer_format(format)
+            .build(),
+    )
 }
 
 /// The rules the declarations leave implicit, applied once to the whole

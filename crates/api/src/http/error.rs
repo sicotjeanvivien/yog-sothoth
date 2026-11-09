@@ -4,7 +4,7 @@ use axum::{
 };
 use tracing::{error, warn};
 
-use crate::application::{MovesError, RotationRunsError};
+use crate::application::{CredentialKind, MovesError, RotationRunsError};
 use crate::http::dto::response::{PROBLEM_CONTENT_TYPE, ProblemDetailsResponse};
 
 /// API-level errors, served as RFC 9457 Problem Details. `Unavailable` is capacity or time
@@ -12,9 +12,9 @@ use crate::http::dto::response::{PROBLEM_CONTENT_TYPE, ProblemDetailsResponse};
 #[derive(Debug)]
 pub(crate) enum ApiError {
     BadRequest(String),
-    /// A credential that opens nothing; `401` with `WWW-Authenticate: Bearer` (RFC 6750).
-    /// ⚠️ One message whatever the reason: it must not tell a revoked key from a forged one.
-    Unauthorized,
+    /// No credential, or one that opens nothing; `401` with `WWW-Authenticate: Bearer` (RFC 6750).
+    /// ⚠️ One message per kind, whatever the reason: it must not tell a revoked key from a forged one.
+    Unauthorized(CredentialKind),
     NotFound(String),
     Unavailable(&'static str),
     Internal(String),
@@ -30,10 +30,10 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, title, detail) = match self {
             ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, "Bad Request", msg),
-            ApiError::Unauthorized => (
+            ApiError::Unauthorized(kind) => (
                 StatusCode::UNAUTHORIZED,
                 "Unauthorized",
-                "the API key is not valid".to_string(),
+                unauthorized_detail(kind).to_string(),
             ),
             ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, "Not Found", msg),
             ApiError::Unavailable(reason) => {
@@ -137,6 +137,18 @@ impl From<MovesError> for ApiError {
 }
 
 /// What a client is told when the database ran out of time or connections.
+/// What a refused client is told it lacks, the same whatever the reason.
+fn unauthorized_detail(kind: CredentialKind) -> &'static str {
+    match kind {
+        CredentialKind::ApiKey => {
+            "a valid API key is required: send it as `Authorization: Bearer <key>`"
+        }
+        CredentialKind::Ticket => {
+            "a valid ticket is required: request one at `POST /api/auth/tickets` with your API key"
+        }
+    }
+}
+
 const TIMEOUT_REASON: &str = "the database is over capacity; retry shortly";
 
 #[cfg(test)]

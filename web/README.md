@@ -500,7 +500,8 @@ A new page goes in one of the two lists and calls `pageMetadata`, or
 ## Developers page
 
 `/developers` lists every route of the API contract by family, with its
-parameters and the fields of its response, and sends one from the browser —
+parameters and the fields of its response, and sends one from the browser with
+the method the contract declares —
 its `curl`, the cursor's pages, Problem Details on failure, the signal stream
 listened to. It is unlisted: `noindex`, out of the sitemap, and no link of the
 site or the dashboard leads to it.

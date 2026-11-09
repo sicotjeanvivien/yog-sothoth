@@ -42,10 +42,17 @@ describe("topicsOf", () => {
 describe("curlOf", () => {
   // Mutations: the stream's curl without `-N`, which buffers; double quotes, where `!` expands.
   it("streams the events unbuffered, the URL single-quoted", () => {
-    expect(curlOf("https://x/api/live?topics=signals", true)).toBe(
+    expect(curlOf("https://x/api/live?topics=signals", true, "GET")).toBe(
       "curl -N -H 'Accept: text/event-stream' 'https://x/api/live?topics=signals'",
     );
-    expect(curlOf("https://x/api/swaps", false)).toBe("curl -s 'https://x/api/swaps'");
+    expect(curlOf("https://x/api/swaps", false, "GET")).toBe("curl -s 'https://x/api/swaps'");
+  });
+
+  // Mutation: the method left out, so the copied command sends a `GET` the route refuses.
+  it("names a method other than GET", () => {
+    expect(curlOf("https://x/api/auth/tickets", false, "POST")).toBe(
+      "curl -s -X POST 'https://x/api/auth/tickets'",
+    );
   });
 });
 

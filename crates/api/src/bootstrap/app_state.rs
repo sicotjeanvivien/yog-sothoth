@@ -29,7 +29,8 @@ use crate::application::{
     PositionChangeCountsService, PositionChangeEventService, PositionFeeClaimEventService,
     ProtocolCatalogService, ProtocolFeeClaimEventService, ProtocolTvlService,
     RewardChangeEventService, RewardClaimEventService, RotationRunService, SignalService,
-    SignalsSource, SwapActivityService, SwapEventService, TokenService, WindowsService, WorkSlots,
+    SignalsSource, SwapActivityService, SwapEventService, TicketRegistry, TokenService,
+    WindowsService, WorkSlots,
 };
 use crate::bootstrap::Config;
 use crate::http::{AppState, SSE_MAX_STREAMS, STATEMENT_TIMEOUT, WORK_SLOT_WAIT, WORK_SLOTS};
@@ -233,6 +234,7 @@ pub(crate) async fn build_app_state(
         token_service: Arc::new(TokenService::new(token_metadata_repo, token_price_repo)),
         announcement_service: Arc::new(AnnouncementService::new(announcement_repo)),
         key_ring: key_ring.clone(),
+        ticket_registry: TicketRegistry::default(),
         health_checker: Arc::new(PgHealthChecker::new(db_pool)),
         shutdown,
     };

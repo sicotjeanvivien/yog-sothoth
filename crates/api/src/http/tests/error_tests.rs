@@ -39,3 +39,35 @@ fn a_backend_failure_stays_a_500() {
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     assert!(!response.headers().contains_key(header::RETRY_AFTER));
 }
+
+async fn detail_of(error: ApiError) -> (StatusCode, String) {
+    let response = error.into_response();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    (status, json["detail"].as_str().unwrap().to_string())
+}
+
+/// Mutation: one message changed, or the two swapped so a refused stream speaks of a key.
+#[tokio::test]
+async fn each_credential_kind_says_what_it_requires() {
+    use crate::application::CredentialKind;
+
+    assert_eq!(
+        detail_of(ApiError::Unauthorized(CredentialKind::ApiKey)).await,
+        (
+            StatusCode::UNAUTHORIZED,
+            "a valid API key is required: send it as `Authorization: Bearer <key>`".to_string()
+        )
+    );
+    assert_eq!(
+        detail_of(ApiError::Unauthorized(CredentialKind::Ticket)).await,
+        (
+            StatusCode::UNAUTHORIZED,
+            "a valid ticket is required: request one at `POST /api/auth/tickets` with your API key"
+                .to_string()
+        )
+    );
+}
