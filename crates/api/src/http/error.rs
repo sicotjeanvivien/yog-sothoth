@@ -136,7 +136,6 @@ impl From<MovesError> for ApiError {
     }
 }
 
-/// What a client is told when the database ran out of time or connections.
 /// What a refused client is told it lacks, the same whatever the reason.
 fn unauthorized_detail(kind: CredentialKind) -> &'static str {
     match kind {
@@ -149,6 +148,7 @@ fn unauthorized_detail(kind: CredentialKind) -> &'static str {
     }
 }
 
+/// What a client is told when the database ran out of time or connections.
 const TIMEOUT_REASON: &str = "the database is over capacity; retry shortly";
 
 #[cfg(test)]

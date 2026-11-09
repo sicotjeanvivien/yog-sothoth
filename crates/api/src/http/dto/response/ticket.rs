@@ -6,7 +6,7 @@ use utoipa::ToSchema;
 use yog_core::domain::Ticket;
 
 /// A ticket for one connection to the live stream, sent as `Authorization: Bearer <ticket>`.
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TicketResponse {
     /// `yogt_` and 64 lowercase hex characters; it opens one stream, once.

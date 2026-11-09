@@ -6613,7 +6613,7 @@
             "apiKey": []
           }
         ],
-        "summary": "A ticket for the key's client: it opens one connection to `/api/live`, within 30 s."
+        "summary": "A ticket for the key's client: it opens one connection to `/api/live`, once."
       }
     },
     "/api/ingestion": {

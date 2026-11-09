@@ -104,3 +104,24 @@ fn a_key_is_exchanged_for_a_ticket() {
         Some(1)
     );
 }
+
+/// Mutation: the route issuing from another registry than the live stream reads, so every
+/// ticket it hands out is refused.
+#[tokio::test]
+async fn the_ticket_the_route_issues_opens_the_live_stream() {
+    let state = state();
+    let bearer = Some(format!("Bearer {}", key(1).expose()));
+    let (status, body) = issue(build_router(state.clone(), vec![]), bearer).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let json: serde_json::Value = serde_json::from_str(&body).expect("a JSON body");
+    let ticket = json["ticket"].as_str().expect("a ticket");
+
+    let request = Request::builder()
+        .uri("/api/live?topics=signals")
+        .header(header::AUTHORIZATION, format!("Bearer {ticket}"))
+        .body(Body::empty())
+        .unwrap();
+    let response = build_router(state, vec![]).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}

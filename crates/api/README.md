@@ -578,7 +578,8 @@ within `TICKET_LIFETIME` (30 s) of its issue. The answer is `{ticket, expiresAt}
   not know the first's. `redeem` takes a ticket out as it reads it, so a second
   use finds nothing. Every ticket lives as long, so the order of issue is the
   order of expiry: each issue drops the expired ones from the oldest, up to the
-  first still valid, which bounds the registry at constant cost.
+  first still valid, at constant cost. The registry holds the tickets of the last
+  30 s only, and as many as were asked for: nothing limits their issue yet.
 - **`authenticate_ticket`** (`http/middleware/ticket_authentication.rs`) is the
   live stream's route layer, `identify_ticket` deciding.
 
@@ -607,7 +608,7 @@ The series, on `:9000/metrics` (host-mapped to 9004 in dev, read through
 | Series | Labels |
 |---|---|
 | `yog_api_requests_total` | `client` — the client's name, a ticket's on the live stream, or `anonymous`; `route` — the route template (`/api/pools/{pool}`) |
-| `yog_api_unauthorized_total` | `credential` — `key` or `ticket`; `reason` — `missing`, `scheme`, `malformed`, `unknown` or `expired` (a key presented to the live stream is a `malformed` ticket) |
+| `yog_api_unauthorized_total` | `credential` — `key` or `ticket`; `reason` — `missing`, `scheme`, `malformed`, `unknown` or `expired` (a key presented to the live stream is a `malformed` ticket; an expired ticket an issue has already forgotten is `unknown`) |
 | `yog_api_tickets_issued_total` | `client` |
 | `yog_api_key_ring_reloads_total` | `outcome` — `reloaded` or `failed` |
 

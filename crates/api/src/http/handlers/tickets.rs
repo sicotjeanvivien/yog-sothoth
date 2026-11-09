@@ -12,7 +12,7 @@ use crate::http::{
     error::ApiError,
 };
 
-/// A ticket for the key's client: it opens one connection to `/api/live`, within 30 s.
+/// A ticket for the key's client: it opens one connection to `/api/live`, once.
 #[utoipa::path(
     post,
     path = "/api/auth/tickets",

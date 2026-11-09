@@ -43,15 +43,15 @@ impl TicketRegistry {
         let mut secret = [0u8; TICKET_SECRET_BYTES];
         getrandom::fill(&mut secret)?;
         let ticket = Ticket::from_random(secret);
+        let hash = ticket.hash();
         let now = Instant::now();
         let expires = now + TICKET_LIFETIME;
         let name = client.name.clone();
         {
             let mut held = self.held();
             held.forget_expired(now);
-            held.by_hash
-                .insert(ticket.hash(), Issued { client, expires });
-            held.in_issue_order.push_back((ticket.hash(), expires));
+            held.by_hash.insert(hash, Issued { client, expires });
+            held.in_issue_order.push_back((hash, expires));
         }
         ApiMetrics::record_ticket_issued(&name);
         Ok((ticket, Utc::now() + TICKET_LIFETIME))
