@@ -18,6 +18,23 @@ This file is a map, not the territory. The in-repo READMEs are the authoritative
 
 **Never reference a project-tracking ticket in this repository** — no `.project/…` path, no ticket number, no "this ticket", in code, comments, READMEs, CI files or commit-visible docs. The tracker is a separate private repository: a reader of this code cannot follow the pointer, and every rename there breaks it. Write the reason itself instead (the defect, the measurement still to come, the migration that fixed it). Committed migrations are the one exception, and only because they can never be edited.
 
+## Decisions — absolute rule: stop and ask
+
+The owner decides; Claude asks. No decision is taken alone, however small it looks.
+
+- **A ticket is started only once every question it raises has an answer from the owner.**
+  A plan holds no decision taken alone — not even one marked "to be contested": each is
+  asked first. Approving a plan does not answer the questions it left open.
+- **During implementation, any new question stops the work**: a name (route, variable,
+  file, field), a deviation from the approved plan, a constraint found on the way, a review
+  finding that needs a choice. Ask, wait for the answer, then resume. Never settle it "for
+  the best" and report afterwards.
+- **A request is done as worded, nothing more.** A "yes" to one action of a question that
+  named several is a yes to that action only.
+- **A decision is applied from where the owner took it** — the ticket, the owner's own
+  message — never from a summary or from Claude's own earlier proposal.
+- A document is never rewritten to justify a deviation: the deviation is reported.
+
 ## Comments — absolute rule
 
 A comment says what the code cannot: a trap (why not the obvious way) or an
