@@ -486,7 +486,7 @@ fn the_document_says_which_credential_each_route_takes() {
     for live in ["/api/live", "/api/live/protocols/{protocol}"] {
         assert_eq!(
             doc["paths"][live]["get"]["security"],
-            json!([{}, { "ticket": [] }]),
+            json!([{ "ticket": [] }]),
             "{live}"
         );
     }
