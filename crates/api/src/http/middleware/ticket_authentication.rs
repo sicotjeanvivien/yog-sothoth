@@ -1,5 +1,5 @@
 //! Who opens the live stream: the client of an `Authorization: Bearer` ticket, used up on the
-//! way, or nobody until the stream is closed to anonymous callers. A key opens nothing here.
+//! way. Nothing else opens it, a key included.
 
 use axum::{
     extract::{MatchedPath, Request, State},
@@ -11,13 +11,12 @@ use yog_core::domain::ApiClient;
 
 use crate::{
     application::{
-        CredentialKind, TicketRegistry, Unauthorized, identify_ticket,
-        metrics::{ANONYMOUS, ApiMetrics},
+        CredentialKind, TicketRegistry, Unauthorized, identify_ticket, metrics::ApiMetrics,
     },
     http::error::ApiError,
 };
 
-/// Attach the client of the request's ticket, if it presents one, and count the request under it.
+/// Attach the client of the request's ticket and count the request under it; refuse any other.
 pub(crate) async fn authenticate_ticket(
     State(registry): State<TicketRegistry>,
     mut request: Request,
@@ -29,12 +28,11 @@ pub(crate) async fn authenticate_ticket(
         .map_or("unmatched", MatchedPath::as_str)
         .to_string();
 
-    let Some(credential) = request.headers().get(header::AUTHORIZATION) else {
-        ApiMetrics::record_request(ANONYMOUS, &route);
-        return next.run(request).await;
+    let client = match request.headers().get(header::AUTHORIZATION) {
+        None => Err(Unauthorized::Missing),
+        Some(credential) => client_of(credential, &registry),
     };
-
-    let client = match client_of(credential, &registry) {
+    let client = match client {
         Ok(client) => client,
         Err(reason) => {
             ApiMetrics::record_unauthorized(CredentialKind::Ticket, reason);

@@ -56,7 +56,7 @@ pub(crate) type TopicStream = BoxStream<'static, Option<Delivery>>;
     get,
     path = "/api/live",
     params(LiveParams),
-    security((), ("ticket" = [])),
+    security(("ticket" = [])),
     responses((
         status = 200,
         description = "Server-sent events, each named by its topic and carrying an item of \
@@ -83,7 +83,7 @@ pub(crate) async fn live(
     get,
     path = "/api/live/protocols/{protocol}",
     params(LiveParams),
-    security((), ("ticket" = [])),
+    security(("ticket" = [])),
     responses((
         status = 200,
         description = "Server-sent events of the protocol, each named by its topic and \

@@ -131,7 +131,7 @@ with no wildcard arm, so adding a variant breaks the build there.
 | `GET` | `/api/windows` | Every window, the shortest first: its bounds, `open`, `opensAt` and `late`, without reading a measure over it |
 | `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` filter); each item embeds its pool's token pair (`tokenA`/`tokenB`, `EmbeddedTokenResponse`), says what its value counts (`valueUnit`) and, on a flow imbalance, which token its swaps mostly take from the pool (`leansToward`) |
 | `POST` | `/api/auth/tickets` | A ticket for the key's client, `{ticket, expiresAt}`: it opens one connection to the live stream, once, within 30 s; `401` without a key (see [Tickets](#tickets)) |
-| `GET` | `/api/live?topics=signals` | SSE: the new items of the topics named, every protocol (see [The live stream](#the-live-stream)); a ticket, or nothing until the stream is closed to anonymous callers |
+| `GET` | `/api/live?topics=signals` | SSE: the new items of the topics named, every protocol (see [The live stream](#the-live-stream)); a ticket |
 | `GET` | `/api/live/protocols/{protocol}?topics=signals` | The same, the protocol's only |
 | `GET` | `/api/protocols` | A page of every protocol of the domain, in the domain's order, and `poolsSeen` over all of them: observed by this build or not, pools seen — the catalogue, live; forward-only cursor |
 | `GET` | `/api/protocols/{protocol}` | The protocol's entry of the catalogue |
@@ -545,8 +545,8 @@ hash opens nothing without its key.
   presented; the price is that a revocation takes effect within 10 s. A reread
   that fails is logged and counted, and the ring keeps the keys it held — a
   revoked key included, until a reread succeeds. A key is checked when a
-  request arrives: a live stream opened with it stays open after its revocation,
-  and a ticket drawn with it still opens one within its lifetime.
+  request arrives: a live stream opened with a ticket drawn from it stays open after
+  its revocation, and such a ticket still opens one within its lifetime.
 - **`authenticate`** (`http/middleware/authentication.rs`) is a *route* layer on
   every `/api` route but the live stream: it runs after routing, so it knows the
   route template, and the probes and an unknown path never reach it. It reads the
@@ -560,9 +560,8 @@ hash opens nothing without its key.
 
 - **`require_api_key`** (`http/middleware/require_api_key.rs`), under `authenticate` on
   `POST /api/auth/tickets` alone, refuses a request no key has named a client for.
-- **Nothing refuses an anonymous call yet**, on the REST routes nor on the live
-  stream. They are counted, by route, so that who calls the API without a key is
-  known before it is closed.
+- **Nothing refuses an anonymous call yet** on the REST read routes. They are counted,
+  by route, so that who calls the API without a key is known before it is closed.
 
 ### Tickets
 
@@ -585,7 +584,7 @@ within `TICKET_LIFETIME` (30 s) of its issue. The answer is `{ticket, expiresAt}
 
   | `Authorization` | What happens |
   |---|---|
-  | absent | anonymous: the stream opens |
+  | absent | `401` |
   | `Bearer` and a ticket issued, unused, within its lifetime | the ticket is used up, its client attached; a `400` or a `503` that follows loses it |
   | another scheme, a key, a bearer that is no ticket, a ticket unknown (never issued or used), expired | `401` |
 
@@ -607,7 +606,7 @@ The series, on `:9000/metrics` (host-mapped to 9004 in dev, read through
 
 | Series | Labels |
 |---|---|
-| `yog_api_requests_total` | `client` — the client's name, a ticket's on the live stream, or `anonymous`; `route` — the route template (`/api/pools/{pool}`) |
+| `yog_api_requests_total` | `client` — the client's name, a ticket's on the live stream, or `anonymous` on a REST route; `route` — the route template (`/api/pools/{pool}`) |
 | `yog_api_unauthorized_total` | `credential` — `key` or `ticket`; `reason` — `missing`, `scheme`, `malformed`, `unknown` or `expired` (a key presented to the live stream is a `malformed` ticket; an expired ticket an issue has already forgotten is `unknown`) |
 | `yog_api_tickets_issued_total` | `client` |
 | `yog_api_key_ring_reloads_total` | `outcome` — `reloaded` or `failed` |

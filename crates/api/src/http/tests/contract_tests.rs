@@ -470,8 +470,8 @@ fn generic_of<'a>(text: &'a str, wrapper: &str) -> Option<&'a str> {
     None
 }
 
-/// Mutation: a scheme dropped, the ticket route's key made optional, or the live stream's
-/// anonymous access dropped before the stream is closed to it.
+/// Mutation: a scheme dropped, the ticket route's key made optional, or the live stream opened
+/// to anonymous callers again.
 #[test]
 fn the_document_says_which_credential_each_route_takes() {
     let doc = document();
@@ -486,7 +486,7 @@ fn the_document_says_which_credential_each_route_takes() {
     for live in ["/api/live", "/api/live/protocols/{protocol}"] {
         assert_eq!(
             doc["paths"][live]["get"]["security"],
-            json!([{}, { "ticket": [] }]),
+            json!([{ "ticket": [] }]),
             "{live}"
         );
     }

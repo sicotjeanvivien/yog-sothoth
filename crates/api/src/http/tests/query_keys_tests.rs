@@ -3,11 +3,19 @@
 
 use std::time::Duration;
 
-use axum::http::StatusCode;
+use axum::{
+    body::Body,
+    http::{Request, StatusCode, header},
+};
 use serde_json::Value;
+use tower::ServiceExt;
+use yog_core::domain::ApiClient;
 
 use super::document;
-use crate::testing::{get, pk};
+use crate::{
+    http::build_router,
+    testing::{app_state, pk},
+};
 
 /// A key no route takes.
 const UNKNOWN: &str = "yog_unknown_key";
@@ -59,9 +67,37 @@ fn valid_value(schema: &Value) -> Option<String> {
         .find_map(valid_value)
 }
 
-/// The answer to `uri`, or `None` when it is still answering after [`PATIENCE`].
+/// The answer to `uri`, or `None` when it is still answering after [`PATIENCE`]. ⚠️ The live
+/// stream gets a ticket: without one it answers `401` before reading its query.
 async fn answer(uri: &str) -> Option<(StatusCode, String, String)> {
-    tokio::time::timeout(PATIENCE, get(uri)).await.ok()
+    let state = app_state();
+    let mut request = Request::builder().uri(uri);
+    if uri.starts_with("/api/live") {
+        let client = ApiClient {
+            id: 1,
+            name: "dashboard".to_string(),
+        };
+        let (ticket, _) = state.ticket_registry.issue(client).expect("random bytes");
+        request = request.header(header::AUTHORIZATION, format!("Bearer {}", ticket.expose()));
+    }
+    let request = request.body(Body::empty()).unwrap();
+    let call = async {
+        let response = build_router(state, vec![]).oneshot(request).await.unwrap();
+        let (parts, body) = response.into_parts();
+        let content_type = parts
+            .headers
+            .get(header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default()
+            .to_string();
+        let body = axum::body::to_bytes(body, usize::MAX).await.unwrap();
+        let detail = serde_json::from_slice::<Value>(&body)
+            .ok()
+            .and_then(|json| json["detail"].as_str().map(str::to_string))
+            .unwrap_or_else(|| String::from_utf8_lossy(&body).into_owned());
+        (parts.status, content_type, detail)
+    };
+    tokio::time::timeout(PATIENCE, call).await.ok()
 }
 
 /// Against `deny_unknown_fields` removed from one parameter struct, or `NoQuery` from one
@@ -118,6 +154,10 @@ async fn every_route_takes_every_key_it_documents() {
                     if detail.contains("unknown field") || detail.contains("unknown variant") =>
                 {
                     refused.push(format!("{request}: {detail}"));
+                }
+                // ⚠️ A refused credential never read the query: it proves nothing about the key.
+                Some((StatusCode::UNAUTHORIZED, _, detail)) => {
+                    refused.push(format!("{request}: its credential refused: {detail}"));
                 }
                 Some(_) => {}
                 None => refused.push(format!("{request}: no answer within {PATIENCE:?}")),

@@ -51,20 +51,28 @@ fn issued(registry: &TicketRegistry) -> String {
     format!("Bearer {}", ticket.expose())
 }
 
-/// Mutation: an anonymous request refused before the stream is closed to it.
+/// Mutation: an anonymous request let through, so the stream opens without a ticket.
 #[test]
-fn a_request_without_a_ticket_passes_counted_as_anonymous() {
+fn a_request_without_a_ticket_is_refused() {
     let ((status, body), metrics) = recorded(send(echo(TicketRegistry::default()), None));
 
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(body, "-");
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
+    assert!(body.contains("a valid ticket is required"), "{body}");
+    assert_eq!(
+        counter(
+            &metrics,
+            "yog_api_unauthorized_total",
+            &[("credential", "ticket"), ("reason", "missing")]
+        ),
+        Some(1)
+    );
     assert_eq!(
         counter(
             &metrics,
             "yog_api_requests_total",
             &[("client", "anonymous"), ("route", "/live/{id}")]
         ),
-        Some(1)
+        None
     );
 }
 
