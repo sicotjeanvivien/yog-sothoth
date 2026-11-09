@@ -560,7 +560,7 @@ hash opens nothing without its key.
 
 - **`require_api_key`** (`http/middleware/require_api_key.rs`), under `authenticate` on
   `POST /api/auth/tickets` alone, refuses a request no key has named a client for.
-- **Nothing refuses an anonymous call yet** on the read routes. They are counted,
+- **Nothing refuses an anonymous call yet** on the REST read routes. They are counted,
   by route, so that who calls the API without a key is known before it is closed.
 
 ### Tickets
