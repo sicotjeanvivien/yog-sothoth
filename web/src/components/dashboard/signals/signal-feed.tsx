@@ -2,15 +2,16 @@
 
 /**
  * The live signal feed, seeded by the server page and kept live by `useLiveSignals`; the
- * status dot keeps a broken stream from passing for a quiet one. Filters apply at render
- * time, leaving the stream and the merge untouched. One signal renders as `SignalCard`.
+ * status dot keeps a broken stream from passing for a quiet one, a gap row marks a reopening.
+ * Filters apply at render time, leaving the stream and the merge untouched.
  */
 
 import { useState } from "react";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import type { SeverityResponse, SignalResponse } from "@/lib/api/schema/zod.gen";
+import { formatUtcTime } from "@/lib/format/date";
 import { filterSignals } from "@/lib/signals/filter-signals";
 
 import { SignalCard } from "./signal-card";
@@ -34,7 +35,8 @@ export function SignalFeed({
   initial: readonly SignalResponse[];
 }) {
   const t = useTranslations("Dashboard.Signals.feed");
-  const { signals, status } = useLiveSignals(initial);
+  const { rows, status } = useLiveSignals(initial);
+  const signals = rows.flatMap((row) => (row.type === "signal" ? [row.signal] : []));
 
   const [activeSeverities, setActiveSeverities] = useState<
     ReadonlySet<SeverityResponse>
@@ -43,7 +45,7 @@ export function SignalFeed({
     new Set(),
   );
 
-  const filtered = filterSignals(signals, activeSeverities, activeDetectors);
+  const filtered = filterSignals(rows, activeSeverities, activeDetectors);
   const resetFilters = () => {
     setActiveSeverities(new Set());
     setActiveDetectors(new Set());
@@ -82,7 +84,7 @@ export function SignalFeed({
             }
           />
 
-          {filtered.length === 0 ? (
+          {!filtered.some((row) => row.type === "signal") ? (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-[8px] border border-sothoth-500/15 bg-cosmos-700/40 px-4 py-6">
               <p className="text-[14px] text-slate-400">
                 {t("filters.emptyFiltered")}
@@ -97,13 +99,27 @@ export function SignalFeed({
             </div>
           ) : (
             <ul className="flex flex-col gap-2">
-              {filtered.map((signal) => (
-                <SignalCard key={signal.id} signal={signal} />
-              ))}
+              {filtered.map((row) =>
+                row.type === "gap" ? (
+                  <SignalGapItem key={row.key} at={row.at} />
+                ) : (
+                  <SignalCard key={row.key} signal={row.signal} />
+                ),
+              )}
             </ul>
           )}
         </>
       )}
     </section>
+  );
+}
+
+function SignalGapItem({ at }: { at: string }) {
+  const t = useTranslations("Dashboard.Signals.feed");
+  const locale = useLocale();
+  return (
+    <li className="px-4 py-1.5 font-dash-mono text-[12px] text-slate-500">
+      {t("gap", { at: formatUtcTime(at, locale) })}
+    </li>
   );
 }

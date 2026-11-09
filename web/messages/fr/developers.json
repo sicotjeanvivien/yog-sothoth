@@ -17,6 +17,13 @@
       "spec": "Spec",
       "download": "openapi.json ↓"
     },
+    "key": {
+      "label": "Clé d'API",
+      "show": "Afficher",
+      "hide": "Masquer",
+      "hint": "Envoyée en Authorization: Bearer depuis votre navigateur ; effacée au rechargement.",
+      "placeholder": "yog_…"
+    },
     "list": {
       "toggle": "Endpoints",
       "filter": "Filtrer : swaps, tvl, '{pool}'…",

@@ -10,10 +10,10 @@ import {
   curlOf,
   missingOf,
   pageValues,
-  topicsOf,
   urlOf,
   type ParamValues,
 } from "@/lib/developers/request";
+import { openSseStream } from "@/lib/live/sse-stream";
 
 import { CopyButton, GhostButton, PrimaryButton } from "./buttons";
 import { JsonView } from "./json-view";
@@ -47,35 +47,54 @@ function Prose({ text }: { text: string }) {
 const LABEL =
   "font-dash-mono text-[11px] font-medium tracking-[0.12em] text-dash-ink-3 uppercase";
 
-/** One request of the route, with the method the contract declares. */
-export async function send(url: string, method: string): Promise<SendResult> {
+/** One request of the route, with the method the contract declares and the visitor's key, if any. */
+export async function send(url: string, method: string, apiKey = ""): Promise<SendResult> {
   const started = performance.now();
   try {
     const response = await fetch(url, {
       method,
-      headers: { Accept: "application/json" },
+      headers: {
+        Accept: "application/json",
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      },
       signal: AbortSignal.timeout(loadClientEnv().NEXT_PUBLIC_YOG_API_TIMEOUT_MS),
     });
-    const text = await response.text();
-    let json: unknown = null;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      json = null;
-    }
-    return {
-      kind: "response",
-      status: `${response.status} ${response.statusText}`.trim(),
-      ok: response.ok,
-      ms: Math.round(performance.now() - started),
-      bytes: byteSize(text),
-      at: new Date().toISOString().slice(11, 19) + " UTC",
-      text: json === null ? text : JSON.stringify(json, null, 2),
-      json,
-    };
+    return responseResult(response.status, response.statusText, response.ok, await response.text(), started);
   } catch (err) {
     return { kind: "network", message: err instanceof Error ? err.message : String(err) };
   }
+}
+
+function responseResult(
+  status: number,
+  statusText: string,
+  ok: boolean,
+  text: string,
+  started: number,
+): SendResult {
+  let json: unknown = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    json = null;
+  }
+  return {
+    kind: "response",
+    status: `${status} ${statusText}`.trim(),
+    ok,
+    ms: Math.round(performance.now() - started),
+    bytes: byteSize(text),
+    at: new Date().toISOString().slice(11, 19) + " UTC",
+    text: json === null ? text : JSON.stringify(json, null, 2),
+    json,
+  };
+}
+
+/** The ticket of a `POST /api/auth/tickets` answer, or null when it is a refusal. */
+function ticketOf(result: SendResult): string | null {
+  if (result.kind !== "response" || !result.ok) return null;
+  const json = result.json as { ticket?: unknown } | null;
+  return typeof json?.ticket === "string" ? json.ticket : null;
 }
 
 function sizeLabel(bytes: number): string {
@@ -166,41 +185,92 @@ function ParamRow({
 
 type StreamEvent = { at: string; id: string; data: string };
 
-/** The live tail: one `EventSource` while listening, closed on stop and on unmount. */
-function useStream(url: string) {
+/**
+ * The live tail: a ticket asked with the visitor's key, then one stream while listening, aborted on
+ * stop and on unmount. ⚠️ Never reopened: a cut shows, and a refusal shows as an answer.
+ */
+function useStream(url: string, ticketUrl: string, apiKey: string) {
   const [state, setState] = useState<"off" | "connecting" | "on">("off");
   const [events, setEvents] = useState<StreamEvent[]>([]);
-  const sourceRef = useRef<EventSource | null>(null);
+  const [refusal, setRefusal] = useState<SendResult | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
 
   const stop = () => {
-    sourceRef.current?.close();
-    sourceRef.current = null;
+    controllerRef.current?.abort();
+    controllerRef.current = null;
     setState("off");
   };
 
-  const start = () => {
+  const start = async () => {
+    const controller = new AbortController();
+    controllerRef.current = controller;
     setEvents([]);
+    setRefusal(null);
     setState("connecting");
-    const source = new EventSource(url);
-    sourceRef.current = source;
-    source.onopen = () => setState("on");
-    source.onerror = () => setState(source.readyState === EventSource.CLOSED ? "off" : "connecting");
-    const receive = (event: MessageEvent) => {
-      const entry = {
-        at: new Date().toISOString().slice(11, 19),
-        id: event.lastEventId,
-        data: event.data as string,
-      };
-      setEvents((current) => [...current, entry].slice(-12));
-    };
-    // ⚠️ `onmessage` only receives unnamed events: the live stream names each by its topic.
-    source.onmessage = receive;
-    for (const topic of topicsOf(url)) source.addEventListener(topic, receive);
+
+    const issued = await send(ticketUrl, "POST", apiKey);
+    if (controller.signal.aborted) return;
+    const ticket = ticketOf(issued);
+    if (ticket === null) {
+      setRefusal(issued);
+      setState("off");
+      return;
+    }
+
+    const started = performance.now();
+    const end = await openSseStream(
+      url,
+      ticket,
+      {
+        onOpen: () => setState("on"),
+        onEvent: (event) => {
+          const entry = { at: new Date().toISOString().slice(11, 19), id: event.id ?? "", data: event.data };
+          setEvents((current) => [...current, entry].slice(-12));
+        },
+      },
+      controller.signal,
+    );
+    if (controller.signal.aborted) return;
+    if (end.kind === "refused") {
+      setRefusal(responseResult(end.status, end.statusText, false, end.body, started));
+    } else if (end.kind === "unreachable") {
+      setRefusal({ kind: "network", message: end.error instanceof Error ? end.error.message : String(end.error) });
+    }
+    controllerRef.current = null;
+    setState("off");
   };
 
-  useEffect(() => () => sourceRef.current?.close(), []);
+  useEffect(() => () => controllerRef.current?.abort(), []);
 
-  return { state, events, start, stop };
+  return { state, events, refusal, start: () => void start(), stop };
+}
+
+/** An answer as the API gave it: its status, time and size, and its body. */
+function ResponseView({ result }: { result: SendResult }) {
+  const t = useTranslations("Developers");
+  if (result.kind === "network") {
+    return (
+      <p className="mt-4 border border-dash-down/50 px-4 py-3 text-[14px] text-dash-down">
+        {t("response.network", { message: result.message })}
+      </p>
+    );
+  }
+  return (
+    <>
+      <div className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-dash-ink-2">
+        <span className={`font-dash-mono font-semibold ${result.ok ? "text-dash-up" : "text-dash-down"}`}>
+          {result.status}
+        </span>
+        <span className="font-dash-mono">{result.ms} ms</span>
+        <span className="font-dash-mono">{sizeLabel(result.bytes)}</span>
+        <span className="font-dash-mono text-dash-ink-3">{result.at}</span>
+        <span className="ml-auto">
+          <CopyButton small text={result.text} label={t("response.copyJson")} copied={t("detail.copied")} />
+        </span>
+      </div>
+      <JsonView text={result.text} label={t("response.body")} />
+    </>
+  );
 }
 
 export function EndpointDetail({
@@ -210,9 +280,11 @@ export function EndpointDetail({
   onValues,
   result,
   onResult,
+  apiKey,
 }: {
   endpoint: Endpoint;
   base: string;
+  apiKey: string;
   values: ParamValues;
   onValues: (values: ParamValues) => void;
   result: SendResult | undefined;
@@ -223,13 +295,13 @@ export function EndpointDetail({
   const [loading, setLoading] = useState(false);
   const url = urlOf(base, endpoint, values);
   const missing = missingOf(endpoint, values);
-  const stream = useStream(url);
+  const stream = useStream(url, `${base}/api/auth/tickets`, apiKey);
 
   const sendWith = async (next: ParamValues) => {
     onValues(next);
     setTab("response");
     setLoading(true);
-    onResult(await send(urlOf(base, endpoint, next), endpoint.method));
+    onResult(await send(urlOf(base, endpoint, next), endpoint.method, apiKey));
     setLoading(false);
   };
 
@@ -350,39 +422,17 @@ export function EndpointDetail({
         <>
           {loading && <Empty>{t("response.sending")}</Empty>}
           {!loading && !result && <Empty>{t("response.empty")}</Empty>}
-          {!loading && result?.kind === "network" && (
-            <p className="mt-4 border border-dash-down/50 px-4 py-3 text-[14px] text-dash-down">
-              {t("response.network", { message: result.message })}
-            </p>
-          )}
-          {!loading && result?.kind === "response" && (
-            <>
-              <div className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-dash-ink-2">
-                <span
-                  className={`font-dash-mono font-semibold ${result.ok ? "text-dash-up" : "text-dash-down"}`}
-                >
-                  {result.status}
-                </span>
-                <span className="font-dash-mono">{result.ms} ms</span>
-                <span className="font-dash-mono">{sizeLabel(result.bytes)}</span>
-                <span className="font-dash-mono text-dash-ink-3">{result.at}</span>
-                <span className="ml-auto">
-                  <CopyButton small text={result.text} label={t("response.copyJson")} copied={t("detail.copied")} />
-                </span>
-              </div>
-              <JsonView text={result.text} label={t("response.body")} />
-              {cursors && (
-                <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-2">
-                  <GhostButton disabled={!cursors.prev} onClick={() => cursors.prev && pageTo(cursors.prev, "prev")}>
-                    {t("response.prev")}
-                  </GhostButton>
-                  <GhostButton disabled={!cursors.next} onClick={() => cursors.next && pageTo(cursors.next, "next")}>
-                    {t("response.next")}
-                  </GhostButton>
-                  <span className="text-[12px] text-dash-ink-3">{t("response.cursorHint")}</span>
-                </div>
-              )}
-            </>
+          {!loading && result && <ResponseView result={result} />}
+          {!loading && cursors && (
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-2">
+              <GhostButton disabled={!cursors.prev} onClick={() => cursors.prev && pageTo(cursors.prev, "prev")}>
+                {t("response.prev")}
+              </GhostButton>
+              <GhostButton disabled={!cursors.next} onClick={() => cursors.next && pageTo(cursors.next, "next")}>
+                {t("response.next")}
+              </GhostButton>
+              <span className="text-[12px] text-dash-ink-3">{t("response.cursorHint")}</span>
+            </div>
           )}
         </>
       )}
@@ -422,6 +472,7 @@ export function EndpointDetail({
               </div>
             ))}
           </div>
+          {stream.refusal && <ResponseView result={stream.refusal} />}
         </>
       )}
 

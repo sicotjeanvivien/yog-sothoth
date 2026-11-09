@@ -30,17 +30,40 @@ function formatZodIssues(error: z.ZodError): string[] {
  * GETs an absolute URL and validates the body against `schema`.
  * @throws ApiClientError on a timeout, a network failure, a non-2xx or a validation failure.
  */
-export async function apiGetWithUrl<T>(
+export function apiGetWithUrl<T>(
   url: string,
   schema: z.ZodType<T>,
   timeoutMs: number,
+  headers: Record<string, string> = {},
 ): Promise<T> {
+  return request("GET", url, schema, timeoutMs, headers);
+}
 
+/**
+ * POSTs to an absolute URL without a body and validates the answer against `schema`.
+ * @throws ApiClientError on a timeout, a network failure, a non-2xx or a validation failure.
+ */
+export function apiPostWithUrl<T>(
+  url: string,
+  schema: z.ZodType<T>,
+  timeoutMs: number,
+  headers: Record<string, string> = {},
+): Promise<T> {
+  return request("POST", url, schema, timeoutMs, headers);
+}
+
+async function request<T>(
+  method: "GET" | "POST",
+  url: string,
+  schema: z.ZodType<T>,
+  timeoutMs: number,
+  headers: Record<string, string>,
+): Promise<T> {
   let response: Response;
   try {
     response = await fetch(url, {
-      method: "GET",
-      headers: { Accept: "application/json" },
+      method,
+      headers: { Accept: "application/json", ...headers },
       signal: AbortSignal.timeout(timeoutMs),
       cache: "no-store",
     });

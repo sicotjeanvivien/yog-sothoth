@@ -404,6 +404,7 @@
         "title": "Latest signals",
         "empty": "No signal yet — the detectors are watching.",
         "fallback": "value {value} (threshold {threshold})",
+        "gap": "Resumed at {at} — signals may have been missed",
         "filters": {
           "severity": "Severity",
           "detector": "Type",

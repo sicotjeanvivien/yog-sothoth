@@ -214,6 +214,11 @@ nowhere else. A revocation reaches `yog-api` at its next reread of the keys,
 every 10 s, for the requests that follow; a live stream already open is not cut. What a key is and how
 the api reads it: [`crates/api/README.md`](../crates/api/README.md#authentication).
 
+The dashboard is one of these clients, `dashboard`. Its key goes in the server's `.env` as
+`YOG_API_KEY`: `yog-web` sends it on every call and trades it for the tickets of the live stream,
+and refuses to start without it. Issue it before the first deployment that needs it, then restart
+`yog-web`. Its server calls `https://$YOG_API_DOMAIN`, the address the browser calls.
+
 ## Avant de déployer
 
 Every pull request says, under **Avant de déployer** (the section of

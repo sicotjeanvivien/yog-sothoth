@@ -27,11 +27,12 @@ that combines several routes is the API's, rule 11 of `crates/api/README.md`.
 ## Architecture
 
 ```
-┌──────────────────────┐   HTTP (SSR render)    ┌─────────┐
+┌──────────────────────┐   HTTP + YOG_API_KEY   ┌─────────┐
 │  Next.js server      │───────────────────────▶│         │
-│  (Server Components) │  YOG_API_INTERNAL_URL  │ yog-api │
-└──────────────────────┘                        │ (Rust)  │
-┌──────────────────────┐   HTTP + SSE           │         │
+│  (Server Components, │  YOG_API_URL           │ yog-api │
+│   one Server Action) │                        │ (Rust)  │
+└──────────────────────┘                        │         │
+┌──────────────────────┐   HTTP + SSE (ticket)  │         │
 │  Browser             │───────────────────────▶│         │
 │  (Client Components) │  NEXT_PUBLIC_YOG_API…  └─────────┘
 └──────────────────────┘   CORS-locked
@@ -39,15 +40,21 @@ that combines several routes is the API's, rule 11 of `crates/api/README.md`.
 
 `yog-api` has two consumers in this package:
 
-- **Server Components** render the initial page data on the Node.js
-  server. They reach the API over the internal network via
-  `YOG_API_INTERNAL_URL` (`http://yog-api:5000` inside Docker).
-- **The browser** calls the API directly for everything dynamic —
-  the signal SSE stream, reconnection refills, the network and
-  ingestion poll. It goes through the public gateway (`https://api.yog-scope.xyz`
-  in production, `http://localhost:5000` in dev) via
-  `NEXT_PUBLIC_YOG_API_URL`. `yog-api`'s CORS layer authorises the
-  dashboard origin.
+- **The Next.js server** renders the initial page data. It calls the API
+  at `YOG_API_URL` — the browser's address, but in the dev compose
+  (`http://yog-api:5000`, where `localhost` is the web container) — with
+  the dashboard's key, `YOG_API_KEY`, on every call: the dashboard is a
+  client of the API like any other, the internal network opens nothing.
+- **The browser** calls the API directly for everything dynamic — the
+  live stream, the network and ingestion poll. It goes through the public
+  gateway (`https://api.yog-scope.xyz` in production, `http://localhost:5000`
+  in dev) via `NEXT_PUBLIC_YOG_API_URL`, and holds no key: the open routes
+  need none, and the live stream takes a single-use ticket. `yog-api`'s
+  CORS layer authorises the dashboard origin.
+- **One Server Action**, `requestTicket` (`lib/live/request-ticket.ts`),
+  trades the key for a ticket before each opening of the live stream. It
+  is not a BFF: no answer of the API goes through Next, only tickets, and
+  Next refuses a call from another origin.
 
 There used to be BFF route handlers under `app/api/` proxying the API
 for the browser. They were removed: pure proxies with no added value —
@@ -63,7 +70,8 @@ lib/api/
 │   ├── client-core.ts   # runtime-agnostic core: URL building, timeout +
 │   │                    # AbortController, error classification, RFC 9457
 │   │                    # envelope parsing, zod validation
-│   ├── server.ts        # apiGet()        — reads YOG_API_INTERNAL_URL
+│   ├── server.ts        # apiGet(), apiPost() — YOG_API_URL + YOG_API_KEY,
+│   │                    # `server-only`: a client import fails the build
 │   └── browser.ts       # apiGetBrowser() — reads NEXT_PUBLIC_YOG_API_URL
 ├── schema/zod.gen.ts    # generated: one zod schema and one type per wire
 │                        # shape, from crates/api/openapi.json — never edited
@@ -73,7 +81,7 @@ lib/api/
 │                        # blocks share go through React's `cache`; a
 │                        # `Scope` picks the root or the protocol's route
 ├── browser/             # browser-side fetchers for Client Component flows
-│                        # (signals refill on reconnect, network status)
+│                        # (network and ingestion status)
 └── errors.ts            # ApiClientError — discriminated union
 ```
 
@@ -161,22 +169,27 @@ The `/signals` dashboard page combines both consumers:
 - the `useLiveSignals` hook (`components/dashboard/signals/`) then
   listens to the `signals` topic of the page's one connection to the API's
   live stream, `GET /api/live?topics=signals` (SSE). Under a protocol, the
-  connection is `/api/live/protocols/{protocol}?topics=…` and the hook
-  refills from `/api/protocols/{protocol}/signals` instead (`lib/signals/
-  signal-paths.ts`). Each event is zod-parsed (malformed → warn + skip) and merged through
-  the pure `mergeSignals` helper (`lib/signals/`): dedup by id, sort by
-  `(triggeredAt, id)` descending, cap at 200 rows. On reconnection the
-  hook refetches page 1 from the browser and reconciles by id, so a
-  connection gap never leaves holes in the feed.
+  connection is `/api/live/protocols/{protocol}?topics=…`. Each event is
+  zod-parsed (malformed → warn + skip) and merged through the pure
+  `mergeSignals` helper (`lib/signals/merge-signals.ts`): dedup by id, sort by
+  time and id descending, cap at 200 rows. The stream carries no history:
+  at each reopening, `markSignalGap` adds a row « Reprise à HH:MM:SS — des
+  signaux ont pu manquer », sorted by its time with the signals, so a signal
+  triggered before the reopening ranks below it even when it arrives after.
+  No gap row on an empty feed, never two with no signal between, and no
+  filter hides one. Browsing the past signals is the paginated API's job.
 
 **One connection per page** — `components/dashboard/live/live-provider.tsx`:
-`LiveProvider` opens the page's single `EventSource` on every topic it shows
+`LiveProvider` opens the page's single stream on every topic it shows
 (`livePath`, `lib/live/live-topics.ts`; `openLive`, `lib/live/live-connection.ts`), and the blocks subscribe to their topic
-through it: the API counts a connection, not a topic, against its 200 slots. A
-named event reaches only `addEventListener` (`onmessage` gets the unnamed ones).
-A refused connection (a `503` past the 200 slots, a proxy error while the API restarts) ends `CLOSED`, which
-the browser never retries: `openLive` reopens it after 5 to 60 s, never before the API's `Retry-After`, half of it random, doubling per refusal.
-Nothing is replayed: `onReopen` tells the subscribers of a gap. On the pages that have the advanced mode, `OverviewLive`
+through it: the API counts a connection, not a topic, against its 200 slots.
+The stream is read with `fetch` (`openSseStream`, `lib/live/sse-stream.ts`; `createSseParser`,
+`lib/live/sse-parser.ts`), because an `EventSource` cannot send a header: each opening asks
+`requestTicket` for a new ticket and sends it as `Authorization: Bearer`, never in the URL.
+An open stream that drops is retried after 1 to 3 s, at random so the visitors an API
+restart cuts come back spread. A refusal (a `503` past the 200 slots, a `401`, a failed
+ticket request) waits 5 to 60 s, never before the API's `Retry-After`, half of it random,
+doubling per refusal. Nothing is replayed: `onReopen` tells the subscribers of a gap. On the pages that have the advanced mode, `OverviewLive`
 picks the topics from it: `signals` in the simple mode, the eight on-chain
 collections too in the advanced (`pageTopics`) — switching reopens the
 connection, so the collections are polled only while the table shows.
@@ -506,6 +519,15 @@ its `curl`, the cursor's pages, Problem Details on failure, the signal stream
 listened to. It is unlisted: `noindex`, out of the sitemap, and no link of the
 site or the dashboard leads to it.
 
+The visitor's own key goes in one field on top (`ApiKeyField`), masked, kept in
+memory only: a reload clears it. It is sent as `Authorization: Bearer` from the
+browser on every route; the dashboard's key is never used here. Listening to the
+stream takes two steps, like any client: `POST /api/auth/tickets` with the key,
+then the stream with the ticket (`openSseStream`). A refusal of either shows as
+an answer, status and Problem Details; a cut stream is not reopened. The `curl`
+names the shell's `$YOG_API_KEY` on every route, and `$TICKET` on the stream —
+never the key itself.
+
 The page reads `public/openapi.json` on the server through
 `lib/developers/contract.ts`. A route of a new first segment
 has no family until `FAMILY_OF_SEGMENT` names one, and the build fails until
@@ -555,16 +577,19 @@ Copy `.env.example` to `.env.local` and fill in the values you need:
 cp .env.example .env.local
 ```
 
-Both env surfaces are **validated with zod at load time** — a missing or
-malformed value fails fast (mirrors `ConfigError::InvalidValue` in the
-Rust services). Server vars live in `lib/config/server-env.schema.ts`,
-browser vars in `lib/config/client-env.schema.ts`; only `NEXT_PUBLIC_*`
-values ever reach the client bundle.
+Both env surfaces are **validated with zod** — a missing or malformed value
+fails fast. Server vars live in `lib/config/server-env.schema.ts`, checked
+when the server starts (`src/instrumentation.ts`): without a well-formed
+`YOG_API_KEY` it stops there, with its message. Browser vars live in
+`lib/config/client-env.schema.ts`; only `NEXT_PUBLIC_*` values ever reach
+the client bundle, and the `web-docker` workflow checks that the key appears
+in no page nor script served.
 
 | Variable                          | Surface     | Purpose                                                                                     |
 | --------------------------------- | ----------- | ------------------------------------------------------------------------------------------- |
-| `YOG_API_INTERNAL_URL`            | server only | Base URL for SSR calls to `yog-api`. In Docker, `http://yog-api:5000`; natively, `http://localhost:5000`. No trailing slash. |
-| `YOG_API_TIMEOUT_MS`              | server only | Timeout for SSR → `yog-api` calls.                                                          |
+| `YOG_API_URL`                     | server only | `yog-api` for the server: the browser's address, but in the dev compose (`http://yog-api:5000`). No trailing slash. |
+| `YOG_API_KEY`                     | server only | The dashboard's API key, `yog_<8 hex>_<64 hex>` (`yog-migrate create-api-key dashboard`). Required. |
+| `YOG_API_TIMEOUT_MS`              | server only | Timeout for server → `yog-api` calls.                                                       |
 | `NEXT_PUBLIC_YOG_API_URL`         | browser     | Public gateway URL the browser calls directly (`https://api.yog-scope.xyz` in production).  |
 | `NEXT_PUBLIC_YOG_API_TIMEOUT_MS`  | browser     | Timeout for browser → `yog-api` calls.                                                     |
 | `NEXT_PUBLIC_FEATURE_*`           | browser     | Feature flags (see below).                                                                  |
@@ -694,13 +719,14 @@ Visit <http://localhost:3000>; you will be redirected to `/en` by the
 locale proxy. Switch to `/fr` in the URL to see the French version.
 
 The dev server expects `yog-api` to be reachable at the address in
-`YOG_API_INTERNAL_URL` — and the browser at the address in
-`NEXT_PUBLIC_YOG_API_URL`. The simplest setup is to run the backend
+`YOG_API_URL`, with a key it knows in `YOG_API_KEY` — and the browser at the
+address in `NEXT_PUBLIC_YOG_API_URL`. The simplest setup is to run the backend
 stack in Docker and the frontend natively:
 
 ```bash
-# From the repo root: backend stack in Docker
+# From the repo root: backend stack in Docker, and a key for the dashboard
 docker compose --profile backend up -d
+docker compose run --rm -T yog-migrate create-api-key dashboard
 
 # Back in web/: frontend natively
 npm run dev
@@ -709,7 +735,8 @@ npm run dev
 With this setup, both URLs point to the same place in `.env.local`:
 
 ```
-YOG_API_INTERNAL_URL=http://localhost:5000
+YOG_API_URL=http://localhost:5000
+YOG_API_KEY=<the key printed above>
 NEXT_PUBLIC_YOG_API_URL=http://localhost:5000
 ```
 
@@ -724,7 +751,7 @@ root, but can also be built and run standalone:
 docker build --build-arg NEXT_PUBLIC_YOG_API_URL=http://localhost:5000 \
   -t yog-sothoth-web:dev .
 docker run --rm -p 3000:3000 --add-host=host.docker.internal:host-gateway \
-  -e YOG_API_INTERNAL_URL=http://host.docker.internal:5000 yog-sothoth-web:dev
+  -e YOG_API_URL=http://host.docker.internal:5000 -e YOG_API_KEY=<key> yog-sothoth-web:dev
 ```
 
 The two URLs arrive at different moments, and that is not a choice:
@@ -733,7 +760,7 @@ The two URLs arrive at different moments, and that is not a choice:
   into the client bundle as a literal and nothing reads it afterwards, so
   passing it to `docker run` changes nothing. The build stops if it is
   empty.
-- `YOG_API_INTERNAL_URL` is read by the server **at run time**.
+- `YOG_API_URL` and `YOG_API_KEY` are read by the server **at run time**.
 
 `docker-compose.yml` passes both — the build argument defaults to
 `http://localhost:5000`. The production image is built by the `images`

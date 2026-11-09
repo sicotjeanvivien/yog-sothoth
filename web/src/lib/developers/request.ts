@@ -19,16 +19,16 @@ export function urlOf(base: string, endpoint: Endpoint, values: ParamValues): st
   return `${base}${path}${query.length ? `?${query.join("&")}` : ""}`;
 }
 
-/** The topics a live URL asks for: the names its events carry. */
-export function topicsOf(url: string): string[] {
-  const topics = new URL(url).searchParams.get("topics") ?? "";
-  return topics.split(",").filter((topic) => topic !== "");
-}
-
-/** ⚠️ Single quotes: a `!` that `encodeURIComponent` leaves would expand inside double ones. */
+/**
+ * ⚠️ The URL in single quotes, where a `!` that `encodeURIComponent` leaves cannot expand; the
+ * header in double quotes, where the shell must expand `$YOG_API_KEY` or `$TICKET`.
+ */
 export function curlOf(url: string, sse: boolean, method: string): string {
-  if (sse) return `curl -N -H 'Accept: text/event-stream' '${url}'`;
-  return method === "GET" ? `curl -s '${url}'` : `curl -s -X ${method} '${url}'`;
+  if (sse) {
+    return `curl -N -H 'Accept: text/event-stream' -H "Authorization: Bearer $TICKET" '${url}'`;
+  }
+  const auth = `-H "Authorization: Bearer $YOG_API_KEY"`;
+  return method === "GET" ? `curl -s ${auth} '${url}'` : `curl -s -X ${method} ${auth} '${url}'`;
 }
 
 /**

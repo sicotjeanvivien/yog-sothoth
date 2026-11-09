@@ -404,6 +404,7 @@
         "title": "Derniers signaux",
         "empty": "Aucun signal pour l'instant — les détecteurs veillent.",
         "fallback": "valeur {value} (seuil {threshold})",
+        "gap": "Reprise à {at} — des signaux ont pu manquer",
         "filters": {
           "severity": "Sévérité",
           "detector": "Type",

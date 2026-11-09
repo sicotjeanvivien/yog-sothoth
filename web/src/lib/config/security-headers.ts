@@ -7,7 +7,7 @@
 export type SecurityHeader = { key: string; value: string };
 
 /** `apiUrl` is the one origin `connect-src` admits besides the dashboard's: the browser's
- *  `fetch` and `EventSource` reach the API directly. */
+ *  `fetch` reaches the API directly, the live stream included. */
 export function securityHeaders(apiUrl: string): SecurityHeader[] {
   const csp = [
     "frame-ancestors 'none'",

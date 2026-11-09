@@ -4,7 +4,9 @@
 declare global {
   namespace NodeJS {
     interface ProcessEnv {
-      YOG_API_INTERNAL_URL?: string;
+      NEXT_RUNTIME?: string;
+      YOG_API_URL?: string;
+      YOG_API_KEY?: string;
       YOG_API_TIMEOUT_MS?: string;
 
       DATABASE_URL?: string;
