@@ -55,4 +55,21 @@ ignore = [
   "RUSTSEC-2026-0404",
   "RUSTSEC-2026-0405",
   "RUSTSEC-2026-0406",
+
+  # ─────────────────────────────────────────────────────────────────
+  # RUSTSEC-2026-0459 — `libsqlite3-sys 0.37.0`, CVE-2026-119375 in the
+  # bundled C SQLite
+  #
+  # Status: ACCEPTED until `sqlx` takes `libsqlite3-sys >= 0.39`.
+  #
+  # Never compiled: `sqlx` is built with `default-features = false` and
+  # without `sqlite`, so `sqlx-sqlite` and `libsqlite3-sys` are only
+  # optional dependencies Cargo writes into Cargo.lock — which is what
+  # `cargo audit` reads. `cargo tree -i libsqlite3-sys --workspace
+  # --all-features --target all` prints nothing. `sqlx` 0.9.0 is the
+  # latest release, and pins `libsqlite3-sys 0.37`.
+  #
+  # Remove this entry the day Dependabot brings a `sqlx` whose
+  # `sqlx-sqlite` takes `libsqlite3-sys >= 0.39`.
+  "RUSTSEC-2026-0459",
 ]
