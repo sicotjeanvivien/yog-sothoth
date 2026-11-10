@@ -21,7 +21,7 @@
       "label": "Clé d'API",
       "show": "Afficher",
       "hide": "Masquer",
-      "hint": "Envoyée en Authorization: Bearer depuis votre navigateur ; effacée au rechargement.",
+      "hint": "Exigée sur toutes les routes, hors état du service et annonces. Envoyée en Authorization: Bearer depuis votre navigateur ; effacée au rechargement.",
       "placeholder": "yog_…"
     },
     "list": {

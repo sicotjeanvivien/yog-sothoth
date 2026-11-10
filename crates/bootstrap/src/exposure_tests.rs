@@ -25,6 +25,12 @@ const ALLOWED: &[(&str, usize, &str)] = &[
          is the one place it is handed over, once; the registry keeps its hash alone",
     ),
     (
+        "crates/api/src/testing.rs",
+        1,
+        "test support, compiled under cfg(test) alone — the test key's consumer is the router \
+         under test: `call_on` sends it as `Authorization`",
+    ),
+    (
         "crates/archive/src/infra/store.rs",
         2,
         "object_store owns the S3 signing — the access key id and the secret \

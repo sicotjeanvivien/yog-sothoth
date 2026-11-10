@@ -470,29 +470,61 @@ fn generic_of<'a>(text: &'a str, wrapper: &str) -> Option<&'a str> {
     None
 }
 
-/// Mutation: a scheme dropped, the ticket route's key made optional, or the live stream opened
-/// to anonymous callers again.
+/// Mutation: a scheme dropped, the document's default key removed, an open route closed or a
+/// closed one opened in the contract, the live stream's ticket dropped, or a `401` left undeclared.
 #[test]
 fn the_document_says_which_credential_each_route_takes() {
     let doc = document();
     let schemes = &doc["components"]["securitySchemes"];
     assert_eq!(schemes["apiKey"]["scheme"], "bearer");
     assert_eq!(schemes["ticket"]["scheme"], "bearer");
+    assert_eq!(doc["security"], json!([{ "apiKey": [] }]));
 
-    assert_eq!(
-        doc["paths"]["/api/auth/tickets"]["post"]["security"],
-        json!([{ "apiKey": [] }])
-    );
-    for live in ["/api/live", "/api/live/protocols/{protocol}"] {
-        assert_eq!(
-            doc["paths"][live]["get"]["security"],
-            json!([{ "ticket": [] }]),
-            "{live}"
-        );
+    let open = [
+        "/api/announcements",
+        "/api/ingestion",
+        "/api/network",
+        "/api/windows",
+    ];
+    let live = ["/api/live", "/api/live/protocols/{protocol}"];
+    let mut counted = (0, 0, 0);
+    for (path, item) in doc["paths"].as_object().expect("paths") {
+        for (method, operation) in item.as_object().expect("a path item") {
+            let own = operation.get("security");
+            let unauthorized = &operation["responses"]["401"];
+            if open.contains(&path.as_str()) {
+                assert_eq!(own, Some(&json!([{}, { "apiKey": [] }])), "{method} {path}");
+                assert!(
+                    unauthorized["description"]
+                        .as_str()
+                        .is_some_and(|d| d.starts_with("A key that opens nothing")),
+                    "{method} {path}"
+                );
+                counted.0 += 1;
+            } else if live.contains(&path.as_str()) {
+                assert_eq!(own, Some(&json!([{ "ticket": [] }])), "{method} {path}");
+                assert!(
+                    unauthorized["description"]
+                        .as_str()
+                        .is_some_and(|d| d.starts_with("No ticket")),
+                    "{method} {path}"
+                );
+                counted.1 += 1;
+            } else {
+                assert!(own.is_none(), "{method} {path} overrides the default key");
+                assert!(
+                    unauthorized["description"]
+                        .as_str()
+                        .is_some_and(|d| d.starts_with("No API key")),
+                    "{method} {path}"
+                );
+                counted.2 += 1;
+            }
+        }
     }
-    assert!(
-        doc["paths"]["/api/signals"]["get"]
-            .get("security")
-            .is_none()
+    assert_eq!(
+        counted,
+        (4, 2, 74),
+        "open routes, live stream, routes taking a key"
     );
 }

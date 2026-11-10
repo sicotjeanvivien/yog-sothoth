@@ -16,7 +16,6 @@ use crate::http::{
 #[utoipa::path(
     post,
     path = "/api/auth/tickets",
-    security(("apiKey" = [])),
     responses((
         status = 200,
         description = "A single-use ticket for one connection to the live stream.",

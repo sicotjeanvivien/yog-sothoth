@@ -21,7 +21,7 @@
       },
       "audience": {
         "title": "Who can use it",
-        "body": "The website and the API are open to anyone, with no account required. By using them, you confirm that you have the capacity to enter into these terms and that your access does not violate any law applicable to you. Yog-Scope does not target minors and is not designed for use by minors without supervision."
+        "body": "The website is open to anyone, with no account required. The API answers without a key only for the service status and the announcements; every other route requires an API key that we issue. By using them, you confirm that you have the capacity to enter into these terms and that your access does not violate any law applicable to you. Yog-Scope does not target minors and is not designed for use by minors without supervision."
       },
       "acceptableUse": {
         "title": "Acceptable use",

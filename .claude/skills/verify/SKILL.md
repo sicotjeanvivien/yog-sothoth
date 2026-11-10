@@ -51,7 +51,7 @@ VALUES ('flow_imbalance','meteora_damm_v2','<a pool_address from the pools table
 - `/en/overview` and `/fr/overview` — KPI strip and latest signals render,
   locale strings (plural forms).
 - `/en/signals` — the feed, its filters and the live stream.
-- API directly: `curl -s localhost:5000/api/signals?limit=3 | jq` — check new
+- API directly: `curl -s -H "Authorization: Bearer <key>" 'localhost:5000/api/signals?limit=3' | jq` — check new
   wire fields on real data, not just fixtures.
 
 ## Gotchas

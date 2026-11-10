@@ -21,7 +21,7 @@
       },
       "audience": {
         "title": "Qui peut l'utiliser",
-        "body": "Le site et l'API sont ouverts à tous, sans création de compte requise. En les utilisant, vous confirmez que vous disposez de la capacité de conclure les présentes conditions et que votre accès n'enfreint aucune loi qui vous est applicable. Yog-Scope ne cible pas les mineurs et n'est pas conçu pour être utilisé par des mineurs sans supervision."
+        "body": "Le site est ouvert à tous, sans création de compte requise. L'API ne répond sans clé que pour l'état du service et les annonces ; toute autre route exige une clé d'API que nous délivrons. En les utilisant, vous confirmez que vous disposez de la capacité de conclure les présentes conditions et que votre accès n'enfreint aucune loi qui vous est applicable. Yog-Scope ne cible pas les mineurs et n'est pas conçu pour être utilisé par des mineurs sans supervision."
       },
       "acceptableUse": {
         "title": "Usage acceptable",

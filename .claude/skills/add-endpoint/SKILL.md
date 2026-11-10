@@ -95,8 +95,10 @@ If the query already exists, skip to Step 3.
 - **Declare and mount the route** — `#[utoipa::path(get, path = "/api/…", params(…),
   responses((status = 200, body = …)))]` on the handler, then
   `.routes(routes!(handlers::…))` in `api_routes` (`crates/api/src/http.rs`), in the
-  slotted router if it is slow. Never `.route("/api/…")`: it serves the route without a
-  contract, and a test fails on it.
+  slotted router if it is slow, else in `closed`: a route takes a key. One that answers
+  without a key goes in `open` and declares the key optional,
+  `security((), ("apiKey" = []))`. Never `.route("/api/…")`: it
+  serves the route without a contract, and a test fails on it.
 - **Regenerate the contract**, and commit both:
   ```bash
   YOG_WRITE_OPENAPI=1 cargo test -p yog-api contract
@@ -124,7 +126,7 @@ cargo clippy -p yog-api -p yog-core -p yog-persistence --all-targets --all-featu
 cargo test --workspace --all-features
 # Then run it against a live DB and hit the route:
 cargo run -p yog-api
-curl http://127.0.0.1:5000/api/<your-endpoint> | jq
+curl -H "Authorization: Bearer <key>" http://127.0.0.1:5000/api/<your-endpoint> | jq
 ```
 
 ## Renaming or reshaping a route
