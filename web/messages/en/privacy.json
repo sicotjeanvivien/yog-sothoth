@@ -29,7 +29,7 @@
       },
       "apiKeys": {
         "title": "When you use an API key",
-        "body": "If we issue you an API key, we keep the name we gave your client, the key's prefix and a hash of it — never the key itself — and the dates it was issued and revoked, in order to check each call and to revoke the key. Each call made with a key is counted by client and by route, in counters that are not stored and reset whenever the service restarts; the API's logs do not name the client. The legal basis is our legitimate interest in controlling access to the API (GDPR, article 6(1)(f)). A revoked key stays recorded, without the key, until you ask us to erase it; our backups, kept for 14 days, hold it until they expire."
+        "body": "If we issue you an API key, we keep the name we gave your client, the key's prefix and a hash of it — never the key itself — and the dates it was issued and revoked, in order to check each call and to revoke the key. Each call made with a key is counted by client and by route, in counters that are not stored and reset whenever the service restarts; the API's logs do not name the client. The legal basis is our legitimate interest in controlling access to the API (GDPR, article 6(1)(f)). A revoked key stays recorded, without the key, until you ask us to erase it; our backups, kept for up to 28 days, hold it until they expire."
       },
       "sponsors": {
         "title": "When you support the project",

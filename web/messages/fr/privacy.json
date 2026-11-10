@@ -29,7 +29,7 @@
       },
       "apiKeys": {
         "title": "Quand vous utilisez une clé d'API",
-        "body": "Si nous vous délivrons une clé d'API, nous gardons le nom donné à votre client, le préfixe de la clé et son hachage — jamais la clé elle-même — et ses dates de délivrance et de révocation, pour vérifier chaque appel et pouvoir la révoquer. Chaque appel fait avec une clé est compté par client et par route, dans des compteurs qui ne sont pas conservés et repartent de zéro à chaque redémarrage du service ; les journaux de l'API ne nomment pas le client. La base juridique est notre intérêt légitime à contrôler l'accès à l'API (article 6.1.f du RGPD). Une clé révoquée reste enregistrée, sans la clé, jusqu'à ce que vous nous demandiez de l'effacer ; nos sauvegardes, gardées 14 jours, la conservent jusqu'à leur expiration."
+        "body": "Si nous vous délivrons une clé d'API, nous gardons le nom donné à votre client, le préfixe de la clé et son hachage — jamais la clé elle-même — et ses dates de délivrance et de révocation, pour vérifier chaque appel et pouvoir la révoquer. Chaque appel fait avec une clé est compté par client et par route, dans des compteurs qui ne sont pas conservés et repartent de zéro à chaque redémarrage du service ; les journaux de l'API ne nomment pas le client. La base juridique est notre intérêt légitime à contrôler l'accès à l'API (article 6.1.f du RGPD). Une clé révoquée reste enregistrée, sans la clé, jusqu'à ce que vous nous demandiez de l'effacer ; nos sauvegardes, gardées jusqu'à 28 jours, la conservent jusqu'à leur expiration."
       },
       "sponsors": {
         "title": "Quand vous soutenez le projet",
