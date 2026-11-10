@@ -1133,6 +1133,21 @@ Compare the target against the source, not against expectations:
   through `docker exec … psql`, for the reason given under
   [`setup_roles.sql`](#setup_rolessql).
 
+### A copy restored outside production
+
+A dump of production carries the API's clients and their keys: names,
+prefixes, hashes, dates. The privacy page promises them erased on request, and
+kept no longer than the backups. So a copy restored anywhere else empties both
+tables — the keys first, `api_keys.client_id` has no `ON DELETE` — once
+verified, before the daemons start or anyone reads it:
+
+```bash
+psql postgresql://yog_migrate:<password>@<target>/yog_sothoth \
+  -c "DELETE FROM api_keys; DELETE FROM api_clients;"
+```
+
+The copy then holds no key: create its own with `create-api-key`.
+
 ### Moving to a new Postgres major, or a new TimescaleDB
 
 A dump restores only into the same Postgres major **and** the same TimescaleDB
