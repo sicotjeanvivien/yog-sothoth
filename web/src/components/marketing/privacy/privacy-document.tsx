@@ -10,6 +10,7 @@ const SECTION_KEYS = [
   "responsible",
   "browsing",
   "contact",
+  "apiKeys",
   "sponsors",
   "thirdParties",
   "cookies",

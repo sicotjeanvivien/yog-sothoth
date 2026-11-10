@@ -25,7 +25,7 @@
       },
       "acceptableUse": {
         "title": "Acceptable use",
-        "body": "You are free to use the data displayed on the website for personal, professional, or research purposes. You are also welcome to query the public API, within reasonable limits — automated traffic that disrupts the service for other users may be rate-limited or blocked. You agree not to attempt to gain unauthorised access to the infrastructure, to interfere with its operation, to scrape it abusively, or to use it to facilitate any illegal activity."
+        "body": "You are free to use the data displayed on the website for personal, professional, or research purposes. You are also welcome to query the API, on the access terms above and within reasonable limits — automated traffic that disrupts the service for other users may be rate-limited or blocked. An API key belongs to the client it was issued to: do not share or publish it; we may revoke it at any time. You agree not to attempt to gain unauthorised access to the infrastructure, to interfere with its operation, to scrape it abusively, or to use it to facilitate any illegal activity."
       },
       "financialAdvice": {
         "title": "No financial advice",

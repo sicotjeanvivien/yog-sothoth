@@ -8,12 +8,12 @@
       "eyebrow": "Privacy policy",
       "title": "What we do with your data.",
       "lead": "Yog-Scope is a read-only public dashboard. It does not require an account, does not use analytics, and does not track visitors. This page explains in plain terms the very limited data the platform handles.",
-      "lastUpdated": "Last updated: 28 October 2026"
+      "lastUpdated": "Last updated: 10 November 2026"
     },
     "prose": {
       "inShort": {
         "title": "In short",
-        "body": "Yog-Scope does not require an account, uses no analytics, shows no advertising, and sets no cookie that requires consent. Our servers do not record your IP address. We only see personal data about you if you write to us or support the project. Two exceptions worth knowing: Cloudflare, which protects the site, sees the IP address of every visit (see \"When you browse the site\"), and token logos are loaded directly from third-party servers, which therefore see your IP address too (see \"Token logos\" below). No data is subject to automated decision-making or profiling."
+        "body": "Yog-Scope does not require an account, uses no analytics, shows no advertising, and sets no cookie that requires consent. Our servers do not record your IP address. We only see personal data about you if you write to us, support the project, or use an API key we issued you. Two exceptions worth knowing: Cloudflare, which protects the site, sees the IP address of every visit (see \"When you browse the site\"), and token logos are loaded directly from third-party servers, which therefore see your IP address too (see \"Token logos\" below). No data is subject to automated decision-making or profiling."
       },
       "responsible": {
         "title": "Who is responsible",
@@ -26,6 +26,10 @@
       "contact": {
         "title": "When you write to us",
         "body": "If you write to the contact address, we process your email address and the content of your message in order to reply. The legal basis is our legitimate interest in handling the requests sent to us (GDPR, article 6(1)(f)). Writing to us is optional: the site works exactly the same without it. Your messages are kept for as long as it takes to handle your request, then deleted. They go through our mailbox, provided by Google (Gmail), and may therefore be transferred to the United States. That transfer is covered by the EU–US Data Privacy Framework, the subject of a European Commission adequacy decision of 10 July 2023."
+      },
+      "apiKeys": {
+        "title": "When you use an API key",
+        "body": "If we issue you an API key, we keep the name we gave your client, the key's prefix and a hash of it — never the key itself — and the dates it was issued and revoked, in order to check each call and to revoke the key. Every call to the API is counted by client and by route, in counters that are not stored and reset whenever the service restarts; our logs do not name the client. The legal basis is our legitimate interest in controlling access to the API (GDPR, article 6(1)(f)). A revoked key stays recorded, without the key, until you ask us to erase it."
       },
       "sponsors": {
         "title": "When you support the project",

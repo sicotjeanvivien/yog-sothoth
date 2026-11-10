@@ -8,12 +8,12 @@
       "eyebrow": "Politique de confidentialité",
       "title": "Ce que nous faisons de vos données.",
       "lead": "Yog-Scope est un dashboard public en lecture seule. Aucun compte n'est requis, aucun outil d'analytique n'est utilisé, aucun visiteur n'est tracké. Cette page explique en termes clairs les très rares données que la plateforme manipule.",
-      "lastUpdated": "Dernière mise à jour : 28 octobre 2026"
+      "lastUpdated": "Dernière mise à jour : 10 novembre 2026"
     },
     "prose": {
       "inShort": {
         "title": "En bref",
-        "body": "Yog-Scope ne demande pas de compte, n'utilise aucun outil d'analytique, n'affiche aucune publicité et ne dépose aucun cookie soumis à consentement. Nos serveurs n'enregistrent pas votre adresse IP. Nous ne voyons de données personnelles vous concernant que si vous nous écrivez ou soutenez le projet. Deux exceptions à connaître : Cloudflare, qui protège le site, voit l'adresse IP de chaque visite (voir « Quand vous consultez le site »), et les logos des tokens sont chargés directement depuis des serveurs tiers, qui voient donc eux aussi votre adresse IP (voir « Logos des tokens » ci-dessous). Aucune donnée ne fait l'objet d'une décision automatisée ni d'un profilage."
+        "body": "Yog-Scope ne demande pas de compte, n'utilise aucun outil d'analytique, n'affiche aucune publicité et ne dépose aucun cookie soumis à consentement. Nos serveurs n'enregistrent pas votre adresse IP. Nous ne voyons de données personnelles vous concernant que si vous nous écrivez, soutenez le projet ou utilisez une clé d'API que nous vous avons délivrée. Deux exceptions à connaître : Cloudflare, qui protège le site, voit l'adresse IP de chaque visite (voir « Quand vous consultez le site »), et les logos des tokens sont chargés directement depuis des serveurs tiers, qui voient donc eux aussi votre adresse IP (voir « Logos des tokens » ci-dessous). Aucune donnée ne fait l'objet d'une décision automatisée ni d'un profilage."
       },
       "responsible": {
         "title": "Qui est responsable",
@@ -26,6 +26,10 @@
       "contact": {
         "title": "Quand vous nous écrivez",
         "body": "Si vous écrivez à l'adresse de contact, nous traitons votre adresse email et le contenu de votre message pour vous répondre. La base juridique est notre intérêt légitime à traiter les demandes qu'on nous adresse (article 6.1.f du RGPD). Nous écrire est facultatif : le site s'utilise exactement de la même façon sans le faire. Vos messages sont conservés le temps nécessaire au traitement de votre demande, puis supprimés. Ils transitent par notre messagerie, fournie par Google (Gmail), et peuvent donc être transférés aux États-Unis. Ce transfert est encadré par le Data Privacy Framework UE–États-Unis, qui fait l'objet d'une décision d'adéquation de la Commission européenne du 10 juillet 2023."
+      },
+      "apiKeys": {
+        "title": "Quand vous utilisez une clé d'API",
+        "body": "Si nous vous délivrons une clé d'API, nous gardons le nom donné à votre client, le préfixe de la clé et son hachage — jamais la clé elle-même — et ses dates de délivrance et de révocation, pour vérifier chaque appel et pouvoir la révoquer. Chaque appel à l'API est compté par client et par route, dans des compteurs qui ne sont pas conservés et repartent de zéro à chaque redémarrage du service ; nos journaux ne nomment pas le client. La base juridique est notre intérêt légitime à contrôler l'accès à l'API (article 6.1.f du RGPD). Une clé révoquée reste enregistrée, sans la clé, jusqu'à ce que vous nous demandiez de l'effacer."
       },
       "sponsors": {
         "title": "Quand vous soutenez le projet",
