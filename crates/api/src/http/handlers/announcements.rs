@@ -16,6 +16,7 @@ use axum::{
 #[utoipa::path(
     get,
     path = "/api/announcements",
+    security(()),
     params(AnnouncementsParams),
     responses((
         status = 200,

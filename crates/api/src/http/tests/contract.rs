@@ -7,7 +7,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use utoipa::openapi::{
     ComponentsBuilder, InfoBuilder, OpenApiBuilder,
-    security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
+    security::{HttpAuthScheme, HttpBuilder, SecurityRequirement, SecurityScheme},
 };
 use utoipa_axum::router::OpenApiRouter;
 
@@ -30,6 +30,11 @@ pub(crate) fn document() -> Value {
                 .security_scheme("ticket", bearer("yogt_<secret>"))
                 .build(),
         ))
+        // A route answers without a key only where its own declaration says `security(())`.
+        .security(Some(vec![SecurityRequirement::new(
+            "apiKey",
+            Vec::<String>::new(),
+        )]))
         .build();
     let routes = super::api_routes(
         WorkSlots::new(1, Duration::ZERO),
@@ -58,6 +63,7 @@ fn bearer(format: &str) -> SecurityScheme {
 /// document rather than repeated on every field and route.
 fn finish(doc: &mut Value) {
     answer_problems(doc);
+    require_credentials(doc);
     require_nullable(doc);
     bound_small_integers(doc);
     refuse_int64(doc, "#");
@@ -88,6 +94,46 @@ fn answer_problems(doc: &mut Value) {
             if HTTP_METHODS.contains(&method.as_str()) {
                 operation["responses"]["default"] = problem.clone();
             }
+        }
+    }
+}
+
+/// Every operation whose security names a scheme answers `401` without its credential; its own
+/// `security` wins over the document's, and `[{}]` asks for none.
+fn require_credentials(doc: &mut Value) {
+    let default = doc["security"].clone();
+    let Some(paths) = doc["paths"].as_object_mut() else {
+        return;
+    };
+    for item in paths.values_mut() {
+        let Some(item) = item.as_object_mut() else {
+            continue;
+        };
+        for (method, operation) in item.iter_mut() {
+            if !HTTP_METHODS.contains(&method.as_str()) {
+                continue;
+            }
+            let security = operation.get("security").unwrap_or(&default).clone();
+            let scheme = security
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_object)
+                .find_map(|requirement| requirement.keys().next().cloned());
+            let description = match scheme.as_deref() {
+                None => continue,
+                Some("apiKey") => {
+                    "No API key, or one that opens nothing: RFC 9457 Problem Details."
+                }
+                Some("ticket") => "No ticket, or one that opens nothing: RFC 9457 Problem Details.",
+                Some(other) => panic!("{method} names the unknown security scheme `{other}`"),
+            };
+            operation["responses"]["401"] = json!({
+                "description": description,
+                "content": {
+                    PROBLEM_CONTENT_TYPE: { "schema": { "$ref": "#/components/schemas/ProblemDetailsResponse" } }
+                }
+            });
         }
     }
 }

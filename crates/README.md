@@ -320,7 +320,7 @@ Add the SQL in the corresponding `Pg*Repository` impl (see the [query-shape poli
 
 - Create or extend a module under `api/src/http/handlers/`.
 - Create request/response DTOs in `api/src/http/dto/` (request validation happens here, before any DB call). They derive `ToSchema` (`IntoParams` and `#[serde(deny_unknown_fields)]` for a query; a route that takes none extracts `Query<NoQuery>`), with their wire forms named — see [the contract](./api/README.md#the-contract).
-- Declare the route on its handler with `#[utoipa::path]` and mount it in `http.rs::api_routes` with `.routes(routes!(…))` — never `.route("/api/…")`, which serves it without a contract.
+- Declare the route on its handler with `#[utoipa::path]` and mount it in `http.rs::api_routes` with `.routes(routes!(…))` — never `.route("/api/…")`, which serves it without a contract. It is mounted in `closed` and takes a key; a route that answers without one goes in `open` and declares `security(())` — see [Authentication](./api/README.md#authentication).
 - Regenerate the contract and commit it: `YOG_WRITE_OPENAPI=1 cargo test -p yog-api contract`, then `npm run gen:api` in `web/`.
 - A **new service** is reached through `AppState`, in two places and two layers: its field in `api/src/http/state.rs`, and its construction in `api/src/bootstrap/app_state.rs::build_app_state`, where the repositories are wired in.
 - Reuse `ApiError` for error mapping; the `From<RepositoryError>` impl handles repository failures uniformly.

@@ -14,7 +14,7 @@ use yog_core::domain::ApiClient;
 use super::document;
 use crate::{
     http::build_router,
-    testing::{app_state, pk},
+    testing::{app_state, pk, test_key},
 };
 
 /// A key no route takes.
@@ -67,8 +67,8 @@ fn valid_value(schema: &Value) -> Option<String> {
         .find_map(valid_value)
 }
 
-/// The answer to `uri`, or `None` when it is still answering after [`PATIENCE`]. ⚠️ The live
-/// stream gets a ticket: without one it answers `401` before reading its query.
+/// The answer to `uri`, or `None` when it is still answering after [`PATIENCE`]. ⚠️ Each route
+/// gets its credential, the live stream a ticket: without one it answers `401` before its query.
 async fn answer(uri: &str) -> Option<(StatusCode, String, String)> {
     let state = app_state();
     let mut request = Request::builder().uri(uri);
@@ -79,6 +79,11 @@ async fn answer(uri: &str) -> Option<(StatusCode, String, String)> {
         };
         let (ticket, _) = state.ticket_registry.issue(client).expect("random bytes");
         request = request.header(header::AUTHORIZATION, format!("Bearer {}", ticket.expose()));
+    } else {
+        request = request.header(
+            header::AUTHORIZATION,
+            format!("Bearer {}", test_key().expose()),
+        );
     }
     let request = request.body(Body::empty()).unwrap();
     let call = async {

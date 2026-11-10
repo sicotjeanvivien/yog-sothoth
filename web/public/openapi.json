@@ -6580,7 +6580,10 @@
             },
             "description": "A failure: RFC 9457 Problem Details."
           }
-        }
+        },
+        "security": [
+          {}
+        ]
       }
     },
     "/api/auth/tickets": {
@@ -6597,6 +6600,16 @@
             },
             "description": "A single-use ticket for one connection to the live stream."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -6608,11 +6621,6 @@
             "description": "A failure: RFC 9457 Problem Details."
           }
         },
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
         "summary": "A ticket for the key's client: it opens one connection to `/api/live`, once."
       }
     },
@@ -6641,6 +6649,9 @@
             "description": "A failure: RFC 9457 Problem Details."
           }
         },
+        "security": [
+          {}
+        ],
         "summary": "How fresh our ingestion is, judged on the last indexed event. No event at\nall is `stale`, not an error."
       }
     },
@@ -6696,6 +6707,16 @@
             },
             "description": "A page of every protocol's liquidity changes, the most recent first; the window ends at the first page."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -6740,6 +6761,16 @@
             },
             "description": "Each protocol's volume over the window divided by its last TVL reading, and every volume over every TVL."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -6780,6 +6811,16 @@
               }
             },
             "description": "Server-sent events, each named by its topic and carrying an item of that collection: `signals` a `SignalResponse`, `liquidity-changes` a `LiquidityChangeEventResponse`, and so on. The `id` is an opaque cursor."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No ticket, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -6835,6 +6876,16 @@
             },
             "description": "Server-sent events of the protocol, each named by its topic and carrying an item of that collection. The `id` is an opaque cursor."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No ticket, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -6879,6 +6930,9 @@
             "description": "A failure: RFC 9457 Problem Details."
           }
         },
+        "security": [
+          {}
+        ],
         "summary": "Where the chain is: the latest slot and the probe's latency. The\n`network_status` row is seeded by the baseline migration: its absence is a\n500, not a 404."
       }
     },
@@ -6933,6 +6987,16 @@
               }
             },
             "description": "A page of every protocol's pool changes, the most recent first; the window ends at the first page."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -6999,6 +7063,16 @@
             },
             "description": "A page of every protocol's pool creations, the most recent first; the window ends at the first page."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -7058,6 +7132,16 @@
             },
             "description": "Each protocol's pools created by `interval`, under the rules of `/api/swaps/series`."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -7102,6 +7186,16 @@
             },
             "description": "Each protocol's pools created over the window."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -7143,6 +7237,16 @@
               }
             },
             "description": "Each protocol's pools discovered in the window, and what they hold."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -7196,6 +7300,16 @@
             },
             "description": "A page of every protocol's pools, the most recently first seen first."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -7232,6 +7346,16 @@
               }
             },
             "description": "The pool, its state now, and its protocol's properties."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -7305,6 +7429,16 @@
               }
             },
             "description": "A page of the pool's liquidity changes, the most recent first; the window ends at the first page."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -7408,6 +7542,16 @@
             },
             "description": "A page of the pool's valued liquidity moves, in the order asked; empty while its protocol's liquidity does not cover the window whole."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -7480,6 +7624,16 @@
               }
             },
             "description": "A page of the pool's pool changes, the most recent first; the window ends at the first page."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -7554,6 +7708,16 @@
             },
             "description": "A page of the pool's position changes, the most recent first; the window ends at the first page."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -7626,6 +7790,16 @@
               }
             },
             "description": "A page of the pool's position fee claims, the most recent first; the window ends at the first page."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -7700,6 +7874,16 @@
             },
             "description": "A page of the pool's protocol fee claims, the most recent first; the window ends at the first page."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -7773,6 +7957,16 @@
             },
             "description": "A page of the pool's reward changes, the most recent first; the window ends at the first page."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -7845,6 +8039,16 @@
               }
             },
             "description": "A page of the pool's reward claims, the most recent first; the window ends at the first page."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -7933,6 +8137,16 @@
               }
             },
             "description": "A page of the pool's rotation runs started in the window, in the order asked, through the last tranche written; empty while not covered."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -8045,6 +8259,16 @@
             },
             "description": "A page of the pool's signals."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -8117,6 +8341,16 @@
             },
             "description": "A page of the pool's swaps, the most recent first; the window ends at the first page."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -8184,6 +8418,16 @@
             },
             "description": "The pool's swaps by `interval`, under the rules of `/api/swaps/series`."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -8235,6 +8479,16 @@
               }
             },
             "description": "The pool's swaps over the window, 0 when it did not swap; no row before it was first seen."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -8301,6 +8555,16 @@
             },
             "description": "A page of every protocol's position changes, the most recent first; the window ends at the first page."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -8365,6 +8629,16 @@
               }
             },
             "description": "A page of every protocol's position fee claims, the most recent first; the window ends at the first page."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -8431,6 +8705,16 @@
             },
             "description": "A page of every protocol's protocol fee claims, the most recent first; the window ends at the first page."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -8483,6 +8767,16 @@
             },
             "description": "A page of every protocol of the domain, observed or not."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -8519,6 +8813,16 @@
               }
             },
             "description": "The protocol's entry of the catalogue, observed or not."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -8592,6 +8896,16 @@
               }
             },
             "description": "A page of the protocol's liquidity changes, the most recent first; the window ends at the first page."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -8695,6 +9009,16 @@
             },
             "description": "A page of the protocol's valued liquidity moves, in the order asked; empty while its liquidity does not cover the window whole."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -8762,6 +9086,16 @@
             },
             "description": "The protocol's liquidity created, added and removed, by `interval`, the window's own step by default: 5 minutes over `1h`, an hour over `24h`, 6 hours over `7d`, a day over `30d`."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -8814,6 +9148,16 @@
             },
             "description": "The protocol's liquidity created, added and removed over the window; no row while its liquidity does not cover the window whole."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -8865,6 +9209,16 @@
               }
             },
             "description": "The protocol's volume over the window divided by its last TVL reading."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -8939,6 +9293,16 @@
             },
             "description": "A page of the protocol's pool changes, the most recent first; the window ends at the first page."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -9012,6 +9376,16 @@
             },
             "description": "A page of the protocol's pool creations, the most recent first; the window ends at the first page."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -9079,6 +9453,16 @@
             },
             "description": "The protocol's pools created by `interval`, under the rules of `/api/swaps/series`."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -9131,6 +9515,16 @@
             },
             "description": "The protocol's pools created over the window."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -9180,6 +9574,16 @@
               }
             },
             "description": "The protocol's pools discovered in the window, and what they hold."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -9240,6 +9644,16 @@
               }
             },
             "description": "A page of the protocol's pools, the most recently first seen first."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -9314,6 +9728,16 @@
             },
             "description": "A page of the protocol's position changes, the most recent first; the window ends at the first page."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -9381,6 +9805,16 @@
             },
             "description": "The positions the protocol opened, locked, split and closed by `interval`, from the facts' coverage."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -9432,6 +9866,16 @@
               }
             },
             "description": "The positions the protocol opened, locked, split and closed over the window; no row while the facts do not cover the window whole."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -9506,6 +9950,16 @@
             },
             "description": "A page of the protocol's position fee claims, the most recent first; the window ends at the first page."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -9573,6 +10027,16 @@
             },
             "description": "The fees the protocol's positions claimed by `interval`, valued, from the claims' coverage."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -9624,6 +10088,16 @@
               }
             },
             "description": "The fees the protocol's positions claimed over the window, valued; no row while its claims do not cover the window whole."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -9698,6 +10172,16 @@
             },
             "description": "A page of the protocol's protocol fee claims, the most recent first; the window ends at the first page."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -9770,6 +10254,16 @@
               }
             },
             "description": "A page of the protocol's reward changes, the most recent first; the window ends at the first page."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -9844,6 +10338,16 @@
             },
             "description": "A page of the protocol's reward claims, the most recent first; the window ends at the first page."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -9911,6 +10415,16 @@
             },
             "description": "The rewards the protocol's positions claimed by `interval`, valued, from the claims' coverage."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -9962,6 +10476,16 @@
               }
             },
             "description": "The rewards the protocol's positions claimed over the window, valued; no row while its claims do not cover the window whole."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -10051,6 +10575,16 @@
             },
             "description": "A page of the protocol's rotation runs started in the window, in the order asked, through the last tranche written; empty while not covered."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -10118,6 +10652,16 @@
             },
             "description": "The protocol's volume by `interval`, the window's own step by default (5 minutes over `1h`, an hour over `24h`, 6 hours over `7d`, a day over `30d`), split by its rotation runs."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -10169,6 +10713,16 @@
               }
             },
             "description": "The protocol's rotation runs started in the window, through the last tranche written; no row while not covered."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -10281,6 +10835,16 @@
             },
             "description": "A page of the protocol's signals."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -10352,6 +10916,16 @@
             },
             "description": "A page of the protocol's swaps over 24 hours at most, the most recent first; the window ends at the first page. A pool's swaps go back 7 days."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -10418,6 +10992,16 @@
               }
             },
             "description": "The protocol's swaps by `interval`, under the rules of `/api/swaps/series`."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -10493,6 +11077,16 @@
             },
             "description": "The protocol's swaps over the window."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -10529,6 +11123,16 @@
               }
             },
             "description": "The protocol's last TVL reading at or before `asOf`, its instant said."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -10592,6 +11196,16 @@
             },
             "description": "The protocol's TVL reading of every hour measured, from the window's start."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -10643,6 +11257,16 @@
               }
             },
             "description": "The protocol's last TVL reading, the one a window before it, and the change without the pools discovered in the window; over `1h`, the last reading alone, at the close of the last frozen hour."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -10709,6 +11333,16 @@
             },
             "description": "A page of every protocol's reward changes, the most recent first; the window ends at the first page."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -10773,6 +11407,16 @@
               }
             },
             "description": "A page of every protocol's reward claims, the most recent first; the window ends at the first page."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -10877,6 +11521,16 @@
             },
             "description": "A page of signals."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -10939,6 +11593,16 @@
               }
             },
             "description": "A page of every protocol's swaps over 24 hours at most, the most recent first; the window ends at the first page. A pool's swaps go back 7 days."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -11019,6 +11683,16 @@
             },
             "description": "A page of tokens, the most traded first, every protocol summed."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -11077,6 +11751,16 @@
               }
             },
             "description": "Each protocol's swaps by `interval`, the window's own step by default: 5 minutes over `1h`, an hour over `24h`, 6 hours over `7d`, a day over `30d`."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -11144,6 +11828,16 @@
             },
             "description": "Each protocol's swaps over the window."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -11196,6 +11890,16 @@
             },
             "description": "A page of tokens, the most recently first fetched first, each with its latest price."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -11232,6 +11936,16 @@
               }
             },
             "description": "The token, with its latest price."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -11292,6 +12006,16 @@
               }
             },
             "description": "A page of the pools the token is either side of, the most recently first seen first."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -11366,6 +12090,16 @@
             },
             "description": "A page of the token's prices over the window, the most recent first; the window ends at the first page."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -11392,6 +12126,16 @@
               }
             },
             "description": "Each protocol's last TVL reading at or before `asOf`, its instant said."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -11447,6 +12191,16 @@
             },
             "description": "Each protocol's TVL reading of every hour measured, from the window's start."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -11491,6 +12245,16 @@
             },
             "description": "Each protocol's last TVL reading, the one a window before it, and the change without the pools discovered in the window; over `1h`, the last reading alone, at the close of the last frozen hour."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -11528,8 +12292,16 @@
             },
             "description": "A failure: RFC 9457 Problem Details."
           }
-        }
+        },
+        "security": [
+          {}
+        ]
       }
     }
-  }
+  },
+  "security": [
+    {
+      "apiKey": []
+    }
+  ]
 }

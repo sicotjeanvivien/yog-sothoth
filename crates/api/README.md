@@ -122,6 +122,9 @@ with no wildcard arm, so adding a variant breaks the build there.
 
 ## Endpoints
 
+Every route below takes a key, but the probes, the four open routes
+(see [Authentication](#authentication)) and the live stream, which takes a ticket.
+
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/healthz` | Liveness — 200 OK, no DB roundtrip |
@@ -378,7 +381,7 @@ What the derive cannot say is said once:
   property is required — `null` is written, never omitted, and a key that may be
   absent says `#[schema(nullable = false)]` (a test fails on a
   `skip_serializing_if` without it); every operation declares its failures as
-  Problem Details; an `int64` (or `u64`) anywhere fails the document, because the generated
+  Problem Details, and its `401` when its security names a scheme; an `int64` (or `u64`) anywhere fails the document, because the generated
   zod would read it as a `BigInt` (point it at `Count`); so does a `$ref` to an
   undeclared schema, which the generator would skip in silence.
 - **Integers carry their Rust range**: utoipa's `non_strict_integers` writes a
@@ -554,14 +557,21 @@ hash opens nothing without its key.
 
   | `Authorization` | What happens |
   |---|---|
-  | absent | anonymous: the request passes — but on `POST /api/auth/tickets`, refused by `require_api_key` |
+  | absent | anonymous: the request passes, counted `anonymous` — then, off the open routes, refused by `require_api_key` |
   | `Bearer` (any case) and a key the ring holds | its `ApiClient` is attached to the request, which passes |
   | another scheme, a bearer that is no key, a key the ring does not hold | `401` |
 
 - **`require_api_key`** (`http/middleware/require_api_key.rs`), under `authenticate` on
-  `POST /api/auth/tickets` alone, refuses a request no key has named a client for.
-- **Nothing refuses an anonymous call yet** on the REST read routes. They are counted,
-  by route, so that who calls the API without a key is known before it is closed.
+  every REST route but the open ones (`closed` in `api_routes`), refuses a request no key
+  has named a client for: `401`.
+- **The open routes** answer without a key: `/api/ingestion`, `/api/network`,
+  `/api/windows`, `/api/announcements`, the platform's state, mounted in `open`; and the
+  probes `/healthz`, `/readyz`, outside both layers. A key sent to an open route is still
+  identified, and refused if it opens nothing.
+- **A route is closed by default.** The contract asks for `apiKey` on the whole document; a
+  route mounted in `open` declares `security(())` in its `#[utoipa::path]`. A test walks
+  every operation of the contract through the router, without a credential, and fails
+  wherever a `401` and the contract disagree.
 
 ### Tickets
 

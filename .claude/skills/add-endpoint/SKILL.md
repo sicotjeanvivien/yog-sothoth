@@ -95,8 +95,9 @@ If the query already exists, skip to Step 3.
 - **Declare and mount the route** — `#[utoipa::path(get, path = "/api/…", params(…),
   responses((status = 200, body = …)))]` on the handler, then
   `.routes(routes!(handlers::…))` in `api_routes` (`crates/api/src/http.rs`), in the
-  slotted router if it is slow. Never `.route("/api/…")`: it serves the route without a
-  contract, and a test fails on it.
+  slotted router if it is slow, else in `closed`: a route takes a key. One that answers
+  without a key goes in `open` and declares `security(())`. Never `.route("/api/…")`: it
+  serves the route without a contract, and a test fails on it.
 - **Regenerate the contract**, and commit both:
   ```bash
   YOG_WRITE_OPENAPI=1 cargo test -p yog-api contract

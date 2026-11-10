@@ -104,8 +104,8 @@ async fn no_such_route() -> ApiError {
 }
 
 /// Every `/api` route, each mounted with its contract (`#[utoipa::path]`) and the credential it
-/// takes: a key, or a ticket for the live stream. The committed OpenAPI document is read from this
-/// same list, so a route cannot be served without being declared.
+/// takes: a key, none on the open routes, or a ticket for the live stream. The committed OpenAPI
+/// document is read from this same list, so a route cannot be served without being declared.
 fn api_routes(
     work_slots: WorkSlots,
     key_ring: KeyRing,
@@ -129,12 +129,15 @@ fn api_routes(
             middleware::ticket_authentication::authenticate_ticket,
         ));
 
-    // Under `authenticate`, added below, which attaches the client this layer requires.
-    let tickets = OpenApiRouter::new()
-        .routes(routes!(handlers::tickets::create_ticket))
-        .route_layer(from_fn(middleware::require_api_key::require_api_key));
+    let tickets = OpenApiRouter::new().routes(routes!(handlers::tickets::create_ticket));
 
-    OpenApiRouter::new()
+    let open = OpenApiRouter::new()
+        .routes(routes!(handlers::announcements::list_announcements))
+        .routes(routes!(handlers::network::get_network))
+        .routes(routes!(handlers::ingestion::get_ingestion))
+        .routes(routes!(handlers::windows::get_windows));
+
+    let closed = OpenApiRouter::new()
         .routes(routes!(
             handlers::rotation_runs::list_protocol_rotation_runs
         ))
@@ -145,10 +148,6 @@ fn api_routes(
         .routes(routes!(
             handlers::rotation_runs::get_protocol_rotation_runs_series
         ))
-        .routes(routes!(handlers::announcements::list_announcements))
-        .routes(routes!(handlers::network::get_network))
-        .routes(routes!(handlers::ingestion::get_ingestion))
-        .routes(routes!(handlers::windows::get_windows))
         .routes(routes!(handlers::token::get_token))
         .routes(routes!(handlers::token::list_tokens))
         .routes(routes!(handlers::token::list_token_prices))
@@ -275,7 +274,11 @@ fn api_routes(
         ))
         .merge(slotted)
         .merge(tickets)
-        // ⚠️ Every route merged above takes a key; the live stream, merged after, does not.
+        // Under `authenticate`, added below, which attaches the client this layer requires.
+        .route_layer(from_fn(middleware::require_api_key::require_api_key));
+
+    open.merge(closed)
+        // ⚠️ A key is identified on every route merged above; the live stream, merged after, takes a ticket.
         .route_layer(from_fn_with_state(
             key_ring,
             middleware::authentication::authenticate,

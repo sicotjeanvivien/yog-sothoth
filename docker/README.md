@@ -199,7 +199,9 @@ revoke it, delete its line in `/home/yog-obs/.ssh/authorized_keys`.
 
 ## API keys
 
-A key is issued on the server, by the one-shot `yog-migrate` service, which
+Without a key, `yog-api` answers `401` on every REST route but the probes and the open
+routes (`/api/ingestion`, `/api/network`, `/api/windows`, `/api/announcements`); the live
+stream takes a ticket, drawn from a key. A key is issued on the server, by the one-shot `yog-migrate` service, which
 passes its words on to the binary (`bootstrap` when there are none, as
 `update.sh` runs it):
 

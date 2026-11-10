@@ -16,26 +16,26 @@ use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
         ActiveKey, Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementKind,
-        AnnouncementLookup, AnnouncementSeverity, AnnouncementStatus, ApiKeyLookup, ClaimKind,
-        ClaimTotals, ClaimTotalsLookup, DiscoveredTvlLookup, EventCursor, EventFreshnessRepository,
-        EventScope, FrozenHours, FrozenPeriod, LiquidityChangeEvent, LiquidityChangeEventLookup,
-        LiquidityFlows, LiquidityMove, LiquidityMoveCursor, LiquidityMoveList, LiquidityMoveLookup,
-        LiquidityMoveOrder, LiquidityTotals, MeteoraDammV2PoolProperties,
-        MeteoraDammV2PoolPropertiesLookup, NetworkStatus, NetworkStatusLookup, Pool, PoolCatalog,
-        PoolChangeEvent, PoolChangeEventLookup, PoolCreationEvent, PoolCreationEventLookup,
-        PoolCreations, PoolCreationsLookup, PoolCursor, PoolEntry, PoolScope, PoolSwapBucket,
-        PositionChangeCounts, PositionChangeCountsLookup, PositionChangeEvent,
-        PositionChangeEventLookup, PositionFeeClaimEvent, PositionFeeClaimEventLookup, Protocol,
-        ProtocolActivityLookup, ProtocolBucket, ProtocolDiscoveredTvl, ProtocolFeeClaimEvent,
-        ProtocolFeeClaimEventLookup, ProtocolPoolCreations, ProtocolPools, ProtocolSwapActivity,
-        ProtocolTvl, ProtocolTvlChange, ProtocolTvlLookup, RewardChangeEvent,
-        RewardChangeEventLookup, RewardClaimEvent, RewardClaimEventLookup, RotationRun,
-        RotationRunCursor, RotationRunLookup, RotationRunOrder, RotationRunScope,
-        RotationRunTotals, RunSplit, Severity, Signal, SignalCursor, SignalFeed, SignalFilter,
-        SignalRecord, SwapActivity, SwapActivityLookup, SwapEvent, SwapEventLookup, TokenActivity,
-        TokenActivityCursor, TokenActivityFeed, TokenActivityPage, TokenCursor, TokenEntry,
-        TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceCursor, TokenPriceLookup,
-        TranchePeriod, Window, WrittenTranches,
+        AnnouncementLookup, AnnouncementSeverity, AnnouncementStatus, ApiClient, ApiKey,
+        ApiKeyLookup, ClaimKind, ClaimTotals, ClaimTotalsLookup, DiscoveredTvlLookup, EventCursor,
+        EventFreshnessRepository, EventScope, FrozenHours, FrozenPeriod, LiquidityChangeEvent,
+        LiquidityChangeEventLookup, LiquidityFlows, LiquidityMove, LiquidityMoveCursor,
+        LiquidityMoveList, LiquidityMoveLookup, LiquidityMoveOrder, LiquidityTotals,
+        MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesLookup, NetworkStatus,
+        NetworkStatusLookup, Pool, PoolCatalog, PoolChangeEvent, PoolChangeEventLookup,
+        PoolCreationEvent, PoolCreationEventLookup, PoolCreations, PoolCreationsLookup, PoolCursor,
+        PoolEntry, PoolScope, PoolSwapBucket, PositionChangeCounts, PositionChangeCountsLookup,
+        PositionChangeEvent, PositionChangeEventLookup, PositionFeeClaimEvent,
+        PositionFeeClaimEventLookup, Protocol, ProtocolActivityLookup, ProtocolBucket,
+        ProtocolDiscoveredTvl, ProtocolFeeClaimEvent, ProtocolFeeClaimEventLookup,
+        ProtocolPoolCreations, ProtocolPools, ProtocolSwapActivity, ProtocolTvl, ProtocolTvlChange,
+        ProtocolTvlLookup, RewardChangeEvent, RewardChangeEventLookup, RewardClaimEvent,
+        RewardClaimEventLookup, RotationRun, RotationRunCursor, RotationRunLookup,
+        RotationRunOrder, RotationRunScope, RotationRunTotals, RunSplit, Severity, Signal,
+        SignalCursor, SignalFeed, SignalFilter, SignalRecord, SwapActivity, SwapActivityLookup,
+        SwapEvent, SwapEventLookup, TokenActivity, TokenActivityCursor, TokenActivityFeed,
+        TokenActivityPage, TokenCursor, TokenEntry, TokenMetadata, TokenMetadataLookup, TokenPrice,
+        TokenPriceCursor, TokenPriceLookup, TranchePeriod, Window, WrittenTranches,
     },
 };
 
@@ -161,7 +161,13 @@ pub(crate) fn app_state() -> AppState {
             Arc::new(MockPriceRepo::empty()),
         )),
         announcement_service: Arc::new(AnnouncementService::new(Arc::new(MockAnnouncementRepo))),
-        key_ring: key_ring(vec![]),
+        key_ring: key_ring(vec![ActiveKey {
+            hash: test_key().hash(),
+            client: ApiClient {
+                id: 1,
+                name: TEST_CLIENT.to_string(),
+            },
+        }]),
         ticket_registry: TicketRegistry::default(),
         health_checker: Arc::new(PgHealthChecker::new(
             PgPool::connect_lazy("postgres://unused@127.0.0.1:1/unused")
@@ -171,13 +177,21 @@ pub(crate) fn app_state() -> AppState {
     }
 }
 
-/// `method uri` through the whole router on [`app_state`]: the status, the headers, and the
-/// `detail` of a Problem Details body (else the body as text).
+/// The client of [`test_key`].
+pub(crate) const TEST_CLIENT: &str = "test";
+
+/// The key [`app_state`]'s ring holds, and [`call`] sends.
+pub(crate) fn test_key() -> ApiKey {
+    ApiKey::from_random([0xee; 4], [0xee; 32])
+}
+
+/// `method uri` through the whole router on [`app_state`], with [`test_key`]: the status, the
+/// headers, and the `detail` of a Problem Details body (else the body as text).
 pub(crate) async fn call(method: Method, uri: &str) -> (StatusCode, HeaderMap, String) {
     call_on(app_state(), method, uri).await
 }
 
-/// [`call`] on `state`.
+/// [`call`] on `state`; ⚠️ its ring must hold [`test_key`], as [`app_state`]'s does.
 pub(crate) async fn call_on(
     state: AppState,
     method: Method,
@@ -186,8 +200,26 @@ pub(crate) async fn call_on(
     let request = Request::builder()
         .method(method)
         .uri(uri)
+        .header(
+            header::AUTHORIZATION,
+            format!("Bearer {}", test_key().expose()),
+        )
         .body(Body::empty())
         .unwrap();
+    send(state, request).await
+}
+
+/// [`call`] without any `Authorization`.
+pub(crate) async fn call_anonymous(method: Method, uri: &str) -> (StatusCode, HeaderMap, String) {
+    let request = Request::builder()
+        .method(method)
+        .uri(uri)
+        .body(Body::empty())
+        .unwrap();
+    send(app_state(), request).await
+}
+
+async fn send(state: AppState, request: Request<Body>) -> (StatusCode, HeaderMap, String) {
     let response = build_router(state, vec![]).oneshot(request).await.unwrap();
     let (parts, body) = response.into_parts();
     let body = axum::body::to_bytes(body, usize::MAX).await.unwrap();

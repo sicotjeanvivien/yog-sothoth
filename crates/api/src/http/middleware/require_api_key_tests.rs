@@ -6,8 +6,8 @@ use axum::{
 use tower::ServiceExt;
 use yog_core::domain::{ActiveKey, ApiClient, ApiKey, Ticket};
 
-use crate::http::{AppState, build_router};
-use crate::testing::{app_state, counter, key_ring, recorded};
+use crate::http::{AppState, build_router, contract::document};
+use crate::testing::{app_state, call_anonymous, counter, key_ring, pk, recorded};
 
 fn key(byte: u8) -> ApiKey {
     ApiKey::from_random([byte; 4], [byte; 32])
@@ -124,4 +124,113 @@ async fn the_ticket_the_route_issues_opens_the_live_stream() {
     let response = build_router(state, vec![]).oneshot(request).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+/// Mutation: `/api/ingestion` mounted under `closed`.
+#[test]
+fn an_anonymous_call_to_ingestion_is_served() {
+    let ((status, _, detail), metrics) =
+        recorded(async { call_anonymous(Method::GET, "/api/ingestion").await });
+
+    assert_ne!(status, StatusCode::UNAUTHORIZED, "{detail}");
+    assert_eq!(
+        counter(
+            &metrics,
+            "yog_api_requests_total",
+            &[("client", "anonymous"), ("route", "/api/ingestion")]
+        ),
+        Some(1)
+    );
+}
+
+/// Mutation: `/api/network` mounted under `closed`.
+#[test]
+fn an_anonymous_call_to_network_is_served() {
+    let ((status, _, detail), metrics) =
+        recorded(async { call_anonymous(Method::GET, "/api/network").await });
+
+    assert_ne!(status, StatusCode::UNAUTHORIZED, "{detail}");
+    assert_eq!(
+        counter(
+            &metrics,
+            "yog_api_requests_total",
+            &[("client", "anonymous"), ("route", "/api/network")]
+        ),
+        Some(1)
+    );
+}
+
+/// Mutation: `/api/windows` mounted under `closed`.
+#[test]
+fn an_anonymous_call_to_windows_is_served() {
+    let ((status, _, detail), metrics) =
+        recorded(async { call_anonymous(Method::GET, "/api/windows").await });
+
+    assert_ne!(status, StatusCode::UNAUTHORIZED, "{detail}");
+    assert_eq!(
+        counter(
+            &metrics,
+            "yog_api_requests_total",
+            &[("client", "anonymous"), ("route", "/api/windows")]
+        ),
+        Some(1)
+    );
+}
+
+/// Mutation: `/api/announcements` mounted under `closed`.
+#[test]
+fn an_anonymous_call_to_announcements_is_served() {
+    let ((status, _, detail), metrics) =
+        recorded(async { call_anonymous(Method::GET, "/api/announcements").await });
+
+    assert_ne!(status, StatusCode::UNAUTHORIZED, "{detail}");
+    assert_eq!(
+        counter(
+            &metrics,
+            "yog_api_requests_total",
+            &[("client", "anonymous"), ("route", "/api/announcements")]
+        ),
+        Some(1)
+    );
+}
+
+/// Mutations: a closed route mounted under `open`, `security(())` on a closed route,
+/// `require_api_key` taken off `closed`, or the document's default key removed.
+#[tokio::test]
+async fn every_route_refuses_an_anonymous_call_where_the_contract_asks_for_a_credential() {
+    let doc = document();
+    let pool = pk(1).to_string();
+    let (mut operations, mut refused, mut drift) = (0, 0, Vec::new());
+    for (path, item) in doc["paths"].as_object().expect("the document has paths") {
+        for (method, operation) in item.as_object().expect("a path item") {
+            let security = operation.get("security").unwrap_or(&doc["security"]);
+            let asks = security
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|requirement| requirement.as_object().is_some_and(|r| !r.is_empty()));
+            let uri = path
+                .replace("{protocol}", "meteora_damm_v2")
+                .replace("{pool}", &pool)
+                .replace("{mint}", &pool);
+            let method = Method::from_bytes(method.to_uppercase().as_bytes()).expect("a method");
+            let (status, _, _) = call_anonymous(method.clone(), &uri).await;
+            if (status == StatusCode::UNAUTHORIZED) != asks {
+                drift.push(format!(
+                    "{method} {uri}: {status}, credential asked: {asks}"
+                ));
+            }
+            operations += 1;
+            refused += usize::from(asks);
+        }
+    }
+    assert!(
+        drift.is_empty(),
+        "the router and the contract disagree: {drift:?}"
+    );
+    assert_eq!(
+        (operations, refused),
+        (80, 76),
+        "every operation, those asking a credential"
+    );
 }
