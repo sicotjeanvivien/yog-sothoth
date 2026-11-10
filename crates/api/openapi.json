@@ -6578,7 +6578,7 @@
                 }
               }
             },
-            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+            "description": "A key that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -6659,7 +6659,7 @@
                 }
               }
             },
-            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+            "description": "A key that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -6953,7 +6953,7 @@
                 }
               }
             },
-            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+            "description": "A key that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {
@@ -12329,7 +12329,7 @@
                 }
               }
             },
-            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+            "description": "A key that opens nothing: RFC 9457 Problem Details."
           },
           "default": {
             "content": {

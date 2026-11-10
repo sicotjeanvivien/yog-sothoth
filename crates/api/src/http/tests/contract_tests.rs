@@ -497,7 +497,7 @@ fn the_document_says_which_credential_each_route_takes() {
                 assert!(
                     unauthorized["description"]
                         .as_str()
-                        .is_some_and(|d| d.starts_with("No API key")),
+                        .is_some_and(|d| d.starts_with("A key that opens nothing")),
                     "{method} {path}"
                 );
                 counted.0 += 1;

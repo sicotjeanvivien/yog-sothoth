@@ -120,8 +120,14 @@ fn require_credentials(doc: &mut Value) {
                 .flatten()
                 .filter_map(Value::as_object)
                 .find_map(|requirement| requirement.keys().next().cloned());
+            let optional = security
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|requirement| requirement.as_object().is_some_and(|r| r.is_empty()));
             let description = match scheme.as_deref() {
                 None => continue,
+                Some("apiKey") if optional => "A key that opens nothing: RFC 9457 Problem Details.",
                 Some("apiKey") => {
                     "No API key, or one that opens nothing: RFC 9457 Problem Details."
                 }
