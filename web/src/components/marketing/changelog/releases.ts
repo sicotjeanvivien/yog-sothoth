@@ -32,6 +32,51 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.10.0",
+    date: "2026-11-10",
+    summary: "The API now takes a key: apart from the service status and the announcements, every route answers only a client we issued a key to.",
+    sections: [
+      {
+        kind: "features",
+        items: [
+          {
+            text: "Every API route but the service status (/api/ingestion, /api/network, /api/windows) and /api/announcements now requires an API key, sent as Authorization: Bearer; a call without one, or with a key that opens nothing, gets a 401.",
+            technical: false,
+          },
+          {
+            text: "The developers page explorer takes your API key, kept in your browser's memory and cleared on reload, and opens the live stream with it.",
+            technical: false,
+          },
+          {
+            text: "The live stream opens with a single-use ticket, issued for a key by POST /api/auth/tickets and valid 30 s, sent as Authorization: Bearer; a call without a ticket is refused.",
+            technical: true,
+          },
+          {
+            text: "The API exposes Prometheus metrics, its calls counted by client and route.",
+            technical: true,
+          },
+          {
+            text: "The Terms and the Privacy policy cover API keys: what a key holder agrees to, and what we keep about a client.",
+            technical: false,
+          },
+        ],
+      },
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "After a cut of its live connection, the signals feed marks where it resumed, instead of fetching the signals it may have missed.",
+            technical: false,
+          },
+          {
+            text: "After a cut of the gRPC stream, the indexer resubscribes live instead of replaying from its last slot: a replay could fall behind the chain for good. A cut now leaves a short unobserved slot range; yog_indexer_grpc_resume_marks_abandoned_total is removed.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.9.0",
     date: "2026-11-05",
     summary: "The live feed now carries the on-chain activity, not only the signals, and a page whose live connection is refused reopens it by itself.",
