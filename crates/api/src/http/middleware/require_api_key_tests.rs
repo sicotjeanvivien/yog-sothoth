@@ -194,7 +194,7 @@ fn an_anonymous_call_to_announcements_is_served() {
     );
 }
 
-/// Mutations: a closed route mounted under `open`, `security(())` on a closed route,
+/// Mutations: a closed route mounted under `open`, `security((), …)` on a closed route,
 /// `require_api_key` taken off `closed`, or the document's default key removed.
 #[tokio::test]
 async fn every_route_refuses_an_anonymous_call_where_the_contract_asks_for_a_credential() {
@@ -204,11 +204,12 @@ async fn every_route_refuses_an_anonymous_call_where_the_contract_asks_for_a_cre
     for (path, item) in doc["paths"].as_object().expect("the document has paths") {
         for (method, operation) in item.as_object().expect("a path item") {
             let security = operation.get("security").unwrap_or(&doc["security"]);
-            let asks = security
-                .as_array()
-                .into_iter()
-                .flatten()
-                .any(|requirement| requirement.as_object().is_some_and(|r| !r.is_empty()));
+            // ⚠️ An empty alternative, `{}`, lets an anonymous call through: asked means none is empty.
+            let alternatives = security.as_array().expect("a security list");
+            let asks = !alternatives.is_empty()
+                && alternatives
+                    .iter()
+                    .all(|requirement| requirement.as_object().is_some_and(|r| !r.is_empty()));
             let uri = path
                 .replace("{protocol}", "meteora_damm_v2")
                 .replace("{pool}", &pool)

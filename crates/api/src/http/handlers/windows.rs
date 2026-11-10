@@ -13,7 +13,7 @@ use axum::{
 #[utoipa::path(
     get,
     path = "/api/windows",
-    security(()),
+    security((), ("apiKey" = [])),
     responses((
         status = 200,
         description = "Every window, its bounds, whether it is open, when it opens, and whether its \

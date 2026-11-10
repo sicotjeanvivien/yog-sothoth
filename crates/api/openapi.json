@@ -6570,6 +6570,16 @@
             },
             "description": "A page of every announcement, or of one status, the latest start first."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -6582,7 +6592,10 @@
           }
         },
         "security": [
-          {}
+          {},
+          {
+            "apiKey": []
+          }
         ]
       }
     },
@@ -6638,6 +6651,16 @@
             },
             "description": "How fresh ingestion is."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -6650,7 +6673,10 @@
           }
         },
         "security": [
-          {}
+          {},
+          {
+            "apiKey": []
+          }
         ],
         "summary": "How fresh our ingestion is, judged on the last indexed event. No event at\nall is `stale`, not an error."
       }
@@ -6919,6 +6945,16 @@
             },
             "description": "The chain's latest slot, as the probe saw it."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -6931,7 +6967,10 @@
           }
         },
         "security": [
-          {}
+          {},
+          {
+            "apiKey": []
+          }
         ],
         "summary": "Where the chain is: the latest slot and the probe's latency. The\n`network_status` row is seeded by the baseline migration: its absence is a\n500, not a 404."
       }
@@ -12282,6 +12321,16 @@
             },
             "description": "Every window, its bounds, whether it is open, when it opens, and whether its figures run late."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
+                }
+              }
+            },
+            "description": "No API key, or one that opens nothing: RFC 9457 Problem Details."
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -12294,7 +12343,10 @@
           }
         },
         "security": [
-          {}
+          {},
+          {
+            "apiKey": []
+          }
         ]
       }
     }

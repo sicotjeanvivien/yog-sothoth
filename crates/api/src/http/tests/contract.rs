@@ -30,7 +30,7 @@ pub(crate) fn document() -> Value {
                 .security_scheme("ticket", bearer("yogt_<secret>"))
                 .build(),
         ))
-        // A route answers without a key only where its own declaration says `security(())`.
+        // A route answers without a key only where its own declaration offers `{}`, `security((), …)`.
         .security(Some(vec![SecurityRequirement::new(
             "apiKey",
             Vec::<String>::new(),
@@ -98,8 +98,8 @@ fn answer_problems(doc: &mut Value) {
     }
 }
 
-/// Every operation whose security names a scheme answers `401` without its credential; its own
-/// `security` wins over the document's, and `[{}]` asks for none.
+/// Every operation whose security names a scheme answers `401` to a credential that opens nothing,
+/// or to none unless an alternative is `{}`; its own `security` wins over the document's.
 fn require_credentials(doc: &mut Value) {
     let default = doc["security"].clone();
     let Some(paths) = doc["paths"].as_object_mut() else {

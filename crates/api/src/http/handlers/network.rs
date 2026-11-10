@@ -16,7 +16,7 @@ use axum::{
 #[utoipa::path(
     get,
     path = "/api/network",
-    security(()),
+    security((), ("apiKey" = [])),
     responses((
         status = 200,
         description = "The chain's latest slot, as the probe saw it.",

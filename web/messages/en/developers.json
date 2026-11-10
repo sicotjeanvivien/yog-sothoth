@@ -21,7 +21,7 @@
       "label": "API key",
       "show": "Show",
       "hide": "Hide",
-      "hint": "Sent as Authorization: Bearer from your browser; cleared on reload.",
+      "hint": "Required on every route but the service status and announcements. Sent as Authorization: Bearer from your browser; cleared on reload.",
       "placeholder": "yog_…"
     },
     "list": {

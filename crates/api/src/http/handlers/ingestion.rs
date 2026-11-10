@@ -15,7 +15,7 @@ use axum::{
 #[utoipa::path(
     get,
     path = "/api/ingestion",
-    security(()),
+    security((), ("apiKey" = [])),
     responses((
         status = 200,
         description = "How fresh ingestion is.",

@@ -569,7 +569,8 @@ hash opens nothing without its key.
   probes `/healthz`, `/readyz`, outside both layers. A key sent to an open route is still
   identified, and refused if it opens nothing.
 - **A route is closed by default.** The contract asks for `apiKey` on the whole document; a
-  route mounted in `open` declares `security(())` in its `#[utoipa::path]`. A test walks
+  route mounted in `open` declares the key optional in its `#[utoipa::path]`,
+  `security((), ("apiKey" = []))`: its `401` is a key that opens nothing. A test walks
   every operation of the contract through the router, without a credential, and fails
   wherever a `401` and the contract disagree.
 
@@ -684,5 +685,5 @@ publish `127.0.0.1:9000` on the host.
 ```bash
 cargo run -p yog-api
 curl http://127.0.0.1:5000/healthz
-curl http://127.0.0.1:5000/api/signals | jq
+curl -H "Authorization: Bearer <key>" http://127.0.0.1:5000/api/signals | jq
 ```

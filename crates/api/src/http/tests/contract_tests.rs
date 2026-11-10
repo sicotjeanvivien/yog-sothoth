@@ -493,8 +493,13 @@ fn the_document_says_which_credential_each_route_takes() {
             let own = operation.get("security");
             let unauthorized = &operation["responses"]["401"];
             if open.contains(&path.as_str()) {
-                assert_eq!(own, Some(&json!([{}])), "{method} {path}");
-                assert!(unauthorized.is_null(), "{method} {path}");
+                assert_eq!(own, Some(&json!([{}, { "apiKey": [] }])), "{method} {path}");
+                assert!(
+                    unauthorized["description"]
+                        .as_str()
+                        .is_some_and(|d| d.starts_with("No API key")),
+                    "{method} {path}"
+                );
                 counted.0 += 1;
             } else if live.contains(&path.as_str()) {
                 assert_eq!(own, Some(&json!([{ "ticket": [] }])), "{method} {path}");
