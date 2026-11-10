@@ -40,7 +40,7 @@ export const RELEASES: readonly Release[] = [
         kind: "features",
         items: [
           {
-            text: "Every API route but the service status (/api/ingestion, /api/network, /api/windows) and /api/announcements now requires an API key, sent as Authorization: Bearer; a call without one, or with a key that opens nothing, gets a 401.",
+            text: "Every API route but the service status (/api/ingestion, /api/network, /api/windows) and /api/announcements now requires an API key, sent as Authorization: Bearer — the live stream, a ticket drawn from one; a call without one, or with a key that opens nothing, gets a 401.",
             technical: false,
           },
           {
