@@ -1083,7 +1083,9 @@ DATABASE_URL_MIGRATE=postgresql://yog_migrate:<password>@<target>/yog_sothoth \
   cargo run -p yog-persistence --bin yog-migrate -- migrate
 ```
 
-Then the daemons. Step 3 prints nothing on success:
+Then the daemons — outside production, only once the API keys are emptied
+(see [*A copy restored outside production*](#a-copy-restored-outside-production)).
+Step 3 prints nothing on success:
 `CREATE EXTENSION IF NOT EXISTS` absorbs the extension the image already
 installed, and `public` already belongs to `yog_migrate` by step 1.
 
@@ -1132,6 +1134,22 @@ Compare the target against the source, not against expectations:
   proves the privileges followed. It proves nothing about passwords when run
   through `docker exec … psql`, for the reason given under
   [`setup_roles.sql`](#setup_rolessql).
+
+### A copy restored outside production
+
+A dump of production carries the API's clients and their keys: names,
+prefixes, hashes, dates. The privacy page promises them erased on request, and
+kept no longer than the backups. So a copy restored anywhere else empties both
+tables — the keys first, `api_keys.client_id` has no `ON DELETE` — once
+verified, before the daemons start or anyone reads it:
+
+```bash
+psql postgresql://yog_migrate:<password>@<target>/yog_sothoth \
+  -c "DELETE FROM api_keys; DELETE FROM api_clients;"
+```
+
+The copy then holds no key: create its own with `create-api-key`. Delete the
+dump file once the copy is restored: it carries the same rows.
 
 ### Moving to a new Postgres major, or a new TimescaleDB
 
