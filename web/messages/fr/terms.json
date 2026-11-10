@@ -25,7 +25,7 @@
       },
       "acceptableUse": {
         "title": "Usage acceptable",
-        "body": "Vous êtes libre d'utiliser les données affichées sur le site à des fins personnelles, professionnelles ou de recherche. Vous pouvez également interroger l'API publique, dans des limites raisonnables — un trafic automatisé qui perturbe le service pour les autres utilisateurs peut être limité ou bloqué. Vous vous engagez à ne pas tenter d'accéder sans autorisation à l'infrastructure, à ne pas en perturber le fonctionnement, à ne pas la scraper de manière abusive, et à ne pas l'utiliser pour faciliter une activité illégale."
+        "body": "Vous êtes libre d'utiliser les données affichées sur le site à des fins personnelles, professionnelles ou de recherche. Vous pouvez également interroger l'API, selon les conditions d'accès ci-dessus et dans des limites raisonnables — un trafic automatisé qui perturbe le service pour les autres utilisateurs peut être limité ou bloqué. Une clé d'API appartient au client à qui elle a été délivrée : ne la partagez ni ne la publiez ; nous pouvons la révoquer à tout moment. Vous vous engagez à ne pas tenter d'accéder sans autorisation à l'infrastructure, à ne pas en perturber le fonctionnement, à ne pas la scraper de manière abusive, et à ne pas l'utiliser pour faciliter une activité illégale."
       },
       "financialAdvice": {
         "title": "Aucun conseil financier",
