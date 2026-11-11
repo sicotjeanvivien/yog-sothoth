@@ -70,27 +70,73 @@ async fn a_recent_event_signals_success() {
     assert_eq!(signals(&heartbeat), ["success"]);
 }
 
-/// A lull is not a fault: the dashboard shows it orange, the check stays green.
+/// Delayed fails the check, saying how late.
 #[tokio::test]
-async fn a_delayed_ingestion_still_signals_success() {
+async fn a_delayed_ingestion_fails_the_check_with_the_age() {
     let (alarm, heartbeat) = alarm(Ok(Some(at(11, 50, 0))));
 
     let verdict = alarm.check(now()).await;
 
-    assert_eq!(verdict, Verdict::Delayed);
+    assert_eq!(
+        verdict,
+        Verdict::Delayed {
+            last_event_at: at(11, 50, 0)
+        }
+    );
+    assert_eq!(
+        signals(&heartbeat),
+        ["failure: delayed: last event 0h10m ago, at 2026-01-15 11:50 UTC"]
+    );
+}
+
+/// The two sides of the dashboard's two minutes: a threshold of the alarm's own, even one second
+/// off, turns one of them wrong.
+#[tokio::test]
+async fn two_minutes_exactly_is_still_live() {
+    let (alarm, heartbeat) = alarm(Ok(Some(at(11, 58, 0))));
+
+    let verdict = alarm.check(now()).await;
+
+    assert_eq!(verdict, Verdict::Live);
     assert_eq!(signals(&heartbeat), ["success"]);
 }
 
+#[tokio::test]
+async fn one_second_past_two_minutes_fails_the_check_as_delayed() {
+    let (alarm, heartbeat) = alarm(Ok(Some(at(11, 57, 59))));
+
+    let verdict = alarm.check(now()).await;
+
+    assert_eq!(
+        verdict,
+        Verdict::Delayed {
+            last_event_at: at(11, 57, 59)
+        }
+    );
+    assert_eq!(
+        signals(&heartbeat),
+        ["failure: delayed: last event 0h02m ago, at 2026-01-15 11:57 UTC"]
+    );
+}
+
 /// The two sides of the dashboard's fifteen minutes: a threshold of the alarm's own, even one
-/// second off, turns one red.
+/// second off, gives the wrong reason.
 #[tokio::test]
 async fn fifteen_minutes_exactly_is_still_delayed() {
     let (alarm, heartbeat) = alarm(Ok(Some(at(11, 45, 0))));
 
     let verdict = alarm.check(now()).await;
 
-    assert_eq!(verdict, Verdict::Delayed);
-    assert_eq!(signals(&heartbeat), ["success"]);
+    assert_eq!(
+        verdict,
+        Verdict::Delayed {
+            last_event_at: at(11, 45, 0)
+        }
+    );
+    assert_eq!(
+        signals(&heartbeat),
+        ["failure: delayed: last event 0h15m ago, at 2026-01-15 11:45 UTC"]
+    );
 }
 
 #[tokio::test]
