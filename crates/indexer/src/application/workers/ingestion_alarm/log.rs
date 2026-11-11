@@ -20,8 +20,8 @@ pub(super) fn alarm_stopped() {
 }
 
 /// The ingestion is live.
-pub(super) fn writing(state: &str) {
-    info!(state, "the ingestion is writing events");
+pub(super) fn writing() {
+    info!(state = "live", "the ingestion is writing events");
 }
 
 /// The dashboard no longer shows the ingestion live.

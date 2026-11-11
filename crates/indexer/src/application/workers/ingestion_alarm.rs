@@ -113,7 +113,7 @@ fn log_change(previous: Option<&'static str>, verdict: &Verdict, now: DateTime<U
     let reason = verdict.failure_reason(now);
     let reason = reason.as_deref().unwrap_or_default();
     match verdict {
-        Verdict::Live => log::writing(verdict.label()),
+        Verdict::Live => log::writing(),
         Verdict::Delayed { .. } => log::falling_behind(reason),
         Verdict::Stale { .. } => log::stopped_writing(reason),
         Verdict::Unreadable(_) => log::unreadable(reason),

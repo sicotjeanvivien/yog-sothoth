@@ -70,7 +70,7 @@ async fn a_recent_event_signals_success() {
     assert_eq!(signals(&heartbeat), ["success"]);
 }
 
-/// Delayed fails the check, saying how late: a success here is the old alarm, silent until stale.
+/// Delayed fails the check, saying how late.
 #[tokio::test]
 async fn a_delayed_ingestion_fails_the_check_with_the_age() {
     let (alarm, heartbeat) = alarm(Ok(Some(at(11, 50, 0))));
