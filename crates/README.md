@@ -192,8 +192,10 @@ The Rust version is pinned in `rust-toolchain.toml` at the repo root — don't o
 
 Four workflows, and each one starts on **every** pull request. Its first job,
 `changes`, diffs the PR against its base and lets the real jobs run only when
-the PR touches the workflow's paths; its last job, `verdict`, is red if any job
-failed or was cancelled, green otherwise — a skipped job is not a failure. The
+the PR touches the workflow's paths; its last job, `verdict`, is green only when
+every job succeeded or was skipped — any other result turns it red, one GitHub
+does not document included (`abandoned`). Its rule is one local action,
+`.github/actions/verdict/`, which the `verdict-gate` job of `scripts.yml` tests. The
 four verdicts — `Verdict (crates)`, `Verdict (web-quality)`,
 `Verdict (web-docker)`, `Verdict (scripts)` — are what the ruleset of `main`
 requires before a merge. Starting everywhere is the point: a required check

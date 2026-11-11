@@ -1,0 +1,16 @@
+# The `verdict` step every CI workflow ends on: the one check the ruleset of
+# main requires from it. One definition for the four workflows — the rule
+# lives in verdict.sh beside it.
+name: verdict
+description: Fails unless every job the calling job needs ended success or skipped.
+inputs:
+  results:
+    description: The `needs` context of the calling job, as `toJSON(needs)`.
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        RESULTS: ${{ inputs.results }}
+      run: "$GITHUB_ACTION_PATH/verdict.sh"
