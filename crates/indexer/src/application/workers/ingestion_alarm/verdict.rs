@@ -9,9 +9,8 @@ use yog_core::domain::FreshnessStatus;
 pub(crate) enum Verdict {
     /// The last event is recent: success.
     Live,
-    /// Older than usual, not yet stopped — a lull, which a quiet watched pool
-    /// produces several times a day: success.
-    Delayed,
+    /// The dashboard no longer shows the ingestion live: failure.
+    Delayed { last_event_at: DateTime<Utc> },
     /// Nothing indexed for too long, or ever (`None`): failure.
     Stale {
         last_event_at: Option<DateTime<Utc>>,
@@ -23,10 +22,15 @@ pub(crate) enum Verdict {
 impl Verdict {
     /// Judge the last event at `now`, by the rule `core` holds.
     pub(super) fn judge(last_event_at: Option<DateTime<Utc>>, now: DateTime<Utc>) -> Self {
-        match FreshnessStatus::from_last_event(last_event_at, now) {
-            FreshnessStatus::Live => Self::Live,
-            FreshnessStatus::Delayed => Self::Delayed,
-            FreshnessStatus::Stale => Self::Stale { last_event_at },
+        match (
+            FreshnessStatus::from_last_event(last_event_at, now),
+            last_event_at,
+        ) {
+            (FreshnessStatus::Live, _) => Self::Live,
+            (FreshnessStatus::Delayed, Some(at)) => Self::Delayed { last_event_at: at },
+            (FreshnessStatus::Delayed, None) | (FreshnessStatus::Stale, _) => {
+                Self::Stale { last_event_at }
+            }
         }
     }
 
@@ -34,7 +38,7 @@ impl Verdict {
     pub(crate) fn label(&self) -> &'static str {
         match self {
             Self::Live => FreshnessStatus::Live.as_str(),
-            Self::Delayed => FreshnessStatus::Delayed.as_str(),
+            Self::Delayed { .. } => FreshnessStatus::Delayed.as_str(),
             Self::Stale { .. } => FreshnessStatus::Stale.as_str(),
             Self::Unreadable(_) => "unreadable",
         }
@@ -43,11 +47,13 @@ impl Verdict {
     /// What `/fail` and the logs say, or `None` when the check succeeds.
     pub(super) fn failure_reason(&self, now: DateTime<Utc>) -> Option<String> {
         match self {
-            Self::Live | Self::Delayed => None,
-            Self::Stale {
+            Self::Live => None,
+            Self::Delayed { last_event_at: at }
+            | Self::Stale {
                 last_event_at: Some(at),
             } => Some(format!(
-                "stale: last event {} ago, at {}",
+                "{}: last event {} ago, at {}",
+                self.label(),
                 hours_minutes(now - *at),
                 at.format("%Y-%m-%d %H:%M UTC")
             )),

@@ -1,5 +1,6 @@
 //! The ingestion alarm: tells a Healthchecks.io check when this process stops writing, which
-//! `restart: unless-stopped` cannot see. A stale ingestion pings `/fail`, a stopped daemon is silence.
+//! `restart: unless-stopped` cannot see. An ingestion the dashboard no longer shows live pings `/fail`, a
+//! stopped daemon is silence.
 //! ⚠️ It judges what was *written*, by the dashboard's [`from_last_event`](yog_core::domain::FreshnessStatus::from_last_event),
 //! not what the process believes: a failing persist is stepped over while counts keep climbing.
 
@@ -10,10 +11,10 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use tokio::time::MissedTickBehavior;
 use tokio_util::sync::CancellationToken;
-use tracing::{info, warn};
 use yog_bootstrap::Heartbeat;
 use yog_core::domain::EventFreshnessRepository;
 
+mod log;
 mod metrics;
 mod verdict;
 
@@ -72,7 +73,7 @@ impl IngestionAlarm {
                 }
             }
         }
-        info!("shutdown requested — ingestion alarm stopped");
+        log::alarm_stopped();
         Ok(())
     }
 
@@ -97,15 +98,9 @@ impl IngestionAlarm {
 
     /// Say what the alarm watches, once, and whether anyone will be told.
     fn log_start(&self) {
-        info!(
-            interval = ?CHECK_INTERVAL,
-            heartbeat = self.heartbeat.is_some(),
-            "ingestion alarm started"
-        );
+        log::alarm_started(CHECK_INTERVAL, self.heartbeat.is_some());
         if self.heartbeat.is_none() {
-            info!(
-                "no heartbeat configured — a stopped ingestion is logged and counted, not signalled"
-            );
+            log::no_heartbeat();
         }
     }
 }
@@ -116,18 +111,12 @@ fn log_change(previous: Option<&'static str>, verdict: &Verdict, now: DateTime<U
         return;
     }
     let reason = verdict.failure_reason(now);
+    let reason = reason.as_deref().unwrap_or_default();
     match verdict {
-        Verdict::Live | Verdict::Delayed => {
-            info!(state = verdict.label(), "the ingestion is writing events");
-        }
-        Verdict::Stale { .. } => warn!(
-            reason = reason.as_deref().unwrap_or_default(),
-            "the ingestion has stopped writing events"
-        ),
-        Verdict::Unreadable(_) => warn!(
-            reason = reason.as_deref().unwrap_or_default(),
-            "the last indexed event could not be read"
-        ),
+        Verdict::Live => log::writing(verdict.label()),
+        Verdict::Delayed { .. } => log::falling_behind(reason),
+        Verdict::Stale { .. } => log::stopped_writing(reason),
+        Verdict::Unreadable(_) => log::unreadable(reason),
     }
 }
 

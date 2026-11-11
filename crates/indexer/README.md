@@ -694,7 +694,7 @@ indicator**, so the alarm and the panel cannot disagree:
 | dashboard | last event | check |
 |---|---|---|
 | `live` | 2 min or less | success |
-| `delayed` | up to 15 min | success — a lull, not a fault |
+| `delayed` | up to 15 min | `/fail`, with the age of the last event |
 | `stale` | older, or none ever | `/fail`, with the age of the last event |
 | — | the read failed | `/fail`, with the error |
 
@@ -708,15 +708,17 @@ keep climbing on a database that refuses every row.
   (`index_concurrency` counts the shared pool's other users; this one is not
   one).
 - **The check**: `INDEXER_HEARTBEAT_URL`, period 5 min, grace 10 min. An
-  ingestion that stops writing fails it within 20 min of its last event (15 to
-  `stale`, then up to 5 to the next check); a stopped indexer, by its silence,
+  ingestion that stops writing fails it within 7 min of its last event (2 to
+  `delayed`, then up to 5 to the next check); a stopped indexer, by its silence,
   within 15 min of its last ping. Optional in development, where the verdict is
   logged and counted only; required by `docker-compose.prod.yml`.
-- **Why fifteen minutes holds for an alarm**, when it was chosen for a display:
-  measured in production on 6 October 2026, under `INGEST_SCOPE=pools`, the
-  longest silence between two indexed events over 4.4 days was 3 min 25 s, and
-  none passed 15 min. Under `protocols` the whole program flows, and the margin
-  only grows.
+- **Why two minutes holds for an alarm**, when it was chosen for a display:
+  replayed on a copy of production from 1 to 9 November 2026 under
+  `INGEST_SCOPE=protocols`, every 5 min (2,332 checks), every check that was not
+  `live` fell inside one of the three ingestion holes longer than 2 min that
+  `unobserved_slot_ranges` records, and none outside them. ⚠️ Under `pools` a
+  quiet watch list goes silent for longer — 3 min 25 s at most over 4.4 days,
+  measured on 6 October 2026 — so a heartbeat there fails on a lull.
 - **The logs speak on a change of outcome**, not at every check: through a long
   outage a warning every five minutes would bury everything else.
 
