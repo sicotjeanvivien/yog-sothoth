@@ -532,25 +532,15 @@ jobs:
           fi
           echo "the committed zod matches the committed OpenAPI document"
 
-  # The one check the ruleset of main requires from this workflow: green when
-  # every job above passed or was skipped, red when one failed or was
-  # cancelled. `always()` is what makes it run after a failure — skipped, a
-  # required check reads as passed, which is the one outcome it must not have.
+  # `always()` makes it run after a failure — skipped, a required check reads as
+  # passed.
   verdict:
     name: Verdict (crates)
     if: always()
     needs: [changes, check, check-per-crate, module-visibility, fmt, clippy, test, test-integration, audit, sqlx-check, contract]
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: .
     steps:
-      - name: Every job passed or was skipped
-        env:
-          RESULTS: ${{ toJSON(needs) }}
-        run: |
-          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$RESULTS"
-          if jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' <<<"$RESULTS" >/dev/null; then
-            echo "a job failed or was cancelled" >&2
-            exit 1
-          fi
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/verdict
+        with:
+          results: ${{ toJSON(needs) }}

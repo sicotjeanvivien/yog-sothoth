@@ -1,22 +1,8 @@
-# Checks for what no other workflow reads: the shell scripts (docker/update.sh,
-# docker/deploy-entry.sh, web/audit.sh, .github/actions/changes/changes.sh —
-# every `*.sh` git tracks) and the workflows themselves.
-#
-#   - shellcheck : shellcheck over `git ls-files '*.sh'`.
-#   - observe-gate : the bypasses the observation key's gate must refuse.
-#   - actionlint : the workflows, with shellcheck over their `run:` scripts,
-#                  installed by `go install` at a pinned version — the Go
-#                  checksum database verifies it, and no third-party action or
-#                  install script runs.
-#
-# Both lint jobs install shellcheck 0.11.0 from its release archive, checked
-# against the SHA-256 below, rather than use the runner's: Ubuntu's is 0.9.0,
-# which reports an SC2015 that 0.11 no longer does, so the runner and a
-# developer's machine disagreed on the same file. One pinned version for
-# both, moved on purpose.
-#
-# Same shape as the other three: a `changes` job decides, the jobs run only
-# when this workflow's paths moved, and `verdict` is the check main requires.
+# Checks for what no other workflow reads: every shell script git tracks
+# (shellcheck), the workflows (actionlint), and the gates of docker/observe.sh
+# and .github/actions/verdict/. Both lint jobs pin shellcheck 0.11.0 by SHA-256;
+# actionlint comes from `go install` at a pinned version — the Go checksum
+# database verifies it, and no third-party action or install script runs.
 
 name: scripts
 
@@ -201,22 +187,51 @@ jobs:
           [ "$counted" = "warn=4 error=5" ] || { echo "counted: $counted, expected warn=4 error=5"; exit 1; }
           echo "every format counted, no message read as a level"
 
-  # The one check the ruleset of main requires from this workflow: green when
-  # every job above passed or was skipped, red when one failed or was
-  # cancelled. `always()` is what makes it run after a failure — skipped, a
-  # required check reads as passed, which is the one outcome it must not have.
+  # The verdict every workflow ends on (.github/actions/verdict/verdict.sh), on
+  # results written by hand: its exit code and the reason it gives.
+  verdict-gate:
+    name: verdict gate
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Only success and skipped pass, and a refusal names its job
+        run: |
+          fail=0
+          expect() { # <label> <exit code> <text stderr must hold> <RESULTS>; a pass must print nothing on stderr
+            local label=$1 want=$2 text=$3 rc=0 err
+            err=$(RESULTS=$4 .github/actions/verdict/verdict.sh 2>&1 >/dev/null) || rc=$?
+            if [ "$rc" -eq "$want" ] && { [ "$want" -ne 0 ] || [ -z "$err" ]; } && [[ $err == *"$text"* ]]; then
+              printf 'ok      %s\n' "$label"
+            else
+              printf 'FAILED  %s: rc=%s %s\n' "$label" "$rc" "$err"
+              fail=1
+            fi
+          }
+          ok='{"result":"success"}'
+          skip='{"result":"skipped"}'
+          expect "all success" 0 "" "{\"a\":$ok,\"b\":$ok}"
+          expect "all skipped" 0 "" "{\"a\":$skip,\"b\":$skip}"
+          expect "success and skipped" 0 "" "{\"a\":$ok,\"b\":$skip}"
+          for result in failure cancelled abandoned neutral; do
+            expect "$result" 1 "b: $result" "{\"a\":$ok,\"b\":{\"result\":\"$result\"},\"c\":$skip}"
+          done
+          expect "no result" 1 "b: null" "{\"a\":$ok,\"b\":{},\"c\":$skip}"
+          expect "not json" 1 "not a non-empty JSON object" "not json"
+          expect "empty input" 1 "not a non-empty JSON object" ""
+          expect "no job" 1 "not a non-empty JSON object" "{}"
+          exit "$fail"
+
+  # `always()` makes it run after a failure — skipped, a required check reads as
+  # passed.
   verdict:
     name: Verdict (scripts)
     if: always()
-    needs: [changes, shellcheck, actionlint, observe-gate]
+    needs: [changes, shellcheck, actionlint, observe-gate, verdict-gate]
     runs-on: ubuntu-latest
     steps:
-      - name: Every job passed or was skipped
-        env:
-          RESULTS: ${{ toJSON(needs) }}
-        run: |
-          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$RESULTS"
-          if jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' <<<"$RESULTS" >/dev/null; then
-            echo "a job failed or was cancelled" >&2
-            exit 1
-          fi
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/verdict
+        with:
+          results: ${{ toJSON(needs) }}
