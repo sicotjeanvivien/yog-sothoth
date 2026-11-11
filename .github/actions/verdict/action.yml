@@ -1,6 +1,5 @@
-# The `verdict` step every CI workflow ends on: the one check the ruleset of
-# main requires from it. One definition for the four workflows — the rule
-# lives in verdict.sh beside it.
+# The `verdict` step every CI workflow ends on. One definition for the four
+# workflows — the rule lives in verdict.sh beside it.
 name: verdict
 description: Fails unless every job the calling job needs ended success or skipped.
 inputs:
