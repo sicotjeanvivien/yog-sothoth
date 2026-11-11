@@ -2,7 +2,7 @@
 # (shellcheck), the workflows (actionlint), and the gates of docker/observe.sh
 # and .github/actions/verdict/. Both lint jobs pin shellcheck 0.11.0, checked
 # against the SHA-256 below: the runner's 0.9.0 reports an SC2015 that 0.11
-# does not, so the runner and a developer's machine disagreed on one file.
+# does not.
 
 name: scripts
 
@@ -223,9 +223,8 @@ jobs:
           expect "no job" 1 "not a non-empty JSON object" "{}"
           exit "$fail"
 
-  # The check main requires: green only when every job above succeeded or was
-  # skipped (.github/actions/verdict/). `always()` makes it run after a failure —
-  # skipped, a required check reads as passed.
+  # `always()` makes it run after a failure — skipped, a required check reads as
+  # passed.
   verdict:
     name: Verdict (scripts)
     if: always()

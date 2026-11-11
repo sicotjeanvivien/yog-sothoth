@@ -148,17 +148,13 @@ jobs:
         # runner do not collide on the container name.
         run: docker stop yog-web-smoke || true
 
-  # The check main requires: green only when every job above succeeded or was
-  # skipped (.github/actions/verdict/). `always()` makes it run after a failure —
-  # skipped, a required check reads as passed.
+  # `always()` makes it run after a failure — skipped, a required check reads as
+  # passed.
   verdict:
     name: Verdict (web-docker)
     if: always()
     needs: [changes, build-and-smoke-test]
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: .
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/verdict
