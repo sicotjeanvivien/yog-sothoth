@@ -65,6 +65,9 @@ services:
     command: ["postgres", "-c", "timescaledb.max_background_workers=0",
               "-c", "client_connection_check_interval=10s",
               "-c", "log_lock_waits=on"]
+    # ⚠️ Docker's 64MB default is shared by every parallel query running at once:
+    # past it they fail with "could not resize shared memory segment … No space left on device".
+    shm_size: 256m
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-yog}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-yog}

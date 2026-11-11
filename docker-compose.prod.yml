@@ -91,9 +91,10 @@
 # Postgres reads through: a limit near its working set sends the reads to
 # disk. 512MB of shared_buffers, a quarter of 2000M, leaves room for 50
 # connections at 4MB of work_mem each, the compression jobs' 64MB of
-# maintenance_work_mem, and that cache, which effective_cache_size describes
-# to the planner. ⚠️ shared_buffers counts against the limit too: a larger
-# share starves the connections and gets Postgres OOM-killed at the first peak.
+# maintenance_work_mem, the base file's /dev/shm, and that cache, which
+# effective_cache_size describes to the planner. ⚠️ shared_buffers
+# counts against the limit too: a larger share starves the connections and
+# gets Postgres OOM-killed at the first peak.
 
 services:
   postgres:
