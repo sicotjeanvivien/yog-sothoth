@@ -55,4 +55,5 @@ fn a_balanced_flow_leans_nowhere() {
 fn only_a_flow_imbalance_has_a_direction() {
     let value = Decimal::new(-75, 2);
     assert_eq!(signal(DETECTOR_TVL_DRAIN, value).leans_toward(), None);
+    assert_eq!(signal("later_detector", value).leans_toward(), None);
 }
