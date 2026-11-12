@@ -254,8 +254,9 @@ subquery on the table of the facts alone; what names a row (`pools`, `token_meta
 rows it keeps, and the order is said again outside it. Joined first, the page pays those lookups for
 its whole window, and only the planner's choice decides: the same shape read 30 days of rotation runs
 through all of `pools` and 30 days of moves through six rows. The ranking itself still reads the
-window; only the date orders can stop early, on their index. A writer that values every fact joins
-them all.
+window; only the date orders can stop early, on their index, and a far page only if the cursor's date
+is also compared alone (`<= COALESCE($n, 'infinity')`): the `OR` that breaks its ties does not bound
+the scan. A writer that values every fact joins them all.
 
 ## USD valuation: which price, and what "unknown" means
 
