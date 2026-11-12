@@ -1,6 +1,6 @@
 //! The process's three tasks, and how they stop.
 
-use axum::Router;
+use axum::{Router, routing::IntoMakeService};
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -14,12 +14,14 @@ const HTTP_SERVER: &str = "http server";
 const LIVE_POLLERS: &str = "live pollers";
 const KEY_RING: &str = "key ring";
 
-/// Serves `router`, runs the live pollers and reloads the key ring until `shutdown`, then stops them within
+/// Serves `app`, runs the live pollers and reloads the key ring until `shutdown`, then stops them within
 /// [`yog_bootstrap::SHUTDOWN_GRACE`]. ⚠️ Graceful shutdown waits for every connection, and an SSE
 /// one never ends alone: it ends because its stream reads the same token (`live_sse`).
 pub(crate) async fn serve(
     listener: TcpListener,
-    router: Router,
+    // ⚠️ Not a `Router`: axum would rebuild every route per connection, and a live stream
+    // keeps that copy for its whole life.
+    app: IntoMakeService<Router>,
     pollers: LivePollers,
     key_ring: KeyRing,
     shutdown: CancellationToken,
@@ -27,7 +29,7 @@ pub(crate) async fn serve(
     let mut server_task = tokio::spawn(
         axum::serve(
             CappedListener::new(listener, MAX_CONNECTIONS, IDLE_TIMEOUT),
-            router,
+            app,
         )
         .with_graceful_shutdown(shutdown.clone().cancelled_owned())
         .into_future(),
