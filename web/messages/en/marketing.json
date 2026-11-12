@@ -49,8 +49,7 @@
       },
       "signals": {
         "drain": "TVL drain on SOL / USDC: −12.4% in 1h",
-        "imbalance": "Sells 3.2 × buys on JitoSOL / SOL",
-        "oracle": "Spot / oracle gap of 2.1% on JUP / USDC"
+        "imbalance": "Sells 3.2 × buys on JitoSOL / SOL"
       },
       "seeAll": "See everything in the dashboard"
     },
@@ -66,7 +65,7 @@
       },
       "signals": {
         "label": "Signals",
-        "value": "3 automatic detectors"
+        "value": "2 automatic detectors"
       },
       "access": {
         "label": "Access",
@@ -91,7 +90,7 @@
         "analyze": {
           "title": "Analyze",
           "body": "Detect anomalies and patterns, and surface the signals that matter.",
-          "events": "flow_imbalance<br></br>price_oracle_deviation · tvl_drain"
+          "events": "flow_imbalance · tvl_drain"
         },
         "signal": {
           "title": "Signal",

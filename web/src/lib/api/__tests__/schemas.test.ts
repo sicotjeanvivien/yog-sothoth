@@ -136,7 +136,7 @@ describe("zProtocolSwapActivityResponse", () => {
 function validSignal() {
   return {
     id: 739,
-    detector: "price_oracle_deviation",
+    detector: "flow_imbalance",
     protocol: "meteora_damm_v2",
     poolAddress: "5NMi3SSebB7MyP17Sf5SwXh6nTnPPp1Ctb1G45NnRKuZ",
     tokenA: {
@@ -154,11 +154,11 @@ function validSignal() {
       logoUri: null,
     },
     severity: "critical",
-    value: "1.1059558665865029280736523078",
-    threshold: "0.0500",
+    value: "0.9559558665865029280736523078",
+    threshold: "0.9",
     valueUnit: "signedRatio",
-    leansToward: null,
-    message: "spot price deviates 1.1060 from oracle (spot 0.000000582488, oracle 0.000000276591)",
+    leansToward: "tokenB",
+    message: "directional flow imbalance 0.9560 (total volume $10035.46)",
     triggeredAt: "2026-07-02T10:03:31.056847Z",
   };
 }
@@ -168,7 +168,7 @@ describe("zSignalResponse", () => {
     expect(() => zSignalResponse.parse(validSignal())).not.toThrow();
   });
 
-  it("accepts a negative value (a deviation can be below the oracle)", () => {
+  it("accepts a negative value (an imbalance can lean toward token A)", () => {
     const parsed = zSignalResponse.parse({ ...validSignal(), value: "-0.2157" });
     expect(parsed.value).toBe("-0.2157");
   });

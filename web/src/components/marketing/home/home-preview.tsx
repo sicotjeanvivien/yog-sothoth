@@ -19,7 +19,6 @@ const BAR_HEIGHTS = [
 const SIGNALS: readonly { key: string; severity: SeverityResponse; time: string }[] = [
   { key: "drain", severity: "critical", time: "21:14" },
   { key: "imbalance", severity: "warning", time: "20:37" },
-  { key: "oracle", severity: "info", time: "16:03" },
 ];
 
 export function HomePreview() {
