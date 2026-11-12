@@ -319,8 +319,6 @@ impl PgLiquidityMoveRepository {
             .fetch_all(&self.pool)
             .await
             .map_err(map_sqlx_error)?,
-            // ⚠️ The cursor's date compared alone too: the OR that breaks its ties
-            // does not bound an index scan.
             (LiquidityMoveScope::Protocol(protocol), LiquidityMoveOrder::At) => sqlx::query_as!(
                 LiquidityMoveRow,
                 r#"
@@ -336,6 +334,8 @@ impl PgLiquidityMoveRepository {
                            AND m.timestamp >= $1 AND m.timestamp < $2
                            AND m.amount_usd IS NOT NULL
                            AND ($8::TEXT IS NULL OR m.kind = $8)
+                           -- ⚠️ The cursor's date compared alone too: the OR that breaks its ties
+                           -- does not bound an index scan.
                            AND m.timestamp <= COALESCE($4, 'infinity'::TIMESTAMPTZ)
                            AND ($4::TIMESTAMPTZ IS NULL
                                 OR m.timestamp < $4
@@ -403,8 +403,6 @@ impl PgLiquidityMoveRepository {
             .fetch_all(&self.pool)
             .await
             .map_err(map_sqlx_error)?,
-            // ⚠️ The cursor's date compared alone too: the OR that breaks its ties
-            // does not bound an index scan.
             (LiquidityMoveScope::Pool(pool), LiquidityMoveOrder::At) => sqlx::query_as!(
                 LiquidityMoveRow,
                 r#"
@@ -420,6 +418,8 @@ impl PgLiquidityMoveRepository {
                            AND m.timestamp >= $1 AND m.timestamp < $2
                            AND m.amount_usd IS NOT NULL
                            AND ($8::TEXT IS NULL OR m.kind = $8)
+                           -- ⚠️ The cursor's date compared alone too: the OR that breaks its ties
+                           -- does not bound an index scan.
                            AND m.timestamp <= COALESCE($4, 'infinity'::TIMESTAMPTZ)
                            AND ($4::TIMESTAMPTZ IS NULL
                                 OR m.timestamp < $4

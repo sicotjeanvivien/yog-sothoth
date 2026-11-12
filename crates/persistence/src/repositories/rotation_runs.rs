@@ -168,8 +168,6 @@ impl RotationRunLookup for PgRotationRunRepository {
             }
             (RotationRunScope::Protocol(protocol), RotationRunOrder::At) => {
                 let key = protocol.as_str();
-                // ⚠️ The cursor's date compared alone too: the OR that breaks its ties
-                // does not bound an index scan.
                 sqlx::query_as!(
                     RotationRunRow,
                     r#"
@@ -180,6 +178,8 @@ impl RotationRunLookup for PgRotationRunRepository {
                         SELECT r.*
                           FROM analytic_rotation_runs r
                          WHERE r.protocol = $3 AND r.started_at >= $1 AND r.started_at < $2
+                           -- ⚠️ The cursor's date compared alone too: the OR that breaks its ties
+                           -- does not bound an index scan.
                            AND r.started_at <= COALESCE($4, 'infinity'::TIMESTAMPTZ)
                            AND ($4::TIMESTAMPTZ IS NULL
                                 OR r.started_at < $4
@@ -242,8 +242,6 @@ impl RotationRunLookup for PgRotationRunRepository {
             }
             (RotationRunScope::Pool(pool), RotationRunOrder::At) => {
                 let key = pool.to_string();
-                // ⚠️ The cursor's date compared alone too: the OR that breaks its ties
-                // does not bound an index scan.
                 sqlx::query_as!(
                     RotationRunRow,
                     r#"
@@ -254,6 +252,8 @@ impl RotationRunLookup for PgRotationRunRepository {
                         SELECT r.*
                           FROM analytic_rotation_runs r
                          WHERE r.pool_address = $3 AND r.started_at >= $1 AND r.started_at < $2
+                           -- ⚠️ The cursor's date compared alone too: the OR that breaks its ties
+                           -- does not bound an index scan.
                            AND r.started_at <= COALESCE($4, 'infinity'::TIMESTAMPTZ)
                            AND ($4::TIMESTAMPTZ IS NULL
                                 OR r.started_at < $4
