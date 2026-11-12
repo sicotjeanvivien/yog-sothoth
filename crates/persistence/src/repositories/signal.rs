@@ -145,6 +145,9 @@ impl SignalFeed for PgSignalRepository {
                 WHERE ($1::TEXT IS NULL OR severity = $1)
                   AND ($2::TEXT IS NULL OR pool_address = $2)
                   AND ($6::TEXT IS NULL OR protocol = $6)
+                  -- ⚠️ The cursor's date compared alone too: the OR that breaks its ties
+                  -- does not bound an index scan.
+                  AND triggered_at <= COALESCE($3, 'infinity'::TIMESTAMPTZ)
                   AND (
                       $3::TIMESTAMPTZ IS NULL
                       OR triggered_at < $3
@@ -174,6 +177,9 @@ impl SignalFeed for PgSignalRepository {
                 WHERE ($1::TEXT IS NULL OR severity = $1)
                   AND ($2::TEXT IS NULL OR pool_address = $2)
                   AND ($6::TEXT IS NULL OR protocol = $6)
+                  -- ⚠️ The cursor's date compared alone too: the OR that breaks its ties
+                  -- does not bound an index scan.
+                  AND triggered_at >= COALESCE($3, '-infinity'::TIMESTAMPTZ)
                   AND (
                       $3::TIMESTAMPTZ IS NULL
                       OR triggered_at > $3

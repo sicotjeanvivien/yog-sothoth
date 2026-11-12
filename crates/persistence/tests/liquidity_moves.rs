@@ -113,9 +113,9 @@ async fn insert_protocol_move(
     .unwrap();
 }
 
-/// Mutation: the cursor's key compared on the amount alone, or without the signature — a
-/// tie repeated on the next page or skipped; the pool or protocol filter dropped; the unvalued
-/// kept.
+/// Mutation: the cursor's key compared on the amount alone, or without the signature, or its date
+/// bound moved off the cursor — a tie repeated on the next page or skipped; the pool or protocol
+/// filter dropped; the unvalued kept.
 #[sqlx::test(migrations = "./migrations")]
 async fn the_moves_page_without_repeat_nor_gap_in_each_scope_and_order(pool: PgPool) {
     let (mine, other) = (pk(1).to_string(), pk(2).to_string());
@@ -128,11 +128,12 @@ async fn the_moves_page_without_repeat_nor_gap_in_each_scope_and_order(pool: PgP
     }
     insert_move(&pool, &mine, "unvalued", 1, None).await;
     insert_move(&pool, &other, "other", 2, Some(1_000)).await;
+    insert_move(&pool, &other, "other2", 15, Some(25)).await;
     insert_protocol_move(&pool, DLMM, &pk(3).to_string(), "dlmm", 3, Some(2_000)).await;
     let repository = repository(&pool).await;
     let day = period(24);
     let mine_only = ["sig0", "sig1", "sig2", "sig3", "sig4"];
-    let protocol = ["other", "sig0", "sig1", "sig2", "sig3", "sig4"];
+    let protocol = ["other", "sig0", "other2", "sig1", "sig2", "sig3", "sig4"];
 
     for (scope, expected) in [
         (LiquidityMoveScope::Pool(pk(1)), &mine_only[..]),

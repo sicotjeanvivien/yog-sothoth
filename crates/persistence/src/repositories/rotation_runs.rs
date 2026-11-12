@@ -178,6 +178,9 @@ impl RotationRunLookup for PgRotationRunRepository {
                         SELECT r.*
                           FROM analytic_rotation_runs r
                          WHERE r.protocol = $3 AND r.started_at >= $1 AND r.started_at < $2
+                           -- ⚠️ The cursor's date compared alone too: the OR that breaks its ties
+                           -- does not bound an index scan.
+                           AND r.started_at <= COALESCE($4, 'infinity'::TIMESTAMPTZ)
                            AND ($4::TIMESTAMPTZ IS NULL
                                 OR r.started_at < $4
                                 OR (r.started_at = $4 AND r.pool_address > $5))
@@ -249,6 +252,9 @@ impl RotationRunLookup for PgRotationRunRepository {
                         SELECT r.*
                           FROM analytic_rotation_runs r
                          WHERE r.pool_address = $3 AND r.started_at >= $1 AND r.started_at < $2
+                           -- ⚠️ The cursor's date compared alone too: the OR that breaks its ties
+                           -- does not bound an index scan.
+                           AND r.started_at <= COALESCE($4, 'infinity'::TIMESTAMPTZ)
                            AND ($4::TIMESTAMPTZ IS NULL
                                 OR r.started_at < $4
                                 OR (r.started_at = $4 AND r.pool_address > $5))

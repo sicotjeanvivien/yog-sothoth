@@ -111,8 +111,9 @@ async fn read_all(
     seen
 }
 
-/// Mutation: a pool's list ranked backwards before its page is cut, or a tie on the volume not
-/// broken by the start — its smallest or oldest run first, or a run lost at a page's edge.
+/// Mutation: a pool's list ranked backwards before its page is cut, a tie on the volume not broken
+/// by the start, or the date bound moved off the cursor — its smallest or oldest run first, or a
+/// run lost at a page's edge.
 #[sqlx::test(migrations = "./migrations")]
 async fn the_runs_of_a_pool_page_in_each_order(pool: PgPool) {
     insert_run(&pool, "meteora_damm_v2", 1, -50, "5", &[]).await;
@@ -120,6 +121,17 @@ async fn the_runs_of_a_pool_page_in_each_order(pool: PgPool) {
     insert_run(&pool, "meteora_damm_v2", 1, -40, "1", &[]).await;
     insert_run(&pool, "meteora_damm_v2", 1, -30, "3", &[]).await;
     insert_run(&pool, "meteora_damm_v2", 2, -20, "9", &[]).await;
+    let half_minute_before = at(-30) - Duration::seconds(30);
+    sqlx::query(
+        "INSERT INTO analytic_rotation_runs (pool_address, started_at, protocol, ended_at,
+           volume_usd, first_hour_volume_usd, extinct, settled)
+         VALUES ($1, $2, 'meteora_damm_v2', $2 + INTERVAL '10 minutes', 2, 1, false, false)",
+    )
+    .bind(pk(1).to_string())
+    .bind(half_minute_before)
+    .execute(&pool)
+    .await
+    .unwrap();
     let repository =
         PgRotationRunRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
     let scope = RotationRunScope::Pool(pk(1));
@@ -136,11 +148,11 @@ async fn the_runs_of_a_pool_page_in_each_order(pool: PgPool) {
 
     assert_eq!(
         by_volume.iter().map(|r| r.1).collect::<Vec<_>>(),
-        [at(-50), at(-45), at(-30), at(-40)]
+        [at(-50), at(-45), at(-30), half_minute_before, at(-40)]
     );
     assert_eq!(
         by_date.iter().map(|r| r.1).collect::<Vec<_>>(),
-        [at(-30), at(-40), at(-45), at(-50)]
+        [at(-30), half_minute_before, at(-40), at(-45), at(-50)]
     );
 }
 

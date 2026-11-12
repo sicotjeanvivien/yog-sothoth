@@ -334,6 +334,9 @@ impl PgLiquidityMoveRepository {
                            AND m.timestamp >= $1 AND m.timestamp < $2
                            AND m.amount_usd IS NOT NULL
                            AND ($8::TEXT IS NULL OR m.kind = $8)
+                           -- ⚠️ The cursor's date compared alone too: the OR that breaks its ties
+                           -- does not bound an index scan.
+                           AND m.timestamp <= COALESCE($4, 'infinity'::TIMESTAMPTZ)
                            AND ($4::TIMESTAMPTZ IS NULL
                                 OR m.timestamp < $4
                                 OR (m.timestamp = $4 AND (m.signature, m.event_index) > ($5, $6)))
@@ -415,6 +418,9 @@ impl PgLiquidityMoveRepository {
                            AND m.timestamp >= $1 AND m.timestamp < $2
                            AND m.amount_usd IS NOT NULL
                            AND ($8::TEXT IS NULL OR m.kind = $8)
+                           -- ⚠️ The cursor's date compared alone too: the OR that breaks its ties
+                           -- does not bound an index scan.
+                           AND m.timestamp <= COALESCE($4, 'infinity'::TIMESTAMPTZ)
                            AND ($4::TIMESTAMPTZ IS NULL
                                 OR m.timestamp < $4
                                 OR (m.timestamp = $4 AND (m.signature, m.event_index) > ($5, $6)))
