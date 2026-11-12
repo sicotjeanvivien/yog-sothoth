@@ -21,10 +21,6 @@ fn signal(detector: &str, value: Decimal) -> Signal {
 #[test]
 fn each_detector_has_the_unit_of_its_values() {
     assert_eq!(
-        SignalValueUnit::of("price_oracle_deviation"),
-        SignalValueUnit::SignedRatio
-    );
-    assert_eq!(
         SignalValueUnit::of("flow_imbalance"),
         SignalValueUnit::SignedRatio
     );
@@ -54,13 +50,9 @@ fn a_balanced_flow_leans_nowhere() {
     );
 }
 
-// Mutation: the detector guard dropped reads a price deviation's sign as a flow's.
+// Mutation: the detector guard dropped.
 #[test]
 fn only_a_flow_imbalance_has_a_direction() {
     let value = Decimal::new(-75, 2);
-    assert_eq!(
-        signal(DETECTOR_PRICE_ORACLE_DEVIATION, value).leans_toward(),
-        None
-    );
     assert_eq!(signal(DETECTOR_TVL_DRAIN, value).leans_toward(), None);
 }

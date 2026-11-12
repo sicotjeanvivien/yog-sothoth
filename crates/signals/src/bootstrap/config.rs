@@ -7,9 +7,7 @@ use chrono::Duration as ChronoDuration;
 use rust_decimal::Decimal;
 use yog_bootstrap::{ConfigError, SecretUrl, duration_var, required_secret_url};
 
-use crate::application::detectors::{
-    FlowImbalanceSettings, PriceOracleDeviationSettings, TvlDrainSettings,
-};
+use crate::application::detectors::{FlowImbalanceSettings, TvlDrainSettings};
 
 mod types;
 
@@ -27,24 +25,6 @@ const DEFAULT_FLOW_COOLDOWN_HOURS: u64 = 6;
 
 /// Volume floor (USD) of the flow window (`SIGNALS_FLOW_MIN_VOLUME_USD`).
 const DEFAULT_FLOW_MIN_VOLUME_USD: i64 = 10_000;
-
-/// How often the price-oracle-deviation detector ticks, in seconds (`SIGNALS_PRICE_DEVIATION_INTERVAL_SECS`).
-const DEFAULT_PRICE_DEVIATION_INTERVAL_SECS: u64 = 300;
-
-/// Rolling per-pool suppression window, in hours (`SIGNALS_PRICE_DEVIATION_COOLDOWN_HOURS`).
-const DEFAULT_PRICE_DEVIATION_COOLDOWN_HOURS: u64 = 6;
-
-/// Oldest acceptable oracle price, in minutes (`SIGNALS_PRICE_DEVIATION_MAX_PRICE_AGE_MINS`).
-/// ⚠️ A stale oracle reads as a spurious deviation, so the pool is skipped.
-const DEFAULT_PRICE_DEVIATION_MAX_PRICE_AGE_MINS: u64 = 15;
-
-/// Oldest acceptable last swap, in hours (`SIGNALS_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS`).
-/// ⚠️ A quieter pool's spot price is history, not a live quote, so it is skipped.
-const DEFAULT_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS: u64 = 24;
-
-/// Minimum TVL (USD) at the last known prices for a pool to be compared
-/// (`SIGNALS_PRICE_DEVIATION_MIN_TVL_USD`): a shallow pool's spot strays from the market by nature.
-const DEFAULT_PRICE_DEVIATION_MIN_TVL_USD: i64 = 10_000;
 
 /// How often the TVL-drain detector ticks, in seconds (`SIGNALS_TVL_DRAIN_INTERVAL_SECS`).
 const DEFAULT_TVL_DRAIN_INTERVAL_SECS: u64 = 300;
@@ -82,27 +62,6 @@ pub(crate) struct Config {
 
     /// `|imbalance|` at or above which the signal escalates to Critical.
     flow_critical: Decimal,
-
-    /// Price-oracle-deviation detector cadence.
-    price_deviation_interval: Duration,
-
-    /// Price-oracle-deviation rolling per-pool suppression window.
-    price_deviation_cooldown: Duration,
-
-    /// Oldest acceptable oracle price observation.
-    price_deviation_max_price_age: ChronoDuration,
-
-    /// Oldest acceptable last swap.
-    price_deviation_max_spot_age: ChronoDuration,
-
-    /// Price-oracle-deviation TVL floor, in USD.
-    price_deviation_min_tvl_usd: Decimal,
-
-    /// `|deviation|` at or above which a signal is emitted.
-    price_deviation_threshold: Decimal,
-
-    /// `|deviation|` at or above which the signal escalates to Critical.
-    price_deviation_critical: Decimal,
 
     /// TVL-drain detector cadence.
     tvl_drain_interval: Duration,
@@ -149,38 +108,6 @@ impl Config {
             flow_threshold: decimal_var("SIGNALS_FLOW_THRESHOLD", Decimal::new(6, 1))?,
             // 0.9 — near one-sided flow.
             flow_critical: decimal_var("SIGNALS_FLOW_CRITICAL", Decimal::new(9, 1))?,
-            price_deviation_interval: Duration::from_secs(duration_var(
-                "SIGNALS_PRICE_DEVIATION_INTERVAL_SECS",
-                DEFAULT_PRICE_DEVIATION_INTERVAL_SECS,
-            )?),
-            price_deviation_cooldown: Duration::from_secs(
-                duration_var(
-                    "SIGNALS_PRICE_DEVIATION_COOLDOWN_HOURS",
-                    DEFAULT_PRICE_DEVIATION_COOLDOWN_HOURS,
-                )? * 3600,
-            ),
-            price_deviation_max_price_age: ChronoDuration::minutes(duration_var(
-                "SIGNALS_PRICE_DEVIATION_MAX_PRICE_AGE_MINS",
-                DEFAULT_PRICE_DEVIATION_MAX_PRICE_AGE_MINS,
-            )? as i64),
-            price_deviation_max_spot_age: ChronoDuration::hours(duration_var(
-                "SIGNALS_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS",
-                DEFAULT_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS,
-            )? as i64),
-            price_deviation_min_tvl_usd: decimal_var(
-                "SIGNALS_PRICE_DEVIATION_MIN_TVL_USD",
-                Decimal::from(DEFAULT_PRICE_DEVIATION_MIN_TVL_USD),
-            )?,
-            // 0.05 — a 5% spot/oracle gap, past the fee band and oracle lag.
-            price_deviation_threshold: decimal_var(
-                "SIGNALS_PRICE_DEVIATION_THRESHOLD",
-                Decimal::new(5, 2),
-            )?,
-            // 0.2 — the pool price is way off the market.
-            price_deviation_critical: decimal_var(
-                "SIGNALS_PRICE_DEVIATION_CRITICAL",
-                Decimal::new(2, 1),
-            )?,
             tvl_drain_interval: Duration::from_secs(duration_var(
                 "SIGNALS_TVL_DRAIN_INTERVAL_SECS",
                 DEFAULT_TVL_DRAIN_INTERVAL_SECS,
@@ -214,11 +141,6 @@ impl Config {
             config.flow_critical,
         )?;
         validate_ladder(
-            "SIGNALS_PRICE_DEVIATION_THRESHOLD",
-            config.price_deviation_threshold,
-            config.price_deviation_critical,
-        )?;
-        validate_ladder(
             "SIGNALS_TVL_DRAIN_THRESHOLD",
             config.tvl_drain_threshold,
             config.tvl_drain_critical,
@@ -236,19 +158,6 @@ impl Config {
             min_volume_usd: self.flow_min_volume_usd,
             threshold: self.flow_threshold,
             critical: self.flow_critical,
-        }
-    }
-
-    /// The price-oracle-deviation detector's settings.
-    pub(crate) fn price_oracle_deviation_settings(&self) -> PriceOracleDeviationSettings {
-        PriceOracleDeviationSettings {
-            interval: self.price_deviation_interval,
-            cooldown: self.price_deviation_cooldown,
-            max_price_age: self.price_deviation_max_price_age,
-            max_spot_age: self.price_deviation_max_spot_age,
-            min_tvl_usd: self.price_deviation_min_tvl_usd,
-            threshold: self.price_deviation_threshold,
-            critical: self.price_deviation_critical,
         }
     }
 

@@ -312,10 +312,6 @@ async fn a_side_value_goes_absent_on_its_own_stale_price(pool: PgPool) {
     );
 }
 
-/// The one exemption: it publishes raw inputs with their `fetched_at`, gated in Rust by
-/// `price_oracle_deviation`. The policy binds valuation, not comparison.
-const EXEMPT: &str = "pool_price_snapshot";
-
 /// `Some((bounds, lookups))` when a view reads prices without one bound per lookup — counted
 /// per lookup, since one view holds several. ⚠️ `lookups == 0` fails: a plain JOIN on the
 /// table has no `FROM token_prices` to count, and 0/0 would wave it through.
@@ -339,8 +335,8 @@ async fn price_readers(pool: &PgPool) -> Vec<(String, String)> {
 /// The one reader of `token_prices`: every as-of lookup is a call to it.
 const AS_OF: &str = "yog_price_asof";
 
-/// The price readers that break the policy: any reader of `token_prices` but [`AS_OF`], and,
-/// [`EXEMPT`] aside, any reader without one bound per lookup.
+/// The price readers that break the policy: any reader of `token_prices` but [`AS_OF`], and any
+/// reader without one bound per lookup.
 fn policy_breaches(readers: &[(String, String)]) -> Vec<String> {
     readers
         .iter()
@@ -349,8 +345,6 @@ fn policy_breaches(readers: &[(String, String)]) -> Vec<String> {
                 Some(format!(
                     "{name} (reads token_prices instead of calling {AS_OF})"
                 ))
-            } else if name == EXEMPT {
-                None
             } else {
                 unbounded_lookups(def).map(|(b, l)| format!("{name} ({b}/{l} bornés)"))
             }
@@ -362,7 +356,7 @@ fn policy_breaches(readers: &[(String, String)]) -> Vec<String> {
 async fn every_price_reader_follows_the_policy(pool: PgPool) {
     let readers = price_readers(&pool).await;
 
-    for known in [AS_OF, "token_stock_price", EXEMPT] {
+    for known in [AS_OF, "token_stock_price"] {
         assert!(
             readers.iter().any(|(name, _)| name == known),
             "{known} no longer reads a price — if that is deliberate, update this test \

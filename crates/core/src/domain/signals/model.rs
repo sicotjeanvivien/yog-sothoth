@@ -8,8 +8,6 @@ use solana_pubkey::Pubkey;
 
 use crate::domain::Protocol;
 
-/// The tag of the detector measuring a pool's spot price against its oracle price.
-pub const DETECTOR_PRICE_ORACLE_DEVIATION: &str = "price_oracle_deviation";
 /// The tag of the detector measuring the direction of a pool's swaps.
 pub const DETECTOR_FLOW_IMBALANCE: &str = "flow_imbalance";
 /// The tag of the detector measuring the share of a pool's liquidity withdrawn.
@@ -28,7 +26,7 @@ impl SignalValueUnit {
     /// The unit of `detector`'s values, past signals included.
     pub fn of(detector: &str) -> Self {
         match detector {
-            DETECTOR_PRICE_ORACLE_DEVIATION | DETECTOR_FLOW_IMBALANCE => Self::SignedRatio,
+            DETECTOR_FLOW_IMBALANCE => Self::SignedRatio,
             DETECTOR_TVL_DRAIN => Self::Ratio,
             _ => Self::Raw,
         }

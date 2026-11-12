@@ -385,7 +385,6 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
             ("yog_signals", &["SELECT"]),
         ],
     ),
-    ("pool_price_snapshot", &[("yog_signals", &["SELECT"])]),
     (
         "pools",
         &[
