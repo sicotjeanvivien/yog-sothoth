@@ -165,6 +165,19 @@ async fn equal_timestamps_tie_break_on_id_desc(pool: PgPool) {
         .unwrap();
     assert_eq!(ids(&page2), vec![1]);
     assert!(page2.is_last);
+
+    let cursor = signal_cursor(page2.prev_cursor.as_ref().unwrap());
+    let back = repo
+        .list(
+            SignalFilter::default(),
+            Some(cursor),
+            PageDirection::Prev,
+            None,
+            1,
+        )
+        .await
+        .unwrap();
+    assert_eq!(ids(&back), vec![2]);
 }
 
 /// Mutation: the live lens keyed on `triggered_at` again — the signal stamped earlier but
