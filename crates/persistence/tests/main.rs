@@ -48,7 +48,6 @@ mod pool_creation_events;
 mod pool_creations;
 mod pool_current_state_order;
 mod pool_entries;
-mod pool_price_snapshot;
 mod pool_properties;
 mod pool_registry;
 mod position_change_counts;

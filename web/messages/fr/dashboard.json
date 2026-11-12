@@ -120,7 +120,6 @@
         "headline": {
           "tvl_drain": "Fuite de TVL sur {pair} : {value}",
           "flow_imbalance": "Déséquilibre des swaps sur {pair} : {value}",
-          "price_oracle_deviation": "Écart prix / oracle sur {pair} : {value}",
           "fallback": "{pair} : {value}"
         }
       },
@@ -398,7 +397,7 @@
     "Signals": {
       "page": {
         "title": "Signaux",
-        "description": "Flux en direct des conclusions des détecteurs : déséquilibres de flux, déviations de prix — chaque anomalie qui mérite un œil, au moment où elle est détectée."
+        "description": "Flux en direct des conclusions des détecteurs : déséquilibres de flux, fuites de TVL — chaque anomalie qui mérite un œil, au moment où elle est détectée."
       },
       "feed": {
         "title": "Derniers signaux",
@@ -422,11 +421,6 @@
           "critical": "Critique"
         },
         "detectors": {
-          "price_oracle_deviation": {
-            "tag": "Prix",
-            "summary": "Le prix du pool s'écarte de {deviation} du prix de l'oracle.",
-            "explain": "Compare le prix spot du pool (dérivé de son état on-chain) au prix oracle des deux tokens (Jupiter). Un écart relatif au-delà du seuil signale un prix décroché du marché — arbitrage possible ou liquidité anormale. Le seuil affiché sur chaque signal est celui qui a été franchi (alerte ou critique)."
-          },
           "flow_imbalance": {
             "tag": "Flux",
             "summaryToward": "Le volume de swaps penche à {percent} vers {token}.",

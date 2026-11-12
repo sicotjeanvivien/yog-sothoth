@@ -49,8 +49,7 @@
       },
       "signals": {
         "drain": "Fuite de TVL sur SOL / USDC : −12,4 % en 1 h",
-        "imbalance": "Ventes 3,2 × achats sur JitoSOL / SOL",
-        "oracle": "Écart spot / oracle 2,1 % sur JUP / USDC"
+        "imbalance": "Ventes 3,2 × achats sur JitoSOL / SOL"
       },
       "seeAll": "Voir tout dans le dashboard"
     },
@@ -66,7 +65,7 @@
       },
       "signals": {
         "label": "Signaux",
-        "value": "3 détecteurs automatiques"
+        "value": "2 détecteurs automatiques"
       },
       "access": {
         "label": "Accès",
@@ -91,7 +90,7 @@
         "analyze": {
           "title": "Analyser",
           "body": "Détectez les anomalies et les motifs, et faites remonter les signaux utiles.",
-          "events": "flow_imbalance<br></br>price_oracle_deviation · tvl_drain"
+          "events": "flow_imbalance · tvl_drain"
         },
         "signal": {
           "title": "Signaler",

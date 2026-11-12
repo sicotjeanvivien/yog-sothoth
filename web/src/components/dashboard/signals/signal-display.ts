@@ -39,7 +39,6 @@ export const SEVERITY_ICON: Record<SeverityResponse, FC<IconProps>> = {
 
 /** Detectors the UI phrases. */
 export const KNOWN_DETECTORS = new Set([
-  "price_oracle_deviation",
   "flow_imbalance",
   "tvl_drain",
 ]);

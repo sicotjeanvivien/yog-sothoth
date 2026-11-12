@@ -24,7 +24,6 @@ mod pool_change_event;
 mod pool_creation_event;
 mod pool_creations;
 mod pool_current_state;
-mod pool_price_snapshot;
 mod position_change_counts;
 mod position_change_event;
 mod position_fee_claim_event;
@@ -127,7 +126,6 @@ pub use pool_current_state::{
     LastEventKind, PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert,
     PoolCurrentStateUpsertOutcome,
 };
-pub use pool_price_snapshot::{PoolPriceSnapshot, PoolPriceSnapshotRepository};
 pub use position_change_counts::{PositionChangeCounts, PositionChangeCountsLookup};
 pub use position_change_event::{
     MeteoraDammV2PositionChange, PositionChangeEvent, PositionChangeEventLookup,
@@ -157,9 +155,9 @@ pub use rotation_runs::{
     RotationRunTotals, RunSplit, RunsFirstHour,
 };
 pub use signals::{
-    DETECTOR_FLOW_IMBALANCE, DETECTOR_PRICE_ORACLE_DEVIATION, DETECTOR_TVL_DRAIN, DetectorError,
-    EvalContext, PairToken, Severity, Signal, SignalCursor, SignalDetector, SignalFeed,
-    SignalFilter, SignalRecord, SignalRepository, SignalValueUnit,
+    DETECTOR_FLOW_IMBALANCE, DETECTOR_TVL_DRAIN, DetectorError, EvalContext, PairToken, Severity,
+    Signal, SignalCursor, SignalDetector, SignalFeed, SignalFilter, SignalRecord, SignalRepository,
+    SignalValueUnit,
 };
 pub use swap_activity::{
     PoolSwapBucket, ProtocolSwapActivity, SwapActivity, SwapActivityLookup, SwapActivityTotal,

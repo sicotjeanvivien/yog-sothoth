@@ -32,12 +32,6 @@ skip_reasons! {
     Unpriced => "unpriced",
     /// The pool's current TVL could not be priced.
     NoTvl => "no_tvl",
-    /// An input was older than its freshness gate.
-    Stale => "stale",
-    /// No `sqrt_price` decoder for that protocol: missing code, not data, hence apart from `Undecodable`.
-    NoDecoder => "no_decoder",
-    /// A ratio that will not compute: a zero price, or a magnitude overflow on an extreme pair.
-    Undecodable => "undecodable",
 }
 
 /// Counters for what a detector saw on a tick.

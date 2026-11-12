@@ -45,8 +45,8 @@ function row(s: SignalResponse): SignalFeedRow {
 const GAP: SignalFeedRow = { type: "gap", key: "gap:2026-07-06T10:00:00Z", at: "2026-07-06T10:00:00Z" };
 
 const FEED = [
-  row(signal(1, "critical", "price_oracle_deviation")),
-  row(signal(2, "warning", "price_oracle_deviation")),
+  row(signal(1, "critical", "tvl_drain")),
+  row(signal(2, "warning", "tvl_drain")),
   GAP,
   row(signal(3, "warning", "flow_imbalance")),
   row(signal(4, "info", "some_future_detector")),
@@ -77,7 +77,7 @@ describe("filterSignals", () => {
     const out = filterSignals(
       FEED,
       new Set(["warning"]),
-      new Set(["price_oracle_deviation"]),
+      new Set(["tvl_drain"]),
     );
     expect(idsOf(out)).toEqual([2, "gap"]);
   });

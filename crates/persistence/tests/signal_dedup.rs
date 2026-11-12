@@ -74,7 +74,7 @@ async fn latest_severity_by_pool_picks_latest_within_window_per_detector(pool: P
     // Another detector on pool 2 → must not leak into this detector's map.
     insert_signal(
         &pool,
-        "price_oracle_deviation",
+        "tvl_drain",
         &p2,
         "critical",
         now - Duration::hours(1),

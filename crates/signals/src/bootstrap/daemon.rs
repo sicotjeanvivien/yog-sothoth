@@ -7,19 +7,15 @@ use anyhow::Context;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use yog_core::domain::{
-    LiquidityFlowRepository, PoolPriceSnapshotRepository, Protocol, SignalDetector,
-    SignalRepository, SwapFlowRepository,
+    LiquidityFlowRepository, Protocol, SignalDetector, SignalRepository, SwapFlowRepository,
 };
 use yog_persistence::{
-    Database, PgLiquidityFlowRepository, PgPoolPriceSnapshotRepository, PgSignalRepository,
-    PgSwapFlowRepository,
+    Database, PgLiquidityFlowRepository, PgSignalRepository, PgSwapFlowRepository,
 };
 
 mod init;
 
-use crate::application::detectors::{
-    DetectorMetrics, FlowImbalanceDetector, PriceOracleDeviationDetector, TvlDrainDetector,
-};
+use crate::application::detectors::{DetectorMetrics, FlowImbalanceDetector, TvlDrainDetector};
 use crate::application::workers::{
     AlarmMetrics, EngineMetrics, MaterializationAlarm, SignalEngine,
 };
@@ -46,8 +42,6 @@ impl Daemon {
             Arc::new(PgSignalRepository::new(pool.clone()));
         let flow_repository: Arc<dyn SwapFlowRepository> =
             Arc::new(PgSwapFlowRepository::new(pool.clone()));
-        let snapshot_repository: Arc<dyn PoolPriceSnapshotRepository> =
-            Arc::new(PgPoolPriceSnapshotRepository::new(pool.clone()));
         let liquidity_flow_repository: Arc<dyn LiquidityFlowRepository> =
             Arc::new(PgLiquidityFlowRepository::new(pool));
 
@@ -56,12 +50,6 @@ impl Daemon {
             Protocol::MeteoraDammV2,
             config.flow_imbalance_settings(),
         ));
-
-        let price_oracle_deviation: Arc<dyn SignalDetector> =
-            Arc::new(PriceOracleDeviationDetector::new(
-                snapshot_repository,
-                config.price_oracle_deviation_settings(),
-            ));
 
         let tvl_drain: Arc<dyn SignalDetector> = Arc::new(TvlDrainDetector::new(
             liquidity_flow_repository,
@@ -73,10 +61,7 @@ impl Daemon {
         DetectorMetrics::register_descriptions();
         AlarmMetrics::register_descriptions();
 
-        let engine = SignalEngine::new(
-            signal_repository,
-            vec![flow_imbalance, price_oracle_deviation, tvl_drain],
-        );
+        let engine = SignalEngine::new(signal_repository, vec![flow_imbalance, tvl_drain]);
         let alarm =
             init_materialization_alarm(&config.database_url, &config.materialization_alarm).await?;
 

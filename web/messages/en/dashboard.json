@@ -120,7 +120,6 @@
         "headline": {
           "tvl_drain": "TVL drain on {pair}: {value}",
           "flow_imbalance": "Swap imbalance on {pair}: {value}",
-          "price_oracle_deviation": "Price / oracle gap on {pair}: {value}",
           "fallback": "{pair}: {value}"
         }
       },
@@ -398,7 +397,7 @@
     "Signals": {
       "page": {
         "title": "Signals",
-        "description": "Live feed of the detectors' conclusions: flow imbalances, price deviations — every anomaly worth a look, as it is detected."
+        "description": "Live feed of the detectors' conclusions: flow imbalances, TVL drains — every anomaly worth a look, as it is detected."
       },
       "feed": {
         "title": "Latest signals",
@@ -422,11 +421,6 @@
           "critical": "Critical"
         },
         "detectors": {
-          "price_oracle_deviation": {
-            "tag": "Price",
-            "summary": "The pool's price is {deviation} away from the oracle price.",
-            "explain": "Compares the pool's spot price (derived from its on-chain state) with the two tokens' oracle price (Jupiter). A relative gap beyond the threshold flags a price detached from the market — possible arbitrage or abnormal liquidity. The threshold shown on each signal is the one that was crossed (warning or critical)."
-          },
           "flow_imbalance": {
             "tag": "Flow",
             "summaryToward": "Swap volume leans {percent} toward {token}.",

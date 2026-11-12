@@ -40,10 +40,6 @@ function detectorSummary(
   locale: string,
 ): string {
   switch (signal.detector) {
-    case "price_oracle_deviation":
-      return t("detectors.price_oracle_deviation.summary", {
-        deviation: formatSignalValue(signal, locale),
-      });
     case "flow_imbalance": {
       const toward = leanedSymbolOf(signal);
       const percent = formatPercent(signal.value, locale);
