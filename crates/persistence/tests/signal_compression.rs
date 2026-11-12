@@ -233,3 +233,45 @@ async fn a_compressed_chunk_serves_the_same_filtered_pages(pool: PgPool) {
          to compression is a signal no filtered page shows"
     );
 }
+
+/// Mutation: 053 deleting another detector's signals, or none under a misspelt name, in a
+/// compressed chunk or an open one.
+#[sqlx::test(migrations = false)]
+async fn migration_053_deletes_the_oracle_signals_alone(pool: PgPool) {
+    let migrator = sqlx::migrate!("./migrations");
+    migrator.run_to(52, &pool).await.unwrap();
+    let mut batch = Vec::new();
+    for days_ago in [1, 8, 15, 22] {
+        for (detector, pool) in [
+            ("price_oracle_deviation", 1),
+            ("flow_imbalance", 2),
+            ("tvl_drain", 3),
+        ] {
+            batch.push(Signal {
+                detector: detector.to_string(),
+                ..signal(Protocol::MeteoraDammV2, Severity::Warning, pool, days_ago)
+            });
+        }
+    }
+    PgSignalRepository::new(pool.clone())
+        .insert_batch(&batch)
+        .await
+        .unwrap();
+    compress_every_chunk(&pool).await;
+
+    migrator.run_to(53, &pool).await.unwrap();
+
+    let left: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT detector, count(*) FROM signals GROUP BY detector ORDER BY detector",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        left,
+        vec![
+            ("flow_imbalance".to_owned(), 4),
+            ("tvl_drain".to_owned(), 4)
+        ]
+    );
+}
