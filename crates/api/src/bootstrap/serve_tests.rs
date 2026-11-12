@@ -53,7 +53,7 @@ async fn start(
     let addr = listener.local_addr().unwrap();
     let handle = tokio::spawn(serve(
         listener,
-        router,
+        router.into_make_service(),
         idle_pollers(),
         crate::testing::key_ring(vec![]),
         shutdown.clone(),

@@ -38,9 +38,15 @@ async fn main() -> anyhow::Result<()> {
         .await
         .inspect_err(|e| error!(error = ?e, "failed to bind the API listener"))?;
     let router = http::build_router(app_state, config.cors_allowed_origins);
-    bootstrap::serve(listener, router, live_pollers, key_ring, token)
-        .await
-        .inspect_err(|e| error!(error = ?e, "fatal error in the API"))
+    bootstrap::serve(
+        listener,
+        router.into_make_service(),
+        live_pollers,
+        key_ring,
+        token,
+    )
+    .await
+    .inspect_err(|e| error!(error = ?e, "fatal error in the API"))
 }
 
 /// Prometheus on `addr`, `:9000` in a container as the daemons: `observe.sh` reads it there.
