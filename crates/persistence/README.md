@@ -46,7 +46,7 @@ persistence/
 │   │   │                     live for /api/live, one function pair per table)
 │   │   ├── protocol_activity.rs, token_activity/ (the frozen hours every
 │   │   │                     measure is read over; the tokens by volume)
-│   │   ├── signal/, swap_flow/, liquidity_flow/, pool_price_snapshot/
+│   │   ├── signal/, swap_flow/, liquidity_flow/
 │   │   ├── token_metadata/, token_price/, network_status/, watched_pool/,
 │   │   │   observed_slots.rs (the slots each ingestion session watched)
 │   │   ├── announcement/
@@ -332,29 +332,18 @@ condition* on `idx_token_prices_mint_recent` rather than a filter. **Do not
 inline the interval literal** — the rule previously lived at one site out of
 seventeen, which is exactly how it got lost.
 
-Two consequences worth knowing before you touch a valuation view:
-
-- `pool_current_tvl` goes NULL when `yog-context` stops refreshing prices, so a
-  dead enrichment loop makes the TVL *disappear* rather than freeze at a stale
-  figure. Its two sides (`value_a_usd`, `value_b_usd`, migration 019) go NULL each
-  on its own price, read from `token_stock_price` (045), which drops a market
-  price more than `yog_market_over_pool_max()` times its token's ceiling — the
-  highest price our pools' trades gave it over `yog_pool_witness_window()`, a
-  trade paying less than `yog_pool_witness_min_usd()` for it witnessing nothing.
-  `tvl_usd` sums the sides valued, a side without a price
-  counting 0 (034), and goes NULL only when neither is; `tvl_complete_usd` is
-  NULL as soon as one side is. `tvl_drain` reads the second: a drain over half a
-  pool is not a drain, and the detector must not compute it against a quote from
-  yesterday either.
-- `pool_price_snapshot` is the one **exempt** view, and the exemption is the
-  policy's boundary rather than an oversight: it publishes no USD figure, only
-  raw inputs with their `fetched_at`, and `price_oracle_deviation` gates on them
-  in Rust alongside its `max_spot_age` guard. **The policy binds valuation, not
-  comparison.** Its reader's TVL floor (migration 024 exposes the reserves) values
-  the pool at the last known prices, whatever their age: through
-  `pool_current_tvl`, a stale price would drop the pool before the detector
-  counts it `stale`. Both value a reserve through `yog_amount_usd` (024): they
-  share the arithmetic, not the prices.
+One consequence worth knowing before you touch a valuation view: `pool_current_tvl`
+goes NULL when `yog-context` stops refreshing prices, so a dead enrichment loop
+makes the TVL *disappear* rather than freeze at a stale figure. Its two sides (`value_a_usd`, `value_b_usd`, migration 019) go NULL each
+on its own price, read from `token_stock_price` (045), which drops a market
+price more than `yog_market_over_pool_max()` times its token's ceiling — the
+highest price our pools' trades gave it over `yog_pool_witness_window()`, a
+trade paying less than `yog_pool_witness_min_usd()` for it witnessing nothing.
+`tvl_usd` sums the sides valued, a side without a price
+counting 0 (034), and goes NULL only when neither is; `tvl_complete_usd` is
+NULL as soon as one side is. `tvl_drain` reads the second: a drain over half a
+pool is not a drain, and the detector must not compute it against a quote from
+yesterday either.
 
 `price_staleness.rs` enumerates the views, materialized views and functions
 reading `token_prices` or `token_last_price`. Any reader of `token_prices` but
@@ -374,9 +363,8 @@ bound reaches it — see the implied price below.
 `token_last_price` holds one row per token: the most recent price written for
 it. `insert_batch` writes it in the statement that inserts into `token_prices`,
 so its only writer is `yog_context`, and an older price never replaces a newer
-one. `pool_current_tvl` joins it under the latest bound, and
-`pool_price_snapshot` (018) without one, instead of searching the hypertable
-twice per pool: their cost follows the tokens, not the pools.
+one. `pool_current_tvl` joins it under the latest bound instead of searching the
+hypertable twice per pool: its cost follows the tokens, not the pools.
 
 It holds the last price of every token in the series: 017 filled the 15-minute
 window, 018 every token.

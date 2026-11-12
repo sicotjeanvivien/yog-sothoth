@@ -60,7 +60,6 @@ core/src/
 │   │                       DetectorError)
 │   ├── swap_flow/         (PoolSwapFlow — directional volume read model)
 │   ├── liquidity_flow/    (PoolLiquidityFlow — windowed add/remove + TVL read model)
-│   ├── pool_price_snapshot/ (spot-vs-oracle read model)
 │   ├── token_metadata/    (TokenMetadata + repo; TokenEntry, its latest price beside it)
 │   ├── token_price/       (TokenPrice + repo, PriceProvider)
 │   ├── kept_prices/       (KeptPrices — what the price series already records,

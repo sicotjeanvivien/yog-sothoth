@@ -43,7 +43,6 @@ table is right: add the row here.
 | `init_event_persistor` | `crates/indexer/src/bootstrap/daemon/init.rs` |
 | `pool_account_resolvers` vec | `crates/context/src/bootstrap/daemon.rs` |
 | `From<domain::Protocol>` for `ProtocolResponse` | `crates/api/src/http/dto/response/protocol.rs` |
-| `spot_price_a_in_b` | `crates/signals/src/application/detectors/price_oracle_deviation.rs` |
 | `formatProtocolLabel` | `web/src/lib/format/format-protocol.ts` |
 
 ## Step 1 — `core`
@@ -119,7 +118,6 @@ Rules: *5. In `api` (when read access is needed)*; each route: *Adding a new API
 
 Rules: *6. In `signals` and `web`*.
 
-- `crates/signals/src/application/detectors/price_oracle_deviation.rs` — its row of the table.
 - `crates/signals/src/bootstrap/daemon.rs` — the detectors' instances, if any.
 - `web/src/lib/format/format-protocol.ts` — its row of the table.
 - The menu line: `web/src/components/dashboard/sidebar/sidebar-keys.ts`,

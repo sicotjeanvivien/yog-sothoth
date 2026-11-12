@@ -26,7 +26,7 @@ It is a **stream observer** — pools are discovered dynamically as transactions
 - **Anchor `event_cpi` decoding** — events read from on-chain emissions, not reconstructed from transfer instructions
 - **AMM state reconstruction** — price, reserves, slippage, imbalance computed from the event stream
 - **Token enrichment** — symbol / name / decimals / logo via Helius DAS, USD prices via Jupiter Price V3
-- **Signal detection** — batch detectors evaluated over the indexed data (swap-flow imbalance, spot-vs-oracle price deviation, TVL drain), Warning/Critical severities, cooldown-based deduplication
+- **Signal detection** — batch detectors evaluated over the indexed data (swap-flow imbalance, TVL drain), Warning/Critical severities, cooldown-based deduplication
 - **Live signal feed** — `GET /api/signals` (paginated) plus an SSE stream, consumed by a dashboard feed page that updates as signals fire
 - **Time-series storage** — TimescaleDB hypertables with compression, retention policies, and continuous aggregates
 - **HTTP API** — JSON endpoints with cursor-based pagination and SSE streaming, served by an axum-based server
@@ -157,7 +157,7 @@ For the native development workflow (running services via `cargo run` against a 
 Yog-Scope is **not open to the public yet**. What runs today, on a development machine:
 
 - **Meteora DAMM v2**, end to end — 19 event kinds indexed, tokens enriched with metadata and USD prices, analytics served by the API and the dashboard.
-- **Three signal detectors** — swap-flow imbalance, spot-vs-oracle price deviation, TVL drain — with a live feed in the dashboard.
+- **Two signal detectors** — swap-flow imbalance, TVL drain — with a live feed in the dashboard.
 - **Ingestion over JSON-RPC**, bounded by the watched-pools allowlist. The Yellowstone gRPC source is written and has not yet run against a real stream.
 
 Next comes production, which ingests over gRPC. After that: lifting the allowlist, then widening coverage to the protocols listed under *Supported protocols*.

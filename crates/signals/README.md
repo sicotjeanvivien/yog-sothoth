@@ -20,7 +20,6 @@ signals/src/
 ├── application/   ← what the daemon does once wired
 │   ├── detectors/ ← the signals' rules, one module per detector
 │   │   ├── flow_imbalance.rs
-│   │   ├── price_oracle_deviation.rs
 │   │   ├── tvl_drain.rs
 │   │   └── metrics.rs ← considered and skipped counters, SkipReason
 │   ├── workers/   ← the loops that run until the stop, each with a folder
@@ -184,20 +183,6 @@ applied by the read, keeps thin pools out — but not a window that is not
 wholly valuable, which has no total to compare and stays to be counted. Warning at `|imbalance| ≥ threshold`, Critical at
 `≥ critical`.
 
-**`price_oracle_deviation`** — compares the on-chain spot price (decoded from
-`sqrt_price` Q64.64 via `core::amm`) with the oracle price
-(`price_a_usd / price_b_usd` from Jupiter), on the relative gap
-`(spot − oracle) / oracle`, reading the `pool_price_snapshot` VIEW, which joins
-`token_last_price` (migration 018). **Freshness guards on both sides**: a stale
-oracle price or a pool whose last swap is too old makes the comparison
-meaningless — no signal is emitted rather than a false one. **A TVL floor**:
-only pools whose TVL reaches `min_tvl_usd` are read, a shallow pool's spot
-straying from the aggregated market price by nature. ⚠️ The TVL is taken at the
-last known prices whatever their age, not from `pool_current_tvl`, which goes
-NULL on a stale price and would drop the pool before it is counted `stale`.
-The Warning/Critical scale is validated fail-loud at
-config load (`threshold < critical`, otherwise Warning would be unreachable).
-
 **`tvl_drain`** — a pool being emptied of its liquidity (LP exodus, rug-like
 behaviour): over a rolling window, `drain = net_removed / starting TVL`, where
 `net_removed = removed_usd − added_usd` (LP churn nets out) and the starting
@@ -210,7 +195,8 @@ window can't dodge the floor by having drained itself below it.
 
 All detectors record in `signal.threshold` the boundary that justifies the
 emitted severity: the critical threshold on a Critical signal, the warning
-one otherwise — not the emission floor.
+one otherwise — not the emission floor. The Warning/Critical scale is validated fail-loud at
+config load (`threshold < critical`, otherwise Warning would be unreachable).
 
 ## Configuration
 
@@ -224,15 +210,6 @@ SIGNALS_FLOW_MIN_VOLUME_USD=10000     # volume floor
 SIGNALS_FLOW_THRESHOLD=0.6            # Warning
 SIGNALS_FLOW_CRITICAL=0.9             # Critical
 SIGNALS_FLOW_COOLDOWN_HOURS=6
-
-# price_oracle_deviation
-SIGNALS_PRICE_DEVIATION_INTERVAL_SECS=300
-SIGNALS_PRICE_DEVIATION_THRESHOLD=0.05
-SIGNALS_PRICE_DEVIATION_CRITICAL=0.2
-SIGNALS_PRICE_DEVIATION_COOLDOWN_HOURS=6
-SIGNALS_PRICE_DEVIATION_MAX_PRICE_AGE_MINS=15   # oracle freshness guard
-SIGNALS_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS=24   # last-swap freshness guard
-SIGNALS_PRICE_DEVIATION_MIN_TVL_USD=10000       # TVL floor, at the last known prices
 
 # tvl_drain
 SIGNALS_TVL_DRAIN_INTERVAL_SECS=300
@@ -261,10 +238,7 @@ counts, failure counters.
 
 **`yog_signals_skipped_total{detector, reason}`** counts pools a detector
 declined to evaluate — `unpriced` (the window was not entirely valuable),
-`no_tvl` (current TVL unpriceable), `stale` (an input older than its freshness
-gate), `no_decoder` (no `sqrt_price` decoder shipped for that protocol —
-missing code, not a data problem), `undecodable` (an oracle ratio that will not
-compute, or a `sqrt_price` its decoder cannot turn into a price). The labels
+`no_tvl` (current TVL unpriceable). The labels
 are defined once, by the `SkipReason` enum in
 `application/detectors/metrics.rs`, and the counter's `# HELP` text is built from it — this list
 copies it for the reader, not for the code. Emitting nothing is the right answer
@@ -280,9 +254,8 @@ nothing.
 
 ⚠️ `considered` counts the pools handed to the detector. `tvl_drain` is handed
 those below its `min_tvl_usd` too: *evaluated and judged immaterial*, not unseen,
-so deliberately NOT counted as skips. `flow_imbalance` and
-`price_oracle_deviation` apply their floor in the read, so a pool below it never
-reaches them and is not counted. ⚠️ `flow_imbalance` still reads every
+so deliberately NOT counted as skips. `flow_imbalance` applies its floor in the
+read, so a pool below it never reaches it and is not counted. ⚠️ `flow_imbalance` still reads every
 unvaluable window, whatever its volume: its `skipped / considered` sets all of
 them against the valued pools above the floor only, and reads higher than before
 the floor moved into the read, with no change in price coverage.
@@ -313,7 +286,7 @@ cargo run -p yog-signals
 1. Implement `SignalDetector` (from `yog-core`) in a new module under
    `application/detectors/`, owning the repository traits it reads. If the read shape
    doesn't exist yet, add a read model + VIEW following the
-   `swap_flow`/`pool_price_snapshot` pattern (VIEW in a migration, `GRANT
+   `swap_flow` pattern (VIEW in a migration, `GRANT
    SELECT … TO yog_signals`, slim repo in `persistence`).
 2. Name its tag in `yog-core` (`domain/signals/model.rs`) and give it its unit in
    `SignalValueUnit::of`: a tag left out is served as `raw`, without any error.
