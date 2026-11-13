@@ -23,9 +23,11 @@ context/src/
 │                      what makes a silent exit fail to compile
 ├── infra/           ← adapters: HeliusDasClient, JupiterPriceClient,
 │                      SolanaAccountClient (+ provider metrics; jupiter_price/
-│                      log.rs holds the client's log lines; infra.rs holds
-│                      the shared http_client and its timeouts; source_error.rs
-│                      turns a reqwest failure into a SourceError, URL stripped)
+│                      log.rs and solana_account/log.rs hold their client's log
+│                      lines; infra.rs holds the shared http_client and its
+│                      timeouts; rate_limit.rs reads a 429 alike for all three;
+│                      source_error.rs turns a reqwest failure into a
+│                      SourceError, URL stripped)
 ├── bootstrap/       ← Config::load(), Daemon::connect — composition root, and the
 │                      stop: run() joins its three workers under the shared grace
 ├── error/           ← SourceError, WorkerError — shared by the layers
@@ -54,8 +56,10 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   ⚠️ **Only the sweep sees the mints filled in late.** The `PoolAccountWorker`
   writes the mints of pools seen without them, whose `first_seen_at` is old;
   so do mints Helius left unresolved past the hour. Either waits up to an hour.
-  A sweep counts as done once listed: only a failed listing sweeps again at the
-  next tick, a Helius failure waits for the next sweep. Its metrics carry a
+  A sweep counts as done once its mints are fetched, or none was missing: a
+  failed listing sweeps again at the next tick; a Helius call whose every chunk
+  failed, after `FULL_SWEEP_RETRY_DELAY` (5 min), the recent pools read in
+  between; a chunk failed among others waits for the next sweep. Its metrics carry a
   `scope=recent_pools|all_pools` label.
 - **`PriceWorker`** — every `CONTEXT_PRICE_INTERVAL_SECS` (default 30 s), or
   back to back when a tick outlasts it, lists the candidate mints and asks
@@ -226,8 +230,9 @@ decoded at this boundary and never reaches `core`, which stays free of it.
 All workers are **deliberately resilient**: HTTP errors, decode errors, and
 per-row persistence errors are absorbed inside the loop (logged and counted,
 then `continue`). An `Err` returned from a source trait is reserved for
-structural misconfiguration, not partial fetch failures — those are handled
-internally as skip-and-log per chunk.
+a call that failed as a whole — structural misconfiguration, every Helius chunk
+failed, or one Solana batch, which fails its call — not partial fetch failures,
+handled internally as skip-and-log per chunk.
 
 One refinement on the Jupiter side: chunks are **spaced**, one every
 `request_spacing` — 1.1 s for `JUPITER_RATE_LIMIT_PER_MINUTE=60`, ten requests
@@ -309,6 +314,15 @@ degrades into a tick-level `SourceError` absorbed like any other.
 
 Prometheus metrics on `:9000/metrics` (host port `9001` in compose): per-worker
 tick/upsert/failure counters and per-provider request counters and durations.
+
+Each provider call counts under `yog_context_provider_call_total{provider,
+outcome}`; a 429 is `rate_limited` for all three providers, and only Jupiter
+retries it. An answer entry that cannot be read counts under
+`yog_context_provider_dropped_total{provider, reason}`: for `solana_account`,
+`unreadable_owner`, `unreadable_data`, and `length_mismatch` once per answer
+that does not carry one entry per address asked, none of whose accounts is kept:
+they pair with the addresses by position. An absent account, a closed pool, is
+not counted.
 
 **Price coverage** is the one gauge pair worth alerting on:
 

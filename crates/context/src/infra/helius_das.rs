@@ -3,6 +3,7 @@
 //! retried next cycle.
 
 use super::metrics::ProviderMetrics;
+use super::rate_limit;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
@@ -142,7 +143,8 @@ impl HeliusDasClient {
             .post(self.rpc_url.expose())
             .json(&request)
             .send()
-            .await?
+            .await?;
+        let response = rate_limit::refused(response)?
             .error_for_status()?
             .json::<DasResponse>()
             .await?;
@@ -159,22 +161,32 @@ impl HeliusDasClient {
 #[async_trait]
 impl MetadataSource for HeliusDasClient {
     /// Fetches metadata for any number of mints, chunked under `DAS_BATCH_MAX`; a failed chunk is
-    /// logged and skipped, the call returning whatever was fetched.
+    /// logged and skipped, the call returning whatever was fetched — or, when every chunk failed,
+    /// the last chunk's error.
     async fn fetch_metadata(&self, mints: &[Pubkey]) -> Result<Vec<FetchedMetadata>, SourceError> {
         let mut all = Vec::with_capacity(mints.len());
+        let mut any_answered = false;
+        let mut last_error = None;
         for chunk in mints.chunks(DAS_BATCH_MAX) {
             match self.fetch_chunk(chunk).await {
-                Ok(fetched) => all.extend(fetched),
+                Ok(fetched) => {
+                    any_answered = true;
+                    all.extend(fetched);
+                }
                 Err(e) => {
                     warn!(
                         error = %e,
                         chunk_size = chunk.len(),
                         "helius_das: chunk failed, continuing",
                     );
+                    last_error = Some(e);
                 }
             }
         }
-        Ok(all)
+        match last_error {
+            Some(e) if !any_answered => Err(e),
+            _ => Ok(all),
+        }
     }
 }
 

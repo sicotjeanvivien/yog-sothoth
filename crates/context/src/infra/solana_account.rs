@@ -10,9 +10,12 @@ use solana_pubkey::Pubkey;
 use yog_bootstrap::SecretUrl;
 
 use super::metrics::ProviderMetrics;
+use super::rate_limit;
 use crate::application::source::{PoolAccountSource, RawAccount};
 use crate::error::SourceError;
 use std::time::Instant;
+
+mod log;
 
 /// `getMultipleAccounts` accepts at most 100 keys per call.
 const ACCOUNTS_BATCH_MAX: usize = 100;
@@ -94,30 +97,52 @@ impl SolanaAccountClient {
             .post(self.rpc_url.expose())
             .json(&request)
             .send()
-            .await?
+            .await?;
+        let accounts = rate_limit::refused(response)?
             .error_for_status()?
             .json::<RpcResponse>()
-            .await?;
+            .await?
+            .result
+            .value;
 
-        // Missing accounts and undecodable base64 are dropped, retried next cycle.
+        // ⚠️ Accounts pair with addresses by position: one entry missing would hand every account
+        // after it to the wrong pool, so an answer of the wrong length keeps none.
+        if accounts.len() != pool_addresses.len() {
+            log::length_mismatch(pool_addresses.len(), accounts.len());
+            ProviderMetrics::record_dropped(PROVIDER_LABEL, "length_mismatch");
+            return Ok(Vec::new());
+        }
+
+        // A `null` is an account that no longer exists, a closed pool: absent, not dropped.
         Ok(pool_addresses
             .iter()
-            .zip(response.result.value)
-            .filter_map(|(pool_address, account)| {
-                let account = account?;
-                // `owner` on the wire is our `program_id`: same pubkey.
-                let program_id = Pubkey::try_from(account.owner.as_str()).ok()?;
-                let data = base64::engine::general_purpose::STANDARD
-                    .decode(account.data.0)
-                    .ok()?;
-                Some(RawAccount {
-                    pool_address: *pool_address,
-                    program_id,
-                    data,
-                })
-            })
+            .zip(accounts)
+            .filter_map(|(pool_address, account)| readable(*pool_address, account?))
             .collect())
     }
+}
+
+/// The account as `core` reads it, or `None`, logged and counted, when its owner or its data
+/// cannot be read; it is asked again next cycle.
+fn readable(pool_address: Pubkey, account: RpcAccount) -> Option<RawAccount> {
+    // `owner` on the wire is our `program_id`: same pubkey.
+    let Ok(program_id) = Pubkey::try_from(account.owner.as_str()) else {
+        return dropped(&pool_address, "unreadable_owner");
+    };
+    let Ok(data) = base64::engine::general_purpose::STANDARD.decode(account.data.0) else {
+        return dropped(&pool_address, "unreadable_data");
+    };
+    Some(RawAccount {
+        pool_address,
+        program_id,
+        data,
+    })
+}
+
+fn dropped(pool_address: &Pubkey, reason: &'static str) -> Option<RawAccount> {
+    log::account_dropped(pool_address, reason);
+    ProviderMetrics::record_dropped(PROVIDER_LABEL, reason);
+    None
 }
 
 #[async_trait]

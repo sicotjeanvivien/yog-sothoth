@@ -137,39 +137,6 @@ fn full_response_filters_to_priced_mints_only() {
     assert_eq!(projected[0].price_usd, dec("0.999"));
 }
 
-// ── 429 handling: Retry-After parsing + backoff policy ──────────────
-
-fn headers_with_retry_after(value: &str) -> reqwest::header::HeaderMap {
-    let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert(
-        reqwest::header::RETRY_AFTER,
-        value.parse().expect("valid header value"),
-    );
-    headers
-}
-
-#[test]
-fn retry_after_parses_delta_seconds() {
-    let headers = headers_with_retry_after("2");
-    assert_eq!(
-        parse_retry_after(&headers),
-        Some(std::time::Duration::from_secs(2))
-    );
-}
-
-#[test]
-fn retry_after_absent_yields_none() {
-    let headers = reqwest::header::HeaderMap::new();
-    assert_eq!(parse_retry_after(&headers), None);
-}
-
-#[test]
-fn retry_after_http_date_form_yields_none() {
-    // The HTTP-date form is not handled: our own backoff applies.
-    let headers = headers_with_retry_after("Wed, 21 Oct 2026 07:28:00 GMT");
-    assert_eq!(parse_retry_after(&headers), None);
-}
-
 #[test]
 fn backoff_uses_server_retry_after_when_present() {
     let delay = rate_limit_backoff(0, Some(std::time::Duration::from_secs(3)));
