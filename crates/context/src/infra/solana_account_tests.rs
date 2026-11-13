@@ -164,8 +164,6 @@ async fn a_failed_batch_fails_the_whole_call() {
     );
 }
 
-// ── Dropped entries, counted under a thread-local recorder ───────────────────────────────
-
 /// The accounts fetched for `addresses` against `script`, and each `dropped_total` reason of this
 /// provider with its count, sorted.
 fn fetch_counting_drops(
@@ -233,22 +231,23 @@ fn an_absent_account_is_not_counted() {
     assert_eq!(drops, []);
 }
 
-/// Mutation: the length check removed, or counted once per missing account.
+/// Mutation: the length check removed, an account of the short answer kept, or the answer counted
+/// once per missing account.
 #[test]
-fn a_short_answer_is_counted_once() {
+fn a_short_answer_keeps_no_account_and_is_counted_once() {
     let (accounts, drops) =
         fetch_counting_drops(vec![answer(vec![account(1)])], &[pk(1), pk(2), pk(3)]);
 
-    assert_eq!(pools(&accounts), [pk(1)]);
+    assert!(accounts.is_empty(), "{:?}", pools(&accounts));
     assert_eq!(drops, [("length_mismatch".to_string(), 1)]);
 }
 
-/// Mutation: only a short answer checked.
+/// Mutation: only a short answer checked, or an account of the long answer kept.
 #[test]
-fn a_long_answer_is_counted_once() {
+fn a_long_answer_keeps_no_account_and_is_counted_once() {
     let (accounts, drops) =
         fetch_counting_drops(vec![answer(vec![account(1), account(2)])], &[pk(1)]);
 
-    assert_eq!(pools(&accounts), [pk(1)]);
+    assert!(accounts.is_empty(), "{:?}", pools(&accounts));
     assert_eq!(drops, [("length_mismatch".to_string(), 1)]);
 }

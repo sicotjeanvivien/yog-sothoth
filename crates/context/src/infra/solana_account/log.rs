@@ -12,7 +12,7 @@ pub(super) fn account_dropped(pool_address: &Pubkey, reason: &'static str) {
     );
 }
 
-/// The answer did not carry one entry per address asked; the entries it has are kept.
+/// The answer did not carry one entry per address asked; none of its accounts is kept.
 pub(super) fn length_mismatch(asked: usize, answered: usize) {
     warn!(
         asked,

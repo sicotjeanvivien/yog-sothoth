@@ -21,7 +21,7 @@ impl ProviderMetrics {
         );
         describe_counter!(
             DROPPED_TOTAL,
-            "Answer entries dropped as unreadable. Labels: provider=solana_account, reason=unreadable_owner|unreadable_data|length_mismatch"
+            "Answer entries dropped as unreadable, or answers whose length differs from the addresses asked. Labels: provider=solana_account, reason=unreadable_owner|unreadable_data|length_mismatch"
         );
     }
 

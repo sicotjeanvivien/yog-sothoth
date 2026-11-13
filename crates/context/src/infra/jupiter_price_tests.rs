@@ -137,8 +137,6 @@ fn full_response_filters_to_priced_mints_only() {
     assert_eq!(projected[0].price_usd, dec("0.999"));
 }
 
-// ── 429 handling: backoff policy ──────────────
-
 #[test]
 fn backoff_uses_server_retry_after_when_present() {
     let delay = rate_limit_backoff(0, Some(std::time::Duration::from_secs(3)));

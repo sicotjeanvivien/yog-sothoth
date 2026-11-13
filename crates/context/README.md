@@ -320,8 +320,9 @@ outcome}`; a 429 is `rate_limited` for all three providers, and only Jupiter
 retries it. An answer entry that cannot be read counts under
 `yog_context_provider_dropped_total{provider, reason}`: for `solana_account`,
 `unreadable_owner`, `unreadable_data`, and `length_mismatch` once per answer
-that does not carry one entry per address asked. An absent account, a closed
-pool, is not counted.
+that does not carry one entry per address asked, none of whose accounts is kept:
+they pair with the addresses by position. An absent account, a closed pool, is
+not counted.
 
 **Price coverage** is the one gauge pair worth alerting on:
 
