@@ -32,6 +32,43 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.11.0",
+    date: "2026-11-13",
+    summary: "The price–oracle deviation detector is retired, and the API and its database hold up better under load.",
+    sections: [
+      {
+        kind: "features",
+        items: [
+          {
+            text: "The Privacy policy and the Terms are revised against the code: what our technical logs hold, a request identifier included, what we keep about an API client, and the API served on a key we issue.",
+            technical: false,
+          },
+        ],
+      },
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "The price–oracle deviation detector is retired, with every signal it published: it flagged a pool's lasting gap to the market rather than a change, and made up nine signals in ten.",
+            technical: false,
+          },
+          {
+            text: "The ingestion alarm fails its Healthchecks.io check as soon as the dashboard would show the ingestion delayed (2 min without a new event) instead of stale (15 min): a shorter outage was never signalled.",
+            technical: true,
+          },
+          {
+            text: "Postgres gets 256 MB of shared memory instead of Docker's 64 MB default: parallel reads of the enrichment and signal daemons no longer fail when they start together.",
+            technical: true,
+          },
+          {
+            text: "The API no longer rebuilds its routes for every connection: a live stream costs about 20 KiB instead of 235, and a request on a fresh connection answers several times faster.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.10.0",
     date: "2026-11-10",
     summary: "The API now takes a key: apart from the service status and the announcements, every route answers only a client we issued a key to.",
