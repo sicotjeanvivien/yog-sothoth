@@ -44,13 +44,17 @@ impl ListTokenActivityRequest {
     pub(crate) fn parse(params: TokenActivityParams) -> Result<Self, ApiError> {
         super::validate_limit(params.limit)?;
         let SortParam::Volume = params.sort;
+        let window = params.window.into();
         let cursor = params
             .cursor
             .as_deref()
-            .map(|raw| super::non_empty("cursor", raw).and_then(decode_token_activity_cursor))
+            .map(|raw| {
+                super::non_empty("cursor", raw)
+                    .and_then(|raw| decode_token_activity_cursor(raw, window))
+            })
             .transpose()?;
         Ok(Self {
-            window: params.window.into(),
+            window,
             cursor,
             limit: params.limit,
         })

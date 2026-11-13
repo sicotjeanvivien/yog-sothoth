@@ -29,6 +29,7 @@ struct SignalCursorWire {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct TokenActivityCursorWire {
+    window: String,
     last_hour: String,
     volume_usd: String,
     mint: String,
@@ -191,6 +192,7 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
             id: c.id,
         }),
         Cursor::TokenActivity(c) => encode_b64_json(&TokenActivityCursorWire {
+            window: c.window.as_str().to_owned(),
             last_hour: c.last_hour.to_rfc3339(),
             volume_usd: c.volume_usd.to_string(),
             mint: c.mint.to_string(),
@@ -283,9 +285,20 @@ pub(crate) fn decode_signal_cursor(raw: &str) -> Result<SignalCursor, ApiError> 
     })
 }
 
-pub(crate) fn decode_token_activity_cursor(raw: &str) -> Result<TokenActivityCursor, ApiError> {
+/// A cursor of the ranking over `window`; one of another window is refused, its key from another
+/// ranking.
+pub(crate) fn decode_token_activity_cursor(
+    raw: &str,
+    window: Window,
+) -> Result<TokenActivityCursor, ApiError> {
     let wire: TokenActivityCursorWire = decode_b64_json(raw)?;
+    if wire.window != window.as_str() {
+        return Err(ApiError::BadRequest(
+            "invalid cursor: taken in another list".to_string(),
+        ));
+    }
     Ok(TokenActivityCursor {
+        window,
         last_hour: parse_rfc3339(&wire.last_hour)?,
         volume_usd: Decimal::from_str(&wire.volume_usd)
             .map_err(|_| ApiError::BadRequest("invalid cursor: malformed volume".to_string()))?,

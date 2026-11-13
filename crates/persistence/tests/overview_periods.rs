@@ -201,6 +201,7 @@ async fn the_next_page_starts_after_a_token_whose_volume_has_many_digits(pool: P
             break;
         };
         cursor = Some(TokenActivityCursor {
+            window: Window::Day,
             last_hour: page.last_hour,
             volume_usd: last.volume_usd,
             mint: last.mint,

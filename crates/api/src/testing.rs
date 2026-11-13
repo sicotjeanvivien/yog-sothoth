@@ -514,12 +514,13 @@ impl ProtocolActivityLookup for MockProtocolActivityRepo {
 }
 
 /// A `TokenActivityFeed` ranked at `ranked_at`, `None` before a ranking: `list` serves `items`,
-/// `list_in_tranches` an empty page. It records each read.
+/// `list_in_tranches` an empty page. It records each read, and each cursor `list` is given.
 #[derive(Default)]
 pub(crate) struct MockTokenActivityRepo {
     pub(crate) ranked_at: Option<DateTime<Utc>>,
     pub(crate) items: Vec<TokenActivity>,
     pub(crate) reads: Mutex<Vec<Window>>,
+    pub(crate) cursors: Mutex<Vec<Option<TokenActivityCursor>>>,
     pub(crate) tranche_reads: Mutex<Vec<TranchePeriod>>,
 }
 
@@ -528,10 +529,11 @@ impl TokenActivityFeed for MockTokenActivityRepo {
     async fn list(
         &self,
         window: Window,
-        _cursor: Option<TokenActivityCursor>,
+        cursor: Option<TokenActivityCursor>,
         _limit: i64,
     ) -> RepositoryResult<Option<TokenActivityPage>> {
         self.reads.lock().unwrap().push(window);
+        self.cursors.lock().unwrap().push(cursor);
         Ok(self.ranked_at.map(|last_hour| TokenActivityPage {
             last_hour,
             page: Page {

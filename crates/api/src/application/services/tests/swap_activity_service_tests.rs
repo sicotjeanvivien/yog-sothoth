@@ -88,6 +88,7 @@ async fn the_tokens_span_ends_at_the_hour_of_their_ranking() {
 async fn a_cursor_of_a_ranking_rewritten_since_is_expired() {
     let (svc, _) = ranked(at_october(20, 12));
     let cursor = |hour| TokenActivityCursor {
+        window: Window::Day,
         last_hour: hour,
         volume_usd: Decimal::from(5),
         mint: pk(1),
@@ -178,6 +179,7 @@ async fn a_cursor_of_an_hour_moved_since_is_expired() {
     let tokens = Arc::new(MockTokenActivityRepo::default());
     let svc = in_hour(&Arc::new(MockSwapActivityRepo::default()), &tokens);
     let cursor = |end| TokenActivityCursor {
+        window: Window::Hour,
         last_hour: end,
         volume_usd: Decimal::from(5),
         mint: pk(1),

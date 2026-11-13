@@ -5,6 +5,7 @@
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
+use yog_core::Cursor;
 use yog_core::domain::{
     FrozenPeriod, PoolCatalog, Protocol, ProtocolActivityLookup, TokenActivityCursor,
     TokenActivityFeed, Window,
@@ -81,12 +82,15 @@ async fn the_tokens_page_by_volume_then_mint_with_their_identity(pool: PgPool) {
     let feed = PgTokenActivityRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
 
     let first = feed.list(Window::Day, None, 2).await.unwrap().unwrap();
-    let cursor = first.page.items.last().map(|t| TokenActivityCursor {
-        last_hour: first.last_hour,
-        volume_usd: t.volume_usd,
-        mint: t.mint,
-    });
-    let second = feed.list(Window::Day, cursor, 2).await.unwrap().unwrap();
+    let Some(Cursor::TokenActivity(next)) = first.page.next_cursor.clone() else {
+        panic!("a next page: {:?}", first.page.next_cursor);
+    };
+    assert_eq!(next.window, Window::Day, "the cursor names its ranking");
+    let second = feed
+        .list(Window::Day, Some(next), 2)
+        .await
+        .unwrap()
+        .unwrap();
     let mints = |items: &[yog_core::domain::TokenActivity]| -> Vec<_> {
         items.iter().map(|t| t.mint).collect()
     };
@@ -112,6 +116,7 @@ async fn a_page_past_the_last_token_still_names_its_ranking(pool: PgPool) {
     let feed = PgTokenActivityRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
 
     let past = TokenActivityCursor {
+        window: Window::Day,
         last_hour: last(),
         volume_usd: Decimal::from(1),
         mint: pk(9),
