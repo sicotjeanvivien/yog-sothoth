@@ -30,7 +30,7 @@ pub struct TokenActivityPage {
 }
 
 /// The last item of a page in the volume ordering, `(volume_usd, mint)`, in
-/// the ranking of `window` at `last_hour`: each freeze rewrites the ranking.
+/// the ranking of `window` at `last_hour`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokenActivityCursor {
     pub window: Window,
