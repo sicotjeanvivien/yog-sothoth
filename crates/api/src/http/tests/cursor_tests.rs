@@ -214,7 +214,20 @@ fn a_token_activity_cursor_of_another_window_is_refused() {
     }
 }
 
-/// Pinned as decided: a cursor issued before it carried its window is refused, not read as `7d`.
+/// Mutation: the window compared after the other fields — a damaged key of another ranking refused
+/// as damaged, not as taken elsewhere.
+#[test]
+fn another_window_is_refused_before_a_damaged_field() {
+    let damaged_week = URL_SAFE_NO_PAD_ENCODE(&format!(
+        r#"{{"window":"7d","last_hour":"yesterday","volume_usd":"1.5","mint":"{VALID_MINT}"}}"#
+    ));
+    assert_refused_because(
+        decode_token_activity_cursor(&damaged_week, Window::Month),
+        "invalid cursor: taken in another list",
+    );
+}
+
+/// Mutation: a cursor without `window` read as the request's.
 #[test]
 fn a_token_activity_cursor_without_its_window_is_refused() {
     let unwindowed = URL_SAFE_NO_PAD_ENCODE(&format!(

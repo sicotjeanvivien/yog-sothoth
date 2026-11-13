@@ -494,20 +494,21 @@ async fn a_known_pools_totals_and_series_are_served() {
 }
 
 /// Mutation: the cursor decoded without the request's window — a page of another ranking followed —
-/// or refused under its own.
+/// or refused, or dropped, under its own.
 #[tokio::test]
 async fn a_token_cursor_is_followed_under_its_window_only() {
     use yog_core::{
         Cursor,
         domain::{TokenActivityCursor, Window},
     };
-    let week = crate::http::cursor::encode_cursor(&Cursor::TokenActivity(TokenActivityCursor {
+    let now = Utc::now();
+    let cursor = TokenActivityCursor {
         window: Window::Week,
-        last_hour: Utc::now() - TimeDelta::hours(1),
+        last_hour: now - TimeDelta::hours(2),
         volume_usd: rust_decimal::Decimal::ONE,
         mint: pk(1),
-    }))
-    .unwrap();
+    };
+    let week = crate::http::cursor::encode_cursor(&Cursor::TokenActivity(cursor.clone())).unwrap();
 
     for window in ["30d", "24h", "1h"] {
         let uri = format!("/api/swaps/by-token?window={window}&cursor={week}");
@@ -516,7 +517,21 @@ async fn a_token_cursor_is_followed_under_its_window_only() {
         assert_eq!(content_type, "application/problem+json", "{uri}");
         assert!(detail.contains("taken in another list"), "{uri}: {detail}");
     }
+    let tokens = Arc::new(MockTokenActivityRepo {
+        ranked_at: Some(cursor.last_hour),
+        ..MockTokenActivityRepo::default()
+    });
+    let mut state = app_state();
+    state.swap_activity_service = Arc::new(SwapActivityService::new(
+        frozen_hours_repo(Some(FrozenHours {
+            first: now - TimeDelta::days(40),
+            last_frozen: cursor.last_hour,
+        })),
+        Arc::new(MockSwapActivityRepo::default()),
+        tokens.clone(),
+    ));
     let uri = format!("/api/swaps/by-token?window=7d&cursor={week}");
-    let (status, _, body) = get(&uri).await;
+    let (status, _, body) = call_on(state, Method::GET, &uri).await;
     assert_eq!(status, StatusCode::OK, "{uri}: {body}");
+    assert_eq!(*tokens.cursors.lock().unwrap(), [Some(cursor)]);
 }
