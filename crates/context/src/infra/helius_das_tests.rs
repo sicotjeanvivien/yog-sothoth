@@ -3,7 +3,7 @@
 use solana_pubkey::Pubkey;
 
 use super::*;
-use crate::testing::ScriptedProvider;
+use crate::testing::{ScriptedProvider, recording_metrics};
 
 /// Deterministic Pubkey for tests.
 fn pk(seed: u8) -> Pubkey {
@@ -459,16 +459,30 @@ async fn every_batch_failed_fails_the_call_with_the_last_error() {
     assert_eq!(provider.requests().len(), 2);
 }
 
-/// Mutation: the 429 left to `error_for_status`, counted `http`.
-#[tokio::test]
-async fn a_429_is_rate_limited() {
-    let provider = ScriptedProvider::answering(vec![(429, serde_json::json!({}))]).await;
-    let client = HeliusDasClient::new(provider.url.clone());
-
-    let refused = client.fetch_metadata(&[pk(1)]).await;
+/// Mutation: the 429 left to `error_for_status`, or `RateLimited` counted under another outcome.
+#[test]
+fn a_429_is_rate_limited() {
+    let (refused, counters) = recording_metrics(async {
+        let provider = ScriptedProvider::answering(vec![(429, serde_json::json!({}))]).await;
+        HeliusDasClient::new(provider.url.clone())
+            .fetch_metadata(&[pk(1)])
+            .await
+    });
 
     assert!(
         matches!(refused, Err(SourceError::RateLimited { .. })),
         "got {refused:?}"
+    );
+    let has = |labels: &[(String, String)], key: &str, value: &str| {
+        labels.iter().any(|(k, v)| k == key && v == value)
+    };
+    assert!(
+        counters.iter().any(|(name, labels, count)| {
+            name == "yog_context_provider_call_total"
+                && has(labels, "provider", PROVIDER_LABEL)
+                && has(labels, "outcome", "rate_limited")
+                && *count == 1
+        }),
+        "{counters:?}"
     );
 }

@@ -25,12 +25,16 @@ use tick_outcome::TickOutcome;
 /// How long the worker searches only the recent pools before it sweeps all of them again.
 const FULL_SWEEP_INTERVAL: std::time::Duration = std::time::Duration::from_secs(3600);
 
+/// How long a sweep whose source call failed waits before it is tried again; the recent pools are
+/// read in between.
+const FULL_SWEEP_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(300);
+
 pub struct MetadataWorker {
     repository: Arc<dyn TokenMetadataRepository>,
     source: Arc<dyn MetadataSource>,
     poll_interval: std::time::Duration,
-    /// When the last listed sweep started; `None` sweeps at the first tick.
-    last_full_sweep: Option<Instant>,
+    /// When the next sweep is due; `None` sweeps at the first tick.
+    next_full_sweep: Option<Instant>,
 }
 
 impl MetadataWorker {
@@ -44,7 +48,7 @@ impl MetadataWorker {
             repository,
             source,
             poll_interval,
-            last_full_sweep: None,
+            next_full_sweep: None,
         }
     }
 
@@ -71,8 +75,8 @@ impl MetadataWorker {
     }
 
     fn scope_due(&self) -> Scope {
-        match self.last_full_sweep {
-            Some(at) if at.elapsed() < FULL_SWEEP_INTERVAL => Scope::RecentPools,
+        match self.next_full_sweep {
+            Some(at) if Instant::now() < at => Scope::RecentPools,
             _ => Scope::AllPools,
         }
     }
@@ -99,7 +103,7 @@ impl MetadataWorker {
         };
         MetadataWorkerMetrics::set_missing_mints(scope.as_label(), missing.len());
         if missing.is_empty() {
-            self.sweep_done(scope, start);
+            self.sweep_due_in(scope, start, FULL_SWEEP_INTERVAL);
             return TickOutcome::NoWork;
         }
 
@@ -108,19 +112,20 @@ impl MetadataWorker {
         // One call: the source chunks and absorbs partial failures.
         let fetched = match self.source.fetch_metadata(&missing).await {
             Ok(fetched) => fetched,
-            Err(e) => return TickOutcome::SourceFailed(e),
+            Err(e) => {
+                self.sweep_due_in(scope, start, FULL_SWEEP_RETRY_DELAY);
+                return TickOutcome::SourceFailed(e);
+            }
         };
-        self.sweep_done(scope, start);
+        self.sweep_due_in(scope, start, FULL_SWEEP_INTERVAL);
 
         self.upsert_all(fetched).await;
         TickOutcome::Enriched
     }
 
-    /// A sweep counts once its mints are fetched, or none was missing: a failed listing or source
-    /// call leaves it due at the next tick.
-    fn sweep_done(&mut self, scope: Scope, start: Instant) {
+    fn sweep_due_in(&mut self, scope: Scope, start: Instant, delay: std::time::Duration) {
         if scope == Scope::AllPools {
-            self.last_full_sweep = Some(start);
+            self.next_full_sweep = Some(start + delay);
         }
     }
 

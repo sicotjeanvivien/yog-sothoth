@@ -371,9 +371,9 @@ async fn a_sweep_whose_listing_failed_is_done_again_at_the_next_tick() {
     assert_eq!(repository.listings(), vec![SWEEP, SWEEP]);
 }
 
-/// Against a sweep counted as done before its source call succeeded.
+/// Against a failed sweep tried again at the next tick, or only after `FULL_SWEEP_INTERVAL`.
 #[tokio::test(start_paused = true)]
-async fn a_sweep_whose_source_call_failed_is_done_again_at_the_next_tick() {
+async fn a_sweep_whose_source_call_failed_is_tried_again_after_the_retry_delay() {
     let repository = Arc::new(FakeRepository::with_missing(vec![pk(1)]));
     let source = Arc::new(FakeSource::with_responses(vec![Err(SourceError::Http(
         "boom".into(),
@@ -382,8 +382,12 @@ async fn a_sweep_whose_source_call_failed_is_done_again_at_the_next_tick() {
 
     worker.run_one_cycle().await;
     worker.run_one_cycle().await;
+    tokio::time::advance(FULL_SWEEP_RETRY_DELAY - std::time::Duration::from_secs(1)).await;
+    worker.run_one_cycle().await;
+    tokio::time::advance(std::time::Duration::from_secs(1)).await;
+    worker.run_one_cycle().await;
 
-    assert_eq!(repository.listings(), vec![SWEEP, SWEEP]);
+    assert_eq!(repository.listings(), vec![SWEEP, RECENT, RECENT, SWEEP]);
 }
 
 /// Against a sweep counted as done only when no mint was missing.

@@ -1,5 +1,5 @@
-//! A 429 read the same way for every provider: a [`SourceError::RateLimited`], counted
-//! `rate_limited`, before `error_for_status` turns it into a plain HTTP error.
+//! A 429 read the same way for every provider: a [`SourceError::RateLimited`], before
+//! `error_for_status` turns it into a plain HTTP error.
 
 use std::time::Duration;
 

@@ -1,6 +1,5 @@
 //! Metrics shared by the `yog-context` providers: every chunk-level HTTP call records one
-//! `call_total` and one `call_duration_seconds`, labelled by provider and outcome; an entry of an
-//! answer that cannot be read records one `dropped_total`, labelled by provider and reason.
+//! `call_total` and one `call_duration_seconds`, labelled by provider and outcome.
 
 use metrics::{counter, describe_counter, describe_histogram, histogram};
 

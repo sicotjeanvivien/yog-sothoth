@@ -57,8 +57,9 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   writes the mints of pools seen without them, whose `first_seen_at` is old;
   so do mints Helius left unresolved past the hour. Either waits up to an hour.
   A sweep counts as done once its mints are fetched, or none was missing: a
-  failed listing, or a Helius call whose every chunk failed, sweeps again at the
-  next tick; a chunk failed among others waits for the next sweep. Its metrics carry a
+  failed listing sweeps again at the next tick; a Helius call whose every chunk
+  failed, after `FULL_SWEEP_RETRY_DELAY` (5 min), the recent pools read in
+  between; a chunk failed among others waits for the next sweep. Its metrics carry a
   `scope=recent_pools|all_pools` label.
 - **`PriceWorker`** — every `CONTEXT_PRICE_INTERVAL_SECS` (default 30 s), or
   back to back when a tick outlasts it, lists the candidate mints and asks

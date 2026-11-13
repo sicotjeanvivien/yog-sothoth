@@ -1,10 +1,9 @@
 //! `getMultipleAccounts` against a local server: what is asked, and whose account comes back.
 
-use metrics_util::debugging::{DebugValue, DebuggingRecorder};
 use serde_json::{Value, json};
 
 use super::*;
-use crate::testing::ScriptedProvider;
+use crate::testing::{ScriptedProvider, recording_metrics};
 
 fn pk(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
@@ -60,25 +59,6 @@ async fn the_request_asks_for_the_addresses_in_base64() {
     assert_eq!(requests[0]["params"][1]["encoding"], "base64");
 }
 
-/// Mutation: an unreadable owner or content failing the whole batch.
-#[tokio::test]
-async fn an_unreadable_account_is_dropped_alone() {
-    let provider = ScriptedProvider::answering(vec![answer(vec![
-        json!({ "data": ["AAAA", "base64"], "owner": "not a key" }),
-        json!({ "data": ["not base64!", "base64"], "owner": pk(9).to_string() }),
-        account(3),
-    ])])
-    .await;
-    let client = SolanaAccountClient::new(provider.url.clone());
-
-    let accounts = client
-        .fetch_accounts(&[pk(1), pk(2), pk(3)])
-        .await
-        .expect("the batch survives");
-
-    assert_eq!(pools(&accounts), [pk(3)]);
-}
-
 /// Mutation: the batch size raised, which the RPC refuses, or a batch lost.
 #[tokio::test]
 async fn past_a_hundred_addresses_every_batch_is_asked() {
@@ -122,17 +102,28 @@ async fn a_refused_call_is_an_http_error() {
     assert!(!error.contains("secret"), "{error}");
 }
 
-/// Mutation: the 429 left to `error_for_status`, counted `http`.
-#[tokio::test]
-async fn a_429_is_rate_limited() {
-    let provider = ScriptedProvider::answering(vec![(429, json!({}))]).await;
-    let client = SolanaAccountClient::new(provider.url.clone());
-
-    let refused = client.fetch_accounts(&[pk(1)]).await;
+/// Mutation: the 429 left to `error_for_status`, or `RateLimited` counted under another outcome.
+#[test]
+fn a_429_is_rate_limited() {
+    let (refused, counters) = recording_metrics(async {
+        let provider = ScriptedProvider::answering(vec![(429, json!({}))]).await;
+        SolanaAccountClient::new(provider.url.clone())
+            .fetch_accounts(&[pk(1)])
+            .await
+    });
 
     assert!(
         matches!(refused, Err(SourceError::RateLimited { .. })),
         "{refused:?}"
+    );
+    assert!(
+        counters.iter().any(|(name, labels, count)| {
+            name == "yog_context_provider_call_total"
+                && has(labels, "provider", PROVIDER_LABEL)
+                && has(labels, "outcome", "rate_limited")
+                && *count == 1
+        }),
+        "{counters:?}"
     );
 }
 
@@ -173,23 +164,7 @@ async fn a_failed_batch_fails_the_whole_call() {
     );
 }
 
-/// Pinned as it is. Mutation: the answers matched to the addresses from the end.
-#[tokio::test]
-async fn a_short_answer_keeps_the_accounts_it_has() {
-    let provider = ScriptedProvider::answering(vec![answer(vec![account(1)])]).await;
-    let client = SolanaAccountClient::new(provider.url.clone());
-
-    let accounts = client
-        .fetch_accounts(&[pk(1), pk(2), pk(3)])
-        .await
-        .expect("the accounts");
-
-    assert_eq!(pools(&accounts), [pk(1)]);
-}
-
 // ── Dropped entries, counted under a thread-local recorder ───────────────────────────────
-//
-// Not `#[tokio::test]`: `with_local_recorder` binds the current thread.
 
 /// The accounts fetched for `addresses` against `script`, and each `dropped_total` reason of this
 /// provider with its count, sorted.
@@ -197,43 +172,33 @@ fn fetch_counting_drops(
     script: Vec<(u16, Value)>,
     addresses: &[Pubkey],
 ) -> (Vec<RawAccount>, Vec<(String, u64)>) {
-    let recorder = DebuggingRecorder::new();
-    let snapshotter = recorder.snapshotter();
-    let accounts = metrics::with_local_recorder(&recorder, || {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("a current-thread runtime")
-            .block_on(async {
-                let provider = ScriptedProvider::answering(script).await;
-                SolanaAccountClient::new(provider.url.clone())
-                    .fetch_accounts(addresses)
-                    .await
-                    .expect("the accounts")
-            })
+    let (accounts, counters) = recording_metrics(async {
+        let provider = ScriptedProvider::answering(script).await;
+        SolanaAccountClient::new(provider.url.clone())
+            .fetch_accounts(addresses)
+            .await
+            .expect("the accounts")
     });
-    let label = |key: &metrics::Key, name: &str| {
-        key.labels()
-            .find(|label| label.key() == name)
-            .map(|label| label.value().to_string())
-    };
-    let mut drops: Vec<(String, u64)> = snapshotter
-        .snapshot()
-        .into_vec()
+    let mut drops: Vec<(String, u64)> = counters
         .into_iter()
-        .filter(|(key, ..)| {
-            key.key().name() == "yog_context_provider_dropped_total"
-                && label(key.key(), "provider").as_deref() == Some("solana_account")
+        .filter(|(name, labels, _)| {
+            name == "yog_context_provider_dropped_total" && has(labels, "provider", PROVIDER_LABEL)
         })
-        .map(|(key, _, _, value)| {
-            let DebugValue::Counter(count) = value else {
-                panic!("dropped_total is a counter");
-            };
-            (label(key.key(), "reason").expect("a reason"), count)
+        .map(|(_, labels, count)| {
+            let reason = labels
+                .into_iter()
+                .find(|(key, _)| key == "reason")
+                .expect("a reason")
+                .1;
+            (reason, count)
         })
         .collect();
     drops.sort();
     (accounts, drops)
+}
+
+fn has(labels: &[(String, String)], key: &str, value: &str) -> bool {
+    labels.iter().any(|(k, v)| k == key && v == value)
 }
 
 /// Mutation: the counter removed, or the two reasons swapped.

@@ -1,5 +1,5 @@
 //! A local HTTP server for the provider clients' tests: it plays scripted answers in order and
-//! keeps each JSON request it received.
+//! keeps each JSON request it received; and the counters a call records.
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -75,4 +75,41 @@ async fn read_json_request(socket: &mut TcpStream) -> Value {
             return serde_json::from_slice(&raw[end + 4..end + 4 + length]).expect("JSON");
         }
     }
+}
+
+/// One counter recorded: its name, its labels, its count.
+pub(crate) type RecordedCounter = (String, Vec<(String, String)>, u64);
+
+/// Run `future` on a current-thread runtime under a thread-local recorder: its output, and every
+/// counter it recorded.
+/// ⚠️ Not from a `#[tokio::test]`: `with_local_recorder` binds the current thread.
+pub(crate) fn recording_metrics<T>(
+    future: impl std::future::Future<Output = T>,
+) -> (T, Vec<RecordedCounter>) {
+    let recorder = metrics_util::debugging::DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+    let output = metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a current-thread runtime")
+            .block_on(future)
+    });
+    let counters = snapshotter
+        .snapshot()
+        .into_vec()
+        .into_iter()
+        .filter_map(|(key, _, _, value)| {
+            let metrics_util::debugging::DebugValue::Counter(count) = value else {
+                return None;
+            };
+            let labels = key
+                .key()
+                .labels()
+                .map(|label| (label.key().to_string(), label.value().to_string()))
+                .collect();
+            Some((key.key().name().to_string(), labels, count))
+        })
+        .collect();
+    (output, counters)
 }
