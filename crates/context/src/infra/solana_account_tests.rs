@@ -1,5 +1,6 @@
 //! `getMultipleAccounts` against a local server: what is asked, and whose account comes back.
 
+use metrics_util::debugging::{DebugValue, DebuggingRecorder};
 use serde_json::{Value, json};
 
 use super::*;
@@ -103,28 +104,36 @@ async fn past_a_hundred_addresses_every_batch_is_asked() {
     assert_eq!(sizes, [100, 1]);
 }
 
-/// Mutation: `error_for_status` removed, or the URL, which holds the key, kept in the error. These
-/// clients have no rate-limit type: a 429 is `Http`.
+/// Mutation: `error_for_status` removed, or the URL, which holds the key, kept in the error.
 #[tokio::test]
 async fn a_refused_call_is_an_http_error() {
-    for status in [500, 429] {
-        let provider = ScriptedProvider::answering(vec![(status, json!({}))]).await;
-        let client = SolanaAccountClient::new(provider.url.clone());
+    let provider = ScriptedProvider::answering(vec![(500, json!({}))]).await;
+    let client = SolanaAccountClient::new(provider.url.clone());
 
-        let refused = client.fetch_accounts(&[pk(1)]).await;
+    let refused = client.fetch_accounts(&[pk(1)]).await;
 
-        assert!(
-            matches!(refused, Err(SourceError::Http(_))),
-            "{status}: {refused:?}"
-        );
-        assert_eq!(
-            provider.requests().len(),
-            1,
-            "the request reached the server"
-        );
-        let error = refused.expect_err("a refusal").to_string();
-        assert!(!error.contains("secret"), "{error}");
-    }
+    assert!(matches!(refused, Err(SourceError::Http(_))), "{refused:?}");
+    assert_eq!(
+        provider.requests().len(),
+        1,
+        "the request reached the server"
+    );
+    let error = refused.expect_err("a refusal").to_string();
+    assert!(!error.contains("secret"), "{error}");
+}
+
+/// Mutation: the 429 left to `error_for_status`, counted `http`.
+#[tokio::test]
+async fn a_429_is_rate_limited() {
+    let provider = ScriptedProvider::answering(vec![(429, json!({}))]).await;
+    let client = SolanaAccountClient::new(provider.url.clone());
+
+    let refused = client.fetch_accounts(&[pk(1)]).await;
+
+    assert!(
+        matches!(refused, Err(SourceError::RateLimited { .. })),
+        "{refused:?}"
+    );
 }
 
 /// Mutation: a missing `result` read as no account: an RPC error comes back as a 200.
@@ -176,4 +185,105 @@ async fn a_short_answer_keeps_the_accounts_it_has() {
         .expect("the accounts");
 
     assert_eq!(pools(&accounts), [pk(1)]);
+}
+
+// ── Dropped entries, counted under a thread-local recorder ───────────────────────────────
+//
+// Not `#[tokio::test]`: `with_local_recorder` binds the current thread.
+
+/// The accounts fetched for `addresses` against `script`, and each `dropped_total` reason of this
+/// provider with its count, sorted.
+fn fetch_counting_drops(
+    script: Vec<(u16, Value)>,
+    addresses: &[Pubkey],
+) -> (Vec<RawAccount>, Vec<(String, u64)>) {
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+    let accounts = metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a current-thread runtime")
+            .block_on(async {
+                let provider = ScriptedProvider::answering(script).await;
+                SolanaAccountClient::new(provider.url.clone())
+                    .fetch_accounts(addresses)
+                    .await
+                    .expect("the accounts")
+            })
+    });
+    let label = |key: &metrics::Key, name: &str| {
+        key.labels()
+            .find(|label| label.key() == name)
+            .map(|label| label.value().to_string())
+    };
+    let mut drops: Vec<(String, u64)> = snapshotter
+        .snapshot()
+        .into_vec()
+        .into_iter()
+        .filter(|(key, ..)| {
+            key.key().name() == "yog_context_provider_dropped_total"
+                && label(key.key(), "provider").as_deref() == Some("solana_account")
+        })
+        .map(|(key, _, _, value)| {
+            let DebugValue::Counter(count) = value else {
+                panic!("dropped_total is a counter");
+            };
+            (label(key.key(), "reason").expect("a reason"), count)
+        })
+        .collect();
+    drops.sort();
+    (accounts, drops)
+}
+
+/// Mutation: the counter removed, or the two reasons swapped.
+#[test]
+fn an_unreadable_account_is_counted_under_its_reason() {
+    let (accounts, drops) = fetch_counting_drops(
+        vec![answer(vec![
+            json!({ "data": ["AAAA", "base64"], "owner": "not a key" }),
+            json!({ "data": ["not base64!", "base64"], "owner": pk(9).to_string() }),
+            account(3),
+        ])],
+        &[pk(1), pk(2), pk(3)],
+    );
+
+    assert_eq!(pools(&accounts), [pk(3)]);
+    assert_eq!(
+        drops,
+        [
+            ("unreadable_data".to_string(), 1),
+            ("unreadable_owner".to_string(), 1)
+        ]
+    );
+}
+
+/// Mutation: an absent account, a closed pool, counted as dropped.
+#[test]
+fn an_absent_account_is_not_counted() {
+    let (accounts, drops) =
+        fetch_counting_drops(vec![answer(vec![Value::Null, account(2)])], &[pk(1), pk(2)]);
+
+    assert_eq!(pools(&accounts), [pk(2)]);
+    assert_eq!(drops, []);
+}
+
+/// Mutation: the length check removed, or counted once per missing account.
+#[test]
+fn a_short_answer_is_counted_once() {
+    let (accounts, drops) =
+        fetch_counting_drops(vec![answer(vec![account(1)])], &[pk(1), pk(2), pk(3)]);
+
+    assert_eq!(pools(&accounts), [pk(1)]);
+    assert_eq!(drops, [("length_mismatch".to_string(), 1)]);
+}
+
+/// Mutation: only a short answer checked.
+#[test]
+fn a_long_answer_is_counted_once() {
+    let (accounts, drops) =
+        fetch_counting_drops(vec![answer(vec![account(1), account(2)])], &[pk(1)]);
+
+    assert_eq!(pools(&accounts), [pk(1)]);
+    assert_eq!(drops, [("length_mismatch".to_string(), 1)]);
 }

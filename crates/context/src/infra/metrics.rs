@@ -1,10 +1,12 @@
 //! Metrics shared by the `yog-context` providers: every chunk-level HTTP call records one
-//! `call_total` and one `call_duration_seconds`, labelled by provider and outcome.
+//! `call_total` and one `call_duration_seconds`, labelled by provider and outcome; an entry of an
+//! answer that cannot be read records one `dropped_total`, labelled by provider and reason.
 
 use metrics::{counter, describe_counter, describe_histogram, histogram};
 
 const CALL_TOTAL: &str = "yog_context_provider_call_total";
 const CALL_DURATION: &str = "yog_context_provider_call_duration_seconds";
+const DROPPED_TOTAL: &str = "yog_context_provider_dropped_total";
 
 pub(crate) struct ProviderMetrics;
 
@@ -17,6 +19,10 @@ impl ProviderMetrics {
         describe_histogram!(
             CALL_DURATION,
             "Duration of a single provider HTTP call in seconds. Labels: provider, outcome"
+        );
+        describe_counter!(
+            DROPPED_TOTAL,
+            "Answer entries dropped as unreadable. Labels: provider=solana_account, reason=unreadable_owner|unreadable_data|length_mismatch"
         );
     }
 
@@ -33,5 +39,14 @@ impl ProviderMetrics {
             "outcome" => outcome,
         )
         .record(seconds);
+    }
+
+    pub(crate) fn record_dropped(provider: &'static str, reason: &'static str) {
+        counter!(
+            DROPPED_TOTAL,
+            "provider" => provider,
+            "reason" => reason,
+        )
+        .increment(1);
     }
 }

@@ -4,6 +4,7 @@
 //! one; a chunk refused on 429 anyway is retried a bounded number of times.
 
 use super::metrics::ProviderMetrics;
+use super::rate_limit;
 use std::collections::{HashMap, HashSet};
 use std::num::NonZeroU32;
 use std::time::{Duration, Instant};
@@ -112,13 +113,7 @@ impl JupiterPriceClient {
             .send()
             .await?;
 
-        if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            return Err(SourceError::RateLimited {
-                retry_after: parse_retry_after(response.headers()),
-            });
-        }
-
-        let response = response
+        let response = rate_limit::refused(response)?
             .error_for_status()?
             .json::<HashMap<String, JupiterPriceEntry>>()
             .await?;
@@ -259,18 +254,6 @@ fn rate_limit_backoff(attempt: u32, retry_after: Option<Duration>) -> Duration {
     retry_after
         .unwrap_or_else(|| RATE_LIMIT_BASE_BACKOFF * 2u32.saturating_pow(attempt))
         .min(RATE_LIMIT_MAX_BACKOFF)
-}
-
-/// `Retry-After` in its delta-seconds form; the HTTP-date form yields `None`.
-fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
-    headers
-        .get(reqwest::header::RETRY_AFTER)?
-        .to_str()
-        .ok()?
-        .trim()
-        .parse::<u64>()
-        .ok()
-        .map(Duration::from_secs)
 }
 
 /// One response entry as a price, or `None` without a usable `usdPrice` or a

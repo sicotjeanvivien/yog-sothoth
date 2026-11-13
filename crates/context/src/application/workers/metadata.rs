@@ -97,11 +97,9 @@ impl MetadataWorker {
             Ok(missing) => missing,
             Err(e) => return TickOutcome::ListFailed(e),
         };
-        if scope == Scope::AllPools {
-            self.last_full_sweep = Some(start);
-        }
         MetadataWorkerMetrics::set_missing_mints(scope.as_label(), missing.len());
         if missing.is_empty() {
+            self.sweep_done(scope, start);
             return TickOutcome::NoWork;
         }
 
@@ -112,9 +110,18 @@ impl MetadataWorker {
             Ok(fetched) => fetched,
             Err(e) => return TickOutcome::SourceFailed(e),
         };
+        self.sweep_done(scope, start);
 
         self.upsert_all(fetched).await;
         TickOutcome::Enriched
+    }
+
+    /// A sweep counts once its mints are fetched, or none was missing: a failed listing or source
+    /// call leaves it due at the next tick.
+    fn sweep_done(&mut self, scope: Scope, start: Instant) {
+        if scope == Scope::AllPools {
+            self.last_full_sweep = Some(start);
+        }
     }
 
     /// Upsert every fetched row, logging individual failures without aborting the batch.

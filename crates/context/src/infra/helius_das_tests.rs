@@ -438,3 +438,37 @@ async fn no_mint_asks_nothing() {
     assert!(fetched.is_empty());
     assert!(provider.requests().is_empty());
 }
+
+/// Mutation: a call whose every batch failed returned as an empty success, or with its first error.
+#[tokio::test]
+async fn every_batch_failed_fails_the_call_with_the_last_error() {
+    let wanted = vec![pk(1); 1_001];
+    let provider = ScriptedProvider::answering(vec![
+        (500, serde_json::json!({})),
+        (429, serde_json::json!({})),
+    ])
+    .await;
+    let client = HeliusDasClient::new(provider.url.clone());
+
+    let failed = client.fetch_metadata(&wanted).await;
+
+    assert!(
+        matches!(failed, Err(SourceError::RateLimited { .. })),
+        "got {failed:?}"
+    );
+    assert_eq!(provider.requests().len(), 2);
+}
+
+/// Mutation: the 429 left to `error_for_status`, counted `http`.
+#[tokio::test]
+async fn a_429_is_rate_limited() {
+    let provider = ScriptedProvider::answering(vec![(429, serde_json::json!({}))]).await;
+    let client = HeliusDasClient::new(provider.url.clone());
+
+    let refused = client.fetch_metadata(&[pk(1)]).await;
+
+    assert!(
+        matches!(refused, Err(SourceError::RateLimited { .. })),
+        "got {refused:?}"
+    );
+}

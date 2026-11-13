@@ -6,6 +6,7 @@
 mod helius_das;
 mod jupiter_price;
 mod metrics;
+mod rate_limit;
 mod solana_account;
 mod source_error;
 
