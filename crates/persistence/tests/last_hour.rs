@@ -193,7 +193,10 @@ async fn the_last_hours_tokens_count_their_pools_once(pool: PgPool) {
         // ⚠️ A cursor that rereads its own row would page forever: fail instead of hanging.
         assert!(seen.len() <= 10, "paging does not end: {seen:?}");
         match page.page.next_cursor {
-            Some(Cursor::TokenActivity(next)) => cursor = Some(next),
+            Some(Cursor::TokenActivity(next)) => {
+                assert_eq!(next.window, Window::Hour, "the cursor names its ranking");
+                cursor = Some(next);
+            }
             Some(other) => panic!("{other:?}"),
             None => break,
         }

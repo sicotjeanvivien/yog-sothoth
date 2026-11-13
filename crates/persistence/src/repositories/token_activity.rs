@@ -91,6 +91,7 @@ impl TokenActivityFeed for PgTokenActivityRepository {
         let page =
             PageBuilder::new(items, limit, QueryMode::Forward, had_cursor).finalize(|token| {
                 Cursor::TokenActivity(TokenActivityCursor {
+                    window,
                     last_hour,
                     volume_usd: token.volume_usd,
                     mint: token.mint,
@@ -185,6 +186,7 @@ impl TokenActivityFeed for PgTokenActivityRepository {
         let page =
             PageBuilder::new(items, limit, QueryMode::Forward, had_cursor).finalize(|token| {
                 Cursor::TokenActivity(TokenActivityCursor {
+                    window: Window::Hour,
                     last_hour,
                     volume_usd: token.volume_usd,
                     mint: token.mint,

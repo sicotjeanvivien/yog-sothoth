@@ -169,6 +169,7 @@ fn token_cursor() -> TokenCursor {
 
 fn token_activity_cursor() -> TokenActivityCursor {
     TokenActivityCursor {
+        window: Window::Week,
         last_hour: Utc.timestamp_micros(MICROS).unwrap(),
         volume_usd: Decimal::new(123_456_789_123_450, 6),
         mint: Pubkey::new_unique(),
@@ -190,15 +191,39 @@ fn token_cursor_round_trip() {
     assert_eq!(decode_token_cursor(&encoded).unwrap(), original);
 }
 
-/// Mutation: the date and the mint swapped, the date truncated to the second, or the volume rounded
-/// or stripped of its final zero, which `Decimal`'s equality alone would not see.
+/// Mutation: the window lost, the date and the mint swapped, the date truncated to the second, or
+/// the volume rounded or stripped of its final zero, which `Decimal`'s equality alone would not see.
 #[test]
 fn token_activity_cursor_round_trip() {
     let original = token_activity_cursor();
     let encoded = encode_cursor(&Cursor::TokenActivity(original.clone())).unwrap();
-    let decoded = decode_token_activity_cursor(&encoded).unwrap();
+    let decoded = decode_token_activity_cursor(&encoded, Window::Week).unwrap();
     assert_eq!(decoded, original);
     assert_eq!(decoded.volume_usd.to_string(), "123456789.123450");
+}
+
+/// Mutation: the window not compared — a `7d` key followed in the `30d` or `1h` ranking.
+#[test]
+fn a_token_activity_cursor_of_another_window_is_refused() {
+    let week = encode_cursor(&Cursor::TokenActivity(token_activity_cursor())).unwrap();
+    for window in [Window::Month, Window::Hour, Window::Day] {
+        assert_refused_because(
+            decode_token_activity_cursor(&week, window),
+            "invalid cursor: taken in another list",
+        );
+    }
+}
+
+/// Pinned as decided: a cursor issued before it carried its window is refused, not read as `7d`.
+#[test]
+fn a_token_activity_cursor_without_its_window_is_refused() {
+    let unwindowed = URL_SAFE_NO_PAD_ENCODE(&format!(
+        r#"{{"last_hour":"{VALID_DATE}","volume_usd":"1.5","mint":"{VALID_MINT}"}}"#
+    ));
+    assert_refused_because(
+        decode_token_activity_cursor(&unwindowed, Window::Week),
+        "invalid cursor: malformed payload",
+    );
 }
 
 /// Mutation: an unreadable date or mint falling back to a default, resuming the list elsewhere.
@@ -223,20 +248,22 @@ fn a_damaged_token_cursor_is_refused_for_its_reason() {
 fn a_damaged_token_activity_cursor_is_refused_for_its_reason() {
     let damaged = |date: &str, volume: &str, mint: &str| {
         URL_SAFE_NO_PAD_ENCODE(&format!(
-            r#"{{"last_hour":"{date}","volume_usd":"{volume}","mint":"{mint}"}}"#
+            r#"{{"window":"7d","last_hour":"{date}","volume_usd":"{volume}","mint":"{mint}"}}"#
         ))
     };
-    assert!(decode_token_activity_cursor(&damaged(VALID_DATE, "1.5", VALID_MINT)).is_ok());
+    assert!(
+        decode_token_activity_cursor(&damaged(VALID_DATE, "1.5", VALID_MINT), Window::Week).is_ok()
+    );
     assert_refused_because(
-        decode_token_activity_cursor(&damaged("yesterday", "1.5", VALID_MINT)),
+        decode_token_activity_cursor(&damaged("yesterday", "1.5", VALID_MINT), Window::Week),
         "invalid cursor: malformed timestamp",
     );
     assert_refused_because(
-        decode_token_activity_cursor(&damaged(VALID_DATE, "a lot", VALID_MINT)),
+        decode_token_activity_cursor(&damaged(VALID_DATE, "a lot", VALID_MINT), Window::Week),
         "invalid cursor: malformed volume",
     );
     assert_refused_because(
-        decode_token_activity_cursor(&damaged(VALID_DATE, "1.5", "not-a-mint")),
+        decode_token_activity_cursor(&damaged(VALID_DATE, "1.5", "not-a-mint"), Window::Week),
         "invalid cursor: malformed mint",
     );
 }
@@ -256,7 +283,10 @@ fn a_cursor_of_the_other_list_or_with_an_unknown_field_is_refused() {
 
     let token = encode_cursor(&Cursor::Token(token_cursor())).unwrap();
     let activity = encode_cursor(&Cursor::TokenActivity(token_activity_cursor())).unwrap();
-    assert_refused_because(decode_token_activity_cursor(&token), malformed);
+    assert_refused_because(
+        decode_token_activity_cursor(&token, Window::Week),
+        malformed,
+    );
     assert_refused_because(decode_token_cursor(&activity), malformed);
 
     assert_refused_because(
@@ -266,9 +296,12 @@ fn a_cursor_of_the_other_list_or_with_an_unknown_field_is_refused() {
         malformed,
     );
     assert_refused_because(
-        decode_token_activity_cursor(&URL_SAFE_NO_PAD_ENCODE(&format!(
-            r#"{{"last_hour":"{VALID_DATE}","volume_usd":"1","mint":"{VALID_MINT}","extra":1}}"#
-        ))),
+        decode_token_activity_cursor(
+            &URL_SAFE_NO_PAD_ENCODE(&format!(
+                r#"{{"window":"7d","last_hour":"{VALID_DATE}","volume_usd":"1","mint":"{VALID_MINT}","extra":1}}"#
+            )),
+            Window::Week,
+        ),
         malformed,
     );
 }

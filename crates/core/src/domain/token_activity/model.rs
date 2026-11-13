@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 
-use crate::domain::TokenMetadata;
+use crate::domain::{TokenMetadata, Window};
 use crate::tools::Page;
 
 /// One token over a window. ⚠️ A swap counts for both its tokens: the volumes
@@ -30,9 +30,10 @@ pub struct TokenActivityPage {
 }
 
 /// The last item of a page in the volume ordering, `(volume_usd, mint)`, in
-/// the ranking of `last_hour`: each freeze rewrites the ranking.
+/// the ranking of `window` at `last_hour`: each freeze rewrites the ranking.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokenActivityCursor {
+    pub window: Window,
     pub last_hour: DateTime<Utc>,
     pub volume_usd: Decimal,
     pub mint: Pubkey,

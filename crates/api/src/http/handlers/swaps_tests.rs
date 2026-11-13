@@ -492,3 +492,31 @@ async fn a_known_pools_totals_and_series_are_served() {
         );
     }
 }
+
+/// Mutation: the cursor decoded without the request's window — a page of another ranking followed —
+/// or refused under its own.
+#[tokio::test]
+async fn a_token_cursor_is_followed_under_its_window_only() {
+    use yog_core::{
+        Cursor,
+        domain::{TokenActivityCursor, Window},
+    };
+    let week = crate::http::cursor::encode_cursor(&Cursor::TokenActivity(TokenActivityCursor {
+        window: Window::Week,
+        last_hour: Utc::now() - TimeDelta::hours(1),
+        volume_usd: rust_decimal::Decimal::ONE,
+        mint: pk(1),
+    }))
+    .unwrap();
+
+    for window in ["30d", "24h", "1h"] {
+        let uri = format!("/api/swaps/by-token?window={window}&cursor={week}");
+        let (status, content_type, detail) = get(&uri).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}: {detail}");
+        assert_eq!(content_type, "application/problem+json", "{uri}");
+        assert!(detail.contains("taken in another list"), "{uri}: {detail}");
+    }
+    let uri = format!("/api/swaps/by-token?window=7d&cursor={week}");
+    let (status, _, body) = get(&uri).await;
+    assert_eq!(status, StatusCode::OK, "{uri}: {body}");
+}

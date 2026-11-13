@@ -156,7 +156,7 @@ Every route below takes a key, but the probes, the four open routes
 | `GET` | `/api/swaps/totals` (`?offset=`), `/series` | Per protocol, the swaps over `?window=`, then per bucket: swaps, volume, fees and their shares — LP, protocol and referral sum to the fees, all known or all null — pool-hours and the valued ones; the totals with the distinct pools that swapped |
 | `GET` | `/api/protocols/{protocol}/swaps/totals`, `/series` | The same, the protocol's own |
 | `GET` | `/api/pools/{pool}/swaps/totals`, `/series` | The same for one pool, without the protocol nor the distinct pools; 404 for a pool unknown |
-| `GET` | `/api/swaps/by-token` | Tokens by volume over `?window=`, every protocol summed, identity embedded, forward-only cursor; a swap counts for both its tokens |
+| `GET` | `/api/swaps/by-token` | Tokens by volume over `?window=`, every protocol summed, identity embedded, forward-only cursor refused (400) under another window; a swap counts for both its tokens |
 | `GET` | `/api/pool-creations/totals`, `/series`, and under `/api/protocols/{protocol}/` | Per protocol, the pools created over the window, then per bucket |
 | `GET` | `/api/protocols/{protocol}/liquidity-moves/totals`, `/series` | The protocol's liquidity created, added and removed, valued, with its moves valued, and on `totals` the distinct owners of its moves; its `coveredSince` is the liquidity's |
 | `GET` | `/api/protocols/{protocol}/position-changes/totals`, `/series` | The positions the protocol opened, locked (vesting or permanent), split and closed over the window, then per bucket, one count per event; over the last hour, counted on the events themselves |
