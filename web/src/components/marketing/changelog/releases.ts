@@ -37,27 +37,26 @@ export const RELEASES: readonly Release[] = [
     summary: "The price–oracle deviation detector is retired, and the API and its database hold up better under load.",
     sections: [
       {
-        kind: "features",
-        items: [
-          {
-            text: "The Privacy policy and the Terms are revised against the code: what our technical logs hold, a request identifier included, what we keep about an API client, and the API served on a key we issue.",
-            technical: false,
-          },
-        ],
-      },
-      {
         kind: "fixes",
         items: [
+          {
+            text: "The Privacy policy now lists everything our technical logs hold, the method and a request identifier included, and says we keep a client's own creation and revocation dates and copy readings of its call counters; the Terms say the API is served on a key we issue.",
+            technical: false,
+          },
           {
             text: "The price–oracle deviation detector is retired, with every signal it published: it flagged a pool's lasting gap to the market rather than a change, and made up nine signals in ten.",
             technical: false,
           },
           {
-            text: "The ingestion alarm fails its Healthchecks.io check as soon as the dashboard would show the ingestion delayed (2 min without a new event) instead of stale (15 min): a shorter outage was never signalled.",
+            text: "yog-signals drops its SIGNALS_PRICE_DEVIATION_* settings, and the stale, no_decoder and undecodable reasons of yog_signals_skipped_total.",
             technical: true,
           },
           {
-            text: "Postgres gets 256 MB of shared memory instead of Docker's 64 MB default: parallel reads of the enrichment and signal daemons no longer fail when they start together.",
+            text: "The ingestion alarm fails its Healthchecks.io check once the ingestion has been delayed (2 min without a new event) instead of stale (15 min), within 7 min of its last event: a shorter outage was never signalled. Under INGEST_SCOPE=pools, a lull longer than 2 min fails it too.",
+            technical: true,
+          },
+          {
+            text: "Postgres gets 256 MB of shared memory instead of Docker's 64 MB default: parallel reads of the enrichment daemon no longer fail when they start together.",
             technical: true,
           },
           {
