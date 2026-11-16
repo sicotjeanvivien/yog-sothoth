@@ -28,7 +28,7 @@
 # and rust-toolchain.toml must all be visible.
 
 # ── chef base ──────────────────────────────────────────────────────
-FROM rust:1.99.1-slim-trixie AS chef
+FROM rust:1.100.0-slim-trixie AS chef
 WORKDIR /app
 
 # pkg-config + libssl-dev are needed by several transitive crates
