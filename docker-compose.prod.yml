@@ -102,8 +102,8 @@ services:
     # that pins only the Postgres major. A dump restores only into the SAME TimescaleDB version
     # (crates/persistence/README.md, "Backup and restore"), so a `pull` that
     # silently moved the version would strand every dump taken before it.
-    # Upgrading is a decision: change this line, then take a fresh dump.
-    image: timescale/timescaledb:2.31.0-pg18
+    # Upgrading: crates/persistence/README.md, "Updating TimescaleDB in place".
+    image: timescale/timescaledb:2.32.0-pg18
     command:
       - postgres
       - -c

@@ -1201,6 +1201,10 @@ done by hand, in this order:
    that `PUBLIC` took nothing back ([above](#what-public-holds-taken-back--and-re-taken-after-an-extension-update)).
 5. **Restart yog-archive** last: its startup dump, the first of the new version,
    starts once nothing is left to change.
+6. **Update `template1` too**, with the same command against it, then read
+   `extversion` in every database of the cluster. `CREATE DATABASE` copies
+   `template1`: left behind, it starts every new database on the old version,
+   `sqlx::test`'s throwaway databases included.
 
 There is no way back afterwards: the previous image lacks the new library, so
 the previous version of the stack can no longer load the extension.
