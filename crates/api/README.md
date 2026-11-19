@@ -24,11 +24,19 @@ api/src/
 ├── application/
 │   ├── services/          ← cross-protocol services at the root (SignalService,
 │   │                        TokenService, NetworkService, IngestionService,
-│   │                        AnnouncementService, PoolService), one
-│   │                        per produced resource (SwapActivityService, the tokens' too,
-│   │                        PoolCreationsService, LiquidityMoveService, ClaimTotalsService,
-│   │                        ProtocolTvlService, DiscoveredTvlService), and period.rs,
-│   │                        the frozen period they all read over
+│   │                        AnnouncementService, PoolService, ProtocolCatalogService,
+│   │                        WindowsService), one per on-chain event collection
+│   │                        (SwapEventService, LiquidityChangeEventService,
+│   │                        PoolCreationEventService, PositionChangeEventService,
+│   │                        PositionFeeClaimEventService, ProtocolFeeClaimEventService,
+│   │                        RewardClaimEventService, RewardChangeEventService,
+│   │                        PoolChangeEventService), one per produced resource
+│   │                        (SwapActivityService, the tokens' too, PoolCreationsService,
+│   │                        LiquidityMoveService, LiquidityTurnoverService,
+│   │                        PositionChangeCountsService, ClaimTotalsService,
+│   │                        RotationRunService, ProtocolTvlService, DiscoveredTvlService),
+│   │                        and period.rs, the frozen period the produced ones and
+│   │                        WindowsService read over
 │   ├── live.rs            ← LiveSource, what a table streamed on /api/live answers
 │   ├── live/poller.rs     ← LivePoller, one per source
 │   ├── live/pollers.rs    ← LivePollers, all of them as one task
@@ -37,6 +45,7 @@ api/src/
 │   ├── live/signals_source.rs ← SignalsSource (enriches once, feeds the signals' broadcast)
 │   ├── live/event_source.rs   ← EventSource, one table of an event collection
 │   ├── cache.rs           ← SharedCache (moka) and its named CachePolicy per use
+│   ├── work_slots.rs      ← WorkSlots, the slots of the expensive database work
 │   ├── auth/key_ring.rs   ← KeyRing, every active API key in memory
 │   ├── auth/ticket_registry.rs ← TicketRegistry, the tickets issued and not yet used, in memory
 │   ├── auth/credential.rs ← identify() and identify_ticket(), the client an `Authorization`
@@ -52,8 +61,9 @@ api/src/
 │   ├── dto/schema.rs      ← the wire forms the contract names (UnsignedDecimal, Count…)
 │   ├── tests/contract.rs  ← test-only: the OpenAPI document, as committed in openapi.json
 │   ├── cursor.rs          ← base64/JSON cursor codec
-│   ├── middleware.rs      ← CORS, security headers, request-id tracing,
-│   │                        capacity bounds (middleware/capacity.rs), every
+│   ├── middleware.rs      ← CORS, security headers, request-id tracing
+│   │                        (middleware/tracing.rs), capacity bounds
+│   │                        (middleware/capacity.rs), every
 │   │                        error as Problem Details (middleware/problem_details.rs),
 │   │                        who calls (middleware/authentication.rs, require_api_key.rs,
 │   │                        ticket_authentication.rs)
@@ -79,8 +89,9 @@ root, **including services whose only data source today is DAMM v2**.
 
 The test is reach, not current content. A cross-protocol service must not name
 a protocol in its constructor: that is how a neutral type accretes one
-protocol's vocabulary, which is what migration 036 removed from the `pools`
-table and what the layout above keeps out of the service layer.
+protocol's vocabulary, which is what the `pools` table shed into its satellite
+(`meteora_damm_v2_pool_properties`, §8 of `001_baseline.sql`) and what the layout
+above keeps out of the service layer.
 
 The one place the read path matches on a protocol is `ProtocolResponse`
 (`http/dto/response/protocol.rs`): its `From<domain::Protocol>` is exhaustive
@@ -119,6 +130,34 @@ with no wildcard arm, so adding a variant breaks the build there.
   share is written once, in their common parent: `logo_uri` in `token.rs`,
   `parse_address` in `request.rs`.
 - **Tests** of a part go in its owner's file, `<side>/tests/<owner>_tests.rs`.
+
+**Not yet following these rules:**
+
+- `request/window_param.rs`, eleven types: `WindowParam`, `DayWindowParam`,
+  `WeekWindowParam`, `MeasureWindowParam`, `IntervalParam`, `ReadingIntervalParam`,
+  `WindowParams`, `MeasureWindowParams`, `MeasureActivityParams`, `SeriesParams`,
+  `ReadingSeriesParams`.
+- `request/list_announcements.rs`, `list_events.rs`, `list_liquidity_moves.rs`,
+  `list_pools.rs`, `list_protocols.rs`, `list_rotation_runs.rs`, `list_token_prices.rs`,
+  `list_tokens.rs`: their `*Params` beside their `*Request`; `list_token_activity.rs`, a
+  `SortParam` too; `live.rs`, `LiveTopic`, `LiveParams` and `LiveRequest`.
+- `response/window.rs`, 23 types, from `WindowResponse` to `LiquidityTurnoverTotalsResponse`.
+- `response/meteora_damm_v2_fees.rs`, a part at the top level, eleven types: two
+  `pub(super)` (`MeteoraDammV2FeeParametersResponse`, `MeteoraDammV2FeeChangesResponse`) and
+  nine private.
+- `response/liquidity_move.rs`, four types; `protocol_catalog.rs`, `protocol_claim_totals.rs`,
+  `protocol_position_change_totals.rs`, `protocol_rotation_run_totals.rs`,
+  `protocol_tvl_change.rs`, `token_activity.rs`, two each.
+- `response/position_change_event/meteora_damm_v2_response.rs`, eight types;
+  `reward_change_event/meteora_damm_v2_response.rs`, six;
+  `pool_change_event/meteora_damm_v2_response.rs`, three.
+- Parts whose type drops its owner's prefix: `ChecksReportResponse` and
+  `ComponentStatusResponse` (`readiness/`), `MeteoraDammV2PropertiesResponse` (`pool_detail/`).
+- `*Param` enums not named like the parameter a client writes: `RotationRunSortParam`
+  (`sort`), `AnnouncementStatusParam` (`status`), `PageDirectionParam` (`dir`),
+  `PagePositionParam` (`position`), `DayWindowParam`, `WeekWindowParam` and
+  `MeasureWindowParam` (`window`, and `offset` for the last), `ReadingIntervalParam`
+  (`interval`).
 
 ## Endpoints
 
@@ -172,10 +211,12 @@ Every route below takes a key, but the probes, the four open routes
 | `GET` | `/api/pool-discoveries/totals`, and under `/api/protocols/{protocol}/` | Per protocol, the pools first seen in the window without their birth observed, and what they hold at the last reading |
 | `GET` | `/api/protocols/{protocol}/signals`, `/api/pools/{pool}/signals` | The signals of one protocol or one pool, paginated as `/api/signals`, `?severity=` |
 
-**What yog-analytic computes** (`/api/protocols/…` but the catalogue and the signals,
-`/api/swaps/…`, `/api/pool-creations/…`, `/api/tvl…`, `/api/pool-discoveries/…`,
-`/api/pools/{pool}/…` but the signals) read yog-analytic's tables over one frozen period,
-built in `period.rs`: the window
+**What yog-analytic computes** — the measures (`…/totals`, `…/series`, `/api/swaps/by-token`),
+the TVL readings (`/api/tvl`, `/api/protocols/{protocol}/tvl`) and the `liquidity-moves` and
+`rotation-runs` lists, at the root, under a protocol or under a pool; not the catalogue, the
+pools, the tokens, the on-chain event lists nor the signals, read live — is read from
+yog-analytic's tables over one frozen period (`liquidity-turnover/totals` divides two such
+reads, the swaps' volume by the last TVL reading), built in `period.rs`: the window
 ends at the close of the last frozen hour, `asOf`, the same for every route (a window of
 future events starts there), and
 no read counts an open hour. Each response carries `asOf`, `coveredSince`, the first
@@ -212,7 +253,7 @@ at the end of this section.
    - **business resources**, the entities of the domain and their state, observed on the chain
      or fetched from a provider: `protocols`, `pools`, `tokens`, and a token's `prices`;
    - **produced resources**, what we compute from the first two: the measures (rule 4),
-     `tvl`, `pool-discoveries`, `liquidity-moves`, `liquidity-turnover`, `rotation-runs`, `vesting-unlocks`,
+     `tvl`, `pool-discoveries`, `liquidity-moves`, `liquidity-turnover`, `rotation-runs`, `vesting-unlocks` (not served yet),
      `signals`;
    - **service resources**, the state and the messages of the service: `network` and
      `ingestion`, singletons each at `/api/<singleton>`, `windows`, the closed list of the windows, unpaginated,
@@ -226,7 +267,7 @@ at the end of this section.
    added or removed, valued; `liquidity-turnover`, how many times the liquidity deposited changed hands over a window;
    `rotation-runs`, a pool's tranches whose quoted reserve turned
    over at least once, no more than 30 min apart, with the tranches between them;
-   `vesting-unlocks`, the liquidity a vesting lock releases at an instant.
+   `vesting-unlocks` (not served yet), the liquidity a vesting lock releases at an instant.
 2. **Three path forms for a request**: `/api/<collection>`, every protocol;
    `/api/<collection>/{id}`, one item; `/api/<entities>/{id}/<collection>`, the collection
    restricted to that entity (`/api/protocols/meteora_damm_v2/swaps`). **Two for the live
@@ -272,13 +313,13 @@ at the end of this section.
    readings of the window, one per hour measured, each at its hour's close; `totals`, from the reading a
    window before the last to the last, with the change between them — a change is not a sum — and
    over `1h` the last reading alone, with no start, no discovered part and no change;
-   `by-token` and `by-pool`, ranked at that last reading, without a window. Every response of what `yog-analytic`
+   `by-token` and `by-pool` (not served yet), ranked at that last reading, without a window. Every response of what `yog-analytic`
    computes carries the instant it reflects (`asOf`), its coverage (`coveredSince`), and its
    window when it is read over one.
 5. **The live stream has its own prefix, `/api/live`**, apart from the requests: an SSE
    connection stays open where a request gets one answer, and the prefix says it before
    anything else. `/api/live?topics=…` for every protocol, `/api/live/<entities>/{id}?topics=…`
-   for one entity (`/api/live/pools/{pool}?topics=signals`); `topics` names the collections it
+   for one entity (`/api/live/pools/{pool}?topics=signals`, not served yet); `topics` names the collections it
    streams, one connection for them all: the on-chain events and `signals`, never another.
    Each message keeps its own shape.
 6. **Every field of a response completes the name of its route.** The route reads as a
@@ -335,7 +376,7 @@ end so a freeze cannot split them. A client computes the change. `previous` is `
 **Parameters and fields.** `window=24h|7d|30d`, a closed list, 400 otherwise; `offset` for the
 previous window. `1h`, the last hour through the last tranche written (through the last frozen hour for the TVL's `totals`), is served by every measure
 but the pools discovered and the TVL's `series`, by `swaps/by-token`, and by the `liquidity-moves` and
-`rotation-runs` lists; an on-chain collection refuses it (400). For a collection of future events (`vesting-unlocks`), `window` covers the
+`rotation-runs` lists; an on-chain collection refuses it (400). For a collection of future events (`vesting-unlocks`, not served yet), `window` covers the
 period after `asOf`, and takes no `offset`. An on-chain collection read live ends its window
 at its first page, whose start the cursor carries. The swaps of every pool, at the root and
 under a protocol, are served over `24h` only: past a day they are compressed by pool, and
@@ -354,6 +395,14 @@ a filter dropped in silence would answer as if it had been applied.
 **Delay.** Every route but the probes and the live stream answers in under
 **2 s** in production, network included, at the heaviest its parameters allow,
 cold and warm. A route above 2 s in production is a bug.
+
+**Not yet following these rules:**
+
+- `/api/swaps/by-token`: `?sort=` with one order, `volume` (rule 3).
+- `/api/pool-creations/totals`, `/series`, the same under `/api/protocols/{protocol}/`, and
+  `/api/protocols/{protocol}/position-changes/totals`, `/series`: over `window=1h`, counted
+  on the on-chain event tables, not read from `yog-analytic`'s (rule 8).
+- Collections not paginated: none but `windows`, unpaginated by rule 1.
 
 ## The contract
 
@@ -388,8 +437,8 @@ What the derive cannot say is said once:
   `u8`, `u16` or `u32` with its own format (`u-int8`…), never a capped `int32`,
   and the finish gives it the maximum of its width unless it declares a lower one.
 - **Refinements** the Rust type does not carry: `min_length = 1`,
-  `maximum = 100`, `format = "uri"`. A bound the server validates (`limit`,
-  `days`) is written in its `#[param]`, and a test pins it to the constant.
+  `maximum = 100`, `format = "uri"`. A bound the server validates (`limit`'s
+  `maximum = 200`) is written in its `#[param]`, and a test pins it to the constant.
 
 After changing a route or a DTO, regenerate both, and commit them:
 
@@ -470,9 +519,9 @@ Poller failures are skip-and-log: a failed tick is logged and the next one proce
 
 SIGTERM or Ctrl-C (`yog_bootstrap::shutdown_signal`) cancels one token, and
 `bootstrap::serve` stops the process the way the daemons stop theirs: the
-server with axum's `with_graceful_shutdown`, then the live pollers, both waited on
-by `yog_bootstrap::Stop` within `SHUTDOWN_GRACE`, which names whichever
-outlives it.
+server with axum's `with_graceful_shutdown`, then the live pollers, then the key
+ring's reload task, all waited on by `yog_bootstrap::Stop` within `SHUTDOWN_GRACE`,
+which names whichever outlives it.
 
 ⚠️ **A graceful shutdown alone would not stop this server.** It stops
 accepting, then waits for every open connection — and an SSE connection never
@@ -501,7 +550,7 @@ Each bound is named once in
 |---|---|---|
 | `STATEMENT_TIMEOUT` | 8 s | Postgres cancels a statement itself (`57014`): cutting the request client-side leaves its statement running |
 | `REQUEST_TIMEOUT` | 10 s | A request that has not produced its response is answered `503`. It bounds the response's production, not its body, so the live stream is not cut |
-| `WORK_SLOTS` | 6 | All expensive reads share 6 `WorkSlots` on a 10-connection pool: the slow route — `/api/signals` — and the cached computation below. With the live pollers' one connection, the light routes always keep 3 |
+| `WORK_SLOTS` | 6 | All expensive reads share 6 `WorkSlots` on a 10-connection pool: the slow routes — `/api/signals`, `/api/protocols/{protocol}/signals`, `/api/pools/{pool}/signals` — and the cached computation below. With the live pollers' one connection, the light routes always keep 3 |
 | `WORK_SLOT_WAIT` | 2 s | How long expensive work waits for a slot before `503` — enough for a page's own burst |
 | `SSE_MAX_STREAMS` | 200 | ~20 KiB an open stream; half of `MAX_CONNECTIONS`, so streams never take the connections ordinary requests need |
 | `MAX_CONNECTIONS` | 400 | Connections held at once; the next wait in the kernel's accept queue (`CappedListener`). Capping streams was not enough: a burst of connections costs memory even when refused, and the allocator keeps the peak — 1000 at once got the process OOM-killed under 32 MiB with the stream cap in place. The `yog-api` image sets `MALLOC_ARENA_MAX=2`: without it glibc kept each burst's peak in a new arena (29.7 → 49 MiB → OOM over three rounds of 1000 opens); with it, twelve rounds of 1000 opens on the nine topics level off at 16.5 MiB without swap, inside the production `mem_limit` of 64 MiB |
@@ -639,7 +688,8 @@ served as `application/problem+json`:
 | Status | `title` | Common causes |
 |--------|---------|---------------|
 | 400 | `Bad Request` | A query or path that does not parse, an empty value, invalid address, malformed cursor, limit out of range, mutually exclusive params |
-| 404 | `Not Found` | Token unknown, no such route |
+| 401 | `Unauthorized` | No key on a closed route, or a credential that opens nothing; carries `WWW-Authenticate: Bearer`, see [Refusals](#refusals) |
+| 404 | `Not Found` | Token or pool unknown, a protocol not in the catalogue, no such route |
 | 405 | `Method Not Allowed` | A method the route does not serve; carries `Allow` |
 | 503 | `Service Unavailable` | Over capacity: no work slot within 2 s, too many open live connections, the request past its deadline, or the database out of connections or past `statement_timeout`. Carries `Retry-After`; see [Capacity bounds](#capacity-bounds) |
 | 500 | `Internal Server Error` | DB failure, encoding bug. `detail` is always the generic message; the real cause is logged server-side under a `request_id` correlatable via the `x-request-id` response header |
@@ -659,7 +709,7 @@ route. The probes stand outside the layer: `/readyz` answers its own report.
 
 Pagination cursors are **opaque to clients**: base64 (url-safe, no-pad)
 encoding of a JSON-serialized `*CursorWire` struct. Clients pass back the
-`next_cursor` from the previous response without interpreting it. Default
+`nextCursor` (or `prevCursor`) from the previous response without interpreting it. Default
 `limit = 50`, hard cap `200`.
 
 ## Configuration

@@ -20,7 +20,8 @@ context/src/
 │                      metrics, log lines (log.rs, one function per line) and
 │                      tests, and a tick_outcome.rs (price/, metadata/):
 │                      TickOutcome, the ways a cycle ends — returning one is
-│                      what makes a silent exit fail to compile
+│                      what makes a silent exit fail to compile; metadata/
+│                      scope.rs: which pools a tick reads the mints of
 ├── infra/           ← adapters: HeliusDasClient, JupiterPriceClient,
 │                      SolanaAccountClient (+ provider metrics; jupiter_price/
 │                      log.rs and solana_account/log.rs hold their client's log
@@ -29,7 +30,8 @@ context/src/
 │                      source_error.rs turns a reqwest failure into a
 │                      SourceError, URL stripped)
 ├── bootstrap/       ← Config::load(), Daemon::connect — composition root, and the
-│                      stop: run() joins its three workers under the shared grace
+│                      stop: run() joins its three workers under the shared grace;
+│                      daemon/log.rs holds the daemon's log lines
 ├── error/           ← SourceError, WorkerError — shared by the layers
 ├── testing.rs       ← test-only: the local HTTP server of the provider clients' tests
 └── main.rs
@@ -333,8 +335,8 @@ yog_context_price_priced_mints / yog_context_price_requested_mints
 Everything USD-denominated downstream — pool TVL, 24h volume, realized fees,
 half the signal detectors — is only as complete as this ratio, and it degrades
 silently: an unlisted mint or a run of Jupiter 429s simply produces unvaluable
-hours. The API reports the consequence per pool (`swapBucketsPriced24h` /
-`swapBuckets24h`); this is the cause, and the leading indicator.
+hours. The API reports the consequence per pool (`poolHoursValued` out of
+`poolHours`, on `/api/pools/{pool}/swaps/totals`); this is the cause, and the leading indicator.
 
 A tick that reached Jupiter but priced nothing sets the gauge to 0 and records
 `yog_context_price_tick_total{outcome="no_prices"}` — it must not look like a
@@ -443,8 +445,10 @@ The type reaches the wire: `HeliusDasClient` and `SolanaAccountClient` hold a
 the `x-api-key` header is built. See [`yog-bootstrap`](../bootstrap/README.md#secrets--one-invariant-two-types)
 for the invariant and the guard that enforces it.
 
-Connects to Postgres as `yog_context` — RW on `token_metadata` and
-`token_last_price`, INSERT-only on `token_prices`, `UPDATE` on the
+Connects to Postgres as `yog_context` — RW on `token_metadata`,
+`token_last_price` and the pool-properties satellites
+(`meteora_damm_v2_pool_properties`, `meteora_dlmm_pool_properties`),
+INSERT-only on `token_prices`, `UPDATE` on the
 pool-property columns of `pools`, RO otherwise.
 
 ## Run

@@ -14,7 +14,8 @@ core/src/
 │   ├── meteora/damm_v2/   (one module per event kind — 19 today — each with
 │   │                       model + repository trait; damm_v2.rs holds the
 │   │                       MeteoraDammV2Event sub-enum; pool_properties/ holds
-│   │                       this protocol's satellite payload)
+│   │                       this protocol's satellite payload; pool_fees/ the
+│   │                       fee parameters a creation or fee update carries)
 │   ├── meteora/dlmm/      (pool_properties/ only — events not extracted yet)
 │   ├── pool/              (Pool, PoolRepository — cross-protocol registry; PoolEntry,
 │   │                       PoolScope — the catalog PoolCatalog pages)
@@ -78,14 +79,19 @@ core/src/
 │   │                       banner; severity deliberately distinct from signals';
 │   │                       AnnouncementEntry, its status and cursor, for the list)
 │   ├── watched_pool/      (allowlist)
+│   ├── auth/              (api_client/, api_key/, ticket/, credential_text.rs —
+│   │                       who calls the API; see Responsibilities)
 │   ├── protocol/          (Protocol enum), trade_direction.rs, freshness_status/
 │   ├── domain_event.rs    (two-level DomainEvent enum)
+│   ├── event_position.rs  (EventPosition, TransactionPosition — where an event sits)
+│   ├── insert_outcome.rs  (InsertOutcome — what an idempotent insert did)
 │   └── pool_account/      (DecodedPoolAccount = PoolRegistryProperties for
 │                           `pools` + two-level PoolAccountProperties for the
 │                           satellite; PoolAccountResolver)
 ├── application/
 │   ├── extraction/        ← transaction → domain events use case
 │   │   ├── meteora/damm_v2/ (events.rs borsh mirrors, extractor.rs, translator.rs)
+│   │   ├── meteora/dlmm.rs  (MeteoraDlmm — the stub extractor)
 │   │   ├── anchor_event.rs  (generic Anchor event_cpi decoder)
 │   │   ├── on_chain_transaction.rs (OnChainTransaction — the neutral input)
 │   │   ├── conformance.rs   (the contract adapters must satisfy — `test-support`)
@@ -129,6 +135,7 @@ File trees here are kept coarse on purpose — the module structure is the contr
 pub trait EventExtractor: Send + Sync {
     fn program_id(&self) -> Pubkey;
     fn extract_events(&self, tx: &OnChainTransaction) -> CoreResult<ExtractionOutcome>;
+    fn is_implemented(&self) -> bool;
 }
 
 /// Holds one pre-instantiated EventExtractor per protocol and routes
@@ -165,7 +172,7 @@ every arm mentioning it existed only to say "not this one". Meteora's other
 products are planned, not in the enum; they arrive through the
 add-a-protocol recipe.
 
-The trait keeps the per-protocol contract explicit and testable; the enum dispatch is cheap — no `dyn` overhead, no allocation per transaction. This crate holds three of the dispatch points a new protocol touches: `ExtractionDispatcher::extract`, `ExtractionDispatcher::implemented_protocols` beside it, and `decode_pool_account` (`application/decoder.rs`) — see the [add-a-protocol recipe](../README.md#adding-a-new-protocol).
+The trait keeps the per-protocol contract explicit and testable; the enum dispatch is cheap — no `dyn` overhead, no allocation per transaction. This crate holds three of the dispatch points a new protocol touches — `ExtractionDispatcher::extract`, `ExtractionDispatcher::implemented_protocols` beside it, and `decode_pool_account` (`application/decoder.rs`) — and its share of two more: the `event_tables!` list of each on-chain collection's `*Table`, and the per-collection enums (`SwapEvent`, …, `PoolChangeEvent`) — see the [add-a-protocol recipe](../README.md#adding-a-new-protocol).
 
 ## `OnChainTransaction` — the neutral input, and its adapters
 
@@ -177,11 +184,11 @@ with the `Pubkey` of the program it was addressed to. Nothing else. A field
 added here is a dependency the extractors gained on their source.
 
 One **adapter** per source fills it, and **none of them lives here**: they are
-in `yog-indexer`'s `infra/rpc/` (see [its README](../indexer/README.md)), beside
-the fetcher whose response they read. `core` has no business knowing who
-supplies its transactions, and there may be more suppliers later. A Yellowstone
-gRPC source adds a *sibling module there*, not a second path through extraction;
-that is the whole point of the shape.
+in `yog-indexer` (see [its README](../indexer/README.md)) — `infra/rpc/`'s
+`from_rpc`, beside the fetcher whose response it reads, and `infra/grpc/`'s
+`from_grpc`, for a Yellowstone update. `core` has no business knowing who
+supplies its transactions. The gRPC adapter is a *sibling module there*, not a
+second path through extraction; that is the whole point of the shape.
 
 What stays here is the **contract** — and, because a contract nobody can check
 is a wish, the arbiter that checks it: `extraction::conformance` (feature
@@ -303,7 +310,7 @@ Documented on the affected types and enforced at construction time:
 - **Lossless `u128` in DB** — `next_sqrt_price` (Q64.64) and `liquidity_delta` are stored as `NUMERIC(39, 0)`; conversion happens in `persistence`, never here.
 - **Off-chain decimal prices** — `TokenPrice::price_usd` is a `rust_decimal::Decimal` (infra-neutral, no `sqlx` leak). It carries one invariant the type cannot express on its own: a price must survive coercion to the column's `NUMERIC(38, 18)`, i.e. land in `[5e-19, 1e20)`. `TokenPrice::is_storable` states it (mirroring Postgres's round-half-away-from-zero), and `price_positivity.rs` asserts it agrees with the server at both ends. The test is deliberately *not* `> 0`: a sub-scale price is positive in Rust and becomes zero only on write — and a stored zero is far worse than an absent one, since it multiplies into a plausible number instead of NULL-annihilating and being caught by the `valuation_complete` guards. The two ends are enforced by *different* layers — the `CHECK` of migration 009 below, the column type itself above (`22003`, before any constraint runs) — which is why the Rust filter has to know both: a batch insert is aborted identically by either.
 - **Integer signedness follows whoever owns the number** — on-chain quantities are unsigned (`u64` / `u128`), database-produced counts are `i64`. Decided 5 August 2026; the reasoning and the counter-argument are below.
-- **Every event carries its position in the chain** — `slot`, `event_index` and `transaction_index` sit on all 19 DAMM v2 event types, assembled once per transaction as an `EventPosition` (see `domain/event_position.rs`) and threaded through the translators. `event_index` numbers the inner instructions of the `OnChainTransaction` addressed to the program — Anchor `event_cpi` or not, decoded or not — which is what lets `(signature, event_index, timestamp)` be a stable unique key: numbering only recognised events would renumber stored rows the day a new discriminator is implemented. The contract that guarantees it is the filter in `extract_anchor_event_cpis` — widen it freely, never narrow it (its doc-comment says why). `transaction_index` is `None` on the `getTransaction` path and exists for the gRPC migration.
+- **Every event carries its position in the chain** — `slot`, `event_index` and `transaction_index` sit on all 19 DAMM v2 event types, assembled once per transaction as an `EventPosition` (see `domain/event_position.rs`) and threaded through the translators. `event_index` numbers the inner instructions of the `OnChainTransaction` addressed to the program — Anchor `event_cpi` or not, decoded or not — which is what lets `(signature, event_index, timestamp)` be a stable unique key: numbering only recognised events would renumber stored rows the day a new discriminator is implemented. The contract that guarantees it is the filter in `extract_anchor_event_cpis` — widen it freely, never narrow it (its doc-comment says why). `transaction_index` is always set on the gRPC path; on the `getTransaction` path it is set only when the provider includes it, `None` otherwise.
 - **An insert reports what it did** — event repositories return `InsertOutcome::{Inserted, Skipped}`, not `()`. `ON CONFLICT DO NOTHING` makes "no error" ambiguous, and discarding the difference is how a too-narrow unique key silently dropped 3–8 % of a pool's swaps until the August 2026 audit.
 
 ### Integer signedness: why counts are `i64`

@@ -176,7 +176,7 @@ The values, per raw hypertable:
 
 | raw hypertable | chunk | compressed after | `drop_after` | its aggregate's `start_offset` | set by |
 |---|---|---|---|---|---|
-| `meteora_damm_v2_swap_events` | 1 day | 1 day | **7 days** | **6 days**, hourly and 5-minute | `014`, `021` |
+| `meteora_damm_v2_swap_events` | 1 day | 1 day | **7 days** | **6 days**, hourly and 5-minute | `014`, `033` |
 | `meteora_damm_v2_liquidity_events`, `…_claim_position_fee_events`, `…_claim_reward_events` | 7 days | 7 days | 30 days | 29 days | `001`, `008` |
 
 ⚠️ `001_baseline.sql:827-837` still declares the swaps at 7 / 7 / 30 days, and
@@ -407,22 +407,22 @@ described the code accurately when it was written keeps describing it long
 after the code moved on. That drift cannot be repaired in place — the fix
 belongs here, where the reader can find it next to the file it corrects.
 
-**`pools.fee_bps`, baseline §015.** The header still says the column is
+**`pools.fee_bps`, baseline §2.** The header still says the column is
 *"unknown between a pool's discovery (swap/liquidity stream) and the arrival of
 its InitializePool event, and left NULL if the fee blob ever fails to decode
-(unknown BaseFeeMode)"*. Neither half holds since §036/§038: the
+(unknown BaseFeeMode)"*. Neither half holds any more: the
 `InitializePool` event no longer writes this column, and **nothing decodes a fee
 blob any more**. `fee_bps` is written by a single writer, yog-context, from the
 on-chain `Pool` account, and it is NULL until that read happens.
 
 The same file states the retired path a second time, and there as a *fact*
-rather than as a nullability condition — §001, on the genesis event table:
+rather than as a nullability condition — §12, on the genesis event table:
 *"the fee configuration is captured UNDECODED as a raw borsh blob
 (`pool_fees_raw`). `pools.fee_bps` (§2) and the fee shape (§8) are derived from
 these stored bytes."* The blob is still captured, and still undecoded; what is no
 longer true is that anything is derived from it. Nothing reads it back. What schedules
 that first read is the **NULL itself**: `list_unresolved` proposes any pool with
-a NULL property column. `needs_refresh` (§038) is the other half — it schedules
+a NULL property column. `needs_refresh` (§2) is the other half — it schedules
 a *re*-read after an event that invalidates a resolved value, since a pool that
 already resolved would otherwise never be proposed again.
 
@@ -433,7 +433,7 @@ derived at read time from the decoded curve (`base_fee_numerator_at`) and is a
 different number — up to ×49 apart on a pool whose scheduler has expired, which
 is what the audit measured against Meteora's own API.
 
-**"Canonical (token_a, token_b) pool ordering", baseline §001 and §004** — on
+**"Canonical (token_a, token_b) pool ordering", baseline §12 and §4** — on
 the swap table, on `claim_protocol_fee_events`, and on `pool_current_state`
 (*"Canonical reserves (token_a, token_b ordering as established in pools)"*). The order is real and consistent; the
 word *canonical* is what misleads, because it reads as a normalisation. There is
@@ -582,7 +582,7 @@ the default privileges set in `setup_roles.sql`; everything else is
 explicit per migration.
 
 ```sql
--- 002_new_event_table.sql
+-- NNN_new_event_table.sql
 
 CREATE TABLE new_event_table (
     ...
@@ -590,7 +590,7 @@ CREATE TABLE new_event_table (
 
 CREATE INDEX ... ;
 
--- Grants — defaults cover SELECT for the three runtime roles; INSERT
+-- Grants — defaults cover SELECT for the six runtime roles; INSERT
 -- / UPDATE goes here.
 GRANT INSERT, UPDATE ON new_event_table TO yog_indexer;
 ```
@@ -623,8 +623,8 @@ only then by the one that adds its policies — 031, 032, 033:
 ### An event table carries its position in the chain
 
 Every `*_events` table carries three columns locating it in the chain, and one
-uniform idempotency key — the shape migration 041 imposed, now `001_baseline.sql`
-§12. A new event table is born with them:
+uniform idempotency key — `001_baseline.sql` §12. A new event table is born
+with them:
 
 ```sql
 CREATE TABLE meteora_<product>_<event_kind>_events (
@@ -654,8 +654,8 @@ magnitude — `event_index` is a `u16` so it is INTEGER, `transaction_index` a
 conversions are then total.
 
 Do **not** invent a per-kind discriminant (`reward_index`, `second_position`
-and friends). Those predate `event_index`, and migration 041 took them out of
-the keys precisely to leave one rule.
+and friends). Those predate `event_index`, and the key of `001_baseline.sql`
+§12 leaves them out precisely to leave one rule.
 
 ### Name every index — do not let the server do it
 
@@ -795,7 +795,8 @@ psql "$DATABASE_URL_MIGRATE" -c "
     SELECT count(*) FROM timescaledb_information.chunks WHERE is_compressed;"
 ```
 
-Done for migration 041 (August 2026): `ADD COLUMN`, the `row_number()` backfill
+Done for the pre-squash migration that added `event_index` (August 2026), now
+`001_baseline.sql` §12: `ADD COLUMN`, the `row_number()` backfill
 and `CREATE UNIQUE INDEX` all pass on a compressed chunk, the chunk stays
 compressed, and the new unique index rejects a duplicate inserted into it — so
 the constraint bites on compressed data too.
@@ -820,7 +821,7 @@ filters each chunk carries from the catalog, before and after it.
 
 When you add a new migration:
 
-1. Create `00X_xxx.sql` here.
+1. Create `NNN_descriptive_name.sql` here, `NNN` the next three-digit number.
 2. Apply it locally:
    ```sh
    cargo run --bin yog-migrate -p yog-persistence
@@ -856,8 +857,8 @@ All three are idempotent, so `bootstrap` is safe to re-run — and safe against 
 second database of the same cluster, where the roles already exist and only the
 per-database privileges need applying. `bootstrap` checks both environment
 variables before touching anything: failing on a missing `DATABASE_URL_MIGRATE`
-*after* creating five cluster-wide roles leaves a half-provisioned cluster.
+*after* creating seven cluster-wide roles leaves a half-provisioned cluster.
 
-Then the runtime services (indexer / api / context / signals) can connect with
+Then the runtime services (indexer / api / context / signals / analytic / archive) can connect with
 their respective roles — but check the allowlist first. It ships one pool, and
 a pool-centric indexer collects only what it is subscribed to.

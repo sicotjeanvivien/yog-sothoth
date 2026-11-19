@@ -120,7 +120,8 @@ rotation, and the first of them is when the rotation runs started being measured
 than the tranches' seven days starts at the first one still kept.
 
 `/api/protocols/…` reads the protocol aggregate and the TVL
-(`repositories/protocol_activity.rs` in `yog-persistence`).
+(`repositories/swap_activity.rs` and `repositories/protocol_tvl.rs` in `yog-persistence`);
+`repositories/protocol_activity.rs` reads which hours are written and frozen, and which tranches.
 
 ## Layout
 

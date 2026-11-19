@@ -99,9 +99,11 @@ and copies that document to `public/openapi.json`, served as is at
 The names are the Rust ones — `zSignalResponse` and its type `SignalResponse`,
 `EmbeddedTokenResponse` for a token inside a signal — and each route has its
 response schema, named after the handler (`zListSignalsResponse`). A fetcher
-passes that one to `apiGet`. The values of the query parameters (`PageDir`,
-`PagePosition`) are derived from the generated query
-schemas, so a value renamed server-side breaks `tsc`. CI's `contract` job fails
+passes that one to `apiGet`. What a fetcher sends is checked against the generated
+query schemas — the bounds of `limit` (`zListSignalsQuery.shape.limit`,
+`zListSwapsByTokenQuery.shape.limit`, through `assertInBounds`), the windows the TVL
+series is served over (`servesTvlSeries`) — so a bound or a value changed server-side
+changes what they accept at the next `gen:api`. CI's `contract` job fails
 when the file is not what the committed document generates.
 
 What the schemas cannot say, and a component must still know:
@@ -230,7 +232,8 @@ ships readable before its wording lands here.
 
 The `(dashboard)` layout mounts `DashboardShell`: the sidebar (a sticky rail
 from 721 px, the `rail:` breakpoint of `globals.css`; a drawer behind a thin
-"Menu" bar up to 720 px), the announcement banner and the live status. The
+"Menu" bar up to 720 px), and above the page the beta banner and the
+announcement banner; the live status is in the page headers. The
 rail collapses to 64 px from the toggle beside the logo, with a cookie.
 
 **Nothing waits for data** — the layout reads only its three cookies before
@@ -271,9 +274,9 @@ it; the drawer has no folded form, whatever the collapse cookie says.
 `DashboardShell` owns both states.
 
 **Live status** — `live-status/`: `LiveIndicator` polls `/api/ingestion` and
-`liveStatusOf` maps it to four states — live (green), delayed (yellow), stale
-(grey), offline (light red, the call failed). It sits in the page header (the
-Overview only) and opens on click, with the slot and RPC latency of
+`liveStatusOf` maps it to five states — live (green), delayed (yellow), stale
+(grey), offline (light red, the call failed), and connecting (grey) while it
+loads. It sits in the page header (the Overview and the protocol page) and opens on click, with the slot and RPC latency of
 `/api/network`, and the rows the page streams in — on the Overview, its price
 coverage and the hour its figures stop at.
 
@@ -293,7 +296,9 @@ used. `__tests__/fonts.test.ts` holds names, ranges and files together.
 
 **Colours** — the dashboard has one colour per role, declared once as
 `--color-dash-*` in `globals.css`: `bg`, `surface`, `surface-2`, `rule`,
-`ink`, `ink-2`, `ink-3`, `accent`, `up`, `down`, `warn`. Every text colour
+`ink`, `ink-2`, `ink-3`, `accent`, `accent-2`, `up`, `down`, `warn`, and the
+charts' `flow-out`, `flow-create`, `run`, `run-out`, `fee-lp`, `fee-protocol`,
+`fee-referral`. Every text colour
 reaches at least 4.5:1 on `dash-bg` and `dash-surface`. Violet (`accent`)
 marks the brand: the active entry, the keyboard focus. Green says live; green
 and red carry a meaning, never the brand. The frame (`shell/`, `sidebar/`,
@@ -310,7 +315,7 @@ moved, while the ⓘ (`InfoPopover`) and `BlockError` they share keep it.
 fees, active pools), activity by protocol, the latest signals, volume per bar
 of the period, the most traded tokens. The header is the title alone, then "Live",
 the period and the advanced mode at its right. Every figure comes from yog-analytic's
-measures (`/api/swaps/…`, `/api/tvl…`, `/api/pool-creations/…`), which all end at the same `asOf`, the close of the last frozen
+measures (`/api/swaps/…`, `/api/tvl…`, `/api/pool-creations/…`, `/api/liquidity-turnover/totals`), which all end at the same `asOf`, the close of the last frozen
 hour — over the last hour, the end of the last 5-minute tranche written.
 
 **The period** — `?period=1h|24h|7d|30d` (`lib/overview/period.ts`; missing,
@@ -565,7 +570,7 @@ dashboard's role colours: neutral for info, `dash-warn`, `dash-down`.
 | `npm run lint`       | Run ESLint with the Next.js config     |
 | `npm run lint:fix`   | Run ESLint and fix what it can         |
 | `npm run typecheck`  | Run `tsc --noEmit` against the project |
-| `npm run gen:api`    | Regenerate `src/lib/api/schema/` from `crates/api/openapi.json` |
+| `npm run gen:api`    | Regenerate `src/lib/api/schema/` from `crates/api/openapi.json`, and copy it to `public/openapi.json` |
 | `npm test`           | Run the Vitest suite once              |
 | `npm run test:watch` | Run Vitest in watch mode               |
 
@@ -603,7 +608,8 @@ The dashboard uses a registry-based feature flag system. The single
 source of truth is [`src/config/features.ts`](src/config/features.ts):
 every flag is declared there with its description, status, and default
 value. TypeScript exposes the union of valid flag names through
-`FeatureName`, so any reference to an unknown flag fails to compile.
+`FeatureName`, so any reference to an unknown flag fails to compile. No page
+reads a flag today: `FeatureGate` and `isFeatureEnabled` have no caller.
 
 ### Toggling a flag
 
@@ -660,11 +666,16 @@ web/
 │   │   ├── globals.css
 │   │   ├── fonts/                   # .woff2 per family and subset, OFL licences, fonts.css
 │   │   ├── layout.tsx               # root layout (passthrough)
+│   │   ├── sitemap.ts               # the sitemap, from config/site.ts
+│   │   ├── robots.ts                # robots.txt, pointing at the sitemap
 │   │   └── [locale]/
 │   │       ├── layout.tsx           # html/body, intl provider, fonts
-│   │       ├── (dashboard)/         # app shell: menu, network status
+│   │       ├── (dashboard)/         # app shell: menu, beta and announcement banners
 │   │       │   ├── overview/        # KPIs, activity by protocol, signals, volume, tokens
+│   │       │   ├── protocols/       # the protocol page (meteora-damm-v2/)
 │   │       │   └── signals/         # live signal feed (SSR + SSE)
+│   │       ├── (developers)/        # its own bar, no menu
+│   │       │   └── developers/      # the developers page
 │   │       └── (marketing)/         # public pages: home, about, terms,
 │   │                                # privacy, legal-notice, support-us,
 │   │                                # changelog
@@ -673,10 +684,12 @@ web/
 │   │   ├── dashboard/               # per-page sections + shell, sidebar,
 │   │   │                            # signals (SignalFeed, useLiveSignals),
 │   │   │                            # live (LiveProvider), activity, announcements
+│   │   ├── developers/              # the developers page: routes, key field, explorer
 │   │   ├── marketing/               # navbar, footer, per-page sections
 │   │   └── shared/                  # buttons, icons, popovers, …
 │   ├── config/
-│   │   └── features.ts              # feature flag registry + helpers
+│   │   ├── features.ts              # feature flag registry + helpers
+│   │   └── site.ts                  # origin, preview image, sitemap and unlisted paths
 │   ├── lib/
 │   │   ├── api/                     # API layer (see above)
 │   │   ├── announcements/           # pickAnnouncement + dismiss cookie
@@ -684,17 +697,24 @@ web/
 │   │   ├── coverage/                # volumeCoverage (pure, tested)
 │   │   ├── overview/                # period, chart, totals (pure, tested)
 │   │   ├── activity/                # activityRow, the activity feed (pure, tested)
+│   │   ├── protocol/                # the protocol page's tabs, liquidity, volume, fees, pools
+│   │   ├── seo/                     # pageMetadata
+│   │   ├── developers/              # the contract read on the server, the explorer's requests
 │   │   ├── format/                  # pubkey, date, number, token-amount formatters
 │   │   ├── live/                    # the live topics, their one path, the reopened connection
 │   │   └── signals/                 # mergeSignals, filterSignals (pure, tested)
 │   ├── types/
 │   │   └── env.d.ts                 # process.env type augmentation
+│   ├── instrumentation.ts           # server start: loads instrumentation-node.ts on Node
+│   ├── instrumentation-node.ts      # the server env check, stops the server on failure
 │   └── proxy.ts                     # locale negotiation (Next 16)
+├── .env.example                     # the variables, to copy to .env.local
 ├── Dockerfile
 ├── audit-exceptions.json            # accepted npm advisories, each with its reason
 ├── audit.sh                         # the CI's npm audit, runnable locally
 ├── eslint.config.mjs
 ├── next.config.ts
+├── openapi-ts.config.ts             # gen:api: crates/api/openapi.json → src/lib/api/schema/
 ├── package.json
 ├── postcss.config.mjs               # @tailwindcss/postcss — v4 has no JS config,
 │                                    # the theme lives in src/app/globals.css

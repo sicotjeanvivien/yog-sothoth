@@ -15,7 +15,7 @@ migration conventions, see [`migrations/README.md`](./migrations/README.md).
 
 ```
 persistence/
-├── migrations/              ← sqlx migrations, forward-only (001_baseline.sql today)
+├── migrations/              ← sqlx migrations, forward-only (001_baseline.sql, then 002 onward)
 │   └── README.md            (forward-only convention, GRANT policy, workflow)
 ├── .sqlx/                   ← committed offline query cache (see below)
 ├── sqlx.toml                ← macro config: NUMERIC → BigDecimal (see below)
@@ -24,29 +24,33 @@ persistence/
 │   │                          DumpStream (pg_dump), ReadabilityCheck (pg_restore)
 │   ├── database.rs          ← Database::connect / close, run_migrations,
 │   │                          run_script — connections, no query of its own
+│   ├── error.rs             ← MigrationError, BackupError
 │   ├── health.rs            ← PgHealthChecker
 │   ├── server_info.rs       ← PgServerInfo: the server's versions
 │   ├── repositories/        ← one impl per domain repository trait
 │   │   ├── analytic/        (the analytic writer's cycle, and one module per
 │   │   │                     protocol for its facts — DAMM v2 today)
 │   │   ├── helper/          (pubkey/u64/u128 conversions, pagination helpers,
-│   │   │                     sqlx error mapping, live_records for the live reads)
+│   │   │                     sqlx error mapping, event_page for the on-chain
+│   │   │                     lists' cursor and page cut, live_records for the live reads)
 │   │   ├── meteora/damm_v2/ (per-event-kind event repositories — 19 today —
 │   │   │                     plus the cp-amm pool-properties satellite)
 │   │   ├── meteora/dlmm/    (the DLMM pool-properties satellite; no event
 │   │   │                     repositories yet)
-│   │   ├── pool/, pool_current_state/ (the registry, and the catalog the API pages:
+│   │   ├── pool/, pool_current_state.rs (the registry, and the catalog the API pages:
 │   │   │                     a page of keys first, then their entries)
 │   │   ├── swap_activity/, pool_creations/, liquidity_moves/, discovered_tvl/, protocol_tvl.rs,
 │   │   │   claim_totals.rs, position_change_counts.rs
 │   │   │                     (the produced resources the API reads by scope:
 │   │   │                     every protocol, one protocol, one pool)
 │   │   ├── swap_event/, liquidity_change_event/, pool_creation_event/, …, pool_change_event/
-│   │   │                     (the on-chain lists, paged; each `live.rs` reads them
-│   │   │                     live for /api/live, one function pair per table)
+│   │   │                     (the on-chain lists, paged; each `live.rs` — all but
+│   │   │                     swap_event/ — reads them live for /api/live, one
+│   │   │                     function pair per table)
 │   │   ├── protocol_activity.rs, token_activity/ (the frozen hours every
 │   │   │                     measure is read over; the tokens by volume)
 │   │   ├── signal/, swap_flow/, liquidity_flow/
+│   │   ├── rotation_runs/ (PgRotationRunRepository: the rotation runs yog-analytic drew)
 │   │   ├── token_metadata/, token_price/, network_status/, watched_pool/,
 │   │   │   observed_slots.rs (the slots each ingestion session watched)
 │   │   ├── announcement/
@@ -129,12 +133,15 @@ tables today. Each table holds only the columns relevant to its protocol: no
 NULL columns for incompatible fields, no generic JSONB blob. When DLMM or
 another protocol lands, it gets sibling tables with their own schemas.
 
-For unified reads, cross-protocol SQL **VIEW**s (`swap_events`,
-`liquidity_events`, `claim_position_fee_events`, `claim_reward_events`) expose
-the slim common columns plus a synthesised `protocol` column. Protocol-specific
-columns are *not* in the VIEWs — code that needs them reads the underlying
-table. A VIEW is added only once a second protocol exposes the same concept;
-the newer DAMM v2 tables (position lifecycle, pool admin) are read
+For unified reads, twelve cross-protocol SQL **VIEW**s (baseline §14:
+`swap_events`, `liquidity_events`, `claim_position_fee_events`,
+`claim_reward_events`, `claim_protocol_fee_events`, the six reward ones from
+`initialize_reward_events` to `withdraw_dead_liquidity_reward_events`, and
+`split_position_events`) expose the slim common columns plus a synthesised
+`protocol` column. Each has a single DAMM v2 branch today; another protocol
+adds a `UNION ALL` branch. Protocol-specific columns are *not* in the VIEWs —
+code that needs them reads the underlying table. The other DAMM v2 tables
+(the rest of the position lifecycle, pool admin) have no VIEW and are read
 per-protocol directly.
 
 Cross-protocol concepts stay generic, single-table: `pools`,
@@ -448,8 +455,9 @@ Requiring the whole window makes the sub-total unrepresentable.
 
 `SUM` skipping NULLs is also why the analytics repositories ship **coverage
 counters**
-next to the sums (`swap_buckets_priced_24h` / `swap_buckets_24h`, mirroring
-`pools_priced` / `pools_observed`): the value alone cannot say how complete it
+next to the sums (`pool_hours_valued` / `pool_hours` for the swaps,
+`moves_valued` / `moves`, `claims_valued` / `claims`, `pools_priced` /
+`pools_unvalued` for the TVL): the value alone cannot say how complete it
 is. Adding a new aggregate over a valued view means adding its coverage too.
 
 ⚠️ **A coverage denominator must be counted where the rows still exist.** The
@@ -613,7 +621,7 @@ satellites: cp-amm out of `pools` (`036`–`037`), the `needs_refresh`
 invalidation flag (`038`), DLMM (`039`), and the pool↔protocol invariant
 (`040`). Post-baseline: `002` rebuilds the swap cagg with the two whole-bucket
 traded totals and adds `meteora_damm_v2_swap_events_hourly_priced` — the
-implied-price rule above.
+implied-price rule above; `003` onward follow in [`migrations/`](./migrations/).
 
 ### The analytic tables (migration 015)
 
@@ -749,7 +757,7 @@ each repository keeps its SQL. `position_fee_claim_event.rs`,
 the same names, under `tests/`, hold the scopes, the window and the pages through shared
 instants.
 
-**The same events, read live.** Each of these repositories also implements
+**The same events, read live.** Each of these repositories but `swap_event.rs` also implements
 `LiveEventFeed` for `/api/live`, in its `live.rs`: table by table, never merged, since an id
 is unique in its table only — a `match` with one line per table, each calling that table's
 pair of reads. Per table, `max(id)` and the rows past an id, by id, both bounded to the last
@@ -846,11 +854,11 @@ so no offset can reach a cleared range.
 
 A satellite table holds the properties that exist for **one** protocol only, so
 `pools` stays the cross-protocol registry it was in `001`. Two exist today —
-`meteora_damm_v2_pool_properties` (036) and `meteora_dlmm_pool_properties`
-(039) — one row per pool, primary-keyed on `pool_address`, owned by
+`meteora_damm_v2_pool_properties` (`001_baseline.sql` §8) and `meteora_dlmm_pool_properties`
+(§9) — one row per pool, primary-keyed on `pool_address`, owned by
 `yog-context`.
 
-Migration `040` writes into the schema a rule that had lived only in application
+The baseline (§2's `UNIQUE (pool_address, protocol)`, the composite FKs of §4, §8, §9) writes into the schema a rule that had lived only in application
 discipline: **a row hanging off `pools` cannot carry a protocol the registry
 disagrees with**. It covers both satellites and `pool_current_state`, which has
 duplicated `pools.protocol` in its own column since `001`.
@@ -980,9 +988,9 @@ materialized views. **Adding a table means adding its line**; the failure prints
 the exact `GRANT`/`REVOKE` for whatever disagrees.
 
 Read that failure as a question — *is the migration wrong, or the matrix?* —
-before editing either. Pasting the missing line to go green is how migration
-036's gap survived a month: `yog_indexer` lost the rights it needed when the
-fee-shape columns moved to a satellite, and every write it attempted failed with
+before editing either. Pasting the missing line to go green is how a gap
+survived a month: `yog_indexer` lost the rights it needed when the
+fee-shape columns moved to a satellite (now baseline §8), and every write it attempted failed with
 `permission denied` under its real role, silently, because the writes are
 skip-and-log and the tests run as the owner.
 
@@ -1280,15 +1288,15 @@ nothing and runs silently.
 
 ## `watched_pools` — startup allowlist
 
-Until the indexer runs on an upgraded RPC path (Helius `transactionSubscribe`
-or a managed Yellowstone gRPC stream), ingestion is bounded by an allowlist of
-pools stored in the `watched_pools` table. The protocol-centric architecture is
+Under `INGEST_SCOPE=pools`, ingestion is bounded by an allowlist of pools
+stored in the `watched_pools` table. The protocol-centric architecture is
 preserved — the allowlist bounds **what the indexer subscribes to**, not what it
-accepts once received: under `INGEST_SCOPE=pools` the listener opens
-one `logsSubscribe` per active row instead of one per program id
-(`WatchedPoolService::restore_subscriptions`). Nothing downstream is aware of
-it — no filter, no code path conditioned on a pool list — so lifting the
-constraint is a config flip, not a return from static configuration.
+accepts once received: the source subscribes once per active row instead of
+once per program id (`WatchedPoolService::restore_subscriptions`) — one
+`logsSubscribe` each under `INGEST_SOURCE=rpc`, the pool addresses in the
+stream's `account_include` filter under `INGEST_SOURCE=grpc`. Nothing downstream
+is aware of it — no filter, no code path conditioned on a pool list — so
+switching scope is a config flip, not a return from static configuration.
 
 The rationale is summarised in the
 [root README's *Pool observation model*](../../README.md#pool-observation-model).
@@ -1451,22 +1459,12 @@ the running process — restart the indexer to pick up the change. Hot reload
 becomes relevant once user-managed watchlists arrive as a first-class
 feature.
 
-### Removing the constraint
+### In production
 
-The allowlist is temporary. It will be lifted once one of the following is in
-place:
-
-- **Helius `transactionSubscribe` (Developer plan)** — eliminates the HTTP
-  fetch entirely; transactions arrive fully parsed in the WebSocket stream.
-- **Helius Startup Launchpad** — 8 months of Business tier free (LaserStream
-  mainnet, 200 RPS).
-- **A managed Yellowstone gRPC (Geyser) provider** (Shyft, Triton, …) with
-  matching throughput.
-
-At that point the indexer switches to `INGEST_SCOPE=protocols` — one
-subscription per program id — and ingestion returns to full protocol-centric
-coverage. The `watched_pools` table stays in the schema; it simply stops being
-read, becoming purely informational rather than enforced.
+Production ingests over Yellowstone gRPC (`INGEST_SOURCE=grpc`, Alchemy) with
+`INGEST_SCOPE=protocols` — one subscription per program id, full
+protocol-centric coverage — and does not read `watched_pools`. The table stays
+in the schema, and `INGEST_SCOPE=pools` stays supported on either source.
 
 ---
 
