@@ -130,9 +130,9 @@ run.
 - **Rows written late.** The wait runs from a row's block time, not from its
   insertion. When the indexer catches up after an outage longer than the limit,
   the rows it writes arrive already "old", and the check fails until the next
-  hourly refresh materialises them — at most an hour. ⚠️ Nothing reports the
-  outage itself today: the indexer has no dead man's switch, so this `/fail`,
-  which names the materialisation, may be the first sign of an ingestion stop.
+  hourly refresh materialises them — at most an hour. The outage itself is
+  the indexer's own alarm to report (`INDEXER_HEARTBEAT_URL`); this `/fail`
+  names only the materialisation it delayed.
 - **A restart after more than an hour down.** The first check runs as soon as
   the daemon starts, before the scheduler's next refresh. Rows that were
   pending when the stack stopped — up to three hours, as designed — have waited
@@ -163,7 +163,7 @@ not be enough: the statement keeps running on the server, and the connection
 stays held, one more at every check, taken from the detectors if the pool were
 shared. The alarm also stops waiting on its own after 90 s, for a server that
 cannot answer at all. The heartbeat is `yog_bootstrap`'s, shared with
-`yog-archive`. Create the check with a **10-minute period and a 20-minute
+`yog-indexer`, `yog-analytic` and `yog-archive`. Create the check with a **10-minute period and a 20-minute
 grace**.
 
 Without that URL — development, where the scheduler is off by design and every
@@ -187,8 +187,8 @@ wholly valuable, which has no total to compare and stays to be counted. Warning 
 behaviour): over a rolling window, `drain = net_removed / starting TVL`, where
 `net_removed = removed_usd − added_usd` (LP churn nets out) and the starting
 TVL is the current TVL plus what left. Reads the
-`meteora_damm_v2_pool_hourly_liquidity_flow` VIEW (baseline §15) joined with
-`pool_current_tvl` (§15 too). Guards: an unvaluable TVL (unknown price, unresolved
+`meteora_damm_v2_pool_hourly_liquidity_flow` VIEW (as redefined by 027) joined with
+`pool_current_tvl` (as redefined by 045). Guards: an unvaluable TVL (unknown price, unresolved
 mints, no reconstructed state) skips the pool — no signal beats a fake one;
 the TVL floor applies to the *starting* TVL so a pool drained within the
 window can't dodge the floor by having drained itself below it.
@@ -233,8 +233,10 @@ update or delete anything.
 ## Observability
 
 Prometheus metrics on `:9000/metrics` (host port `9002` in compose):
-per-detector tick counters, evaluation durations, emitted/suppressed signal
-counts, failure counters.
+`yog_signals_tick_total{detector, outcome}`, one per tick, its `outcome` one of
+`ok`, `suppressed`, `eval_failed`, `dedup_failed`, `persist_failed` — failures
+are outcomes, not a counter of their own; `yog_signals_emitted_total{detector}`,
+the signals persisted; and the series below.
 
 **`yog_signals_skipped_total{detector, reason}`** counts pools a detector
 declined to evaluate — `unpriced` (the window was not entirely valuable),

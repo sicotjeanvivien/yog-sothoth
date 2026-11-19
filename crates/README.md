@@ -44,26 +44,19 @@ crates/
 The dependency graph is strict and one-directional:
 
 ```
-                       ┌──────────┐
-                       │   core   │  no I/O
-                       └────▲─────┘
-                            │
-              ┌─────────────┼─────────────────────────────────────────────────┐
-              │             │                                                 │
-        ┌─────┴─────┐ ┌─────┴─────┐                                           │
-        │persistence│ │ bootstrap │                                           │
-        └─────▲─────┘ └─────▲─────┘                                           │
-              │             │                                                 │
-              └──────┬──────┘                                                 │
-                     │                                                        │
-      ┌──────────┬───┴──────┬───────────┬───────────┬────────────┬────────────┘
-      │          │          │           │           │            │
- ┌────┴────┐ ┌───┴───┐ ┌────┴────┐ ┌────┴────┐ ┌────┴─────┐ ┌────┴────┐
- │ indexer │ │  api  │ │ context │ │ signals │ │ analytic │ │ archive │
- └─────────┘ └───────┘ └─────────┘ └─────────┘ └──────────┘ └─────────┘
+ ┌──────────┐          ┌─────────────┐          ┌───────────┐
+ │   core   │◄─────────┤ persistence ├─────────►│ bootstrap │
+ │  no I/O  │          └───▲─────▲───┘          └──▲─────▲──┘
+ └────▲─────┘              │     │                 │     │
+      │                    │     │  ┌─────────┐    │     │
+      │                    │     └──┤ archive ├────┘     │
+      │                    │        └─────────┘          │
+ ┌────┴────────────────────┴─────────────────────────────┴────┐
+ │      indexer  ·  api  ·  context  ·  signals  ·  analytic  │
+ └────────────────────────────────────────────────────────────┘
 ```
 
-`core` knows nothing about Postgres, axum, or HTTP clients. It declares traits; the adapters and binaries implement and consume them. Each binary depends only on `core` (types + traits), `persistence` (concrete repos), and `bootstrap` (startup helpers).
+`core` knows nothing about Postgres, axum, or HTTP clients. It declares traits; the adapters and binaries implement and consume them. Each binary depends only on `core` (types + traits), `persistence` (concrete repos), and `bootstrap` (startup helpers) — `archive` on the last two only. `persistence` uses `bootstrap` too (`SecretUrl`, and the startup helpers of `yog-migrate`); `bootstrap` depends on no workspace crate.
 
 ---
 
@@ -73,7 +66,7 @@ The dependency graph is strict and one-directional:
 - **[`persistence` (`yog-persistence`)](./persistence/README.md)** — the Postgres adapter. `Pg*` repository implementations, the forward-only migration suite, the `yog-migrate` binary, the SQLx offline cache, the query-shape policy (inline `query!` / VIEW / `QueryBuilder`), and the `watched_pools` operational reference.
 - **[`bootstrap` (`yog-bootstrap`)](./bootstrap/README.md)** — shared startup utilities: env parsing primitives, the two secret types (`SecretUrl`, `SecretKey`) and the `Endpoint` that holds an address apart from its credential, `ConfigError`, `init_rustls()`, `init_tracing()`, the shared stop (`shutdown_signal()`, `TaskEnd`, `Stop`), and — behind the `heartbeat` feature, for `archive`, `signals`, `indexer` and `analytic` — the Healthchecks.io dead man's switch. The decision rule for adding anything: *does this run identically in every binary's `main()`?* If it varies even slightly, it stays in the binary.
 - **[`indexer` (`yog-indexer`)](./indexer/README.md)** — the ingest daemon. A `TransactionSource` port with two implementations — JSON-RPC (listener → dispatcher → fetch) and Yellowstone gRPC — chosen by `INGEST_SOURCE`, feeding a bounded worker, `TransactionProcessor`, per-protocol sub-persistors, Prometheus metrics. Beside them, the ingestion alarm: a Healthchecks.io check fails when the ingestion stops writing events.
-- **[`api` (`yog-api`)](./api/README.md)** — the read-only HTTP server. Sixteen endpoints, cursor pagination, RFC 9457 errors, and the shared SSE poller behind the live signal stream.
+- **[`api` (`yog-api`)](./api/README.md)** — the read-only HTTP server. Eighty `/api` endpoints beside the two probes `/healthz` and `/readyz`, cursor pagination, RFC 9457 errors, and the shared SSE poller behind the live signal stream.
 - **[`context` (`yog-context`)](./context/README.md)** — the enrichment daemon. Three workers: token metadata (Helius DAS), USD prices (Jupiter Price V3), and pool-account property backfill. The last one names no protocol — it iterates one `PoolAccountResolver` per protocol (cp-amm and DLMM today), each owning its queue and its satellite table.
 - **[`archive` (`yog-archive`)](./archive/README.md)** — the backup daemon. Every six hours, `pg_dump` under the read-only `yog_archive` role, streamed to an S3-compatible bucket, checked by a `pg_restore` that reads every block, and signalled to a dead man's switch. It never restores: the proven procedure is in [`persistence/README.md`](./persistence/README.md#backup-and-restore).
 - **[`signals` (`yog-signals`)](./signals/README.md)** — the signal engine. Batch detectors at per-detector cadence, stateless between ticks, cooldown-based dedup with severity escalation; two detectors today: swap-flow imbalance, TVL drain. Beside them, the materialisation alarm: a Healthchecks.io check fails when a continuous aggregate stops being materialised.
@@ -92,7 +85,7 @@ All coordination between the binaries happens through the schema, and the schema
 | `yog_api` | writes nothing | api |
 | `yog_context` | `INSERT, UPDATE` on `token_metadata`, `token_last_price` and every per-protocol pool-properties satellite; `INSERT` only on `token_prices`; `UPDATE` on the pool-property columns of `pools` — **the sole writer of account-derived properties** | context |
 | `yog_signals` | `INSERT` (append-only) on `signals`; `EXECUTE` on `yog_cagg_materialization_backlog()`, which no other role holds | signals |
-| `yog_analytic` | `INSERT, UPDATE` on the `analytic_*` tables | analytic |
+| `yog_analytic` | `INSERT` on the `analytic_*` tables, plus `UPDATE` and/or `DELETE` on those it rewrites — granted table by table, in the migration that creates each | analytic |
 | `yog_archive` | `SELECT` on every schema, granted schema by schema by `setup_roles.sql` at each run; writes nothing | archive |
 | admin (e.g. `yog` superuser) | Full — provisioning, `cargo sqlx prepare`, ad-hoc operations | tooling only, never a running service |
 
@@ -207,9 +200,10 @@ traps it avoids (renames, quoted non-ASCII paths, a broken pattern). ⚠️
 `edited`, which the workflows do not listen to, because every title or body edit
 is `edited` too. After retargeting a PR, push a commit or close and reopen it.
 
-- **`crates.yml`** — Rust workspace: `check` (then `cargo doc` with `-D warnings`, the only check on intra-doc links), `check-per-crate` (one `cargo check -p <member>` per crate — `check` passes the whole workspace in a single call, where Cargo unifies features and a crate that forgot to declare one is kept green by its siblings), `module-visibility` (see *Conventions*), `fmt`, `clippy -D warnings`, `test`, `test-integration`, `audit`, `sqlx-check` (spins up TimescaleDB, applies migrations, verifies the committed `.sqlx/` cache)
+- **`crates.yml`** — Rust workspace: `check` (then `cargo doc` with `-D warnings`, the only check on intra-doc links), `check-per-crate` (one `cargo check -p <member>` per crate — `check` passes the whole workspace in a single call, where Cargo unifies features and a crate that forgot to declare one is kept green by its siblings), `module-visibility` (see *Conventions*), `fmt`, `clippy -D warnings`, `test`, `test-integration`, `audit`, `sqlx-check` (spins up TimescaleDB, applies migrations, verifies the committed `.sqlx/` cache), `contract` (regenerates the web's zod schemas from the committed `web/public/openapi.json` and fails on any difference)
 - **`web-quality.yml`** / **`web-docker.yml`** — the frontend (see [`web/README.md`](../web/README.md))
-- **`scripts.yml`** — what no other workflow reads: `shellcheck` over every tracked `*.sh` (`docker/update.sh`, `docker/deploy-entry.sh`, `web/audit.sh`), and `actionlint` over the workflows, with shellcheck on their `run:` scripts
+- **`scripts.yml`** — what no other workflow reads: `shellcheck` over every tracked `*.sh` (`docker/update.sh`, `docker/deploy-entry.sh`, `docker/observe.sh`, `docker/pull-images.sh`, `web/audit.sh`, `.github/actions/changes/changes.sh`, `.github/actions/verdict/verdict.sh`), `actionlint` over the workflows, with shellcheck on their `run:` scripts, and `observe-gate` (`docker/observe.sh`: every bypass refused by the gate and by root, its output filters strict)
+- **`cache-cleanup.yml`** — not one of the four: when a PR closes, deletes its Actions caches; every Monday at 04:00 UTC, sweeps the caches of closed PRs left behind and prunes the stale generations of `main`'s (rules in `.github/cache-rules.jq`)
 - **`dependabot.yml`** — not a workflow: every Monday at 05:00 UTC, one PR per ecosystem with every newer version, majors included. What it never proposes is listed in `.github/versions-checked-by-hand.md`, checked by hand
 
 ---
@@ -297,6 +291,8 @@ There is no central registry. A protocol is added by writing isolated per-protoc
 | the `match` of the nine `Pg*EventRepository` of the on-chain lists (`PgSwapEventRepository`, …, `PgPoolChangeEventRepository`) | `persistence` | the protocol's event tables in the on-chain lists (a `UNION ALL` at the root) |
 | the `event_tables!` list of each on-chain collection's `*Table` (`core/src/domain/<collection>/repository.rs`) and the `match` of its `Pg*EventRepository`'s `live_tip`/`live_after` (`<collection>/live.rs`) | `core`, `persistence` | the protocol's tables streamed on `/api/live`, one poller each |
 | `PgRotationRunRepository::find_measured_since` | `persistence` | when the protocol's rotation runs are measured from (`None` while its writer does not draw them) |
+| `PgClaimTotalsRepository::find_measured_since` | `persistence` | when the protocol's claims are valued from (`None` while its writer does not value them) |
+| `PgPositionChangeCountsRepository::list_tranches` | `persistence` | the protocol's position changes per five-minute tranche, read from its own `*_position_changes_every` function (empty without one) |
 | `SwapEvent`, `LiquidityChangeEvent`, `PoolCreationEvent`, `PositionChangeEvent`, `PositionFeeClaimEvent`, `ProtocolFeeClaimEvent`, `RewardClaimEvent`, `RewardChangeEvent`, `PoolChangeEvent` and their `From` in `http/dto/response/` | `core`, `api` | the protocol's variant and its block in the on-chain lists |
 | `formatProtocolLabel` (`web/src/lib/format/format-protocol.ts`) | `web` | display label |
 

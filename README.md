@@ -57,7 +57,7 @@ Six backend processes share a single Postgres database — no direct calls betwe
                  gRPC
 ```
 
-- **`indexer`** subscribes to Meteora programs (or, for now, to the watched pools), decodes Anchor events, persists the reconstructed state. A `TransactionSource` port — JSON-RPC or Yellowstone gRPC, chosen by `INGEST_SOURCE` — feeding a bounded-concurrency worker, with Prometheus metrics.
+- **`indexer`** subscribes to Meteora programs (or, under `INGEST_SCOPE=pools`, to the watched pools), decodes Anchor events, persists the reconstructed state. A `TransactionSource` port — JSON-RPC or Yellowstone gRPC, chosen by `INGEST_SOURCE` — feeding a bounded-concurrency worker, with Prometheus metrics.
 - **`context`** enriches the raw mint addresses recorded by the indexer with token metadata (Helius DAS) and USD prices (Jupiter Price V3), and resolves pool properties (mints, fee config) from on-chain accounts. Independent worker loops with configurable intervals.
 - **`signals`** is a batch detector engine: each detector polls the accumulated data at its own cadence, stateless between ticks — the database carries the state — and emits typed signals with a severity into the `signals` table. A per-`(detector, pool)` cooldown prevents re-alerting, except on severity escalation.
 - **`analytic`** values the swaps once per pool and per hour into fact tables, sums them per protocol and measures each protocol's TVL, every five minutes; an hour is frozen ten minutes after its close. Readers then read sums instead of re-pricing every hour of their window on each request.
@@ -73,11 +73,9 @@ For the full ingestion pipeline, the Anchor decoding mechanism, the database rol
 
 ## Pool observation model
 
-The long-term design is **protocol-centric**: the indexer subscribes to Meteora program IDs and ingests every transaction that touches them, discovering pools as they appear in the stream.
+The indexer is **protocol-centric**: it subscribes to Meteora program IDs and ingests every transaction that touches them, discovering pools as they appear in the stream. Production runs this way — `INGEST_SCOPE=protocols` over a managed Yellowstone gRPC (Geyser) stream, `INGEST_SOURCE=grpc`, provider **Alchemy, pay-as-you-go**, replaceable by configuration alone since the code names no provider.
 
-In the current phase, ingestion is bounded by a **temporary allowlist** stored in the `watched_pools` table — the public Solana RPC and the free Helius tier both cap transaction fetches at roughly 10 req/s, and peak DAMM v2 traffic saturates that by more than an order of magnitude. The allowlist bounds what the indexer *subscribes to*, not what it accepts afterwards: `INGEST_SCOPE=pools` registers one subscription target per watched pool instead of one per program id, on either source. Nothing downstream knows about it — no filter, no code path conditioned on a pool list, so lifting the constraint is a config flip (`INGEST_SCOPE=protocols`), not a refactor. How each source turns a target into a subscription is in the [indexer README](./crates/indexer/README.md).
-
-The allowlist is lifted by a managed Yellowstone gRPC (Geyser) stream. The source is written — `INGEST_SOURCE=grpc`, behind the same `TransactionSource` port as JSON-RPC — and the provider is chosen: **Alchemy, pay-as-you-go** (September 2026), replaceable by configuration alone since the code names no provider. What is still missing is the first run against a real stream: the gRPC source has only ever talked to an in-process test server, so the allowlist stays until that run has measured the stream.
+The code still supports a narrower scope, `INGEST_SCOPE=pools`, bounded by an allowlist stored in the `watched_pools` table: it registers one subscription target per watched pool instead of one per program id, on either source. The allowlist bounds what the indexer *subscribes to*, not what it accepts afterwards — nothing downstream knows about it, no filter, no code path conditioned on a pool list. Production does not read it. The JSON-RPC source (`INGEST_SOURCE=rpc`) is still in the code as well, behind the same `TransactionSource` port; it fetches every transaction back one request at a time, so the indexer warns at startup when it is paired with `INGEST_SCOPE=protocols`. How each source turns a target into a subscription is in the [indexer README](./crates/indexer/README.md).
 
 For administering the allowlist (schema, seed scripts, SQL helpers), see **[`crates/persistence/README.md`](./crates/persistence/README.md)**.
 
@@ -110,14 +108,14 @@ All nineteen are extracted, persisted to their own per-kind table (`meteora_damm
 
 | Layer | Technology |
 |---|---|
-| Indexer, enrichment, signals, API | Rust 1.99, Tokio, axum, sqlx |
+| Indexer, enrichment, signals, API | Rust 1.100, Tokio, axum, sqlx |
 | Database | TimescaleDB on PostgreSQL 18 |
 | Frontend | Next.js 16, TypeScript, Tailwind v4, next-intl |
 | External data | Solana JSON-RPC (any provider), Yellowstone gRPC (Alchemy), Helius DAS, Jupiter Price V3 |
 | Container runtime | Docker Compose (7 backend images + 1 frontend image; `yog-archive` runs only under the production overlay) |
 | Reverse proxy | Caddy (automatic TLS via Let's Encrypt), the server's entry proxy shared by every site on the machine |
 | Observability | Prometheus, tracing |
-| CI | GitHub Actions (cargo check, rustdoc doc links, per-crate check, module visibility, fmt, clippy, unit and DB-backed integration tests, audit, sqlx offline check) |
+| CI | GitHub Actions (cargo check, rustdoc doc links, per-crate check, module visibility, fmt, clippy, unit and DB-backed integration tests, audit, sqlx offline check, OpenAPI contract) |
 
 ---
 
@@ -139,14 +137,14 @@ docker compose up -d
 # Provision roles + schema + watched-pools allowlist (idempotent, safe to re-run)
 cargo run -p yog-persistence --bin yog-migrate -- bootstrap
 
-# Bring up the full backend stack (postgres + migrate + indexer + api + context + signals)
+# Bring up the full backend stack (postgres + migrate + indexer + api + context + signals + analytic)
 docker compose --profile backend up -d --build
 
 # Or the full stack including the web dashboard
 docker compose --profile full up -d --build
 ```
 
-The API is reachable on `http://localhost:5000` and the web dashboard on `http://localhost:3000`. Each daemon exposes Prometheus metrics on the host: indexer on `127.0.0.1:9000/metrics`, context on `:9001`, signals on `:9002`, analytic on `:9003`.
+The API is reachable on `http://localhost:5000` and the web dashboard on `http://localhost:3000`. Each daemon exposes Prometheus metrics on the host: indexer on `127.0.0.1:9000/metrics`, context on `:9001`, signals on `:9002`, analytic on `:9003`, api on `:9004`.
 
 For the native development workflow (running services via `cargo run` against a dockerised Postgres), the migration toolchain, and the SQL conventions, see **[`crates/README.md`](./crates/README.md)**. For the frontend setup, see **[`web/README.md`](./web/README.md)**.
 
@@ -154,13 +152,11 @@ For the native development workflow (running services via `cargo run` against a 
 
 ## Status
 
-Yog-Scope is **not open to the public yet**. What runs today, on a development machine:
+What runs in production, on Scaleway:
 
 - **Meteora DAMM v2**, end to end — 19 event kinds indexed, tokens enriched with metadata and USD prices, analytics served by the API and the dashboard.
 - **Two signal detectors** — swap-flow imbalance, TVL drain — with a live feed in the dashboard.
-- **Ingestion over JSON-RPC**, bounded by the watched-pools allowlist. The Yellowstone gRPC source is written and has not yet run against a real stream.
-
-Next comes production, which ingests over gRPC. After that: lifting the allowlist, then widening coverage to the protocols listed under *Supported protocols*.
+- **Ingestion over Yellowstone gRPC** (Alchemy), protocol-wide (`INGEST_SCOPE=protocols`): pools are discovered from the stream, the watched-pools allowlist is not read.
 
 ---
 

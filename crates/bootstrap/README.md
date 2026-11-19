@@ -1,7 +1,8 @@
 # yog-bootstrap
 
 Library. Shared startup utilities for the native binaries (`yog-indexer`,
-`yog-context`, `yog-signals`, `yog-api`) and `yog-migrate`: env parsing
+`yog-context`, `yog-signals`, `yog-analytic`, `yog-archive`, `yog-api`) and
+`yog-migrate`: env parsing
 primitives, the two secret types and the `Endpoint` that holds an address apart
 from its credential, `ConfigError`, `init_rustls()`, `init_tracing()` — and the
 other end of the same lifecycle, the shared stop — and, behind a feature, the
@@ -27,9 +28,10 @@ bootstrap/src/
 ├── secret.rs     ← SecretUrl, SecretKey — redaction, scrub, expose()
 ├── endpoint.rs   ← Endpoint: <FUNCTION>_URL + optional header pair + key
 ├── error.rs      ← ConfigError, returned by every binary's Config::load
-├── runtime.rs    ← init_rustls(), init_tracing() and its filter
+├── runtime.rs    ← init_rustls(), init_tracing() and its filter,
+│                   init_tracing_on_stderr() (for a command whose stdout is its result)
 ├── shutdown.rs   ← shutdown_signal(), TaskEnd, handle_task_result, Stop,
-│                   SHUTDOWN_GRACE
+│                   SHUTDOWN_GRACE, report_overrun
 ├── heartbeat.rs  ← Heartbeat, HealthchecksHeartbeat, HeartbeatSettings
 │                   (feature `heartbeat`); RecordingHeartbeat (`test-support`)
 └── lib.rs        ← re-exports, and the exposure_tests.rs guard
@@ -44,15 +46,16 @@ may be absent, which `required` refuses, so it trims on its own — and a
 **blank** value is not read as absent there but refused as `InvalidValue`, so
 `FOO_SECS=` stops the daemon instead of falling back to the default.
 
-`env`, `secret`, `endpoint`, `runtime` and `shutdown` each have their
-`*_tests.rs` beside them; `exposure_tests.rs` is the build-failing guard on
+`env`, `secret`, `endpoint`, `runtime`, `shutdown` and `heartbeat` each have
+their `*_tests.rs` beside them; `exposure_tests.rs` is the build-failing guard on
 `.expose()` call sites (see *Secrets* below).
 
 ## The shared stop
 
 `shutdown.rs` holds `shutdown_signal()` (SIGINT **and** SIGTERM), `TaskEnd`
 (what a `JoinError` actually says), `handle_task_result`, and `Stop` with its
-`SHUTDOWN_GRACE`.
+`SHUTDOWN_GRACE` — and `report_overrun`, which `Stop::finish` calls to name the
+tasks that outlived the grace, public for a daemon that waits on its own.
 
 ⚠️ The stop moved here on 14 September 2026 and **not before**: `yog-indexer`
 had it first, `yog-context` had grown its own copy of `handle_task_result`
@@ -99,10 +102,12 @@ a bare `cargo test -p yog-bootstrap` is green without them.
 *The secret part is never printable; only the non-secret carrier is.*
 `SecretKey` masks its value as `****` unconditionally, for a bare key or token.
 `SecretUrl` redacts every component a URL can carry a credential in —
-userinfo, path, query string, fragment — and keeps scheme, host and port, so a
-daemon that dies on startup still says which provider it could not reach.
-Postgres alone also keeps its role name and its database name: both are ours,
-and both are the diagnostic.
+password, path, query string, fragment — and keeps scheme, host and port, so a
+daemon that dies on startup still says which provider it could not reach. The
+user name before a password stays too, whatever the scheme. A userinfo with no
+password may be a bare token (`https://<token>@host`), so it goes — except on
+Postgres, which also keeps its database name: role and database are ours, and
+both are the diagnostic.
 
 **The path rule fails closed**, and that is the design: it is redacted for
 every scheme *except* Postgres, whose path is the database name. So a provider
@@ -113,8 +118,11 @@ came to print a bare API key in the clear.
 
 So does the userinfo rule. When an `@` sits past the authority bound, the
 password carries an unencoded delimiter *or* a path segment contains an `@`,
-and nothing short of a URL parser tells the two apart — so the value comes back
-as the scheme alone, `postgresql://***REDACTED***`. It costs a diagnostic on a
+and nothing short of a URL parser tells the two apart — so when the authority
+holds a `:`, the value comes back as the scheme alone,
+`postgresql://***REDACTED***`. Without a `:` no password can be there, and the
+userinfo is printed as it is, a bare token included; the path and query rules
+still apply. The fail-closed case costs a diagnostic on a
 URL that hid nothing (`https://host:8080/pa@th`), and that is the trade: an
 earlier attempt to disambiguate instead printed `postgresql://yog:pa#ss@…` in
 full.

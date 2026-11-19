@@ -116,7 +116,7 @@ read without the account that deploys: `ssh yog-obs health`, `metrics` or `db`.
   memory against its limit; its `WARN` and `ERROR` lines of the last hour,
   in JSON or in text, **counted**; the host's disk and memory; and whether the installed script
   still matches the checkout's.
-- `metrics` — the `yog_*` series of the four daemons, read from inside the
+- `metrics` — the `yog_*` series of the four daemons and the api, read from inside the
   compose network through yog-web's `wget`.
 - `db` — fixed counts, as `yog_api`, read-only and bounded to 15 s a query.
   `jobs_last_run_failed` counts `yog_migrate`'s jobs whose last run failed: one

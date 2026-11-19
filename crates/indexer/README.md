@@ -1,7 +1,8 @@
 # yog-indexer
 
-Native binary. Long-lived process consuming Solana mainnet WebSocket events
-and persisting indexed state — the ingest end of the platform.
+Native binary. Long-lived process consuming Solana mainnet transactions — over
+a Yellowstone gRPC stream (production's source) or JSON-RPC WebSocket
+notifications — and persisting indexed state — the ingest end of the platform.
 
 For the workspace-level picture (dependency graph, conventions, database
 roles, the add-a-protocol recipe), see [`crates/README.md`](../README.md).
@@ -31,26 +32,30 @@ indexer/src/
 │                            the slots received for good, and their recorder
 │   ├── listener/          ← one module per responsibility: connector,
 │   │                        ending (+ verdict), retry_budget,
-│   │                        stall_clock, log — listener.rs assembles them
-│   ├── session/           ← slot_progress, delivery, ping_answer, log —
+│   │                        stall_clock, slots_recorder, log — listener.rs
+│   │                        assembles them
+│   ├── session/           ← slot_progress, delivery, ping_answer,
+│   │                        received_slots, received_span, log —
 │   │                        session.rs only routes each update to them
 │   ├── slot_timestamp_buffer/ ← waiting_slots (what waits, and which go),
 │   │                        known_slots (what is settled), bank, log —
 │   │                        slot_timestamp_buffer.rs only orchestrates them
-│   └── tests/             ← its ten test files, grouped: what is left beside
+│   └── tests/             ← its twelve test files and their two helpers
+│                            (fixtures, geyser_server), grouped: what is left beside
 │                            them is what goes into the binary
 ├── infra/rpc/             ← RpcTransactionSource and the three stages it owns:
 │                            RpcListener + SubscriptionWorker (WebSocket fleet),
 │                            SignatureDispatcher filter chain, FetchWorker +
 │                            TransactionFetcher (HTTP + FetchError)
 │   └── tests/             ← and its seven, for the same reason. These two are
-│                            the only grouped ones: the crate's nine other
+│                            the only grouped ones: the crate's ten other
 │                            directories hold one or two test files each, and a
 │                            directory for one file groups nothing
 ├── bootstrap/             ← Config::load(), and Daemon (composition root) split
 │                            by subject: daemon.rs holds the lifecycle, and
 │                            daemon/ the wiring (init.rs), the tasks and the
-│                            concurrency bound (tasks.rs). The stop's mechanics
+│                            concurrency bound (tasks.rs), and the log lines
+│                            about its own configuration (config_log.rs). The stop's mechanics
 │                            are shared — `yog_bootstrap::shutdown`
 ├── error/                 ← typed error per layer
 ├── bin/inspect_logs.rs    ← ad-hoc debugging helper for raw log streams
@@ -216,14 +221,15 @@ its inputs are hand-built — the message is constructed with the understanding
 the code uses to read it, and the two can agree on a lie. One consequence is
 concrete: `program_id_index` resolution walks static keys, then loaded writable,
 then loaded readonly, and **no fixture in this repository can witness it** — 25
-of the 92 transaction fixtures use address lookup tables, none carries a
+of the 93 transaction fixtures use address lookup tables, none carries a
 `loadedAddresses`, and a JSON-RPC response hands `programId` over already
 resolved anyway, so index resolution is structurally a gRPC-only concern. Its
 test is built from the documented rule, not from an observation. First
 confrontation with reality is the live stream.
 
 `transaction_index` is the one field the two adapters legitimately disagree on —
-`getTransaction` omits it, a Yellowstone update always carries it — so
+a `getTransaction` response carries it only when the provider includes it, and
+the adapter passes it through; a Yellowstone update always carries it — so
 `assert_matches_reference` takes it as an argument and each adapter states what
 its source provides. It is also the field this whole migration exists for.
 
@@ -269,8 +275,9 @@ converge — on a translated transaction — and a source owns its whole
 sub-graph, however many tasks that takes.
 
 `bootstrap/daemon/init.rs::init_source` is the only place in the crate that names
-a concrete source, and the only one that reads `INGEST_SOURCE` — nothing
-downstream of the port learns which one runs. The guard is mechanical:
+a concrete source. `Config::load` reads `INGEST_SOURCE` into a
+`TransactionArrival`, which `init_source` matches on and `config_log.rs` only
+logs — nothing downstream of the port learns which one runs. The guard is mechanical:
 `grep IngestSource crates/indexer/src` should find it in `bootstrap/` and
 nowhere else.
 
@@ -340,7 +347,7 @@ that can reach it.
 | connections | one WebSocket **per target** | one stream |
 | per transaction | a second call (`getTransaction`) | nothing — it is delivered |
 | the ceiling | requests per second | bandwidth: what you receive and drop is paid for |
-| `transaction_index` | absent, so same-slot events cannot be ranked | present |
+| `transaction_index` | only if the provider includes it; absent, same-slot events cannot be ranked | present |
 | filtering | client-side chain | `failed`/`vote` server-side; no invocation equivalent |
 | price today | free tier | a subscription, deferred |
 
@@ -474,7 +481,8 @@ the two dispatch points a new protocol touches in this crate, the other being
 - **An order the key cannot decide is counted, not assumed away** — the
   `pool_current_state` projection orders on `(slot, transaction_index,
   event_index)`, but `transaction_index` is empty on the `getTransaction`
-  path, so two transactions of one block touching one pool cannot be ranked.
+  path when the provider leaves it out, so two transactions of one block
+  touching one pool cannot be ranked.
   The repository reports that case and it is counted
   (`yog_indexer_pool_current_state_same_slot_total`), on the applied path as
   well as the rejected one — an ambiguity that wrongly accepts costs as much as
@@ -549,8 +557,8 @@ acquisition paths, which is what makes comparing them meaningful.
 
 Prometheus metrics on `:9000/metrics` (host port `9000` in compose). Every
 family carries a `protocol` label unless its entry below says otherwise; the
-names below are the ones actually emitted. No gauges today — all counters and
-histograms.
+names below are the ones actually emitted. Counters and histograms, but for
+three gauges of the gRPC listener, named in its entry.
 
 - **Pipeline counters** — `yog_indexer_raw_log_events_total`,
   `yog_indexer_raw_log_events_rejected_total{filter, reason}`,
@@ -637,7 +645,7 @@ histograms.
     standalone fee harvest is operator traffic that lands here by construction;
   - **a stub protocol.** `MeteoraDlmm` returns `ExtractionOutcome::default()`,
     so every DLMM transaction would exit `no_events` the day it is subscribed
-    (`../core/README.md`, *The dispatcher*);
+    (`../core/README.md`, *`EventExtractor` and `ExtractionDispatcher`*);
   - **no `InvocationFilter` on the gRPC path.** `account_include` matches
     account keys, so a transaction referencing the program only through an
     address lookup table arrives and decodes to nothing
@@ -727,6 +735,7 @@ keep climbing on a database that refuses every row.
 ```env
 DATABASE_URL_INDEXER=postgresql://yog_indexer:...@localhost:5433/yog_sothoth
 INGEST_STREAM_URL=wss://...            # + INGEST_STREAM_KEY if it has a {key}
+                                       # + INGEST_STREAM_HEADER_NAME / _HEADER_VALUE, optional
 INGEST_TRANSACTION_URL=https://...     # + INGEST_TRANSACTION_KEY likewise
 NETWORK_STATUS_URL=https://...         # + NETWORK_STATUS_KEY likewise
 RPC_WORKER_MAX_RETRIES=10
@@ -748,9 +757,10 @@ that has gone away.
 The two `INGEST_*` axes are the only ones that change what the process *is*,
 and the first line of its log names the couple it loaded.
 
-**Three endpoints, six variables.** Each is an `Endpoint`: a `<FUNCTION>_URL`
+**Three endpoints, eight variables.** Each is an `Endpoint`: a `<FUNCTION>_URL`
 carrying `{key}` where the provider expects its credential, plus a
-`<FUNCTION>_KEY` holding it. They are named after what they serve — what the
+`<FUNCTION>_KEY` holding it — and, for `INGEST_STREAM` alone, an optional
+`_HEADER_NAME` / `_HEADER_VALUE` pair (see `infra/endpoint/credential.rs`). They are named after what they serve — what the
 ingestion listens to, where a transaction is fetched back from, and the chain
 reference the health probe reads — never after the protocol they speak. The variable they replace, `SOLANA_RPC_HTTP`,
 was named for its transport, so it excluded nothing and had accumulated three
@@ -762,16 +772,18 @@ variable. See [`yog-bootstrap`](../bootstrap/README.md#endpoints--named-after-wh
 for the type, and `.env.example` for the convention.
 
 `DATABASE_URL_INDEXER` carries its secret *inside* the URL, because `sqlx`
-wants the string whole, and is a `SecretUrl`: userinfo, path, query string and
-fragment are redacted in `Display` and `Debug`, while scheme, host and port
-stay legible so a failed startup still names what it could not reach. The path
-is redacted because providers put credentials there — Alchemy's `/v2/<key>`,
-QuickNode's `/<token>/` — and only Postgres URLs keep theirs, it being the
-database name.
+wants the string whole, and is a `SecretUrl`: password, path, query string and
+fragment are redacted in `Display` and `Debug`, while scheme, host, port and the
+user name before a password stay legible so a failed startup still names what it
+could not reach. A userinfo with no password may be a bare token, so it is
+redacted too — except on Postgres, where it is the role. The path is redacted
+because providers put credentials there — Alchemy's `/v2/<key>`, QuickNode's
+`/<token>/` — and only Postgres URLs keep theirs, it being the database name.
 
 An assembled endpoint is a `SecretUrl` too, and keeps that type all the way
 down: `Endpoint::url()` builds one, `RpcListener` clones it once per worker,
-and `SubscriptionWorker` exposes it only as the argument of `PubsubClient::new`.
+and `SubscriptionWorker` hands it to `Credential::ws_request`, which exposes it
+only to build the handshake request `PubsubClient::new` receives.
 The `inspect_logs` bin reads the same pair through the same types. The
 invariant and the guard that enforces it are documented in
 [`yog-bootstrap`](../bootstrap/README.md#secrets--one-invariant-two-types).
