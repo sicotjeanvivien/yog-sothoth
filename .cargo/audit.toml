@@ -72,4 +72,32 @@ ignore = [
   # Remove this entry the day Dependabot brings a `sqlx` whose
   # `sqlx-sqlite` takes `libsqlite3-sys >= 0.39`.
   "RUSTSEC-2026-0459",
+
+  # ─────────────────────────────────────────────────────────────────
+  # RUSTSEC-2026-0543 — `chrono` unmaintained (informational)
+  #
+  # Status: ACCEPTED until our crates and their dependencies leave it.
+  #
+  # Every instant we hold is a `chrono` type: eight workspace crates
+  # depend on it directly, `sqlx` maps `TIMESTAMPTZ` to it (its
+  # `chrono` feature), `utoipa` describes it, and `object_store` pulls
+  # it in regardless. The maintainer winds it down and points to
+  # `jiff`; no vulnerability is known.
+  #
+  # Remove this entry once `cargo tree -i chrono --workspace
+  # --target all` prints nothing.
+  "RUSTSEC-2026-0543",
+
+  # ─────────────────────────────────────────────────────────────────
+  # RUSTSEC-2026-0542 — `humantime` unmaintained (informational)
+  #
+  # Status: ACCEPTED until `object_store` drops it.
+  #
+  # Only `object_store` (yog-archive's S3 client) pulls it in; nothing
+  # of ours calls it. It wraps `chrono`, hence the advisory.
+  #
+  # Remove this entry the day Dependabot brings an `object_store`
+  # without `humantime` (`cargo tree -i humantime --workspace
+  # --target all` prints nothing).
+  "RUSTSEC-2026-0542",
 ]
