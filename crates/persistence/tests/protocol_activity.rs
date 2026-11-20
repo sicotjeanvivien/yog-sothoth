@@ -50,14 +50,13 @@ async fn no_read_counts_the_open_hour(pool: PgPool) {
     );
 }
 
-async fn insert_token_period(pool: &PgPool, mint: u8, volume: i64, at: DateTime<Utc>) {
+async fn insert_token_period(pool: &PgPool, mint: u8, volume: i64) {
     sqlx::query(
         "INSERT INTO analytic_token_periods
-           (period, mint, bucket, volume_usd, pools, pool_hours, pool_hours_valued)
-         VALUES ('24h', $1, $2, $3, 1, 1, 1)",
+           (period, mint, volume_usd, pools, pool_hours, pool_hours_valued)
+         VALUES ('24h', $1, $2, 1, 1, 1)",
     )
     .bind(pk(mint).to_string())
-    .bind(at)
     .bind(volume)
     .execute(pool)
     .await
@@ -68,8 +67,9 @@ async fn insert_token_period(pool: &PgPool, mint: u8, volume: i64, at: DateTime<
 /// twice, another skipped), or the identity left unjoined.
 #[sqlx::test(migrations = "./migrations")]
 async fn the_tokens_page_by_volume_then_mint_with_their_identity(pool: PgPool) {
+    seed_hours(&pool, 1).await;
     for (mint, volume) in [(1, 30), (2, 20), (3, 20), (4, 5)] {
-        insert_token_period(&pool, mint, volume, last()).await;
+        insert_token_period(&pool, mint, volume).await;
     }
     sqlx::query(
         "INSERT INTO token_metadata (mint, symbol, decimals, fetched_at, last_refresh_at)
@@ -108,11 +108,12 @@ async fn the_tokens_page_by_volume_then_mint_with_their_identity(pool: PgPool) {
     assert!(first.page.items[1].metadata.is_none());
 }
 
-/// Mutation: the hour taken from the rows — an empty page past the last token
-/// would lose the hour of its ranking, and a ranking never written read as one.
+/// Mutation: the hour taken from the rows — an empty page past the last token, or a window
+/// without a token, would lose the hour of its ranking.
 #[sqlx::test(migrations = "./migrations")]
 async fn a_page_past_the_last_token_still_names_its_ranking(pool: PgPool) {
-    insert_token_period(&pool, 1, 30, last()).await;
+    seed_hours(&pool, 1).await;
+    insert_token_period(&pool, 1, 30).await;
     let feed = PgTokenActivityRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
 
     let past = TokenActivityCursor {
@@ -126,11 +127,26 @@ async fn a_page_past_the_last_token_still_names_its_ranking(pool: PgPool) {
         .await
         .unwrap()
         .unwrap();
-    let week = feed.list(Window::Week, None, 10).await.unwrap();
+    let week = feed.list(Window::Week, None, 10).await.unwrap().unwrap();
 
     assert_eq!(page.last_hour, last());
     assert!(page.page.items.is_empty() && page.page.is_last);
-    assert!(week.is_none());
+    assert_eq!(week.last_hour, last());
+    assert!(week.page.items.is_empty());
+}
+
+/// Mutation: the open hour read as the hour of a ranking — one would be served before any freeze.
+#[sqlx::test(migrations = "./migrations")]
+async fn no_ranking_before_the_first_freeze(pool: PgPool) {
+    sqlx::query("INSERT INTO analytic_hours (bucket) VALUES ($1)")
+        .bind(last())
+        .execute(&pool)
+        .await
+        .unwrap();
+    insert_token_period(&pool, 1, 30).await;
+    let feed = PgTokenActivityRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+
+    assert!(feed.list(Window::Day, None, 10).await.unwrap().is_none());
 }
 
 async fn insert_seen_pool(pool: &PgPool, seed: u8, protocol: Protocol, mints: Option<(u8, u8)>) {

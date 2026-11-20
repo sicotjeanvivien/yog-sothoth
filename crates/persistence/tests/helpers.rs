@@ -123,7 +123,6 @@ pub async fn write_facts_spanning(pool: &PgPool, first: i64, last: i64) {
         from: hour_of(now - Duration::hours(first)),
         through: hour_of(now - Duration::hours(last)),
         freeze_through: None,
-        tvl_hour: None,
         at: now,
     };
     PgAnalyticRepository::new(pool.clone())
@@ -140,7 +139,6 @@ pub async fn write_frozen_hours(pool: &PgPool, hours: i64) {
         from: as_of() - Duration::hours(hours),
         through: as_of() - Duration::hours(1),
         freeze_through: Some(as_of() - Duration::hours(1)),
-        tvl_hour: None,
         at: as_of() + Duration::minutes(10),
     };
     PgAnalyticRepository::new(pool.clone())

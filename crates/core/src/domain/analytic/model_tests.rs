@@ -85,14 +85,14 @@ fn a_clock_behind_the_last_frozen_hour_plans_nothing() {
 
     assert!(cycle.through < cycle.from);
     assert_eq!(cycle.freeze_through, None);
-    assert_eq!(cycle.tvl_hour, None);
 }
 
+/// Against the open hour measured: its TVL would be rewritten through the hour, then kept as
+/// it stood at the first measure.
 #[test]
-fn the_tvl_goes_to_the_hour_of_the_cycle() {
-    let cycle = CycleWrite::plan(at(20, 35), frozen_through(8));
-
-    assert_eq!(cycle.tvl_hour, Some(at(20, 0)));
+fn the_tvl_goes_to_the_last_closed_hour() {
+    assert_eq!(last_closed_hour(at(20, 35)), at(19, 0));
+    assert_eq!(last_closed_hour(at(20, 0)), at(19, 0));
 }
 
 /// Against a frozen hour left in the range: a second writer, or a cycle
@@ -107,7 +107,6 @@ fn a_cycle_loses_the_hours_frozen_since_it_was_planned() {
     assert!(left.through < left.from);
     assert!(left.tranches_through < left.tranches_from);
     assert_eq!(left.freeze_through, None);
-    assert_eq!(left.tvl_hour, None);
 }
 
 /// Against the clamp to `through` kept in `plan` only: a cycle built by hand
@@ -120,7 +119,6 @@ fn a_hand_built_cycle_freezes_nothing_past_what_it_rewrites() {
         from: at(9, 0),
         through: at(9, 0),
         freeze_through: Some(at(12, 0)),
-        tvl_hour: None,
         at: at(13, 30),
     };
 
@@ -173,7 +171,6 @@ fn an_hour_waits_for_its_last_tranche_to_freeze() {
         from: at(9, 0),
         through: at(12, 0),
         freeze_through: Some(at(12, 0)),
-        tvl_hour: None,
         at: at(13, 30),
     };
 

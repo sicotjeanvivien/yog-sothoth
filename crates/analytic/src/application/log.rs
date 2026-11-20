@@ -2,6 +2,7 @@
 
 use std::time::Duration;
 
+use chrono::{DateTime, Utc};
 use tracing::{error, info};
 use yog_core::RepositoryError;
 use yog_core::domain::CycleOutcome;
@@ -32,6 +33,14 @@ pub(super) fn written(outcome: &CycleOutcome, elapsed: Duration) {
 
 pub(super) fn failed(error: &RepositoryError, elapsed: Duration) {
     error!(error = %error, secs = elapsed.as_secs_f64(), "analytic cycle failed");
+}
+
+pub(super) fn tvl_measured(hour: DateTime<Utc>, elapsed: Duration) {
+    info!(hour = %hour, secs = elapsed.as_secs_f64(), "TVL measured");
+}
+
+pub(super) fn tvl_failed(hour: DateTime<Utc>, error: &RepositoryError, elapsed: Duration) {
+    error!(hour = %hour, error = %error, secs = elapsed.as_secs_f64(), "TVL measure failed");
 }
 
 pub(super) fn stopped() {

@@ -21,12 +21,14 @@ const PROGRESS: AnalyticProgress = AnalyticProgress {
     last_tranche: None,
 };
 
-/// Answers `progress` as scripted, writes every cycle unless `refusal` is set,
-/// and keeps the cycles it was asked to write.
+/// Answers `progress` and `tvl` as scripted, writes every cycle unless `refusal` is set,
+/// and keeps the cycles and the TVL measures it was asked for.
 struct ScriptedRepository {
     progress: RepositoryResult<AnalyticProgress>,
     refusal: Option<RepositoryError>,
+    tvl: RepositoryResult<TvlMeasure>,
     cycles: Mutex<Vec<CycleWrite>>,
+    measures: Mutex<Vec<(DateTime<Utc>, DateTime<Utc>)>>,
 }
 
 #[async_trait]
@@ -47,20 +49,41 @@ impl AnalyticRepository for ScriptedRepository {
             }),
         }
     }
+
+    async fn measure_tvl(
+        &self,
+        hour: DateTime<Utc>,
+        at: DateTime<Utc>,
+    ) -> RepositoryResult<TvlMeasure> {
+        self.measures.lock().unwrap().push((hour, at));
+        self.tvl.clone()
+    }
 }
+
+type Scripted = (
+    AnalyticWorker,
+    Arc<ScriptedRepository>,
+    Arc<RecordingHeartbeat>,
+);
 
 fn worker(
     progress: RepositoryResult<AnalyticProgress>,
     refusal: Option<RepositoryError>,
-) -> (
-    AnalyticWorker,
-    Arc<ScriptedRepository>,
-    Arc<RecordingHeartbeat>,
-) {
+) -> Scripted {
+    measuring(progress, refusal, Ok(TvlMeasure::Measured))
+}
+
+fn measuring(
+    progress: RepositoryResult<AnalyticProgress>,
+    refusal: Option<RepositoryError>,
+    tvl: RepositoryResult<TvlMeasure>,
+) -> Scripted {
     let repository = Arc::new(ScriptedRepository {
         progress,
         refusal,
+        tvl,
         cycles: Mutex::new(Vec::new()),
+        measures: Mutex::new(Vec::new()),
     });
     let heartbeat = Arc::new(RecordingHeartbeat::default());
     let worker = AnalyticWorker::new(
@@ -122,4 +145,48 @@ async fn an_unreadable_progress_writes_nothing_and_signals_failure() {
 
     assert!(repository.cycles.lock().unwrap().is_empty());
     assert!(signals(&heartbeat)[0].contains("pool timed out"));
+}
+
+/// Against the measure run only after a written cycle: during a run of failed cycles, the
+/// closed hours would go without their TVL.
+#[tokio::test]
+async fn a_failed_cycle_still_measures_the_last_closed_hour() {
+    let refused = RepositoryError::Backend("canceling statement due to statement timeout".into());
+    let (worker, repository, _) = worker(Ok(PROGRESS), Some(refused));
+
+    assert!(worker.run_cycle(at(12, 30)).await.is_err());
+
+    assert_eq!(
+        *repository.measures.lock().unwrap(),
+        [(at(11, 0), at(12, 30))]
+    );
+}
+
+/// Against the heartbeat following the cycle alone: a measure failing for good would never
+/// reach the alarm.
+#[tokio::test]
+async fn a_failed_measure_alone_signals_its_error() {
+    let refused =
+        RepositoryError::Backend("permission denied for table analytic_protocol_tvl".into());
+    let (worker, _, heartbeat) = measuring(Ok(PROGRESS), None, Err(refused));
+
+    assert!(worker.run_cycle(at(12, 30)).await.is_ok());
+
+    assert_eq!(signals(&heartbeat).len(), 1);
+    assert!(
+        signals(&heartbeat)[0].starts_with("failure: TVL measure failed:")
+            && signals(&heartbeat)[0].contains("permission denied for table analytic_protocol_tvl"),
+        "{:?}",
+        signals(&heartbeat)
+    );
+}
+
+/// Against an hour already measured taken for a failure: eleven cycles an hour would alarm.
+#[tokio::test]
+async fn an_hour_already_measured_signals_success() {
+    let (worker, _, heartbeat) = measuring(Ok(PROGRESS), None, Ok(TvlMeasure::AlreadyMeasured));
+
+    worker.run_cycle(at(12, 30)).await.unwrap();
+
+    assert_eq!(signals(&heartbeat), ["success"]);
 }

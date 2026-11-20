@@ -625,13 +625,14 @@ implied-price rule above; `003` onward follow in [`migrations/`](./migrations/).
 
 ### The analytic tables (migration 015)
 
-`yog-analytic` is their only writer, one transaction per cycle
+`yog-analytic` is their only writer, one transaction per cycle and one per TVL measure
 (`repositories/analytic.rs`): the closed 5-minute tranches, each protocol's from
 its own module — its pools' prices into `analytic_pool_prices_5min`, its swaps
 valued by each direction's trusted leg into `analytic_pool_5min` (028, 031); the facts of the open hours, one
 row per (pool, hour), summed from those tranches; the protocol aggregate summed
 from the facts; the tranches and hours recorded, the hours frozen once closed;
-the protocol TVL, by the rule of `pool_current_tvl`, with its pools unvalued
+and, apart from the cycle, once per closed hour (a row for the hour means measured), the
+protocol TVL, by the rule of `pool_current_tvl`, with its pools unvalued
 counted apart, and the part of it held by the pools discovered in each window
 (`analytic_protocol_tvl_discovered`, 034: first seen since the window's start point
 was last measured, their birth unobserved, counted among the pools of
@@ -654,8 +655,12 @@ so a missing row means a window never counted) and the tokens
 (`analytic_token_periods`, replaced at each freeze, their volume rounded to
 6 decimals so the page cursor, a `Decimal`, holds it exactly). Both group per
 pool before counting: a `COUNT(DISTINCT)` sorts every pool-hour, and spills. The
-tokens are read with the hour of their ranking in one statement, which a freeze
-cannot split.
+tokens are written by `yog_replace_token_periods` (054), `SECURITY DEFINER`, the only
+right `yog_analytic` holds on them: built in parallel in an `UNLOGGED` work table,
+then only the rows that changed written, about 2 % of them; a `DELETE`, not a
+swap of tables nor a `TRUNCATE`, whose lock would wait behind `pg_dump`. Their hour
+is the last frozen one of `analytic_hours`, read with them in one statement, which
+a freeze cannot split.
 `repositories/protocol_activity.rs` reads the frozen hours every measure is read over, and
 `token_activity.rs` the tokens; `tests/overview_periods.rs` and `tests/protocol_activity.rs`
 hold the rules. The last hour has no aggregate: through the last tranche written, its swaps,

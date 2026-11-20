@@ -10,7 +10,10 @@ use yog_core::domain::{
 };
 use yog_persistence::{PgAnalyticRepository, PgTokenActivityRepository};
 
-use super::helpers::{pk, setup_roles_and_connect_as};
+use super::helpers::{INSUFFICIENT_PRIVILEGE, pk, setup_roles_and_connect_as, sqlstate};
+
+/// How long a write or a read may wait on a lock before the test calls it blocked.
+const WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
 fn hour(n: i64) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 10, 1, 0, 0, 0).unwrap() + Duration::hours(n)
@@ -25,7 +28,6 @@ fn cycle(first: i64, last: i64) -> CycleWrite {
         from: hour(first),
         through: hour(last),
         freeze_through: Some(hour(last)),
-        tvl_hour: None,
         at: hour(last + 2),
     }
 }
@@ -94,11 +96,11 @@ async fn active_pools(pool: &PgPool, period: &str, at: i64) -> Option<i64> {
     .unwrap()
 }
 
-type TokenRow = (String, DateTime<Utc>, BigDecimal, i64, i64, i64);
+type TokenRow = (String, BigDecimal, i64, i64, i64);
 
 async fn tokens(pool: &PgPool, period: &str) -> Vec<TokenRow> {
     sqlx::query_as(
-        "SELECT mint, bucket, volume_usd, pools, pool_hours, pool_hours_valued
+        "SELECT mint, volume_usd, pools, pool_hours, pool_hours_valued
            FROM analytic_token_periods WHERE period = $1 ORDER BY mint",
     )
     .bind(period)
@@ -256,15 +258,15 @@ async fn a_token_is_the_sum_of_the_pools_that_hold_it(pool: PgPool) {
     repository.write_cycle(&cycle(0, 1)).await.unwrap();
 
     let mut expected = vec![
-        (pk(101).to_string(), hour(1), BigDecimal::from(30), 2, 3, 2),
-        (pk(102).to_string(), hour(1), BigDecimal::from(30), 1, 2, 2),
-        (pk(103).to_string(), hour(1), BigDecimal::from(0), 1, 1, 0),
+        (pk(101).to_string(), BigDecimal::from(30), 2, 3, 2),
+        (pk(102).to_string(), BigDecimal::from(30), 1, 2, 2),
+        (pk(103).to_string(), BigDecimal::from(0), 1, 1, 0),
     ];
     expected.sort();
     assert_eq!(tokens(&pool, "24h").await, expected);
 }
 
-/// Mutation: the rows of the previous freeze kept beside the new ones.
+/// Mutation: a changed token left as the previous freeze wrote it (`ON CONFLICT DO NOTHING`).
 #[sqlx::test(migrations = "./migrations")]
 async fn a_freeze_replaces_the_tokens_of_the_last_one(pool: PgPool) {
     let p = setup_pool(&pool, 1, 101, 102).await;
@@ -278,8 +280,66 @@ async fn a_freeze_replaces_the_tokens_of_the_last_one(pool: PgPool) {
 
     let rows = tokens(&pool, "24h").await;
     assert_eq!(rows.len(), 2);
-    assert!(rows.iter().all(|row| row.1 == hour(1)), "{rows:?}");
-    assert_eq!(rows[0].2, BigDecimal::from(30));
+    assert!(rows.iter().all(|row| row.1 == 30), "{rows:?}");
+}
+
+/// Mutation: the tokens gone from the window left in place (no `DELETE`).
+#[sqlx::test(migrations = "./migrations")]
+async fn a_token_gone_from_its_window_is_removed(pool: PgPool) {
+    let p = setup_pool(&pool, 1, 101, 102).await;
+    let q = setup_pool(&pool, 2, 103, 104).await;
+    insert_tranche(&pool, &p, 0, Some(10)).await;
+    insert_tranche(&pool, &q, 25, Some(20)).await;
+
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
+    repository.write_cycle(&cycle(0, 0)).await.unwrap();
+    repository.write_cycle(&cycle(1, 25)).await.unwrap();
+
+    let day: Vec<_> = tokens(&pool, "24h")
+        .await
+        .into_iter()
+        .map(|t| t.0)
+        .collect();
+    let mut expected = vec![pk(103).to_string(), pk(104).to_string()];
+    expected.sort();
+    assert_eq!(day, expected);
+}
+
+/// The row versions of the 24h tokens, by mint.
+async fn row_versions(pool: &PgPool) -> Vec<(String, String)> {
+    sqlx::query_as(
+        "SELECT mint, xmin::TEXT FROM analytic_token_periods WHERE period = '24h' ORDER BY mint",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+/// Mutation: every token written again at each freeze, the unchanged ones with the rest.
+#[sqlx::test(migrations = "./migrations")]
+async fn an_unchanged_token_is_not_written_again(pool: PgPool) {
+    let p = setup_pool(&pool, 1, 101, 102).await;
+    let q = setup_pool(&pool, 2, 103, 104).await;
+    insert_tranche(&pool, &p, 0, Some(10)).await;
+    insert_tranche(&pool, &q, 1, Some(20)).await;
+
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
+    repository.write_cycle(&cycle(0, 0)).await.unwrap();
+    let before = row_versions(&pool).await;
+    repository.write_cycle(&cycle(1, 1)).await.unwrap();
+    let after = row_versions(&pool).await;
+
+    let kept = [pk(101).to_string(), pk(102).to_string()];
+    let unchanged = |rows: &[(String, String)]| -> Vec<(String, String)> {
+        rows.iter()
+            .filter(|(mint, _)| kept.contains(mint))
+            .cloned()
+            .collect()
+    };
+    assert_eq!(unchanged(&after), unchanged(&before));
+    assert_eq!(after.len(), 4);
 }
 
 /// Mutation: the births counted on `pools.first_seen_at` — R, never initialized,
@@ -305,4 +365,96 @@ async fn a_birth_is_an_initialize_pool_and_nothing_else(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(births, [(hour(0), 0), (hour(1), 2)]);
+}
+
+/// `yog_replace_token_periods` called by hand through `through`, on `executor`.
+async fn replace_token_periods<'e>(
+    executor: impl sqlx::PgExecutor<'e>,
+    through: DateTime<Utc>,
+) -> Result<(), sqlx::Error> {
+    let (periods, hours): (Vec<&str>, Vec<i32>) = Window::ALL
+        .iter()
+        .map(|window| (window.as_str(), window.hours()))
+        .unzip();
+    sqlx::query("SELECT yog_replace_token_periods($1, $2, $3)")
+        .bind(through)
+        .bind(periods)
+        .bind(hours)
+        .execute(executor)
+        .await
+        .map(|_| ())
+}
+
+/// Mutation: `TRUNCATE` in place of the `DELETE`: the read waits behind the freeze.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_read_during_a_freeze_serves_the_last_ranking_without_waiting(pool: PgPool) {
+    let p = setup_pool(&pool, 1, 101, 102).await;
+    insert_tranche(&pool, &p, 0, Some(10)).await;
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
+    repository.write_cycle(&cycle(0, 0)).await.unwrap();
+    let feed = PgTokenActivityRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+
+    let mut freeze = pool.begin().await.unwrap();
+    replace_token_periods(&mut *freeze, hour(30)).await.unwrap();
+    let read = tokio::time::timeout(WAIT, feed.list(Window::Day, None, 10)).await;
+    freeze.rollback().await.unwrap();
+
+    let page = read
+        .expect("the read must not wait behind the freeze")
+        .unwrap()
+        .unwrap();
+    assert_eq!(page.page.items.len(), 2);
+}
+
+/// Mutations: `TRUNCATE`, or the table dropped or renamed: the freeze waits behind the dump.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_freeze_goes_through_while_a_dump_reads_the_tokens(pool: PgPool) {
+    let p = setup_pool(&pool, 1, 101, 102).await;
+    insert_tranche(&pool, &p, 0, Some(10)).await;
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
+
+    let mut dump = pool.begin().await.unwrap();
+    sqlx::query("LOCK TABLE analytic_token_periods IN ACCESS SHARE MODE")
+        .execute(&mut *dump)
+        .await
+        .unwrap();
+    let written = tokio::time::timeout(WAIT, repository.write_cycle(&cycle(0, 0))).await;
+    dump.rollback().await.unwrap();
+
+    written
+        .expect("the freeze must not wait behind the dump")
+        .unwrap();
+    assert_eq!(tokens(&pool, "24h").await.len(), 2);
+}
+
+/// Mutations: EXECUTE not granted to `yog_analytic`, or left to `PUBLIC`.
+#[sqlx::test(migrations = "./migrations")]
+async fn only_yog_analytic_may_replace_the_tokens(pool: PgPool) {
+    let p = setup_pool(&pool, 1, 101, 102).await;
+    insert_tranche(&pool, &p, 0, Some(10)).await;
+    let analytic = setup_roles_and_connect_as(&pool, "yog_analytic").await;
+    // ⚠️ SECURITY DEFINER runs as its owner, a superuser here: the test hands it to
+    // `yog_migrate`, the production owner, with the rights ownership gives it there.
+    sqlx::raw_sql(
+        "ALTER FUNCTION yog_replace_token_periods(TIMESTAMPTZ, TEXT[], INT[]) OWNER TO yog_migrate;
+         GRANT SELECT ON ALL TABLES IN SCHEMA public TO yog_migrate;
+         GRANT INSERT, UPDATE, DELETE ON analytic_token_periods TO yog_migrate;",
+    )
+    .execute(&pool)
+    .await
+    .expect("hand the function to its production owner");
+
+    PgAnalyticRepository::new(analytic)
+        .write_cycle(&cycle(0, 0))
+        .await
+        .unwrap();
+    assert_eq!(tokens(&pool, "24h").await.len(), 2);
+
+    let api = setup_roles_and_connect_as(&pool, "yog_api").await;
+    let refused = replace_token_periods(&api, hour(0))
+        .await
+        .expect_err("yog_api must not replace the tokens");
+    assert_eq!(sqlstate(&refused), INSUFFICIENT_PRIVILEGE);
 }

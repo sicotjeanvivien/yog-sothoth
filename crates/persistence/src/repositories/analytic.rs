@@ -1,5 +1,6 @@
 //! Postgres implementation of [`AnalyticRepository`]: one transaction per cycle, whose only
-//! per-protocol parts are each protocol's tranches, liquidity, rotation runs and births.
+//! per-protocol parts are each protocol's tranches, liquidity, rotation runs and births, and
+//! one per TVL measure.
 //!
 //! [`AnalyticRepository`]: yog_core::domain::AnalyticRepository
 
@@ -12,7 +13,8 @@ use sqlx::{PgExecutor, PgPool, Postgres, Transaction, postgres::types::PgInterva
 use yog_core::{
     RepositoryResult,
     domain::{
-        AnalyticProgress, AnalyticRepository, CycleOutcome, CycleWrite, Protocol, TRANCHE, Window,
+        AnalyticProgress, AnalyticRepository, CycleOutcome, CycleWrite, Protocol, TRANCHE,
+        TvlMeasure, Window,
     },
 };
 
@@ -81,15 +83,13 @@ impl AnalyticRepository for PgAnalyticRepository {
             Some(through) => {
                 let frozen = freeze(&mut tx, cycle.from, through, cycle.at).await?;
                 write_protocol_periods(&mut tx, cycle.from, through).await?;
-                write_token_periods(&mut tx, through).await?;
                 frozen
             }
             None => 0,
         };
         refresh_token_pool_ceilings(&mut tx, cycle.at).await?;
-        if let Some(hour) = cycle.tvl_hour {
-            measure_tvl(&mut tx, hour, cycle.at).await?;
-            meteora_damm_v2::measure_discovered_tvl(&mut tx, hour).await?;
+        if let Some(through) = cycle.freeze_through {
+            replace_token_periods(&mut tx, through).await?;
         }
 
         tx.commit().await.map_err(map_sqlx_error)?;
@@ -99,6 +99,20 @@ impl AnalyticRepository for PgAnalyticRepository {
             pool_hours,
             hours_frozen,
         })
+    }
+
+    async fn measure_tvl(
+        &self,
+        hour: DateTime<Utc>,
+        at: DateTime<Utc>,
+    ) -> RepositoryResult<TvlMeasure> {
+        let mut tx = self.pool.begin().await.map_err(map_sqlx_error)?;
+        if measure_tvl(&mut tx, hour, at).await? == 0 {
+            return Ok(TvlMeasure::AlreadyMeasured);
+        }
+        meteora_damm_v2::measure_discovered_tvl(&mut tx, hour).await?;
+        tx.commit().await.map_err(map_sqlx_error)?;
+        Ok(TvlMeasure::Measured)
     }
 }
 
@@ -364,44 +378,16 @@ async fn write_protocol_periods(
     Ok(())
 }
 
-/// Every token of every window ending at `last_hour`, in place of the last
-/// ones: the volume of the pools that hold it, a swap counting for both sides.
-async fn write_token_periods(
+/// Every token of every window ending at `through`, in place of the last ones: the volume of
+/// the pools that hold it, a swap counting for both sides (migration 054).
+async fn replace_token_periods(
     tx: &mut Transaction<'static, Postgres>,
-    last_hour: DateTime<Utc>,
+    through: DateTime<Utc>,
 ) -> RepositoryResult<()> {
-    sqlx::query!("DELETE FROM analytic_token_periods")
-        .execute(&mut **tx)
-        .await
-        .map_err(map_sqlx_error)?;
     let (periods, hours) = windows();
     sqlx::query!(
-        r#"
-        WITH by_pool AS (
-            SELECT w.period, f.protocol, f.pool_address,
-                   SUM(f.volume_in_a_usd + f.volume_in_b_usd) FILTER (WHERE f.valued)
-                       AS volume_usd,
-                   COUNT(*) AS pool_hours, COUNT(*) FILTER (WHERE f.valued) AS pool_hours_valued
-              FROM UNNEST($2::TEXT[], $3::INT[]) AS w (period, hours)
-              JOIN analytic_pool_hourly f
-                ON f.bucket > $1::TIMESTAMPTZ - make_interval(hours => w.hours)
-               AND f.bucket <= $1
-             GROUP BY w.period, f.protocol, f.pool_address
-        )
-        INSERT INTO analytic_token_periods (
-            period, mint, bucket, volume_usd, pools, pool_hours, pool_hours_valued
-        )
-        -- ⚠️ Rounded: the page cursor, a Decimal, must hold the volume exactly.
-        SELECT b.period, m.mint, $1, ROUND(COALESCE(SUM(b.volume_usd), 0), 6), COUNT(*),
-               SUM(b.pool_hours), SUM(b.pool_hours_valued)
-          FROM by_pool b
-          -- ⚠️ The mints joined to the pools once summed, not to each pool-hour.
-          JOIN pools p ON p.pool_address = b.pool_address AND p.protocol = b.protocol
-         CROSS JOIN LATERAL (VALUES (p.token_a_mint), (p.token_b_mint)) AS m (mint)
-         WHERE m.mint IS NOT NULL
-         GROUP BY b.period, m.mint
-        "#,
-        last_hour,
+        "SELECT yog_replace_token_periods($1, $2, $3)",
+        through,
         &periods,
         &hours,
     )
@@ -446,13 +432,14 @@ async fn refresh_token_pool_ceilings(
     Ok(())
 }
 
-/// The current TVL of every protocol, by the rule of `pool_current_tvl`.
+/// The current TVL of every protocol, by the rule of `pool_current_tvl`, written to `hour`
+/// unless it holds one already; the rows written.
 async fn measure_tvl(
     tx: &mut Transaction<'static, Postgres>,
     hour: DateTime<Utc>,
     at: DateTime<Utc>,
-) -> RepositoryResult<()> {
-    sqlx::query!(
+) -> RepositoryResult<u64> {
+    let written = sqlx::query!(
         r#"
         INSERT INTO analytic_protocol_tvl
             (protocol, bucket, tvl_usd, pools_priced, pools_unvalued, measured_at)
@@ -461,7 +448,9 @@ async fn measure_tvl(
                COUNT(*) FILTER (WHERE t.tvl_usd IS NULL), $2
           FROM pool_current_tvl t
           JOIN pools p ON p.pool_address = t.pool_address
+         WHERE NOT EXISTS (SELECT 1 FROM analytic_protocol_tvl WHERE bucket = $1)
          GROUP BY p.protocol
+        -- ⚠️ Reached only by a concurrent measure of the same hour: the last one written stays.
         ON CONFLICT (protocol, bucket) DO UPDATE SET
             tvl_usd        = EXCLUDED.tvl_usd,
             pools_priced   = EXCLUDED.pools_priced,
@@ -474,5 +463,5 @@ async fn measure_tvl(
     .execute(&mut **tx)
     .await
     .map_err(map_sqlx_error)?;
-    Ok(())
+    Ok(written.rows_affected())
 }

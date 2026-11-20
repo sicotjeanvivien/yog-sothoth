@@ -29,7 +29,7 @@ pub struct AnalyticProgress {
 
 /// One cycle: the tranches `tranches_from..=tranches_through`, each valued once,
 /// the hours `from..=through`, each rewritten whole — none when the end is
-/// before the start — and the TVL measured at `at`.
+/// before the start — written at `at`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CycleWrite {
     pub tranches_from: DateTime<Utc>,
@@ -38,8 +38,6 @@ pub struct CycleWrite {
     pub through: DateTime<Utc>,
     /// Never past `through`, nor past an hour whose last tranche is unwritten.
     pub freeze_through: Option<DateTime<Utc>>,
-    /// The hour of `at`, `None` when that hour is already frozen.
-    pub tvl_hour: Option<DateTime<Utc>>,
     pub at: DateTime<Utc>,
 }
 
@@ -65,7 +63,6 @@ impl CycleWrite {
             from,
             through,
             freeze_through: Some(closed),
-            tvl_hour: Some(current),
             at: now,
         }
         .without_written(progress)
@@ -95,9 +92,6 @@ impl CycleWrite {
                 .zip(complete)
                 .map(|(hour, complete)| hour.min(self.through).min(complete))
                 .filter(|hour| *hour >= from),
-            tvl_hour: self
-                .tvl_hour
-                .filter(|hour| written.last_frozen.is_none_or(|frozen| *hour > frozen)),
             ..self
         }
     }
@@ -111,6 +105,20 @@ pub struct CycleOutcome {
     /// The (pool, hour) facts upserted.
     pub pool_hours: u64,
     pub hours_frozen: u64,
+}
+
+/// What a TVL measure did: one per hour, the hour's first measure kept.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TvlMeasure {
+    Measured,
+    /// The hour already had its TVL: nothing written.
+    AlreadyMeasured,
+}
+
+/// The hour a TVL measured at `now` is written to: the last closed one, read from the
+/// pools' current state.
+pub fn last_closed_hour(now: DateTime<Utc>) -> DateTime<Utc> {
+    hour_of(now) - TimeDelta::hours(1)
 }
 
 fn hour_of(at: DateTime<Utc>) -> DateTime<Utc> {

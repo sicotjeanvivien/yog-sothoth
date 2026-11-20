@@ -4,7 +4,9 @@
 use chrono::{DateTime, Duration, DurationRound, Utc};
 use sqlx::PgPool;
 use sqlx::types::BigDecimal;
-use yog_core::domain::{AnalyticProgress, AnalyticRepository, CycleWrite};
+use yog_core::domain::{
+    AnalyticProgress, AnalyticRepository, CycleWrite, TvlMeasure, last_closed_hour,
+};
 use yog_persistence::PgAnalyticRepository;
 
 use super::helpers::{
@@ -522,8 +524,7 @@ async fn a_side_without_a_price_counts_zero_and_a_pool_without_any_its_own_count
     let now = now();
     let repository =
         PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
-    let cycle = cycle_from(now, hours_before(now, 0));
-    repository.write_cycle(&cycle).await.unwrap();
+    let hour = measure_after_a_cycle(&repository, now).await;
 
     let measured: (DateTime<Utc>, Option<BigDecimal>, i64, i64, DateTime<Utc>) = sqlx::query_as(
         "SELECT bucket, tvl_usd, pools_priced, pools_unvalued, measured_at
@@ -532,10 +533,24 @@ async fn a_side_without_a_price_counts_zero_and_a_pool_without_any_its_own_count
     .fetch_one(&pool)
     .await
     .unwrap();
+    assert_eq!(measured, (hour, Some(dec("1627.5")), 2, 1, now));
+}
+
+/// A cycle at `now`, then the TVL measure the worker runs after it; the hour measured.
+async fn measure_after_a_cycle(
+    repository: &PgAnalyticRepository,
+    now: DateTime<Utc>,
+) -> DateTime<Utc> {
+    repository
+        .write_cycle(&cycle_from(now, hours_before(now, 0)))
+        .await
+        .unwrap();
+    let hour = last_closed_hour(now);
     assert_eq!(
-        measured,
-        (cycle.tvl_hour.unwrap(), Some(dec("1627.5")), 2, 1, cycle.at)
+        repository.measure_tvl(hour, now).await.unwrap(),
+        TvlMeasure::Measured
     );
+    hour
 }
 
 /// The discovered part of each window, as `(period, tvl_usd, pools)` in window order.
@@ -571,8 +586,7 @@ async fn a_pool_discovered_in_a_window_counts_in_its_part_and_one_born_there_doe
     pool: PgPool,
 ) {
     let now = now();
-    let cycle = cycle_from(now, hours_before(now, 0));
-    let hour = cycle.tvl_hour.unwrap();
+    let hour = last_closed_hour(now);
     let start_of_day = hour + Duration::hours(1) - Duration::hours(24);
     seed_pool_seen_at(&pool, 4, 1, hour - Duration::hours(2)).await;
     seed_pool_seen_at(&pool, 8, 16, start_of_day).await;
@@ -597,7 +611,7 @@ async fn a_pool_discovered_in_a_window_counts_in_its_part_and_one_born_there_doe
 
     let repository =
         PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
-    repository.write_cycle(&cycle).await.unwrap();
+    measure_after_a_cycle(&repository, now).await;
 
     assert_eq!(
         discovered(&pool, hour).await,
@@ -614,8 +628,7 @@ async fn a_pool_discovered_in_a_window_counts_in_its_part_and_one_born_there_doe
 #[sqlx::test]
 async fn a_pool_first_seen_after_the_start_measure_counts_as_discovered(pool: PgPool) {
     let now = now();
-    let cycle = cycle_from(now, hours_before(now, 0));
-    let hour = cycle.tvl_hour.unwrap();
+    let hour = last_closed_hour(now);
     let from = hour + Duration::hours(1) - Duration::hours(24);
     sqlx::query(
         "INSERT INTO analytic_protocol_tvl
@@ -632,7 +645,7 @@ async fn a_pool_first_seen_after_the_start_measure_counts_as_discovered(pool: Pg
 
     let repository =
         PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
-    repository.write_cycle(&cycle).await.unwrap();
+    measure_after_a_cycle(&repository, now).await;
 
     assert_eq!(
         discovered(&pool, hour).await[0],
@@ -645,15 +658,16 @@ async fn a_pool_first_seen_after_the_start_measure_counts_as_discovered(pool: Pg
 #[sqlx::test]
 async fn a_pool_without_a_current_state_is_not_counted_discovered(pool: PgPool) {
     let now = now();
-    let cycle = cycle_from(now, hours_before(now, 0));
     setup_pool(&pool, 9, Some("180.0")).await;
+    // ⚠️ A pool measured, seen long ago: without a TVL row, no measure is written at all.
+    seed_pool_seen_at(&pool, 7, 8, last_closed_hour(now) - Duration::days(40)).await;
 
     let repository =
         PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
-    repository.write_cycle(&cycle).await.unwrap();
+    let hour = measure_after_a_cycle(&repository, now).await;
 
     assert_eq!(
-        discovered(&pool, cycle.tvl_hour.unwrap()).await[0],
+        discovered(&pool, hour).await[0],
         ("24h".to_owned(), dec("0"), 0)
     );
 }
@@ -662,13 +676,12 @@ async fn a_pool_without_a_current_state_is_not_counted_discovered(pool: PgPool) 
 #[sqlx::test]
 async fn a_window_without_a_discovered_pool_writes_zero(pool: PgPool) {
     let now = now();
-    let cycle = cycle_from(now, hours_before(now, 0));
-    let hour = cycle.tvl_hour.unwrap();
+    let hour = last_closed_hour(now);
     seed_pool_seen_at(&pool, 7, 8, hour - Duration::days(40)).await;
 
     let repository =
         PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
-    repository.write_cycle(&cycle).await.unwrap();
+    measure_after_a_cycle(&repository, now).await;
 
     assert_eq!(
         discovered(&pool, hour).await,
@@ -906,4 +919,101 @@ async fn a_cycle_writes_the_hours_missing_since_the_last_and_never_rewrites_a_fr
         (cycle.through - frozen).num_hours() + 1,
         "{opened:?}"
     );
+}
+
+/// How long a write may wait on a lock before the test calls it blocked.
+const WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// The measure times of every protocol's TVL at `hour`.
+async fn measured_at(pool: &PgPool, hour: DateTime<Utc>) -> Vec<DateTime<Utc>> {
+    sqlx::query_scalar("SELECT measured_at FROM analytic_protocol_tvl WHERE bucket = $1")
+        .bind(hour)
+        .fetch_all(pool)
+        .await
+        .unwrap()
+}
+
+/// Mutation: the measure without its `NOT EXISTS`: every cycle of the hour measures it again.
+#[sqlx::test]
+async fn a_second_measure_of_an_hour_writes_nothing(pool: PgPool) {
+    let priced = setup_pool(&pool, 1, Some("180.0")).await;
+    hold(&pool, &priced, 1, 1_000_000_000).await;
+    let now = now();
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
+    let hour = measure_after_a_cycle(&repository, now).await;
+
+    let again = repository
+        .measure_tvl(hour, now + Duration::minutes(5))
+        .await
+        .unwrap();
+
+    assert_eq!(again, TvlMeasure::AlreadyMeasured);
+    assert_eq!(measured_at(&pool, hour).await, [now]);
+}
+
+/// Mutation: the TVL committed apart from its discovered part: the hour reads as measured, and
+/// the part a failure left unwritten is never written.
+#[sqlx::test]
+async fn an_hour_whose_measure_failed_is_measured_whole_next_time(pool: PgPool) {
+    let priced = setup_pool(&pool, 1, Some("180.0")).await;
+    hold(&pool, &priced, 1, 1_000_000_000).await;
+    let now = now();
+    let hour = last_closed_hour(now);
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
+
+    let mut blocker = pool.begin().await.unwrap();
+    sqlx::query("LOCK TABLE analytic_protocol_tvl_discovered IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+    let failed = tokio::time::timeout(WAIT, repository.measure_tvl(hour, now)).await;
+    blocker.rollback().await.unwrap();
+    assert!(
+        failed.is_err(),
+        "the measure must wait on the lock: {failed:?}"
+    );
+
+    let next = repository
+        .measure_tvl(hour, now + Duration::minutes(5))
+        .await
+        .unwrap();
+
+    assert_eq!(next, TvlMeasure::Measured);
+    assert_eq!(discovered(&pool, hour).await.len(), 3);
+}
+
+/// Mutation: the measure back in the cycle's transaction: the cycle waits on it, and its
+/// freeze is lost with it.
+#[sqlx::test]
+async fn a_failed_measure_leaves_the_freeze_written(pool: PgPool) {
+    let now = now();
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
+
+    let mut blocker = pool.begin().await.unwrap();
+    sqlx::query("LOCK TABLE analytic_protocol_tvl IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+    let written = tokio::time::timeout(
+        WAIT,
+        repository.write_cycle(&cycle_from(now, hours_before(now, 3))),
+    )
+    .await;
+    let measured =
+        tokio::time::timeout(WAIT, repository.measure_tvl(last_closed_hour(now), now)).await;
+    blocker.rollback().await.unwrap();
+
+    let outcome = written
+        .expect("the cycle must not wait on the measure")
+        .unwrap();
+    assert!(outcome.hours_frozen > 0, "{outcome:?}");
+    assert!(measured.is_err(), "the measure must wait on the lock");
+    assert_eq!(
+        repository.progress().await.unwrap().last_frozen,
+        outcome.written.freeze_through
+    );
+    assert!(measured_at(&pool, last_closed_hour(now)).await.is_empty());
 }
