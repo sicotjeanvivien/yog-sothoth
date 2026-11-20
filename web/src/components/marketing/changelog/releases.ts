@@ -32,6 +32,30 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.11.1",
+    date: "2026-11-20",
+    summary: "A token-ranking cursor resumed under another window is refused instead of skipping or repeating tokens, yog-context counts a failed Helius sweep and the Solana answers it drops, and the database moves to TimescaleDB 2.32.0.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "On /api/swaps/by-token, a cursor carries its window: resumed under another window, it is refused (400) instead of resuming another ranking, which skipped or repeated tokens. A cursor issued before this release is refused; start again from the first page.",
+            technical: false,
+          },
+          {
+            text: "yog-context counts a Helius call whose every chunk failed as a failed tick and tries its full sweep again 5 min later, counts the Solana accounts it drops as unreadable, and the answers whose length differs from the addresses asked (yog_context_provider_dropped_total), and counts a 429 as rate_limited for every provider.",
+            technical: true,
+          },
+          {
+            text: "TimescaleDB 2.32.0, Rust 1.100.0 and the dependencies' updates.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.0",
     date: "2026-11-13",
     summary: "The price–oracle deviation detector is retired, and the API and its database hold up better under load.",
