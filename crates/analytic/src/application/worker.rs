@@ -8,7 +8,9 @@ use tokio::time::MissedTickBehavior;
 use tokio_util::sync::CancellationToken;
 use yog_bootstrap::Heartbeat;
 use yog_core::RepositoryResult;
-use yog_core::domain::{AnalyticRepository, CycleOutcome, CycleWrite};
+use yog_core::domain::{
+    AnalyticRepository, CycleOutcome, CycleWrite, TvlMeasure, last_closed_hour,
+};
 
 use super::{log, metrics};
 
@@ -51,33 +53,78 @@ impl AnalyticWorker {
         log::stopped();
     }
 
+    /// The cycle, then the TVL measure whatever the cycle did: it reads the pools' current
+    /// state, not what the cycle writes.
     pub(crate) async fn run_cycle(&self, now: DateTime<Utc>) -> RepositoryResult<CycleOutcome> {
+        let written = self.write_cycle(now).await;
+        // ⚠️ Its own clock, not the cycle's: a long cycle would date the pools' state minutes early.
+        let measured = self.measure_tvl(Utc::now()).await;
+        self.report(&written, &measured).await;
+        written
+    }
+
+    async fn write_cycle(&self, now: DateTime<Utc>) -> RepositoryResult<CycleOutcome> {
         let started = Instant::now();
-        let written = self.write(now).await;
+        let written = self.plan_and_write(now).await;
         let elapsed = started.elapsed();
         match &written {
             Ok(outcome) => {
                 metrics::record_cycle("written", elapsed);
                 metrics::record_frozen(outcome.hours_frozen);
                 log::written(outcome, elapsed);
-                if let Some(heartbeat) = &self.heartbeat {
-                    heartbeat.report_success().await;
-                }
             }
             Err(error) => {
                 metrics::record_cycle("failed", elapsed);
                 log::failed(error, elapsed);
-                if let Some(heartbeat) = &self.heartbeat {
-                    heartbeat
-                        .report_failure(&format!("cycle failed: {error}"))
-                        .await;
-                }
             }
         }
         written
     }
 
-    async fn write(&self, now: DateTime<Utc>) -> RepositoryResult<CycleOutcome> {
+    async fn measure_tvl(&self, now: DateTime<Utc>) -> RepositoryResult<TvlMeasure> {
+        let hour = last_closed_hour(now);
+        let started = Instant::now();
+        let measured = self.repository.measure_tvl(hour, now).await;
+        let elapsed = started.elapsed();
+        match &measured {
+            Ok(TvlMeasure::Measured) => {
+                metrics::record_tvl("measured", elapsed);
+                log::tvl_measured(hour, elapsed);
+            }
+            Ok(TvlMeasure::AlreadyMeasured) => {}
+            Err(error) => {
+                metrics::record_tvl("failed", elapsed);
+                log::tvl_failed(hour, error, elapsed);
+            }
+        }
+        measured
+    }
+
+    /// A failure when the cycle or the measure failed, the cycle's first.
+    async fn report(
+        &self,
+        written: &RepositoryResult<CycleOutcome>,
+        measured: &RepositoryResult<TvlMeasure>,
+    ) {
+        let Some(heartbeat) = &self.heartbeat else {
+            return;
+        };
+        match (written, measured) {
+            (Ok(_), Ok(_)) => heartbeat.report_success().await,
+            (Err(error), _) => {
+                heartbeat
+                    .report_failure(&format!("cycle failed: {error}"))
+                    .await;
+            }
+            (Ok(_), Err(error)) => {
+                heartbeat
+                    .report_failure(&format!("TVL measure failed: {error}"))
+                    .await;
+            }
+        }
+    }
+
+    async fn plan_and_write(&self, now: DateTime<Utc>) -> RepositoryResult<CycleOutcome> {
         let progress = self.repository.progress().await?;
         self.repository
             .write_cycle(&CycleWrite::plan(now, progress))

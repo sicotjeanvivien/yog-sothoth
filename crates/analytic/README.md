@@ -161,13 +161,14 @@ in `persistence` (`repositories/analytic.rs`).
   (10 min) has passed — the first cycle after that point freezes it. An hour
   freezes only on a cycle that rewrote it, and only once its last tranche is
   valued, so its last write sees every swap that arrived within the margin.
-- **TVL**: measured into the hour of the cycle, as long as that hour is not
-  frozen. It is the reserves of every pool observed since indexing began, each
+- **TVL**: after each cycle, written or failed, in its own transaction: the last
+  closed hour, unless it holds its TVL already, so once an hour, and again at the
+  next cycle when it failed. A failed measure costs no freeze. It is the reserves of every pool observed since indexing began, each
   side at its token's stock price (`token_stock_price`, 045): its Jupiter price when
   under 15 minutes old, unless more than ten times the highest price our pools'
   trades gave the token over 7 days, its ceiling. A side without one counts 0, a
   pool with no side valued is counted apart (`pools_unvalued`). Each cycle keeps
-  every token's ceiling (`analytic_token_pool_ceilings`) from what each tranche's
+  every token's ceiling (`analytic_token_pool_ceilings`), which the TVL reads, from what each tranche's
   trade implied for it (`pool_a_usd`, `pool_b_usd` of the price table), a trade
   that paid less than $1 for it witnessing nothing. The
   pools Meteora holds that never emitted an event since are out of it: a limit of
@@ -193,7 +194,9 @@ What a window cannot sum from its hours is written once per freeze:
   counts for both its tokens, as aggregators count it, so the tokens add up to
   twice the total — its distinct pools, and its pool-hours with the valued ones,
   the volume's coverage. Only the last freeze's are kept, the volume rounded to
-  6 decimals.
+  6 decimals; built aside, in parallel, then only the tokens that changed written
+  (`yog_replace_token_periods`, `persistence` migration 054), the hour of the
+  ranking being the last frozen one.
 - **The births** are not a period: counted per protocol and hour from its
   `initialize_pool` events, with the facts, and summed by the reader. A pool
   first seen is not a pool born: in `protocols` scope most pools seen are old.
@@ -234,12 +237,14 @@ lock fails with its reason rather than holding the next ones.
 
 ## Signals
 
-- **Healthchecks.io**: a success after every written cycle, a `/fail` with the
-  error after a failed one. A failed cycle is logged, counted and skipped; the
+- **Healthchecks.io**: a success after every written cycle whose TVL measure did
+  not fail, a `/fail` with the error after a failed cycle or a failed measure. A failed cycle is logged, counted and skipped; the
   next tick tries again. A stopped daemon is the silence the check notices.
 - **Prometheus**, on `:9000/metrics` (host port 9003 in `docker-compose.yml`):
   `yog_analytic_cycles_total{outcome=written|failed}`,
   `yog_analytic_cycle_duration_seconds`, `yog_analytic_hours_frozen_total`,
+  `yog_analytic_tvl_measures_total{outcome=measured|failed}` (an hour found measured
+  counts nothing), `yog_analytic_tvl_measure_duration_seconds`,
   `yog_analytic_heartbeat_failures_total`.
 
 ## Deploying

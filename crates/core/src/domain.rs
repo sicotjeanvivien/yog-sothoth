@@ -49,7 +49,7 @@ mod watched_pool;
 pub use analytic::{
     AnalyticProgress, AnalyticRepository, CycleOutcome, CycleWrite, FREEZE_MARGIN, FrozenHours,
     FrozenPeriod, MAX_HOURS_PER_CYCLE, ProtocolBucket, QUOTED_MINTS, RUN_GAP, RUN_ROTATION,
-    TRANCHE, TranchePeriod, Window, WrittenTranches,
+    TRANCHE, TranchePeriod, TvlMeasure, Window, WrittenTranches, last_closed_hour,
 };
 pub use announcements::{
     Announcement, AnnouncementCursor, AnnouncementEntry, AnnouncementKind, AnnouncementLookup,

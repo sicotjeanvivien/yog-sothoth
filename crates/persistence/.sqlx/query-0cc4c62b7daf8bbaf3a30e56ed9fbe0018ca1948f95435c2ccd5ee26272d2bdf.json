@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT yog_replace_token_periods($1, $2, $3)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "yog_replace_token_periods",
+        "type_info": "Void",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "TextArray",
+        "Int4Array"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0cc4c62b7daf8bbaf3a30e56ed9fbe0018ca1948f95435c2ccd5ee26272d2bdf"
+}

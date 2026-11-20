@@ -128,10 +128,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     ),
     (
         "analytic_token_periods",
-        &[
-            ("yog_analytic", &["DELETE", "INSERT", "SELECT"]),
-            ("yog_api", &["SELECT"]),
-        ],
+        &[("yog_analytic", &["SELECT"]), ("yog_api", &["SELECT"])],
     ),
     (
         "analytic_token_pool_ceilings",
