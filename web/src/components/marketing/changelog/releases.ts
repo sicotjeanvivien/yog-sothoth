@@ -34,7 +34,7 @@ export const RELEASES: readonly Release[] = [
   {
     version: "v0.11.1",
     date: "2026-11-20",
-    summary: "Token rankings page through without skipping or repeating, the enrichment daemon no longer fails silently, and the database moves to TimescaleDB 2.32.0.",
+    summary: "A token-ranking cursor resumed under another window is refused instead of skipping or repeating tokens, yog-context counts a failed Helius sweep and the Solana answers it drops, and the database moves to TimescaleDB 2.32.0.",
     sections: [
       {
         kind: "fixes",
@@ -44,7 +44,7 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "yog-context counts a Helius call whose every chunk failed as a failed tick and tries its full sweep again 5 min later, counts the Solana accounts it drops as unreadable (yog_context_provider_dropped_total), and counts a 429 as rate_limited for every provider.",
+            text: "yog-context counts a Helius call whose every chunk failed as a failed tick and tries its full sweep again 5 min later, counts the Solana accounts it drops as unreadable, and the answers whose length differs from the addresses asked (yog_context_provider_dropped_total), and counts a 429 as rate_limited for every provider.",
             technical: true,
           },
           {
