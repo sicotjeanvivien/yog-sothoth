@@ -1,7 +1,7 @@
 -- 054_token_periods_built_aside.sql — the tokens of every window, built in parallel in a work table, and only what
--- differs written to analytic_token_periods: about 2 % of its rows change from one freeze to the next. `bucket` leaves
--- the rows, which it would all change: the hour of the ranking is the last frozen one, frozen in the same transaction.
--- SECURITY DEFINER, so yog_analytic needs EXECUTE alone; search_path pinned with pg_temp last, as in 013.
+-- differs written to analytic_token_periods. `bucket` leaves the rows, which it would all change: the hour of the
+-- ranking is the last frozen one, frozen in the same transaction.
+-- SECURITY DEFINER, so yog_analytic needs EXECUTE alone; search_path pinned with pg_temp last.
 
 ALTER TABLE analytic_token_periods DROP COLUMN bucket;
 

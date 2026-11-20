@@ -70,7 +70,8 @@ impl AnalyticWorker {
                 log::failed(error, elapsed);
             }
         }
-        let measured = self.measure_tvl(now).await;
+        // ⚠️ Its own clock, not the cycle's: a long cycle would date the pools' state minutes early.
+        let measured = self.measure_tvl(Utc::now()).await;
         if let Some(heartbeat) = &self.heartbeat {
             match (&written, &measured) {
                 (Ok(_), Ok(_)) => heartbeat.report_success().await,

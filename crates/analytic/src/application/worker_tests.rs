@@ -28,6 +28,8 @@ struct ScriptedRepository {
     refusal: Option<RepositoryError>,
     tvl: RepositoryResult<TvlMeasure>,
     cycles: Mutex<Vec<CycleWrite>>,
+    /// When each cycle returned, by the wall clock.
+    cycles_done: Mutex<Vec<DateTime<Utc>>>,
     measures: Mutex<Vec<(DateTime<Utc>, DateTime<Utc>)>>,
 }
 
@@ -39,6 +41,7 @@ impl AnalyticRepository for ScriptedRepository {
 
     async fn write_cycle(&self, cycle: &CycleWrite) -> RepositoryResult<CycleOutcome> {
         self.cycles.lock().unwrap().push(*cycle);
+        self.cycles_done.lock().unwrap().push(Utc::now());
         match &self.refusal {
             Some(error) => Err(error.clone()),
             None => Ok(CycleOutcome {
@@ -83,6 +86,7 @@ fn measuring(
         refusal,
         tvl,
         cycles: Mutex::new(Vec::new()),
+        cycles_done: Mutex::new(Vec::new()),
         measures: Mutex::new(Vec::new()),
     });
     let heartbeat = Arc::new(RecordingHeartbeat::default());
@@ -156,10 +160,23 @@ async fn a_failed_cycle_still_measures_the_last_closed_hour() {
 
     assert!(worker.run_cycle(at(12, 30)).await.is_err());
 
-    assert_eq!(
-        *repository.measures.lock().unwrap(),
-        [(at(11, 0), at(12, 30))]
-    );
+    let measures = repository.measures.lock().unwrap().clone();
+    assert_eq!(measures.len(), 1);
+    let (hour, measured_at) = measures[0];
+    assert_eq!(hour, last_closed_hour(measured_at));
+}
+
+/// Against the measure dated by the cycle's clock: a long cycle would date the pools' state, read
+/// after it, minutes early.
+#[tokio::test]
+async fn the_measure_is_dated_after_the_cycle() {
+    let (worker, repository, _) = worker(Ok(PROGRESS), None);
+
+    worker.run_cycle(at(12, 30)).await.unwrap();
+
+    let cycle_done = repository.cycles_done.lock().unwrap()[0];
+    let (_, measured_at) = repository.measures.lock().unwrap()[0];
+    assert!(measured_at >= cycle_done, "{measured_at} < {cycle_done}");
 }
 
 /// Against the heartbeat following the cycle alone: a measure failing for good would never
