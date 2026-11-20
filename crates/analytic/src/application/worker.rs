@@ -56,8 +56,16 @@ impl AnalyticWorker {
     /// The cycle, then the TVL measure whatever the cycle did: it reads the pools' current
     /// state, not what the cycle writes.
     pub(crate) async fn run_cycle(&self, now: DateTime<Utc>) -> RepositoryResult<CycleOutcome> {
+        let written = self.write_cycle(now).await;
+        // ⚠️ Its own clock, not the cycle's: a long cycle would date the pools' state minutes early.
+        let measured = self.measure_tvl(Utc::now()).await;
+        self.report(&written, &measured).await;
+        written
+    }
+
+    async fn write_cycle(&self, now: DateTime<Utc>) -> RepositoryResult<CycleOutcome> {
         let started = Instant::now();
-        let written = self.write(now).await;
+        let written = self.plan_and_write(now).await;
         let elapsed = started.elapsed();
         match &written {
             Ok(outcome) => {
@@ -68,23 +76,6 @@ impl AnalyticWorker {
             Err(error) => {
                 metrics::record_cycle("failed", elapsed);
                 log::failed(error, elapsed);
-            }
-        }
-        // ⚠️ Its own clock, not the cycle's: a long cycle would date the pools' state minutes early.
-        let measured = self.measure_tvl(Utc::now()).await;
-        if let Some(heartbeat) = &self.heartbeat {
-            match (&written, &measured) {
-                (Ok(_), Ok(_)) => heartbeat.report_success().await,
-                (Err(error), _) => {
-                    heartbeat
-                        .report_failure(&format!("cycle failed: {error}"))
-                        .await;
-                }
-                (Ok(_), Err(error)) => {
-                    heartbeat
-                        .report_failure(&format!("TVL measure failed: {error}"))
-                        .await;
-                }
             }
         }
         written
@@ -109,7 +100,31 @@ impl AnalyticWorker {
         measured
     }
 
-    async fn write(&self, now: DateTime<Utc>) -> RepositoryResult<CycleOutcome> {
+    /// A failure when the cycle or the measure failed, the cycle's first.
+    async fn report(
+        &self,
+        written: &RepositoryResult<CycleOutcome>,
+        measured: &RepositoryResult<TvlMeasure>,
+    ) {
+        let Some(heartbeat) = &self.heartbeat else {
+            return;
+        };
+        match (written, measured) {
+            (Ok(_), Ok(_)) => heartbeat.report_success().await,
+            (Err(error), _) => {
+                heartbeat
+                    .report_failure(&format!("cycle failed: {error}"))
+                    .await;
+            }
+            (Ok(_), Err(error)) => {
+                heartbeat
+                    .report_failure(&format!("TVL measure failed: {error}"))
+                    .await;
+            }
+        }
+    }
+
+    async fn plan_and_write(&self, now: DateTime<Utc>) -> RepositoryResult<CycleOutcome> {
         let progress = self.repository.progress().await?;
         self.repository
             .write_cycle(&CycleWrite::plan(now, progress))
