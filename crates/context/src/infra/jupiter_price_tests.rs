@@ -217,6 +217,7 @@ fn client_at(base_url: String, per_minute: u32) -> JupiterPriceClient {
         base_url,
         SecretKey::for_tests("test-key"),
         NonZeroU32::new(per_minute).expect("non-zero"),
+        Arc::new(SourceHealth::default()),
     )
 }
 
@@ -630,4 +631,107 @@ async fn a_status_and_a_decode_failure_are_classified_without_leaking_the_secret
     let decode_err = SourceError::from(raw_decode);
     assert!(matches!(decode_err, SourceError::Decode(_)), "{decode_err}");
     assert!(!decode_err.to_string().contains(SECRET), "{decode_err}");
+}
+
+// ── Heartbeat ───────────────────────────────────────────────────────
+
+use crate::application::heartbeat::window_verdict::WindowVerdict;
+
+fn unpaced_client_feeding(base_url: String, health: &Arc<SourceHealth>) -> JupiterPriceClient {
+    JupiterPriceClient::new(
+        base_url,
+        SecretKey::for_tests("test-key"),
+        NonZeroU32::new(60_000).expect("non-zero"),
+        Arc::clone(health),
+    )
+}
+
+fn failure(health: &SourceHealth) -> String {
+    match health.take_window() {
+        WindowVerdict::Failing(reason) => reason,
+        WindowVerdict::Healthy => panic!("the window should have failed"),
+    }
+}
+
+#[tokio::test]
+async fn a_chunk_given_up_on_429_fails_the_window_with_its_error() {
+    // Mutation: the chunk's error not passed on.
+    let health = Arc::new(SourceHealth::default());
+    let responses = (0..RATE_LIMIT_MAX_ATTEMPTS)
+        .map(|_| response_429(0))
+        .collect();
+    let client = unpaced_client_feeding(serve_scripted_responses(responses), &health);
+
+    client
+        .fetch_prices(&[pk(50)], &CancellationToken::new())
+        .await
+        .expect("Ok expected");
+
+    let reason = failure(&health);
+    assert!(
+        reason.starts_with("price: 1 calls, none succeeded, last error: source rate-limited (429)"),
+        "{reason}"
+    );
+}
+
+#[tokio::test]
+async fn a_chunk_without_a_single_price_fails_the_window() {
+    // Mutation: an answer without a price counted as a success.
+    let health = Arc::new(SourceHealth::default());
+    let client =
+        unpaced_client_feeding(serve_scripted_responses(vec![response_200("{}")]), &health);
+
+    client
+        .fetch_prices(&[pk(51)], &CancellationToken::new())
+        .await
+        .expect("Ok expected");
+
+    assert_eq!(
+        failure(&health),
+        "price: 1 calls, none succeeded, last error: no price returned"
+    );
+}
+
+#[tokio::test]
+async fn a_chunk_that_brought_back_a_price_clears_the_window() {
+    // Mutation: a priced chunk not recorded as a success.
+    let mints: Vec<Pubkey> = (1..=51).map(pk).collect();
+    let responses = std::iter::once(response_200(&price_body(mints[0])))
+        .chain((0..RATE_LIMIT_MAX_ATTEMPTS).map(|_| response_429(0)))
+        .collect();
+    let health = Arc::new(SourceHealth::default());
+    let client = unpaced_client_feeding(serve_scripted_responses(responses), &health);
+
+    client
+        .fetch_prices(&mints, &CancellationToken::new())
+        .await
+        .expect("Ok expected");
+
+    assert_eq!(health.take_window(), WindowVerdict::Healthy);
+}
+
+#[tokio::test]
+async fn a_chunk_dropped_at_the_stop_is_not_counted() {
+    // Mutation: the stop counted as a refusal.
+    let script = vec![(Duration::from_secs(30), response_200(&price_body(pk(52))))];
+    let (base_url, arrivals) = serve_timed_responses(script);
+    let health = Arc::new(SourceHealth::default());
+    let client = unpaced_client_feeding(base_url, &health);
+    let shutdown = CancellationToken::new();
+    let stop = shutdown.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        stop.cancel();
+    });
+
+    tokio::time::timeout(
+        Duration::from_secs(5),
+        client.fetch_prices(&[pk(52)], &shutdown),
+    )
+    .await
+    .expect("the stop drops the request in flight")
+    .expect("Ok expected");
+
+    assert_eq!(arrivals.lock().unwrap().len(), 1, "premise: it was sent");
+    assert_eq!(health.take_window(), WindowVerdict::Healthy);
 }

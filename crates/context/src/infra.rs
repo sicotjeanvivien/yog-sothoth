@@ -14,7 +14,7 @@ use std::time::Duration;
 
 pub(crate) use helius_das::HeliusDasClient;
 pub(crate) use jupiter_price::JupiterPriceClient;
-pub(crate) use metrics::ProviderMetrics;
+pub(crate) use metrics::{HEARTBEAT_FAILURES, ProviderMetrics};
 pub(crate) use solana_account::SolanaAccountClient;
 
 /// Overall per-request deadline shared by the provider clients.

@@ -163,6 +163,7 @@ async fn no_missing_mints_skips_source_and_upsert() {
         repository.clone(),
         source.clone(),
         std::time::Duration::from_secs(10),
+        Arc::new(SourceHealth::default()),
     );
 
     worker.run_one_cycle().await;
@@ -188,6 +189,7 @@ async fn enriches_all_mints_in_single_chunk() {
         repository.clone(),
         source.clone(),
         std::time::Duration::from_secs(10),
+        Arc::new(SourceHealth::default()),
     );
 
     worker.run_one_cycle().await;
@@ -239,6 +241,7 @@ async fn upserts_only_what_source_returned() {
         repository.clone(),
         source.clone(),
         std::time::Duration::from_secs(10),
+        Arc::new(SourceHealth::default()),
     );
 
     worker.run_one_cycle().await;
@@ -262,6 +265,7 @@ async fn list_missing_error_skips_cycle_silently() {
         repository.clone(),
         source.clone(),
         std::time::Duration::from_secs(10),
+        Arc::new(SourceHealth::default()),
     );
 
     // Must NOT panic and must NOT call the source.
@@ -283,6 +287,7 @@ async fn source_error_skips_upserts_for_that_chunk() {
         repository.clone(),
         source.clone(),
         std::time::Duration::from_secs(10),
+        Arc::new(SourceHealth::default()),
     );
 
     worker.run_one_cycle().await;
@@ -310,6 +315,7 @@ async fn upsert_error_does_not_stop_the_batch() {
         repository.clone(),
         source.clone(),
         std::time::Duration::from_secs(10),
+        Arc::new(SourceHealth::default()),
     );
 
     worker.run_one_cycle().await;
@@ -324,7 +330,12 @@ async fn upsert_error_does_not_stop_the_batch() {
 }
 
 fn idle_worker(repository: Arc<FakeRepository>, source: Arc<FakeSource>) -> MetadataWorker {
-    MetadataWorker::new(repository, source, std::time::Duration::from_secs(10))
+    MetadataWorker::new(
+        repository,
+        source,
+        std::time::Duration::from_secs(10),
+        Arc::new(SourceHealth::default()),
+    )
 }
 
 const RECENT: (Scope, Option<Duration>) = (Scope::RecentPools, Some(MISSING_MINT_DISCOVERY_WINDOW));
@@ -405,4 +416,40 @@ async fn a_sweep_whose_source_call_succeeded_is_not_done_again() {
     worker.run_one_cycle().await;
 
     assert_eq!(repository.listings(), vec![SWEEP, RECENT]);
+}
+
+// ── Heartbeat ─────────────────────────────────────────────────────────
+
+use crate::application::heartbeat::window_verdict::WindowVerdict;
+
+#[tokio::test]
+async fn each_source_call_is_counted_for_the_heartbeat() {
+    // Mutation: the call's outcome recorded backwards, or not at all.
+    let repository = Arc::new(FakeRepository::with_missing(vec![pk(1)]));
+    let refused = || Err(SourceError::RateLimited { retry_after: None });
+    let source = Arc::new(FakeSource::with_responses(vec![
+        refused(),
+        refused(),
+        Ok(vec![]),
+    ]));
+    let health = Arc::new(SourceHealth::default());
+    let mut worker = MetadataWorker::new(
+        repository,
+        source,
+        std::time::Duration::from_secs(10),
+        Arc::clone(&health),
+    );
+
+    worker.run_one_cycle().await;
+    assert_eq!(
+        health.take_window(),
+        WindowVerdict::Failing(
+            "metadata: 1 calls, none succeeded, last error: source rate-limited (429), retry_after=None"
+                .to_string()
+        )
+    );
+
+    worker.run_one_cycle().await;
+    worker.run_one_cycle().await;
+    assert_eq!(health.take_window(), WindowVerdict::Healthy);
 }

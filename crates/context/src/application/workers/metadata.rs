@@ -10,6 +10,7 @@ use tokio_util::sync::CancellationToken;
 
 use yog_core::domain::{MISSING_MINT_DISCOVERY_WINDOW, TokenMetadata, TokenMetadataRepository};
 
+use crate::application::heartbeat::{source_health::SourceHealth, source_role::SourceRole};
 use crate::application::source::{FetchedMetadata, MetadataSource};
 use crate::error::WorkerError;
 
@@ -35,6 +36,7 @@ pub struct MetadataWorker {
     poll_interval: std::time::Duration,
     /// When the next sweep is due; `None` sweeps at the first tick.
     next_full_sweep: Option<Instant>,
+    health: Arc<SourceHealth>,
 }
 
 impl MetadataWorker {
@@ -43,12 +45,14 @@ impl MetadataWorker {
         repository: Arc<dyn TokenMetadataRepository>,
         source: Arc<dyn MetadataSource>,
         poll_interval: std::time::Duration,
+        health: Arc<SourceHealth>,
     ) -> Self {
         Self {
             repository,
             source,
             poll_interval,
             next_full_sweep: None,
+            health,
         }
     }
 
@@ -111,8 +115,13 @@ impl MetadataWorker {
 
         // One call: the source chunks and absorbs partial failures.
         let fetched = match self.source.fetch_metadata(&missing).await {
-            Ok(fetched) => fetched,
+            Ok(fetched) => {
+                self.health.record_success(SourceRole::Metadata);
+                fetched
+            }
             Err(e) => {
+                self.health
+                    .record_failure(SourceRole::Metadata, e.to_string());
                 self.sweep_due_in(scope, start, FULL_SWEEP_RETRY_DELAY);
                 return TickOutcome::SourceFailed(e);
             }

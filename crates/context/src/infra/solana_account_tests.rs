@@ -164,20 +164,21 @@ async fn a_failed_batch_fails_the_whole_call() {
     );
 }
 
+type Drops = Vec<(String, u64)>;
+
 /// The accounts fetched for `addresses` against `script`, and each `dropped_total` reason of this
 /// provider with its count, sorted.
 fn fetch_counting_drops(
     script: Vec<(u16, Value)>,
     addresses: &[Pubkey],
-) -> (Vec<RawAccount>, Vec<(String, u64)>) {
+) -> (Result<Vec<RawAccount>, SourceError>, Drops) {
     let (accounts, counters) = recording_metrics(async {
         let provider = ScriptedProvider::answering(script).await;
         SolanaAccountClient::new(provider.url.clone())
             .fetch_accounts(addresses)
             .await
-            .expect("the accounts")
     });
-    let mut drops: Vec<(String, u64)> = counters
+    let mut drops: Drops = counters
         .into_iter()
         .filter(|(name, labels, _)| {
             name == "yog_context_provider_dropped_total" && has(labels, "provider", PROVIDER_LABEL)
@@ -211,7 +212,7 @@ fn an_unreadable_account_is_counted_under_its_reason() {
         &[pk(1), pk(2), pk(3)],
     );
 
-    assert_eq!(pools(&accounts), [pk(3)]);
+    assert_eq!(pools(&accounts.expect("the accounts")), [pk(3)]);
     assert_eq!(
         drops,
         [
@@ -227,27 +228,33 @@ fn an_absent_account_is_not_counted() {
     let (accounts, drops) =
         fetch_counting_drops(vec![answer(vec![Value::Null, account(2)])], &[pk(1), pk(2)]);
 
-    assert_eq!(pools(&accounts), [pk(2)]);
+    assert_eq!(pools(&accounts.expect("the accounts")), [pk(2)]);
     assert_eq!(drops, []);
 }
 
-/// Mutation: the length check removed, an account of the short answer kept, or the answer counted
+/// Mutation: the length check removed, the short answer kept as a success, or the answer counted
 /// once per missing account.
 #[test]
-fn a_short_answer_keeps_no_account_and_is_counted_once() {
+fn a_short_answer_fails_the_call_and_is_counted_once() {
     let (accounts, drops) =
         fetch_counting_drops(vec![answer(vec![account(1)])], &[pk(1), pk(2), pk(3)]);
 
-    assert!(accounts.is_empty(), "{:?}", pools(&accounts));
+    assert!(
+        matches!(&accounts, Err(SourceError::Decode(reason)) if reason == "1 accounts answered for 3 addresses asked"),
+        "{accounts:?}"
+    );
     assert_eq!(drops, [("length_mismatch".to_string(), 1)]);
 }
 
-/// Mutation: only a short answer checked, or an account of the long answer kept.
+/// Mutation: only a short answer checked, or the long answer kept as a success.
 #[test]
-fn a_long_answer_keeps_no_account_and_is_counted_once() {
+fn a_long_answer_fails_the_call_and_is_counted_once() {
     let (accounts, drops) =
         fetch_counting_drops(vec![answer(vec![account(1), account(2)])], &[pk(1)]);
 
-    assert!(accounts.is_empty(), "{:?}", pools(&accounts));
+    assert!(
+        matches!(&accounts, Err(SourceError::Decode(reason)) if reason == "2 accounts answered for 1 addresses asked"),
+        "{accounts:?}"
+    );
     assert_eq!(drops, [("length_mismatch".to_string(), 1)]);
 }

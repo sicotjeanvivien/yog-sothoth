@@ -12,6 +12,7 @@ use tracing::{debug, info, warn};
 use yog_core::application::decode_pool_account;
 use yog_core::domain::{PoolAccountResolver, PoolRepository};
 
+use crate::application::heartbeat::{source_health::SourceHealth, source_role::SourceRole};
 use crate::application::source::PoolAccountSource;
 use crate::error::WorkerError;
 
@@ -25,6 +26,7 @@ pub struct PoolAccountWorker {
     pool_repository: Arc<dyn PoolRepository>,
     source: Arc<dyn PoolAccountSource>,
     poll_interval: std::time::Duration,
+    health: Arc<SourceHealth>,
 }
 
 impl PoolAccountWorker {
@@ -33,12 +35,14 @@ impl PoolAccountWorker {
         pool_repository: Arc<dyn PoolRepository>,
         source: Arc<dyn PoolAccountSource>,
         poll_interval: std::time::Duration,
+        health: Arc<SourceHealth>,
     ) -> Self {
         Self {
             resolvers,
             pool_repository,
             source,
             poll_interval,
+            health,
         }
     }
 
@@ -84,8 +88,13 @@ impl PoolAccountWorker {
         }
 
         let accounts = match self.source.fetch_accounts(&unresolved).await {
-            Ok(accounts) => accounts,
+            Ok(accounts) => {
+                self.health.record_success(SourceRole::PoolAccount);
+                accounts
+            }
             Err(e) => {
+                self.health
+                    .record_failure(SourceRole::PoolAccount, e.to_string());
                 warn!(protocol = %protocol, error = %e, "pool-account worker: source returned a hard error");
                 return;
             }

@@ -151,6 +151,7 @@ fn worker(
         pool_repo,
         source,
         std::time::Duration::from_secs(10),
+        Arc::new(SourceHealth::default()),
     )
 }
 
@@ -259,4 +260,49 @@ async fn an_account_of_another_protocol_is_not_written() {
     worker(repo, pool_repo, source).run_one_cycle().await;
 
     assert!(journal.lock().unwrap().is_empty());
+}
+
+// ── Heartbeat ─────────────────────────────────────────────────────────
+
+use crate::application::heartbeat::window_verdict::WindowVerdict;
+
+/// A source that refuses every call.
+struct RefusingSource;
+
+#[async_trait]
+impl PoolAccountSource for RefusingSource {
+    async fn fetch_accounts(&self, _: &[Pubkey]) -> Result<Vec<RawAccount>, SourceError> {
+        Err(SourceError::RateLimited { retry_after: None })
+    }
+}
+
+#[tokio::test]
+async fn each_source_call_is_counted_for_the_heartbeat() {
+    // Mutation: the call's outcome recorded backwards, or not at all.
+    let (repo, pool_repo, _) = fakes(vec![pk(1)], false);
+    let health = Arc::new(SourceHealth::default());
+    let with_source = |source: Arc<dyn PoolAccountSource>| {
+        PoolAccountWorker::new(
+            vec![repo.clone()],
+            pool_repo.clone(),
+            source,
+            std::time::Duration::from_secs(10),
+            Arc::clone(&health),
+        )
+    };
+    let refusing = with_source(Arc::new(RefusingSource));
+    let answering = with_source(Arc::new(FakeSource { accounts: vec![] }));
+
+    refusing.run_one_cycle().await;
+    assert_eq!(
+        health.take_window(),
+        WindowVerdict::Failing(
+            "pool_account: 1 calls, none succeeded, last error: source rate-limited (429), retry_after=None"
+                .to_string()
+        )
+    );
+
+    refusing.run_one_cycle().await;
+    answering.run_one_cycle().await;
+    assert_eq!(health.take_window(), WindowVerdict::Healthy);
 }

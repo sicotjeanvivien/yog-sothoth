@@ -39,3 +39,12 @@ pub(super) fn endpoints_initialized(token_metadata: &Endpoint, pool_account: &En
 pub(super) fn cancellation_received() {
     info!("cancellation received — stopping");
 }
+
+/// Whether a heartbeat is configured; without one, a source refusing every call is only logged.
+pub(super) fn heartbeat_configured(configured: bool) {
+    if configured {
+        info!("heartbeat configured — a source refusing every call fails the check");
+    } else {
+        info!("no heartbeat configured — a source refusing every call is logged, not signalled");
+    }
+}

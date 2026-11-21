@@ -14,6 +14,10 @@ roles), see [`crates/README.md`](../README.md).
 ```
 context/src/
 ├── application/     ← what the daemon does once wired
+│   ├── heartbeat.rs ← HeartbeatReporter: pings the sources' verdict every window;
+│   │                  heartbeat/ holds source_health.rs (SourceHealth: each source's
+│   │                  calls since the last ping), source_role.rs (SourceRole),
+│   │                  window_verdict.rs (WindowVerdict) and log.rs
 │   ├── source/      ← ports: MetadataSource, PriceSource, PoolAccountSource
 │   └── workers/     ← use cases: MetadataWorker, PriceWorker, PoolAccountWorker,
 │                      one <worker>.rs each, its own modules in <worker>/ —
@@ -30,7 +34,10 @@ context/src/
 │                      source_error.rs turns a reqwest failure into a
 │                      SourceError, URL stripped)
 ├── bootstrap/       ← Config::load(), Daemon::connect — composition root, and the
-│                      stop: run() joins its three workers under the shared grace;
+│                      stop: run() joins its three workers and the heartbeat
+│                      reporter under the shared grace; daemon/init.rs builds
+│                      what connect() owns and declares the metric families;
+│                      daemon/tasks.rs spawns the four tasks and names them;
 │                      daemon/log.rs holds the daemon's log lines
 ├── error/           ← SourceError, WorkerError — shared by the layers
 ├── testing.rs       ← test-only: the local HTTP server of the provider clients' tests
@@ -288,7 +295,8 @@ started always finishes — if it is given the time.
 The **price worker is waited on first**, because it is the only one whose
 interrupted work is *lost* rather than merely *abandoned*: its tick ends in a
 single `INSERT` of prices stamped at one instant, and that instant does not come
-back. The other two re-list their remainder next tick.
+back. The other two re-list their remainder next tick. The heartbeat reporter,
+when there is one, is waited on last: it holds no work.
 
 ⚠️ **A price tick outlasts the grace on its own, so it hears the stop at any
 point.** The Jupiter client races the token against each chunk — its slot,
@@ -312,18 +320,55 @@ is closed by the shared `infra::http_client()`: every provider client
 carries a total-request timeout (15 s) and a connect timeout (5 s), so a hang
 degrades into a tick-level `SourceError` absorbed like any other.
 
+## The source alarm
+
+A source that refuses every call leaves the new pools without mints or
+`decimals`, and the valuation publishes wrong volumes; nothing else says so.
+The metadata and pool-account workers record each source call in a shared
+`SourceHealth`, the Jupiter client each chunk, and the
+`HeartbeatReporter` reads and clears it every `HEARTBEAT_WINDOW` (5 minutes),
+pinging the Healthchecks.io check of `CONTEXT_HEARTBEAT_URL`:
+
+- **`/fail`** when a source was called in the window without a single success,
+  naming it by role — `metadata`, `pool_account`, `price`, never the provider,
+  which a URL chooses — with its number of calls and its last error;
+- **success** otherwise, a window without any call included: a tick with no
+  new pool calls nothing, so a quiet hour is no outage. One refusal followed by
+  a success in the same window is no alarm either.
+
+A failure is any hard error — HTTP, 5xx, timeout, decoding. A Jupiter chunk
+succeeds when it brings back at least one price: a refused chunk and an answer
+without a single price both fail, the latter as `no price returned`. ⚠️ Jupiter
+is counted per chunk, not per tick: a price tick lasts about as long as a
+window, so a tick-level count would leave windows without a call — green —
+in the middle of an outage. A chunk dropped at the stop is not counted. The
+first ping goes at start, on an empty window, so the check turns green with
+the deployment.
+
+Create the check with a **5-minute period and a 10-minute grace**; its ping URL
+goes in the server's `.env` as `CONTEXT_HEARTBEAT_URL`, which
+`docker-compose.prod.yml` requires. ⚠️ The window is a constant, not a
+variable: the check's period is set on it. Without the URL — development — the
+sources are still counted, no reporter runs, and a log line at start says so.
+One check covers the three sources: while it is failing for one, a second
+one's outage raises nothing new.
+
 ## Observability
 
 Prometheus metrics on `:9000/metrics` (host port `9001` in compose): per-worker
 tick/upsert/failure counters and per-provider request counters and durations.
+A heartbeat signal that could not be delivered counts under
+`yog_context_heartbeat_failures_total{kind}`; its absence raises the alarm on
+the other side.
 
 Each provider call counts under `yog_context_provider_call_total{provider,
 outcome}`; a 429 is `rate_limited` for all three providers, and only Jupiter
 retries it. An answer entry that cannot be read counts under
 `yog_context_provider_dropped_total{provider, reason}`: for `solana_account`,
 `unreadable_owner`, `unreadable_data`, and `length_mismatch` once per answer
-that does not carry one entry per address asked, none of whose accounts is kept:
-they pair with the addresses by position. An absent account, a closed pool, is
+that does not carry one entry per address asked: it fails the call, a decode
+error, and none of its accounts is kept, since they pair with the addresses by
+position. An absent account, a closed pool, is
 not counted.
 
 **Price coverage** is the one gauge pair worth alerting on:
@@ -406,6 +451,7 @@ JUPITER_API_KEY=...
 JUPITER_RATE_LIMIT_PER_MINUTE=60   # optional, the key's tier as Jupiter documents it
 CONTEXT_METADATA_POLL_SECS=10
 CONTEXT_PRICE_INTERVAL_SECS=30
+CONTEXT_HEARTBEAT_URL=https://hc-ping.com/...   # optional here, required in production
 ```
 
 ⚠️ **`CONTEXT_PRICE_INTERVAL_SECS` must be non-zero and under 900 s, and the

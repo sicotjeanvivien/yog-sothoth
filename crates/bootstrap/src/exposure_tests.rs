@@ -61,7 +61,7 @@ const ALLOWED: &[(&str, usize, &str)] = &[
          The errors reqwest builds from it go back through `SecretUrl::scrub`",
     ),
     (
-        "crates/context/src/bootstrap/daemon.rs",
+        "crates/context/src/bootstrap/daemon/init.rs",
         1,
         "`init_db` takes the wrapped URL and exposes it at `Database::connect`",
     ),

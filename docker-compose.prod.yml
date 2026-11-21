@@ -63,6 +63,10 @@
 #   ANALYTIC_HEARTBEAT_URL
 #                      the check yog-analytic pings after each cycle and fails
 #                      when one fails (period 5 min); crates/analytic/README.md
+#   CONTEXT_HEARTBEAT_URL
+#                      the check yog-context fails when a source was called
+#                      without a single success for 5 min (period 5 min, grace
+#                      10 min); crates/context/README.md, "The source alarm"
 # The CORS origin is derived from the domain rather than set separately: two
 # values that must agree are one value.
 #
@@ -177,6 +181,8 @@ services:
     image: yog-context:prod
     build: !reset null
     ports: !reset []
+    environment:
+      CONTEXT_HEARTBEAT_URL: ${CONTEXT_HEARTBEAT_URL:?set it in the server's .env}
     # ⚠️ Size it on anonymous memory plus swap: the peak stops at the limit, the rest is in swap.
     mem_limit: 64m
 

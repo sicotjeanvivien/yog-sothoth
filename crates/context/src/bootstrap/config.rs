@@ -5,8 +5,8 @@ use std::num::NonZeroU32;
 use std::time::Duration;
 
 use yog_bootstrap::{
-    ConfigError, Endpoint, SecretKey, SecretUrl, duration_var, parse_optional, required,
-    required_endpoint, required_secret_key, required_secret_url,
+    ConfigError, Endpoint, SecretKey, SecretUrl, duration_var, optional_secret_url, parse_optional,
+    required, required_endpoint, required_secret_key, required_secret_url,
 };
 use yog_core::domain::PRICE_MAX_AGE_LATEST;
 
@@ -47,6 +47,9 @@ pub(crate) struct Config {
 
     /// How often the metadata worker polls `pools` for new mints.
     pub(crate) metadata_poll_interval: Duration,
+
+    /// Optional in development; `docker-compose.prod.yml` requires it.
+    pub(crate) heartbeat_url: Option<SecretUrl>,
 }
 
 impl Config {
@@ -67,6 +70,7 @@ impl Config {
                 "CONTEXT_METADATA_POLL_SECS",
                 DEFAULT_METADATA_POLL_SECS,
             )?),
+            heartbeat_url: optional_secret_url("CONTEXT_HEARTBEAT_URL"),
         })
     }
 }

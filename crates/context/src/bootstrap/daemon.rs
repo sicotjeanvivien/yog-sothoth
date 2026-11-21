@@ -1,29 +1,33 @@
-//! Shared daemon dependencies, assembled once at startup: the repositories
-//! and the three source clients, each with its own HTTP client.
+//! Shared daemon dependencies, assembled once at startup: the repositories,
+//! the three source clients, each with its own HTTP client, and the heartbeat.
 
 use std::sync::Arc;
 
 use anyhow::Context;
-use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use yog_bootstrap::{SecretUrl, Stop, handle_task_result};
+use yog_bootstrap::{Heartbeat, Stop, handle_task_result};
 use yog_core::domain::{
     PoolAccountResolver, PoolRepository, TokenMetadataRepository, TokenPriceRepository,
 };
 use yog_persistence::{
-    Database, PgMeteoraDammV2PoolPropertiesRepository, PgMeteoraDlmmPoolPropertiesRepository,
+    PgMeteoraDammV2PoolPropertiesRepository, PgMeteoraDlmmPoolPropertiesRepository,
     PgPoolRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
 };
 
+use crate::application::heartbeat::source_health::SourceHealth;
 use crate::application::source::{MetadataSource, PoolAccountSource, PriceSource};
-use crate::application::workers::{
-    MetadataWorker, MetadataWorkerMetrics, PoolAccountWorker, PriceWorker, PriceWorkerMetrics,
-};
 use crate::bootstrap::Config;
-use crate::error::WorkerError;
-use crate::infra::{HeliusDasClient, JupiterPriceClient, ProviderMetrics, SolanaAccountClient};
+use crate::infra::{HeliusDasClient, JupiterPriceClient, SolanaAccountClient};
 
+mod init;
 mod log;
+mod tasks;
+
+use init::{init_db, init_heartbeat, register_metric_descriptions};
+use tasks::{
+    METADATA, POOL_ACCOUNT, PRICE, REPORTER, reporter_end, spawn_heartbeat_reporter,
+    spawn_metadata_worker, spawn_pool_account_worker, spawn_price_worker,
+};
 
 /// Dependencies shared by the daemon's workers.
 #[derive(Clone)]
@@ -46,6 +50,10 @@ pub(crate) struct Daemon {
     poll_interval: std::time::Duration,
     /// The price worker's cadence.
     price_interval: std::time::Duration,
+    /// What the sources answered since the last ping, fed by the workers and the price client.
+    health: Arc<SourceHealth>,
+    /// `None` in development: the sources are counted, nothing is signalled.
+    heartbeat: Option<Arc<dyn Heartbeat>>,
 }
 
 impl Daemon {
@@ -80,10 +88,12 @@ impl Daemon {
 
         // Each client takes the wrapped secret: `.expose()` happens at the request builder.
         let metadata_source = Arc::new(HeliusDasClient::new(config.token_metadata.url()));
+        let health = Arc::new(SourceHealth::default());
         let price_source = Arc::new(JupiterPriceClient::new(
             config.jupiter_url.clone(),
             config.jupiter_api_key.clone(),
             config.jupiter_rate_limit,
+            Arc::clone(&health),
         ));
         log::jupiter_spacing(config.jupiter_rate_limit, price_source.request_spacing());
         // `getMultipleAccounts` has its own endpoint, maybe another provider than DAS: both are
@@ -92,9 +102,14 @@ impl Daemon {
             Arc::new(SolanaAccountClient::new(config.pool_account.url()));
         log::endpoints_initialized(&config.token_metadata, &config.pool_account);
 
-        MetadataWorkerMetrics::register_descriptions();
-        PriceWorkerMetrics::register_descriptions();
-        ProviderMetrics::register_descriptions();
+        let heartbeat = config
+            .heartbeat_url
+            .clone()
+            .map(init_heartbeat)
+            .transpose()?;
+        log::heartbeat_configured(heartbeat.is_some());
+
+        register_metric_descriptions();
 
         Ok(Self {
             token_metadata_repository,
@@ -106,17 +121,21 @@ impl Daemon {
             pool_account_source,
             poll_interval,
             price_interval,
+            health,
+            heartbeat,
         })
     }
 
-    /// Run the three workers until one ends or the stop is asked for, then wait for the others.
+    /// Run the workers and, when configured, the reporter until one ends or the stop is asked for, then wait for the others.
     /// ⚠️ The waiting is the point: `main` drops the runtime on return, destroying a tick in flight;
     /// the grace bounds it.
     pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
+        let health = self.health;
         let mut metadata_task = spawn_metadata_worker(
             Arc::clone(&self.token_metadata_repository),
             self.metadata_source.clone(),
             self.poll_interval,
+            Arc::clone(&health),
             shutdown.clone(),
         );
         let mut price_task = spawn_price_worker(
@@ -132,8 +151,13 @@ impl Daemon {
             self.pool_repository.clone(),
             self.pool_account_source.clone(),
             self.poll_interval,
+            Arc::clone(&health),
             shutdown.clone(),
         );
+        let mut reporter_task = self
+            .heartbeat
+            .clone()
+            .map(|heartbeat| spawn_heartbeat_reporter(health, heartbeat, shutdown.clone()));
 
         // ⚠️ The cancellation arm carries no verdict: a failing worker may still be stopping, and its
         // error arrives through `Stop`; `ended` lets it step over the handle the `select!` polled.
@@ -142,6 +166,9 @@ impl Daemon {
             result = &mut price_task => (Some(PRICE), handle_task_result(result, PRICE)),
             result = &mut pool_account_task => {
                 (Some(POOL_ACCOUNT), handle_task_result(result, POOL_ACCOUNT))
+            }
+            result = reporter_end(&mut reporter_task) => {
+                (Some(REPORTER), handle_task_result(result, REPORTER))
             }
             _ = shutdown.cancelled() => {
                 log::cancellation_received();
@@ -152,67 +179,15 @@ impl Daemon {
         // Whichever arm fired, the others are told. Idempotent.
         shutdown.cancel();
 
-        // ⚠️ The price worker first: `Stop` spends one grace across the three, and only its work is
-        // lost; the other two re-list what they did not finish.
+        // ⚠️ The price worker first: `Stop` spends one grace across the tasks, and only its work is lost.
         let mut stop = Stop::new(first, ended);
         stop.settle(PRICE, &mut price_task).await;
         stop.settle(METADATA, &mut metadata_task).await;
         stop.settle(POOL_ACCOUNT, &mut pool_account_task).await;
+        if let Some(task) = &mut reporter_task {
+            stop.settle(REPORTER, task).await;
+        }
 
         stop.finish()
     }
-}
-
-/// The names the three workers answer to, in the logs and in the list of what outlived the grace.
-const METADATA: &str = "metadata worker";
-const PRICE: &str = "price worker";
-const POOL_ACCOUNT: &str = "pool-account worker";
-
-/// Connect to the database. The error names the failure, never the URL.
-async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
-    let db = Database::connect(database_url.expose())
-        .await
-        .context("failed to connect to database")?;
-    log::connected_to_database();
-    Ok(db)
-}
-
-/// Spawn the metadata worker task.
-fn spawn_metadata_worker(
-    repository: Arc<dyn TokenMetadataRepository>,
-    metadata_source: Arc<dyn MetadataSource>,
-    poll_interval: std::time::Duration,
-    shutdown: CancellationToken,
-) -> JoinHandle<Result<(), WorkerError>> {
-    let worker = MetadataWorker::new(repository, metadata_source, poll_interval);
-    tokio::spawn(async move { worker.run(shutdown).await })
-}
-
-/// Spawn the price worker task.
-fn spawn_price_worker(
-    metadata_repository: Arc<dyn TokenMetadataRepository>,
-    price_repository: Arc<dyn TokenPriceRepository>,
-    price_source: Arc<dyn PriceSource>,
-    interval: std::time::Duration,
-    shutdown: CancellationToken,
-) -> JoinHandle<Result<(), WorkerError>> {
-    let worker = PriceWorker::new(
-        metadata_repository,
-        price_repository,
-        price_source,
-        interval,
-    );
-    tokio::spawn(async move { worker.run(shutdown).await })
-}
-
-/// Spawn the pool-account resolver worker task.
-fn spawn_pool_account_worker(
-    resolvers: Vec<Arc<dyn PoolAccountResolver>>,
-    pool_repository: Arc<dyn PoolRepository>,
-    source: Arc<dyn PoolAccountSource>,
-    poll_interval: std::time::Duration,
-    shutdown: CancellationToken,
-) -> JoinHandle<Result<(), WorkerError>> {
-    let worker = PoolAccountWorker::new(resolvers, pool_repository, source, poll_interval);
-    tokio::spawn(async move { worker.run(shutdown).await })
 }
