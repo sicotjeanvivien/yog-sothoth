@@ -14,8 +14,10 @@ roles), see [`crates/README.md`](../README.md).
 ```
 context/src/
 ├── application/     ← what the daemon does once wired
-│   ├── heartbeat.rs ← HeartbeatReporter: pings the sources' verdict every window
-│   ├── source_health.rs ← SourceHealth: each source's calls since the last ping
+│   ├── heartbeat.rs ← HeartbeatReporter: pings the sources' verdict every window;
+│   │                  heartbeat/ holds source_health.rs (SourceHealth: each source's
+│   │                  calls since the last ping), source_role.rs (SourceRole),
+│   │                  window_verdict.rs (WindowVerdict) and log.rs
 │   ├── source/      ← ports: MetadataSource, PriceSource, PoolAccountSource
 │   └── workers/     ← use cases: MetadataWorker, PriceWorker, PoolAccountWorker,
 │                      one <worker>.rs each, its own modules in <worker>/ —
@@ -33,7 +35,8 @@ context/src/
 │                      SourceError, URL stripped)
 ├── bootstrap/       ← Config::load(), Daemon::connect — composition root, and the
 │                      stop: run() joins its three workers and the heartbeat
-│                      reporter under the shared grace;
+│                      reporter under the shared grace; daemon/init.rs builds
+│                      what connect() owns and declares the metric families;
 │                      daemon/log.rs holds the daemon's log lines
 ├── error/           ← SourceError, WorkerError — shared by the layers
 ├── testing.rs       ← test-only: the local HTTP server of the provider clients' tests

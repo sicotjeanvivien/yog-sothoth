@@ -420,7 +420,7 @@ async fn a_sweep_whose_source_call_succeeded_is_not_done_again() {
 
 // ── Heartbeat ─────────────────────────────────────────────────────────
 
-use crate::application::source_health::WindowVerdict;
+use crate::application::heartbeat::window_verdict::WindowVerdict;
 
 #[tokio::test]
 async fn each_source_call_is_counted_for_the_heartbeat() {

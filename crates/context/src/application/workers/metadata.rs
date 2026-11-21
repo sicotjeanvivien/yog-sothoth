@@ -10,8 +10,8 @@ use tokio_util::sync::CancellationToken;
 
 use yog_core::domain::{MISSING_MINT_DISCOVERY_WINDOW, TokenMetadata, TokenMetadataRepository};
 
+use crate::application::heartbeat::{source_health::SourceHealth, source_role::SourceRole};
 use crate::application::source::{FetchedMetadata, MetadataSource};
-use crate::application::source_health::{SourceHealth, SourceRole};
 use crate::error::WorkerError;
 
 mod log;

@@ -7,10 +7,14 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use yog_bootstrap::Heartbeat;
 
-use super::source_health::{SourceHealth, WindowVerdict};
 use crate::error::WorkerError;
+use source_health::SourceHealth;
+use window_verdict::WindowVerdict;
 
 mod log;
+pub(crate) mod source_health;
+pub(crate) mod source_role;
+pub(crate) mod window_verdict;
 
 /// ⚠️ The Healthchecks.io check's period is set on it: changed alone, it raises false alarms.
 pub(crate) const HEARTBEAT_WINDOW: Duration = Duration::from_secs(300);

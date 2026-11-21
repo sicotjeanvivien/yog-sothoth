@@ -3,38 +3,8 @@
 
 use std::sync::Mutex;
 
-/// The part a source plays, named in the heartbeat's failure rather than its provider: the
-/// provider is chosen by a URL.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SourceRole {
-    Metadata,
-    PoolAccount,
-    Price,
-}
-
-impl SourceRole {
-    const ALL: [SourceRole; 3] = [
-        SourceRole::Metadata,
-        SourceRole::PoolAccount,
-        SourceRole::Price,
-    ];
-
-    pub(crate) fn as_label(self) -> &'static str {
-        match self {
-            SourceRole::Metadata => "metadata",
-            SourceRole::PoolAccount => "pool_account",
-            SourceRole::Price => "price",
-        }
-    }
-
-    fn index(self) -> usize {
-        match self {
-            SourceRole::Metadata => 0,
-            SourceRole::PoolAccount => 1,
-            SourceRole::Price => 2,
-        }
-    }
-}
+use super::source_role::SourceRole;
+use super::window_verdict::WindowVerdict;
 
 /// One source's calls in the window.
 #[derive(Debug, Default, Clone)]
@@ -42,14 +12,6 @@ struct Tally {
     calls: u64,
     successes: u64,
     last_error: Option<String>,
-}
-
-/// The verdict on a window: a source called without a single success fails it.
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) enum WindowVerdict {
-    Healthy,
-    /// Names each failing source, by role.
-    Failing(String),
 }
 
 #[derive(Debug, Default)]

@@ -264,7 +264,7 @@ async fn an_account_of_another_protocol_is_not_written() {
 
 // ── Heartbeat ─────────────────────────────────────────────────────────
 
-use crate::application::source_health::WindowVerdict;
+use crate::application::heartbeat::window_verdict::WindowVerdict;
 
 /// A source that refuses every call.
 struct RefusingSource;

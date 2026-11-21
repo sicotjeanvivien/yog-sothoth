@@ -635,7 +635,7 @@ async fn a_status_and_a_decode_failure_are_classified_without_leaking_the_secret
 
 // ── Heartbeat ───────────────────────────────────────────────────────
 
-use crate::application::source_health::WindowVerdict;
+use crate::application::heartbeat::window_verdict::WindowVerdict;
 
 fn unpaced_client_feeding(base_url: String, health: &Arc<SourceHealth>) -> JupiterPriceClient {
     JupiterPriceClient::new(

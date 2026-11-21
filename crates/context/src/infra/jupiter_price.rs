@@ -20,8 +20,8 @@ use yog_core::domain::PriceProvider;
 
 use crate::{
     application::{
+        heartbeat::{source_health::SourceHealth, source_role::SourceRole},
         source::{FetchedPrice, PriceAnswer, PriceSource},
-        source_health::{SourceHealth, SourceRole},
     },
     error::SourceError,
 };

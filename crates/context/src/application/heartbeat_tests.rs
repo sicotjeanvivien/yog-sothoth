@@ -3,7 +3,7 @@
 use yog_bootstrap::RecordingHeartbeat;
 
 use super::*;
-use crate::application::source_health::SourceRole;
+use crate::application::heartbeat::source_role::SourceRole;
 
 fn signals(heartbeat: &RecordingHeartbeat) -> Vec<String> {
     heartbeat.signals.lock().unwrap().clone()

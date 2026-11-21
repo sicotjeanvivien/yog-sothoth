@@ -6,30 +6,27 @@ use std::sync::Arc;
 use anyhow::Context;
 use tokio::task::{JoinError, JoinHandle};
 use tokio_util::sync::CancellationToken;
-use yog_bootstrap::{
-    HealthchecksHeartbeat, Heartbeat, HeartbeatSettings, SecretUrl, Stop, handle_task_result,
-};
+use yog_bootstrap::{Heartbeat, Stop, handle_task_result};
 use yog_core::domain::{
     PoolAccountResolver, PoolRepository, TokenMetadataRepository, TokenPriceRepository,
 };
 use yog_persistence::{
-    Database, PgMeteoraDammV2PoolPropertiesRepository, PgMeteoraDlmmPoolPropertiesRepository,
+    PgMeteoraDammV2PoolPropertiesRepository, PgMeteoraDlmmPoolPropertiesRepository,
     PgPoolRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
 };
 
 use crate::application::heartbeat::HeartbeatReporter;
+use crate::application::heartbeat::source_health::SourceHealth;
 use crate::application::source::{MetadataSource, PoolAccountSource, PriceSource};
-use crate::application::source_health::SourceHealth;
-use crate::application::workers::{
-    MetadataWorker, MetadataWorkerMetrics, PoolAccountWorker, PriceWorker, PriceWorkerMetrics,
-};
+use crate::application::workers::{MetadataWorker, PoolAccountWorker, PriceWorker};
 use crate::bootstrap::Config;
 use crate::error::WorkerError;
-use crate::infra::{
-    HEARTBEAT_FAILURES, HeliusDasClient, JupiterPriceClient, ProviderMetrics, SolanaAccountClient,
-};
+use crate::infra::{HeliusDasClient, JupiterPriceClient, SolanaAccountClient};
 
+mod init;
 mod log;
+
+use init::{init_db, init_heartbeat, register_metric_descriptions};
 
 /// Dependencies shared by the daemon's workers.
 #[derive(Clone)]
@@ -111,9 +108,7 @@ impl Daemon {
             .transpose()?;
         log::heartbeat_configured(heartbeat.is_some());
 
-        MetadataWorkerMetrics::register_descriptions();
-        PriceWorkerMetrics::register_descriptions();
-        ProviderMetrics::register_descriptions();
+        register_metric_descriptions();
 
         Ok(Self {
             token_metadata_repository,
@@ -202,25 +197,6 @@ const METADATA: &str = "metadata worker";
 const PRICE: &str = "price worker";
 const POOL_ACCOUNT: &str = "pool-account worker";
 const REPORTER: &str = "heartbeat reporter";
-
-/// Connect to the database. The error names the failure, never the URL.
-async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
-    let db = Database::connect(database_url.expose())
-        .await
-        .context("failed to connect to database")?;
-    log::connected_to_database();
-    Ok(db)
-}
-
-fn init_heartbeat(url: SecretUrl) -> anyhow::Result<Arc<dyn Heartbeat>> {
-    let settings = HeartbeatSettings {
-        variable: "CONTEXT_HEARTBEAT_URL",
-        undelivered_counter: HEARTBEAT_FAILURES,
-    };
-    let heartbeat = HealthchecksHeartbeat::new(url, settings)
-        .context("failed to build the heartbeat client")?;
-    Ok(Arc::new(heartbeat))
-}
 
 async fn reporter_end(
     task: &mut Option<JoinHandle<Result<(), WorkerError>>>,

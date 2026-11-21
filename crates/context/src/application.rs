@@ -3,5 +3,4 @@
 
 pub(crate) mod heartbeat;
 pub(crate) mod source;
-pub(crate) mod source_health;
 pub(crate) mod workers;
