@@ -6,6 +6,7 @@ use metrics::{counter, describe_counter, describe_histogram, histogram};
 const CALL_TOTAL: &str = "yog_context_provider_call_total";
 const CALL_DURATION: &str = "yog_context_provider_call_duration_seconds";
 const DROPPED_TOTAL: &str = "yog_context_provider_dropped_total";
+pub(crate) const HEARTBEAT_FAILURES: &str = "yog_context_heartbeat_failures_total";
 
 pub(crate) struct ProviderMetrics;
 
@@ -22,6 +23,10 @@ impl ProviderMetrics {
         describe_counter!(
             DROPPED_TOTAL,
             "Answer entries dropped as unreadable, or answers whose length differs from the addresses asked. Labels: provider=solana_account, reason=unreadable_owner|unreadable_data|length_mismatch"
+        );
+        describe_counter!(
+            HEARTBEAT_FAILURES,
+            "Heartbeat signals that could not be delivered, by kind"
         );
     }
 

@@ -163,7 +163,7 @@ not be enough: the statement keeps running on the server, and the connection
 stays held, one more at every check, taken from the detectors if the pool were
 shared. The alarm also stops waiting on its own after 90 s, for a server that
 cannot answer at all. The heartbeat is `yog_bootstrap`'s, shared with
-`yog-indexer`, `yog-analytic` and `yog-archive`. Create the check with a **10-minute period and a 20-minute
+`yog-indexer`, `yog-analytic`, `yog-archive` and `yog-context`. Create the check with a **10-minute period and a 20-minute
 grace**.
 
 Without that URL — development, where the scheduler is off by design and every

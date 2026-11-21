@@ -45,10 +45,11 @@ fn debugging_the_config_prints_no_credential() {
         jupiter_rate_limit: NonZeroU32::new(60).expect("non-zero"),
         price_interval: Duration::from_secs(30),
         metadata_poll_interval: Duration::from_secs(10),
+        heartbeat_url: Some(SecretUrl::for_tests("https://hc-ping.com/hc-slug")),
     };
 
     let rendered = format!("{config:?}");
-    for secret in ["hunter2", "das-key", "jup-key", "pasted"] {
+    for secret in ["hunter2", "das-key", "jup-key", "pasted", "hc-slug"] {
         assert!(
             !rendered.contains(secret),
             "`{secret}` survived: {rendered}"

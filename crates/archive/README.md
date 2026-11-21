@@ -39,7 +39,7 @@ archive/src/
 
 The heartbeat — success, or `/fail` with the reason — is not here either: it is
 `yog_bootstrap`'s (feature `heartbeat`), shared with `yog-indexer`,
-`yog-signals` and `yog-analytic`. The archive hands it its variable's name and its
+`yog-signals`, `yog-analytic` and `yog-context`. The archive hands it its variable's name and its
 counter, `yog_archive_heartbeat_failures_total`, so what it reports is unchanged.
 
 `pg_dump` and `pg_restore` are not here:

@@ -7,6 +7,7 @@ use super::metrics::ProviderMetrics;
 use super::rate_limit;
 use std::collections::{HashMap, HashSet};
 use std::num::NonZeroU32;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
@@ -18,7 +19,10 @@ use yog_bootstrap::SecretKey;
 use yog_core::domain::PriceProvider;
 
 use crate::{
-    application::source::{FetchedPrice, PriceAnswer, PriceSource},
+    application::{
+        source::{FetchedPrice, PriceAnswer, PriceSource},
+        source_health::{SourceHealth, SourceRole},
+    },
     error::SourceError,
 };
 
@@ -26,6 +30,9 @@ mod log;
 
 /// Maximum number of `ids` per call (documented limit).
 const JUPITER_BATCH_MAX: usize = 50;
+
+/// The heartbeat's failure for a chunk answered without a single price.
+const NO_PRICE_RETURNED: &str = "no price returned";
 
 /// Attempts per chunk when Jupiter answers 429, the first call included.
 const RATE_LIMIT_MAX_ATTEMPTS: u32 = 3;
@@ -58,17 +65,25 @@ pub struct JupiterPriceClient {
     api_key: SecretKey,
     /// The least time between the starts of two chunks.
     request_spacing: Duration,
+    /// ⚠️ Fed per chunk, not per tick: a tick lasts as long as a heartbeat window.
+    health: Arc<SourceHealth>,
 }
 
 impl JupiterPriceClient {
     /// Build the client against the given base URL and API key, spaced under
     /// `rate_limit`, the requests per minute the key's tier allows.
-    pub fn new(base_url: String, api_key: SecretKey, rate_limit: NonZeroU32) -> Self {
+    pub fn new(
+        base_url: String,
+        api_key: SecretKey,
+        rate_limit: NonZeroU32,
+        health: Arc<SourceHealth>,
+    ) -> Self {
         Self {
             http: super::http_client(),
             base_url,
             api_key,
             request_spacing: spacing_under(rate_limit),
+            health,
         }
     }
 
@@ -163,6 +178,19 @@ impl JupiterPriceClient {
 }
 
 impl JupiterPriceClient {
+    /// A chunk succeeded when it brought back at least one price.
+    fn record_health(&self, result: &Result<PriceAnswer, SourceError>) {
+        match result {
+            Ok(answered) if !answered.priced.is_empty() => {
+                self.health.record_success(SourceRole::Price);
+            }
+            Ok(_) => self
+                .health
+                .record_failure(SourceRole::Price, NO_PRICE_RETURNED.to_string()),
+            Err(e) => self.health.record_failure(SourceRole::Price, e.to_string()),
+        }
+    }
+
     /// One chunk in its slot, raced against the stop: `None` if the stop came first.
     /// ⚠️ The race covers slot, request and retries, so a slow Jupiter or a long `Retry-After`
     /// cannot hold the stop past its grace.
@@ -202,6 +230,7 @@ impl PriceSource for JupiterPriceClient {
                 log::stopped(index * JUPITER_BATCH_MAX, mints.len());
                 break;
             };
+            self.record_health(&result);
             add_chunk(&mut answer, result, chunk.len());
         }
         Ok(answer)
