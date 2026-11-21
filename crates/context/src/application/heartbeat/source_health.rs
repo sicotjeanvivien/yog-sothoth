@@ -1,5 +1,4 @@
-//! What each source answered since the last heartbeat: the three workers record every call,
-//! the heartbeat reporter reads and clears the window.
+//! What each source answered since the last heartbeat; the reporter reads and clears the window.
 
 use std::sync::Mutex;
 

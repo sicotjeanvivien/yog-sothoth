@@ -179,8 +179,7 @@ impl Daemon {
         // Whichever arm fired, the others are told. Idempotent.
         shutdown.cancel();
 
-        // ⚠️ The price worker first: `Stop` spends one grace across the tasks, and only its work is
-        // lost; the other two re-list what they did not finish.
+        // ⚠️ The price worker first: `Stop` spends one grace across the tasks, and only its work is lost.
         let mut stop = Stop::new(first, ended);
         stop.settle(PRICE, &mut price_task).await;
         stop.settle(METADATA, &mut metadata_task).await;

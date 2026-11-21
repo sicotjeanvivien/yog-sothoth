@@ -110,7 +110,11 @@ impl SolanaAccountClient {
         if accounts.len() != pool_addresses.len() {
             log::length_mismatch(pool_addresses.len(), accounts.len());
             ProviderMetrics::record_dropped(PROVIDER_LABEL, "length_mismatch");
-            return Ok(Vec::new());
+            return Err(SourceError::Decode(format!(
+                "{} accounts answered for {} addresses asked",
+                accounts.len(),
+                pool_addresses.len()
+            )));
         }
 
         // A `null` is an account that no longer exists, a closed pool: absent, not dropped.
