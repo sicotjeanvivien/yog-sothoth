@@ -55,6 +55,13 @@ struct JupiterPriceEntry {
     usd_price: Option<Decimal>,
 }
 
+/// What Jupiter answered for one chunk.
+enum ChunkAnswer {
+    Priced(PriceAnswer),
+    /// Not a single mint came back priced.
+    NoPrice,
+}
+
 /// Client for the Jupiter Price API V3, authenticated by the `x-api-key` header.
 #[derive(Clone)]
 pub struct JupiterPriceClient {
@@ -93,10 +100,7 @@ impl JupiterPriceClient {
     }
 
     /// Single HTTP call. Caller guarantees `mints.len() <= JUPITER_BATCH_MAX`.
-    async fn fetch_chunk(&self, mints: &[Pubkey]) -> Result<PriceAnswer, SourceError> {
-        if mints.is_empty() {
-            return Ok(PriceAnswer::default());
-        }
+    async fn fetch_chunk(&self, mints: &[Pubkey]) -> Result<ChunkAnswer, SourceError> {
         debug_assert!(mints.len() <= JUPITER_BATCH_MAX);
         let start = Instant::now();
         let result = self.fetch_chunk_inner(mints).await;
@@ -113,7 +117,7 @@ impl JupiterPriceClient {
         result
     }
 
-    async fn fetch_chunk_inner(&self, mints: &[Pubkey]) -> Result<PriceAnswer, SourceError> {
+    async fn fetch_chunk_inner(&self, mints: &[Pubkey]) -> Result<ChunkAnswer, SourceError> {
         let ids: String = mints
             .iter()
             .map(|m| m.to_string())
@@ -138,13 +142,11 @@ impl JupiterPriceClient {
             .filter_map(into_fetched_price)
             .collect();
 
-        match chunk_answer(mints, priced) {
-            Some(answer) => Ok(answer),
-            None => {
-                log::degraded_answer(mints.len());
-                Ok(PriceAnswer::default())
-            }
+        let answer = chunk_answer(mints, priced);
+        if let ChunkAnswer::NoPrice = answer {
+            log::degraded_answer(mints.len());
         }
+        Ok(answer)
     }
 }
 
@@ -155,7 +157,7 @@ impl JupiterPriceClient {
         &self,
         mints: &[Pubkey],
         next_start: &mut tokio::time::Instant,
-    ) -> Result<PriceAnswer, SourceError> {
+    ) -> Result<ChunkAnswer, SourceError> {
         let mut attempt = 0;
         loop {
             // ⚠️ From start to start: a pause after the answer would add the
@@ -178,13 +180,10 @@ impl JupiterPriceClient {
 }
 
 impl JupiterPriceClient {
-    /// A chunk succeeded when it brought back at least one price.
-    fn record_health(&self, result: &Result<PriceAnswer, SourceError>) {
+    fn record_health(&self, result: &Result<ChunkAnswer, SourceError>) {
         match result {
-            Ok(answered) if !answered.priced.is_empty() => {
-                self.health.record_success(SourceRole::Price);
-            }
-            Ok(_) => self
+            Ok(ChunkAnswer::Priced(_)) => self.health.record_success(SourceRole::Price),
+            Ok(ChunkAnswer::NoPrice) => self
                 .health
                 .record_failure(SourceRole::Price, NO_PRICE_RETURNED.to_string()),
             Err(e) => self.health.record_failure(SourceRole::Price, e.to_string()),
@@ -199,7 +198,7 @@ impl JupiterPriceClient {
         chunk: &[Pubkey],
         next_start: &mut tokio::time::Instant,
         shutdown: &CancellationToken,
-    ) -> Option<Result<PriceAnswer, SourceError>> {
+    ) -> Option<Result<ChunkAnswer, SourceError>> {
         tokio::select! {
             biased;
 
@@ -241,25 +240,26 @@ impl PriceSource for JupiterPriceClient {
 /// nothing: its mints are in neither list.
 fn add_chunk(
     answer: &mut PriceAnswer,
-    result: Result<PriceAnswer, SourceError>,
+    result: Result<ChunkAnswer, SourceError>,
     chunk_size: usize,
 ) {
     match result {
-        Ok(answered) => {
+        Ok(ChunkAnswer::Priced(answered)) => {
             answer.priced.extend(answered.priced);
             answer.unpriced.extend(answered.unpriced);
         }
+        Ok(ChunkAnswer::NoPrice) => {}
         Err(e) => log::chunk_failed(&e, chunk_size),
     }
 }
 
 /// The answer to one chunk: every mint asked that did not come back with a price is unpriced.
-/// ⚠️ `None` when none came back priced: a chunk mixes live and dead mints, so `{}`, an error
+/// ⚠️ `NoPrice` when none came back priced: a chunk mixes live and dead mints, so `{}`, an error
 /// body or all-null entries are a degraded answer, not a verdict on its live mints.
-fn chunk_answer(asked: &[Pubkey], priced: Vec<FetchedPrice>) -> Option<PriceAnswer> {
+fn chunk_answer(asked: &[Pubkey], priced: Vec<FetchedPrice>) -> ChunkAnswer {
     let with_price: HashSet<Pubkey> = priced.iter().map(|price| price.mint).collect();
     if !asked.iter().any(|mint| with_price.contains(mint)) {
-        return None;
+        return ChunkAnswer::NoPrice;
     }
 
     let unpriced = asked
@@ -268,7 +268,7 @@ fn chunk_answer(asked: &[Pubkey], priced: Vec<FetchedPrice>) -> Option<PriceAnsw
         .copied()
         .collect();
 
-    Some(PriceAnswer { priced, unpriced })
+    ChunkAnswer::Priced(PriceAnswer { priced, unpriced })
 }
 
 /// The least time between the starts of two chunks, under `rate_limit`.

@@ -4,7 +4,6 @@
 use std::sync::Arc;
 
 use anyhow::Context;
-use tokio::task::{JoinError, JoinHandle};
 use tokio_util::sync::CancellationToken;
 use yog_bootstrap::{Heartbeat, Stop, handle_task_result};
 use yog_core::domain::{
@@ -15,18 +14,20 @@ use yog_persistence::{
     PgPoolRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
 };
 
-use crate::application::heartbeat::HeartbeatReporter;
 use crate::application::heartbeat::source_health::SourceHealth;
 use crate::application::source::{MetadataSource, PoolAccountSource, PriceSource};
-use crate::application::workers::{MetadataWorker, PoolAccountWorker, PriceWorker};
 use crate::bootstrap::Config;
-use crate::error::WorkerError;
 use crate::infra::{HeliusDasClient, JupiterPriceClient, SolanaAccountClient};
 
 mod init;
 mod log;
+mod tasks;
 
 use init::{init_db, init_heartbeat, register_metric_descriptions};
+use tasks::{
+    METADATA, POOL_ACCOUNT, PRICE, REPORTER, reporter_end, spawn_heartbeat_reporter,
+    spawn_metadata_worker, spawn_pool_account_worker, spawn_price_worker,
+};
 
 /// Dependencies shared by the daemon's workers.
 #[derive(Clone)]
@@ -190,70 +191,4 @@ impl Daemon {
 
         stop.finish()
     }
-}
-
-/// The names the four tasks answer to, in the logs and in the list of what outlived the grace.
-const METADATA: &str = "metadata worker";
-const PRICE: &str = "price worker";
-const POOL_ACCOUNT: &str = "pool-account worker";
-const REPORTER: &str = "heartbeat reporter";
-
-async fn reporter_end(
-    task: &mut Option<JoinHandle<Result<(), WorkerError>>>,
-) -> Result<Result<(), WorkerError>, JoinError> {
-    match task {
-        Some(task) => task.await,
-        None => std::future::pending().await,
-    }
-}
-
-fn spawn_heartbeat_reporter(
-    health: Arc<SourceHealth>,
-    heartbeat: Arc<dyn Heartbeat>,
-    shutdown: CancellationToken,
-) -> JoinHandle<Result<(), WorkerError>> {
-    let reporter = HeartbeatReporter::new(health, heartbeat);
-    tokio::spawn(async move { reporter.run(shutdown).await })
-}
-
-/// Spawn the metadata worker task.
-fn spawn_metadata_worker(
-    repository: Arc<dyn TokenMetadataRepository>,
-    metadata_source: Arc<dyn MetadataSource>,
-    poll_interval: std::time::Duration,
-    health: Arc<SourceHealth>,
-    shutdown: CancellationToken,
-) -> JoinHandle<Result<(), WorkerError>> {
-    let worker = MetadataWorker::new(repository, metadata_source, poll_interval, health);
-    tokio::spawn(async move { worker.run(shutdown).await })
-}
-
-/// Spawn the price worker task.
-fn spawn_price_worker(
-    metadata_repository: Arc<dyn TokenMetadataRepository>,
-    price_repository: Arc<dyn TokenPriceRepository>,
-    price_source: Arc<dyn PriceSource>,
-    interval: std::time::Duration,
-    shutdown: CancellationToken,
-) -> JoinHandle<Result<(), WorkerError>> {
-    let worker = PriceWorker::new(
-        metadata_repository,
-        price_repository,
-        price_source,
-        interval,
-    );
-    tokio::spawn(async move { worker.run(shutdown).await })
-}
-
-/// Spawn the pool-account resolver worker task.
-fn spawn_pool_account_worker(
-    resolvers: Vec<Arc<dyn PoolAccountResolver>>,
-    pool_repository: Arc<dyn PoolRepository>,
-    source: Arc<dyn PoolAccountSource>,
-    poll_interval: std::time::Duration,
-    health: Arc<SourceHealth>,
-    shutdown: CancellationToken,
-) -> JoinHandle<Result<(), WorkerError>> {
-    let worker = PoolAccountWorker::new(resolvers, pool_repository, source, poll_interval, health);
-    tokio::spawn(async move { worker.run(shutdown).await })
 }

@@ -37,6 +37,7 @@ context/src/
 │                      stop: run() joins its three workers and the heartbeat
 │                      reporter under the shared grace; daemon/init.rs builds
 │                      what connect() owns and declares the metric families;
+│                      daemon/tasks.rs spawns the four tasks and names them;
 │                      daemon/log.rs holds the daemon's log lines
 ├── error/           ← SourceError, WorkerError — shared by the layers
 ├── testing.rs       ← test-only: the local HTTP server of the provider clients' tests
