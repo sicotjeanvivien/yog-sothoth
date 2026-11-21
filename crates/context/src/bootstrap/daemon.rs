@@ -130,8 +130,7 @@ impl Daemon {
         })
     }
 
-    /// Run the three workers, and the heartbeat reporter when configured, until one ends or the stop
-    /// is asked for, then wait for the others.
+    /// Run the workers and, when configured, the reporter until one ends or the stop is asked for, then wait for the others.
     /// ⚠️ The waiting is the point: `main` drops the runtime on return, destroying a tick in flight;
     /// the grace bounds it.
     pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
@@ -184,7 +183,7 @@ impl Daemon {
         // Whichever arm fired, the others are told. Idempotent.
         shutdown.cancel();
 
-        // ⚠️ The price worker first: `Stop` spends one grace across the three, and only its work is
+        // ⚠️ The price worker first: `Stop` spends one grace across the tasks, and only its work is
         // lost; the other two re-list what they did not finish.
         let mut stop = Stop::new(first, ended);
         stop.settle(PRICE, &mut price_task).await;
