@@ -32,6 +32,22 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.11.2",
+    date: "2026-11-22",
+    summary: "yog-analytic holds the database for less time: the token rankings are written by difference, and the TVL is measured once an hour.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "yog-analytic writes the token rankings by difference instead of rewriting every row at each frozen hour, and measures the protocols' TVL once an hour, at the first round after the hour closes, in its own transaction after the round's writes: a failed measure no longer loses them and is tried again at the next round (yog_analytic_tvl_measures_total, yog_analytic_tvl_measure_duration_seconds).",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.1",
     date: "2026-11-20",
     summary: "A token-ranking cursor resumed under another window is refused instead of skipping or repeating tokens, yog-context counts a failed Helius sweep and the Solana answers it drops, and the database moves to TimescaleDB 2.32.0.",
