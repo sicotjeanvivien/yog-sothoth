@@ -40,7 +40,7 @@ export const RELEASES: readonly Release[] = [
         kind: "fixes",
         items: [
           {
-            text: "yog-analytic writes the token rankings by difference instead of rewriting every row at each frozen hour, and measures the protocols' TVL once an hour, just after the hour closes, apart from its five-minute round: a failed measure no longer costs the round and is tried again at the next one (yog_analytic_tvl_measures_total, yog_analytic_tvl_measure_duration_seconds).",
+            text: "yog-analytic writes the token rankings by difference instead of rewriting every row at each frozen hour, and measures the protocols' TVL once an hour, at the first round after the hour closes, in its own transaction after the round's writes: a failed measure no longer loses them and is tried again at the next round (yog_analytic_tvl_measures_total, yog_analytic_tvl_measure_duration_seconds).",
             technical: true,
           },
         ],
