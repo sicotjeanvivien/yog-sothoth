@@ -73,23 +73,23 @@ describe("sitemap", () => {
 describe("pageMetadata", () => {
   const metadata = pageMetadata({
     locale: "en",
-    path: "/signals",
-    title: "Signals",
-    description: "The feed.",
+    path: "/developers",
+    title: "Developers",
+    description: "The API.",
   });
 
   // Mutation: the canonical built from the request URL, query string included.
   it("names a canonical without parameters and both languages, x-default unprefixed", () => {
     expect(metadata.alternates).toEqual({
-      canonical: "/en/signals",
-      languages: { en: "/en/signals", fr: "/fr/signals", "x-default": "/signals" },
+      canonical: "/en/developers",
+      languages: { en: "/en/developers", fr: "/fr/developers", "x-default": "/developers" },
     });
   });
 
   // Mutation: `og:title` carrying the brand, which `og:site_name` already says.
   it("gives the preview the page's own title and the shared image", () => {
     expect(metadata.openGraph).toMatchObject({
-      title: "Signals",
+      title: "Developers",
       siteName: "Yog-Scope",
       locale: "en_US",
       alternateLocale: ["fr_FR"],

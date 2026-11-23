@@ -22,7 +22,7 @@ export const SITEMAP_PATHS = [
 ] as const;
 
 /** Served with their metadata, out of the sitemap. */
-export const UNLISTED_PATHS = ["/signals", "/developers"] as const;
+export const UNLISTED_PATHS = ["/developers"] as const;
 
 export type PagePath = (typeof SITEMAP_PATHS)[number] | (typeof UNLISTED_PATHS)[number];
 

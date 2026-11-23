@@ -395,21 +395,8 @@
       "retryPending": "Chargement…"
     },
     "Signals": {
-      "page": {
-        "title": "Signaux",
-        "description": "Flux en direct des conclusions des détecteurs : déséquilibres de flux, fuites de TVL — chaque anomalie qui mérite un œil, au moment où elle est détectée."
-      },
       "feed": {
-        "title": "Derniers signaux",
-        "empty": "Aucun signal pour l'instant — les détecteurs veillent.",
-        "fallback": "valeur {value} (seuil {threshold})",
         "gap": "Reprise à {at} — des signaux ont pu manquer",
-        "filters": {
-          "severity": "Sévérité",
-          "detector": "Type",
-          "emptyFiltered": "Aucun signal ne correspond aux filtres.",
-          "reset": "Réinitialiser"
-        },
         "status": {
           "connecting": "Connexion",
           "live": "En direct",
@@ -419,22 +406,6 @@
           "info": "Info",
           "warning": "Alerte",
           "critical": "Critique"
-        },
-        "detectors": {
-          "flow_imbalance": {
-            "tag": "Flux",
-            "summaryToward": "Le volume de swaps penche à {percent} vers {token}.",
-            "summary": "Le volume de swaps penche à {percent} dans une seule direction.",
-            "explain": "Mesure le déséquilibre directionnel du volume de swaps sur une fenêtre glissante : (volume A→B − volume B→A) / volume total, de −100 % à +100 %. Un flux qui penche fortement d'un côté signale une pression d'achat ou de vente soutenue. Un plancher de volume écarte les pools trop calmes."
-          },
-          "tvl_drain": {
-            "tag": "TVL",
-            "summary": "{percent} de la liquidité de la pool est sortie.",
-            "explain": "Mesure, sur une fenêtre glissante, la part du TVL de départ retirée de la pool : (retraits − dépôts) / TVL de départ. Un drain élevé signale un exode des LPs ou un comportement de type rug. Les retraits compensés par des dépôts (rebalancing) s'annulent ; un plancher de TVL écarte les pools poussière, et une pool dont les tokens ne sont pas valorisables est ignorée plutôt que mal lue."
-          }
-        },
-        "detail": {
-          "threshold": "Seuil"
         }
       }
     },
