@@ -118,7 +118,9 @@ read without the account that deploys: `ssh yog-obs health`, `metrics` or `db`.
   still matches the checkout's.
 - `metrics` — the `yog_*` series of the four daemons and the api, read from inside the
   compose network through yog-web's `wget`.
-- `db` — fixed counts, as `yog_api`, read-only and bounded to 15 s a query.
+- `db` — fixed counts, as `yog_api`, read-only and bounded to 4 s a query. A
+  query that fails prints `<name> unreadable_<sqlstate>` (`57014` is a timeout),
+  and the ones after it are still read.
   `jobs_last_run_failed` counts `yog_migrate`'s jobs whose last run failed: one
   that gave up on a lock is expected, and retries by itself. ⚠️ A run that compressed
   another chunk ends as a success: `chunks_compression_overdue` is what sees the

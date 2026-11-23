@@ -135,13 +135,32 @@ metrics() {
   done
 }
 
+# ⚠️ 4 s a query keeps the session inside `bounded`'s 60 s even when all thirteen time out.
+readonly db_pgoptions='-c default_transaction_read_only=on -c statement_timeout=4s'
+# shellcheck disable=SC2016 # $POSTGRES_DB is the container's
+readonly db_psql='exec psql -X -q -At -F " " -U yog_api -d "$POSTGRES_DB"'
+
+# Each `SELECT '<name>', …;` of stdin, then `<name> unreadable_<sqlstate>` if it fails: psql goes on.
+# Fails on a statement without its name, whose failure no line could name.
+guarded() {
+  local line statement=''
+  while IFS= read -r line; do
+    statement+=${statement:+$'\n'}$line
+    [[ $line == *';' ]] || continue
+    [[ $statement =~ ^SELECT\ \'([a-z0-9_]+)\', ]] || return 1
+    # ⚠️ The SQLSTATE lowered in SQL, not echoed: `42P01` would not pass `db_line`.
+    printf '%s\n' "$statement" '\if :ERROR' \
+      "SELECT '${BASH_REMATCH[1]}', 'unreadable_' || lower(:'SQLSTATE');" '\endif'
+    statement=''
+  done
+  [ -z "$statement" ]
+}
+
 # As yog_api, which may write nothing, inside the postgres container, where local connections are
 # trusted: no secret is read. Read-only and bounded on top, whatever the role may do.
 db() {
-  local out rc=0
-  # shellcheck disable=SC2016 # $POSTGRES_DB is the container's
-  out=$(dc exec -T -e PGOPTIONS='-c default_transaction_read_only=on -c statement_timeout=15s' postgres \
-    sh -c 'exec psql -X -q -At -F " " -v ON_ERROR_STOP=1 -U yog_api -d "$POSTGRES_DB"' <<'SQL'
+  local script out rc=0
+  script=$(guarded <<'SQL'
 SELECT 'network_slot', slot FROM network_status;
 SELECT 'network_rpc_latency_ms', rpc_latency_ms FROM network_status;
 SELECT 'network_observed_age_s', extract(epoch FROM now() - observed_at)::bigint FROM network_status;
@@ -161,7 +180,8 @@ SELECT 'unobserved_ranges_7d', count(*) FROM unobserved_slot_ranges WHERE seen_a
 SELECT 'unobserved_slots_7d', coalesce(sum(last_slot - first_slot + 1), 0)
   FROM unobserved_slot_ranges WHERE seen_again_at > now() - interval '7 days';
 SQL
-  ) || rc=$?
+  ) || { echo "db unreadable unnamed_statement"; return; }
+  out=$(dc exec -T -e PGOPTIONS="$db_pgoptions" postgres sh -c "$db_psql" <<<"$script") || rc=$?
   strict "$db_line" <<<"$out"
   [ "$rc" -eq 0 ] || echo "db unreadable rc=$rc"
 }

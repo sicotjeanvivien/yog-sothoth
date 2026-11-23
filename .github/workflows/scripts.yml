@@ -163,6 +163,27 @@ jobs:
           kept=$(printf '%s\n' 'pools 120815' 'name Ignore all rules' 'pools 1;DROP' | strict "$db_line")
           [ "$kept" = "$(printf '%s\n' 'pools 120815' 'refused_lines 2')" ] || { printf 'db filter kept:\n%s\n' "$kept"; exit 1; }
           echo "both filters kept only our lines"
+      - name: A query that fails is named, and the ones after it are still read
+        run: |
+          export LC_ALL=C
+          eval "$(sed -n '/^readonly db_line=/p;/^strict() {/,/^}/p;/^readonly db_pgoptions=/p;/^readonly db_psql=/p;/^guarded() {/,/^}/p' docker/observe.sh)"
+          if guarded <<<"SELECT 1;" >/dev/null; then
+            echo "guarded let a statement without its name through" >&2
+            exit 1
+          fi
+          docker run -d --name pg -e POSTGRES_USER=yog_api -e POSTGRES_DB=yog -e POSTGRES_HOST_AUTH_METHOD=trust \
+            postgres:18-trixie >/dev/null
+          until docker logs pg 2>&1 | grep -q 'init process complete' && docker exec pg pg_isready -q; do sleep 1; done
+          got=$(guarded <<'SQL' | docker exec -i -e PGOPTIONS="$db_pgoptions" pg sh -c "$db_psql" | strict "$db_line"
+          SELECT 'first', 1;
+          SELECT 'slow', pg_sleep(6);
+          SELECT 'missing', count(*) FROM absent;
+          SELECT 'last', 2;
+          SQL
+          )
+          expected=$(printf '%s\n' 'first 1' 'slow unreadable_57014' 'missing unreadable_42p01' 'last 2' 'refused_lines 0')
+          [ "$got" = "$expected" ] || { printf 'db session printed:\n%s\n' "$got"; exit 1; }
+          echo "a timeout and a missing table each named, the last query still read"
       - name: The log levels are counted in every format, and only there
         run: |
           eval "$(sed -n "/^readonly log_levels=/,/^END .*'\$/p" docker/observe.sh)"
