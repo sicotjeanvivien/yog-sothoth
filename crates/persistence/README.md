@@ -1201,7 +1201,8 @@ done by hand, in this order:
    `SELECT alter_job(job_id, scheduled => false) FROM timescaledb_information.jobs`.
    The new image can also move the Postgres minor, and the old library then
    fails every job the scheduler runs until the update. Measured on
-   23 November 2026 (2.32.0 → 2.32.1, Postgres 18.6 → 18.7).
+   23 November 2026 (2.32.0 → 2.32.1, Postgres 18.6 → 18.7). Every job must
+   be scheduled first: step 6 resumes them all.
 2. **Wait for yog-archive's startup dump** to end in `archived`: it is the last
    dump of the old version, and the only one that restores into it.
 3. **Update the extension**, alone in a fresh session, with no `pg_dump`
