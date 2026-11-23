@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * The latest signals, every protocol's or one protocol's, seeded by the server and kept live by
- * `useLiveSignals`: severity, time, headline, and detector · protocol, with the stream-status dot
- * and a gap row at each reopening, counted among the rows shown.
+ * The signals that arrive while the page is open, kept by `useLiveSignals`: severity, time,
+ * headline, and detector · protocol, with the stream-status dot and a gap row at each reopening,
+ * counted among the rows shown.
  */
 
 import type { ReactNode } from "react";
@@ -24,18 +24,10 @@ import { formatShortAddress } from "@/lib/format/format-short-address";
 
 import { ROW_CLASS } from "./overview-layout";
 
-export function OverviewSignalsLive({
-  initial,
-  heading,
-  tableLabel,
-}: {
-  initial: readonly SignalResponse[];
-  heading: ReactNode;
-  tableLabel: string;
-}) {
+export function OverviewSignalsLive({ heading, tableLabel }: { heading: ReactNode; tableLabel: string }) {
   const t = useTranslations("Dashboard.Overview.signals");
   const tFeed = useTranslations("Dashboard.Signals.feed");
-  const { rows, status } = useLiveSignals(initial);
+  const { rows, status } = useLiveSignals();
   const latest = rows.slice(0, LATEST_SIGNALS_COUNT);
 
   return (

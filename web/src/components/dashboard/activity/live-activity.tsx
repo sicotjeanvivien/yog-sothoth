@@ -13,7 +13,6 @@ import { STATUS_DOT } from "@/components/dashboard/signals/signal-display";
 import { addEvent, markGap, type FeedRow } from "@/lib/activity/activity-feed";
 import { activityRow, toActivityItem, type ActivityRow, type DetailPart } from "@/lib/activity/activity-row";
 import { formatUtcTime } from "@/lib/format/date";
-import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { ACTIVITY_TOPICS } from "@/lib/live/live-topics";
 
 import { HEAD_ROW_CLASS, ROW_CLASS } from "@/components/dashboard/overview/overview-layout";
@@ -21,22 +20,9 @@ import { HEAD_ROW_CLASS, ROW_CLASS } from "@/components/dashboard/overview/overv
 /** The rows that fit the block's height in the advanced mode. */
 export const VISIBLE_ROWS = 10;
 
-const COLUMNS = {
-  withProtocol: "grid-cols-[64px_minmax(0,0.8fr)_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,2fr)]",
-  withoutProtocol: "grid-cols-[64px_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,2fr)]",
-} as const;
+const COLUMNS = "grid-cols-[64px_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,2fr)]";
 
-export function LiveActivity({
-  heading,
-  tableLabel,
-  withProtocol,
-}: {
-  heading: ReactNode;
-  tableLabel: string;
-  /** A column naming each event's protocol, for a table of every protocol's. */
-  withProtocol: boolean;
-}) {
-  const columns = withProtocol ? COLUMNS.withProtocol : COLUMNS.withoutProtocol;
+export function LiveActivity({ heading, tableLabel }: { heading: ReactNode; tableLabel: string }) {
   const t = useTranslations("Dashboard.Activity");
   const tFeed = useTranslations("Dashboard.Signals.feed");
   const { status, subscribe, onReopen } = useLive();
@@ -78,9 +64,8 @@ export function LiveActivity({
       ) : (
         <div className="overflow-x-auto">
           <div role="table" aria-label={tableLabel} className="min-w-[560px]">
-            <div role="row" className={`${HEAD_ROW_CLASS} ${columns}`}>
+            <div role="row" className={`${HEAD_ROW_CLASS} ${COLUMNS}`}>
               <div role="columnheader">{t("columns.time")}</div>
-              {withProtocol && <div role="columnheader">{t("columns.protocol")}</div>}
               <div role="columnheader">{t("columns.kind")}</div>
               <div role="columnheader">{t("columns.pool")}</div>
               <div role="columnheader">{t("columns.detail")}</div>
@@ -89,7 +74,7 @@ export function LiveActivity({
               row.type === "gap" ? (
                 <GapRow key={row.key} at={row.at} />
               ) : (
-                <EventRow key={row.key} row={row.row} columns={columns} withProtocol={withProtocol} />
+                <EventRow key={row.key} row={row.row} />
               ),
             )}
           </div>
@@ -99,28 +84,15 @@ export function LiveActivity({
   );
 }
 
-function EventRow({
-  row,
-  columns,
-  withProtocol,
-}: {
-  row: ActivityRow;
-  columns: string;
-  withProtocol: boolean;
-}) {
+function EventRow({ row }: { row: ActivityRow }) {
   const t = useTranslations("Dashboard.Activity");
   const locale = useLocale();
 
   return (
-    <div role="row" className={`${ROW_CLASS} ${columns}`}>
+    <div role="row" className={`${ROW_CLASS} ${COLUMNS}`}>
       <div role="cell" className="font-dash-mono text-[12px] text-dash-ink-2 tabular-nums">
         <time dateTime={row.at}>{formatUtcTime(row.at, locale)}</time>
       </div>
-      {withProtocol && (
-        <div role="cell" className="truncate text-[13px] text-dash-ink-2">
-          {formatProtocolLabel(row.protocol)}
-        </div>
-      )}
       <div role="cell" className="truncate text-dash-ink">
         {t(`kind.${row.kind}`)}
       </div>

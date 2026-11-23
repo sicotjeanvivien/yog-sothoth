@@ -15,6 +15,7 @@ export function VolumeBars({
   ticks,
   axis,
   height,
+  className = "",
   caption,
   invite,
   label,
@@ -23,7 +24,10 @@ export function VolumeBars({
   bars: readonly { height: number | null; reading: string }[];
   ticks: readonly { bottom: number; label: string }[];
   axis: readonly string[];
+  /** The plot's least height; bars and ticks are drawn as shares of it, so it may grow. */
   height: number;
+  /** On the root, a flex column: a `flex-1` there lets the plot take the height it is given. */
+  className?: string;
   /** A name at the left of the reading line, for a chart under another. */
   caption?: string;
   invite: string;
@@ -44,8 +48,11 @@ export function VolumeBars({
     );
   };
 
+  // ⚠️ Shares of the box inside the plot's 1 px bottom border, where the pixels used to be drawn.
+  const share = (px: number) => `${(px / (height - 1)) * 100}%`;
+
   return (
-    <div>
+    <div className={`flex flex-col ${className}`}>
       <p className="mb-2 flex min-h-[18px] items-baseline justify-between gap-2">
         {caption !== undefined && <span className={LABEL_CLASS}>{caption}</span>}
         <span aria-live="polite" className="font-dash-mono text-[12px] text-dash-ink-2">
@@ -59,15 +66,15 @@ export function VolumeBars({
         onKeyDown={onKeyDown}
         onMouseLeave={() => setActive(null)}
         onBlur={() => setActive(null)}
-        className="relative flex items-end gap-0.5 border-b border-dash-rule"
-        style={{ height }}
+        className="relative flex flex-1 gap-0.5 border-b border-dash-rule"
+        style={{ minHeight: height }}
       >
         {ticks.map((tick) => (
           <span
             key={tick.label}
             aria-hidden="true"
             className="pointer-events-none absolute inset-x-0 z-[1] h-0 border-t border-dashed border-dash-ink-3/30"
-            style={{ bottom: tick.bottom }}
+            style={{ bottom: share(tick.bottom) }}
           >
             <span className="absolute bottom-0.5 left-0 bg-dash-surface pr-1 font-dash-mono text-[11px] leading-none text-dash-ink-3">
               {tick.label}
@@ -79,14 +86,14 @@ export function VolumeBars({
             key={i}
             onMouseEnter={() => setActive(i)}
             onClick={() => setActive(i)}
-            className="flex h-full min-w-0 flex-1 cursor-crosshair items-end"
+            className="flex min-w-0 flex-1 cursor-crosshair items-end"
           >
             {bar.height !== null && (
               <div
                 className={`w-full rounded-t-[2px] bg-dash-accent transition-opacity ${
                   active !== null && active !== i ? "opacity-35" : ""
                 }`}
-                style={{ height: bar.height }}
+                style={{ height: share(bar.height) }}
               />
             )}
           </div>

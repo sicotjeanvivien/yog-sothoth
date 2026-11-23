@@ -10,10 +10,10 @@ export const CELL_CLASS =
 
 export const SPAN = {
   kpi: "col-span-6 dash-wide:col-span-3 adv:rail:col-span-4 adv:dash-wide:col-span-2",
+  protocols: "col-span-12",
   main: "col-span-12 dash-wide:col-span-8",
-  side: "col-span-12 dash-wide:col-span-4 dash-wide:row-span-3 adv:dash-wide:row-span-2",
-  /** Beside the live activity in the advanced mode, under the volume in the simple. */
-  tokens: "col-span-12 dash-wide:col-span-8 adv:dash-wide:col-span-4",
+  /** Beside the volume, in both modes. */
+  tokens: "col-span-12 dash-wide:col-span-4",
 } as const;
 
 export const MIN_HEIGHT = {

@@ -1,7 +1,7 @@
 /**
  * Volume by 5-minute tranche (1H), by hour (24H) or by 6- or 24-hour slice (7D, 30D), the API's total of each bar: the page's main
- * chart, and the fees under it in the advanced mode. The server lays the slots and words every
- * reading; `VolumeBars` only tracks the bar under the pointer.
+ * chart, and the fees under it in the advanced mode; alone, it takes the row's height. The server
+ * lays the slots and words every reading; `VolumeBars` only tracks the bar under the pointer.
  */
 
 import { getLocale, getTranslations } from "next-intl/server";
@@ -30,7 +30,7 @@ import { ADVANCED_ONLY, CELL_CLASS, MIN_HEIGHT, SPAN } from "./overview-layout";
 import { BlockFailed, BlockSkeleton } from "./overview-states";
 import { VolumeBars } from "./volume-bars";
 
-const SECTION_CLASS = `${CELL_CLASS} ${SPAN.main} ${MIN_HEIGHT.volume}`;
+const SECTION_CLASS = `${CELL_CLASS} ${SPAN.main} ${MIN_HEIGHT.volume} flex flex-col`;
 
 const TITLE = { "1h": "titleFiveMinutes", "24h": "titleHourly", "7d": "titleSixHours", "30d": "titleDaily" } as const;
 
@@ -139,6 +139,7 @@ export async function VolumeChart({ period }: { period: Period }) {
             ticks={volume.ticks}
             axis={axis}
             height={CHART_PX.volume.height}
+            className="flex-1 adv:flex-none"
             invite={t("invite")}
             label={t("chartLabel")}
           />

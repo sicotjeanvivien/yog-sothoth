@@ -10,18 +10,9 @@ import { BlockHeading } from "@/components/dashboard/overview/overview-parts";
 
 import { LiveActivity } from "./live-activity";
 
-export async function ActivityBlock({
-  scope,
-  span,
-  minHeight,
-}: {
-  /** Every protocol's activity, or the protocol's of the page. */
-  scope: "all" | "protocol";
-  span: string;
-  minHeight: string;
-}) {
+export async function ActivityBlock({ span, minHeight }: { span: string; minHeight: string }) {
   const t = await getTranslations("Dashboard.Activity");
-  const title = scope === "all" ? t("title") : t("titleProtocol");
+  const title = t("titleProtocol");
 
   return (
     <section
@@ -31,7 +22,6 @@ export async function ActivityBlock({
       <LiveActivity
         heading={<BlockHeading title={title} info={t("info")} />}
         tableLabel={t("tableLabel")}
-        withProtocol={scope === "all"}
       />
     </section>
   );
