@@ -32,6 +32,22 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.11.4",
+    date: "2026-11-23",
+    summary: "The production probe no longer loses its readings when one query is slow.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "The production probe reads every query: one that fails is named instead of hiding the ones after it.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.3",
     date: "2026-11-23",
     summary: "The database moves to TimescaleDB 2.32.1, and the dependencies are updated.",
