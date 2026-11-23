@@ -395,21 +395,8 @@
       "retryPending": "Loading…"
     },
     "Signals": {
-      "page": {
-        "title": "Signals",
-        "description": "Live feed of the detectors' conclusions: flow imbalances, TVL drains — every anomaly worth a look, as it is detected."
-      },
       "feed": {
-        "title": "Latest signals",
-        "empty": "No signal yet — the detectors are watching.",
-        "fallback": "value {value} (threshold {threshold})",
         "gap": "Resumed at {at} — signals may have been missed",
-        "filters": {
-          "severity": "Severity",
-          "detector": "Type",
-          "emptyFiltered": "No signal matches the filters.",
-          "reset": "Reset"
-        },
         "status": {
           "connecting": "Connecting",
           "live": "Live",
@@ -419,22 +406,6 @@
           "info": "Info",
           "warning": "Warning",
           "critical": "Critical"
-        },
-        "detectors": {
-          "flow_imbalance": {
-            "tag": "Flow",
-            "summaryToward": "Swap volume leans {percent} toward {token}.",
-            "summary": "Swap volume leans {percent} in one direction.",
-            "explain": "Measures the directional imbalance of swap volume over a rolling window: (A→B volume − B→A volume) / total volume, from −100% to +100%. A flow leaning hard one way flags sustained buy or sell pressure. A volume floor filters out near-idle pools."
-          },
-          "tvl_drain": {
-            "tag": "TVL",
-            "summary": "{percent} of the pool's liquidity has left.",
-            "explain": "Measures, over a rolling window, the share of the pool's starting TVL that has been withdrawn: (removals − adds) / starting TVL. A high drain flags an LP exodus or rug-like behaviour. Withdrawals offset by deposits (rebalancing) cancel out; a TVL floor filters out dust pools, and a pool whose tokens cannot be priced is skipped rather than misread."
-          }
-        },
-        "detail": {
-          "threshold": "Threshold"
         }
       }
     },

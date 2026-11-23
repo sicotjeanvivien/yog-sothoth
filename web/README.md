@@ -164,10 +164,10 @@ block-level error state.
 
 ## Live signal feed
 
-The `/signals` dashboard page combines both consumers:
+The signal blocks of the Overview and of tab 06 read the live stream:
 
-- the first page of signals is fetched server-side (`fetchSignals`) and
-  rendered by the Server Component;
+- the Overview seeds its block with the latest signals, fetched server-side
+  (`fetchSignals`); tab 06 starts empty and says so, nothing is loaded first;
 - the `useLiveSignals` hook (`components/dashboard/signals/`) then
   listens to the `signals` topic of the page's one connection to the API's
   live stream, `GET /api/live?topics=signals` (SSE). Under a protocol, the
@@ -178,8 +178,8 @@ The `/signals` dashboard page combines both consumers:
   at each reopening, `markSignalGap` adds a row « Reprise à HH:MM:SS — des
   signaux ont pu manquer », sorted by its time with the signals, so a signal
   triggered before the reopening ranks below it even when it arrives after.
-  No gap row on an empty feed, never two with no signal between, and no
-  filter hides one. Browsing the past signals is the paginated API's job.
+  No gap row on an empty feed, and never two with no signal between.
+  Browsing the past signals is the paginated API's job.
 
 **One connection per page** — `components/dashboard/live/live-provider.tsx`:
 `LiveProvider` opens the page's single stream on every topic it shows
@@ -196,15 +196,6 @@ picks the topics from it: `signals` in the simple mode, the eight on-chain
 collections too in the advanced (`pageTopics`) — switching reopens the
 connection, so the collections are polled only while the table shows.
 
-Above the feed, **severity × detector filter chips** (`signal-filters.tsx`)
-narrow it locally: within a dimension the active values are OR'd, across
-dimensions they are AND'd, and an empty selection means "no filter" — the
-default state of an alert feed must never hide anything. The filtering
-(`filterSignals`, pure and tested) happens at render time over the merged list:
-the SSE stream and the 200-item merge are untouched, so a hidden signal stays in
-memory and reappears the moment the filter releases it. One ⓘ on the detector
-group explains what each detector means.
-
 The **Overview** shows the latest signals as rows of its own, kept live over the
 same SSE hook (see *Overview*).
 
@@ -219,14 +210,6 @@ zod-parsed as its collection's item (`toActivityItem`), then presented by
 is one side of the pair. The feed keeps 50 rows, the latest first in their order of
 arrival, and shows 10, the height of its row; after a reopening it says that events
 may have been missed (`markGap`), rather than look whole.
-
-Signals render as cards: token pair (embedded `tokenA`/`tokenB` from the
-API, reusing `PoolPairCell`; short pool address while unresolved), a
-human-readable per-detector headline phrased from the structured `value`
-(i18n, the figures in the unit the API serves, `valueUnit`, the flow's lean as a magnitude — not the detector's raw English `message`),
-and a detail footer (exact value, threshold, raw detector tag). A
-detector unknown to the UI falls back to `message`, so a new detector
-ships readable before its wording lands here.
 
 ## Dashboard frame
 
@@ -262,7 +245,7 @@ one, or the platform's logo (`public/logo_<platform>.svg`) — shown in both sta
 the compiler refuses a key without one. The collapsed rail keeps every row as
 its icon alone, its label in `title`, hides the products, and marks the
 platform of the current page. The About page's scope (`PROTOCOL_SCOPE`) is
-read from the same data. `/signals` is no longer in the menu.
+read from the same data.
 
 **Preferences** — at the foot of the menu: the
 language, FR | EN (`shared/locale-switch.tsx`, also the site footer's), each a
@@ -445,10 +428,10 @@ so the page is no longer, the positions' life cycle over the period, in one colu
 `owners` of `liquidity-moves/totals` for the distinct LPs; a period without a row reads "—"
 (`lifeCountOf`).
 
-**06 Live activity** — `protocol/activity/activity-tab.tsx`: the protocol's latest signals,
-whatever the period, from `/api/protocols/{protocol}/signals`, then those that arrive on
-`/api/live/protocols/{protocol}?topics=…`, through the Overview's signal rows
-(`OverviewSignalsLive`). In the advanced mode, the protocol's live activity sits beside
+**06 Live activity** — `protocol/activity/activity-tab.tsx`: the protocol's signals that
+arrive on `/api/live/protocols/{protocol}?topics=…` while the tab is open, through the
+Overview's signal rows (`OverviewSignalsLive`); it starts empty and says so, nothing is
+loaded first. In the advanced mode, the protocol's live activity sits beside
 them, each on half the width as in the canvas, on the same connection.
 
 **Tabs** — `lib/protocol/tabs.ts` lists the six tabs of the canvas, in order;
@@ -672,8 +655,7 @@ web/
 │   │       ├── layout.tsx           # html/body, intl provider, fonts
 │   │       ├── (dashboard)/         # app shell: menu, beta and announcement banners
 │   │       │   ├── overview/        # KPIs, activity by protocol, signals, volume, tokens
-│   │       │   ├── protocols/       # the protocol page (meteora-damm-v2/)
-│   │       │   └── signals/         # live signal feed (SSR + SSE)
+│   │       │   └── protocols/       # the protocol page (meteora-damm-v2/)
 │   │       ├── (developers)/        # its own bar, no menu
 │   │       │   └── developers/      # the developers page
 │   │       └── (marketing)/         # public pages: home, about, terms,
@@ -682,7 +664,7 @@ web/
 │   ├── components/
 │   │   ├── feature-gate.tsx         # <FeatureGate flag="..."> wrapper
 │   │   ├── dashboard/               # per-page sections + shell, sidebar,
-│   │   │                            # signals (SignalFeed, useLiveSignals),
+│   │   │                            # signals (useLiveSignals, badges),
 │   │   │                            # live (LiveProvider), activity, announcements
 │   │   ├── developers/              # the developers page: routes, key field, explorer
 │   │   ├── marketing/               # navbar, footer, per-page sections
@@ -702,7 +684,7 @@ web/
 │   │   ├── developers/              # the contract read on the server, the explorer's requests
 │   │   ├── format/                  # pubkey, date, number, token-amount formatters
 │   │   ├── live/                    # the live topics, their one path, the reopened connection
-│   │   └── signals/                 # mergeSignals, filterSignals (pure, tested)
+│   │   └── signals/                 # mergeSignals, the signals' paths (pure, tested)
 │   ├── types/
 │   │   └── env.d.ts                 # process.env type augmentation
 │   ├── instrumentation.ts           # server start: loads instrumentation-node.ts on Node
