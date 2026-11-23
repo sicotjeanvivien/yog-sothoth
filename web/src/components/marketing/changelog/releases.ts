@@ -32,6 +32,22 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.11.3",
+    date: "2026-11-23",
+    summary: "The database moves to TimescaleDB 2.32.1, and the dependencies are updated.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "TimescaleDB 2.32.1 and the dependencies' updates.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.2",
     date: "2026-11-22",
     summary: "yog-analytic holds the database for less time: the token rankings are written by difference, and the TVL is measured once an hour.",
