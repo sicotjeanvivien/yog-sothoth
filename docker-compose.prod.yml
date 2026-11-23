@@ -107,7 +107,7 @@ services:
     # (crates/persistence/README.md, "Backup and restore"), so a `pull` that
     # silently moved the version would strand every dump taken before it.
     # Upgrading: crates/persistence/README.md, "Updating TimescaleDB in place".
-    image: timescale/timescaledb:2.32.0-pg18
+    image: timescale/timescaledb:2.32.1-pg18
     command:
       - postgres
       - -c
