@@ -1197,24 +1197,32 @@ deploys as usual. The new image also ships the previous TimescaleDB libraries,
 so Postgres restarts on it with the extension unchanged; the update itself is
 done by hand, in this order:
 
-1. **Wait for yog-archive's startup dump** to end in `archived`: it is the last
+1. **Pause every job before the deploy**:
+   `SELECT alter_job(job_id, scheduled => false) FROM timescaledb_information.jobs`.
+   The new image can also move the Postgres minor, and the old library then
+   fails every job the scheduler runs until the update. Measured on
+   23 November 2026 (2.32.0 → 2.32.1, Postgres 18.6 → 18.7).
+2. **Wait for yog-archive's startup dump** to end in `archived`: it is the last
    dump of the old version, and the only one that restores into it.
-2. **Update the extension**, alone in a fresh session, with no `pg_dump`
+3. **Update the extension**, alone in a fresh session, with no `pg_dump`
    running (it would hold the update behind its locks, and everything behind
    the update):
    `PGOPTIONS='-c lock_timeout=30s' psql -X <admin-url> -c "ALTER EXTENSION timescaledb UPDATE"`.
    Any statement before it in the session — a `SET lock_timeout` included —
    loads the old library, and the update is refused.
-3. **Restart every daemon but yog-archive**, at once. A connection opened before
+4. **Restart every daemon but yog-archive**, at once. A connection opened before
    the update keeps the old library loaded, and every TimescaleDB query on it
    fails with `"timescaledb" already loaded with a different version`. Measured on
    21 October 2026 (2.30.1 → 2.30.2): yog-indexer, yog-signals and
    yog-analytic failed their heartbeats until restarted.
-4. **Re-run `yog-migrate bootstrap`** (it applies `setup_roles.sql`), and check
+5. **Re-run `yog-migrate bootstrap`** (it applies `setup_roles.sql`), and check
    that `PUBLIC` took nothing back ([above](#what-public-holds-taken-back--and-re-taken-after-an-extension-update)).
-5. **Restart yog-archive** last: its startup dump, the first of the new version,
+6. **Resume the jobs** (`scheduled => true`), and wait until none is running:
+   the overdue ones start at once, and a compression must not cross the dump
+   of the next step.
+7. **Restart yog-archive** last: its startup dump, the first of the new version,
    starts once nothing is left to change.
-6. **Update `template1` too**, with the same command against it, then read
+8. **Update `template1` too**, with the same command against it, then read
    `extversion` in every database of the cluster. `CREATE DATABASE` copies
    `template1`: left behind, it starts every new database on the old version,
    `sqlx::test`'s throwaway databases included.
