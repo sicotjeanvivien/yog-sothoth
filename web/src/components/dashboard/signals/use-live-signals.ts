@@ -1,20 +1,20 @@
 "use client";
 
 /**
- * The live tail of the signals, on the `signals` topic of the page's connection (`LiveProvider`),
- * over a list seeded by the server-rendered page. ⚠️ The stream carries no history: a reopening
- * adds a gap row where events may have been missed.
+ * The signals that arrive on the `signals` topic of the page's connection (`LiveProvider`), from
+ * an empty list. ⚠️ The stream carries no history: a reopening adds a gap row where events may
+ * have been missed.
  */
 
 import { useEffect, useState } from "react";
 
 import { useLive } from "@/components/dashboard/live/live-provider";
-import { zSignalResponse, type SignalResponse } from "@/lib/api/schema/zod.gen";
+import { zSignalResponse } from "@/lib/api/schema/zod.gen";
 import { markSignalGap, mergeSignals, type SignalFeedRow } from "@/lib/signals/merge-signals";
 
-export function useLiveSignals(initial: readonly SignalResponse[]) {
+export function useLiveSignals() {
   const { status, subscribe, onReopen } = useLive();
-  const [rows, setRows] = useState<readonly SignalFeedRow[]>(() => mergeSignals([], initial));
+  const [rows, setRows] = useState<readonly SignalFeedRow[]>([]);
 
   useEffect(
     () =>

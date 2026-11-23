@@ -9,8 +9,6 @@ import { cookies } from "next/headers";
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
-import { ActivityBlock } from "@/components/dashboard/activity/activity-block";
-import { OverviewLive } from "@/components/dashboard/live/overview-live";
 import { OverviewHeader } from "@/components/dashboard/overview/overview-header";
 import {
   FeesKpi,
@@ -21,14 +19,10 @@ import {
   TvlKpi,
   VolumeKpi,
 } from "@/components/dashboard/overview/overview-kpis";
-import { GRID_CLASS, MIN_HEIGHT, SPAN } from "@/components/dashboard/overview/overview-layout";
+import { GRID_CLASS } from "@/components/dashboard/overview/overview-layout";
 import { OverviewMode } from "@/components/dashboard/overview/overview-mode";
 import { OVERVIEW_ADVANCED_COOKIE } from "@/components/dashboard/overview/overview-mode-state";
 import { StaleBanner } from "@/components/dashboard/overview/overview-states";
-import {
-  OverviewSignals,
-  OverviewSignalsPlaceholder,
-} from "@/components/dashboard/overview/overview-signals";
 import {
   ProtocolActivity,
   ProtocolActivityPlaceholder,
@@ -103,23 +97,17 @@ export default async function OverviewPage({
         </Suspense>
       </div>
 
-      <OverviewLive>
       <div className={GRID_CLASS}>
         <Suspense key={`protocols-${period}`} fallback={<ProtocolActivityPlaceholder period={period} />}>
           <ProtocolActivity period={period} />
         </Suspense>
-        <Suspense fallback={<OverviewSignalsPlaceholder />}>
-          <OverviewSignals />
-        </Suspense>
         <Suspense key={`chart-${period}`} fallback={<VolumeChartPlaceholder period={period} />}>
           <VolumeChart period={period} />
         </Suspense>
-        <ActivityBlock scope="all" span={SPAN.main} minHeight={MIN_HEIGHT.activity} />
         <Suspense key={`tokens-${period}`} fallback={<TopTokensPlaceholder period={period} />}>
           <TopTokens period={period} />
         </Suspense>
       </div>
-      </OverviewLive>
     </OverviewMode>
   );
 }

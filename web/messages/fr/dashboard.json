@@ -113,9 +113,6 @@
         "live": "en direct"
       },
       "signals": {
-        "title": "Signaux",
-        "info": "Des comportements inhabituels repérés automatiquement dans les pools observées. Ce sont des constats, pas des conseils.",
-        "tableLabel": "Derniers signaux, tous protocoles",
         "empty": "Aucun signal pour l'instant — les détecteurs veillent.",
         "headline": {
           "tvl_drain": "Fuite de TVL sur {pair} : {value}",
@@ -428,7 +425,6 @@
       "dismiss": "Fermer cette annonce"
     },
     "Activity": {
-      "title": "Activité en direct · tous protocoles",
       "titleProtocol": "Activité en direct",
       "info": "Ce qui arrive sur la chaîne, au fil de l'eau : liquidité, créations de pools, positions, réclamations, récompenses. Les swaps n'y sont pas, ni aucun montant en dollars ; un montant n'est montré que si les décimales de son token sont connues.",
       "scope": "en direct · hors swaps",
@@ -437,7 +433,6 @@
       "gap": "Reprise à {at} — des événements ont pu manquer",
       "columns": {
         "time": "Heure",
-        "protocol": "Protocole",
         "kind": "Type",
         "pool": "Pool",
         "detail": "Détail"

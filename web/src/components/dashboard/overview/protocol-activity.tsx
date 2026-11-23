@@ -43,7 +43,7 @@ const PROTOCOL_OF: Record<ScopeLine["key"], ProtocolResponse | null> = {
 const COLUMNS =
   "min-w-[460px] grid-cols-[minmax(0,1.7fr)_repeat(2,minmax(0,1fr))_minmax(0,1.4fr)] adv:min-w-[640px] adv:grid-cols-[minmax(0,1.7fr)_72px_108px_108px_100px_minmax(0,1.2fr)]";
 
-const SECTION_CLASS = `${CELL_CLASS} ${SPAN.main} ${MIN_HEIGHT.protocols}`;
+const SECTION_CLASS = `${CELL_CLASS} ${SPAN.protocols} ${MIN_HEIGHT.protocols}`;
 
 export async function ProtocolActivity({ period }: { period: Period }) {
   const locale = await getLocale();
@@ -175,7 +175,7 @@ export async function ProtocolActivityPlaceholder({ period }: { period: Period }
   return (
     <BlockSkeleton
       title={t("protocols.title", { period: t(`period.short.${period}`) })}
-      span={SPAN.main}
+      span={SPAN.protocols}
       minHeight={MIN_HEIGHT.protocols}
       shape={{ rows: 5 }}
     />

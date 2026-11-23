@@ -113,9 +113,6 @@
         "live": "live"
       },
       "signals": {
-        "title": "Signals",
-        "info": "Unusual behaviour spotted automatically in the observed pools. These are findings, not advice.",
-        "tableLabel": "Latest signals, all protocols",
         "empty": "No signal yet — the detectors are watching.",
         "headline": {
           "tvl_drain": "TVL drain on {pair}: {value}",
@@ -428,7 +425,6 @@
       "dismiss": "Dismiss this announcement"
     },
     "Activity": {
-      "title": "Live activity · all protocols",
       "titleProtocol": "Live activity",
       "info": "What lands on chain, as it happens: liquidity, pool creations, positions, claims, rewards. No swaps, and no dollar amount; an amount is shown only when its token's decimals are known.",
       "scope": "live · swaps excluded",
@@ -437,7 +433,6 @@
       "gap": "Resumed at {at} — events may have been missed",
       "columns": {
         "time": "Time",
-        "protocol": "Protocol",
         "kind": "Type",
         "pool": "Pool",
         "detail": "Detail"

@@ -22,14 +22,9 @@ export async function ActivityTab({ protocol }: { protocol: ProtocolResponse }) 
   return (
     <OverviewLive protocol={protocol}>
     <div className={GRID_CLASS}>
-      <ActivityBlock
-        scope="protocol"
-        span="col-span-12 dash-wide:col-span-6"
-        minHeight={MIN_HEIGHT.activity}
-      />
+      <ActivityBlock span="col-span-12 dash-wide:col-span-6" minHeight={MIN_HEIGHT.activity} />
       <section aria-label={t("title")} className={`${CELL_CLASS} ${SPAN} ${MIN_HEIGHT.signals}`}>
         <OverviewSignalsLive
-          initial={[]}
           heading={<BlockHeading title={t("title")} info={t("info")} />}
           tableLabel={t("tableLabel")}
         />

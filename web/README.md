@@ -76,7 +76,7 @@ lib/api/
 ├── schema/zod.gen.ts    # generated: one zod schema and one type per wire
 │                        # shape, from crates/api/openapi.json — never edited
 ├── server/              # one fetcher per resource for Server Components:
-│                        # fetchSignals, fetchSwapTotals, fetchTopTokens,
+│                        # fetchSwapTotals, fetchTopTokens,
 │                        # fetchOpenAnnouncements, … — those a page's
 │                        # blocks share go through React's `cache`; a
 │                        # `Scope` picks the root or the protocol's route
@@ -164,22 +164,19 @@ block-level error state.
 
 ## Live signal feed
 
-The signal blocks of the Overview and of tab 06 read the live stream:
-
-- the Overview seeds its block with the latest signals, fetched server-side
-  (`fetchSignals`); tab 06 starts empty and says so, nothing is loaded first;
-- the `useLiveSignals` hook (`components/dashboard/signals/`) then
-  listens to the `signals` topic of the page's one connection to the API's
-  live stream, `GET /api/live?topics=signals` (SSE). Under a protocol, the
-  connection is `/api/live/protocols/{protocol}?topics=…`. Each event is
-  zod-parsed (malformed → warn + skip) and merged through the pure
-  `mergeSignals` helper (`lib/signals/merge-signals.ts`): dedup by id, sort by
-  time and id descending, cap at 200 rows. The stream carries no history:
-  at each reopening, `markSignalGap` adds a row « Reprise à HH:MM:SS — des
-  signaux ont pu manquer », sorted by its time with the signals, so a signal
-  triggered before the reopening ranks below it even when it arrives after.
-  No gap row on an empty feed, and never two with no signal between.
-  Browsing the past signals is the paginated API's job.
+Only tab 06 shows signals, live; the Overview has no live block. Its block
+starts empty and says so, nothing is loaded first; the
+`useLiveSignals` hook (`components/dashboard/signals/`) listens to the `signals`
+topic of the page's one connection to the API's live stream,
+`GET /api/live/protocols/{protocol}?topics=…` (SSE). Each event is
+zod-parsed (malformed → warn + skip) and merged through the pure
+`mergeSignals` helper (`lib/signals/merge-signals.ts`): dedup by id, sort by
+time and id descending, cap at 200 rows. The stream carries no history:
+at each reopening, `markSignalGap` adds a row « Reprise à HH:MM:SS — des
+signaux ont pu manquer », sorted by its time with the signals, so a signal
+triggered before the reopening ranks below it even when it arrives after.
+No gap row on an empty feed, and never two with no signal between.
+Browsing the past signals is the paginated API's job.
 
 **One connection per page** — `components/dashboard/live/live-provider.tsx`:
 `LiveProvider` opens the page's single stream on every topic it shows
@@ -191,18 +188,14 @@ The stream is read with `fetch` (`openSseStream`, `lib/live/sse-stream.ts`; `cre
 An open stream that drops is retried after 1 to 3 s, at random so the visitors an API
 restart cuts come back spread. A refusal (a `503` past the 200 slots, a `401`, a failed
 ticket request) waits 5 to 60 s, never before the API's `Retry-After`, half of it random,
-doubling per refusal. Nothing is replayed: `onReopen` tells the subscribers of a gap. On the pages that have the advanced mode, `OverviewLive`
-picks the topics from it: `signals` in the simple mode, the eight on-chain
+doubling per refusal. Nothing is replayed: `onReopen` tells the subscribers of a gap. On tab 06, `OverviewLive`
+picks the topics from the advanced mode: `signals` in the simple mode, the eight on-chain
 collections too in the advanced (`pageTopics`) — switching reopens the
 connection, so the collections are polled only while the table shows.
 
-The **Overview** shows the latest signals as rows of its own, kept live over the
-same SSE hook (see *Overview*).
-
-**Live activity** — `components/dashboard/activity/`, in the advanced mode of the
-Overview (every protocol's) and of tab 06 (the protocol's): the on-chain events
-but the swaps as they arrive — time, protocol on the Overview, kind, pool by pair,
-detail. It starts empty and says so: nothing is loaded first. Each message is
+**Live activity** — `components/dashboard/activity/`, in the advanced mode of
+tab 06: the protocol's on-chain events but the swaps as they arrive — time,
+kind, pool by pair, detail. It starts empty and says so: nothing is loaded first. Each message is
 zod-parsed as its collection's item (`toActivityItem`), then presented by
 `activityRow` (`lib/activity/`, pure and tested): amounts in units of their token
 (`formatTokenAmount`), never in dollars, and none while the token's `decimals` is
@@ -295,8 +288,9 @@ moved, while the ⓘ (`InfoPopover`) and `BlockError` they share keep it.
 ## Overview
 
 `(dashboard)/overview/page.tsx`, after the canvas: four KPIs (TVL, volume,
-fees, active pools), activity by protocol, the latest signals, volume per bar
-of the period, the most traded tokens. The header is the title alone, then "Live",
+fees, active pools), activity by protocol on the full width, then volume per bar
+of the period on 8 columns beside the most traded tokens on 4, in both modes. Nothing
+on it is live: the signals and the live activity are tab 06's. The header is the title alone, then "Live",
 the period and the advanced mode at its right. Every figure comes from yog-analytic's
 measures (`/api/swaps/…`, `/api/tvl…`, `/api/pool-creations/…`, `/api/liquidity-turnover/totals`), which all end at the same `asOf`, the close of the last frozen
 hour — over the last hour, the end of the last 5-minute tranche written.
@@ -311,7 +305,7 @@ the value of the last frozen hour; only its change follows the period, and over 
 A block reads the chosen period or says why it cannot, never another period on the same page. The selector (`period-selector.tsx`) is a set of
 links over the page's periods, each as `/api/windows` says; in its own unkeyed `<Suspense>` so a period change keeps it; every block
 that reads the period has its `<Suspense key={period}>`, so the change shows
-their waiting slots only; the signals do not reload.
+their waiting slots only.
 
 **What may not be shown** — a figure the facts do not cover whole is "—", never a smaller number. The API says it (`open`, `opensAt`, `previous.covered`):
 - a period whose window starts before `coveredSince` (the first frozen hour) is
@@ -338,7 +332,8 @@ to ~70 min, a tranche far less. When a response says `late`, the computation has
 band over the page says until when the figures run, each KPI shows that hour,
 and the "Live" panel colours it. "Live" itself keeps speaking of ingestion,
 which can be fine while the figures stall. The reads several blocks share are fetched
-once per render. The volume chart is HTML bars (`volume-bars.tsx`): two dashed
+once per render. The volume chart is HTML bars (`volume-bars.tsx`), drawn as shares
+of its plot so that, alone in the simple mode, it takes the height of its row: two dashed
 marks on round values (`roundTicks`), a fixed reading line above, the bar under
 the pointer, finger or arrow keys full and the others faded. A volume, of a
 token, a protocol or a KPI, that covers only part of its pool-hours carries the
@@ -354,9 +349,7 @@ the sections never changes. The server renders both modes; `OverviewMode` puts
 shows, hides and tightens. The switch writes the
 `yog_overview_advanced` cookie (one year, declared in `/privacy`), which the
 page reads for the first paint. Each block's `MIN_HEIGHT` has its advanced
-value, so its waiting slot keeps its size in both modes. The live activity takes
-the canvas' third row: 8 columns beside the most traded tokens on 4, the signals
-spanning two rows instead of three, and the page no taller than in the simple mode.
+value, so its waiting slot keeps its size in both modes.
 
 ## Protocol page
 
@@ -654,7 +647,7 @@ web/
 │   │   └── [locale]/
 │   │       ├── layout.tsx           # html/body, intl provider, fonts
 │   │       ├── (dashboard)/         # app shell: menu, beta and announcement banners
-│   │       │   ├── overview/        # KPIs, activity by protocol, signals, volume, tokens
+│   │       │   ├── overview/        # KPIs, activity by protocol, volume, tokens
 │   │       │   └── protocols/       # the protocol page (meteora-damm-v2/)
 │   │       ├── (developers)/        # its own bar, no menu
 │   │       │   └── developers/      # the developers page
@@ -684,7 +677,7 @@ web/
 │   │   ├── developers/              # the contract read on the server, the explorer's requests
 │   │   ├── format/                  # pubkey, date, number, token-amount formatters
 │   │   ├── live/                    # the live topics, their one path, the reopened connection
-│   │   └── signals/                 # mergeSignals, the signals' paths (pure, tested)
+│   │   └── signals/                 # mergeSignals (pure, tested)
 │   ├── types/
 │   │   └── env.d.ts                 # process.env type augmentation
 │   ├── instrumentation.ts           # server start: loads instrumentation-node.ts on Node

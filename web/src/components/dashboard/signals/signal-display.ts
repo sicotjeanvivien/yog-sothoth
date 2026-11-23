@@ -29,7 +29,7 @@ export const STATUS_DOT: Record<
   reconnecting: "bg-amber-400",
 };
 
-/** How many signals the Overview's signals block shows. */
+/** How many signals the Live Activity tab shows. */
 export const LATEST_SIGNALS_COUNT = 7;
 
 export function formatSignalValue(signal: SignalResponse, locale: string): string {
