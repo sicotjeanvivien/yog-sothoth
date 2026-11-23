@@ -55,6 +55,9 @@ updates:
     groups:
       docker:
         patterns: ["*"]
+    ignore:
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: docker-compose
     directory: /
