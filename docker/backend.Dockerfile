@@ -157,7 +157,7 @@ ENTRYPOINT ["/usr/local/bin/yog-analytic"]
 # Debian release as the builder — so the same glibc — with no apt repository
 # to add. The tag pins the major only; a minor that moves is harmless, a
 # major must move together with the database image.
-FROM postgres:18-trixie AS yog-archive
+FROM postgres:19-trixie AS yog-archive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libssl3 ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
