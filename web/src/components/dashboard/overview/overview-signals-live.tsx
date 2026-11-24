@@ -10,17 +10,12 @@ import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { SeverityBadge } from "@/components/dashboard/signals/severity-badge";
-import {
-  formatSignalValue,
-  KNOWN_DETECTORS,
-  LATEST_SIGNALS_COUNT,
-  STATUS_DOT,
-} from "@/components/dashboard/signals/signal-display";
+import { LATEST_SIGNALS_COUNT, STATUS_DOT } from "@/components/dashboard/signals/signal-display";
+import { signalHeadline } from "@/components/dashboard/signals/signal-headline";
 import { useLiveSignals } from "@/components/dashboard/signals/use-live-signals";
 import type { SignalResponse } from "@/lib/api/schema/zod.gen";
 import { formatUtcTime } from "@/lib/format/date";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
-import { formatShortAddress } from "@/lib/format/format-short-address";
 
 import { ROW_CLASS } from "./overview-layout";
 
@@ -64,15 +59,7 @@ function SignalRow({ signal }: { signal: SignalResponse }) {
   const tFeed = useTranslations("Dashboard.Signals.feed");
   const locale = useLocale();
 
-  // ⚠️ Isolated (FSI…PDI): a right-to-left symbol would otherwise reverse the whole line.
-  const pair =
-    signal.tokenA.symbol !== null && signal.tokenB.symbol !== null
-      ? `\u2068${signal.tokenA.symbol}\u2069 / \u2068${signal.tokenB.symbol}\u2069`
-      : formatShortAddress(signal.poolAddress);
-  const value = formatSignalValue(signal, locale);
-  const headline = KNOWN_DETECTORS.has(signal.detector)
-    ? t(`headline.${signal.detector}`, { pair, value })
-    : (signal.message ?? t("headline.fallback", { pair, value }));
+  const headline = signalHeadline(signal, locale, t);
 
   return (
     <div role="row" className={`${ROW_CLASS} grid-cols-[76px_52px_minmax(0,1fr)]`}>

@@ -21,7 +21,7 @@ describe("page topics", () => {
   });
 });
 
-// Mutation: a protocol's stream opened without it — tab 06 would show every protocol's events.
+// Mutation: a protocol's stream opened without it — the Live Activity tab would show every protocol's events.
 describe("live path", () => {
   it("carries every topic of the page on one connection", () => {
     expect(livePath(pageTopics(true))).toBe(

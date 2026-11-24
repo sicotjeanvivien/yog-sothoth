@@ -42,6 +42,9 @@ export const ROW_CLASS =
 export const HEAD_ROW_CLASS =
   "grid items-baseline gap-x-3 border-b border-dash-rule pb-2 font-dash-mono text-[11px] font-medium tracking-[0.1em] whitespace-nowrap text-dash-ink-3 uppercase";
 
+export const SEGMENT_CLASS =
+  "inline-flex min-h-9 min-w-11 items-center justify-center border-r border-dash-rule px-3 font-dash-mono text-[12px] last:border-r-0";
+
 export const NUM_CLASS = "text-right font-dash-mono tabular-nums whitespace-nowrap";
 
 /** Shown in the advanced mode only, as a flex box or a block; the server renders it in both. */

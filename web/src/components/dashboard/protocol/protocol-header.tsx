@@ -1,7 +1,7 @@
 /**
  * A protocol page's compact header: its platform, its title and an ⓘ with the program; at the
  * right, the Overview's controls. ⚠️ The period links
- * keep the tab, the tab links keep the period.
+ * keep the tab and the Signals tab's place, the tab links keep the period.
  */
 
 import { getTranslations } from "next-intl/server";
@@ -13,17 +13,26 @@ import type { PagePath } from "@/config/site";
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
 import { shortenPubkey } from "@/lib/format/pubkey";
 import { OVERVIEW_PERIODS, type Period } from "@/lib/overview/period";
-import { tabQuery, type ProtocolTab } from "@/lib/protocol/tabs";
+import { periodKeep, type SignalsQuery } from "@/lib/protocol/signals-query";
+import type { ProtocolTab } from "@/lib/protocol/tabs";
 
 type HeaderProps = {
   pathname: PagePath;
   period: Period;
   tab: ProtocolTab | null;
+  signals: SignalsQuery;
   protocol: ProtocolResponse;
   programId: string;
 };
 
-export async function ProtocolHeader({ pathname, period, tab, protocol, programId }: HeaderProps) {
+export async function ProtocolHeader({
+  pathname,
+  period,
+  tab,
+  signals,
+  protocol,
+  programId,
+}: HeaderProps) {
   const t = await getTranslations("Dashboard.Protocol.page");
 
   return (
@@ -49,7 +58,7 @@ export async function ProtocolHeader({ pathname, period, tab, protocol, programI
         periods={OVERVIEW_PERIODS}
         scope={protocol}
         pathname={pathname}
-        keep={tabQuery(tab)}
+        keep={periodKeep(tab, signals)}
       />
     </header>
   );

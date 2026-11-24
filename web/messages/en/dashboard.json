@@ -202,6 +202,7 @@
         "fees": "Fees",
         "pools": "Pools & positions",
         "tokens": "Tokens",
+        "signals": "Signals",
         "activity": "Live activity"
       },
       "liquidity": {
@@ -372,6 +373,25 @@
           "info": "Unusual behaviour spotted automatically in this protocol's pools. These are findings, not advice.",
           "tableLabel": "Latest signals of the protocol"
         }
+      },
+      "signals": {
+        "label": "Protocol signals",
+        "tableLabel": "Protocol signals, newest first",
+        "filterLabel": "Severity",
+        "all": "All",
+        "periodIgnored": "Every signal, whatever the period chosen.",
+        "columns": {
+          "severity": "Severity",
+          "triggered": "Triggered",
+          "signal": "Signal",
+          "valueThreshold": "Value · threshold"
+        },
+        "pageSize": "{count} signals a page, newest first",
+        "pagesLabel": "Pages",
+        "newer": "← Newer",
+        "older": "Older →",
+        "emptyFiltered": "No signal at this severity.",
+        "empty": "No signal recorded yet."
       }
     },
     "BlockError": {

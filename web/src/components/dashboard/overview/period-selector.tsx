@@ -13,8 +13,7 @@ import type { PagePath } from "@/config/site";
 import { Link } from "@/i18n/navigation";
 import { pageQuery, type Period } from "@/lib/overview/period";
 
-const SEGMENT_CLASS =
-  "inline-flex min-h-9 min-w-11 items-center justify-center border-r border-dash-rule px-3 font-dash-mono text-[12px] last:border-r-0";
+import { SEGMENT_CLASS } from "./overview-layout";
 
 /** Per period, open, or closed with the reason its panel shows. */
 export type PeriodAvailability = Record<Period, { open: true } | { open: false; reason: string }>;

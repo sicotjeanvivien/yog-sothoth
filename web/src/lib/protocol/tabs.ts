@@ -1,9 +1,17 @@
 /**
  * The tabs of a protocol's page, in their row's order, chosen by `?tab=`. A tab joins the row
- * when its content ships; its number is its place in the full list, so it never moves.
+ * when its content ships; its number is its place in the full list.
  */
 
-export const PROTOCOL_TABS = ["liquidity", "volume", "fees", "pools", "tokens", "activity"] as const;
+export const PROTOCOL_TABS = [
+  "liquidity",
+  "volume",
+  "fees",
+  "pools",
+  "tokens",
+  "signals",
+  "activity",
+] as const;
 
 export type ProtocolTab = (typeof PROTOCOL_TABS)[number];
 
@@ -13,10 +21,11 @@ export const READY_TABS: ReadonlySet<ProtocolTab> = new Set<ProtocolTab>([
   "volume",
   "fees",
   "pools",
+  "signals",
   "activity",
 ]);
 
-/** "01" to "06", shown before the tab's label. */
+/** "01", "02"…, shown before the tab's label. */
 export function tabNumber(tab: ProtocolTab): string {
   return String(PROTOCOL_TABS.indexOf(tab) + 1).padStart(2, "0");
 }

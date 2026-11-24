@@ -25,9 +25,11 @@ import { PoolsTab } from "@/components/dashboard/protocol/pools/pools-tab";
 import { ProtocolHeader } from "@/components/dashboard/protocol/protocol-header";
 import { FeesRateKpi, ProtocolFeesKpi } from "@/components/dashboard/protocol/protocol-kpis";
 import { ProtocolTabs } from "@/components/dashboard/protocol/protocol-tabs";
+import { SignalsTab } from "@/components/dashboard/protocol/signals/signals-tab";
 import { VolumeTab } from "@/components/dashboard/protocol/volume/volume-tab";
 import { OVERVIEW_PERIODS } from "@/lib/overview/period";
 import { readPeriod } from "@/lib/api/server/read-period";
+import { readSignalsQuery } from "@/lib/protocol/signals-query";
 import { parseTab, readyTabs } from "@/lib/protocol/tabs";
 import { pageMetadata } from "@/lib/seo/page-metadata";
 
@@ -39,7 +41,13 @@ const PROGRAM_ID = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG";
 
 type ProtocolPageProps = {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ period?: string | string[]; tab?: string | string[] }>;
+  searchParams: Promise<{
+    period?: string | string[];
+    tab?: string | string[];
+    severity?: string | string[];
+    cursor?: string | string[];
+    dir?: string | string[];
+  }>;
 };
 
 export async function generateMetadata({ params }: ProtocolPageProps): Promise<Metadata> {
@@ -59,6 +67,7 @@ export default async function DammV2Page({ params, searchParams }: ProtocolPageP
   const query = await searchParams;
   const period = await readPeriod(query.period, OVERVIEW_PERIODS);
   const tab = parseTab(query.tab);
+  const signals = readSignalsQuery(query);
   const initialAdvanced = (await cookies()).get(OVERVIEW_ADVANCED_COOKIE)?.value === "1";
   const t = await getTranslations("Dashboard.Protocol");
 
@@ -68,6 +77,7 @@ export default async function DammV2Page({ params, searchParams }: ProtocolPageP
         pathname={PATHNAME}
         period={period}
         tab={tab}
+        signals={signals}
         protocol={PROTOCOL}
         programId={PROGRAM_ID}
       />
@@ -106,6 +116,9 @@ export default async function DammV2Page({ params, searchParams }: ProtocolPageP
       {tab === "volume" && <VolumeTab period={period} protocol={PROTOCOL} />}
       {tab === "fees" && <FeesTab period={period} protocol={PROTOCOL} />}
       {tab === "pools" && <PoolsTab period={period} protocol={PROTOCOL} />}
+      {tab === "signals" && (
+        <SignalsTab protocol={PROTOCOL} pathname={PATHNAME} period={period} query={signals} />
+      )}
       {tab === "activity" && <ActivityTab protocol={PROTOCOL} />}
     </OverviewMode>
   );
