@@ -179,9 +179,11 @@ export async function FeeSplit({ period, protocol }: TabProps) {
     };
   });
 
+  // ⚠️ The bars' tints, not the table's parts: a measured bar is split in a period that is not.
+  const drawn = FEE_PARTS.filter((part) => bars.some((bar) => bar.segments.some((s) => s.tone === part)));
   const legend = (
     <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] text-dash-ink-2">
-      {shown.map((part) => (
+      {(drawn.length > 0 ? drawn : shown).map((part) => (
         <span key={part}>
           <span aria-hidden="true" className={`mr-1.5 inline-block h-2.5 w-2.5 align-[-1px] ${FEE_TONE[part]}`} />
           {t(`parts.${part}`)}

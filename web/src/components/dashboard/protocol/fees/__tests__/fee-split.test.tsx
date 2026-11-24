@@ -81,12 +81,14 @@ describe("FeeSplit", () => {
     expect(html).not.toContain(NOT_MEASURED);
   });
 
-  // Mutation: the text left out, or the split drawn over a period it does not cover.
+  // Mutation: the text left out, or the split drawn over a period it does not cover; or the legend
+  // read off the table — a measured bar's compounded part drawn without its entry.
   it("keeps the LPs' fees whole and says why over a period the split does not cover", async () => {
     const html = await render([bar(2, [null, null]), bar(1, ["70", "10"])]);
 
     expect(html).not.toContain("LP — compounding</div>");
     expect(html).toContain("claiming_fee + compounding_fee");
     expect(html).toContain(NOT_MEASURED);
+    expect(html).toContain("LP — compounding</span>");
   });
 });

@@ -135,7 +135,7 @@ SELECT pool_address, $1, $2, swap_count, valued,
                COALESCE(t.referral_fee_in_a, 0) * u.per_a
              + sold.referral_b * u.sale_b + COALESCE(t.referral_fee_in_b_on_buys, 0) * u.buy_b
            END AS referral_fees_usd,
-           -- ⚠️ Without its raw swaps (a tranche caught up past their 7 days), `r` is NULL: unknown.
+           -- ⚠️ Without its raw swaps, `r` is NULL: unknown.
            CASE WHEN v.valued THEN
                r.compounding_in_a * u.per_a
              + (r.compounding_in_b - r.compounding_in_b_on_buys) * u.sale_b
