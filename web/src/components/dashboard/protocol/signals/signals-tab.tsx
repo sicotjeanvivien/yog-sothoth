@@ -184,7 +184,6 @@ function SignalTable({
   tSeverity: Translator;
   locale: FormatLocale;
 }) {
-
   return (
     <div className="overflow-x-auto">
       <div role="table" aria-label={t("tableLabel")} className="min-w-[640px]">
