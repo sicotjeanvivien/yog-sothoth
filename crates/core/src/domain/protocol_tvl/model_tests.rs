@@ -80,6 +80,7 @@ fn swaps(protocol: Protocol, volume: Option<i64>) -> crate::domain::ProtocolSwap
             referral_fees_usd: None,
             pool_hours: 10,
             pool_hours_valued: 9,
+            meteora_damm_v2: None,
         },
         pools: None,
     }

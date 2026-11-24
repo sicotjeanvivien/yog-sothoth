@@ -6,10 +6,10 @@ use crate::http::cursor::EventCollection;
 use crate::http::{
     AppState,
     dto::{
-        PageResponse, PoolSwapBucketResponse, ProtocolSwapActivityBucketResponse,
-        ProtocolSwapActivityResponse, ProtocolSwapSeriesResponse, ProtocolSwapTotalsResponse,
-        SwapActivityResponse, SwapEventResponse, SwapSeriesResponse, SwapTotalsResponse,
-        TokenActivityPageResponse,
+        PageResponse, PoolSwapActivityResponse, PoolSwapBucketResponse,
+        ProtocolSwapActivityBucketResponse, ProtocolSwapActivityResponse,
+        ProtocolSwapSeriesResponse, ProtocolSwapTotalsResponse, SwapEventResponse,
+        SwapSeriesResponse, SwapTotalsResponse, TokenActivityPageResponse,
         request::{
             DayWindowParam, EventsParams, ListEventsRequest, ListTokenActivityRequest,
             MeasureActivityParams, MeasureWindowParams, SeriesParams, TokenActivityParams,
@@ -134,14 +134,14 @@ async fn list_series(
     responses((
         status = 200,
         description = "The pool's swaps over the window, 0 when it did not swap; no row before it was first seen.",
-        body = SwapTotalsResponse<SwapActivityResponse>
+        body = SwapTotalsResponse<PoolSwapActivityResponse>
     ))
 )]
 pub(crate) async fn get_pool_swap_totals(
     State(state): State<AppState>,
     Path(pool): Path<String>,
     Query(params): Query<MeasureWindowParams>,
-) -> Result<Json<SwapTotalsResponse<SwapActivityResponse>>, ApiError> {
+) -> Result<Json<SwapTotalsResponse<PoolSwapActivityResponse>>, ApiError> {
     let pool = super::known_pool(&state, &pool).await?;
     let window = params.window.into();
     let measured = state

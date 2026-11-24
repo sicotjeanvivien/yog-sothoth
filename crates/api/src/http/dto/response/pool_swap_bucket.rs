@@ -5,7 +5,7 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::PoolSwapBucket;
 
-use super::swap_activity::SwapActivityResponse;
+use super::swap_activity::{SwapActivityMeteoraDammV2Response, SwapActivityResponse};
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -13,12 +13,16 @@ pub(crate) struct PoolSwapBucketResponse {
     from: DateTime<Utc>,
     #[serde(flatten)]
     activity: SwapActivityResponse,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    meteora_damm_v2: Option<SwapActivityMeteoraDammV2Response>,
 }
 
 impl From<PoolSwapBucket> for PoolSwapBucketResponse {
-    fn from(b: PoolSwapBucket) -> Self {
+    fn from(mut b: PoolSwapBucket) -> Self {
         Self {
             from: b.from,
+            meteora_damm_v2: b.activity.meteora_damm_v2.take().map(Into::into),
             activity: b.activity.into(),
         }
     }

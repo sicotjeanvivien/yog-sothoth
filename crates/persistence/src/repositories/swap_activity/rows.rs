@@ -2,7 +2,10 @@ use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use yog_core::{
     RepositoryError,
-    domain::{PoolSwapBucket, ProtocolBucket, ProtocolSwapActivity, SwapActivity},
+    domain::{
+        MeteoraDammV2LpFeeSplit, PoolSwapBucket, Protocol, ProtocolBucket, ProtocolSwapActivity,
+        SwapActivity,
+    },
 };
 
 use crate::repositories::helper::{
@@ -11,12 +14,15 @@ use crate::repositories::helper::{
 
 /// The swap columns every read selects, whatever its scope.
 pub(super) struct SwapActivityRow {
+    pub(super) protocol: String,
     pub(super) swaps: i64,
     pub(super) volume_usd: Option<BigDecimal>,
     pub(super) fees_usd: Option<BigDecimal>,
     pub(super) lp_fees_usd: Option<BigDecimal>,
     pub(super) protocol_fees_usd: Option<BigDecimal>,
     pub(super) referral_fees_usd: Option<BigDecimal>,
+    pub(super) claiming_fees_usd: Option<BigDecimal>,
+    pub(super) compounding_fees_usd: Option<BigDecimal>,
     pub(super) pool_hours: i64,
     pub(super) pool_hours_valued: i64,
 }
@@ -29,6 +35,8 @@ pub(super) struct ProtocolSwapActivityRow {
     pub(super) lp_fees_usd: Option<BigDecimal>,
     pub(super) protocol_fees_usd: Option<BigDecimal>,
     pub(super) referral_fees_usd: Option<BigDecimal>,
+    pub(super) claiming_fees_usd: Option<BigDecimal>,
+    pub(super) compounding_fees_usd: Option<BigDecimal>,
     pub(super) pool_hours: i64,
     pub(super) pool_hours_valued: i64,
     pub(super) pools: Option<i64>,
@@ -43,18 +51,23 @@ pub(super) struct ProtocolSwapBucketRow {
     pub(super) lp_fees_usd: Option<BigDecimal>,
     pub(super) protocol_fees_usd: Option<BigDecimal>,
     pub(super) referral_fees_usd: Option<BigDecimal>,
+    pub(super) claiming_fees_usd: Option<BigDecimal>,
+    pub(super) compounding_fees_usd: Option<BigDecimal>,
     pub(super) pool_hours: i64,
     pub(super) pool_hours_valued: i64,
 }
 
 pub(super) struct PoolSwapBucketRow {
     pub(super) bucket_from: DateTime<Utc>,
+    pub(super) protocol: String,
     pub(super) swaps: i64,
     pub(super) volume_usd: Option<BigDecimal>,
     pub(super) fees_usd: Option<BigDecimal>,
     pub(super) lp_fees_usd: Option<BigDecimal>,
     pub(super) protocol_fees_usd: Option<BigDecimal>,
     pub(super) referral_fees_usd: Option<BigDecimal>,
+    pub(super) claiming_fees_usd: Option<BigDecimal>,
+    pub(super) compounding_fees_usd: Option<BigDecimal>,
     pub(super) pool_hours: i64,
     pub(super) pool_hours_valued: i64,
 }
@@ -79,6 +92,16 @@ impl TryFrom<SwapActivityRow> for SwapActivity {
             referral_fees_usd: convert_usd(row.referral_fees_usd, "referral_fees_usd")?,
             pool_hours: row.pool_hours,
             pool_hours_valued: row.pool_hours_valued,
+            meteora_damm_v2: match parse_protocol(&row.protocol)? {
+                Protocol::MeteoraDammV2 => Some(MeteoraDammV2LpFeeSplit {
+                    claiming_fees_usd: convert_usd(row.claiming_fees_usd, "claiming_fees_usd")?,
+                    compounding_fees_usd: convert_usd(
+                        row.compounding_fees_usd,
+                        "compounding_fees_usd",
+                    )?,
+                }),
+                Protocol::MeteoraDlmm => None,
+            },
         })
     }
 }
@@ -91,12 +114,15 @@ impl TryFrom<ProtocolSwapActivityRow> for ProtocolSwapActivity {
             protocol: parse_protocol(&row.protocol)?,
             pools: row.pools,
             activity: SwapActivityRow {
+                protocol: row.protocol.clone(),
                 swaps: row.swaps,
                 volume_usd: row.volume_usd,
                 fees_usd: row.fees_usd,
                 lp_fees_usd: row.lp_fees_usd,
                 protocol_fees_usd: row.protocol_fees_usd,
                 referral_fees_usd: row.referral_fees_usd,
+                claiming_fees_usd: row.claiming_fees_usd,
+                compounding_fees_usd: row.compounding_fees_usd,
                 pool_hours: row.pool_hours,
                 pool_hours_valued: row.pool_hours_valued,
             }
@@ -113,12 +139,15 @@ impl TryFrom<ProtocolSwapBucketRow> for ProtocolBucket<SwapActivity> {
             protocol: parse_protocol(&row.protocol)?,
             from: row.bucket_from,
             value: SwapActivityRow {
+                protocol: row.protocol.clone(),
                 swaps: row.swaps,
                 volume_usd: row.volume_usd,
                 fees_usd: row.fees_usd,
                 lp_fees_usd: row.lp_fees_usd,
                 protocol_fees_usd: row.protocol_fees_usd,
                 referral_fees_usd: row.referral_fees_usd,
+                claiming_fees_usd: row.claiming_fees_usd,
+                compounding_fees_usd: row.compounding_fees_usd,
                 pool_hours: row.pool_hours,
                 pool_hours_valued: row.pool_hours_valued,
             }
@@ -134,12 +163,15 @@ impl TryFrom<PoolSwapBucketRow> for PoolSwapBucket {
         Ok(PoolSwapBucket {
             from: row.bucket_from,
             activity: SwapActivityRow {
+                protocol: row.protocol.clone(),
                 swaps: row.swaps,
                 volume_usd: row.volume_usd,
                 fees_usd: row.fees_usd,
                 lp_fees_usd: row.lp_fees_usd,
                 protocol_fees_usd: row.protocol_fees_usd,
                 referral_fees_usd: row.referral_fees_usd,
+                claiming_fees_usd: row.claiming_fees_usd,
+                compounding_fees_usd: row.compounding_fees_usd,
                 pool_hours: row.pool_hours,
                 pool_hours_valued: row.pool_hours_valued,
             }

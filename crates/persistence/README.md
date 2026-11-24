@@ -795,6 +795,11 @@ deleted and written again every cycle, a settled one written once with its hours
 `analytic_rotation_run_hours` (`ON DELETE CASCADE` from its rotation run). Both are kept without limit;
 `analytic_tranches.rotations` says from which tranche the rotation runs are measured.
 `tests/analytic_rotation_runs.rs` holds the rotation, the two thresholds and the settling.
+
+**The LPs' fee split (055).** The tranche statement also writes `claiming_fees_usd` and
+`compounding_fees_usd`, from the raw swaps; the hourly upserts and `swap_activity.rs` sum them only
+where every row with LP fees has them (`NULL` on the rows written before 055, never backfilled), an
+hour or a tranche without a fact at 0. `tests/lp_fee_split.rs` holds the writes and the ten reads.
 `rotation_runs.rs` reads them for the routes: the runs started in a period through the last
 tranche written (`analytic_tranches`), listed by volume — rounded as the cursor holds it — or
 by start, each named by its pool's token symbols (`LEFT JOIN`: a pool without metadata stays

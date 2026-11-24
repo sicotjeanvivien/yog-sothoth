@@ -3263,6 +3263,21 @@
         ],
         "type": "object"
       },
+      "PoolSwapActivityResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SwapActivityResponse"
+          },
+          {
+            "properties": {
+              "meteoraDammV2": {
+                "$ref": "#/components/schemas/SwapActivityMeteoraDammV2Response"
+              }
+            },
+            "type": "object"
+          }
+        ]
+      },
       "PoolSwapBucketResponse": {
         "allOf": [
           {
@@ -3273,6 +3288,9 @@
               "from": {
                 "format": "date-time",
                 "type": "string"
+              },
+              "meteoraDammV2": {
+                "$ref": "#/components/schemas/SwapActivityMeteoraDammV2Response"
               }
             },
             "required": [
@@ -4045,6 +4063,9 @@
                 "format": "date-time",
                 "type": "string"
               },
+              "meteoraDammV2": {
+                "$ref": "#/components/schemas/SwapActivityMeteoraDammV2Response"
+              },
               "protocol": {
                 "$ref": "#/components/schemas/ProtocolResponse"
               }
@@ -4064,6 +4085,9 @@
           },
           {
             "properties": {
+              "meteoraDammV2": {
+                "$ref": "#/components/schemas/SwapActivityMeteoraDammV2Response"
+              },
               "pools": {
                 "oneOf": [
                   {
@@ -4111,6 +4135,9 @@
                         "from": {
                           "format": "date-time",
                           "type": "string"
+                        },
+                        "meteoraDammV2": {
+                          "$ref": "#/components/schemas/SwapActivityMeteoraDammV2Response"
                         },
                         "protocol": {
                           "$ref": "#/components/schemas/ProtocolResponse"
@@ -4166,6 +4193,9 @@
                     },
                     {
                       "properties": {
+                        "meteoraDammV2": {
+                          "$ref": "#/components/schemas/SwapActivityMeteoraDammV2Response"
+                        },
                         "pools": {
                           "oneOf": [
                             {
@@ -5158,6 +5188,36 @@
         "pattern": "^-?\\d+(\\.\\d+)?$",
         "type": "string"
       },
+      "SwapActivityMeteoraDammV2Response": {
+        "description": "What a DAMM v2 row says beyond every protocol's: its LPs' fees claimed and compounded into\nthe pool, which sum to `lpFeesUsd`; each `null` where not measured.",
+        "properties": {
+          "claimingFeesUsd": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "compoundingFeesUsd": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnsignedDecimal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "claimingFeesUsd",
+          "compoundingFeesUsd"
+        ],
+        "type": "object"
+      },
       "SwapActivityResponse": {
         "properties": {
           "feesUsd": {
@@ -5385,6 +5445,9 @@
                         "from": {
                           "format": "date-time",
                           "type": "string"
+                        },
+                        "meteoraDammV2": {
+                          "$ref": "#/components/schemas/SwapActivityMeteoraDammV2Response"
                         }
                       },
                       "required": [
@@ -5437,7 +5500,7 @@
         ],
         "description": "The protocols of a read summed; each field unknown as soon as one protocol's is."
       },
-      "SwapTotalsResponse_SwapActivityResponse": {
+      "SwapTotalsResponse_PoolSwapActivityResponse": {
         "allOf": [
           {
             "$ref": "#/components/schemas/WindowPeriodResponse"
@@ -5449,78 +5512,19 @@
               },
               "items": {
                 "items": {
-                  "properties": {
-                    "feesUsd": {
-                      "oneOf": [
-                        {
-                          "$ref": "#/components/schemas/UnsignedDecimal"
-                        },
-                        {
-                          "type": "null"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SwapActivityResponse"
+                    },
+                    {
+                      "properties": {
+                        "meteoraDammV2": {
+                          "$ref": "#/components/schemas/SwapActivityMeteoraDammV2Response"
                         }
-                      ]
-                    },
-                    "lpFeesUsd": {
-                      "oneOf": [
-                        {
-                          "$ref": "#/components/schemas/UnsignedDecimal"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "poolHours": {
-                      "$ref": "#/components/schemas/Count"
-                    },
-                    "poolHoursValued": {
-                      "$ref": "#/components/schemas/Count"
-                    },
-                    "protocolFeesUsd": {
-                      "oneOf": [
-                        {
-                          "$ref": "#/components/schemas/UnsignedDecimal"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "referralFeesUsd": {
-                      "oneOf": [
-                        {
-                          "$ref": "#/components/schemas/UnsignedDecimal"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "swaps": {
-                      "$ref": "#/components/schemas/Count"
-                    },
-                    "volumeUsd": {
-                      "oneOf": [
-                        {
-                          "$ref": "#/components/schemas/UnsignedDecimal"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
+                      },
+                      "type": "object"
                     }
-                  },
-                  "required": [
-                    "swaps",
-                    "poolHours",
-                    "poolHoursValued",
-                    "feesUsd",
-                    "lpFeesUsd",
-                    "protocolFeesUsd",
-                    "referralFeesUsd",
-                    "volumeUsd"
-                  ],
-                  "type": "object"
+                  ]
                 },
                 "type": "array"
               },
@@ -8513,7 +8517,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SwapTotalsResponse_SwapActivityResponse"
+                  "$ref": "#/components/schemas/SwapTotalsResponse_PoolSwapActivityResponse"
                 }
               }
             },

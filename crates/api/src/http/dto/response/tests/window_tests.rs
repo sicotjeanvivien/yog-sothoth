@@ -4,9 +4,9 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde_json::{Value, json, to_value};
 use yog_core::domain::{
-    FrozenHours, FrozenPeriod, LiquidityTurnover, Protocol, ProtocolBucket,
-    ProtocolLiquidityTurnover, ProtocolPoolCreations, ProtocolSwapActivity, ProtocolTvlChange,
-    SwapActivity, TvlReading, Window,
+    FrozenHours, FrozenPeriod, LiquidityTurnover, MeteoraDammV2LpFeeSplit, Protocol,
+    ProtocolBucket, ProtocolLiquidityTurnover, ProtocolPoolCreations, ProtocolSwapActivity,
+    ProtocolTvlChange, SwapActivity, TvlReading, Window,
 };
 
 use super::{
@@ -43,6 +43,7 @@ fn activity() -> SwapActivity {
         referral_fees_usd: None,
         pool_hours: 3,
         pool_hours_valued: 1,
+        meteora_damm_v2: None,
     }
 }
 
@@ -58,6 +59,51 @@ fn reading(at: DateTime<Utc>, tvl: i64) -> TvlReading {
         at,
         tvl_usd: Some(Decimal::from(tvl)),
     }
+}
+
+/// Mutation: the block in the flattened fields, which every `total` row shares — or dropped from
+/// the DAMM v2 row.
+#[test]
+fn the_damm_v2_split_is_in_its_row_never_in_total() {
+    let split = || SwapActivity {
+        meteora_damm_v2: Some(MeteoraDammV2LpFeeSplit {
+            claiming_fees_usd: Some(Decimal::ONE),
+            compounding_fees_usd: None,
+        }),
+        ..activity()
+    };
+    let totals = SwapTotals {
+        measured: Measured {
+            period: None,
+            items: vec![ProtocolSwapActivity {
+                protocol: Protocol::MeteoraDammV2,
+                activity: split(),
+                pools: None,
+            }],
+        },
+        previous: None,
+    };
+    let body = to_value(
+        ProtocolSwapTotalsResponse::<ProtocolSwapActivityResponse>::new(Window::Day, None, totals),
+    )
+    .unwrap();
+    let block = json!({ "claimingFeesUsd": "1", "compoundingFeesUsd": null });
+    assert_eq!(body["items"][0]["meteoraDammV2"], block);
+    assert_eq!(body["total"].get("meteoraDammV2"), None);
+
+    let series = vec![ProtocolBucket {
+        protocol: Protocol::MeteoraDammV2,
+        from: at_october(20, 13),
+        value: split(),
+    }];
+    let body = to_value(ProtocolSwapSeriesResponse::<
+        ProtocolSwapActivityBucketResponse,
+    >::new(
+        Window::Day, SeriesInterval::Hour, measured(series)
+    ))
+    .unwrap();
+    assert_eq!(body["items"][0]["meteoraDammV2"], block);
+    assert_eq!(body["total"][0].get("meteoraDammV2"), None);
 }
 
 /// Mutation: a `total` dropped from its envelope, or read off one row: under one protocol the two

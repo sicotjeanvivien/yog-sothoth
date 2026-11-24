@@ -4,6 +4,8 @@ import type { FeePart } from "@/lib/protocol/fees";
 
 export const FEE_TONE: Record<FeePart, string> = {
   lp: "bg-dash-fee-lp",
+  claiming: "bg-dash-fee-lp",
+  compounding: "bg-dash-fee-compounding",
   protocol: "bg-dash-fee-protocol",
   referral: "bg-dash-fee-referral",
 };

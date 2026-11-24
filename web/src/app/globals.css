@@ -48,6 +48,7 @@
   --color-dash-run-out: #1798ad;
   /* Fee bars: the LPs' part, the protocol's, the referral's. */
   --color-dash-fee-lp: #987aee;
+  --color-dash-fee-compounding: #6642ca;
   --color-dash-fee-protocol: #1798ad;
   --color-dash-fee-referral: #b48a3c;
 

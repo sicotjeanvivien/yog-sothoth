@@ -32,6 +32,7 @@ import { axisOf, daysAgoOf, hourOf, readsClock, roundTicks } from "@/lib/overvie
 import type { Period } from "@/lib/overview/period";
 import {
   FEE_PARTS,
+  feePartsOf,
   feeSharesOf,
   feeSlotsOf,
   feeSumOf,
@@ -73,6 +74,8 @@ const CHART_LABEL = {
 /** The fields of the swap event each part sums. */
 const FIELDS: Record<FeePart, string> = {
   lp: "claiming_fee + compounding_fee",
+  claiming: "claiming_fee",
+  compounding: "compounding_fee",
   protocol: "protocol_fee",
   referral: "referral_fee",
 };
@@ -107,7 +110,7 @@ export async function FeesTab({ period, protocol }: TabProps) {
   );
 }
 
-async function FeeSplit({ period, protocol }: TabProps) {
+export async function FeeSplit({ period, protocol }: TabProps) {
   const t = await getTranslations("Dashboard.Protocol.fees");
   const tVolume = await getTranslations("Dashboard.Overview.volume");
   const tPeriod = await getTranslations("Dashboard.Overview.period");
@@ -138,6 +141,8 @@ async function FeeSplit({ period, protocol }: TabProps) {
   const slots = feeSlotsOf(swaps);
   const totals = feeTotalsOf(slots);
   const shares = totals === null ? null : feeSharesOf(totals);
+  const shown = feePartsOf(totals);
+  const unsplit = totals !== null && totals.lp !== null && shown.includes("lp");
   const max = Math.max(0, ...slots.map(feeSumOf));
   const scale = (v: number) => (max > 0 ? (v / max) * CHART_PX.top : 0);
   const daysAgo = (days: number) => (days === 0 ? tVolume("today") : tVolume("daysAgo", { days }));
@@ -148,7 +153,7 @@ async function FeeSplit({ period, protocol }: TabProps) {
     return {
       when,
       total: usd(parts === null ? null : feeSumOf(parts)),
-      rows: FEE_PARTS.map((part) => ({
+      rows: feePartsOf(parts).map((part) => ({
         tone: part,
         name: t(`parts.${part}`),
         value: usd(parts === null ? null : parts[part]),
@@ -167,7 +172,7 @@ async function FeeSplit({ period, protocol }: TabProps) {
     }
     const height = (v: number | null) => (v === null ? 0 : Math.max(v > 0 ? 1 : 0, Math.round(scale(v))));
     return {
-      segments: FEE_PARTS.map((part) => ({ tone: part, height: height(slot[part]) })).filter(
+      segments: feePartsOf(slot).map((part) => ({ tone: part, height: height(slot[part]) })).filter(
         (s) => s.height > 0,
       ),
       detail: detailOf(when, slot),
@@ -176,7 +181,7 @@ async function FeeSplit({ period, protocol }: TabProps) {
 
   const legend = (
     <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] text-dash-ink-2">
-      {FEE_PARTS.map((part) => (
+      {shown.map((part) => (
         <span key={part}>
           <span aria-hidden="true" className={`mr-1.5 inline-block h-2.5 w-2.5 align-[-1px] ${FEE_TONE[part]}`} />
           {t(`parts.${part}`)}
@@ -204,7 +209,7 @@ async function FeeSplit({ period, protocol }: TabProps) {
                 {t("share")}
               </div>
             </div>
-            {FEE_PARTS.map((part) => (
+            {shown.map((part) => (
               <div key={part} role="row" className={`${ROW_CLASS} ${DESTINATION_COLUMNS}`}>
                 <div role="cell" className="min-w-0">
                   <div className="text-dash-ink">
@@ -227,6 +232,7 @@ async function FeeSplit({ period, protocol }: TabProps) {
                 </div>
               </div>
             ))}
+            {unsplit && <p className="mt-3 text-[12px] text-dash-ink-2">{t("splitNotMeasured")}</p>}
           </div>
           <div>
             <p className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">

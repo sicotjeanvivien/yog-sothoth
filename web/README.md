@@ -400,16 +400,17 @@ covered, they say so instead of a partial count. The words are "rafale" and
 "rotation run": what is seen, never an intent.
 
 **03 Fees** — `protocol/fees/fees-tab.tsx`: where the protocol's fees go, the
-LPs' part (`claiming_fee + compounding_fee`), the protocol's and the referral's,
-read on `swaps/series` of the protocol and summed per bar by
-`lib/protocol/fees.ts`: per destination over the period, amount and share, and
-per bar stacked in the three tints (`dash-fee-*`), the bar under the pointer
-detailed under the chart. The three parts make the fees whole. Beside it, what the
+LPs' part — claimed (`claiming_fee`) and compounded into the pool (`compounding_fee`), from the
+row's `meteoraDammV2` — the protocol's and the referral's, read on `swaps/series` of the
+protocol and summed per bar by `lib/protocol/fees.ts`: per destination over the period, amount
+and share, and per bar stacked in their tints (`dash-fee-*`), the bar under the pointer detailed
+under the chart. The parts make the fees whole. A bar without the LPs' split keeps their part
+whole (`dash-fee-lp`); a period splits only if every bar with LP fees does, else the table keeps
+one LP row and says the split is not measured over the whole period. Beside it, what the
 LPs take back: the fees and the rewards claimed, valued, with their addresses
 (`position-fee-claims/totals`, `reward-claims/totals`), and nothing else: a share of the
 LPs' fees claimed would cross two routes, a rule the web does not hold. The claims are measured from a later hour
-than the swaps: until a window is covered, the block says so. The LPs' split between
-claiming and compounding is not drawn yet.
+than the swaps: until a window is covered, the block says so.
 
 **04 Pools & positions** — `protocol/pools/pools-tab.tsx`: the pools born over the
 period, bar by bar, from `pool-creations/series` of the protocol
