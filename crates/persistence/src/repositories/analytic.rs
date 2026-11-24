@@ -190,7 +190,6 @@ async fn upsert_pool_hourly(
             volume_in_a_usd, volume_in_b_usd, fees_usd, lp_fees_usd,
             protocol_fees_usd, referral_fees_usd, claiming_fees_usd, compounding_fees_usd
         )
-        -- ⚠️ The split by COUNT, not by SUM alone, which skips a tranche written before it.
         SELECT pool_address, time_bucket('1 hour', bucket), protocol,
                SUM(swap_count), bool_and(valued),
                CASE WHEN bool_and(valued) THEN SUM(volume_in_a_usd) END,
@@ -199,6 +198,7 @@ async fn upsert_pool_hourly(
                CASE WHEN bool_and(valued) THEN SUM(lp_fees_usd) END,
                CASE WHEN bool_and(valued) THEN SUM(protocol_fees_usd) END,
                CASE WHEN bool_and(valued) THEN SUM(referral_fees_usd) END,
+               -- ⚠️ The split by COUNT, not by SUM alone, which skips a tranche written before it.
                CASE WHEN bool_and(valued) AND COUNT(claiming_fees_usd) = COUNT(*)
                     THEN SUM(claiming_fees_usd) END,
                CASE WHEN bool_and(valued) AND COUNT(compounding_fees_usd) = COUNT(*)
