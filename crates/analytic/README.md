@@ -102,6 +102,14 @@ unresolved, the reward may be one of them. Without a price or decimals,
 `analytic_tranches.claims` marks the tranches written with their claims, and the first of them
 is when the claims started being measured.
 
+## The LPs' fee split
+
+A DAMM v2 tranche also carries its LPs' fees split between those **claimed** and those
+**compounded** into the pool: the compounded ones summed from the raw swaps in the same read as
+the rotation, valued at the prices per unit of the protocol's and the referral's, the claimed ones
+the LPs' fees left. The hour and the protocol keep the split only where every tranche or pool
+with LP fees has it. No backfill: the tranches written before it hold `NULL`, not measured.
+
 ## The rotation runs
 
 A tranche carries its **rotation**: what its quoted side — SOL, USDC or USDT — traded over

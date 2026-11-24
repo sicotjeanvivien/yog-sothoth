@@ -1,5 +1,7 @@
-//! The swaps of a scope over a period or a bucket; the row of a pool's `swaps/totals`, and the
-//! fields every other swap row flattens in. `poolHoursValued` of `poolHours` is the coverage.
+//! The swaps of a scope over a period or a bucket: the fields every swap row flattens in.
+//! `poolHoursValued` of `poolHours` is the coverage.
+
+mod meteora_damm_v2_response;
 
 use rust_decimal::Decimal;
 use serde::Serialize;
@@ -7,6 +9,8 @@ use utoipa::ToSchema;
 use yog_core::domain::SwapActivity;
 
 use crate::http::dto::schema::{Count, UnsignedDecimal};
+
+pub(crate) use meteora_damm_v2_response::SwapActivityMeteoraDammV2Response;
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

@@ -1,5 +1,6 @@
 //! PostgreSQL implementation of [`SwapActivityLookup`]: yog-analytic's protocol and pool hours, read
-//! over the period the caller built.
+//! over the period the caller built. ⚠️ The LPs' fee split is summed only where every row with LP
+//! fees has it: SUM alone would skip the rows written before it was measured.
 
 mod rows;
 
@@ -46,6 +47,10 @@ impl SwapActivityLookup for PgSwapActivityRepository {
                    SUM(h.lp_fees_usd) AS lp_fees_usd,
                    SUM(h.protocol_fees_usd) AS protocol_fees_usd,
                    SUM(h.referral_fees_usd) AS referral_fees_usd,
+                   CASE WHEN bool_and(h.claiming_fees_usd IS NOT NULL OR h.lp_fees_usd IS NULL) THEN SUM(h.claiming_fees_usd) END
+                       AS claiming_fees_usd,
+                   CASE WHEN bool_and(h.compounding_fees_usd IS NOT NULL OR h.lp_fees_usd IS NULL) THEN SUM(h.compounding_fees_usd) END
+                       AS compounding_fees_usd,
                    SUM(h.active_pools)::BIGINT AS "pool_hours!",
                    SUM(h.active_pools_valued)::BIGINT AS "pool_hours_valued!",
                    MAX(p.active_pools)::BIGINT AS pools
@@ -82,6 +87,7 @@ impl SwapActivityLookup for PgSwapActivityRepository {
             r#"
             SELECT protocol, bucket AS bucket_from, swap_count AS swaps,
                    volume_usd, fees_usd, lp_fees_usd, protocol_fees_usd, referral_fees_usd,
+                   claiming_fees_usd, compounding_fees_usd,
                    active_pools AS pool_hours, active_pools_valued AS pool_hours_valued
               FROM analytic_protocol_hourly
              WHERE bucket >= GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ) AND bucket < $2
@@ -115,6 +121,10 @@ impl SwapActivityLookup for PgSwapActivityRepository {
                    SUM(volume_usd) AS volume_usd, SUM(fees_usd) AS fees_usd,
                    SUM(lp_fees_usd) AS lp_fees_usd, SUM(protocol_fees_usd) AS protocol_fees_usd,
                    SUM(referral_fees_usd) AS referral_fees_usd,
+                   CASE WHEN bool_and(claiming_fees_usd IS NOT NULL OR lp_fees_usd IS NULL) THEN SUM(claiming_fees_usd) END
+                       AS claiming_fees_usd,
+                   CASE WHEN bool_and(compounding_fees_usd IS NOT NULL OR lp_fees_usd IS NULL) THEN SUM(compounding_fees_usd) END
+                       AS compounding_fees_usd,
                    SUM(active_pools)::BIGINT AS "pool_hours!",
                    SUM(active_pools_valued)::BIGINT AS "pool_hours_valued!"
               FROM (
@@ -162,6 +172,12 @@ impl SwapActivityLookup for PgSwapActivityRepository {
                        AS protocol_fees_usd,
                    CASE WHEN COUNT(f.pool_address) = 0 THEN 0 ELSE SUM(f.referral_fees_usd) END
                        AS referral_fees_usd,
+                   CASE WHEN COUNT(f.pool_address) = 0 THEN 0
+                        WHEN bool_and(f.claiming_fees_usd IS NOT NULL OR f.lp_fees_usd IS NULL)
+                        THEN SUM(f.claiming_fees_usd) END AS claiming_fees_usd,
+                   CASE WHEN COUNT(f.pool_address) = 0 THEN 0
+                        WHEN bool_and(f.compounding_fees_usd IS NOT NULL OR f.lp_fees_usd IS NULL)
+                        THEN SUM(f.compounding_fees_usd) END AS compounding_fees_usd,
                    COUNT(f.pool_address) AS "pool_hours!",
                    COUNT(f.pool_address) FILTER (WHERE f.valued) AS "pool_hours_valued!",
                    COUNT(DISTINCT f.pool_address) AS pools
@@ -203,6 +219,10 @@ impl SwapActivityLookup for PgSwapActivityRepository {
                        AS protocol_fees_usd,
                    CASE WHEN a.bucket IS NULL THEN 0 ELSE a.referral_fees_usd END
                        AS referral_fees_usd,
+                   CASE WHEN a.bucket IS NULL THEN 0 ELSE a.claiming_fees_usd END
+                       AS claiming_fees_usd,
+                   CASE WHEN a.bucket IS NULL THEN 0 ELSE a.compounding_fees_usd END
+                       AS compounding_fees_usd,
                    COALESCE(a.pools, 0)::BIGINT AS "pool_hours!",
                    COALESCE(a.pools_valued, 0)::BIGINT AS "pool_hours_valued!"
               FROM generate_series(GREATEST($1::TIMESTAMPTZ, $3::TIMESTAMPTZ),
@@ -215,6 +235,10 @@ impl SwapActivityLookup for PgSwapActivityRepository {
                          SUM(fees_usd) AS fees_usd, SUM(lp_fees_usd) AS lp_fees_usd,
                          SUM(protocol_fees_usd) AS protocol_fees_usd,
                          SUM(referral_fees_usd) AS referral_fees_usd,
+                         CASE WHEN bool_and(claiming_fees_usd IS NOT NULL OR lp_fees_usd IS NULL) THEN SUM(claiming_fees_usd) END
+                             AS claiming_fees_usd,
+                         CASE WHEN bool_and(compounding_fees_usd IS NOT NULL OR lp_fees_usd IS NULL) THEN SUM(compounding_fees_usd) END
+                             AS compounding_fees_usd,
                          COUNT(*) AS pools, COUNT(*) FILTER (WHERE valued) AS pools_valued
                     FROM analytic_pool_5min
                    WHERE bucket >= $1 AND bucket < $2
@@ -251,11 +275,11 @@ impl SwapActivityLookup for PgSwapActivityRepository {
             seen AS (
                 -- ⚠️ From its first fact when earlier: an event indexed late can precede `first_seen_at`.
                 SELECT LEAST(date_trunc('hour', first_seen_at), (SELECT MIN(bucket) FROM facts))
-                           AS since
+                           AS since, protocol
                   FROM pools
                  WHERE pool_address = $3 AND protocol = ANY($4::TEXT[])
             )
-            SELECT COALESCE(SUM(f.swap_count), 0)::BIGINT AS "swaps!",
+            SELECT MAX(seen.protocol) AS "protocol!", COALESCE(SUM(f.swap_count), 0)::BIGINT AS "swaps!",
                    CASE WHEN COUNT(f.bucket) = 0 THEN 0
                         ELSE SUM(f.volume_in_a_usd + f.volume_in_b_usd) END AS volume_usd,
                    CASE WHEN COUNT(f.bucket) = 0 THEN 0 ELSE SUM(f.fees_usd) END AS fees_usd,
@@ -264,6 +288,12 @@ impl SwapActivityLookup for PgSwapActivityRepository {
                         ELSE SUM(f.protocol_fees_usd) END AS protocol_fees_usd,
                    CASE WHEN COUNT(f.bucket) = 0 THEN 0
                         ELSE SUM(f.referral_fees_usd) END AS referral_fees_usd,
+                   CASE WHEN COUNT(f.bucket) = 0 THEN 0
+                        WHEN bool_and(f.claiming_fees_usd IS NOT NULL OR f.lp_fees_usd IS NULL)
+                        THEN SUM(f.claiming_fees_usd) END AS claiming_fees_usd,
+                   CASE WHEN COUNT(f.bucket) = 0 THEN 0
+                        WHEN bool_and(f.compounding_fees_usd IS NOT NULL OR f.lp_fees_usd IS NULL)
+                        THEN SUM(f.compounding_fees_usd) END AS compounding_fees_usd,
                    COUNT(f.bucket) AS "pool_hours!",
                    COUNT(f.bucket) FILTER (WHERE f.valued) AS "pool_hours_valued!"
               FROM seen
@@ -299,11 +329,12 @@ impl SwapActivityLookup for PgSwapActivityRepository {
             seen AS (
                 -- ⚠️ From its first fact when earlier: an event indexed late can precede `first_seen_at`.
                 SELECT LEAST(date_trunc('hour', first_seen_at), (SELECT MIN(bucket) FROM facts))
-                           AS since
+                           AS since, protocol
                   FROM pools
                  WHERE pool_address = $4 AND protocol = ANY($5::TEXT[])
             )
-            SELECT h.bucket AS bucket_from, COALESCE(f.swap_count, 0) AS "swaps!",
+            SELECT h.bucket AS bucket_from, seen.protocol AS "protocol!",
+                   COALESCE(f.swap_count, 0) AS "swaps!",
                    CASE WHEN f.bucket IS NULL THEN 0
                         ELSE f.volume_in_a_usd + f.volume_in_b_usd END AS volume_usd,
                    CASE WHEN f.bucket IS NULL THEN 0 ELSE f.fees_usd END AS fees_usd,
@@ -312,6 +343,10 @@ impl SwapActivityLookup for PgSwapActivityRepository {
                        AS protocol_fees_usd,
                    CASE WHEN f.bucket IS NULL THEN 0 ELSE f.referral_fees_usd END
                        AS referral_fees_usd,
+                   CASE WHEN f.bucket IS NULL THEN 0 ELSE f.claiming_fees_usd END
+                       AS claiming_fees_usd,
+                   CASE WHEN f.bucket IS NULL THEN 0 ELSE f.compounding_fees_usd END
+                       AS compounding_fees_usd,
                    (CASE WHEN f.bucket IS NULL THEN 0 ELSE 1 END)::BIGINT AS "pool_hours!",
                    (CASE WHEN f.valued THEN 1 ELSE 0 END)::BIGINT AS "pool_hours_valued!"
               FROM seen
@@ -349,12 +384,13 @@ impl SwapActivityLookup for PgSwapActivityRepository {
             seen AS (
                 -- ⚠️ From its first fact when earlier: an event indexed late can precede `first_seen_at`.
                 SELECT LEAST(date_trunc('hour', first_seen_at), (SELECT MIN(bucket) FROM facts))
-                           AS since
+                           AS since, protocol
                   FROM pools
                  WHERE pool_address = $4 AND protocol = ANY($5::TEXT[])
             )
             SELECT time_bucket($6::INTERVAL, h.bucket, origin => $2::TIMESTAMPTZ)
                        AS "bucket_from!",
+                   seen.protocol AS "protocol!",
                    COALESCE(SUM(f.swap_count), 0)::BIGINT AS "swaps!",
                    CASE WHEN COUNT(f.bucket) = 0 THEN 0
                         ELSE SUM(f.volume_in_a_usd + f.volume_in_b_usd) END AS volume_usd,
@@ -364,6 +400,12 @@ impl SwapActivityLookup for PgSwapActivityRepository {
                         ELSE SUM(f.protocol_fees_usd) END AS protocol_fees_usd,
                    CASE WHEN COUNT(f.bucket) = 0 THEN 0
                         ELSE SUM(f.referral_fees_usd) END AS referral_fees_usd,
+                   CASE WHEN COUNT(f.bucket) = 0 THEN 0
+                        WHEN bool_and(f.claiming_fees_usd IS NOT NULL OR f.lp_fees_usd IS NULL)
+                        THEN SUM(f.claiming_fees_usd) END AS claiming_fees_usd,
+                   CASE WHEN COUNT(f.bucket) = 0 THEN 0
+                        WHEN bool_and(f.compounding_fees_usd IS NOT NULL OR f.lp_fees_usd IS NULL)
+                        THEN SUM(f.compounding_fees_usd) END AS compounding_fees_usd,
                    COUNT(f.bucket) AS "pool_hours!",
                    COUNT(f.bucket) FILTER (WHERE f.valued) AS "pool_hours_valued!"
               FROM seen
@@ -371,7 +413,7 @@ impl SwapActivityLookup for PgSwapActivityRepository {
               LEFT JOIN facts f ON f.bucket = h.bucket
              WHERE h.bucket >= $1 AND h.bucket < $2
                AND time_bucket($6::INTERVAL, h.bucket, origin => $2::TIMESTAMPTZ) >= $3
-             GROUP BY 1
+             GROUP BY 1, seen.protocol
              ORDER BY 1
             "#,
             period.from,
@@ -402,11 +444,11 @@ impl SwapActivityLookup for PgSwapActivityRepository {
             seen AS (
                 -- ⚠️ From its first fact when earlier: an event indexed late can precede `first_seen_at`.
                 SELECT LEAST(time_bucket('5 minutes', first_seen_at), (SELECT MIN(bucket) FROM facts))
-                           AS since
+                           AS since, protocol
                   FROM pools
                  WHERE pool_address = $3 AND protocol = ANY($4::TEXT[])
             )
-            SELECT COALESCE(SUM(f.swap_count), 0)::BIGINT AS "swaps!",
+            SELECT MAX(seen.protocol) AS "protocol!", COALESCE(SUM(f.swap_count), 0)::BIGINT AS "swaps!",
                    CASE WHEN COUNT(f.bucket) = 0 THEN 0
                         ELSE SUM(f.volume_in_a_usd + f.volume_in_b_usd) END AS volume_usd,
                    CASE WHEN COUNT(f.bucket) = 0 THEN 0 ELSE SUM(f.fees_usd) END AS fees_usd,
@@ -415,6 +457,12 @@ impl SwapActivityLookup for PgSwapActivityRepository {
                         ELSE SUM(f.protocol_fees_usd) END AS protocol_fees_usd,
                    CASE WHEN COUNT(f.bucket) = 0 THEN 0
                         ELSE SUM(f.referral_fees_usd) END AS referral_fees_usd,
+                   CASE WHEN COUNT(f.bucket) = 0 THEN 0
+                        WHEN bool_and(f.claiming_fees_usd IS NOT NULL OR f.lp_fees_usd IS NULL)
+                        THEN SUM(f.claiming_fees_usd) END AS claiming_fees_usd,
+                   CASE WHEN COUNT(f.bucket) = 0 THEN 0
+                        WHEN bool_and(f.compounding_fees_usd IS NOT NULL OR f.lp_fees_usd IS NULL)
+                        THEN SUM(f.compounding_fees_usd) END AS compounding_fees_usd,
                    COUNT(f.bucket) AS "pool_hours!",
                    COUNT(f.bucket) FILTER (WHERE f.valued) AS "pool_hours_valued!"
               FROM seen
@@ -449,11 +497,12 @@ impl SwapActivityLookup for PgSwapActivityRepository {
             seen AS (
                 -- ⚠️ From its first fact when earlier: an event indexed late can precede `first_seen_at`.
                 SELECT LEAST(time_bucket('5 minutes', first_seen_at), (SELECT MIN(bucket) FROM facts))
-                           AS since
+                           AS since, protocol
                   FROM pools
                  WHERE pool_address = $4 AND protocol = ANY($5::TEXT[])
             )
-            SELECT h.bucket AS bucket_from, COALESCE(f.swap_count, 0) AS "swaps!",
+            SELECT h.bucket AS bucket_from, seen.protocol AS "protocol!",
+                   COALESCE(f.swap_count, 0) AS "swaps!",
                    CASE WHEN f.bucket IS NULL THEN 0
                         ELSE f.volume_in_a_usd + f.volume_in_b_usd END AS volume_usd,
                    CASE WHEN f.bucket IS NULL THEN 0 ELSE f.fees_usd END AS fees_usd,
@@ -462,6 +511,10 @@ impl SwapActivityLookup for PgSwapActivityRepository {
                        AS protocol_fees_usd,
                    CASE WHEN f.bucket IS NULL THEN 0 ELSE f.referral_fees_usd END
                        AS referral_fees_usd,
+                   CASE WHEN f.bucket IS NULL THEN 0 ELSE f.claiming_fees_usd END
+                       AS claiming_fees_usd,
+                   CASE WHEN f.bucket IS NULL THEN 0 ELSE f.compounding_fees_usd END
+                       AS compounding_fees_usd,
                    (CASE WHEN f.bucket IS NULL THEN 0 ELSE 1 END)::BIGINT AS "pool_hours!",
                    (CASE WHEN f.valued THEN 1 ELSE 0 END)::BIGINT AS "pool_hours_valued!"
               FROM seen

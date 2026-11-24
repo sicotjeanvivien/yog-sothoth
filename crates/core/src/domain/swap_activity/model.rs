@@ -26,6 +26,16 @@ pub struct SwapActivity {
     pub referral_fees_usd: Option<Decimal>,
     pub pool_hours: i64,
     pub pool_hours_valued: i64,
+    /// `Some` in a DAMM v2 protocol's or pool's row only, never in the protocols summed.
+    pub meteora_damm_v2: Option<MeteoraDammV2LpFeeSplit>,
+}
+
+/// The LPs' fees of DAMM v2, split between those claimed and those compounded into the pool;
+/// each `None` where not measured. Their sum is `lp_fees_usd`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MeteoraDammV2LpFeeSplit {
+    pub claiming_fees_usd: Option<Decimal>,
+    pub compounding_fees_usd: Option<Decimal>,
 }
 
 /// One protocol's swaps over a period, with its pools that swapped in it.
@@ -64,6 +74,7 @@ impl SwapActivity {
                         referral_fees_usd: usd(|a| a.referral_fees_usd),
                         pool_hours: values.iter().map(|value| value.pool_hours).sum(),
                         pool_hours_valued: values.iter().map(|value| value.pool_hours_valued).sum(),
+                        meteora_damm_v2: None,
                     },
                 }
             })
@@ -105,6 +116,7 @@ impl ProtocolSwapActivity {
                 referral_fees_usd: usd(|a| a.referral_fees_usd),
                 pool_hours: rows.iter().map(|row| row.activity.pool_hours).sum(),
                 pool_hours_valued: rows.iter().map(|row| row.activity.pool_hours_valued).sum(),
+                meteora_damm_v2: None,
             },
             pools: rows.iter().map(|row| row.pools).sum(),
         })

@@ -292,12 +292,15 @@
         "info": "Every swap pays fees. Most go to the liquidity providers (LPs), paid out or reinvested in the pool; a part goes to the protocol, and sometimes a part to a referrer.",
         "parts": {
           "lp": "LP",
+          "claiming": "LP — claiming",
+          "compounding": "LP — compounding",
           "protocol": "Protocol",
           "referral": "Referral"
         },
         "tableLabel": "Fees by destination over the period",
         "destination": "Destination",
         "share": "Share",
+        "splitNotMeasured": "Claiming / compounding split not yet measured over the whole period.",
         "total": "{total} in total",
         "noValue": "no valued fees",
         "periodTotal": "Total over {period}",

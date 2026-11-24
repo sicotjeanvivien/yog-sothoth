@@ -12,11 +12,17 @@ WITH tranche AS (
       LEFT JOIN token_metadata tmb ON tmb.mint = p.token_b_mint::TEXT
      WHERE s.bucket = $1
 ),
--- What each side traded over its mean reserve, from the raw swaps: the aggregate keeps no reserve.
-turnover AS (
+-- From the raw swaps, which the aggregate does not sum so: what each side traded over its mean
+-- reserve, and the LPs' fees compounded, split as the aggregate splits the others.
+raw AS (
     SELECT pool_address,
            SUM(amount_a)::NUMERIC / NULLIF(AVG(reserve_a_after), 0) AS rotation_a,
-           SUM(amount_b)::NUMERIC / NULLIF(AVG(reserve_b_after), 0) AS rotation_b
+           SUM(amount_b)::NUMERIC / NULLIF(AVG(reserve_b_after), 0) AS rotation_b,
+           COALESCE(SUM(compounding_fee) FILTER (WHERE fee_token_is_a), 0) AS compounding_in_a,
+           COALESCE(SUM(compounding_fee) FILTER (WHERE NOT fee_token_is_a), 0) AS compounding_in_b,
+           COALESCE(SUM(compounding_fee)
+                        FILTER (WHERE trade_direction = 'b_to_a' AND NOT fee_token_is_a), 0)
+               AS compounding_in_b_on_buys
       FROM meteora_damm_v2_swap_events
      WHERE timestamp >= $1 AND timestamp < $1::TIMESTAMPTZ + $3::INTERVAL
      GROUP BY pool_address
@@ -99,12 +105,14 @@ prices AS (
 INSERT INTO analytic_pool_5min (
     pool_address, bucket, protocol, swap_count, valued,
     volume_in_a_usd, volume_in_b_usd, fees_usd, lp_fees_usd,
-    protocol_fees_usd, referral_fees_usd, rotation
+    protocol_fees_usd, referral_fees_usd, rotation, claiming_fees_usd, compounding_fees_usd
 )
 SELECT pool_address, $1, $2, swap_count, valued,
        volume_in_a_usd, volume_in_b_usd, fees_usd,
        fees_usd - protocol_fees_usd - referral_fees_usd,
-       protocol_fees_usd, referral_fees_usd, rotation
+       protocol_fees_usd, referral_fees_usd, rotation,
+       fees_usd - protocol_fees_usd - referral_fees_usd - compounding_fees_usd,
+       compounding_fees_usd
   FROM (
     SELECT t.pool_address, t.swap_count, v.valued,
            -- ⚠️ Both sides quoted, or neither: the smaller, so the thinner side does not mark.
@@ -126,10 +134,16 @@ SELECT pool_address, $1, $2, swap_count, valued,
            CASE WHEN v.valued THEN
                COALESCE(t.referral_fee_in_a, 0) * u.per_a
              + sold.referral_b * u.sale_b + COALESCE(t.referral_fee_in_b_on_buys, 0) * u.buy_b
-           END AS referral_fees_usd
+           END AS referral_fees_usd,
+           -- ⚠️ Without its raw swaps, `r` is NULL: unknown.
+           CASE WHEN v.valued THEN
+               r.compounding_in_a * u.per_a
+             + (r.compounding_in_b - r.compounding_in_b_on_buys) * u.sale_b
+             + r.compounding_in_b_on_buys * u.buy_b
+           END AS compounding_fees_usd
       FROM tranche t
       JOIN quoted q ON q.pool_address = t.pool_address
-      LEFT JOIN turnover r ON r.pool_address = t.pool_address
+      LEFT JOIN raw r ON r.pool_address = t.pool_address
      -- ⚠️ A→B always pays its fee on the output, in B; B→A pays it in A in a BothToken
      -- pool, else on its input in B: the sales' B fees are what the buys' leave.
      CROSS JOIN LATERAL (

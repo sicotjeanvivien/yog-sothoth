@@ -292,12 +292,15 @@
         "info": "Chaque échange paie des fees. La plus grande part revient aux déposants (LP), versée à part ou réinvestie dans la pool ; une part revient au protocole, et parfois une part à un apporteur d'affaires (referral).",
         "parts": {
           "lp": "LP",
+          "claiming": "LP — claiming",
+          "compounding": "LP — compounding",
           "protocol": "Protocole",
           "referral": "Referral"
         },
         "tableLabel": "Fees par destination sur la période",
         "destination": "Destination",
         "share": "Part",
+        "splitNotMeasured": "Partage claiming / compounding pas encore mesuré sur toute la période.",
         "total": "{total} au total",
         "noValue": "aucune fee valorisée",
         "periodTotal": "Total sur {period}",

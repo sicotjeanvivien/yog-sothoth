@@ -6,7 +6,7 @@ use utoipa::ToSchema;
 use yog_core::domain::{ProtocolBucket, SwapActivity};
 
 use super::protocol::ProtocolResponse;
-use super::swap_activity::SwapActivityResponse;
+use super::swap_activity::{SwapActivityMeteoraDammV2Response, SwapActivityResponse};
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -15,13 +15,17 @@ pub(crate) struct ProtocolSwapActivityBucketResponse {
     from: DateTime<Utc>,
     #[serde(flatten)]
     activity: SwapActivityResponse,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    meteora_damm_v2: Option<SwapActivityMeteoraDammV2Response>,
 }
 
 impl From<ProtocolBucket<SwapActivity>> for ProtocolSwapActivityBucketResponse {
-    fn from(b: ProtocolBucket<SwapActivity>) -> Self {
+    fn from(mut b: ProtocolBucket<SwapActivity>) -> Self {
         Self {
             protocol: b.protocol.into(),
             from: b.from,
+            meteora_damm_v2: b.value.meteora_damm_v2.take().map(Into::into),
             activity: b.value.into(),
         }
     }

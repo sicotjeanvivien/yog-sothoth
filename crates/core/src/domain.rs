@@ -160,8 +160,8 @@ pub use signals::{
     SignalValueUnit,
 };
 pub use swap_activity::{
-    PoolSwapBucket, ProtocolSwapActivity, SwapActivity, SwapActivityLookup, SwapActivityTotal,
-    SwapBucket,
+    MeteoraDammV2LpFeeSplit, PoolSwapBucket, ProtocolSwapActivity, SwapActivity,
+    SwapActivityLookup, SwapActivityTotal, SwapBucket,
 };
 pub use swap_event::{SwapEvent, SwapEventLookup};
 pub use swap_flow::{PoolSwapFlow, SwapFlowRepository};

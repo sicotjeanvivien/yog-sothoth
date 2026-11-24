@@ -188,7 +188,7 @@ async fn upsert_pool_hourly(
         INSERT INTO analytic_pool_hourly (
             pool_address, bucket, protocol, swap_count, valued,
             volume_in_a_usd, volume_in_b_usd, fees_usd, lp_fees_usd,
-            protocol_fees_usd, referral_fees_usd
+            protocol_fees_usd, referral_fees_usd, claiming_fees_usd, compounding_fees_usd
         )
         SELECT pool_address, time_bucket('1 hour', bucket), protocol,
                SUM(swap_count), bool_and(valued),
@@ -197,7 +197,12 @@ async fn upsert_pool_hourly(
                CASE WHEN bool_and(valued) THEN SUM(fees_usd) END,
                CASE WHEN bool_and(valued) THEN SUM(lp_fees_usd) END,
                CASE WHEN bool_and(valued) THEN SUM(protocol_fees_usd) END,
-               CASE WHEN bool_and(valued) THEN SUM(referral_fees_usd) END
+               CASE WHEN bool_and(valued) THEN SUM(referral_fees_usd) END,
+               -- ⚠️ The split by COUNT, not by SUM alone, which skips a tranche written before it.
+               CASE WHEN bool_and(valued) AND COUNT(claiming_fees_usd) = COUNT(*)
+                    THEN SUM(claiming_fees_usd) END,
+               CASE WHEN bool_and(valued) AND COUNT(compounding_fees_usd) = COUNT(*)
+                    THEN SUM(compounding_fees_usd) END
           FROM analytic_pool_5min
          WHERE bucket >= $1 AND bucket < $2::TIMESTAMPTZ + INTERVAL '1 hour'
          GROUP BY pool_address, time_bucket('1 hour', bucket), protocol
@@ -210,7 +215,9 @@ async fn upsert_pool_hourly(
             fees_usd          = EXCLUDED.fees_usd,
             lp_fees_usd       = EXCLUDED.lp_fees_usd,
             protocol_fees_usd = EXCLUDED.protocol_fees_usd,
-            referral_fees_usd = EXCLUDED.referral_fees_usd
+            referral_fees_usd = EXCLUDED.referral_fees_usd,
+            claiming_fees_usd    = EXCLUDED.claiming_fees_usd,
+            compounding_fees_usd = EXCLUDED.compounding_fees_usd
         "#,
         from,
         through,
@@ -235,7 +242,7 @@ async fn upsert_protocol_hourly(
         r#"
         INSERT INTO analytic_protocol_hourly (
             protocol, bucket, volume_usd, fees_usd, lp_fees_usd,
-            protocol_fees_usd, referral_fees_usd,
+            protocol_fees_usd, referral_fees_usd, claiming_fees_usd, compounding_fees_usd,
             swap_count, active_pools, active_pools_valued
         )
         -- ⚠️ 0 only for an hour without any pool: one whose pools are all unvalued sums to NULL.
@@ -245,6 +252,8 @@ async fn upsert_protocol_hourly(
                CASE WHEN a.bucket IS NULL THEN 0 ELSE a.lp_fees_usd END,
                CASE WHEN a.bucket IS NULL THEN 0 ELSE a.protocol_fees_usd END,
                CASE WHEN a.bucket IS NULL THEN 0 ELSE a.referral_fees_usd END,
+               CASE WHEN a.bucket IS NULL THEN 0 ELSE a.claiming_fees_usd END,
+               CASE WHEN a.bucket IS NULL THEN 0 ELSE a.compounding_fees_usd END,
                COALESCE(a.swap_count, 0), COALESCE(a.active_pools, 0),
                COALESCE(a.active_pools_valued, 0)
           FROM generate_series($1::TIMESTAMPTZ, $2::TIMESTAMPTZ, INTERVAL '1 hour') AS h (bucket)
@@ -255,6 +264,11 @@ async fn upsert_protocol_hourly(
                      SUM(fees_usd) AS fees_usd, SUM(lp_fees_usd) AS lp_fees_usd,
                      SUM(protocol_fees_usd) AS protocol_fees_usd,
                      SUM(referral_fees_usd) AS referral_fees_usd,
+                     -- ⚠️ Unknown as soon as a pool's LP fees lack it: SUM alone would skip it.
+                     CASE WHEN bool_and(claiming_fees_usd IS NOT NULL OR lp_fees_usd IS NULL)
+                          THEN SUM(claiming_fees_usd) END AS claiming_fees_usd,
+                     CASE WHEN bool_and(compounding_fees_usd IS NOT NULL OR lp_fees_usd IS NULL)
+                          THEN SUM(compounding_fees_usd) END AS compounding_fees_usd,
                      SUM(swap_count) AS swap_count, COUNT(*) AS active_pools,
                      COUNT(*) FILTER (WHERE valued) AS active_pools_valued
                 FROM analytic_pool_hourly
@@ -267,6 +281,8 @@ async fn upsert_protocol_hourly(
             lp_fees_usd         = EXCLUDED.lp_fees_usd,
             protocol_fees_usd   = EXCLUDED.protocol_fees_usd,
             referral_fees_usd   = EXCLUDED.referral_fees_usd,
+            claiming_fees_usd   = EXCLUDED.claiming_fees_usd,
+            compounding_fees_usd = EXCLUDED.compounding_fees_usd,
             swap_count          = EXCLUDED.swap_count,
             active_pools        = EXCLUDED.active_pools,
             active_pools_valued = EXCLUDED.active_pools_valued

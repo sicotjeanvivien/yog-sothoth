@@ -806,6 +806,11 @@ by 6 or 24 hours the same, a slice split only whole.
 `tests/rotation_runs.rs` holds the period, both orders, the symbols, the totals, the split bars
 and the coverage.
 
+**The LPs' fee split (055).** The tranche statement also writes `claiming_fees_usd` and
+`compounding_fees_usd`, from the raw swaps; the hourly upserts and `swap_activity.rs` sum them only
+where every row with LP fees has them (`NULL` on the rows written before 055, never backfilled), an
+hour or a tranche without a fact at 0. `tests/lp_fee_split.rs` holds the writes and the ten reads.
+
 Still reading market prices outside the table: the liquidity
 (`meteora_damm_v2_pool_hourly_liquidity_flow`,
 `meteora_damm_v2_liquidity_events_valued`) and the TVL (`pool_current_tvl`).

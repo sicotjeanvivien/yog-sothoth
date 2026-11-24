@@ -1,7 +1,7 @@
 use chrono::{TimeZone, Utc};
 use rust_decimal::Decimal;
 
-use super::{ProtocolSwapActivity, SwapActivity};
+use super::{MeteoraDammV2LpFeeSplit, ProtocolSwapActivity, SwapActivity};
 use crate::domain::{Protocol, ProtocolBucket};
 
 fn activity(volume: Option<i64>) -> SwapActivity {
@@ -14,6 +14,7 @@ fn activity(volume: Option<i64>) -> SwapActivity {
         referral_fees_usd: Some(Decimal::ZERO),
         pool_hours: 10,
         pool_hours_valued: 8,
+        meteora_damm_v2: None,
     }
 }
 
@@ -142,4 +143,33 @@ fn a_sum_that_overflows_is_unknown() {
         SwapActivity::bucket_totals(&rows)[0].activity.volume_usd,
         None
     );
+}
+
+/// Mutation: the DAMM v2 split kept in the protocols summed — a `total` row carrying one protocol's block.
+#[test]
+fn the_protocols_summed_carry_no_protocol_block() {
+    let split = Some(MeteoraDammV2LpFeeSplit {
+        claiming_fees_usd: Some(Decimal::ONE),
+        compounding_fees_usd: Some(Decimal::ZERO),
+    });
+    let damm = SwapActivity {
+        meteora_damm_v2: split,
+        ..activity(Some(3))
+    };
+
+    let total = ProtocolSwapActivity::total(&[ProtocolSwapActivity {
+        protocol: Protocol::MeteoraDammV2,
+        activity: damm.clone(),
+        pools: None,
+    }])
+    .unwrap();
+    assert_eq!(total.activity.meteora_damm_v2, None);
+
+    let at = Utc.with_ymd_and_hms(2026, 11, 24, 3, 0, 0).unwrap();
+    let buckets = SwapActivity::bucket_totals(&[ProtocolBucket {
+        protocol: Protocol::MeteoraDammV2,
+        from: at,
+        value: damm,
+    }]);
+    assert_eq!(buckets[0].activity.meteora_damm_v2, None);
 }

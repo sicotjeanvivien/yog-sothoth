@@ -1,0 +1,110 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH facts AS MATERIALIZED (\n                SELECT * FROM analytic_pool_hourly\n                 WHERE pool_address = $4 AND bucket >= $1 AND bucket < $2\n            ),\n            seen AS (\n                -- ⚠️ From its first fact when earlier: an event indexed late can precede `first_seen_at`.\n                SELECT LEAST(date_trunc('hour', first_seen_at), (SELECT MIN(bucket) FROM facts))\n                           AS since, protocol\n                  FROM pools\n                 WHERE pool_address = $4 AND protocol = ANY($5::TEXT[])\n            )\n            SELECT time_bucket($6::INTERVAL, h.bucket, origin => $2::TIMESTAMPTZ)\n                       AS \"bucket_from!\",\n                   seen.protocol AS \"protocol!\",\n                   COALESCE(SUM(f.swap_count), 0)::BIGINT AS \"swaps!\",\n                   CASE WHEN COUNT(f.bucket) = 0 THEN 0\n                        ELSE SUM(f.volume_in_a_usd + f.volume_in_b_usd) END AS volume_usd,\n                   CASE WHEN COUNT(f.bucket) = 0 THEN 0 ELSE SUM(f.fees_usd) END AS fees_usd,\n                   CASE WHEN COUNT(f.bucket) = 0 THEN 0 ELSE SUM(f.lp_fees_usd) END AS lp_fees_usd,\n                   CASE WHEN COUNT(f.bucket) = 0 THEN 0\n                        ELSE SUM(f.protocol_fees_usd) END AS protocol_fees_usd,\n                   CASE WHEN COUNT(f.bucket) = 0 THEN 0\n                        ELSE SUM(f.referral_fees_usd) END AS referral_fees_usd,\n                   CASE WHEN COUNT(f.bucket) = 0 THEN 0\n                        WHEN bool_and(f.claiming_fees_usd IS NOT NULL OR f.lp_fees_usd IS NULL)\n                        THEN SUM(f.claiming_fees_usd) END AS claiming_fees_usd,\n                   CASE WHEN COUNT(f.bucket) = 0 THEN 0\n                        WHEN bool_and(f.compounding_fees_usd IS NOT NULL OR f.lp_fees_usd IS NULL)\n                        THEN SUM(f.compounding_fees_usd) END AS compounding_fees_usd,\n                   COUNT(f.bucket) AS \"pool_hours!\",\n                   COUNT(f.bucket) FILTER (WHERE f.valued) AS \"pool_hours_valued!\"\n              FROM seen\n              JOIN analytic_hours h ON h.bucket >= seen.since\n              LEFT JOIN facts f ON f.bucket = h.bucket\n             WHERE h.bucket >= $1 AND h.bucket < $2\n               AND time_bucket($6::INTERVAL, h.bucket, origin => $2::TIMESTAMPTZ) >= $3\n             GROUP BY 1, seen.protocol\n             ORDER BY 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bucket_from!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "protocol!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "pools",
+            "name": "protocol"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "swaps!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "volume_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "lp_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "protocol_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "referral_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "claiming_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
+        "name": "compounding_fees_usd",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 10,
+        "name": "pool_hours!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 11,
+        "name": "pool_hours_valued!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "TextArray",
+        "Interval"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "c263f2dbe401a07605271eae22ded98f6a40bc529bedc5253f6a0023c66eff62"
+}
