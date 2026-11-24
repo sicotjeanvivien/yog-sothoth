@@ -10,7 +10,7 @@ export function signalHeadline(signal: SignalResponse, locale: string, t: Headli
   // ⚠️ Isolated (FSI…PDI): a right-to-left symbol would otherwise reverse the whole line.
   const pair =
     signal.tokenA.symbol !== null && signal.tokenB.symbol !== null
-      ? `⁨${signal.tokenA.symbol}⁩ / ⁨${signal.tokenB.symbol}⁩`
+      ? `\u2068${signal.tokenA.symbol}\u2069 / \u2068${signal.tokenB.symbol}\u2069`
       : formatShortAddress(signal.poolAddress);
   const value = formatSignalValue(signal, locale);
   return KNOWN_DETECTORS.has(signal.detector)

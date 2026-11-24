@@ -3,6 +3,7 @@
  * severity, read when the page opens. The page's period does not apply, and the tab says so.
  */
 
+import { Suspense } from "react";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import {
@@ -13,7 +14,7 @@ import {
   ROW_CLASS,
   SEGMENT_CLASS,
 } from "@/components/dashboard/overview/overview-layout";
-import { BlockFailed } from "@/components/dashboard/overview/overview-states";
+import { BlockFailed, BlockSkeleton } from "@/components/dashboard/overview/overview-states";
 import { SeverityBadge } from "@/components/dashboard/signals/severity-badge";
 import {
   formatSignalThreshold,
@@ -29,18 +30,20 @@ import type {
   SeverityResponse,
 } from "@/lib/api/schema/zod.gen";
 import { fetchProtocolSignals, SIGNALS_PAGE_SIZE } from "@/lib/api/server/signals";
-import { formatUtcMoment, type FormatLocale } from "@/lib/format/date";
+import { formatAbsolute, type FormatLocale } from "@/lib/format/date";
 import { pageQuery, type Period } from "@/lib/overview/period";
 import { signalsQueryParams, type SignalsQuery } from "@/lib/protocol/signals-query";
 import { tabQuery } from "@/lib/protocol/tabs";
 
 const FILTERS: readonly (SeverityResponse | null)[] = [null, "critical", "warning", "info"];
 
-const COLUMNS = "grid-cols-[76px_140px_minmax(0,1fr)_140px]";
+const COLUMNS = "grid-cols-[76px_148px_minmax(0,1fr)_140px]";
 
 const ON_CLASS = `${SEGMENT_CLASS} bg-dash-accent font-semibold text-dash-surface`;
 
 const LINK_CLASS = `${SEGMENT_CLASS} text-dash-ink-2 hover:bg-dash-surface hover:text-dash-ink`;
+
+const SKELETON_ROWS = 8;
 
 const OFF_CLASS = `${SEGMENT_CLASS} text-dash-ink-3/60`;
 
@@ -53,7 +56,22 @@ type TabProps = {
   query: SignalsQuery;
 };
 
-export async function SignalsTab({ protocol, pathname, period, query }: TabProps) {
+/** Waits for its list alone: the page's header, KPIs and tabs render first. */
+export function SignalsTab(props: TabProps) {
+  const { severity, page } = props.query;
+  return (
+    <div className={GRID_CLASS}>
+      <Suspense
+        key={`signals-${severity}-${page?.dir}-${page?.cursor}`}
+        fallback={<BlockSkeleton span="col-span-12" minHeight="" shape={{ rows: SKELETON_ROWS }} />}
+      >
+        <SignalsList {...props} />
+      </Suspense>
+    </div>
+  );
+}
+
+export async function SignalsList({ protocol, pathname, period, query }: TabProps) {
   const t = await getTranslations("Dashboard.Protocol.signals");
   const tSeverity = await getTranslations("Dashboard.Signals.feed.severity");
   const tHeadline = await getTranslations("Dashboard.Overview.signals");
@@ -69,11 +87,9 @@ export async function SignalsTab({ protocol, pathname, period, query }: TabProps
   } catch (err) {
     if (err instanceof ApiClientError) {
       return (
-        <div className={GRID_CLASS}>
-          <section aria-label={t("label")} className={`${CELL_CLASS} col-span-12`}>
-            <BlockFailed kind={err.details.kind} />
-          </section>
-        </div>
+        <section aria-label={t("label")} className={`${CELL_CLASS} col-span-12`}>
+          <BlockFailed kind={err.details.kind} />
+        </section>
       );
     }
     throw err;
@@ -81,56 +97,54 @@ export async function SignalsTab({ protocol, pathname, period, query }: TabProps
   const { page, severity } = read;
 
   return (
-    <div className={GRID_CLASS}>
-      <section aria-label={t("label")} className={`${CELL_CLASS} col-span-12`}>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5">
-          <div role="group" aria-label={t("filterLabel")} className="inline-flex border border-dash-rule">
-            {FILTERS.map((filter) => {
-              const label = filter === null ? t("all") : tSeverity(filter);
-              return filter === severity ? (
-                <span key={filter ?? "all"} aria-current="page" className={ON_CLASS}>
-                  {label}
-                </span>
-              ) : (
-                <Link
-                  key={filter ?? "all"}
-                  href={href({ severity: filter, page: null })}
-                  scroll={false}
-                  className={LINK_CLASS}
-                >
-                  {label}
-                </Link>
-              );
-            })}
-          </div>
-          <p className="text-[12px] text-dash-ink-2">{t("periodIgnored")}</p>
+    <section aria-label={t("label")} className={`${CELL_CLASS} col-span-12`}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5">
+        <div role="group" aria-label={t("filterLabel")} className="inline-flex border border-dash-rule">
+          {FILTERS.map((filter) => {
+            const label = filter === null ? t("all") : tSeverity(filter);
+            return filter === severity ? (
+              <span key={filter ?? "all"} aria-current="page" className={ON_CLASS}>
+                {label}
+              </span>
+            ) : (
+              <Link
+                key={filter ?? "all"}
+                href={href({ severity: filter, page: null })}
+                scroll={false}
+                className={LINK_CLASS}
+              >
+                {label}
+              </Link>
+            );
+          })}
         </div>
+        <p className="text-[12px] text-dash-ink-2">{t("periodIgnored")}</p>
+      </div>
 
-        {page.items.length === 0 ? (
-          <p className="py-6 text-[14px] text-dash-ink-2">
-            {severity === null ? t("empty") : t("emptyFiltered")}
-          </p>
-        ) : (
-          <SignalTable page={page} t={t} tHeadline={tHeadline} tSeverity={tSeverity} locale={locale} />
-        )}
+      {page.items.length === 0 ? (
+        <p className="py-6 text-[14px] text-dash-ink-2">
+          {severity === null ? t("empty") : t("emptyFiltered")}
+        </p>
+      ) : (
+        <SignalTable page={page} t={t} tHeadline={tHeadline} tSeverity={tSeverity} locale={locale} />
+      )}
 
-        <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2.5">
-          <p className="text-[12px] text-dash-ink-2">{t("pageSize", { count: SIGNALS_PAGE_SIZE })}</p>
-          <div role="group" aria-label={t("pagesLabel")} className="inline-flex border border-dash-rule">
-            <PageLink
-              label={t("newer")}
-              cursor={page.isFirst ? null : page.prevCursor}
-              href={(cursor) => href({ severity, page: { cursor, dir: "prev" } })}
-            />
-            <PageLink
-              label={t("older")}
-              cursor={page.isLast ? null : page.nextCursor}
-              href={(cursor) => href({ severity, page: { cursor, dir: "next" } })}
-            />
-          </div>
+      <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2.5">
+        <p className="text-[12px] text-dash-ink-2">{t("pageSize", { count: SIGNALS_PAGE_SIZE })}</p>
+        <div role="group" aria-label={t("pagesLabel")} className="inline-flex border border-dash-rule">
+          <PageLink
+            label={t("newer")}
+            cursor={page.isFirst ? null : page.prevCursor}
+            href={(cursor) => href({ severity, page: { cursor, dir: "prev" } })}
+          />
+          <PageLink
+            label={t("older")}
+            cursor={page.isLast ? null : page.nextCursor}
+            href={(cursor) => href({ severity, page: { cursor, dir: "next" } })}
+          />
         </div>
-      </section>
-    </div>
+      </div>
+    </section>
   );
 }
 
@@ -173,7 +187,7 @@ function SignalTable({
 
   return (
     <div className="overflow-x-auto">
-      <div role="table" aria-label={t("tableLabel")} className="min-w-[600px]">
+      <div role="table" aria-label={t("tableLabel")} className="min-w-[640px]">
         <div role="row" className={`${HEAD_ROW_CLASS} ${COLUMNS}`}>
           <div role="columnheader">{t("columns.severity")}</div>
           <div role="columnheader">{t("columns.triggered")}</div>
@@ -189,7 +203,7 @@ function SignalTable({
             </div>
             <div role="cell" className="font-dash-mono text-[12px] text-dash-ink-2 tabular-nums">
               <time dateTime={signal.triggeredAt}>
-                {formatUtcMoment(signal.triggeredAt, locale) ?? "—"}
+                {formatAbsolute(signal.triggeredAt) ?? "—"}
               </time>
             </div>
             <div role="cell" className="min-w-0">
@@ -227,7 +241,7 @@ function PageLink({
     );
   }
   return (
-    <Link href={href(cursor)} scroll={false} className={LINK_CLASS}>
+    <Link href={href(cursor)} className={LINK_CLASS}>
       {label}
     </Link>
   );

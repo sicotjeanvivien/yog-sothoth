@@ -8,7 +8,7 @@ import type { PageResponseSignalResponse, SignalResponse } from "@/lib/api/schem
 import type { SignalsQuery } from "@/lib/protocol/signals-query";
 import messages from "@/messages/en/dashboard.json";
 
-import { SignalsTab } from "../signals-tab";
+import { SignalsList, SignalsTab } from "../signals-tab";
 
 const fetchProtocolSignals = vi.fn();
 
@@ -29,18 +29,25 @@ vi.mock("@/i18n/navigation", () => ({
     href,
     children,
     className,
+    scroll,
   }: {
     href: { pathname: string; query: Record<string, string> };
     children: ReactNode;
     className?: string;
+    scroll?: boolean;
   }) => (
-    <a href={`${href.pathname}?${new URLSearchParams(href.query)}`} className={className}>
+    <a
+      href={`${href.pathname}?${new URLSearchParams(href.query)}`}
+      className={className}
+      data-scroll={String(scroll ?? true)}
+    >
       {children}
     </a>
   ),
 }));
 vi.mock("@/components/dashboard/overview/overview-states", () => ({
   BlockFailed: ({ kind }: { kind: string }) => <p>failed: {kind}</p>,
+  BlockSkeleton: () => <p>waiting</p>,
 }));
 
 const t = createTranslator({ locale: "en", messages, namespace: "Dashboard.Protocol.signals" });
@@ -80,7 +87,7 @@ const FIRST: SignalsQuery = { severity: null, page: null };
 
 async function render(query: SignalsQuery = FIRST): Promise<string> {
   return renderToStaticMarkup(
-    await SignalsTab({
+    await SignalsList({
       protocol: "meteora_damm_v2",
       pathname: "/protocols/meteora-damm-v2",
       period: "7d",
@@ -98,6 +105,15 @@ function links(html: string): Record<string, string> {
   return found;
 }
 
+/** Whether each link keeps the scroll, by its text. */
+function scrolls(html: string): Record<string, string> {
+  const found: Record<string, string> = {};
+  for (const [, scroll = "", text = ""] of html.matchAll(/<a [^>]*data-scroll="([^"]*)"[^>]*>([^<]*)<\/a>/g)) {
+    found[text] = scroll;
+  }
+  return found;
+}
+
 beforeEach(() => {
   fetchProtocolSignals.mockReset();
 });
@@ -108,7 +124,7 @@ describe("SignalsTab", () => {
     const html = await render();
 
     expect(html).toContain("Critical");
-    expect(html).toContain("Nov 23, 21:14 UTC");
+    expect(html).toContain("2026-11-23 21:14 UTC");
     expect(html).toContain("TVL drain on ⁨SOL⁩ / ⁨USDC⁩: 12.4%");
     expect(html).toContain("tvl_drain");
     expect(html).toContain("12.4% <span");
@@ -139,6 +155,16 @@ describe("SignalsTab", () => {
     expect(to[t("older")]).toBe(
       "/protocols/meteora-damm-v2?tab=signals&severity=warning&cursor=older-c&period=7d",
     );
+  });
+
+  // Mutation: `scroll={false}` on the steps leaves the reader at the foot of the new page.
+  it("brings the reader to the top on a step, not on a filter", async () => {
+    fetchProtocolSignals.mockResolvedValue(page({ isFirst: false, prevCursor: "newer-c" }));
+    const scroll = scrolls(await render({ severity: null, page: { cursor: "here", dir: "next" } }));
+
+    expect(scroll[t("newer")]).toBe("true");
+    expect(scroll[t("older")]).toBe("true");
+    expect(scroll["Critical"]).toBe("false");
   });
 
   // Mutation: a step past the list's edge, onto an empty page.
@@ -185,5 +211,20 @@ describe("SignalsTab", () => {
     fetchProtocolSignals.mockResolvedValue(page({ items: [], nextCursor: null, isLast: true }));
     expect(await render()).toContain(t("empty"));
     expect(await render({ severity: "info", page: null })).toContain(t("emptyFiltered"));
+  });
+
+  // Mutation: the list read outside a `<Suspense>`, the whole page waits for the API.
+  it("renders its waiting slot while the list is read", () => {
+    fetchProtocolSignals.mockReturnValue(new Promise(() => {}));
+    const html = renderToStaticMarkup(
+      SignalsTab({
+        protocol: "meteora_damm_v2",
+        pathname: "/protocols/meteora-damm-v2",
+        period: "7d",
+        query: FIRST,
+      }),
+    );
+
+    expect(html).toContain("waiting");
   });
 });

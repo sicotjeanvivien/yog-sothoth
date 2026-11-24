@@ -422,8 +422,9 @@ so the page is no longer, the positions' life cycle over the period, in one colu
 (`lifeCountOf`).
 
 **06 Signals** — `protocol/signals/signals-tab.tsx`: the protocol's signals, newest first,
-50 a page from `/api/protocols/{protocol}/signals`, read when the page opens, not live. Each
-row: severity, day and hour in UTC, the sentence of the live rows (`signalHeadline`) with the
+50 a page from `/api/protocols/{protocol}/signals`, read when the page opens, not live, in its
+own `<Suspense>`. Each row: severity, date with its year and hour in UTC (`formatAbsolute`: the
+list reaches back over the whole history), the sentence of the live rows (`signalHeadline`) with the
 detector under it, value · threshold. The filter by severity and the steps "Newer" / "Older"
 are links: `?severity=`, `?cursor=` and `?dir=prev`, the API's own names
 (`lib/protocol/signals-query.ts`). A filter starts from the first page; a missing, repeated

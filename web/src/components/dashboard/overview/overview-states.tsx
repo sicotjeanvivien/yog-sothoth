@@ -111,14 +111,14 @@ export async function KpiSkeleton({ advanced = false }: { advanced?: boolean }) 
   );
 }
 
-/** A block's waiting slot: its title, then rows or a chart as bars. */
+/** A block's waiting slot: its title if it has one, then rows or a chart as bars. */
 export async function BlockSkeleton({
   title,
   span,
   minHeight,
   shape,
 }: {
-  title: string;
+  title?: string;
   span: string;
   minHeight: string;
   shape: { rows: number } | "chart";
@@ -126,9 +126,11 @@ export async function BlockSkeleton({
   const t = await getTranslations("Dashboard.shell");
   return (
     <section aria-busy="true" className={`${CELL_CLASS} ${span} ${minHeight}`}>
-      <div className={BLOCK_HEAD_CLASS}>
-        <h2 className={BLOCK_TITLE_CLASS}>{title}</h2>
-      </div>
+      {title !== undefined && (
+        <div className={BLOCK_HEAD_CLASS}>
+          <h2 className={BLOCK_TITLE_CLASS}>{title}</h2>
+        </div>
+      )}
       {shape === "chart" ? (
         <>
           <span className={`${BAR} mt-[26px] h-[170px]`} />
