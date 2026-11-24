@@ -32,6 +32,43 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.12.0",
+    date: "2026-11-24",
+    summary: "The DAMM v2 page gains its Signals tab and splits the LPs' fees between claimed and compounded; the Overview shows the period only.",
+    sections: [
+      {
+        kind: "features",
+        items: [
+          {
+            text: "The DAMM v2 page has a Signals tab: the protocol's past signals, newest first, 50 per page, filtered by severity.",
+            technical: false,
+          },
+          {
+            text: "The DAMM v2 Fees tab splits the LPs' fees between those claimed and those compounded back into the pool. The split is measured from this release on: a period that started before it shows the LPs' fees whole, and says so.",
+            technical: false,
+          },
+          {
+            text: "The DAMM v2 rows of /api/swaps/totals and …/series, /api/protocols/{protocol}/swaps/totals and …/series, /api/pools/{pool}/swaps/totals and …/series carry a meteoraDammV2 block, claimingFeesUsd and compoundingFeesUsd, null where the split was not measured; the total rows never carry it.",
+            technical: true,
+          },
+        ],
+      },
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "The Overview shows the selected period only. The live signals and on-chain activity are in the DAMM v2 Live activity tab, which starts empty and fills as they arrive.",
+            technical: false,
+          },
+          {
+            text: "The /signals page is removed: a protocol's signals are in its Signals tab.",
+            technical: false,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.4",
     date: "2026-11-23",
     summary: "The production probe no longer loses its readings when one query is slow.",
