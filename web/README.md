@@ -164,7 +164,7 @@ block-level error state.
 
 ## Live signal feed
 
-Only tab 06 shows signals, live; the Overview has no live block. Its block
+Only tab 07 shows signals live, tab 06 lists the past ones; the Overview has no live block. Its block
 starts empty and says so, nothing is loaded first; the
 `useLiveSignals` hook (`components/dashboard/signals/`) listens to the `signals`
 topic of the page's one connection to the API's live stream,
@@ -176,7 +176,7 @@ at each reopening, `markSignalGap` adds a row « Reprise à HH:MM:SS — des
 signaux ont pu manquer », sorted by its time with the signals, so a signal
 triggered before the reopening ranks below it even when it arrives after.
 No gap row on an empty feed, and never two with no signal between.
-Browsing the past signals is the paginated API's job.
+Browsing the past signals is tab 06's job, on the paginated API.
 
 **One connection per page** — `components/dashboard/live/live-provider.tsx`:
 `LiveProvider` opens the page's single stream on every topic it shows
@@ -188,13 +188,13 @@ The stream is read with `fetch` (`openSseStream`, `lib/live/sse-stream.ts`; `cre
 An open stream that drops is retried after 1 to 3 s, at random so the visitors an API
 restart cuts come back spread. A refusal (a `503` past the 200 slots, a `401`, a failed
 ticket request) waits 5 to 60 s, never before the API's `Retry-After`, half of it random,
-doubling per refusal. Nothing is replayed: `onReopen` tells the subscribers of a gap. On tab 06, `OverviewLive`
+doubling per refusal. Nothing is replayed: `onReopen` tells the subscribers of a gap. On tab 07, `OverviewLive`
 picks the topics from the advanced mode: `signals` in the simple mode, the eight on-chain
 collections too in the advanced (`pageTopics`) — switching reopens the
 connection, so the collections are polled only while the table shows.
 
 **Live activity** — `components/dashboard/activity/`, in the advanced mode of
-tab 06: the protocol's on-chain events but the swaps as they arrive — time,
+tab 07: the protocol's on-chain events but the swaps as they arrive — time,
 kind, pool by pair, detail. It starts empty and says so: nothing is loaded first. Each message is
 zod-parsed as its collection's item (`toActivityItem`), then presented by
 `activityRow` (`lib/activity/`, pure and tested): amounts in units of their token
@@ -290,7 +290,7 @@ moved, while the ⓘ (`InfoPopover`) and `BlockError` they share keep it.
 `(dashboard)/overview/page.tsx`, after the canvas: four KPIs (TVL, volume,
 fees, active pools), activity by protocol on the full width, then volume per bar
 of the period on 8 columns beside the most traded tokens on 4, in both modes. Nothing
-on it is live: the signals and the live activity are tab 06's. The header is the title alone, then "Live",
+on it is live: the signals and the live activity are tab 07's. The header is the title alone, then "Live",
 the period and the advanced mode at its right. Every figure comes from yog-analytic's
 measures (`/api/swaps/…`, `/api/tvl…`, `/api/pool-creations/…`, `/api/liquidity-turnover/totals`), which all end at the same `asOf`, the close of the last frozen
 hour — over the last hour, the end of the last 5-minute tranche written.
@@ -421,18 +421,28 @@ so the page is no longer, the positions' life cycle over the period, in one colu
 `owners` of `liquidity-moves/totals` for the distinct LPs; a period without a row reads "—"
 (`lifeCountOf`).
 
-**06 Live activity** — `protocol/activity/activity-tab.tsx`: the protocol's signals that
+**06 Signals** — `protocol/signals/signals-tab.tsx`: the protocol's signals, newest first,
+50 a page from `/api/protocols/{protocol}/signals`, read when the page opens, not live. Each
+row: severity, day and hour in UTC, the sentence of the live rows (`signalHeadline`) with the
+detector under it, value · threshold. The filter by severity and the steps "Newer" / "Older"
+are links: `?severity=`, `?cursor=` and `?dir=prev`, the API's own names
+(`lib/protocol/signals-query.ts`). A filter starts from the first page; a missing, repeated
+or unknown value, or a cursor the API refuses (400), reads as the first page. The page's
+period does not apply, and the tab says so; a period change keeps the filter and the page
+(`periodKeep`).
+
+**07 Live activity** — `protocol/activity/activity-tab.tsx`: the protocol's signals that
 arrive on `/api/live/protocols/{protocol}?topics=…` while the tab is open, through the
 Overview's signal rows (`OverviewSignalsLive`); it starts empty and says so, nothing is
 loaded first. In the advanced mode, the protocol's live activity sits beside
 them, each on half the width as in the canvas, on the same connection.
 
-**Tabs** — `lib/protocol/tabs.ts` lists the six tabs of the canvas, in order;
+**Tabs** — `lib/protocol/tabs.ts` lists the seven tabs of the canvas, in order;
 a tab joins the row when its content ships (`READY_TABS`), numbered by its
-place in the full list so it never moves. `?tab=` picks one, a bad value falls
+place in the full list. `?tab=` picks one, a bad value falls
 back to the first ready, which, like the default period, the URL leaves out
 (`pageQuery`, `tabQuery`); tab links keep the period, period links keep the
-tab, and a digit key opens its tab, Shift allowed for AZERTY. The KPIs'
+tab, and the Signals tab's filter and page, and a digit key opens its tab, Shift allowed for AZERTY. The KPIs'
 `<Suspense>` is keyed by the period only: a tab change re-reads them on the
 server and keeps them on screen.
 
@@ -657,7 +667,7 @@ web/
 │   ├── components/
 │   │   ├── feature-gate.tsx         # <FeatureGate flag="..."> wrapper
 │   │   ├── dashboard/               # per-page sections + shell, sidebar,
-│   │   │                            # signals (useLiveSignals, badges),
+│   │   │                            # signals (useLiveSignals, badges, headline),
 │   │   │                            # live (LiveProvider), activity, announcements
 │   │   ├── developers/              # the developers page: routes, key field, explorer
 │   │   ├── marketing/               # navbar, footer, per-page sections
@@ -672,7 +682,7 @@ web/
 │   │   ├── coverage/                # volumeCoverage (pure, tested)
 │   │   ├── overview/                # period, chart, totals (pure, tested)
 │   │   ├── activity/                # activityRow, the activity feed (pure, tested)
-│   │   ├── protocol/                # the protocol page's tabs, liquidity, volume, fees, pools
+│   │   ├── protocol/                # the protocol page's tabs, liquidity, volume, fees, pools, signals
 │   │   ├── seo/                     # pageMetadata
 │   │   ├── developers/              # the contract read on the server, the explorer's requests
 │   │   ├── format/                  # pubkey, date, number, token-amount formatters

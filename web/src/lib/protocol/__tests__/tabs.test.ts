@@ -45,11 +45,12 @@ describe("tabNumber", () => {
   it("is the tab's place in the full list", () => {
     expect(tabNumber("liquidity")).toBe("01");
     expect(tabNumber("fees")).toBe("03");
-    expect(tabNumber("activity")).toBe("06");
+    expect(tabNumber("signals")).toBe("06");
+    expect(tabNumber("activity")).toBe("07");
   });
 
-  it("covers the six tabs of the canvas", () => {
-    expect(PROTOCOL_TABS).toHaveLength(6);
+  it("covers the seven tabs of the canvas", () => {
+    expect(PROTOCOL_TABS).toHaveLength(7);
   });
 });
 
@@ -63,14 +64,15 @@ describe("tabForKey", () => {
     expect(tabForKey("2", ready("liquidity", "fees"))).toBeNull();
   });
 
-  // Mutation: the activity tab out of the shipped ones — its panel unreachable.
-  it("opens the activity tab, shipped, on 6", () => {
-    expect(tabForKey("6")).toBe("activity");
+  // Mutation: the signals or activity tab out of the shipped ones — its panel unreachable.
+  it("opens the signals tab on 6 and the activity tab on 7, both shipped", () => {
+    expect(tabForKey("6")).toBe("signals");
+    expect(tabForKey("7")).toBe("activity");
   });
 
   it("does nothing on any other key", () => {
     const shipped = ready(...PROTOCOL_TABS);
-    for (const key of ["0", "7", "12", "a", "Enter"]) {
+    for (const key of ["0", "8", "12", "a", "Enter"]) {
       expect(tabForKey(key, shipped)).toBeNull();
     }
   });

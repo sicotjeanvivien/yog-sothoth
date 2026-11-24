@@ -1,5 +1,5 @@
 /**
- * The tab 06 of a protocol's page: the signals that arrive while it is open, and in the advanced
+ * The Live Activity tab of a protocol's page: the signals that arrive while it is open, and in the advanced
  * mode its live activity beside them, on one connection to the protocol's live stream.
  * ⚠️ No signal is loaded before the stream: the block starts empty, like the activity table.
  */

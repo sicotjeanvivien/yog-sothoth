@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { SignalResponse } from "@/lib/api/schema/zod.gen";
 
-import { formatSignalValue } from "../signal-display";
+import { formatSignalThreshold, formatSignalValue } from "../signal-display";
 
 function signal(overrides: Partial<SignalResponse>): SignalResponse {
   const token = { mint: null, name: null, decimals: null, logoUri: null };
@@ -43,5 +43,18 @@ describe("formatSignalValue", () => {
   // Mutation: the unit read off the detector's name again.
   it("reads the unit, not the detector", () => {
     expect(formatSignalValue(signal({ detector: "tvl_drain", valueUnit: "raw" }), "en")).toBe("0.75");
+  });
+});
+
+describe("formatSignalThreshold", () => {
+  // Mutation: the threshold formatted as the value gives it a "+"; a drain's left raw.
+  it("has no sign, whatever the value's", () => {
+    expect(formatSignalThreshold(signal({ valueUnit: "signedRatio" }), "en")).toBe("60%");
+    expect(formatSignalThreshold(signal({ valueUnit: "ratio" }), "en")).toBe("60%");
+  });
+
+  it("stays raw in a raw unit, and is empty without a threshold", () => {
+    expect(formatSignalThreshold(signal({ valueUnit: "raw" }), "en")).toBe("0.6");
+    expect(formatSignalThreshold(signal({ threshold: null }), "en")).toBe("—");
   });
 });

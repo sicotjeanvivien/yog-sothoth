@@ -42,3 +42,10 @@ export function formatSignalValue(signal: SignalResponse, locale: string): strin
       return formatSignedPercent(signal.value, locale);
   }
 }
+
+export function formatSignalThreshold(signal: SignalResponse, locale: string): string {
+  if (signal.threshold === null) {
+    return "—";
+  }
+  return signal.valueUnit === "raw" ? signal.threshold : formatPercent(signal.threshold, locale);
+}
