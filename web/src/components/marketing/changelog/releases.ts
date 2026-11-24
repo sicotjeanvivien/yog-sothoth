@@ -48,7 +48,7 @@ export const RELEASES: readonly Release[] = [
             technical: false,
           },
           {
-            text: "The DAMM v2 rows of /api/swaps/totals, /api/protocols/{protocol}/swaps/totals and …/series, /api/pools/{pool}/swaps/totals and …/series carry a meteoraDammV2 block, claimingFeesUsd and compoundingFeesUsd, null where the split was not measured; the total rows never carry it.",
+            text: "The DAMM v2 rows of /api/swaps/totals and …/series, /api/protocols/{protocol}/swaps/totals and …/series, /api/pools/{pool}/swaps/totals and …/series carry a meteoraDammV2 block, claimingFeesUsd and compoundingFeesUsd, null where the split was not measured; the total rows never carry it.",
             technical: true,
           },
         ],
