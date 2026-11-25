@@ -5921,7 +5921,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/UnsignedDecimal",
-                "description": "`null` when none of its locked pools is valued."
+                "description": "`null` for a protocol without locks, or when none of its locked pools is valued."
               },
               {
                 "type": "null"

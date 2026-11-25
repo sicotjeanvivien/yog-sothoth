@@ -33,7 +33,6 @@ struct LockedColumns {
     vesting_covered_since: Option<DateTime<Utc>>,
 }
 
-/// The six locked columns of a row, by name.
 macro_rules! locked_columns {
     ($row:ident) => {
         LockedColumns {

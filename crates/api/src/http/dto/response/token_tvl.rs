@@ -16,7 +16,7 @@ pub(crate) struct TokenTvlResponse {
     /// The valued sides of its pools.
     #[schema(value_type = UnsignedDecimal)]
     tvl_usd: Decimal,
-    /// `null` when none of its locked pools is valued.
+    /// `null` for a protocol without locks, or when none of its locked pools is valued.
     #[schema(value_type = Option<UnsignedDecimal>)]
     locked_usd: Option<Decimal>,
     /// Its pools, valued or not.

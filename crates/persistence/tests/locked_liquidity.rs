@@ -669,7 +669,7 @@ async fn the_tokens_rank_by_tvl_or_locked_and_page_without_a_gap(pool: PgPool) {
     }
     let repo = PgTokenTvlRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
     let mint = |seed: u8| pk(seed);
-    // Ties ranked by mint: three at 300 for the TVL, two unknown locked parts.
+    // Ties ranked by mint.
     let by_mint = |mut seeds: Vec<u8>| {
         seeds.sort_by_key(|seed| mint(*seed).to_string());
         seeds
