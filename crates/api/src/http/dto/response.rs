@@ -29,9 +29,6 @@ mod protocol_rotation_run_bucket;
 mod protocol_rotation_run_totals;
 mod protocol_swap_activity;
 mod protocol_swap_activity_bucket;
-mod protocol_tvl;
-mod protocol_tvl_change;
-mod protocol_tvl_meteora_damm_v2;
 mod readiness;
 mod reading;
 mod reward_change_event;
@@ -43,11 +40,9 @@ mod swap_event;
 mod ticket;
 mod token;
 mod token_activity;
-mod token_tvl;
-mod token_tvl_page;
 mod tranche_window;
+mod tvl;
 mod vesting_unlock;
-mod vesting_unlock_page;
 mod window;
 mod windowed_page;
 
@@ -81,8 +76,6 @@ pub(crate) use protocol_rotation_run_bucket::ProtocolRotationRunBucketResponse;
 pub(crate) use protocol_rotation_run_totals::ProtocolRotationRunTotalsResponse;
 pub(crate) use protocol_swap_activity::ProtocolSwapActivityResponse;
 pub(crate) use protocol_swap_activity_bucket::ProtocolSwapActivityBucketResponse;
-pub(crate) use protocol_tvl::ProtocolTvlResponse;
-pub(crate) use protocol_tvl_change::ProtocolTvlChangeResponse;
 pub(crate) use readiness::{
     ChecksReportResponse, ComponentStatusResponse, ReadinessResponse, ReadinessStatusResponse,
 };
@@ -95,9 +88,9 @@ pub(crate) use swap_event::SwapEventResponse;
 pub(crate) use ticket::TicketResponse;
 pub(crate) use token::{TokenPriceResponse, TokenResponse};
 pub(crate) use token_activity::TokenActivityPageResponse;
-pub(crate) use token_tvl_page::TokenTvlPageResponse;
 pub(crate) use tranche_window::TrancheWindowedResponse;
-pub(crate) use vesting_unlock_page::VestingUnlockPageResponse;
+pub(crate) use tvl::{ProtocolTvlChangeResponse, ProtocolTvlResponse, TokenTvlPageResponse};
+pub(crate) use vesting_unlock::VestingUnlockPageResponse;
 pub(crate) use window::{
     LiquidityTurnoverTotalsResponse, PoolCreationTotalsResponse, ProtocolSwapSeriesResponse,
     ProtocolSwapTotalsResponse, RunSplitSeriesResponse, SeriesResponse, SwapSeriesResponse,
