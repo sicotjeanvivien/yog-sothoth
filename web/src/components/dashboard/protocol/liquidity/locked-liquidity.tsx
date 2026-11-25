@@ -27,11 +27,14 @@ import { formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { pairLabel, shortenPubkey } from "@/lib/format/pubkey";
 import { amountOf, shareOf } from "@/lib/overview/totals";
-import { lockedTokensOf } from "@/lib/protocol/locked";
+import { comingUnlocksOf, lockedTokensOf } from "@/lib/protocol/locked";
 
 const TOKENS_SHOWN = 4;
 
 const UNLOCKS_SHOWN = 5;
+
+/** More than shown: those already past since the reading are left out. */
+const UNLOCKS_READ = 10;
 
 /** Beside the flows and the moves, on both their rows. */
 export const LOCKED_SPAN = `col-span-12 dash-wide:col-span-4 dash-wide:row-span-2 ${ADVANCED_ONLY.block}`;
@@ -54,7 +57,7 @@ export async function LockedLiquidity({ protocol }: BlockProps) {
     [reading, tokens, unlocks] = await Promise.all([
       fetchTvl(protocol),
       fetchTokenTvl(protocol, "locked", TOKENS_SHOWN),
-      fetchVestingUnlocks(protocol, "7d", "amount", UNLOCKS_SHOWN),
+      fetchVestingUnlocks(protocol, "7d", "amount", UNLOCKS_READ),
     ]);
   } catch (err) {
     if (err instanceof ApiClientError) {
@@ -98,6 +101,7 @@ export async function LockedLiquidity({ protocol }: BlockProps) {
       : [{ key: "others", label: t("others"), ...byToken.others }]),
   ];
   const now = new Date();
+  const coming = comingUnlocksOf(unlocks.items, now, UNLOCKS_SHOWN);
 
   return (
     <section aria-label={title} className={LOCKED_CLASS}>
@@ -131,7 +135,9 @@ export async function LockedLiquidity({ protocol }: BlockProps) {
       <p className="mt-1.5 text-[12px] text-dash-ink-3">
         {t("coverage", {
           pools: formatCount(block.poolsLocked),
+          poolsCount: block.poolsLocked,
           unvalued: formatCount(block.poolsLockedUnvalued),
+          unvaluedCount: block.poolsLockedUnvalued,
         })}
         {block.vestingCoveredSince !== null &&
           t("coverageSince", { date: formatUtcMoment(block.vestingCoveredSince, locale) ?? "—" })}
@@ -160,11 +166,11 @@ export async function LockedLiquidity({ protocol }: BlockProps) {
       )}
 
       <p className={`${LABEL_CLASS} mt-[18px] mb-1`}>{t("unlocks")}</p>
-      {unlocks.items.length === 0 ? (
+      {coming.length === 0 ? (
         <p className="py-2 text-[14px] text-dash-ink-2">{t("unlocksEmpty")}</p>
       ) : (
         <div role="table" aria-label={t("unlocksLabel")}>
-          {unlocks.items.map((unlock) => (
+          {coming.map((unlock) => (
             <div
               key={`${unlock.position}-${unlock.unlocksAt}`}
               role="row"

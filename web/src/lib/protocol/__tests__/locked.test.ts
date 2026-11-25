@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { lockedTokensOf } from "../locked";
+import { comingUnlocksOf, lockedTokensOf } from "../locked";
 
 const token = (symbol: string) => ({
   decimals: 9,
@@ -68,5 +68,39 @@ describe("lockedTokensOf", () => {
   // Mutation: a rest below a cent kept, drawn as « Others » at $0.
   it("shows no rest under a cent", () => {
     expect(lockedTokensOf(page([["SOL", "100"]], "100.004")).others).toBeNull();
+  });
+
+  // Mutation: a token with nothing locked kept, drawn as a row at $0.
+  it("leaves out a token with nothing locked", () => {
+    const { tokens } = lockedTokensOf(
+      page(
+        [
+          ["SOL", "40"],
+          ["USDC", "0"],
+        ],
+        "40",
+      ),
+    );
+
+    expect(tokens.map((t) => t.token.symbol)).toEqual(["SOL"]);
+  });
+});
+
+describe("comingUnlocksOf", () => {
+  const now = new Date("2026-11-25T10:55:00Z");
+  const at = (unlocksAt: string) => ({ unlocksAt });
+
+  // Mutation: a release past since the reading kept, worded « 25 minutes ago ».
+  it("leaves out what is already released", () => {
+    expect(comingUnlocksOf([at("2026-11-25T10:30:00Z"), at("2026-11-25T11:30:00Z")], now, 5)).toEqual([
+      at("2026-11-25T11:30:00Z"),
+    ]);
+  });
+
+  // Mutation: the cut taken before the past ones are left out, which shows fewer than it could.
+  it("shows as many as asked once the past ones are out", () => {
+    const items = [at("2026-11-25T10:00:00Z"), at("2026-11-25T12:00:00Z"), at("2026-11-25T13:00:00Z")];
+
+    expect(comingUnlocksOf(items, now, 2)).toHaveLength(2);
   });
 });

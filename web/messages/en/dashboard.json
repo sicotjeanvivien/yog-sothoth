@@ -251,7 +251,7 @@
           "permanent": "Permanent",
           "vesting": "Vesting",
           "splitLabel": "Permanent {permanent}, vesting {vesting}",
-          "coverage": "{pools} locked pools · {unvalued} not valued",
+          "coverage": "{pools} locked {poolsCount, plural, one {pool} other {pools}} · {unvalued} not valued",
           "coverageSince": " · vesting observed since {date}",
           "byToken": "By token",
           "byTokenLabel": "Locked liquidity by token",

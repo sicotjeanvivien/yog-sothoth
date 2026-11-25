@@ -251,7 +251,7 @@
           "permanent": "Permanent",
           "vesting": "Vesting",
           "splitLabel": "Permanent {permanent}, vesting {vesting}",
-          "coverage": "{pools} pools verrouillées · {unvalued} non valorisées",
+          "coverage": "{pools} {poolsCount, plural, one {pool verrouillée} other {pools verrouillées}} · {unvalued} {unvaluedCount, plural, one {non valorisée} other {non valorisées}}",
           "coverageSince": " · vesting observé depuis le {date}",
           "byToken": "Par token",
           "byTokenLabel": "Liquidité verrouillée par token",
