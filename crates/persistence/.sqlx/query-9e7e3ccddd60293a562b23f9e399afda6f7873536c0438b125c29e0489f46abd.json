@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "LOCK TABLE analytic_tvl_by_token, analytic_vesting_unlocks IN EXCLUSIVE MODE",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "9e7e3ccddd60293a562b23f9e399afda6f7873536c0438b125c29e0489f46abd"
+}

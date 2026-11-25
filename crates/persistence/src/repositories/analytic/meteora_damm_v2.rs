@@ -1,6 +1,7 @@
 //! The DAMM v2 branch: one tranche of its swaps, its pools' prices written
 //! and the swaps valued at them in a single statement, then its liquidity moves;
-//! its pools born; and the TVL of its pools discovered, seen first without their birth.
+//! its pools born; the TVL of its pools discovered, seen first without their birth; and its liquidity
+//! locked at the reading, with the vesting releases to come.
 
 use chrono::{DateTime, Utc};
 use sqlx::{Postgres, Transaction, postgres::types::PgInterval};
@@ -243,6 +244,41 @@ pub(super) async fn measure_discovered_tvl(
         &hours,
     )
     .execute(&mut **tx)
+    .await
+    .map_err(map_sqlx_error)?;
+    Ok(())
+}
+
+/// The liquidity locked at `at`, in the reading of `hour`: the protocol's figures, every
+/// protocol's tokens, and the vesting releases within `horizon`, the last two replacing the last
+/// reading's. One statement, so the pools' locked liquidity is computed once.
+pub(super) async fn write_locked_reading(
+    tx: &mut Transaction<'static, Postgres>,
+    hour: DateTime<Utc>,
+    at: DateTime<Utc>,
+    horizon: PgInterval,
+) -> RepositoryResult<()> {
+    // ⚠️ Two measures at once would each empty what the other has not written yet.
+    sqlx::query!("LOCK TABLE analytic_tvl_by_token, analytic_vesting_unlocks IN EXCLUSIVE MODE")
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+    sqlx::query!("DELETE FROM analytic_tvl_by_token")
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+    sqlx::query!("DELETE FROM analytic_vesting_unlocks")
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+    sqlx::query_file!(
+        "src/repositories/analytic/meteora_damm_v2_locked_reading.sql",
+        hour,
+        at,
+        Protocol::MeteoraDammV2.as_str(),
+        horizon,
+    )
+    .fetch_one(&mut **tx)
     .await
     .map_err(map_sqlx_error)?;
     Ok(())

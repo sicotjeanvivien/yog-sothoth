@@ -40,6 +40,7 @@ mod liquidity_moves;
 mod liquidity_value;
 mod live_events;
 mod lock_position;
+mod locked_liquidity;
 mod lp_fee_split;
 mod observed_slots;
 mod overview_periods;

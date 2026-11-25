@@ -57,4 +57,8 @@ pub struct MeteoraDammV2PoolAccountProperties {
 
     /// The pool's liquidity locked for good, in L.
     pub permanent_lock_liquidity: Option<u128>,
+
+    /// The unit of every point of the pool, a vesting's included: 0 slot, 1 timestamp.
+    /// ⚠️ Not the scheduler's `activation_type`, which is kept only with a fee curve.
+    pub pool_activation_type: Option<u8>,
 }

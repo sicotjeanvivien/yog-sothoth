@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM analytic_tvl_by_token",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "21d25800f7183bc82bc5445fe0b5d98fab9e475a9ff09bdc961f7eb6da05708c"
+}

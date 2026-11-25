@@ -123,6 +123,7 @@ fn properties_only(base_fee_kind: Option<BaseFeeKind>) -> PoolAccountProperties 
         sqrt_price: None,
         collect_fee_mode: None,
         permanent_lock_liquidity: None,
+        pool_activation_type: None,
     })
 }
 
@@ -875,6 +876,7 @@ async fn the_fee_scheduler_curve_round_trips_and_can_be_cleared(pool: PgPool) {
         sqrt_price: None,
         collect_fee_mode: None,
         permanent_lock_liquidity: None,
+        pool_activation_type: None,
     });
 
     repo.set_pool_account(&pk(1), &with_curve).await.unwrap();
@@ -946,6 +948,7 @@ async fn an_out_of_range_curve_costs_the_curve_and_nothing_else(pool: PgPool) {
         sqrt_price: None,
         collect_fee_mode: None,
         permanent_lock_liquidity: None,
+        pool_activation_type: None,
     });
 
     repo.set_pool_account(&pk(1), &props)

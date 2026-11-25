@@ -5,11 +5,11 @@ use super::*;
 use crate::amm::damm_v2::BaseFeeKind;
 use crate::application::decoder::PoolAccountRejection;
 use crate::application::decoder::meteora::damm_v2::{
-    BASE_FEE_MODE_OFFSET, CLIFF_FEE_NUMERATOR_OFFSET, COLLECT_FEE_MODE_OFFSET,
-    DYNAMIC_FEE_INITIALIZED_OFFSET, NUMBER_OF_PERIOD_OFFSET, PERMANENT_LOCK_LIQUIDITY_OFFSET,
-    POOL_DISCRIMINATOR, PROTOCOL_FEE_PERCENT_OFFSET, REFERRAL_FEE_PERCENT_OFFSET,
-    SQRT_MAX_PRICE_OFFSET, SQRT_MIN_PRICE_OFFSET, SQRT_PRICE_OFFSET, TOKEN_A_MINT_OFFSET,
-    TOKEN_B_MINT_OFFSET,
+    ACTIVATION_TYPE_OFFSET, BASE_FEE_MODE_OFFSET, CLIFF_FEE_NUMERATOR_OFFSET,
+    COLLECT_FEE_MODE_OFFSET, DYNAMIC_FEE_INITIALIZED_OFFSET, NUMBER_OF_PERIOD_OFFSET,
+    PERMANENT_LOCK_LIQUIDITY_OFFSET, POOL_DISCRIMINATOR, PROTOCOL_FEE_PERCENT_OFFSET,
+    REFERRAL_FEE_PERCENT_OFFSET, SQRT_MAX_PRICE_OFFSET, SQRT_MIN_PRICE_OFFSET, SQRT_PRICE_OFFSET,
+    TOKEN_A_MINT_OFFSET, TOKEN_B_MINT_OFFSET,
 };
 use crate::application::decoder::meteora::dlmm::{
     BASE_FACTOR_OFFSET, BASE_FEE_POWER_FACTOR_OFFSET, BIN_STEP_OFFSET, LB_PAIR_DISCRIMINATOR,
@@ -180,6 +180,22 @@ fn decodes_the_range_and_the_permanent_lock_at_their_offsets() {
     assert_eq!(props.sqrt_price, Some(values[2].1));
     assert_eq!(props.permanent_lock_liquidity, Some(values[3].1));
     assert_eq!(props.collect_fee_mode, Some(2));
+}
+
+/// Mutation: the pool's unit read only with a fee curve, like the scheduler's.
+#[test]
+fn the_pool_activation_type_is_read_whatever_the_fee_shape() {
+    let mut data = with_fee_shape(
+        cp_amm_account(2_500_000, (20, 20), pk(2), pk(3)),
+        0,
+        0,
+        false,
+    );
+    data[ACTIVATION_TYPE_OFFSET] = 1;
+
+    let props = damm_v2_properties(&data);
+    assert_eq!(props.fee_scheduler, None, "a constant fee has no curve");
+    assert_eq!(props.pool_activation_type, Some(1));
 }
 
 /// An account one byte short of the permanent lock loses the five, and only them.

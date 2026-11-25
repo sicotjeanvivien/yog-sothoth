@@ -248,6 +248,11 @@ fn decodes_the_range_and_permanent_lock_of_real_accounts() {
             Some(permanent),
             "{pool}: permanent lock"
         );
+        assert_eq!(
+            props.pool_activation_type,
+            Some(1),
+            "{pool}: every captured pool counts its points in seconds"
+        );
 
         // Independent of our offsets: what cp-amm allows each mode to hold.
         if mode == 2 {

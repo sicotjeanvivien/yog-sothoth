@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM analytic_vesting_unlocks",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "ab13c6b1521ed27b17b6e662b94ba8d62fc381d01d7b3e9da3abe75d8357ca43"
+}
