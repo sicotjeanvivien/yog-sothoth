@@ -6,7 +6,7 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::ProtocolTvl;
 
-use super::meteora_damm_v2::ProtocolTvlMeteoraDammV2Response;
+use super::meteora_damm_v2::{ProtocolTvlMeteoraDammV2Response, meteora_damm_v2_of};
 use crate::http::dto::response::protocol::ProtocolResponse;
 use crate::http::dto::schema::{Count, UnsignedDecimal};
 
@@ -36,11 +36,11 @@ impl From<ProtocolTvl> for ProtocolTvlResponse {
             tvl_usd: t.tvl_usd,
             pools_priced: t.pools_priced,
             pools_unvalued: t.pools_unvalued,
-            meteora_damm_v2: t.meteora_damm_v2.map(Into::into),
+            meteora_damm_v2: meteora_damm_v2_of(t.protocol_part),
         }
     }
 }
 
 #[cfg(test)]
-#[path = "../tests/protocol_tvl_tests.rs"]
+#[path = "tests/reading_tests.rs"]
 mod tests;

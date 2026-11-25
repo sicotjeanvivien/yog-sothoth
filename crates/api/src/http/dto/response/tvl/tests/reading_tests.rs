@@ -1,6 +1,6 @@
 use chrono::{TimeZone, Utc};
 use rust_decimal::Decimal;
-use yog_core::domain::{Protocol, ProtocolTvl};
+use yog_core::domain::{Protocol, ProtocolTvl, ProtocolTvlMeteoraDammV2, ProtocolTvlPart};
 
 use super::ProtocolTvlResponse;
 
@@ -13,7 +13,7 @@ fn a_reading_carries_its_priced_and_unvalued_pools() {
         tvl_usd: Some(Decimal::from(100)),
         pools_priced: 3,
         pools_unvalued: 2,
-        meteora_damm_v2: None,
+        protocol_part: None,
     };
 
     let json = serde_json::to_value(ProtocolTvlResponse::from(reading)).unwrap();
@@ -35,17 +35,17 @@ fn the_locked_block_is_null_before_the_measure_and_named_after_it() {
         tvl_usd: Some(Decimal::from(100)),
         pools_priced: 3,
         pools_unvalued: 2,
-        meteora_damm_v2: None,
+        protocol_part: None,
     };
     let measured = ProtocolTvl {
-        meteora_damm_v2: Some(yog_core::domain::ProtocolTvlMeteoraDammV2 {
+        protocol_part: Some(ProtocolTvlPart::MeteoraDammV2(ProtocolTvlMeteoraDammV2 {
             locked_usd: Decimal::from(40),
             permanent_usd: Decimal::from(30),
             vesting_usd: Decimal::from(10),
             pools_locked: 5,
             pools_locked_unvalued: 1,
             vesting_covered_since: Some(Utc.timestamp_opt(1_600_000_000, 0).unwrap()),
-        }),
+        })),
         ..before.clone()
     };
 

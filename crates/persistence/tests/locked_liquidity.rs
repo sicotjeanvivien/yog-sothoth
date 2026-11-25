@@ -6,8 +6,8 @@ use sqlx::PgPool;
 use sqlx::types::BigDecimal;
 use std::str::FromStr;
 use yog_core::domain::{
-    AnalyticRepository, Protocol, ProtocolTvlLookup, TokenTvlLookup, TokenTvlOrder, TvlMeasure,
-    VestingUnlockLookup, VestingUnlockOrder, Window, last_closed_hour,
+    AnalyticRepository, Protocol, ProtocolTvlLookup, ProtocolTvlPart, TokenTvlLookup,
+    TokenTvlOrder, TvlMeasure, VestingUnlockLookup, VestingUnlockOrder, Window, last_closed_hour,
 };
 use yog_persistence::{
     PgAnalyticRepository, PgProtocolTvlRepository, PgTokenTvlRepository, PgVestingUnlockRepository,
@@ -604,17 +604,28 @@ async fn reading(
     measured_at: DateTime<Utc>,
     locked: Option<&str>,
 ) {
+    protocol_reading(pool, "meteora_damm_v2", bucket, measured_at, locked).await;
+}
+
+async fn protocol_reading(
+    pool: &PgPool,
+    protocol: &str,
+    bucket: DateTime<Utc>,
+    measured_at: DateTime<Utc>,
+    locked: Option<&str>,
+) {
     sqlx::query(
         "INSERT INTO analytic_protocol_tvl
            (protocol, bucket, tvl_usd, pools_priced, pools_unvalued, measured_at, locked_usd,
             permanent_usd, vesting_usd, pools_locked, pools_locked_unvalued, vesting_covered_since)
-         VALUES ('meteora_damm_v2', $1, 1000, 3, 0, $2, $3::NUMERIC, $3::NUMERIC, 0,
+         VALUES ($4, $1, 1000, 3, 0, $2, $3::NUMERIC, $3::NUMERIC, 0,
                  CASE WHEN $3 IS NULL THEN NULL ELSE 2 END, CASE WHEN $3 IS NULL THEN NULL ELSE 1 END,
                  CASE WHEN $3 IS NULL THEN NULL ELSE '2026-10-03 11:28:37+00'::TIMESTAMPTZ END)",
     )
     .bind(bucket)
     .bind(measured_at)
     .bind(locked)
+    .bind(protocol)
     .execute(pool)
     .await
     .unwrap();
@@ -633,11 +644,26 @@ async fn a_reading_carries_its_locked_block_once_measured(pool: PgPool) {
 
     let readings = repo.list_hourly(hour(0), hour(1), None).await.unwrap();
 
-    assert_eq!(readings[0].meteora_damm_v2, None);
-    let block = readings[1].meteora_damm_v2.expect("measured");
+    assert_eq!(readings[0].protocol_part, None);
+    let Some(ProtocolTvlPart::MeteoraDammV2(block)) = readings[1].protocol_part else {
+        panic!("measured: {:?}", readings[1].protocol_part);
+    };
     assert_eq!(block.locked_usd.to_string(), "250");
     assert_eq!((block.pools_locked, block.pools_locked_unvalued), (2, 1));
     assert!(block.vesting_covered_since.is_some());
+}
+
+/// Mutation: another protocol's reading given the DAMM v2 part.
+#[sqlx::test]
+async fn another_protocol_reading_carries_no_protocol_part(pool: PgPool) {
+    protocol_reading(&pool, "meteora_dlmm", hour(0), hour(1), Some("250")).await;
+    let repo = PgProtocolTvlRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+
+    let readings = repo.list_hourly(hour(0), hour(0), None).await.unwrap();
+
+    assert_eq!(readings.len(), 1);
+    assert_eq!(readings[0].protocol, Protocol::MeteoraDlmm);
+    assert_eq!(readings[0].protocol_part, None);
 }
 
 /// Mutation: either order's key or its tie-break, an unknown locked part sorted first, or the

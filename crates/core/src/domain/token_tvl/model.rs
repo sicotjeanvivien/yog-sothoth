@@ -1,10 +1,9 @@
 //! A protocol's TVL by token, at its last reading: the liquidity each token holds in its pools.
 
-use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 
-use crate::domain::{Protocol, TokenMetadata};
+use crate::domain::TokenMetadata;
 
 /// One token at a reading: the valued sides of its pools, and the part of them locked.
 /// ⚠️ A pool counts for both its tokens: the tokens add up to twice the protocol's TVL.
@@ -18,30 +17,4 @@ pub struct TokenTvl {
     pub locked_usd: Option<Decimal>,
     /// Its pools, valued or not.
     pub pools: i64,
-}
-
-/// The order of the ranking, each descending then by mint; an unknown locked part last.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum TokenTvlOrder {
-    #[default]
-    Tvl,
-    Locked,
-}
-
-/// The protocol's own reading, the tokens' denominator.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TokenTvlTotal {
-    pub tvl_usd: Option<Decimal>,
-    pub locked_usd: Option<Decimal>,
-}
-
-/// The last token of a page, in the ranking of `protocol`'s reading at `at`, in `order`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TokenTvlCursor {
-    pub protocol: Protocol,
-    pub at: DateTime<Utc>,
-    pub order: TokenTvlOrder,
-    /// The order's value, `None` for an unknown locked part.
-    pub value: Option<Decimal>,
-    pub mint: Pubkey,
 }

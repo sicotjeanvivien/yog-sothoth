@@ -7,7 +7,7 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::{ProtocolTvlChange, TvlReading};
 
-use super::meteora_damm_v2::ProtocolTvlMeteoraDammV2Response;
+use super::meteora_damm_v2::{ProtocolTvlMeteoraDammV2Response, meteora_damm_v2_of};
 use crate::http::dto::response::protocol::ProtocolResponse;
 use crate::http::dto::schema::{SignedDecimal, UnsignedDecimal};
 
@@ -57,7 +57,7 @@ impl From<ProtocolTvlChange> for ProtocolTvlChangeResponse {
             start: c.start.map(Into::into),
             discovered_tvl_usd: c.discovered_tvl_usd,
             change_usd,
-            meteora_damm_v2: c.meteora_damm_v2.map(Into::into),
+            meteora_damm_v2: meteora_damm_v2_of(c.protocol_part),
         }
     }
 }

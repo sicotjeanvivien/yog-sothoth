@@ -2,7 +2,10 @@ use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use yog_core::{
     RepositoryError,
-    domain::{ProtocolTvl, ProtocolTvlChange, ProtocolTvlMeteoraDammV2, TvlReading},
+    domain::{
+        Protocol, ProtocolTvl, ProtocolTvlChange, ProtocolTvlMeteoraDammV2, ProtocolTvlPart,
+        TvlReading,
+    },
 };
 
 use crate::repositories::helper::{
@@ -69,17 +72,29 @@ impl LockedColumns {
     }
 }
 
+/// The part of `protocol`'s reading only it has, read from the columns it writes.
+fn protocol_part(
+    protocol: Protocol,
+    locked: LockedColumns,
+) -> Result<Option<ProtocolTvlPart>, RepositoryError> {
+    match protocol {
+        Protocol::MeteoraDammV2 => Ok(locked.into_block()?.map(ProtocolTvlPart::MeteoraDammV2)),
+        Protocol::MeteoraDlmm => Ok(None),
+    }
+}
+
 impl TryFrom<ProtocolTvlRow> for ProtocolTvl {
     type Error = RepositoryError;
 
     fn try_from(row: ProtocolTvlRow) -> Result<Self, Self::Error> {
+        let protocol = parse_protocol(&row.protocol)?;
         Ok(ProtocolTvl {
-            protocol: parse_protocol(&row.protocol)?,
+            protocol,
             at: row.at,
             tvl_usd: convert_optional(row.tvl_usd, "tvl_usd", convert_bigdecimal_to_decimal)?,
             pools_priced: row.pools_priced,
             pools_unvalued: row.pools_unvalued,
-            meteora_damm_v2: locked_columns!(row).into_block()?,
+            protocol_part: protocol_part(protocol, locked_columns!(row))?,
         })
     }
 }
@@ -104,8 +119,9 @@ impl TryFrom<ProtocolTvlChangeRow> for ProtocolTvlChange {
 
     fn try_from(row: ProtocolTvlChangeRow) -> Result<Self, Self::Error> {
         let decimal = |value, field| convert_optional(value, field, convert_bigdecimal_to_decimal);
+        let protocol = parse_protocol(&row.protocol)?;
         Ok(ProtocolTvlChange {
-            protocol: parse_protocol(&row.protocol)?,
+            protocol,
             end: TvlReading {
                 at: row.end_at,
                 tvl_usd: decimal(row.end_tvl_usd, "end_tvl_usd")?,
@@ -120,7 +136,7 @@ impl TryFrom<ProtocolTvlChangeRow> for ProtocolTvlChange {
                 })
                 .transpose()?,
             discovered_tvl_usd: decimal(row.discovered_tvl_usd, "discovered_tvl_usd")?,
-            meteora_damm_v2: locked_columns!(row).into_block()?,
+            protocol_part: protocol_part(protocol, locked_columns!(row))?,
         })
     }
 }

@@ -61,7 +61,7 @@ fn tvl_of_100_usd() -> Vec<ProtocolTvl> {
         tvl_usd: Some(Decimal::from(100)),
         pools_priced: 1,
         pools_unvalued: 0,
-        meteora_damm_v2: None,
+        protocol_part: None,
     }]
 }
 

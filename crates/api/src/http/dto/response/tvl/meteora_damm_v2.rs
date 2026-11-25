@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::Serialize;
 use utoipa::ToSchema;
-use yog_core::domain::ProtocolTvlMeteoraDammV2;
+use yog_core::domain::{ProtocolTvlMeteoraDammV2, ProtocolTvlPart};
 
 use crate::http::dto::schema::{Count, UnsignedDecimal};
 
@@ -42,4 +42,12 @@ impl From<ProtocolTvlMeteoraDammV2> for ProtocolTvlMeteoraDammV2Response {
             vesting_covered_since: b.vesting_covered_since,
         }
     }
+}
+
+/// The DAMM v2 block of a reading whose protocol part is DAMM v2's.
+pub(super) fn meteora_damm_v2_of(
+    part: Option<ProtocolTvlPart>,
+) -> Option<ProtocolTvlMeteoraDammV2Response> {
+    // ⚠️ An irrefutable pattern: another variant fails the build here instead of reading `null`.
+    part.map(|ProtocolTvlPart::MeteoraDammV2(block)| block.into())
 }

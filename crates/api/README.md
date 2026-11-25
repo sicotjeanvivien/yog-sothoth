@@ -131,7 +131,8 @@ with no wildcard arm, so adding a variant breaks the build there.
 - **Conversions** live with the type they build, and a behaviour two DTOs
   share is written once, in their common parent: `logo_uri` in `token.rs`,
   `parse_address` in `request.rs`.
-- **Tests** of a part go in its owner's file, `<side>/tests/<owner>_tests.rs`.
+- **Tests** of a part go in its owner's file, `<side>/tests/<owner>_tests.rs`;
+  in a resource's folder, `<resource>/tests/<file>_tests.rs`.
 
 **Not yet following these rules:**
 

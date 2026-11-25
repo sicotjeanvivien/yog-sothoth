@@ -54,12 +54,13 @@ core/src/
 │   │                       ClaimTotalsLookup)
 │   ├── protocol_tvl/      (ProtocolTvl, a reading at an instant; ProtocolTvlChange, from the
 │   │                       reading a window before; TvlChangeTotal; LiquidityTurnover, a
-│   │                       window's volume over the last TVL — ProtocolTvlLookup)
+│   │                       window's volume over the last TVL — ProtocolTvlLookup; part.rs,
+│   │                       ProtocolTvlPart, the part only one protocol has)
 │   ├── discovered_tvl/    (ProtocolDiscoveredTvl — DiscoveredTvlLookup)
 │   ├── token_tvl/         (TokenTvl, a protocol's tokens at its last reading, ranked by TVL
-│   │                       or locked — TokenTvlLookup; read.rs, the page it returns)
+│   │                       or locked — TokenTvlLookup; read.rs, its order, cursor, total and page)
 │   ├── vesting_unlocks/   (VestingUnlock, what the vesting locks release after the last
-│   │                       reading — VestingUnlockLookup; read.rs, the page it returns)
+│   │                       reading — VestingUnlockLookup; read.rs, its order, cursor and page)
 │   ├── protocol_activity/ (ProtocolActivityLookup: the frozen hours every measure is read over)
 │   ├── token_activity/    (TokenActivity — TokenActivityFeed, by volume)
 │   ├── signals/           (Signal, Severity, SignalDetector, EvalContext,

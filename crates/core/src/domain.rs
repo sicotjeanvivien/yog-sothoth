@@ -147,7 +147,7 @@ pub use protocol_fee_claim_event::{
 };
 pub use protocol_tvl::{
     LiquidityTurnover, ProtocolLiquidityTurnover, ProtocolTvl, ProtocolTvlChange,
-    ProtocolTvlLookup, TvlChangeTotal, TvlReading,
+    ProtocolTvlLookup, ProtocolTvlPart, TvlChangeTotal, TvlReading,
 };
 pub use reward_change_event::{
     MeteoraDammV2RewardChange, RewardChangeEvent, RewardChangeEventLookup, RewardChangeTable,
