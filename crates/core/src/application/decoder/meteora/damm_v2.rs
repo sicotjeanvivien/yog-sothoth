@@ -49,6 +49,17 @@ pub(in crate::application::decoder) const REDUCTION_FACTOR_OFFSET: usize = 32;
 pub(in crate::application::decoder) const ACTIVATION_POINT_OFFSET: usize = 472;
 pub(in crate::application::decoder) const ACTIVATION_TYPE_OFFSET: usize = 480;
 
+/// `Pool::sqrt_min_price`, `sqrt_max_price`, `sqrt_price` (u128 each).
+pub(in crate::application::decoder) const SQRT_MIN_PRICE_OFFSET: usize = 424;
+pub(in crate::application::decoder) const SQRT_MAX_PRICE_OFFSET: usize = 440;
+pub(in crate::application::decoder) const SQRT_PRICE_OFFSET: usize = 456;
+
+/// `Pool::collect_fee_mode` (u8).
+pub(in crate::application::decoder) const COLLECT_FEE_MODE_OFFSET: usize = 484;
+
+/// `Pool::permanent_lock_liquidity` (u128), after the two U256 fee accumulators.
+pub(in crate::application::decoder) const PERMANENT_LOCK_LIQUIDITY_OFFSET: usize = 552;
+
 /// Minimum length for the **required** fields, the mints and the cliff fee.
 /// ⚠️ Not the scheduler fields: refusing the account for an optional extra would
 /// leave the pool unresolved, at the head of the queue forever.
@@ -57,6 +68,9 @@ const MIN_LEN: usize = TOKEN_B_MINT_OFFSET + 32;
 /// Length needed for the fee-scheduler reads, checked separately from
 /// [`MIN_LEN`] so a short account degrades instead of being refused.
 const SCHEDULER_MIN_LEN: usize = ACTIVATION_TYPE_OFFSET + 1;
+
+/// Length needed for the range and the permanent lock, optional like the scheduler.
+const LIQUIDITY_SHAPE_MIN_LEN: usize = PERMANENT_LOCK_LIQUIDITY_OFFSET + 16;
 
 /// Decode a cp-amm `Pool` account, split by **who stores it**: the `pools`
 /// registry (token pair, base fee) and this protocol's satellite.
@@ -90,6 +104,16 @@ pub(in crate::application::decoder) fn decode_pool_account(
             .try_into()
             .expect("8 bytes, length checked above"),
     );
+    let has_liquidity_shape = data.len() >= LIQUIDITY_SHAPE_MIN_LEN;
+    let read_u128 = |at: usize| {
+        has_liquidity_shape.then(|| {
+            u128::from_le_bytes(
+                data[at..at + 16]
+                    .try_into()
+                    .expect("16 bytes, length checked above"),
+            )
+        })
+    };
 
     Ok(DecodedPoolAccount {
         registry: PoolRegistryProperties {
@@ -105,6 +129,11 @@ pub(in crate::application::decoder) fn decode_pool_account(
             base_fee_kind,
             has_dynamic_fee: data[DYNAMIC_FEE_INITIALIZED_OFFSET] != 0,
             fee_scheduler: decode_fee_scheduler(data, base_fee_kind, number_of_period),
+            sqrt_min_price: read_u128(SQRT_MIN_PRICE_OFFSET),
+            sqrt_max_price: read_u128(SQRT_MAX_PRICE_OFFSET),
+            sqrt_price: read_u128(SQRT_PRICE_OFFSET),
+            collect_fee_mode: has_liquidity_shape.then(|| data[COLLECT_FEE_MODE_OFFSET]),
+            permanent_lock_liquidity: read_u128(PERMANENT_LOCK_LIQUIDITY_OFFSET),
         }),
     })
 }

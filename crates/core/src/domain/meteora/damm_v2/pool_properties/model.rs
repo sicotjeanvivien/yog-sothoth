@@ -44,4 +44,17 @@ pub struct MeteoraDammV2PoolAccountProperties {
 
     /// The decay curve, `Some` **only** for the two time-scheduler modes.
     pub fee_scheduler: Option<FeeSchedulerParams>,
+
+    /// The price range and the price at the read, Q64.64 square roots; these five are
+    /// `None` together, for an account too short to hold them.
+    /// ⚠️ A `Compounding` pool has no range: it reads `0` and `u128::MAX`.
+    pub sqrt_min_price: Option<u128>,
+    pub sqrt_max_price: Option<u128>,
+    pub sqrt_price: Option<u128>,
+
+    /// `CollectFeeMode`: 0 both tokens, 1 token B only, 2 compounding.
+    pub collect_fee_mode: Option<u8>,
+
+    /// The pool's liquidity locked for good, in L.
+    pub permanent_lock_liquidity: Option<u128>,
 }

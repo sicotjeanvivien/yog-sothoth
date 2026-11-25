@@ -45,6 +45,11 @@ fn expected_properties() -> PoolAccountProperties {
         has_dynamic_fee: true,
         // A constant fee: no decay curve, `number_of_period == 0`.
         fee_scheduler: None,
+        sqrt_min_price: Some(0),
+        sqrt_max_price: Some(0),
+        sqrt_price: Some(0),
+        collect_fee_mode: Some(0),
+        permanent_lock_liquidity: Some(0),
     })
 }
 

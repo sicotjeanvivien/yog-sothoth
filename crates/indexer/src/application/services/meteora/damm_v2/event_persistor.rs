@@ -105,7 +105,7 @@ impl MeteoraDammV2EventPersistor {
             MeteoraDammV2Event::ClosePosition(e) => self.persist_close_position(e).await,
             MeteoraDammV2Event::LockPosition(e) => self.persist_lock_position(e).await,
             MeteoraDammV2Event::PermanentLockPosition(e) => {
-                self.persist_permanent_lock_position(e).await
+                self.persist_permanent_lock_position(e, kind).await
             }
             MeteoraDammV2Event::InitializePool(e) => self.persist_initialize_pool(e, kind).await,
             MeteoraDammV2Event::SetPoolStatus(e) => self.persist_set_pool_status(e).await,
@@ -363,13 +363,22 @@ impl MeteoraDammV2EventPersistor {
             .map_err(anyhow::Error::new)
     }
 
+    /// The pool's permanent total is an account property: flagged for yog-context to reread.
     async fn persist_permanent_lock_position(
         &self,
         event: &MeteoraDammV2PermanentLockPositionEvent,
+        kind: &'static str,
     ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
+        if let Err(err) = self
+            .pool_maintenance
+            .mark_needs_refresh(Self::PROTOCOL, &event.pool_address)
+            .await
+        {
+            warn!(error = %err, kind, "mark_needs_refresh failed");
+        }
         self.repos
             .permanent_lock_position
             .insert(event)

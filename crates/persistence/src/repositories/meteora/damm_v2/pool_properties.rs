@@ -18,7 +18,9 @@ use yog_core::{
     },
 };
 
-use crate::repositories::helper::{convert_string_to_pubkey, convert_u64_to_i64, map_sqlx_error};
+use crate::repositories::helper::{
+    convert_string_to_pubkey, convert_u64_to_i64, convert_u128_to_bigdecimal, map_sqlx_error,
+};
 
 pub struct PgMeteoraDammV2PoolPropertiesRepository {
     pool: PgPool,
@@ -65,8 +67,8 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
     /// Pools never resolved (a NULL column) or flagged `needs_refresh`, oldest first.
     /// The flag is lowered by the registry write, which the caller issues last.
     async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>> {
-        // ⚠️ Not `base_fee_kind`: NULL for a mode this build cannot map, it would requeue the
-        // pool every cycle and starve the batch. `has_dynamic_fee` always decodes.
+        // ⚠️ Not `base_fee_kind` nor the range columns: NULL for an account that cannot give them,
+        // they would requeue the pool every cycle and starve the batch. `has_dynamic_fee` always decodes.
         let rows = sqlx::query!(
             r#"
             SELECT p.pool_address
@@ -142,8 +144,10 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
                 (pool_address, protocol_fee_percent, referral_fee_percent,
                  base_fee_kind, has_dynamic_fee,
                  cliff_fee_numerator, number_of_period, period_frequency,
-                 reduction_factor, activation_point, activation_type)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                 reduction_factor, activation_point, activation_type,
+                 sqrt_min_price, sqrt_max_price, sqrt_price, collect_fee_mode,
+                 permanent_lock_liquidity)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             ON CONFLICT (pool_address) DO UPDATE
                 SET protocol_fee_percent = EXCLUDED.protocol_fee_percent,
                     referral_fee_percent = EXCLUDED.referral_fee_percent,
@@ -165,7 +169,12 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
                     period_frequency     = EXCLUDED.period_frequency,
                     reduction_factor     = EXCLUDED.reduction_factor,
                     activation_point     = EXCLUDED.activation_point,
-                    activation_type      = EXCLUDED.activation_type
+                    activation_type      = EXCLUDED.activation_type,
+                    sqrt_min_price           = EXCLUDED.sqrt_min_price,
+                    sqrt_max_price           = EXCLUDED.sqrt_max_price,
+                    sqrt_price               = EXCLUDED.sqrt_price,
+                    collect_fee_mode         = EXCLUDED.collect_fee_mode,
+                    permanent_lock_liquidity = EXCLUDED.permanent_lock_liquidity
             "#,
             pool_address.to_string(),
             protocol_pct,
@@ -178,6 +187,19 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
             reduction_factor,
             activation_point,
             activation_type,
+            properties
+                .sqrt_min_price
+                .map(|v| convert_u128_to_bigdecimal(v, "sqrt_min_price")),
+            properties
+                .sqrt_max_price
+                .map(|v| convert_u128_to_bigdecimal(v, "sqrt_max_price")),
+            properties
+                .sqrt_price
+                .map(|v| convert_u128_to_bigdecimal(v, "sqrt_price")),
+            properties.collect_fee_mode.map(i16::from),
+            properties
+                .permanent_lock_liquidity
+                .map(|v| convert_u128_to_bigdecimal(v, "permanent_lock_liquidity")),
         )
         .execute(&self.pool)
         .await

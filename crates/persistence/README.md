@@ -898,6 +898,13 @@ same `Self::PROTOCOL`. What the constraint adds is survival: those guards sit in
 loops and call sequences no compiler protects, and hold only for today's
 callers. See `tests/pool_properties.rs`.
 
+**The price range and the permanent lock (056).** The cp-amm satellite also holds the
+account's `sqrt_min_price`, `sqrt_max_price`, `sqrt_price` (at the read), `collect_fee_mode`
+and `permanent_lock_liquidity`, all `NUMERIC(39,0)` but the mode, `NULL` for an account too short to hold them. The
+unresolved queue does not wait for them — it would requeue such an account forever — so the
+migration flags every DAMM v2 pool `needs_refresh` once, and a permanent lock flags its pool
+for the next read.
+
 ## `setup_roles.sql`
 
 Provisioning script applied as the admin role, by
