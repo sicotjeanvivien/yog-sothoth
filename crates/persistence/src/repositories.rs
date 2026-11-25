@@ -34,6 +34,8 @@ mod swap_flow;
 mod token_activity;
 mod token_metadata;
 mod token_price;
+mod token_tvl;
+mod vesting_unlock;
 mod watched_pool;
 
 pub use analytic::PgAnalyticRepository;
@@ -83,4 +85,6 @@ pub use swap_flow::PgSwapFlowRepository;
 pub use token_activity::PgTokenActivityRepository;
 pub use token_metadata::PgTokenMetadataRepository;
 pub use token_price::PgTokenPriceRepository;
+pub use token_tvl::PgTokenTvlRepository;
+pub use vesting_unlock::PgVestingUnlockRepository;
 pub use watched_pool::PgWatchedPoolRepository;

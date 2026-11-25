@@ -1163,8 +1163,20 @@ export const zProtocolRotationRunBucketResponse = z.object({
 
 export type ProtocolRotationRunBucketResponse = z.infer<typeof zProtocolRotationRunBucketResponse>;
 
+export const zProtocolTvlMeteoraDammV2Response = z.object({
+    lockedUsd: zUnsignedDecimal,
+    permanentUsd: zUnsignedDecimal,
+    poolsLocked: zCount,
+    poolsLockedUnvalued: zCount,
+    vestingCoveredSince: z.iso.datetime({ offset: true }).nullable(),
+    vestingUsd: zUnsignedDecimal
+});
+
+export type ProtocolTvlMeteoraDammV2Response = z.infer<typeof zProtocolTvlMeteoraDammV2Response>;
+
 export const zProtocolTvlResponse = z.object({
     at: z.iso.datetime({ offset: true }),
+    meteoraDammV2: zProtocolTvlMeteoraDammV2Response.nullable(),
     poolsPriced: zCount,
     poolsUnvalued: zCount,
     protocol: zProtocolResponse,
@@ -1178,6 +1190,7 @@ export const zReadingResponseProtocolTvlResponse = z.object({
     coveredSince: z.iso.datetime({ offset: true }).nullable(),
     items: z.array(z.object({
         at: z.iso.datetime({ offset: true }),
+        meteoraDammV2: zProtocolTvlMeteoraDammV2Response.nullable(),
         poolsPriced: zCount,
         poolsUnvalued: zCount,
         protocol: zProtocolResponse,
@@ -1351,6 +1364,35 @@ export const zTokenResponse = z.object({
 
 export type TokenResponse = z.infer<typeof zTokenResponse>;
 
+export const zTokenTvlPageTotalResponse = z.object({
+    lockedUsd: zUnsignedDecimal.nullable(),
+    tvlUsd: zUnsignedDecimal.nullable()
+});
+
+export type TokenTvlPageTotalResponse = z.infer<typeof zTokenTvlPageTotalResponse>;
+
+export const zTokenTvlResponse = z.object({
+    lockedUsd: zUnsignedDecimal.nullable(),
+    pools: zCount,
+    token: zEmbeddedTokenResponse,
+    tvlUsd: zUnsignedDecimal
+});
+
+export type TokenTvlResponse = z.infer<typeof zTokenTvlResponse>;
+
+export const zTokenTvlPageResponse = z.object({
+    at: z.iso.datetime({ offset: true }).nullable(),
+    coveredSince: z.iso.datetime({ offset: true }).nullable(),
+    isFirst: z.boolean(),
+    isLast: z.boolean(),
+    items: z.array(zTokenTvlResponse),
+    nextCursor: z.string().nullable(),
+    prevCursor: z.string().nullable(),
+    total: zTokenTvlPageTotalResponse
+});
+
+export type TokenTvlPageResponse = z.infer<typeof zTokenTvlPageResponse>;
+
 export const zTvlReadingResponse = z.object({
     at: z.iso.datetime({ offset: true }),
     tvlUsd: zUnsignedDecimal.nullable()
@@ -1362,6 +1404,7 @@ export const zProtocolTvlChangeResponse = z.object({
     changeUsd: zSignedDecimal.nullable(),
     discoveredTvlUsd: zUnsignedDecimal.nullable(),
     end: zTvlReadingResponse,
+    meteoraDammV2: zProtocolTvlMeteoraDammV2Response.nullable(),
     protocol: zProtocolResponse,
     start: zTvlReadingResponse.nullable()
 });
@@ -1376,6 +1419,19 @@ export const zTvlTotalResponse = z.object({
 });
 
 export type TvlTotalResponse = z.infer<typeof zTvlTotalResponse>;
+
+export const zVestingUnlockResponse = z.object({
+    amountUsd: zUnsignedDecimal.nullable(),
+    liquidity: zU128String,
+    poolAddress: z.string().min(1),
+    position: z.string().min(1),
+    protocol: zProtocolResponse,
+    tokenASymbol: z.string().nullable(),
+    tokenBSymbol: z.string().nullable(),
+    unlocksAt: z.iso.datetime({ offset: true })
+});
+
+export type VestingUnlockResponse = z.infer<typeof zVestingUnlockResponse>;
 
 export const zWindowPeriodResponse = z.object({
     asOf: z.iso.datetime({ offset: true }).nullable(),
@@ -1507,6 +1563,7 @@ export const zSeriesResponseProtocolTvlResponse = zWindowPeriodResponse.and(z.ob
     interval: zIntervalResponse,
     items: z.array(z.object({
         at: z.iso.datetime({ offset: true }),
+        meteoraDammV2: zProtocolTvlMeteoraDammV2Response.nullable(),
         poolsPriced: zCount,
         poolsUnvalued: zCount,
         protocol: zProtocolResponse,
@@ -1572,6 +1629,7 @@ export const zTvlTotalsResponseProtocolTvlChangeResponse = zWindowPeriodResponse
         changeUsd: zSignedDecimal.nullable(),
         discoveredTvlUsd: zUnsignedDecimal.nullable(),
         end: zTvlReadingResponse,
+        meteoraDammV2: zProtocolTvlMeteoraDammV2Response.nullable(),
         protocol: zProtocolResponse,
         start: zTvlReadingResponse.nullable()
     })),
@@ -1580,6 +1638,19 @@ export const zTvlTotalsResponseProtocolTvlChangeResponse = zWindowPeriodResponse
 }));
 
 export type TvlTotalsResponseProtocolTvlChangeResponse = z.infer<typeof zTvlTotalsResponseProtocolTvlChangeResponse>;
+
+export const zVestingUnlockPageResponse = z.object({
+    asOf: z.iso.datetime({ offset: true }).nullable(),
+    coveredSince: z.iso.datetime({ offset: true }).nullable(),
+    isFirst: z.boolean(),
+    isLast: z.boolean(),
+    items: z.array(zVestingUnlockResponse),
+    nextCursor: z.string().nullable(),
+    prevCursor: z.string().nullable(),
+    window: zWindowResponse
+});
+
+export type VestingUnlockPageResponse = z.infer<typeof zVestingUnlockPageResponse>;
 
 export const zWindowRowResponse = zWindowPeriodResponse.and(z.object({
     window: zWindowResponse
@@ -2594,6 +2665,18 @@ export const zGetProtocolTvlReadingPath = z.object({
 
 export const zGetProtocolTvlReadingResponse = zReadingResponseProtocolTvlResponse;
 
+export const zListProtocolTvlByTokenPath = z.object({
+    protocol: z.string()
+});
+
+export const zListProtocolTvlByTokenQuery = z.object({
+    sort: z.enum(['tvl', 'locked']).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListProtocolTvlByTokenResponse = zTokenTvlPageResponse;
+
 export const zGetProtocolTvlSeriesPath = z.object({
     protocol: z.string()
 });
@@ -2623,6 +2706,23 @@ export const zGetProtocolTvlTotalsQuery = z.object({
 });
 
 export const zGetProtocolTvlTotalsResponse = zTvlTotalsResponseProtocolTvlChangeResponse;
+
+export const zListProtocolVestingUnlocksPath = z.object({
+    protocol: z.string()
+});
+
+export const zListProtocolVestingUnlocksQuery = z.object({
+    window: z.enum([
+        '24h',
+        '7d',
+        '30d'
+    ]).optional(),
+    sort: z.enum(['time', 'amount']).optional(),
+    cursor: z.string().min(1).nullish(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+export const zListProtocolVestingUnlocksResponse = zVestingUnlockPageResponse;
 
 export const zListRewardChangesQuery = z.object({
     window: z.enum([

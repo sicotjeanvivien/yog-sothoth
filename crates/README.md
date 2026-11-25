@@ -290,13 +290,14 @@ There is no central registry. A protocol is added by writing isolated per-protoc
 | `PoolService::get_pool` (`application/services/pool_service.rs`) | `api` | the pool's protocol properties in `/api/pools/{pool}` |
 | the `match` of the nine `Pg*EventRepository` of the on-chain lists (`PgSwapEventRepository`, …, `PgPoolChangeEventRepository`) | `persistence` | the protocol's event tables in the on-chain lists (a `UNION ALL` at the root) |
 | the `event_tables!` list of each on-chain collection's `*Table` (`core/src/domain/<collection>/repository.rs`) and the `match` of its `Pg*EventRepository`'s `live_tip`/`live_after` (`<collection>/live.rs`) | `core`, `persistence` | the protocol's tables streamed on `/api/live`, one poller each |
+| `ProtocolTvlPart` (`core/src/domain/protocol_tvl/part.rs`), `protocol_part` (`persistence/src/repositories/protocol_tvl/rows.rs`) and the `meteora_damm_v2_of` beside each block's response (`api/src/http/dto/response/tvl/`) | `core`, `persistence`, `api` | the part of a TVL reading only the protocol has, and its block in `tvl` |
 | `PgRotationRunRepository::find_measured_since` | `persistence` | when the protocol's rotation runs are measured from (`None` while its writer does not draw them) |
 | `PgClaimTotalsRepository::find_measured_since` | `persistence` | when the protocol's claims are valued from (`None` while its writer does not value them) |
 | `PgPositionChangeCountsRepository::list_tranches` | `persistence` | the protocol's position changes per five-minute tranche, read from its own `*_position_changes_every` function (empty without one) |
 | `SwapEvent`, `LiquidityChangeEvent`, `PoolCreationEvent`, `PositionChangeEvent`, `PositionFeeClaimEvent`, `ProtocolFeeClaimEvent`, `RewardClaimEvent`, `RewardChangeEvent`, `PoolChangeEvent` and their `From` in `http/dto/response/` | `core`, `api` | the protocol's variant and its block in the on-chain lists |
 | `formatProtocolLabel` (`web/src/lib/format/format-protocol.ts`) | `web` | display label |
 
-The two-level enums (`DomainEvent`, `PoolAccountProperties`) and the switch of `formatProtocolLabel` are matched exhaustively, so adding a variant breaks the build, or the web's typecheck, at each site that must follow instead of silently dropping the protocol.
+The two-level enums (`DomainEvent`, `PoolAccountProperties`, `ProtocolTvlPart`) and the switch of `formatProtocolLabel` are matched exhaustively, so adding a variant breaks the build, or the web's typecheck, at each site that must follow instead of silently dropping the protocol.
 
 ---
 

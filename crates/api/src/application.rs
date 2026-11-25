@@ -30,6 +30,7 @@ pub(crate) use services::{
     ProtocolFeeClaimEventService, ProtocolTvlService, RewardChangeEventService,
     RewardClaimEventService, RotationRunService, RotationRunsError, SeriesInterval,
     SignalListParams, SignalService, SwapActivityService, SwapEventService, SwapTotals,
-    TokenActivityRead, TokenAggregate, TokenService, WindowsService,
+    TokenActivityRead, TokenAggregate, TokenService, TokenTvlRead, TokenTvlService,
+    VestingUnlockRead, VestingUnlockService, WindowsService,
 };
 pub(crate) use work_slots::WorkSlots;

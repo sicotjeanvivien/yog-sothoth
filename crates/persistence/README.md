@@ -51,6 +51,9 @@ persistence/
 │   │   │                     measure is read over; the tokens by volume)
 │   │   ├── signal/, swap_flow/, liquidity_flow/
 │   │   ├── rotation_runs/ (PgRotationRunRepository: the rotation runs yog-analytic drew)
+│   │   ├── token_tvl/, vesting_unlock/ (the TVL by token and the vesting releases of the
+│   │   │                     last reading, each read with its reading: cursor.rs its keys,
+│   │   │                     query.rs one statement per order, page.rs the page, rows.rs)
 │   │   ├── token_metadata/, token_price/, network_status/, watched_pool/,
 │   │   │   observed_slots.rs (the slots each ingestion session watched)
 │   │   ├── announcement/
@@ -912,6 +915,11 @@ concentrated amounts of L; `yog_damm_v2_pool_locked_liquidity(at)` gives, per po
 liquidity, its permanent and vesting L and what one L is worth on each side. Both run as their caller:
 `yog_analytic` holds SELECT on what they read. `analytic_protocol_tvl` gains the locked figures;
 `analytic_tvl_by_token` and `analytic_vesting_unlocks` keep the last reading only.
+
+**The first vesting observed (058).** `analytic_protocol_tvl.vesting_covered_since`, written with each locked
+reading: the vestings locked before it are out of reach, and `tvl` says so. Read by `PgProtocolTvlRepository`,
+beside the locked figures; `PgTokenTvlRepository` and `PgVestingUnlockRepository` read the two last-reading
+tables, each with its reading in the same statement.
 
 ## `setup_roles.sql`
 

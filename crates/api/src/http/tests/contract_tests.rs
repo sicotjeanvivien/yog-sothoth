@@ -201,7 +201,7 @@ fn file_name(path: &Path) -> String {
 fn every_api_route_is_in_the_document() {
     let doc = document();
     let paths = doc["paths"].as_object().expect("paths");
-    assert_eq!(paths.len(), 80, "{:?}", paths.keys().collect::<Vec<_>>());
+    assert_eq!(paths.len(), 82, "{:?}", paths.keys().collect::<Vec<_>>());
 }
 
 /// A document of one schema, as `finish` receives it.
@@ -299,10 +299,10 @@ fn the_documented_bounds_are_the_validated_ones() {
         }
     }
     assert_eq!(
-        seen, 41,
-        "limit on the three signal feeds, the two token rankings, the two liquidity moves, the \
+        seen, 43,
+        "limit on the three signal feeds, the three token rankings, the two liquidity moves, the \
          three pool lists, the tokens, a token's prices, the twenty-six on-chain event lists, the \
-         announcements and the two lists of rotation runs"
+         announcements, the two lists of rotation runs and the vesting releases"
     );
 }
 
@@ -390,7 +390,7 @@ fn every_operation_answers_its_failures_as_problem_details() {
             checked += 1;
         }
     }
-    assert_eq!(checked, 80, "one operation per /api route");
+    assert_eq!(checked, 82, "one operation per /api route");
 }
 
 /// Red when a response has no `description`, which OpenAPI 3.1 requires.
@@ -446,7 +446,7 @@ fn every_handler_declares_the_body_and_query_it_has() {
             checked += 1;
         }
     }
-    assert_eq!(checked, 80, "one #[utoipa::path] per /api route");
+    assert_eq!(checked, 82, "one #[utoipa::path] per /api route");
     assert!(drift.is_empty(), "{drift:?}");
 }
 
@@ -524,7 +524,7 @@ fn the_document_says_which_credential_each_route_takes() {
     }
     assert_eq!(
         counted,
-        (4, 2, 74),
+        (4, 2, 76),
         "open routes, live stream, routes taking a key"
     );
 }

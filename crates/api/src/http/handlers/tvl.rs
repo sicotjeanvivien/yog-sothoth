@@ -7,13 +7,16 @@ use axum::{
 };
 use yog_core::domain::Protocol;
 
-use crate::application::SeriesInterval;
+use crate::application::{SeriesInterval, TokenTvlRead};
 use crate::http::{
     AppState,
     dto::{
         ProtocolTvlChangeResponse, ProtocolTvlResponse, ReadingResponse, SeriesResponse,
-        TvlTotalsResponse,
-        request::{MeasureWindowParams, NoQuery, ReadingSeriesParams, parse_protocol},
+        TokenTvlPageResponse, TvlTotalsResponse,
+        request::{
+            ListTokenTvlRequest, MeasureWindowParams, NoQuery, ReadingSeriesParams, TokenTvlParams,
+            parse_protocol,
+        },
     },
     error::ApiError,
 };
@@ -163,4 +166,34 @@ async fn get_change(
         .get_tvl_change(window, protocol)
         .await?;
     Ok(Json(TvlTotalsResponse::new(window, measured)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/protocols/{protocol}/tvl/by-token",
+    params(TokenTvlParams),
+    responses((
+        status = 200,
+        description = "A page of the protocol's tokens at its last TVL reading, the most held first \
+                       or the most locked first, with the protocol's own reading as `total`.",
+        body = TokenTvlPageResponse
+    ))
+)]
+pub(crate) async fn list_protocol_tvl_by_token(
+    State(state): State<AppState>,
+    Path(protocol): Path<String>,
+    Query(params): Query<TokenTvlParams>,
+) -> Result<Json<TokenTvlPageResponse>, ApiError> {
+    let protocol = parse_protocol(&protocol)?;
+    let request = ListTokenTvlRequest::parse(params, protocol)?;
+    match state
+        .token_tvl_service
+        .list_by_token(protocol, request.order, request.cursor, request.limit)
+        .await?
+    {
+        TokenTvlRead::Page(read) => Ok(Json(TokenTvlPageResponse::new(read.map(|r| *r))?)),
+        TokenTvlRead::CursorExpired => Err(ApiError::BadRequest(
+            "`cursor` belongs to a reading replaced since: start again without it".to_string(),
+        )),
+    }
 }

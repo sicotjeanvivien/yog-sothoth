@@ -1,0 +1,153 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH latest AS (\n                SELECT DISTINCT ON (protocol) protocol, bucket, tvl_usd, locked_usd, permanent_usd,\n                       vesting_usd, pools_locked, pools_locked_unvalued, vesting_covered_since\n                  FROM analytic_protocol_tvl\n                 WHERE bucket <= $1 AND ($4::TEXT IS NULL OR protocol = $4)\n                 ORDER BY protocol, bucket DESC\n            )\n            SELECT l.protocol, l.bucket + INTERVAL '1 hour' AS \"end_at!\", l.tvl_usd AS end_tvl_usd,\n                   s.bucket + INTERVAL '1 hour' AS start_at, s.tvl_usd AS start_tvl_usd,\n                   d.tvl_usd AS \"discovered_tvl_usd?\", l.locked_usd, l.permanent_usd, l.vesting_usd,\n                   l.pools_locked, l.pools_locked_unvalued, l.vesting_covered_since\n              FROM latest l\n              LEFT JOIN analytic_protocol_tvl s\n                     ON s.protocol = l.protocol\n                    AND s.bucket = l.bucket - make_interval(hours => $2)\n                    -- ⚠️ A last reading older than `$1` would serve a change ending before `asOf`.\n                    AND l.bucket = $1\n              LEFT JOIN analytic_protocol_tvl_discovered d\n                     ON d.protocol = l.protocol AND d.period = $3 AND d.bucket = l.bucket\n             ORDER BY l.protocol\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "protocol"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "end_at!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "end_tvl_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "tvl_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "start_at",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "start_tvl_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "tvl_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "discovered_tvl_usd?",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl_discovered",
+            "name": "tvl_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "locked_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "locked_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "permanent_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "permanent_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "vesting_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "vesting_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "pools_locked",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "pools_locked"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "pools_locked_unvalued",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "pools_locked_unvalued"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "vesting_covered_since",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "vesting_covered_since"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int4",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      true,
+      null,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "8ed29efe843c7915a647268a81319392992c8080f8ba5909d9e87d8ce1b37bf4"
+}

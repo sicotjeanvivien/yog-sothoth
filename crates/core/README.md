@@ -15,7 +15,9 @@ core/src/
 │   │                       model + repository trait; damm_v2.rs holds the
 │   │                       MeteoraDammV2Event sub-enum; pool_properties/ holds
 │   │                       this protocol's satellite payload; pool_fees/ the
-│   │                       fee parameters a creation or fee update carries)
+│   │                       fee parameters a creation or fee update carries;
+│   │                       locked_liquidity.rs the part of a TVL reading only
+│   │                       this protocol has)
 │   ├── meteora/dlmm/      (pool_properties/ only — events not extracted yet)
 │   ├── pool/              (Pool, PoolRepository — cross-protocol registry; PoolEntry,
 │   │                       PoolScope — the catalog PoolCatalog pages)
@@ -52,8 +54,13 @@ core/src/
 │   │                       ClaimTotalsLookup)
 │   ├── protocol_tvl/      (ProtocolTvl, a reading at an instant; ProtocolTvlChange, from the
 │   │                       reading a window before; TvlChangeTotal; LiquidityTurnover, a
-│   │                       window's volume over the last TVL — ProtocolTvlLookup)
+│   │                       window's volume over the last TVL — ProtocolTvlLookup; part.rs,
+│   │                       ProtocolTvlPart, the part only one protocol has)
 │   ├── discovered_tvl/    (ProtocolDiscoveredTvl — DiscoveredTvlLookup)
+│   ├── token_tvl/         (TokenTvl, a protocol's tokens at its last reading, ranked by TVL
+│   │                       or locked — TokenTvlLookup; read.rs, its order, cursor, total and page)
+│   ├── vesting_unlocks/   (VestingUnlock, what the vesting locks release after the last
+│   │                       reading — VestingUnlockLookup; read.rs, its order, cursor and page)
 │   ├── protocol_activity/ (ProtocolActivityLookup: the frozen hours every measure is read over)
 │   ├── token_activity/    (TokenActivity — TokenActivityFeed, by volume)
 │   ├── signals/           (Signal, Severity, SignalDetector, EvalContext,

@@ -191,8 +191,9 @@ in `persistence` (`repositories/analytic.rs`).
   vesting known; otherwise, or compounding, or its range unread, it is counted apart (`pools_locked_unvalued`).
   The same statement replaces the TVL by token of the last reading (`analytic_tvl_by_token`: every token with
   a valued side, its pools counted valued or not) and the vesting releases of the next 30 days
-  (`analytic_vesting_unlocks`, one row per instant, at the reading's prices; none for a slot-counted
-  schedule, whose instant would be an estimate).
+  (`analytic_vesting_unlocks`, one row per position and instant, its schedules' releases summed, at the
+  reading's prices; none for a slot-counted schedule, whose instant would be an estimate), and the first
+  vesting observed (`vesting_covered_since`).
 - **Discovered part**: with each TVL, for every window — 24 h, 7 and 30 days — the
   TVL of the pools first seen since the window's start point was last measured (its
   `from` when there is none) whose `initialize_pool` was not observed. Such a

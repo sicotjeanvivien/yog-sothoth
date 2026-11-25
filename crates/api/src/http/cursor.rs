@@ -15,7 +15,8 @@ use yog_core::{
         AnnouncementCursor, AnnouncementStatus, EventCursor, EventScope, LiquidityMoveCursor,
         LiquidityMoveKind, LiquidityMoveList, LiquidityMoveOrder, LiquidityMoveScope, PoolCursor,
         PoolScope, Protocol, RotationRunCursor, RotationRunOrder, RotationRunScope, SignalCursor,
-        TokenActivityCursor, TokenCursor, TokenPriceCursor, Window,
+        TokenActivityCursor, TokenCursor, TokenPriceCursor, TokenTvlCursor, TokenTvlOrder,
+        VestingUnlockCursor, VestingUnlockOrder, Window,
     },
 };
 
@@ -89,6 +90,31 @@ struct RotationRunCursorWire {
     volume_usd: String,
     started_at: String,
     pool: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TokenTvlCursorWire {
+    protocol: String,
+    at: String,
+    order: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    value: Option<String>,
+    mint: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct VestingUnlockCursorWire {
+    protocol: String,
+    as_of: String,
+    window: String,
+    order: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    amount_usd: Option<String>,
+    unlocks_at: String,
+    pool: String,
+    position: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -245,6 +271,23 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
             volume_usd: c.volume_usd.to_string(),
             started_at: c.started_at.to_rfc3339(),
             pool: c.pool_address.to_string(),
+        }),
+        Cursor::TokenTvl(c) => encode_b64_json(&TokenTvlCursorWire {
+            protocol: c.protocol.as_str().to_owned(),
+            at: c.at.to_rfc3339(),
+            order: token_tvl_order_tag(c.order).to_owned(),
+            value: c.value.map(|v| v.to_string()),
+            mint: c.mint.to_string(),
+        }),
+        Cursor::VestingUnlock(c) => encode_b64_json(&VestingUnlockCursorWire {
+            protocol: c.protocol.as_str().to_owned(),
+            as_of: c.as_of.to_rfc3339(),
+            window: c.window.as_str().to_owned(),
+            order: vesting_unlock_order_tag(c.order).to_owned(),
+            amount_usd: c.amount_usd.map(|v| v.to_string()),
+            unlocks_at: c.unlocks_at.to_rfc3339(),
+            pool: c.pool_address.to_string(),
+            position: c.position.to_string(),
         }),
         Cursor::Announcement(c) => encode_b64_json(&AnnouncementCursorWire {
             status: c.status.map(|s| s.as_str().to_owned()),
@@ -509,3 +552,81 @@ impl LiveCursor {
 #[cfg(test)]
 #[path = "tests/cursor_tests.rs"]
 mod tests;
+
+fn token_tvl_order_tag(order: TokenTvlOrder) -> &'static str {
+    match order {
+        TokenTvlOrder::Tvl => "tvl",
+        TokenTvlOrder::Locked => "locked",
+    }
+}
+
+fn vesting_unlock_order_tag(order: VestingUnlockOrder) -> &'static str {
+    match order {
+        VestingUnlockOrder::Time => "time",
+        VestingUnlockOrder::Amount => "amount",
+    }
+}
+
+fn malformed(what: &str) -> ApiError {
+    ApiError::BadRequest(format!("invalid cursor: malformed {what}"))
+}
+
+/// A cursor of `protocol`'s tokens in `order`; one of another list is refused.
+pub(crate) fn decode_token_tvl_cursor(
+    raw: &str,
+    protocol: Protocol,
+    order: TokenTvlOrder,
+) -> Result<TokenTvlCursor, ApiError> {
+    let wire: TokenTvlCursorWire = decode_b64_json(raw)?;
+    if wire.protocol != protocol.as_str() || wire.order != token_tvl_order_tag(order) {
+        return Err(ApiError::BadRequest(
+            "invalid cursor: taken in another list".to_string(),
+        ));
+    }
+    let value = wire
+        .value
+        .map(|v| Decimal::from_str(&v).map_err(|_| malformed("value")))
+        .transpose()?;
+    // ⚠️ Only an unknown locked part has no value: a TVL key without one would match nothing.
+    if order == TokenTvlOrder::Tvl && value.is_none() {
+        return Err(malformed("value"));
+    }
+    Ok(TokenTvlCursor {
+        protocol,
+        at: parse_rfc3339(&wire.at)?,
+        order,
+        value,
+        mint: Pubkey::from_str(&wire.mint).map_err(|_| malformed("mint"))?,
+    })
+}
+
+/// A cursor of `protocol`'s releases over `window` in `order`; one of another list is refused.
+pub(crate) fn decode_vesting_unlock_cursor(
+    raw: &str,
+    protocol: Protocol,
+    window: Window,
+    order: VestingUnlockOrder,
+) -> Result<VestingUnlockCursor, ApiError> {
+    let wire: VestingUnlockCursorWire = decode_b64_json(raw)?;
+    if wire.protocol != protocol.as_str()
+        || wire.window != window.as_str()
+        || wire.order != vesting_unlock_order_tag(order)
+    {
+        return Err(ApiError::BadRequest(
+            "invalid cursor: taken in another list".to_string(),
+        ));
+    }
+    Ok(VestingUnlockCursor {
+        protocol,
+        as_of: parse_rfc3339(&wire.as_of)?,
+        window,
+        order,
+        amount_usd: wire
+            .amount_usd
+            .map(|v| Decimal::from_str(&v).map_err(|_| malformed("amount")))
+            .transpose()?,
+        unlocks_at: parse_rfc3339(&wire.unlocks_at)?,
+        pool_address: Pubkey::from_str(&wire.pool).map_err(|_| malformed("pool"))?,
+        position: Pubkey::from_str(&wire.position).map_err(|_| malformed("position"))?,
+    })
+}

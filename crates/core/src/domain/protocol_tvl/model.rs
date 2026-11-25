@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
 use crate::domain::swap_activity::sum_known;
-use crate::domain::{Protocol, ProtocolSwapActivity};
+use crate::domain::{Protocol, ProtocolSwapActivity, ProtocolTvlPart};
 
 /// One protocol's TVL as last measured during the hour that closes at `at`: its pools
 /// valued by their priced sides; `pools_unvalued` counts those with no side valued.
@@ -15,6 +15,8 @@ pub struct ProtocolTvl {
     pub tvl_usd: Option<Decimal>,
     pub pools_priced: i64,
     pub pools_unvalued: i64,
+    /// `None` for another protocol, and for a reading made before the locks were measured.
+    pub protocol_part: Option<ProtocolTvlPart>,
 }
 
 /// A TVL reading: the protocol's TVL as measured during the hour that closes at `at`.
@@ -32,6 +34,8 @@ pub struct ProtocolTvlChange {
     pub end: TvlReading,
     pub start: Option<TvlReading>,
     pub discovered_tvl_usd: Option<Decimal>,
+    /// The part of the last reading only its protocol has.
+    pub protocol_part: Option<ProtocolTvlPart>,
 }
 
 impl ProtocolTvlChange {
@@ -45,6 +49,7 @@ impl ProtocolTvlChange {
             },
             start: None,
             discovered_tvl_usd: None,
+            protocol_part: reading.protocol_part,
         }
     }
 

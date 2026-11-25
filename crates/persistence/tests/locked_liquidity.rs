@@ -5,8 +5,13 @@ use chrono::{DateTime, Duration, DurationRound, Utc};
 use sqlx::PgPool;
 use sqlx::types::BigDecimal;
 use std::str::FromStr;
-use yog_core::domain::{AnalyticRepository, TvlMeasure, last_closed_hour};
-use yog_persistence::PgAnalyticRepository;
+use yog_core::domain::{
+    AnalyticRepository, Protocol, ProtocolTvlLookup, ProtocolTvlPart, TokenTvlLookup,
+    TokenTvlOrder, TvlMeasure, VestingUnlockLookup, VestingUnlockOrder, Window, last_closed_hour,
+};
+use yog_persistence::{
+    PgAnalyticRepository, PgProtocolTvlRepository, PgTokenTvlRepository, PgVestingUnlockRepository,
+};
 
 use super::helpers::{pk, price_mint, setup_roles_and_connect_as};
 
@@ -590,4 +595,255 @@ async fn a_failed_locked_reading_writes_no_tvl_either(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(readings.0, 0);
+}
+
+/// One reading of DAMM v2 at `bucket`, measured at `measured_at`, its locked part `locked` or not.
+async fn reading(
+    pool: &PgPool,
+    bucket: DateTime<Utc>,
+    measured_at: DateTime<Utc>,
+    locked: Option<&str>,
+) {
+    protocol_reading(pool, "meteora_damm_v2", bucket, measured_at, locked).await;
+}
+
+async fn protocol_reading(
+    pool: &PgPool,
+    protocol: &str,
+    bucket: DateTime<Utc>,
+    measured_at: DateTime<Utc>,
+    locked: Option<&str>,
+) {
+    sqlx::query(
+        "INSERT INTO analytic_protocol_tvl
+           (protocol, bucket, tvl_usd, pools_priced, pools_unvalued, measured_at, locked_usd,
+            permanent_usd, vesting_usd, pools_locked, pools_locked_unvalued, vesting_covered_since)
+         VALUES ($4, $1, 1000, 3, 0, $2, $3::NUMERIC, $3::NUMERIC, 0,
+                 CASE WHEN $3 IS NULL THEN NULL ELSE 2 END, CASE WHEN $3 IS NULL THEN NULL ELSE 1 END,
+                 CASE WHEN $3 IS NULL THEN NULL ELSE '2026-10-03 11:28:37+00'::TIMESTAMPTZ END)",
+    )
+    .bind(bucket)
+    .bind(measured_at)
+    .bind(locked)
+    .bind(protocol)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+fn hour(h: i64) -> DateTime<Utc> {
+    DateTime::from_timestamp(1_764_000_000 + h * 3_600, 0).unwrap()
+}
+
+/// Mutation: the block built from a reading before the measure, or its columns swapped.
+#[sqlx::test]
+async fn a_reading_carries_its_locked_block_once_measured(pool: PgPool) {
+    reading(&pool, hour(0), hour(1), None).await;
+    reading(&pool, hour(1), hour(2), Some("250")).await;
+    let repo = PgProtocolTvlRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+
+    let readings = repo.list_hourly(hour(0), hour(1), None).await.unwrap();
+
+    assert_eq!(readings[0].protocol_part, None);
+    let Some(ProtocolTvlPart::MeteoraDammV2(block)) = readings[1].protocol_part else {
+        panic!("measured: {:?}", readings[1].protocol_part);
+    };
+    assert_eq!(block.locked_usd.to_string(), "250");
+    assert_eq!((block.pools_locked, block.pools_locked_unvalued), (2, 1));
+    assert!(block.vesting_covered_since.is_some());
+}
+
+/// Mutation: another protocol's reading given the DAMM v2 part.
+#[sqlx::test]
+async fn another_protocol_reading_carries_no_protocol_part(pool: PgPool) {
+    protocol_reading(&pool, "meteora_dlmm", hour(0), hour(1), Some("250")).await;
+    let repo = PgProtocolTvlRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+
+    let readings = repo.list_hourly(hour(0), hour(0), None).await.unwrap();
+
+    assert_eq!(readings.len(), 1);
+    assert_eq!(readings[0].protocol, Protocol::MeteoraDlmm);
+    assert_eq!(readings[0].protocol_part, None);
+}
+
+/// Mutation: either order's key or its tie-break, an unknown locked part sorted first, or the
+/// total summed from the rows.
+#[sqlx::test]
+async fn the_tokens_rank_by_tvl_or_locked_and_page_without_a_gap(pool: PgPool) {
+    reading(&pool, hour(0), hour(1), Some("70")).await;
+    for (seed, tvl, locked) in [
+        (1u8, "500", Some("50")),
+        (2, "300", None),
+        (3, "300", Some("20")),
+        (5, "300", None),
+        (4, "100", Some("60")),
+        // Apart only past a Decimal's 28 digits: a raw keyset would serve one of them twice.
+        (6, "12345.678901234567890123456789012", None),
+        (7, "12345.678901234567890123456789013", None),
+    ] {
+        sqlx::query(
+            "INSERT INTO analytic_tvl_by_token (protocol, bucket, mint, tvl_usd, locked_usd, pools)
+             VALUES ('meteora_damm_v2', $1, $2, $3::NUMERIC, $4::NUMERIC, 1)",
+        )
+        .bind(hour(0))
+        .bind(pk(seed).to_string())
+        .bind(tvl)
+        .bind(locked)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let repo = PgTokenTvlRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+    let mint = |seed: u8| pk(seed);
+    // Ties ranked by mint.
+    let by_mint = |mut seeds: Vec<u8>| {
+        seeds.sort_by_key(|seed| mint(*seed).to_string());
+        seeds
+    };
+    let tvl_order = [
+        by_mint(vec![6, 7]),
+        vec![1],
+        by_mint(vec![2, 3, 5]),
+        vec![4],
+    ]
+    .concat();
+    let locked_order = [vec![4, 1, 3], by_mint(vec![2, 5, 6, 7])].concat();
+
+    for (order, expected) in [
+        (TokenTvlOrder::Tvl, tvl_order),
+        (TokenTvlOrder::Locked, locked_order),
+    ] {
+        let mut seen = Vec::new();
+        let mut cursor = None;
+        loop {
+            let read = repo
+                .list(Protocol::MeteoraDammV2, order, cursor, 1)
+                .await
+                .unwrap()
+                .expect("a reading");
+            assert_eq!(read.at, hour(1));
+            assert!(read.covered_since.is_some(), "the first vesting observed");
+            assert_eq!(
+                read.total.locked_usd.map(|v| v.to_string()),
+                Some("70".to_string())
+            );
+            seen.extend(read.page.items.iter().map(|t| t.mint));
+            match read.page.next_cursor {
+                Some(yog_core::Cursor::TokenTvl(c)) => cursor = Some(*c),
+                _ => break,
+            }
+        }
+        let expected: Vec<_> = expected.into_iter().map(mint).collect();
+        assert_eq!(seen, expected, "{order:?}");
+    }
+}
+
+/// Mutation: the window's bound, its start at the reading, either order or its tie-break, or an
+/// unvalued release sorted first.
+#[sqlx::test]
+async fn the_releases_are_those_of_the_window_after_the_reading(pool: PgPool) {
+    let at = hour(1) + Duration::minutes(5);
+    reading(&pool, hour(0), at, Some("1")).await;
+    for (position, ahead, amount) in [
+        (1u8, Duration::hours(1), Some("5")),
+        (2, Duration::days(2), None),
+        (5, Duration::days(1), None),
+        (3, Duration::days(3), Some("9")),
+        (4, Duration::days(8), Some("100")),
+    ] {
+        sqlx::query(
+            "INSERT INTO analytic_vesting_unlocks
+               (protocol, bucket, pool_address, position, unlocks_at, liquidity, amount_usd)
+             VALUES ('meteora_damm_v2', $1, $2, $3, $4, 7, $5::NUMERIC)",
+        )
+        .bind(hour(0))
+        .bind(pk(9).to_string())
+        .bind(pk(position).to_string())
+        .bind(at + ahead)
+        .bind(amount)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let repo = PgVestingUnlockRepository::new(setup_roles_and_connect_as(&pool, "yog_api").await);
+
+    for (order, expected) in [
+        (VestingUnlockOrder::Time, vec![1, 5, 2, 3]),
+        (VestingUnlockOrder::Amount, vec![3, 1, 5, 2]),
+    ] {
+        let mut seen = Vec::new();
+        let mut cursor = None;
+        loop {
+            let read = repo
+                .list(Protocol::MeteoraDammV2, Window::Week, order, cursor, 1)
+                .await
+                .unwrap()
+                .expect("a reading");
+            assert_eq!(read.as_of, at);
+            seen.extend(read.page.items.iter().map(|u| u.position));
+            match read.page.next_cursor {
+                Some(yog_core::Cursor::VestingUnlock(c)) => cursor = Some(*c),
+                _ => break,
+            }
+        }
+        let expected: Vec<_> = expected.into_iter().map(pk).collect();
+        assert_eq!(seen, expected, "{order:?}");
+    }
+}
+
+/// Mutation: the releases not summed by position and instant, or the first vesting not written.
+#[sqlx::test]
+async fn one_position_releasing_twice_at_once_is_one_row(pool: PgPool) {
+    let now = now();
+    let full = locked_pool(
+        &pool,
+        1,
+        (FULL_RANGE.1, FULL_RANGE.2, FULL_RANGE.3),
+        1,
+        Some(1),
+        "0",
+        FULL_RANGE_DEPOSIT,
+    )
+    .await;
+    let cliff = now.timestamp() + 3_600;
+    vesting(&pool, &full, 0, (cliff, 0, 10, 0, 0)).await;
+    sqlx::query(
+        "INSERT INTO meteora_damm_v2_lock_position_events
+           (pool_address, signature, position, owner, vesting, cliff_point, period_frequency,
+            cliff_unlock_liquidity, liquidity_per_period, number_of_period, timestamp, slot,
+            event_index)
+         VALUES ($1, 'second', 'position-0', 'owner', 'other-vesting', $2, 0, 15, 0, 0,
+                 '2026-10-01 00:00:00+00', 1, 9)",
+    )
+    .bind(&full)
+    .bind(cliff)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
+
+    assert_eq!(
+        repository
+            .measure_tvl(last_closed_hour(now), now)
+            .await
+            .unwrap(),
+        TvlMeasure::Measured
+    );
+
+    let rows: Vec<(String, BigDecimal)> =
+        sqlx::query_as("SELECT position, liquidity FROM analytic_vesting_unlocks")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(rows, vec![("position-0".to_string(), dec("25"))]);
+    let since: (Option<DateTime<Utc>>,) =
+        sqlx::query_as("SELECT vesting_covered_since FROM analytic_protocol_tvl")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        since.0.map(|t| t.to_rfc3339()),
+        Some("2026-10-01T00:00:00+00:00".to_string())
+    );
 }

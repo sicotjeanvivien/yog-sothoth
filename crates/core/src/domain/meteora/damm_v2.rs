@@ -8,6 +8,7 @@ mod initialize_pool_event;
 mod initialize_reward_event;
 mod liquidity_event;
 mod lock_position_event;
+mod locked_liquidity;
 mod permanent_lock_position_event;
 mod pool_fees;
 mod pool_properties;
@@ -19,6 +20,8 @@ mod update_reward_duration_event;
 mod update_reward_funder_event;
 mod withdraw_dead_liquidity_reward_event;
 mod withdraw_ineligible_reward_event;
+
+pub use locked_liquidity::ProtocolTvlMeteoraDammV2;
 
 use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;

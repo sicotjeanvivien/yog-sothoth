@@ -111,11 +111,13 @@ with no wildcard arm, so adding a variant breaks the build there.
   enum of one of its parameters, named like the parameter a client writes
   (`severity` → `SeverityParam`, `sort` → `SortParam`): its module says which
   route it belongs to.
-- **Place.** One type per file. At the top level, what a route returns — its
-  body, or the item of a page — or takes, its `*Request`. A part lives in its
-  owner's folder, one level deep; a response part's file drops the owner's
-  prefix, its type keeps it (`announcement/kind_response.rs` holds
-  `AnnouncementKindResponse`).
+- **Place.** One type per file. A response lives in the folder of its resource
+  (`response/tvl/`, `response/vesting_unlock/`), whose root file declares its files
+  and re-exports what the handlers read; a file there drops the resource's prefix,
+  its type keeps it (`tvl/by_token.rs` holds `TokenTvlResponse`). A route's
+  `*Request` sits at the top level of `request/`. A part lives in its owner's
+  folder, one level deep; a response part's file drops the owner's prefix, its
+  type keeps it (`announcement/kind_response.rs` holds `AnnouncementKindResponse`).
   A part several share lives with the one it is about, and the others reach
   it through it: `signal/severity_response.rs`,
   `token/embedded_token_response.rs`. The query of `GET /api/signals` and its
@@ -129,10 +131,13 @@ with no wildcard arm, so adding a variant breaks the build there.
 - **Conversions** live with the type they build, and a behaviour two DTOs
   share is written once, in their common parent: `logo_uri` in `token.rs`,
   `parse_address` in `request.rs`.
-- **Tests** of a part go in its owner's file, `<side>/tests/<owner>_tests.rs`.
+- **Tests** of a part go in its owner's file, `<side>/tests/<owner>_tests.rs`;
+  in a resource's folder, `<resource>/tests/<file>_tests.rs`.
 
 **Not yet following these rules:**
 
+- Every response but those of `tvl` and `vesting-unlocks`: at the top level of
+  `response/`, not in the folder of its resource.
 - `request/window_param.rs`, eleven types: `WindowParam`, `DayWindowParam`,
   `WeekWindowParam`, `MeasureWindowParam`, `IntervalParam`, `ReadingIntervalParam`,
   `WindowParams`, `MeasureWindowParams`, `MeasureActivityParams`, `SeriesParams`,
@@ -147,7 +152,7 @@ with no wildcard arm, so adding a variant breaks the build there.
   nine private.
 - `response/liquidity_move.rs`, four types; `protocol_catalog.rs`, `protocol_claim_totals.rs`,
   `protocol_position_change_totals.rs`, `protocol_rotation_run_totals.rs`,
-  `protocol_tvl_change.rs`, `token_activity.rs`, two each.
+  `tvl/change.rs`, `token_activity.rs`, two each.
 - `response/position_change_event/meteora_damm_v2_response.rs`, eight types;
   `reward_change_event/meteora_damm_v2_response.rs`, six;
   `pool_change_event/meteora_damm_v2_response.rs`, three.
@@ -205,9 +210,11 @@ Every route below takes a key, but the probes, the four open routes
 | `GET` | `/api/protocols/{protocol}/rotation-runs/series` | The protocol's volume by `interval`, split by its runs, `splitSince` the first instant they split a bar from: in them and outside them (never under 0), both `null` on a bar the runs do not cover whole or with an hour not valued |
 | `GET` | `/api/protocols/{protocol}/liquidity-moves`, `/api/pools/{pool}/liquidity-moves` | A page of the valued moves (creations, additions, removals), their pool's token symbols embedded, the lock their transaction puts on a position (`none`, `vesting`, `permanent`, `null` before measured), `?kind=create|add|remove` to keep one kind, `?sort=amount` (default) or `at`, forward-only cursor that keeps its first page's end, refused (400) under another list, kind or window, or once that end is over an hour behind; empty while the protocol's liquidity does not cover the window |
 | `GET` | `/api/liquidity-turnover/totals`, `/api/protocols/{protocol}/liquidity-turnover/totals` | Per protocol and in `total`, the volume over the window divided by the last TVL reading, whose hour its rows say (`tvlAt`), with the volume's coverage; `null` without a volume or a TVL above 0 |
-| `GET` | `/api/tvl`, `/api/protocols/{protocol}/tvl` | Per protocol, the last TVL reading at or before `asOf`, its `at` said |
+| `GET` | `/api/tvl`, `/api/protocols/{protocol}/tvl` | Per protocol, the last TVL reading at or before `asOf`, its `at` said. A DAMM v2 row adds `meteoraDammV2`, its liquidity locked — permanent and vesting, the pools locked and those not valued, the first vesting observed — on every form of `tvl`, `null` on a reading made before it was measured |
 | `GET` | `/api/tvl/series`, `/api/protocols/{protocol}/tvl/series` (`interval=1h`, its only step) | Per protocol, the reading of every hour measured from the window's start |
 | `GET` | `/api/tvl/totals`, `/api/protocols/{protocol}/tvl/totals` | Per protocol, the last reading, the one exactly a window before it (`null` when not measured, when the last is not at `asOf`, or over `1h`), the part the pools discovered in the window hold at the last, and the change without it, `null` as soon as one term is |
+| `GET` | `/api/protocols/{protocol}/tvl/by-token` (`?sort=tvl\|locked`) | A page of the protocol's tokens at its last reading (`at`): the valued sides of their pools, the part locked (`null` for a protocol without locks, or when none of its locked pools is valued), their pools; `total`, the protocol's own reading, not the tokens summed — each pool counts for both its tokens; `coveredSince`, the first vesting observed. A cursor of a reading replaced since is refused (400) |
+| `GET` | `/api/protocols/{protocol}/vesting-unlocks` (`?window=24h\|7d\|30d`, `?sort=time\|amount`) | A page of what the vesting locks release within the window after `asOf`, the instant of the last reading: one row per position and instant, the pool's pair, the liquidity in L and its value at the reading's prices (`null` for a pool not valued); `coveredSince`, the first vesting observed. A slot-counted schedule has no instant and is not listed. A cursor of a reading replaced since is refused (400). Only DAMM v2 has locks: for another protocol `asOf` is `null`, as before a first reading |
 | `GET` | `/api/pool-discoveries/totals`, and under `/api/protocols/{protocol}/` | Per protocol, the pools first seen in the window without their birth observed, and what they hold at the last reading |
 | `GET` | `/api/protocols/{protocol}/signals`, `/api/pools/{pool}/signals` | The signals of one protocol or one pool, paginated as `/api/signals`, `?severity=` |
 
@@ -253,7 +260,7 @@ at the end of this section.
    - **business resources**, the entities of the domain and their state, observed on the chain
      or fetched from a provider: `protocols`, `pools`, `tokens`, and a token's `prices`;
    - **produced resources**, what we compute from the first two: the measures (rule 4),
-     `tvl`, `pool-discoveries`, `liquidity-moves`, `liquidity-turnover`, `rotation-runs`, `vesting-unlocks` (not served yet),
+     `tvl`, `pool-discoveries`, `liquidity-moves`, `liquidity-turnover`, `rotation-runs`, `vesting-unlocks`,
      `signals`;
    - **service resources**, the state and the messages of the service: `network` and
      `ingestion`, singletons each at `/api/<singleton>`, `windows`, the closed list of the windows, unpaginated,
@@ -267,7 +274,7 @@ at the end of this section.
    added or removed, valued; `liquidity-turnover`, how many times the liquidity deposited changed hands over a window;
    `rotation-runs`, a pool's tranches whose quoted reserve turned
    over at least once, no more than 30 min apart, with the tranches between them;
-   `vesting-unlocks` (not served yet), the liquidity a vesting lock releases at an instant.
+   `vesting-unlocks`, the liquidity a vesting lock releases at an instant.
 2. **Three path forms for a request**: `/api/<collection>`, every protocol;
    `/api/<collection>/{id}`, one item; `/api/<entities>/{id}/<collection>`, the collection
    restricted to that entity (`/api/protocols/meteora_damm_v2/swaps`). **Two for the live
@@ -313,7 +320,7 @@ at the end of this section.
    readings of the window, one per hour measured, each at its hour's close; `totals`, from the reading a
    window before the last to the last, with the change between them — a change is not a sum — and
    over `1h` the last reading alone, with no start, no discovered part and no change;
-   `by-token` and `by-pool` (not served yet), ranked at that last reading, without a window. Every response of what `yog-analytic`
+   `by-token` (under a protocol) and `by-pool` (not served yet), ranked at that last reading, without a window. Every response of what `yog-analytic`
    computes carries the instant it reflects (`asOf`), its coverage (`coveredSince`), and its
    window when it is read over one.
 5. **The live stream has its own prefix, `/api/live`**, apart from the requests: an SSE
@@ -376,7 +383,7 @@ end so a freeze cannot split them. A client computes the change. `previous` is `
 **Parameters and fields.** `window=24h|7d|30d`, a closed list, 400 otherwise; `offset` for the
 previous window. `1h`, the last hour through the last tranche written (through the last frozen hour for the TVL's `totals`), is served by every measure
 but the pools discovered and the TVL's `series`, by `swaps/by-token`, and by the `liquidity-moves` and
-`rotation-runs` lists; an on-chain collection refuses it (400). For a collection of future events (`vesting-unlocks`, not served yet), `window` covers the
+`rotation-runs` lists; an on-chain collection refuses it (400). For a collection of future events (`vesting-unlocks`), `window` covers the
 period after `asOf`, and takes no `offset`. An on-chain collection read live ends its window
 at its first page, whose start the cursor carries. The swaps of every pool, at the root and
 under a protocol, are served over `24h` only: past a day they are compressed by pool, and
@@ -399,6 +406,9 @@ cold and warm. A route above 2 s in production is a bug.
 **Not yet following these rules:**
 
 - `/api/swaps/by-token`: `?sort=` with one order, `volume` (rule 3).
+- `/api/protocols/{protocol}/tvl/by-token` and `/vesting-unlocks`: their tables keep the last reading
+  written, which precedes the hour's freeze by a few minutes; `tvl` serves the last frozen hour's. Each
+  response says its own instant (`at`, `asOf`), and the two can differ until the freeze (rule 4).
 - `/api/pool-creations/totals`, `/series`, the same under `/api/protocols/{protocol}/`, and
   `/api/protocols/{protocol}/position-changes/totals`, `/series`: over `window=1h`, counted
   on the on-chain event tables, not read from `yog-analytic`'s (rule 8).
