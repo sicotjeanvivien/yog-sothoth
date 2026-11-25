@@ -33,6 +33,8 @@ pub enum Cursor {
     PoolChangeEvent(Box<crate::domain::EventCursor>),
     Announcement(Box<crate::domain::AnnouncementCursor>),
     RotationRun(Box<crate::domain::RotationRunCursor>),
+    TokenTvl(Box<crate::domain::TokenTvlCursor>),
+    VestingUnlock(Box<crate::domain::VestingUnlockCursor>),
     /// The last protocol of a page of the catalogue, in [`Protocol::all`](crate::domain::Protocol::all)'s order.
     Protocol(crate::domain::Protocol),
 }

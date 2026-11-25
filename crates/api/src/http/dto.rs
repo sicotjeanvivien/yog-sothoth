@@ -20,6 +20,6 @@ pub(crate) use response::{
     RewardChangeEventResponse, RewardClaimEventResponse, RotationRunResponse,
     RunSplitSeriesResponse, SeriesResponse, SignalResponse, SwapEventResponse, SwapSeriesResponse,
     SwapTotalsResponse, TicketResponse, TokenActivityPageResponse, TokenPriceResponse,
-    TokenResponse, TrancheWindowedResponse, TvlTotalsResponse, WindowedPageResponse,
-    WindowedResponse, WindowsResponse,
+    TokenResponse, TokenTvlPageResponse, TrancheWindowedResponse, TvlTotalsResponse,
+    VestingUnlockPageResponse, WindowedPageResponse, WindowedResponse, WindowsResponse,
 };

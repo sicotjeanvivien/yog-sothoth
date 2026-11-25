@@ -36,7 +36,7 @@ pub use repositories::{
     PgRewardClaimEventRepository, PgRotationRunRepository, PgSignalRepository,
     PgSwapActivityRepository, PgSwapEventRepository, PgSwapFlowRepository,
     PgTokenActivityRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
-    PgWatchedPoolRepository,
+    PgTokenTvlRepository, PgVestingUnlockRepository, PgWatchedPoolRepository,
 };
 pub use server_info::{PgServerInfo, ServerVersions};
 

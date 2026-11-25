@@ -153,6 +153,7 @@ fn each_envelope_sums_its_protocols_in_total() {
         end: reading(at, 100),
         start: Some(reading(at, 90)),
         discovered_tvl_usd: Some(Decimal::ONE),
+        meteora_damm_v2: None,
     });
     let body = to_value(TvlTotalsResponse::<ProtocolTvlChangeResponse>::new(
         Window::Day,

@@ -35,7 +35,8 @@ impl ProtocolTvlLookup for PgProtocolTvlRepository {
             r#"
             SELECT DISTINCT ON (protocol)
                    protocol, bucket + INTERVAL '1 hour' AS "at!", tvl_usd, pools_priced,
-                   pools_unvalued
+                   pools_unvalued, locked_usd, permanent_usd, vesting_usd, pools_locked, pools_locked_unvalued,
+                   vesting_covered_since
               FROM analytic_protocol_tvl
              WHERE bucket <= $1 AND ($2::TEXT IS NULL OR protocol = $2)
              ORDER BY protocol, bucket DESC
@@ -60,7 +61,8 @@ impl ProtocolTvlLookup for PgProtocolTvlRepository {
             ProtocolTvlRow,
             r#"
             SELECT protocol, bucket + INTERVAL '1 hour' AS "at!", tvl_usd, pools_priced,
-                   pools_unvalued
+                   pools_unvalued, locked_usd, permanent_usd, vesting_usd, pools_locked, pools_locked_unvalued,
+                   vesting_covered_since
               FROM analytic_protocol_tvl
              WHERE bucket BETWEEN $1 AND $2 AND ($3::TEXT IS NULL OR protocol = $3)
              ORDER BY bucket, protocol
@@ -86,14 +88,16 @@ impl ProtocolTvlLookup for PgProtocolTvlRepository {
             ProtocolTvlChangeRow,
             r#"
             WITH latest AS (
-                SELECT DISTINCT ON (protocol) protocol, bucket, tvl_usd
+                SELECT DISTINCT ON (protocol) protocol, bucket, tvl_usd, locked_usd, permanent_usd,
+                       vesting_usd, pools_locked, pools_locked_unvalued, vesting_covered_since
                   FROM analytic_protocol_tvl
                  WHERE bucket <= $1 AND ($4::TEXT IS NULL OR protocol = $4)
                  ORDER BY protocol, bucket DESC
             )
             SELECT l.protocol, l.bucket + INTERVAL '1 hour' AS "end_at!", l.tvl_usd AS end_tvl_usd,
                    s.bucket + INTERVAL '1 hour' AS start_at, s.tvl_usd AS start_tvl_usd,
-                   d.tvl_usd AS "discovered_tvl_usd?"
+                   d.tvl_usd AS "discovered_tvl_usd?", l.locked_usd, l.permanent_usd, l.vesting_usd,
+                   l.pools_locked, l.pools_locked_unvalued, l.vesting_covered_since
               FROM latest l
               LEFT JOIN analytic_protocol_tvl s
                      ON s.protocol = l.protocol

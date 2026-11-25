@@ -8,6 +8,7 @@ use utoipa::ToSchema;
 use yog_core::domain::{ProtocolTvlChange, TvlReading};
 
 use super::protocol::ProtocolResponse;
+use super::protocol_tvl_meteora_damm_v2::ProtocolTvlMeteoraDammV2Response;
 use crate::http::dto::schema::{SignedDecimal, UnsignedDecimal};
 
 /// The TVL at `at`, the close of the hour it was measured in.
@@ -43,6 +44,8 @@ pub(crate) struct ProtocolTvlChangeResponse {
     /// `end − discoveredTvlUsd − start`; `null` as soon as one of them is.
     #[schema(value_type = Option<SignedDecimal>)]
     change_usd: Option<Decimal>,
+    /// The locked liquidity of `end`; `null` for another protocol, and before it was measured.
+    meteora_damm_v2: Option<ProtocolTvlMeteoraDammV2Response>,
 }
 
 impl From<ProtocolTvlChange> for ProtocolTvlChangeResponse {
@@ -54,6 +57,7 @@ impl From<ProtocolTvlChange> for ProtocolTvlChangeResponse {
             start: c.start.map(Into::into),
             discovered_tvl_usd: c.discovered_tvl_usd,
             change_usd,
+            meteora_damm_v2: c.meteora_damm_v2.map(Into::into),
         }
     }
 }

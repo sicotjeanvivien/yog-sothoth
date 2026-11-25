@@ -1,0 +1,145 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT protocol, bucket + INTERVAL '1 hour' AS \"at!\", tvl_usd, pools_priced,\n                   pools_unvalued, locked_usd, permanent_usd, vesting_usd, pools_locked, pools_locked_unvalued,\n                   vesting_covered_since\n              FROM analytic_protocol_tvl\n             WHERE bucket BETWEEN $1 AND $2 AND ($3::TEXT IS NULL OR protocol = $3)\n             ORDER BY bucket, protocol\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "protocol",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "protocol"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "at!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "tvl_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "tvl_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "pools_priced",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "pools_priced"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "pools_unvalued",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "pools_unvalued"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "locked_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "locked_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "permanent_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "permanent_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "vesting_usd",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "vesting_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "pools_locked",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "pools_locked"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "pools_locked_unvalued",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "pools_locked_unvalued"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "vesting_covered_since",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "vesting_covered_since"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "cc82c47fba46a9a940d5e669b17f6d7ecde6dc525df1c0b1de55817eb86a94e2"
+}

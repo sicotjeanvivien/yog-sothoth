@@ -28,6 +28,7 @@ pub(super) mod swaps;
 pub(super) mod tickets;
 pub(super) mod token;
 pub(super) mod tvl;
+pub(super) mod vesting_unlocks;
 pub(super) mod windows;
 
 /// The token of the path, or a 404 when the catalog has not fetched its metadata.

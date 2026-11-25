@@ -17,7 +17,7 @@ use crate::application::{
     PositionFeeClaimEventService, ProtocolCatalogService, ProtocolFeeClaimEventService,
     ProtocolTvlService, RewardChangeEventService, RewardClaimEventService, RotationRunService,
     SignalService, SwapActivityService, SwapEventService, TicketRegistry, TokenService,
-    WindowsService, WorkSlots,
+    TokenTvlService, VestingUnlockService, WindowsService, WorkSlots,
 };
 
 /// The services and the runtime handles the router and handlers read. Handlers never reach a
@@ -45,6 +45,8 @@ pub(crate) struct AppState {
     pub(crate) position_change_counts_service: Arc<PositionChangeCountsService>,
     pub(crate) rotation_run_service: Arc<RotationRunService>,
     pub(crate) protocol_tvl_service: Arc<ProtocolTvlService>,
+    pub(crate) token_tvl_service: Arc<TokenTvlService>,
+    pub(crate) vesting_unlock_service: Arc<VestingUnlockService>,
     pub(crate) discovered_tvl_service: Arc<DiscoveredTvlService>,
     pub(crate) pool_service: Arc<PoolService>,
     pub(crate) swap_event_service: Arc<SwapEventService>,

@@ -15,6 +15,21 @@ pub struct ProtocolTvl {
     pub tvl_usd: Option<Decimal>,
     pub pools_priced: i64,
     pub pools_unvalued: i64,
+    /// `None` for another protocol, and for a reading made before the locks were measured.
+    pub meteora_damm_v2: Option<ProtocolTvlMeteoraDammV2>,
+}
+
+/// The DAMM v2 liquidity locked at a reading, valued at its prices: a pool is valued when a side
+/// is and its vesting known, the others counted apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProtocolTvlMeteoraDammV2 {
+    pub locked_usd: Decimal,
+    pub permanent_usd: Decimal,
+    pub vesting_usd: Decimal,
+    pub pools_locked: i64,
+    pub pools_locked_unvalued: i64,
+    /// The first vesting observed: those locked before it are out of reach.
+    pub vesting_covered_since: Option<DateTime<Utc>>,
 }
 
 /// A TVL reading: the protocol's TVL as measured during the hour that closes at `at`.
@@ -32,6 +47,8 @@ pub struct ProtocolTvlChange {
     pub end: TvlReading,
     pub start: Option<TvlReading>,
     pub discovered_tvl_usd: Option<Decimal>,
+    /// The locked liquidity of the last reading.
+    pub meteora_damm_v2: Option<ProtocolTvlMeteoraDammV2>,
 }
 
 impl ProtocolTvlChange {
@@ -45,6 +62,7 @@ impl ProtocolTvlChange {
             },
             start: None,
             discovered_tvl_usd: None,
+            meteora_damm_v2: reading.meteora_damm_v2,
         }
     }
 

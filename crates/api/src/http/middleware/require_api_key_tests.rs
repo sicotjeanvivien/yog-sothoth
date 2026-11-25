@@ -231,7 +231,7 @@ async fn every_route_refuses_an_anonymous_call_where_the_contract_asks_for_a_cre
     );
     assert_eq!(
         (operations, refused),
-        (80, 76),
+        (82, 78),
         "every operation, those asking a credential"
     );
 }

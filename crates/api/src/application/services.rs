@@ -26,6 +26,8 @@ mod signal_service;
 mod swap_activity_service;
 mod swap_event_service;
 mod token_service;
+mod token_tvl_service;
+mod vesting_unlock_service;
 mod windows_service;
 
 pub(crate) use announcement_service::AnnouncementService;
@@ -54,4 +56,6 @@ pub(crate) use signal_service::{SignalListParams, SignalService};
 pub(crate) use swap_activity_service::{SwapActivityService, SwapTotals, TokenActivityRead};
 pub(crate) use swap_event_service::SwapEventService;
 pub(crate) use token_service::{TokenAggregate, TokenService};
+pub(crate) use token_tvl_service::{TokenTvlRead, TokenTvlService};
+pub(crate) use vesting_unlock_service::{VestingUnlockRead, VestingUnlockService};
 pub(crate) use windows_service::WindowsService;

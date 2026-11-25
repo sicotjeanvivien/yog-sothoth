@@ -266,6 +266,10 @@ fn api_routes(
         .routes(routes!(handlers::tvl::get_protocol_tvl_series))
         .routes(routes!(handlers::tvl::get_tvl_totals))
         .routes(routes!(handlers::tvl::get_protocol_tvl_totals))
+        .routes(routes!(handlers::tvl::list_protocol_tvl_by_token))
+        .routes(routes!(
+            handlers::vesting_unlocks::list_protocol_vesting_unlocks
+        ))
         .routes(routes!(
             handlers::pool_discoveries::get_pool_discovery_totals
         ))

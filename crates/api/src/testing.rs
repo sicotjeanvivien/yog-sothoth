@@ -47,7 +47,7 @@ use crate::application::{
     PositionFeeClaimEventService, ProtocolCatalogService, ProtocolFeeClaimEventService,
     ProtocolTvlService, RewardChangeEventService, RewardClaimEventService, RotationRunService,
     SignalService, SwapActivityService, SwapEventService, TicketRegistry, TokenService,
-    WindowsService, WorkSlots,
+    TokenTvlService, VestingUnlockService, WindowsService, WorkSlots,
 };
 use crate::http::{AppState, build_router};
 use axum::body::Body;
@@ -112,6 +112,8 @@ pub(crate) fn app_state() -> AppState {
             frozen_hours_repo(None),
             Arc::new(MockProtocolTvlRepo::default()),
         )),
+        token_tvl_service: Arc::new(TokenTvlService::new(Arc::new(NoReading))),
+        vesting_unlock_service: Arc::new(VestingUnlockService::new(Arc::new(NoReading))),
         discovered_tvl_service: Arc::new(DiscoveredTvlService::new(
             frozen_hours_repo(None),
             Arc::new(MockDiscoveredTvlRepo::default()),
@@ -1772,5 +1774,35 @@ impl<I> crate::application::Paired<I> {
             token_a: crate::application::EnrichedToken::unresolved(),
             token_b: crate::application::EnrichedToken::unresolved(),
         }
+    }
+}
+
+/// A TVL by token and a vesting calendar before their first reading.
+pub(crate) struct NoReading;
+
+#[async_trait::async_trait]
+impl yog_core::domain::TokenTvlLookup for NoReading {
+    async fn list(
+        &self,
+        _: yog_core::domain::Protocol,
+        _: yog_core::domain::TokenTvlOrder,
+        _: Option<yog_core::domain::TokenTvlCursor>,
+        _: i64,
+    ) -> yog_core::RepositoryResult<Option<yog_core::domain::TokenTvlPage>> {
+        Ok(None)
+    }
+}
+
+#[async_trait::async_trait]
+impl yog_core::domain::VestingUnlockLookup for NoReading {
+    async fn list(
+        &self,
+        _: yog_core::domain::Protocol,
+        _: yog_core::domain::Window,
+        _: yog_core::domain::VestingUnlockOrder,
+        _: Option<yog_core::domain::VestingUnlockCursor>,
+        _: i64,
+    ) -> yog_core::RepositoryResult<Option<yog_core::domain::VestingUnlockPage>> {
+        Ok(None)
     }
 }

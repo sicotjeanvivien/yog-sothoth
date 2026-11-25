@@ -17,6 +17,7 @@ fn change(start: Option<TvlReading>, discovered: Option<i64>) -> ProtocolTvlChan
         end: reading(Some(1_300)),
         start,
         discovered_tvl_usd: discovered.map(Decimal::from),
+        meteora_damm_v2: None,
     }
 }
 
@@ -50,6 +51,7 @@ fn a_last_reading_alone_has_no_change() {
         tvl_usd: Some(Decimal::from(5)),
         pools_priced: 1,
         pools_unvalued: 0,
+        meteora_damm_v2: None,
     });
 
     assert_eq!(last.end, reading(Some(5)));
@@ -65,6 +67,7 @@ fn tvl_reading(protocol: Protocol, tvl: Option<i64>) -> super::ProtocolTvl {
         tvl_usd: tvl.map(Decimal::from),
         pools_priced: 1,
         pools_unvalued: 0,
+        meteora_damm_v2: None,
     }
 }
 
@@ -95,6 +98,7 @@ fn a_total_adds_every_protocol_and_is_unknown_with_one_term() {
         end: reading(Some(end)),
         start: Some(reading(Some(start))),
         discovered_tvl_usd: Some(Decimal::ONE),
+        meteora_damm_v2: None,
     };
 
     let total = super::ProtocolTvlChange::total(&[

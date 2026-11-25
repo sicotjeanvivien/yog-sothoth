@@ -23,7 +23,9 @@ reading AS (
            permanent_usd         = s.permanent_usd,
            vesting_usd           = s.vesting_usd,
            pools_locked          = s.pools,
-           pools_locked_unvalued = s.unvalued
+           pools_locked_unvalued = s.unvalued,
+           vesting_covered_since = (SELECT v.timestamp FROM meteora_damm_v2_lock_position_events v
+                                     ORDER BY v.timestamp LIMIT 1)
       FROM (
         SELECT COALESCE(SUM(permanent_usd + vesting_usd) FILTER (WHERE is_valued), 0) AS locked_usd,
                COALESCE(SUM(permanent_usd) FILTER (WHERE is_valued), 0) AS permanent_usd,
@@ -97,10 +99,12 @@ releases AS (
 unlocks AS (
     INSERT INTO analytic_vesting_unlocks
         (protocol, bucket, pool_address, position, unlocks_at, liquidity, amount_usd)
-    SELECT $3, $1, r.pool_address, r.position, to_timestamp(r.point), r.liquidity,
-           r.liquidity * l.usd_per_liquidity
+    -- One row per position and instant: two schedules of one position can release together.
+    SELECT $3, $1, r.pool_address, r.position, to_timestamp(r.point), SUM(r.liquidity),
+           SUM(r.liquidity) * l.usd_per_liquidity
       FROM releases r
       LEFT JOIN locked l ON l.pool_address = r.pool_address
+     GROUP BY r.pool_address, r.position, r.point, l.usd_per_liquidity
     RETURNING 1
 )
 SELECT (SELECT COUNT(*) FROM reading) AS "readings!",

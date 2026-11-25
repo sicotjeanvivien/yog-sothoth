@@ -42,8 +42,10 @@ mod swap_flow;
 mod token_activity;
 mod token_metadata;
 mod token_price;
+mod token_tvl;
 mod trade_direction;
 mod unpriced_mints;
+mod vesting_unlocks;
 mod watched_pool;
 
 pub use analytic::{
@@ -144,7 +146,7 @@ pub use protocol_fee_claim_event::{
 };
 pub use protocol_tvl::{
     LiquidityTurnover, ProtocolLiquidityTurnover, ProtocolTvl, ProtocolTvlChange,
-    ProtocolTvlLookup, TvlChangeTotal, TvlReading,
+    ProtocolTvlLookup, ProtocolTvlMeteoraDammV2, TvlChangeTotal, TvlReading,
 };
 pub use reward_change_event::{
     MeteoraDammV2RewardChange, RewardChangeEvent, RewardChangeEventLookup, RewardChangeTable,
@@ -176,6 +178,12 @@ pub use token_price::{
     PRICE_STORAGE_PRECISION, PRICE_STORAGE_SCALE, PriceProvider, TokenPrice, TokenPriceCursor,
     TokenPriceLookup, TokenPriceRepository,
 };
+pub use token_tvl::{
+    TokenTvl, TokenTvlCursor, TokenTvlLookup, TokenTvlOrder, TokenTvlPage, TokenTvlTotal,
+};
 pub use trade_direction::TradeDirection;
 pub use unpriced_mints::UnpricedMints;
+pub use vesting_unlocks::{
+    VestingUnlock, VestingUnlockCursor, VestingUnlockLookup, VestingUnlockOrder, VestingUnlockPage,
+};
 pub use watched_pool::{WatchedPool, WatchedPoolRepository};

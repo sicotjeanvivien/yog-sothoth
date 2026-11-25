@@ -18,7 +18,8 @@ use yog_persistence::{
     PgProtocolFeeClaimEventRepository, PgProtocolTvlRepository, PgRewardChangeEventRepository,
     PgRewardClaimEventRepository, PgRotationRunRepository, PgSignalRepository,
     PgSwapActivityRepository, PgSwapEventRepository, PgTokenActivityRepository,
-    PgTokenMetadataRepository, PgTokenPriceRepository, PoolSettings,
+    PgTokenMetadataRepository, PgTokenPriceRepository, PgTokenTvlRepository,
+    PgVestingUnlockRepository, PoolSettings,
 };
 
 use crate::application::{
@@ -30,7 +31,7 @@ use crate::application::{
     ProtocolCatalogService, ProtocolFeeClaimEventService, ProtocolTvlService,
     RewardChangeEventService, RewardClaimEventService, RotationRunService, SignalService,
     SignalsSource, SwapActivityService, SwapEventService, TicketRegistry, TokenService,
-    WindowsService, WorkSlots,
+    TokenTvlService, VestingUnlockService, WindowsService, WorkSlots,
 };
 use crate::bootstrap::Config;
 use crate::http::{AppState, SSE_MAX_STREAMS, STATEMENT_TIMEOUT, WORK_SLOT_WAIT, WORK_SLOTS};
@@ -219,6 +220,12 @@ pub(crate) async fn build_app_state(
         position_change_counts_service,
         rotation_run_service,
         protocol_tvl_service,
+        token_tvl_service: Arc::new(TokenTvlService::new(Arc::new(PgTokenTvlRepository::new(
+            db_pool.clone(),
+        )))),
+        vesting_unlock_service: Arc::new(VestingUnlockService::new(Arc::new(
+            PgVestingUnlockRepository::new(db_pool.clone()),
+        ))),
         discovered_tvl_service,
         pool_service,
         swap_event_service,
