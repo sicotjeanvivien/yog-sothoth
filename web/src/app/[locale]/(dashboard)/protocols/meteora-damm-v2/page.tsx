@@ -23,7 +23,11 @@ import { FeesTab } from "@/components/dashboard/protocol/fees/fees-tab";
 import { LiquidityTab } from "@/components/dashboard/protocol/liquidity/liquidity-tab";
 import { PoolsTab } from "@/components/dashboard/protocol/pools/pools-tab";
 import { ProtocolHeader } from "@/components/dashboard/protocol/protocol-header";
-import { FeesRateKpi, ProtocolFeesKpi } from "@/components/dashboard/protocol/protocol-kpis";
+import {
+  FeesRateKpi,
+  LockedLiquidityKpi,
+  ProtocolFeesKpi,
+} from "@/components/dashboard/protocol/protocol-kpis";
 import { ProtocolTabs } from "@/components/dashboard/protocol/protocol-tabs";
 import { SignalsTab } from "@/components/dashboard/protocol/signals/signals-tab";
 import { VolumeTab } from "@/components/dashboard/protocol/volume/volume-tab";
@@ -100,6 +104,9 @@ export default async function DammV2Page({ params, searchParams }: ProtocolPageP
         </Suspense>
         <Suspense key={`pools-${period}`} fallback={<KpiPlaceholder />}>
           <PoolsKpi period={period} scope={PROTOCOL} />
+        </Suspense>
+        <Suspense key="locked" fallback={<KpiPlaceholder advanced />}>
+          <LockedLiquidityKpi protocol={PROTOCOL} />
         </Suspense>
       </div>
 

@@ -32,6 +32,30 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.13.0",
+    date: "2026-11-25",
+    summary: "The DAMM v2 page shows how much of its liquidity is locked, and what unlocks next.",
+    sections: [
+      {
+        kind: "features",
+        items: [
+          {
+            text: "The DAMM v2 page, in the advanced mode, has a Locked liquidity KPI with its share of the TVL, and a Locked liquidity block in the Liquidity tab: permanent and vesting, the four tokens most locked and the rest, and the five largest unlocks of the next 7 days.",
+            technical: false,
+          },
+          {
+            text: "The TVL readings of /api/tvl, /api/protocols/{protocol}/tvl and their series and totals carry a meteoraDammV2 block: lockedUsd, permanentUsd, vestingUsd, poolsLocked, poolsLockedUnvalued and vestingCoveredSince, null before the locks were measured. New routes: /api/protocols/{protocol}/tvl/by-token (sort=tvl|locked) and /api/protocols/{protocol}/vesting-unlocks (window=24h|7d|30d, sort=time|amount).",
+            technical: true,
+          },
+          {
+            text: "Every DAMM v2 pool account is read once more, for its price range and its permanent lock.",
+            technical: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.12.0",
     date: "2026-11-24",
     summary: "The DAMM v2 page gains its Signals tab and splits the LPs' fees between claimed and compounded; the Overview shows the period only.",

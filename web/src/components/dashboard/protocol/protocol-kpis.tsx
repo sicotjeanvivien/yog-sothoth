@@ -1,7 +1,7 @@
 /**
  * The KPI cells a protocol's page has and the Overview has not: its fees with their effective
- * rate, and in the advanced mode the protocol's fees with their share. The others are the
- * Overview's, on the protocol's routes.
+ * rate, and in the advanced mode the protocol's fees with their share and the locked liquidity.
+ * The others are the Overview's, on the protocol's routes.
  */
 
 import { getLocale, getTranslations } from "next-intl/server";
@@ -10,7 +10,7 @@ import { closedReason, KpiCell, Unavailable } from "@/components/dashboard/overv
 import { kpiError, valued } from "@/components/dashboard/overview/overview-kpis";
 import { lateStamp } from "@/components/dashboard/overview/overview-states";
 import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
-import { fetchSwapTotals } from "@/lib/api/server/protocols";
+import { fetchSwapTotals, fetchTvl } from "@/lib/api/server/protocols";
 import { formatFeeRate, formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import type { Period } from "@/lib/overview/period";
@@ -84,6 +84,49 @@ export async function ProtocolFeesKpi({ period, protocol }: KpiProps) {
           : t("protocolFeesShare", { share: formatPercent(String(share), locale) })
       }
       stamp={await lateStamp(now)}
+      advanced
+    />
+  );
+}
+
+/** The last TVL reading's locked liquidity, and its share of that reading's TVL. */
+export async function LockedLiquidityKpi({ protocol }: { protocol: ProtocolResponse }) {
+  const t = await getTranslations("Dashboard.Protocol.kpis");
+  const locale = await getLocale();
+  const label = t("locked");
+  const info = t("info.locked");
+
+  let reading;
+  try {
+    reading = await fetchTvl(protocol);
+  } catch (err) {
+    return kpiError(err, label, info, true);
+  }
+  const last = reading.items[0];
+  const block = last?.meteoraDammV2 ?? null;
+  if (last === undefined || block === null) {
+    return (
+      <KpiCell
+        label={label}
+        info={info}
+        value={<Unavailable reason={t("lockedNotMeasured")} />}
+        advanced
+      />
+    );
+  }
+
+  const share = shareOf(amountOf(block.lockedUsd), amountOf(last.tvlUsd));
+
+  return (
+    <KpiCell
+      label={label}
+      info={info}
+      value={formatUsdCompact(block.lockedUsd)}
+      sub={
+        share === null
+          ? undefined
+          : t("lockedShare", { share: formatPercent(String(share), locale) })
+      }
       advanced
     />
   );

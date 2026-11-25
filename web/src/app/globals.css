@@ -51,6 +51,9 @@
   --color-dash-fee-compounding: #6642ca;
   --color-dash-fee-protocol: #1798ad;
   --color-dash-fee-referral: #b48a3c;
+  /* Locked liquidity: for good; until its vesting ends. */
+  --color-dash-lock-permanent: #a78bfa;
+  --color-dash-lock-vesting: #6642ca;
 
   /* 721 px: up to 720 px is the phone — the dashboard menu a drawer, the
      site menu folded behind "Menu". */
