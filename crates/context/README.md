@@ -193,7 +193,10 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   `009_price_positivity.sql` for the manual sequence and for why the plain path
   is nevertheless fine until the rejection counter leaves zero.
 - **`PoolAccountWorker`** — same cadence as the metadata worker. Fills every
-  account-derived pool property: mints, base fee, fee split, fee shape.
+  account-derived pool property: mints, base fee, fee split, fee shape, and for
+  cp-amm the price range, the price at the read, the fee collection mode and the
+  liquidity locked for good (`permanent_lock_liquidity`, reread after each
+  permanent lock: the indexer flags the pool).
 
   **It is the only writer of those columns.** The indexer does not decode
   property values from events — it raises `pools.needs_refresh` when an event

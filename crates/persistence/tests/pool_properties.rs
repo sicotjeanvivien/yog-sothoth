@@ -118,6 +118,11 @@ fn properties_only(base_fee_kind: Option<BaseFeeKind>) -> PoolAccountProperties 
         base_fee_kind,
         has_dynamic_fee: true,
         fee_scheduler: None,
+        sqrt_min_price: None,
+        sqrt_max_price: None,
+        sqrt_price: None,
+        collect_fee_mode: None,
+        permanent_lock_liquidity: None,
     })
 }
 
@@ -227,6 +232,96 @@ async fn list_unresolved_drops_a_pool_once_its_account_is_resolved(pool: PgPool)
     assert!(
         unresolved.is_empty(),
         "a resolved pool must leave the queue, else it is re-fetched forever"
+    );
+}
+
+/// Mutation: one of the five columns left out of the write or of the upsert, or narrowed.
+#[sqlx::test]
+async fn the_range_and_permanent_lock_round_trip_at_full_width(pool: PgPool) {
+    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+    let PoolAccountProperties::MeteoraDammV2(mut props) =
+        properties_only(Some(BaseFeeKind::Constant))
+    else {
+        unreachable!("properties_only builds cp-amm properties")
+    };
+    // A compounding pool's range: no bound, the widest values the account can hold.
+    props.sqrt_min_price = Some(0);
+    props.sqrt_max_price = Some(u128::MAX);
+    props.sqrt_price = Some(1_698_602_818_067_443_507);
+    props.collect_fee_mode = Some(2);
+    props.permanent_lock_liquidity = Some(45_872_362_771_778_656_017_868_448_399_854);
+
+    repo.set_pool_account(&pk(1), &PoolAccountProperties::MeteoraDammV2(props.clone()))
+        .await
+        .unwrap();
+
+    let row = sqlx::query_as::<_, (String, String, String, Option<i16>, String)>(
+        "SELECT sqrt_min_price::TEXT, sqrt_max_price::TEXT, sqrt_price::TEXT, collect_fee_mode,
+                permanent_lock_liquidity::TEXT
+           FROM meteora_damm_v2_pool_properties WHERE pool_address = $1",
+    )
+    .bind(pk(1).to_string())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.0, "0");
+    assert_eq!(row.1, u128::MAX.to_string());
+    assert_eq!(row.2, "1698602818067443507");
+    assert_eq!(row.3, Some(2));
+    assert_eq!(row.4, "45872362771778656017868448399854");
+
+    // A later read — the indexer flagged the pool after a permanent lock — replaces the total.
+    props.permanent_lock_liquidity = Some(45_872_362_771_778_656_017_868_448_400_000);
+    repo.set_pool_account(&pk(1), &PoolAccountProperties::MeteoraDammV2(props))
+        .await
+        .unwrap();
+    let total: (String,) = sqlx::query_as(
+        "SELECT permanent_lock_liquidity::TEXT FROM meteora_damm_v2_pool_properties
+          WHERE pool_address = $1",
+    )
+    .bind(pk(1).to_string())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        total.0, "45872362771778656017868448400000",
+        "a reread must not keep a stale total"
+    );
+}
+
+/// A pool never resolved goes before an older pool only flagged for a refresh.
+/// Mutation: the queue ordered by `first_seen_at` alone.
+#[sqlx::test]
+async fn a_newborn_pool_is_served_before_the_flagged_ones(pool: PgPool) {
+    let satellite = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    let registry = PgPoolRepository::new(pool.clone());
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+    resolve(&satellite, &registry, &pk(1), Some(BaseFeeKind::Constant)).await;
+    registry.mark_needs_refresh(&pk(1)).await.unwrap();
+    seed_pool(&pool, pk(2), Protocol::MeteoraDammV2, 2).await;
+
+    assert_eq!(satellite.list_unresolved(1).await.unwrap(), vec![pk(2)]);
+    assert_eq!(
+        satellite.list_unresolved(2).await.unwrap(),
+        vec![pk(2), pk(1)]
+    );
+}
+
+/// A read that cannot give the range leaves the queue like any other.
+/// Mutation: a range column added to the predicate, which strands the pool.
+#[sqlx::test]
+async fn a_pool_read_without_its_range_leaves_the_queue(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+    let satellite = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    let registry = PgPoolRepository::new(pool.clone());
+
+    // `properties_only` carries no range: an account too short to hold one.
+    resolve(&satellite, &registry, &pk(1), Some(BaseFeeKind::Constant)).await;
+
+    assert!(
+        satellite.list_unresolved(100).await.unwrap().is_empty(),
+        "a pool whose account cannot give the range must not be fetched forever"
     );
 }
 
@@ -775,6 +870,11 @@ async fn the_fee_scheduler_curve_round_trips_and_can_be_cleared(pool: PgPool) {
         base_fee_kind: Some(BaseFeeKind::SchedulerLinear),
         has_dynamic_fee: true,
         fee_scheduler: Some(scheduler),
+        sqrt_min_price: None,
+        sqrt_max_price: None,
+        sqrt_price: None,
+        collect_fee_mode: None,
+        permanent_lock_liquidity: None,
     });
 
     repo.set_pool_account(&pk(1), &with_curve).await.unwrap();
@@ -841,6 +941,11 @@ async fn an_out_of_range_curve_costs_the_curve_and_nothing_else(pool: PgPool) {
             activation_type: 1,
             kind: BaseFeeKind::SchedulerLinear,
         }),
+        sqrt_min_price: None,
+        sqrt_max_price: None,
+        sqrt_price: None,
+        collect_fee_mode: None,
+        permanent_lock_liquidity: None,
     });
 
     repo.set_pool_account(&pk(1), &props)

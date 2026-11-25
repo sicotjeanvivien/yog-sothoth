@@ -200,6 +200,75 @@ fn decodes_real_mainnet_accounts() {
     }
 }
 
+/// `(pool, sqrt_min_price, sqrt_max_price, sqrt_price, collect_fee_mode, permanent_lock_liquidity)`.
+#[rustfmt::skip]
+const EXPECTED_LIQUIDITY_SHAPE: &[(&str, u128, u128, u128, u8, u128)] = &[
+    ("28BDU1aghznh8t9Z1imygPU2DrLzw34FC5V9MHYb3HSA", 4_295_048_016, 79_226_673_521_066_979_257_578_248_091, 129_552_330_664_826_534, 1, 0),
+    ("2hoh2jW3RLRLRrLagb6aWPL3txRMfWsgNstC4j2cdRhW", 0, u128::MAX, 1_698_602_818_067_443_507, 2, 45_872_362_771_778_656_017_868_448_399_854),
+    ("4EqtnwiCSDJQJvVBrLh7pVdCxmo9rGKd66u4Esmq5Utt", 0, u128::MAX, 228_012_060_033_831_723, 2, 0),
+    ("59cbVFRS9GSYeMPVrNQtDyzGnaN8o3fyWZcPJxFuNZjD", 4_295_048_016, 79_226_673_521_066_979_257_578_248_091, 6_055_168_928_050_420_145, 1, 0),
+    ("7j7Qm6oeWZ2MFRve3kPWg1fE5cXYLDFPYe9982SjWrbC", 4_295_048_016, 79_226_673_521_066_979_257_578_248_091, 124_463_820_677_546_745, 1, 0),
+    ("8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie", 4_880_549_731_789_001_291, 12_236_185_739_241_331_242, 5_013_759_551_191_025_806, 0, 24_632_261_441_830_973_163_426_669_659),
+    ("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j", 4_124_817_371_235_594_858, 13_043_817_825_332_782_212, 5_015_921_809_364_189_011, 1, 4_411_193_110_611_902_338_516_290_616),
+    ("FvAQ9jyDAqSGtTmLm5Mgpq3NhVhjfwEU8e6gUmtS1PqQ", 0, u128::MAX, 16_247_403_954_620_036, 2, 0),
+    ("FvXPAoRBA6QMWBMqjy1rCLuRkXDH3Q3zD6ZAv8yJ8U7j", 0, u128::MAX, 16_516_526_959_307_043, 2, 453_823_834_630_973_485_099_295_104_095_050),
+    ("KKyUyWncRfakBZh2M318BFfdR6332WWu1NePd9amQtj", 4_295_048_016, 79_226_673_521_066_979_257_578_248_091, 8_204_016_103_425_407_481, 1, 793_921_928_996_210_251_910_880_349_418),
+    ("sZchbRCFoUcr3xzUhqtngzXCr2DUnvurd5hTx9NtXZB", 4_295_048_016, 79_226_673_521_066_979_257_578_248_091, 39_650_337_623_906_754, 0, 0),
+];
+
+/// cp-amm's bounds on a concentrated pool's range (`constants.rs`).
+const MIN_SQRT_PRICE: u128 = 4_295_048_016;
+const MAX_SQRT_PRICE: u128 = 79_226_673_521_066_979_257_578_248_091;
+
+/// Mutation: any of the five offsets moved by one byte.
+#[test]
+fn decodes_the_range_and_permanent_lock_of_real_accounts() {
+    for &(pool, min, max, price, mode, permanent) in EXPECTED_LIQUIDITY_SHAPE {
+        let fixture = load(CP_AMM_DIR, pool);
+        let data = base64_decode(&fixture.data_base64);
+        let owner = Pubkey::from_str(&fixture.owner).expect("owner");
+        let decoded = decode_pool_account(&owner, &data)
+            .unwrap_or_else(|err| panic!("{pool}: real account rejected: {err}"));
+        let PoolAccountProperties::MeteoraDammV2(props) = decoded.properties else {
+            panic!("{pool}: decoded as another protocol")
+        };
+
+        assert_eq!(
+            (props.sqrt_min_price, props.sqrt_max_price, props.sqrt_price),
+            (Some(min), Some(max), Some(price)),
+            "{pool}: range and price"
+        );
+        assert_eq!(
+            props.collect_fee_mode,
+            Some(mode),
+            "{pool}: collect fee mode"
+        );
+        assert_eq!(
+            props.permanent_lock_liquidity,
+            Some(permanent),
+            "{pool}: permanent lock"
+        );
+
+        // Independent of our offsets: what cp-amm allows each mode to hold.
+        if mode == 2 {
+            assert_eq!(
+                (min, max),
+                (0, u128::MAX),
+                "{pool}: a compounding pool has no range"
+            );
+        } else {
+            assert!(
+                MIN_SQRT_PRICE <= min && max <= MAX_SQRT_PRICE,
+                "{pool}: range out of cp-amm bounds"
+            );
+        }
+        assert!(
+            min <= price && price <= max,
+            "{pool}: price outside its range"
+        );
+    }
+}
+
 // ── DLMM `LbPair` ───────────────────────────────────────────────────
 
 /// Every field, on every captured `LbPair`: the mints name known tokens and the

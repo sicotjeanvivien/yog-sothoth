@@ -5,9 +5,11 @@ use super::*;
 use crate::amm::damm_v2::BaseFeeKind;
 use crate::application::decoder::PoolAccountRejection;
 use crate::application::decoder::meteora::damm_v2::{
-    BASE_FEE_MODE_OFFSET, CLIFF_FEE_NUMERATOR_OFFSET, DYNAMIC_FEE_INITIALIZED_OFFSET,
-    NUMBER_OF_PERIOD_OFFSET, POOL_DISCRIMINATOR, PROTOCOL_FEE_PERCENT_OFFSET,
-    REFERRAL_FEE_PERCENT_OFFSET, TOKEN_A_MINT_OFFSET, TOKEN_B_MINT_OFFSET,
+    BASE_FEE_MODE_OFFSET, CLIFF_FEE_NUMERATOR_OFFSET, COLLECT_FEE_MODE_OFFSET,
+    DYNAMIC_FEE_INITIALIZED_OFFSET, NUMBER_OF_PERIOD_OFFSET, PERMANENT_LOCK_LIQUIDITY_OFFSET,
+    POOL_DISCRIMINATOR, PROTOCOL_FEE_PERCENT_OFFSET, REFERRAL_FEE_PERCENT_OFFSET,
+    SQRT_MAX_PRICE_OFFSET, SQRT_MIN_PRICE_OFFSET, SQRT_PRICE_OFFSET, TOKEN_A_MINT_OFFSET,
+    TOKEN_B_MINT_OFFSET,
 };
 use crate::application::decoder::meteora::dlmm::{
     BASE_FACTOR_OFFSET, BASE_FEE_POWER_FACTOR_OFFSET, BIN_STEP_OFFSET, LB_PAIR_DISCRIMINATOR,
@@ -146,6 +148,57 @@ fn decodes_cp_amm_fields_at_their_offsets() {
     let props = damm_v2_properties(&data);
     assert_eq!(props.protocol_fee_percent, 20);
     assert_eq!(props.referral_fee_percent, 20);
+}
+
+/// Mutation: one of the five reads narrowed, swapped with a neighbour, or read big-endian.
+#[test]
+fn decodes_the_range_and_the_permanent_lock_at_their_offsets() {
+    let mut data = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));
+    let values: [(usize, u128); 4] = [
+        (
+            SQRT_MIN_PRICE_OFFSET,
+            0x0101_0000_0000_0000_0000_0000_0000_0011,
+        ),
+        (
+            SQRT_MAX_PRICE_OFFSET,
+            0x0202_0000_0000_0000_0000_0000_0000_0022,
+        ),
+        (SQRT_PRICE_OFFSET, 0x0303_0000_0000_0000_0000_0000_0000_0033),
+        (
+            PERMANENT_LOCK_LIQUIDITY_OFFSET,
+            0x0404_0000_0000_0000_0000_0000_0000_0044,
+        ),
+    ];
+    for (at, value) in values {
+        data[at..at + 16].copy_from_slice(&value.to_le_bytes());
+    }
+    data[COLLECT_FEE_MODE_OFFSET] = 2;
+
+    let props = damm_v2_properties(&data);
+    assert_eq!(props.sqrt_min_price, Some(values[0].1));
+    assert_eq!(props.sqrt_max_price, Some(values[1].1));
+    assert_eq!(props.sqrt_price, Some(values[2].1));
+    assert_eq!(props.permanent_lock_liquidity, Some(values[3].1));
+    assert_eq!(props.collect_fee_mode, Some(2));
+}
+
+/// An account one byte short of the permanent lock loses the five, and only them.
+/// Mutation: requiring them, which refuses the account and strands the pool.
+#[test]
+fn an_account_too_short_for_the_permanent_lock_keeps_the_rest() {
+    let mut data = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));
+    data[SQRT_MIN_PRICE_OFFSET..SQRT_MIN_PRICE_OFFSET + 16].copy_from_slice(&7u128.to_le_bytes());
+    let short = &data[..PERMANENT_LOCK_LIQUIDITY_OFFSET + 15];
+
+    let props = damm_v2_properties(short);
+    assert_eq!(props.protocol_fee_percent, 20);
+    assert_eq!(
+        (props.sqrt_min_price, props.sqrt_max_price, props.sqrt_price),
+        (None, None, None),
+        "the range is read only with the permanent lock"
+    );
+    assert_eq!(props.collect_fee_mode, None);
+    assert_eq!(props.permanent_lock_liquidity, None);
 }
 
 /// Mutation: reading byte 49 (`padding_0`) into any field; poisoned, it must change nothing.

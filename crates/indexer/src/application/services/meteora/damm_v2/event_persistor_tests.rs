@@ -735,7 +735,11 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
             })
         )
         .await,
-        ["pool:touch", "insert:permanent_lock_position"]
+        [
+            "pool:touch",
+            "pool:mark_needs_refresh",
+            "insert:permanent_lock_position"
+        ]
     );
 
     // initialize_pool: upsert + insert, no projection; the blob is stored verbatim.
