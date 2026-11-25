@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                WITH reading AS (\n                    SELECT max(bucket) AS bucket FROM analytic_tvl_by_token WHERE protocol = $1\n                )\n                SELECT r.bucket + INTERVAL '1 hour' AS \"at?\",\n                       p.tvl_usd AS \"total_tvl_usd?\", p.locked_usd AS \"total_locked_usd?\",\n                       t.mint AS \"mint?\", t.tvl_usd AS \"tvl_usd?\", t.locked_usd AS \"locked_usd?\",\n                       t.pools AS \"pools?\",\n                       m.symbol AS \"symbol?\", m.name AS \"name?\", m.decimals AS \"decimals?\",\n                       m.logo_uri AS \"logo_uri?\", m.metadata_provider AS \"metadata_provider?\",\n                       m.fetched_at AS \"fetched_at?\", m.last_refresh_at AS \"last_refresh_at?\"\n                  FROM reading r\n                  LEFT JOIN analytic_protocol_tvl p ON p.protocol = $1 AND p.bucket = r.bucket\n                  LEFT JOIN LATERAL (\n                      SELECT * FROM analytic_tvl_by_token t\n                       WHERE t.protocol = $1\n                         AND (NOT $4\n                              OR ($2::NUMERIC IS NOT NULL\n                                  AND (t.locked_usd < $2 OR (t.locked_usd = $2 AND t.mint > $3)\n                                       OR t.locked_usd IS NULL))\n                              OR ($2::NUMERIC IS NULL AND t.locked_usd IS NULL AND t.mint > $3))\n                       ORDER BY t.locked_usd DESC NULLS LAST, t.mint\n                       LIMIT $5\n                  ) t ON true\n                  LEFT JOIN token_metadata m ON m.mint = t.mint\n                 ORDER BY t.locked_usd DESC NULLS LAST, t.mint\n                ",
+  "query": "\n                WITH reading AS (\n                    SELECT max(bucket) AS bucket FROM analytic_tvl_by_token WHERE protocol = $1\n                )\n                SELECT r.bucket + INTERVAL '1 hour' AS \"at?\",\n                       p.tvl_usd AS \"total_tvl_usd?\", p.locked_usd AS \"total_locked_usd?\",\n                       p.vesting_covered_since AS \"covered_since?\",\n                       t.mint AS \"mint?\", t.tvl_usd AS \"tvl_usd?\", t.locked_usd AS \"locked_usd?\",\n                       t.pools AS \"pools?\", ROUND(t.locked_usd, 6) AS \"value_key?\",\n                       m.symbol AS \"symbol?\", m.name AS \"name?\", m.decimals AS \"decimals?\",\n                       m.logo_uri AS \"logo_uri?\", m.metadata_provider AS \"metadata_provider?\",\n                       m.fetched_at AS \"fetched_at?\", m.last_refresh_at AS \"last_refresh_at?\"\n                  FROM reading r\n                  LEFT JOIN analytic_protocol_tvl p ON p.protocol = $1 AND p.bucket = r.bucket\n                  LEFT JOIN LATERAL (\n                      SELECT * FROM analytic_tvl_by_token t\n                       WHERE t.protocol = $1\n                         AND (NOT $4\n                              OR ($2::NUMERIC IS NOT NULL\n                                  AND (ROUND(t.locked_usd, 6) < $2\n                                       OR (ROUND(t.locked_usd, 6) = $2 AND t.mint > $3)\n                                       OR t.locked_usd IS NULL))\n                              OR ($2::NUMERIC IS NULL AND t.locked_usd IS NULL AND t.mint > $3))\n                       ORDER BY ROUND(t.locked_usd, 6) DESC NULLS LAST, t.mint\n                       LIMIT $5\n                  ) t ON true\n                  LEFT JOIN token_metadata m ON m.mint = t.mint\n                 ORDER BY ROUND(t.locked_usd, 6) DESC NULLS LAST, t.mint\n                ",
   "describe": {
     "columns": [
       {
@@ -33,6 +33,17 @@
       },
       {
         "ordinal": 3,
+        "name": "covered_since?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "vesting_covered_since"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
         "name": "mint?",
         "type_info": "Text",
         "origin": {
@@ -43,7 +54,7 @@
         }
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "tvl_usd?",
         "type_info": "Numeric",
         "origin": {
@@ -54,7 +65,7 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "locked_usd?",
         "type_info": "Numeric",
         "origin": {
@@ -65,7 +76,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "pools?",
         "type_info": "Int8",
         "origin": {
@@ -76,7 +87,13 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
+        "name": "value_key?",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
         "name": "symbol?",
         "type_info": "Text",
         "origin": {
@@ -87,7 +104,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 10,
         "name": "name?",
         "type_info": "Text",
         "origin": {
@@ -98,7 +115,7 @@
         }
       },
       {
-        "ordinal": 9,
+        "ordinal": 11,
         "name": "decimals?",
         "type_info": "Int2",
         "origin": {
@@ -109,7 +126,7 @@
         }
       },
       {
-        "ordinal": 10,
+        "ordinal": 12,
         "name": "logo_uri?",
         "type_info": "Text",
         "origin": {
@@ -120,7 +137,7 @@
         }
       },
       {
-        "ordinal": 11,
+        "ordinal": 13,
         "name": "metadata_provider?",
         "type_info": "Text",
         "origin": {
@@ -131,7 +148,7 @@
         }
       },
       {
-        "ordinal": 12,
+        "ordinal": 14,
         "name": "fetched_at?",
         "type_info": "Timestamptz",
         "origin": {
@@ -142,7 +159,7 @@
         }
       },
       {
-        "ordinal": 13,
+        "ordinal": 15,
         "name": "last_refresh_at?",
         "type_info": "Timestamptz",
         "origin": {
@@ -166,10 +183,12 @@
       null,
       true,
       true,
+      true,
       false,
       false,
       true,
       false,
+      null,
       true,
       true,
       false,
@@ -179,5 +198,5 @@
       false
     ]
   },
-  "hash": "62832c6dd63d0e4aa148fb4c75d5ab5d98b940e15b9fdf351b866e99cb4970d7"
+  "hash": "d4c889bcf53c3132ec202359a7fe8c5281a7ed032e65ddf13b5ab56fd5f549c6"
 }

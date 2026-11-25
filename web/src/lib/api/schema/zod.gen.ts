@@ -1382,6 +1382,7 @@ export type TokenTvlResponse = z.infer<typeof zTokenTvlResponse>;
 
 export const zTokenTvlPageResponse = z.object({
     at: z.iso.datetime({ offset: true }).nullable(),
+    coveredSince: z.iso.datetime({ offset: true }).nullable(),
     isFirst: z.boolean(),
     isLast: z.boolean(),
     items: z.array(zTokenTvlResponse),

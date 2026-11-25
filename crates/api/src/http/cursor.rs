@@ -583,14 +583,19 @@ pub(crate) fn decode_token_tvl_cursor(
             "invalid cursor: taken in another list".to_string(),
         ));
     }
+    let value = wire
+        .value
+        .map(|v| Decimal::from_str(&v).map_err(|_| malformed("value")))
+        .transpose()?;
+    // ⚠️ Only an unknown locked part has no value: a TVL key without one would match nothing.
+    if order == TokenTvlOrder::Tvl && value.is_none() {
+        return Err(malformed("value"));
+    }
     Ok(TokenTvlCursor {
         protocol,
         at: parse_rfc3339(&wire.at)?,
         order,
-        value: wire
-            .value
-            .map(|v| Decimal::from_str(&v).map_err(|_| malformed("value")))
-            .transpose()?,
+        value,
         mint: Pubkey::from_str(&wire.mint).map_err(|_| malformed("mint"))?,
     })
 }

@@ -651,6 +651,9 @@ async fn the_tokens_rank_by_tvl_or_locked_and_page_without_a_gap(pool: PgPool) {
         (3, "300", Some("20")),
         (5, "300", None),
         (4, "100", Some("60")),
+        // Apart only past a Decimal's 28 digits: a raw keyset would serve one of them twice.
+        (6, "12345.678901234567890123456789012", None),
+        (7, "12345.678901234567890123456789013", None),
     ] {
         sqlx::query(
             "INSERT INTO analytic_tvl_by_token (protocol, bucket, mint, tvl_usd, locked_usd, pools)
@@ -671,8 +674,14 @@ async fn the_tokens_rank_by_tvl_or_locked_and_page_without_a_gap(pool: PgPool) {
         seeds.sort_by_key(|seed| mint(*seed).to_string());
         seeds
     };
-    let tvl_order = [vec![1], by_mint(vec![2, 3, 5]), vec![4]].concat();
-    let locked_order = [vec![4, 1, 3], by_mint(vec![2, 5])].concat();
+    let tvl_order = [
+        by_mint(vec![6, 7]),
+        vec![1],
+        by_mint(vec![2, 3, 5]),
+        vec![4],
+    ]
+    .concat();
+    let locked_order = [vec![4, 1, 3], by_mint(vec![2, 5, 6, 7])].concat();
 
     for (order, expected) in [
         (TokenTvlOrder::Tvl, tvl_order),
@@ -687,6 +696,7 @@ async fn the_tokens_rank_by_tvl_or_locked_and_page_without_a_gap(pool: PgPool) {
                 .unwrap()
                 .expect("a reading");
             assert_eq!(read.at, hour(1));
+            assert!(read.covered_since.is_some(), "the first vesting observed");
             assert_eq!(
                 read.total.locked_usd.map(|v| v.to_string()),
                 Some("70".to_string())

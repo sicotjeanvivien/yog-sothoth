@@ -54,6 +54,10 @@ core/src/
 │   │                       reading a window before; TvlChangeTotal; LiquidityTurnover, a
 │   │                       window's volume over the last TVL — ProtocolTvlLookup)
 │   ├── discovered_tvl/    (ProtocolDiscoveredTvl — DiscoveredTvlLookup)
+│   ├── token_tvl/         (TokenTvl, a protocol's tokens at its last reading, ranked by TVL
+│   │                       or locked — TokenTvlLookup)
+│   ├── vesting_unlocks/   (VestingUnlock, what the vesting locks release after the last
+│   │                       reading — VestingUnlockLookup)
 │   ├── protocol_activity/ (ProtocolActivityLookup: the frozen hours every measure is read over)
 │   ├── token_activity/    (TokenActivity — TokenActivityFeed, by volume)
 │   ├── signals/           (Signal, Severity, SignalDetector, EvalContext,

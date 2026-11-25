@@ -1,0 +1,138 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                WITH reading AS (\n                    SELECT bucket, measured_at, vesting_covered_since FROM analytic_protocol_tvl\n                     WHERE protocol = $1 AND locked_usd IS NOT NULL\n                     ORDER BY bucket DESC LIMIT 1\n                )\n                SELECT r.measured_at AS \"as_of?\", r.vesting_covered_since AS \"covered_since?\",\n                       u.pool_address AS \"pool_address?\", ma.symbol AS \"token_a_symbol?\",\n                       mb.symbol AS \"token_b_symbol?\", u.position AS \"position?\",\n                       u.unlocks_at AS \"unlocks_at?\", u.liquidity AS \"liquidity?\",\n                       u.amount_usd AS \"amount_usd?\",\n                       ROUND(u.amount_usd, 6) AS \"amount_key?\"\n                  FROM reading r\n                  LEFT JOIN LATERAL (\n                      SELECT * FROM analytic_vesting_unlocks u\n                       WHERE u.protocol = $1 AND u.bucket = r.bucket\n                         AND u.unlocks_at > r.measured_at\n                         AND u.unlocks_at <= r.measured_at + $2::INTERVAL\n                         AND (NOT $3\n                              -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits, the column more.\n                              OR ($8::NUMERIC IS NOT NULL\n                                  AND (ROUND(u.amount_usd, 6) < $8 OR u.amount_usd IS NULL\n                                       OR (ROUND(u.amount_usd, 6) = $8\n                                           AND (u.unlocks_at, u.pool_address, u.position)\n                                               > ($4, $5, $6))))\n                              OR ($8::NUMERIC IS NULL AND u.amount_usd IS NULL\n                                  AND (u.unlocks_at, u.pool_address, u.position) > ($4, $5, $6)))\n                       ORDER BY ROUND(u.amount_usd, 6) DESC NULLS LAST, u.unlocks_at, u.pool_address,\n                                u.position\n                       LIMIT $7\n                  ) u ON true\n                  LEFT JOIN pools p ON p.pool_address = u.pool_address\n                  LEFT JOIN token_metadata ma ON ma.mint = p.token_a_mint::TEXT\n                  LEFT JOIN token_metadata mb ON mb.mint = p.token_b_mint::TEXT\n                 ORDER BY ROUND(u.amount_usd, 6) DESC NULLS LAST, u.unlocks_at, u.pool_address, u.position\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "as_of?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "measured_at"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "covered_since?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "analytic_protocol_tvl",
+            "name": "vesting_covered_since"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "pool_address?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_vesting_unlocks",
+            "name": "pool_address"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "token_a_symbol?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "symbol"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "token_b_symbol?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "token_metadata",
+            "name": "symbol"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "position?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "analytic_vesting_unlocks",
+            "name": "position"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "unlocks_at?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "analytic_vesting_unlocks",
+            "name": "unlocks_at"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "liquidity?",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_vesting_unlocks",
+            "name": "liquidity"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "amount_usd?",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "analytic_vesting_unlocks",
+            "name": "amount_usd"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "amount_key?",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Interval",
+        "Bool",
+        "Timestamptz",
+        "Text",
+        "Text",
+        "Int8",
+        "Numeric"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "66470d530f198417828b18021bc1eb2907a621ae72a04f96e20ccd0c73c9ef20"
+}

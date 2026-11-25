@@ -1,5 +1,6 @@
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use yog_core::{RepositoryResult, domain::TokenTvl};
 
 use crate::repositories::helper::{
@@ -13,10 +14,13 @@ pub(super) struct TokenTvlRow {
     pub(super) at: Option<DateTime<Utc>>,
     pub(super) total_tvl_usd: Option<BigDecimal>,
     pub(super) total_locked_usd: Option<BigDecimal>,
+    pub(super) covered_since: Option<DateTime<Utc>>,
     pub(super) mint: Option<String>,
     pub(super) tvl_usd: Option<BigDecimal>,
     pub(super) locked_usd: Option<BigDecimal>,
     pub(super) pools: Option<i64>,
+    /// The order's value rounded as the cursor holds it.
+    pub(super) value_key: Option<BigDecimal>,
     pub(super) symbol: Option<String>,
     pub(super) name: Option<String>,
     pub(super) decimals: Option<i16>,
@@ -27,9 +31,10 @@ pub(super) struct TokenTvlRow {
 }
 
 impl TokenTvlRow {
-    /// `None` for the row of an empty page.
-    pub(super) fn into_token(self) -> RepositoryResult<Option<TokenTvl>> {
+    /// The token and its key in the order, `None` for the row of an empty page.
+    pub(super) fn into_token(self) -> RepositoryResult<Option<(TokenTvl, Option<Decimal>)>> {
         let row = self;
+        let key = convert_optional(row.value_key, "value_key", convert_bigdecimal_to_decimal)?;
         let (Some(mint), Some(tvl_usd), Some(pools)) = (row.mint, row.tvl_usd, row.pools) else {
             return Ok(None);
         };
@@ -56,7 +61,7 @@ impl TokenTvlRow {
             }
             _ => None,
         };
-        Ok(Some(TokenTvl {
+        let token = TokenTvl {
             mint: convert_string_to_pubkey(mint, "mint")?,
             metadata,
             tvl_usd: convert_bigdecimal_to_decimal(tvl_usd, "tvl_usd")?,
@@ -66,6 +71,7 @@ impl TokenTvlRow {
                 convert_bigdecimal_to_decimal,
             )?,
             pools,
-        }))
+        };
+        Ok(Some((token, key)))
     }
 }

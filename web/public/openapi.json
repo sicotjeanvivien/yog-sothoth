@@ -5836,6 +5836,14 @@
               "null"
             ]
           },
+          "coveredSince": {
+            "description": "The first vesting observed: the locked parts leave out those locked before it.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "isFirst": {
             "type": "boolean"
           },
@@ -5870,6 +5878,7 @@
           "isFirst",
           "isLast",
           "at",
+          "coveredSince",
           "nextCursor",
           "prevCursor"
         ],

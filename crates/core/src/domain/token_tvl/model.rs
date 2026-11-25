@@ -40,6 +40,8 @@ pub struct TokenTvlTotal {
 #[derive(Debug, Clone)]
 pub struct TokenTvlPage {
     pub at: DateTime<Utc>,
+    /// The first vesting observed: the locked parts leave out those locked before it.
+    pub covered_since: Option<DateTime<Utc>>,
     pub total: TokenTvlTotal,
     pub page: Page<TokenTvl>,
 }

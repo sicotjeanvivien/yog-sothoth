@@ -59,8 +59,9 @@ impl TokenTvlLookup for PgTokenTvlRepository {
                 )
                 SELECT r.bucket + INTERVAL '1 hour' AS "at?",
                        p.tvl_usd AS "total_tvl_usd?", p.locked_usd AS "total_locked_usd?",
+                       p.vesting_covered_since AS "covered_since?",
                        t.mint AS "mint?", t.tvl_usd AS "tvl_usd?", t.locked_usd AS "locked_usd?",
-                       t.pools AS "pools?",
+                       t.pools AS "pools?", ROUND(t.tvl_usd, 6) AS "value_key?",
                        m.symbol AS "symbol?", m.name AS "name?", m.decimals AS "decimals?",
                        m.logo_uri AS "logo_uri?", m.metadata_provider AS "metadata_provider?",
                        m.fetched_at AS "fetched_at?", m.last_refresh_at AS "last_refresh_at?"
@@ -69,12 +70,14 @@ impl TokenTvlLookup for PgTokenTvlRepository {
                   LEFT JOIN LATERAL (
                       SELECT * FROM analytic_tvl_by_token t
                        WHERE t.protocol = $1
-                         AND (NOT $4 OR t.tvl_usd < $2 OR (t.tvl_usd = $2 AND t.mint > $3))
-                       ORDER BY t.tvl_usd DESC, t.mint
+                         -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits, the column more.
+                         AND (NOT $4 OR ROUND(t.tvl_usd, 6) < $2
+                              OR (ROUND(t.tvl_usd, 6) = $2 AND t.mint > $3))
+                       ORDER BY ROUND(t.tvl_usd, 6) DESC, t.mint
                        LIMIT $5
                   ) t ON true
                   LEFT JOIN token_metadata m ON m.mint = t.mint
-                 ORDER BY t.tvl_usd DESC, t.mint
+                 ORDER BY ROUND(t.tvl_usd, 6) DESC, t.mint
                 "#,
                     protocol.as_str(),
                     after_value,
@@ -95,8 +98,9 @@ impl TokenTvlLookup for PgTokenTvlRepository {
                 )
                 SELECT r.bucket + INTERVAL '1 hour' AS "at?",
                        p.tvl_usd AS "total_tvl_usd?", p.locked_usd AS "total_locked_usd?",
+                       p.vesting_covered_since AS "covered_since?",
                        t.mint AS "mint?", t.tvl_usd AS "tvl_usd?", t.locked_usd AS "locked_usd?",
-                       t.pools AS "pools?",
+                       t.pools AS "pools?", ROUND(t.locked_usd, 6) AS "value_key?",
                        m.symbol AS "symbol?", m.name AS "name?", m.decimals AS "decimals?",
                        m.logo_uri AS "logo_uri?", m.metadata_provider AS "metadata_provider?",
                        m.fetched_at AS "fetched_at?", m.last_refresh_at AS "last_refresh_at?"
@@ -107,14 +111,15 @@ impl TokenTvlLookup for PgTokenTvlRepository {
                        WHERE t.protocol = $1
                          AND (NOT $4
                               OR ($2::NUMERIC IS NOT NULL
-                                  AND (t.locked_usd < $2 OR (t.locked_usd = $2 AND t.mint > $3)
+                                  AND (ROUND(t.locked_usd, 6) < $2
+                                       OR (ROUND(t.locked_usd, 6) = $2 AND t.mint > $3)
                                        OR t.locked_usd IS NULL))
                               OR ($2::NUMERIC IS NULL AND t.locked_usd IS NULL AND t.mint > $3))
-                       ORDER BY t.locked_usd DESC NULLS LAST, t.mint
+                       ORDER BY ROUND(t.locked_usd, 6) DESC NULLS LAST, t.mint
                        LIMIT $5
                   ) t ON true
                   LEFT JOIN token_metadata m ON m.mint = t.mint
-                 ORDER BY t.locked_usd DESC NULLS LAST, t.mint
+                 ORDER BY ROUND(t.locked_usd, 6) DESC NULLS LAST, t.mint
                 "#,
                     protocol.as_str(),
                     after_value,
@@ -134,6 +139,7 @@ impl TokenTvlLookup for PgTokenTvlRepository {
         let Some(at) = first.at else {
             return Ok(None);
         };
+        let covered_since = first.covered_since;
         let total = TokenTvlTotal {
             tvl_usd: convert_optional(
                 first.total_tvl_usd.clone(),
@@ -146,26 +152,32 @@ impl TokenTvlLookup for PgTokenTvlRepository {
                 convert_bigdecimal_to_decimal,
             )?,
         };
-        let items = rows
+        let keyed = rows
             .into_iter()
             .filter_map(|row| row.into_token().transpose())
             .collect::<RepositoryResult<Vec<_>>>()?;
-        let page =
-            PageBuilder::new(items, limit, QueryMode::Forward, had_cursor).finalize(|token| {
+        let page = PageBuilder::new(keyed, limit, QueryMode::Forward, had_cursor).finalize(
+            |(token, key)| {
                 Cursor::TokenTvl(Box::new(TokenTvlCursor {
                     protocol,
                     at,
                     order,
-                    value: match order {
-                        TokenTvlOrder::Tvl => Some(token.tvl_usd),
-                        TokenTvlOrder::Locked => token.locked_usd,
-                    },
+                    value: *key,
                     mint: token.mint,
                 }))
-            });
+            },
+        );
+        let page = Page {
+            items: page.items.into_iter().map(|(token, _)| token).collect(),
+            next_cursor: page.next_cursor,
+            prev_cursor: page.prev_cursor,
+            is_first: page.is_first,
+            is_last: page.is_last,
+        };
         // ⚠️ Forward only: a previous cursor would be read forward from the first item.
         Ok(Some(TokenTvlPage {
             at,
+            covered_since,
             total,
             page: Page {
                 prev_cursor: None,

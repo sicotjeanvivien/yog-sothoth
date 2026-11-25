@@ -51,6 +51,8 @@ persistence/
 │   │   │                     measure is read over; the tokens by volume)
 │   │   ├── signal/, swap_flow/, liquidity_flow/
 │   │   ├── rotation_runs/ (PgRotationRunRepository: the rotation runs yog-analytic drew)
+│   │   ├── token_tvl/, vesting_unlock/ (the TVL by token and the vesting releases of the
+│   │   │                     last reading, each read with its reading)
 │   │   ├── token_metadata/, token_price/, network_status/, watched_pool/,
 │   │   │   observed_slots.rs (the slots each ingestion session watched)
 │   │   ├── announcement/

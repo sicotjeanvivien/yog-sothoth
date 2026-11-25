@@ -19,6 +19,8 @@ use total_response::TokenTvlPageTotalResponse;
 pub(crate) struct TokenTvlPageResponse {
     /// The close of the hour of the reading; `null` before the first.
     at: Option<DateTime<Utc>>,
+    /// The first vesting observed: the locked parts leave out those locked before it.
+    covered_since: Option<DateTime<Utc>>,
     total: TokenTvlPageTotalResponse,
     items: Vec<TokenTvlResponse>,
     next_cursor: Option<String>,
@@ -32,6 +34,7 @@ impl TokenTvlPageResponse {
         let Some(read) = read else {
             return Ok(Self {
                 at: None,
+                covered_since: None,
                 total: TokenTvlTotal {
                     tvl_usd: None,
                     locked_usd: None,
@@ -47,6 +50,7 @@ impl TokenTvlPageResponse {
         let page = read.page;
         Ok(Self {
             at: Some(read.at),
+            covered_since: read.covered_since,
             total: read.total.into(),
             next_cursor: encode_cursor_opt(page.next_cursor.as_ref())?,
             prev_cursor: encode_cursor_opt(page.prev_cursor.as_ref())?,

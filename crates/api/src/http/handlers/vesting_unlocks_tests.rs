@@ -82,3 +82,29 @@ async fn a_cursor_of_another_list_or_past_its_window_is_refused() {
         assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}: {body}");
     }
 }
+
+/// Mutation: a TVL cursor decoded without its value, whose next page matches nothing — a silent
+/// empty page instead of a refusal.
+#[tokio::test]
+async fn a_tvl_cursor_without_its_value_is_refused() {
+    use yog_core::{
+        Cursor,
+        domain::{Protocol, TokenTvlCursor, TokenTvlOrder},
+    };
+    let cursor = crate::http::cursor::encode_cursor(&Cursor::TokenTvl(Box::new(TokenTvlCursor {
+        protocol: Protocol::MeteoraDammV2,
+        at: chrono::Utc::now(),
+        order: TokenTvlOrder::Tvl,
+        value: None,
+        mint: crate::testing::pk(1),
+    })))
+    .unwrap();
+
+    let (status, _, body) = get(&format!(
+        "/api/protocols/meteora_damm_v2/tvl/by-token?cursor={cursor}"
+    ))
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    assert!(body.contains("malformed value"), "{body}");
+}

@@ -1,5 +1,6 @@
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use yog_core::{
     RepositoryResult,
     domain::{Protocol, VestingUnlock},
@@ -22,11 +23,17 @@ pub(super) struct VestingUnlockRow {
     pub(super) unlocks_at: Option<DateTime<Utc>>,
     pub(super) liquidity: Option<BigDecimal>,
     pub(super) amount_usd: Option<BigDecimal>,
+    /// The amount rounded as the cursor holds it.
+    pub(super) amount_key: Option<BigDecimal>,
 }
 
 impl VestingUnlockRow {
-    /// `None` for the row of an empty page.
-    pub(super) fn into_unlock(self, protocol: Protocol) -> RepositoryResult<Option<VestingUnlock>> {
+    /// The release and its amount key, `None` for the row of an empty page.
+    pub(super) fn into_unlock(
+        self,
+        protocol: Protocol,
+    ) -> RepositoryResult<Option<(VestingUnlock, Option<Decimal>)>> {
+        let key = convert_optional(self.amount_key, "amount_key", convert_bigdecimal_to_decimal)?;
         let (Some(pool_address), Some(position), Some(unlocks_at), Some(liquidity)) = (
             self.pool_address,
             self.position,
@@ -35,7 +42,7 @@ impl VestingUnlockRow {
         ) else {
             return Ok(None);
         };
-        Ok(Some(VestingUnlock {
+        let unlock = VestingUnlock {
             protocol,
             pool_address: convert_string_to_pubkey(pool_address, "pool_address")?,
             token_a_symbol: self.token_a_symbol,
@@ -48,6 +55,7 @@ impl VestingUnlockRow {
                 "amount_usd",
                 convert_bigdecimal_to_decimal,
             )?,
-        }))
+        };
+        Ok(Some((unlock, key)))
     }
 }

@@ -67,7 +67,8 @@ impl VestingUnlockLookup for PgVestingUnlockRepository {
                        u.pool_address AS "pool_address?", ma.symbol AS "token_a_symbol?",
                        mb.symbol AS "token_b_symbol?", u.position AS "position?",
                        u.unlocks_at AS "unlocks_at?", u.liquidity AS "liquidity?",
-                       u.amount_usd AS "amount_usd?"
+                       u.amount_usd AS "amount_usd?",
+                       ROUND(u.amount_usd, 6) AS "amount_key?"
                   FROM reading r
                   LEFT JOIN LATERAL (
                       SELECT * FROM analytic_vesting_unlocks u
@@ -109,7 +110,8 @@ impl VestingUnlockLookup for PgVestingUnlockRepository {
                        u.pool_address AS "pool_address?", ma.symbol AS "token_a_symbol?",
                        mb.symbol AS "token_b_symbol?", u.position AS "position?",
                        u.unlocks_at AS "unlocks_at?", u.liquidity AS "liquidity?",
-                       u.amount_usd AS "amount_usd?"
+                       u.amount_usd AS "amount_usd?",
+                       ROUND(u.amount_usd, 6) AS "amount_key?"
                   FROM reading r
                   LEFT JOIN LATERAL (
                       SELECT * FROM analytic_vesting_unlocks u
@@ -117,21 +119,22 @@ impl VestingUnlockLookup for PgVestingUnlockRepository {
                          AND u.unlocks_at > r.measured_at
                          AND u.unlocks_at <= r.measured_at + $2::INTERVAL
                          AND (NOT $3
+                              -- ⚠️ Rounded as the cursor holds it: a `Decimal` keeps 28 digits, the column more.
                               OR ($8::NUMERIC IS NOT NULL
-                                  AND (u.amount_usd < $8 OR u.amount_usd IS NULL
-                                       OR (u.amount_usd = $8
+                                  AND (ROUND(u.amount_usd, 6) < $8 OR u.amount_usd IS NULL
+                                       OR (ROUND(u.amount_usd, 6) = $8
                                            AND (u.unlocks_at, u.pool_address, u.position)
                                                > ($4, $5, $6))))
                               OR ($8::NUMERIC IS NULL AND u.amount_usd IS NULL
                                   AND (u.unlocks_at, u.pool_address, u.position) > ($4, $5, $6)))
-                       ORDER BY u.amount_usd DESC NULLS LAST, u.unlocks_at, u.pool_address,
+                       ORDER BY ROUND(u.amount_usd, 6) DESC NULLS LAST, u.unlocks_at, u.pool_address,
                                 u.position
                        LIMIT $7
                   ) u ON true
                   LEFT JOIN pools p ON p.pool_address = u.pool_address
                   LEFT JOIN token_metadata ma ON ma.mint = p.token_a_mint::TEXT
                   LEFT JOIN token_metadata mb ON mb.mint = p.token_b_mint::TEXT
-                 ORDER BY u.amount_usd DESC NULLS LAST, u.unlocks_at, u.pool_address, u.position
+                 ORDER BY ROUND(u.amount_usd, 6) DESC NULLS LAST, u.unlocks_at, u.pool_address, u.position
                 "#,
                     protocol.as_str(),
                     span,
@@ -155,23 +158,31 @@ impl VestingUnlockLookup for PgVestingUnlockRepository {
             return Ok(None);
         };
         let covered_since = first.covered_since;
-        let items = rows
+        let keyed = rows
             .into_iter()
             .filter_map(|row| row.into_unlock(protocol).transpose())
             .collect::<RepositoryResult<Vec<_>>>()?;
-        let page =
-            PageBuilder::new(items, limit, QueryMode::Forward, had_cursor).finalize(|unlock| {
+        let page = PageBuilder::new(keyed, limit, QueryMode::Forward, had_cursor).finalize(
+            |(unlock, key)| {
                 Cursor::VestingUnlock(Box::new(VestingUnlockCursor {
                     protocol,
                     as_of,
                     window,
                     order,
-                    amount_usd: unlock.amount_usd,
+                    amount_usd: *key,
                     unlocks_at: unlock.unlocks_at,
                     pool_address: unlock.pool_address,
                     position: unlock.position,
                 }))
-            });
+            },
+        );
+        let page = Page {
+            items: page.items.into_iter().map(|(unlock, _)| unlock).collect(),
+            next_cursor: page.next_cursor,
+            prev_cursor: page.prev_cursor,
+            is_first: page.is_first,
+            is_last: page.is_last,
+        };
         // ⚠️ Forward only: a previous cursor would be read forward from the first item.
         Ok(Some(VestingUnlockPage {
             as_of,

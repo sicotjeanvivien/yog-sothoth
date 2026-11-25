@@ -32,6 +32,7 @@ impl TokenTvlLookup for Lens {
     ) -> RepositoryResult<Option<TokenTvlPage>> {
         Ok(self.0.map(|at| TokenTvlPage {
             at,
+            covered_since: None,
             total: TokenTvlTotal {
                 tvl_usd: None,
                 locked_usd: None,
