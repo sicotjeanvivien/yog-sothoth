@@ -64,7 +64,7 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
         Protocol::MeteoraDammV2
     }
 
-    /// Pools never resolved (a NULL column) or flagged `needs_refresh`, oldest first.
+    /// Pools never resolved (a NULL column), then those flagged `needs_refresh`; oldest first in each.
     /// The flag is lowered by the registry write, which the caller issues last.
     async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>> {
         // ⚠️ Not `base_fee_kind` nor the range columns: NULL for an account that cannot give them,
@@ -82,7 +82,13 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
                 OR props.protocol_fee_percent   IS NULL
                 OR props.referral_fee_percent   IS NULL
                 OR props.has_dynamic_fee        IS NULL)
-            ORDER BY p.first_seen_at
+            -- ⚠️ Never-resolved first: a refresh of every pool (056) must not starve the newborn ones.
+            ORDER BY (p.token_a_mint IS NULL OR p.token_b_mint IS NULL OR p.fee_bps IS NULL
+                      OR props.pool_address         IS NULL
+                      OR props.protocol_fee_percent IS NULL
+                      OR props.referral_fee_percent IS NULL
+                      OR props.has_dynamic_fee      IS NULL) DESC,
+                     p.first_seen_at
             LIMIT $1
             "#,
             limit,

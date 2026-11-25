@@ -290,6 +290,24 @@ async fn the_range_and_permanent_lock_round_trip_at_full_width(pool: PgPool) {
     );
 }
 
+/// A pool never resolved goes before an older pool only flagged for a refresh.
+/// Mutation: the queue ordered by `first_seen_at` alone.
+#[sqlx::test]
+async fn a_newborn_pool_is_served_before_the_flagged_ones(pool: PgPool) {
+    let satellite = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    let registry = PgPoolRepository::new(pool.clone());
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+    resolve(&satellite, &registry, &pk(1), Some(BaseFeeKind::Constant)).await;
+    registry.mark_needs_refresh(&pk(1)).await.unwrap();
+    seed_pool(&pool, pk(2), Protocol::MeteoraDammV2, 2).await;
+
+    assert_eq!(satellite.list_unresolved(1).await.unwrap(), vec![pk(2)]);
+    assert_eq!(
+        satellite.list_unresolved(2).await.unwrap(),
+        vec![pk(2), pk(1)]
+    );
+}
+
 /// A read that cannot give the range leaves the queue like any other.
 /// Mutation: a range column added to the predicate, which strands the pool.
 #[sqlx::test]
