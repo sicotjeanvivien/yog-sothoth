@@ -134,6 +134,8 @@ pub(in crate::application::decoder) fn decode_pool_account(
             sqrt_price: read_u128(SQRT_PRICE_OFFSET),
             collect_fee_mode: has_liquidity_shape.then(|| data[COLLECT_FEE_MODE_OFFSET]),
             permanent_lock_liquidity: read_u128(PERMANENT_LOCK_LIQUIDITY_OFFSET),
+            pool_activation_type: (data.len() > ACTIVATION_TYPE_OFFSET)
+                .then(|| data[ACTIVATION_TYPE_OFFSET]),
         }),
     })
 }

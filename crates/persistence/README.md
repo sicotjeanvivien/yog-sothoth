@@ -905,6 +905,14 @@ unresolved queue does not wait for them — it would requeue such an account for
 migration flags every DAMM v2 pool `needs_refresh` once, and a permanent lock flags its pool
 for the next read.
 
+**The pool's unit and the locked liquidity (057).** `pool_activation_type`, the unit of every point of a
+pool (0 slot, 1 timestamp), read for every pool — the scheduler's `activation_type` is kept with a fee
+curve only — and every DAMM v2 pool flagged once more. `yog_damm_v2_liquidity_amounts` is cp-amm's
+concentrated amounts of L; `yog_damm_v2_pool_locked_liquidity(at)` gives, per pool holding locked
+liquidity, its permanent and vesting L and what one L is worth on each side. Both run as their caller:
+`yog_analytic` holds SELECT on what they read. `analytic_protocol_tvl` gains the locked figures;
+`analytic_tvl_by_token` and `analytic_vesting_unlocks` keep the last reading only.
+
 ## `setup_roles.sql`
 
 Provisioning script applied as the admin role, by

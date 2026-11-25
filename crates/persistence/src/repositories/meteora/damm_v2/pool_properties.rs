@@ -152,8 +152,8 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
                  cliff_fee_numerator, number_of_period, period_frequency,
                  reduction_factor, activation_point, activation_type,
                  sqrt_min_price, sqrt_max_price, sqrt_price, collect_fee_mode,
-                 permanent_lock_liquidity)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                 permanent_lock_liquidity, pool_activation_type)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             ON CONFLICT (pool_address) DO UPDATE
                 SET protocol_fee_percent = EXCLUDED.protocol_fee_percent,
                     referral_fee_percent = EXCLUDED.referral_fee_percent,
@@ -180,7 +180,8 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
                     sqrt_max_price           = EXCLUDED.sqrt_max_price,
                     sqrt_price               = EXCLUDED.sqrt_price,
                     collect_fee_mode         = EXCLUDED.collect_fee_mode,
-                    permanent_lock_liquidity = EXCLUDED.permanent_lock_liquidity
+                    permanent_lock_liquidity = EXCLUDED.permanent_lock_liquidity,
+                    pool_activation_type     = EXCLUDED.pool_activation_type
             "#,
             pool_address.to_string(),
             protocol_pct,
@@ -206,6 +207,7 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
             properties
                 .permanent_lock_liquidity
                 .map(|v| convert_u128_to_bigdecimal(v, "permanent_lock_liquidity")),
+            properties.pool_activation_type.map(i16::from),
         )
         .execute(&self.pool)
         .await

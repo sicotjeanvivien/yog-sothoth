@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The locked liquidity of the TVL reading of $1, at $2: the protocol's figures ($3), every protocol's\n-- tokens, and the vesting releases up to $2 + $4. A pool is valued when a side is and its vesting known.\n-- ⚠️ MATERIALIZED: the three writes read one evaluation of the function, its cost paid once.\nWITH locked AS MATERIALIZED (\n    SELECT l.pool_address, l.permanent_liquidity, l.vesting_liquidity,\n           l.a_usd_per_liquidity, l.b_usd_per_liquidity,\n           COALESCE(l.a_usd_per_liquidity + l.b_usd_per_liquidity,\n                    l.a_usd_per_liquidity, l.b_usd_per_liquidity) AS usd_per_liquidity\n      FROM yog_damm_v2_pool_locked_liquidity($2) l\n),\nvalued AS (\n    SELECT pool_address,\n           permanent_liquidity * usd_per_liquidity AS permanent_usd,\n           vesting_liquidity * usd_per_liquidity AS vesting_usd,\n           (permanent_liquidity + vesting_liquidity) * a_usd_per_liquidity AS a_usd,\n           (permanent_liquidity + vesting_liquidity) * b_usd_per_liquidity AS b_usd,\n           usd_per_liquidity IS NOT NULL AND vesting_liquidity IS NOT NULL AS is_valued\n      FROM locked\n),\nreading AS (\n    UPDATE analytic_protocol_tvl t\n       SET locked_usd            = s.locked_usd,\n           permanent_usd         = s.permanent_usd,\n           vesting_usd           = s.vesting_usd,\n           pools_locked          = s.pools,\n           pools_locked_unvalued = s.unvalued\n      FROM (\n        SELECT COALESCE(SUM(permanent_usd + vesting_usd) FILTER (WHERE is_valued), 0) AS locked_usd,\n               COALESCE(SUM(permanent_usd) FILTER (WHERE is_valued), 0) AS permanent_usd,\n               COALESCE(SUM(vesting_usd) FILTER (WHERE is_valued), 0) AS vesting_usd,\n               COUNT(*) AS pools,\n               COUNT(*) FILTER (WHERE NOT is_valued) AS unvalued\n          FROM valued\n      ) s\n     WHERE t.protocol = $3 AND t.bucket = $1\n    RETURNING 1\n),\nsides AS (\n    SELECT p.protocol, p.token_a_mint::TEXT AS mint, t.value_a_usd AS tvl_usd,\n           CASE WHEN v.is_valued THEN v.a_usd END AS locked_usd\n      FROM pool_current_tvl t\n      JOIN pools p ON p.pool_address = t.pool_address\n      LEFT JOIN valued v ON v.pool_address = t.pool_address\n     WHERE p.token_a_mint IS NOT NULL\n    UNION ALL\n    SELECT p.protocol, p.token_b_mint::TEXT, t.value_b_usd,\n           CASE WHEN v.is_valued THEN v.b_usd END\n      FROM pool_current_tvl t\n      JOIN pools p ON p.pool_address = t.pool_address\n      LEFT JOIN valued v ON v.pool_address = t.pool_address\n     WHERE p.token_b_mint IS NOT NULL\n),\ntokens AS (\n    INSERT INTO analytic_tvl_by_token (protocol, bucket, mint, tvl_usd, locked_usd, pools)\n    SELECT protocol, $1, mint, SUM(tvl_usd),\n           CASE WHEN protocol = $3 THEN COALESCE(SUM(locked_usd), 0) END,\n           COUNT(*)\n      FROM sides\n     GROUP BY protocol, mint\n    HAVING COUNT(tvl_usd) > 0\n    RETURNING 1\n),\nbounds AS (\n    SELECT extract(epoch FROM $2::TIMESTAMPTZ)::NUMERIC AS from_s,\n           extract(epoch FROM $2::TIMESTAMPTZ + $4::INTERVAL)::NUMERIC AS to_s\n),\nschedules AS (\n    -- ⚠️ Seconds only: a slot-counted schedule's instant would be an estimate.\n    SELECT v.pool_address, v.position, v.cliff_point::NUMERIC AS cliff,\n           v.period_frequency::NUMERIC AS freq, v.number_of_period AS n,\n           v.cliff_unlock_liquidity, v.liquidity_per_period\n      FROM meteora_damm_v2_lock_position_events v\n      CROSS JOIN bounds b\n      LEFT JOIN meteora_damm_v2_pool_properties pp ON pp.pool_address = v.pool_address\n     WHERE COALESCE(pp.pool_activation_type,\n                    (SELECT i.activation_type FROM meteora_damm_v2_initialize_pool_events i\n                      WHERE i.pool_address = v.pool_address LIMIT 1)) = 1\n       AND v.cliff_point <= b.to_s\n       AND v.cliff_point + v.period_frequency * v.number_of_period > b.from_s\n),\nreleases AS (\n    -- The cliff releases its own part; each period after it, one more `liquidity_per_period`.\n    SELECT s.pool_address, s.position, s.cliff AS point, s.cliff_unlock_liquidity AS liquidity\n      FROM schedules s CROSS JOIN bounds b\n     WHERE s.cliff_unlock_liquidity > 0 AND s.cliff > b.from_s\n    UNION ALL\n    SELECT s.pool_address, s.position, s.cliff + k * s.freq, s.liquidity_per_period\n      FROM schedules s CROSS JOIN bounds b\n     CROSS JOIN LATERAL generate_series(\n         GREATEST(1, floor((b.from_s - s.cliff) / s.freq) + 1)::BIGINT,\n         LEAST(s.n::NUMERIC, floor((b.to_s - s.cliff) / s.freq))::BIGINT) AS k\n     WHERE s.freq > 0 AND s.liquidity_per_period > 0\n),\nunlocks AS (\n    INSERT INTO analytic_vesting_unlocks\n        (protocol, bucket, pool_address, position, unlocks_at, liquidity, amount_usd)\n    SELECT $3, $1, r.pool_address, r.position, to_timestamp(r.point), r.liquidity,\n           r.liquidity * l.usd_per_liquidity\n      FROM releases r\n      LEFT JOIN locked l ON l.pool_address = r.pool_address\n    RETURNING 1\n)\nSELECT (SELECT COUNT(*) FROM reading) AS \"readings!\",\n       (SELECT COUNT(*) FROM tokens) AS \"tokens!\",\n       (SELECT COUNT(*) FROM unlocks) AS \"unlocks!\"\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "readings!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "tokens!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "unlocks!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "Interval"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "a9939b525154c6a8e1c57697c8539546208317c5e52393b4e82c5f2fbf64df57"
+}

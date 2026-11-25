@@ -50,6 +50,7 @@ fn expected_properties() -> PoolAccountProperties {
         sqrt_price: Some(0),
         collect_fee_mode: Some(0),
         permanent_lock_liquidity: Some(0),
+        pool_activation_type: Some(0),
     })
 }
 

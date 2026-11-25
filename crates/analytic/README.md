@@ -14,7 +14,8 @@ into `analytic_pool_5min`, then each of its liquidity moves into
 `analytic_protocol_position_changes_hourly`; measures the TVL of every protocol into
 `analytic_protocol_tvl`, and the part of it the pools discovered in each window
 hold into `analytic_protocol_tvl_discovered`; and freezes each hour ten minutes after its close,
-writing then the distinct pools and the tokens of every window ending at it.
+writing then the distinct pools and the tokens of every window ending at it. With the TVL,
+it writes the DAMM v2 liquidity locked, the TVL by token and the vesting releases to come.
 A tranche is valued once, a frozen hour never written again.
 
 It exists because valuing at read time does not scale, nor holds: a reader of
@@ -181,6 +182,16 @@ in `persistence` (`repositories/analytic.rs`).
   that paid less than $1 for it witnessing nothing. The
   pools Meteora holds that never emitted an event since are out of it: a limit of
   observation, which grows the figure as dormant pools wake.
+- **Locked liquidity**: with each TVL, in its transaction, one statement
+  (`meteora_damm_v2_locked_reading.sql`) over `yog_damm_v2_pool_locked_liquidity` (057), computed once: the
+  DAMM v2 liquidity locked at the measure, permanent — the greater of the account's total and the last lock's —
+  and vesting, judged on cp-amm's schedule in the pool's own unit (seconds, or the last indexed slot); converted
+  from L by cp-amm's formulas and valued at the TVL's stock prices. A pool is valued when a side is and its
+  vesting known; otherwise, or compounding, or its range unread, it is counted apart (`pools_locked_unvalued`).
+  The same statement replaces the TVL by token of the last reading (`analytic_tvl_by_token`: every token with
+  a valued side, its pools counted valued or not) and the vesting releases of the next 30 days
+  (`analytic_vesting_unlocks`, one row per instant, at the reading's prices; none for a slot-counted
+  schedule, whose instant would be an estimate).
 - **Discovered part**: with each TVL, for every window — 24 h, 7 and 30 days — the
   TVL of the pools first seen since the window's start point was last measured (its
   `from` when there is none) whose `initialize_pool` was not observed. Such a

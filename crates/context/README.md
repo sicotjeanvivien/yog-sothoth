@@ -196,7 +196,8 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   account-derived pool property: mints, base fee, fee split, fee shape, and for
   cp-amm the price range, the price at the read, the fee collection mode and the
   liquidity locked for good (`permanent_lock_liquidity`, reread after each
-  permanent lock: the indexer flags the pool).
+  permanent lock: the indexer flags the pool), and the pool's unit of time
+  (`pool_activation_type`), whatever its fee shape.
 
   **It is the only writer of those columns.** The indexer does not decode
   property values from events — it raises `pools.needs_refresh` when an event

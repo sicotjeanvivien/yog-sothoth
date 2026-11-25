@@ -145,6 +145,20 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
             ("yog_api", &["SELECT"]),
         ],
     ),
+    (
+        "analytic_tvl_by_token",
+        &[
+            ("yog_analytic", &["DELETE", "INSERT", "SELECT"]),
+            ("yog_api", &["SELECT"]),
+        ],
+    ),
+    (
+        "analytic_vesting_unlocks",
+        &[
+            ("yog_analytic", &["DELETE", "INSERT", "SELECT"]),
+            ("yog_api", &["SELECT"]),
+        ],
+    ),
     ("announcements", &[("yog_api", &["SELECT"])]),
     ("api_clients", &[("yog_api", &["SELECT"])]),
     ("api_keys", &[("yog_api", &["SELECT"])]),
@@ -271,6 +285,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     (
         "meteora_damm_v2_pool_properties",
         &[
+            ("yog_analytic", &["SELECT"]),
             ("yog_api", &["SELECT"]),
             ("yog_context", &["INSERT", "SELECT", "UPDATE"]),
         ],
@@ -356,6 +371,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     (
         "network_status",
         &[
+            ("yog_analytic", &["SELECT"]),
             ("yog_api", &["SELECT"]),
             ("yog_indexer", &["INSERT", "SELECT", "UPDATE"]),
         ],
@@ -370,6 +386,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     (
         "pool_current_state",
         &[
+            ("yog_analytic", &["SELECT"]),
             ("yog_api", &["SELECT"]),
             ("yog_indexer", &["INSERT", "SELECT", "UPDATE"]),
         ],
@@ -424,6 +441,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
             ("yog_signals", &["SELECT"]),
         ],
     ),
+    ("token_stock_price", &[("yog_analytic", &["SELECT"])]),
     ("unobserved_slot_ranges", &[("yog_api", &["SELECT"])]),
     ("update_reward_duration_events", &[("yog_api", &["SELECT"])]),
     ("update_reward_funder_events", &[("yog_api", &["SELECT"])]),

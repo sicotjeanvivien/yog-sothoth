@@ -111,6 +111,13 @@ impl AnalyticRepository for PgAnalyticRepository {
             return Ok(TvlMeasure::AlreadyMeasured);
         }
         meteora_damm_v2::measure_discovered_tvl(&mut tx, hour).await?;
+        meteora_damm_v2::write_locked_reading(
+            &mut tx,
+            hour,
+            at,
+            interval_of(Window::Month.duration()),
+        )
+        .await?;
         tx.commit().await.map_err(map_sqlx_error)?;
         Ok(TvlMeasure::Measured)
     }
