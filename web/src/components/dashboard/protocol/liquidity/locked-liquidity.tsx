@@ -22,6 +22,7 @@ import {
   fetchVestingUnlocks,
 } from "@/lib/api/server/protocols";
 import { formatRelative, formatUtcMoment, type FormatLocale } from "@/lib/format/date";
+import { formatCount } from "@/lib/format/format-count";
 import { formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { pairLabel, shortenPubkey } from "@/lib/format/pubkey";
@@ -128,7 +129,10 @@ export async function LockedLiquidity({ protocol }: BlockProps) {
         </span>
       </div>
       <p className="mt-1.5 text-[12px] text-dash-ink-3">
-        {t("coverage", { pools: block.poolsLocked, unvalued: block.poolsLockedUnvalued })}
+        {t("coverage", {
+          pools: formatCount(block.poolsLocked),
+          unvalued: formatCount(block.poolsLockedUnvalued),
+        })}
         {block.vestingCoveredSince !== null &&
           t("coverageSince", { date: formatUtcMoment(block.vestingCoveredSince, locale) ?? "—" })}
       </p>
