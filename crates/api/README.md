@@ -111,11 +111,13 @@ with no wildcard arm, so adding a variant breaks the build there.
   enum of one of its parameters, named like the parameter a client writes
   (`severity` → `SeverityParam`, `sort` → `SortParam`): its module says which
   route it belongs to.
-- **Place.** One type per file. At the top level, what a route returns — its
-  body, or the item of a page — or takes, its `*Request`. A part lives in its
-  owner's folder, one level deep; a response part's file drops the owner's
-  prefix, its type keeps it (`announcement/kind_response.rs` holds
-  `AnnouncementKindResponse`).
+- **Place.** One type per file. A response lives in the folder of its resource
+  (`response/tvl/`, `response/vesting_unlock/`), whose root file declares its files
+  and re-exports what the handlers read; a file there drops the resource's prefix,
+  its type keeps it (`tvl/by_token.rs` holds `TokenTvlResponse`). A route's
+  `*Request` sits at the top level of `request/`. A part lives in its owner's
+  folder, one level deep; a response part's file drops the owner's prefix, its
+  type keeps it (`announcement/kind_response.rs` holds `AnnouncementKindResponse`).
   A part several share lives with the one it is about, and the others reach
   it through it: `signal/severity_response.rs`,
   `token/embedded_token_response.rs`. The query of `GET /api/signals` and its
@@ -133,6 +135,8 @@ with no wildcard arm, so adding a variant breaks the build there.
 
 **Not yet following these rules:**
 
+- Every response but those of `tvl` and `vesting-unlocks`: at the top level of
+  `response/`, not in the folder of its resource.
 - `request/window_param.rs`, eleven types: `WindowParam`, `DayWindowParam`,
   `WeekWindowParam`, `MeasureWindowParam`, `IntervalParam`, `ReadingIntervalParam`,
   `WindowParams`, `MeasureWindowParams`, `MeasureActivityParams`, `SeriesParams`,
@@ -147,7 +151,7 @@ with no wildcard arm, so adding a variant breaks the build there.
   nine private.
 - `response/liquidity_move.rs`, four types; `protocol_catalog.rs`, `protocol_claim_totals.rs`,
   `protocol_position_change_totals.rs`, `protocol_rotation_run_totals.rs`,
-  `protocol_tvl_change.rs`, `token_activity.rs`, two each.
+  `tvl/change.rs`, `token_activity.rs`, two each.
 - `response/position_change_event/meteora_damm_v2_response.rs`, eight types;
   `reward_change_event/meteora_damm_v2_response.rs`, six;
   `pool_change_event/meteora_damm_v2_response.rs`, three.

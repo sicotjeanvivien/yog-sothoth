@@ -6,8 +6,8 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::ProtocolTvl;
 
-use super::protocol::ProtocolResponse;
-use super::protocol_tvl_meteora_damm_v2::ProtocolTvlMeteoraDammV2Response;
+use super::meteora_damm_v2::ProtocolTvlMeteoraDammV2Response;
+use crate::http::dto::response::protocol::ProtocolResponse;
 use crate::http::dto::schema::{Count, UnsignedDecimal};
 
 /// A protocol's TVL at `at`, the close of the hour it was last measured in.
@@ -42,5 +42,5 @@ impl From<ProtocolTvl> for ProtocolTvlResponse {
 }
 
 #[cfg(test)]
-#[path = "tests/protocol_tvl_tests.rs"]
+#[path = "../tests/protocol_tvl_tests.rs"]
 mod tests;

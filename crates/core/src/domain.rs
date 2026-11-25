@@ -110,6 +110,7 @@ pub use meteora::{
     MeteoraDammV2WithdrawDeadLiquidityRewardEventRepository,
     MeteoraDammV2WithdrawIneligibleRewardEvent,
     MeteoraDammV2WithdrawIneligibleRewardEventRepository, MeteoraDlmmPoolAccountProperties,
+    ProtocolTvlMeteoraDammV2,
 };
 pub use network_status::{NetworkStatus, NetworkStatusLookup, NetworkStatusRepository};
 pub use observed_slots::{ObservedSlots, ObservedSlotsRepository};
@@ -146,7 +147,7 @@ pub use protocol_fee_claim_event::{
 };
 pub use protocol_tvl::{
     LiquidityTurnover, ProtocolLiquidityTurnover, ProtocolTvl, ProtocolTvlChange,
-    ProtocolTvlLookup, ProtocolTvlMeteoraDammV2, TvlChangeTotal, TvlReading,
+    ProtocolTvlLookup, TvlChangeTotal, TvlReading,
 };
 pub use reward_change_event::{
     MeteoraDammV2RewardChange, RewardChangeEvent, RewardChangeEventLookup, RewardChangeTable,

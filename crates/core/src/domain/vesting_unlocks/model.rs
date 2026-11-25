@@ -5,7 +5,6 @@ use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 
 use crate::domain::{Protocol, Window};
-use crate::tools::Page;
 
 /// What one position's schedules release at one instant, valued at the reading's prices.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,15 +28,6 @@ pub enum VestingUnlockOrder {
     #[default]
     Time,
     Amount,
-}
-
-/// A page of the releases after `as_of`, the instant of the reading they were written at.
-#[derive(Debug, Clone)]
-pub struct VestingUnlockPage {
-    pub as_of: DateTime<Utc>,
-    /// The first vesting observed: those locked before it are not listed.
-    pub covered_since: Option<DateTime<Utc>>,
-    pub page: Page<VestingUnlock>,
 }
 
 /// The last release of a page, in the list of `protocol`'s reading at `as_of` over `window`.

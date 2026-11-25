@@ -5,7 +5,6 @@ use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 
 use crate::domain::{Protocol, TokenMetadata};
-use crate::tools::Page;
 
 /// One token at a reading: the valued sides of its pools, and the part of them locked.
 /// ⚠️ A pool counts for both its tokens: the tokens add up to twice the protocol's TVL.
@@ -34,16 +33,6 @@ pub enum TokenTvlOrder {
 pub struct TokenTvlTotal {
     pub tvl_usd: Option<Decimal>,
     pub locked_usd: Option<Decimal>,
-}
-
-/// A page of the ranking of the reading at `at`, the close of its hour.
-#[derive(Debug, Clone)]
-pub struct TokenTvlPage {
-    pub at: DateTime<Utc>,
-    /// The first vesting observed: the locked parts leave out those locked before it.
-    pub covered_since: Option<DateTime<Utc>>,
-    pub total: TokenTvlTotal,
-    pub page: Page<TokenTvl>,
 }
 
 /// The last token of a page, in the ranking of `protocol`'s reading at `at`, in `order`.

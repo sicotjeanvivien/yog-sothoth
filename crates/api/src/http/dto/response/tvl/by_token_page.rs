@@ -5,7 +5,7 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::{TokenTvlPage, TokenTvlTotal};
 
-use super::token_tvl::TokenTvlResponse;
+use super::by_token::TokenTvlResponse;
 use crate::http::cursor::encode_cursor_opt;
 use crate::http::error::ApiError;
 

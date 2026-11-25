@@ -5,9 +5,9 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::{VestingUnlockPage, Window};
 
-use super::vesting_unlock::VestingUnlockResponse;
-use super::window::WindowResponse;
+use super::item::VestingUnlockResponse;
 use crate::http::cursor::encode_cursor_opt;
+use crate::http::dto::response::window::WindowResponse;
 use crate::http::error::ApiError;
 
 /// A forward-only page of the releases within `window` after `asOf`: `prevCursor` is always `null`.

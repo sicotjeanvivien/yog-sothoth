@@ -29,5 +29,5 @@ pub use damm_v2::{
     MeteoraDammV2UpdateRewardFunderEventRepository, MeteoraDammV2WithdrawDeadLiquidityRewardEvent,
     MeteoraDammV2WithdrawDeadLiquidityRewardEventRepository,
     MeteoraDammV2WithdrawIneligibleRewardEvent,
-    MeteoraDammV2WithdrawIneligibleRewardEventRepository,
+    MeteoraDammV2WithdrawIneligibleRewardEventRepository, ProtocolTvlMeteoraDammV2,
 };

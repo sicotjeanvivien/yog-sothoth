@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
 use crate::domain::swap_activity::sum_known;
-use crate::domain::{Protocol, ProtocolSwapActivity};
+use crate::domain::{Protocol, ProtocolSwapActivity, ProtocolTvlMeteoraDammV2};
 
 /// One protocol's TVL as last measured during the hour that closes at `at`: its pools
 /// valued by their priced sides; `pools_unvalued` counts those with no side valued.
@@ -17,19 +17,6 @@ pub struct ProtocolTvl {
     pub pools_unvalued: i64,
     /// `None` for another protocol, and for a reading made before the locks were measured.
     pub meteora_damm_v2: Option<ProtocolTvlMeteoraDammV2>,
-}
-
-/// The DAMM v2 liquidity locked at a reading, valued at its prices: a pool is valued when a side
-/// is and its vesting known, the others counted apart.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ProtocolTvlMeteoraDammV2 {
-    pub locked_usd: Decimal,
-    pub permanent_usd: Decimal,
-    pub vesting_usd: Decimal,
-    pub pools_locked: i64,
-    pub pools_locked_unvalued: i64,
-    /// The first vesting observed: those locked before it are out of reach.
-    pub vesting_covered_since: Option<DateTime<Utc>>,
 }
 
 /// A TVL reading: the protocol's TVL as measured during the hour that closes at `at`.
