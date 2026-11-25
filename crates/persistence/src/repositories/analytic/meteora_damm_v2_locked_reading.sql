@@ -37,14 +37,14 @@ reading AS (
 ),
 sides AS (
     SELECT p.protocol, p.token_a_mint::TEXT AS mint, t.value_a_usd AS tvl_usd,
-           CASE WHEN v.is_valued THEN v.a_usd END AS locked_usd
+           CASE WHEN v.is_valued THEN v.a_usd END AS locked_usd, v.pool_address IS NOT NULL AS is_locked
       FROM pool_current_tvl t
       JOIN pools p ON p.pool_address = t.pool_address
       LEFT JOIN valued v ON v.pool_address = t.pool_address
      WHERE p.token_a_mint IS NOT NULL
     UNION ALL
     SELECT p.protocol, p.token_b_mint::TEXT, t.value_b_usd,
-           CASE WHEN v.is_valued THEN v.b_usd END
+           CASE WHEN v.is_valued THEN v.b_usd END, v.pool_address IS NOT NULL
       FROM pool_current_tvl t
       JOIN pools p ON p.pool_address = t.pool_address
       LEFT JOIN valued v ON v.pool_address = t.pool_address
@@ -53,7 +53,10 @@ sides AS (
 tokens AS (
     INSERT INTO analytic_tvl_by_token (protocol, bucket, mint, tvl_usd, locked_usd, pools)
     SELECT protocol, $1, mint, SUM(tvl_usd),
-           CASE WHEN protocol = $3 THEN COALESCE(SUM(locked_usd), 0) END,
+           -- ⚠️ Locked pools none of them valued: unknown, not 0.
+           CASE WHEN protocol <> $3 THEN NULL
+                WHEN bool_or(is_locked) AND COUNT(locked_usd) = 0 THEN NULL
+                ELSE COALESCE(SUM(locked_usd), 0) END,
            COUNT(*)
       FROM sides
      GROUP BY protocol, mint

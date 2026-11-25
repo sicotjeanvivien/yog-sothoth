@@ -258,6 +258,11 @@ pub(super) async fn write_locked_reading(
     at: DateTime<Utc>,
     horizon: PgInterval,
 ) -> RepositoryResult<()> {
+    // ⚠️ Two measures at once would each empty what the other has not written yet.
+    sqlx::query!("LOCK TABLE analytic_tvl_by_token, analytic_vesting_unlocks IN EXCLUSIVE MODE")
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
     sqlx::query!("DELETE FROM analytic_tvl_by_token")
         .execute(&mut **tx)
         .await

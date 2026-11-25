@@ -10,7 +10,7 @@ use yog_persistence::PgAnalyticRepository;
 
 use super::helpers::{pk, price_mint, setup_roles_and_connect_as};
 
-/// A real full-range creation (`EMKc66c2…`): its L, price and range, and the amounts it deposited.
+/// A full-range creation: its L, price and range, and the amounts it deposited.
 const FULL_RANGE: (&str, &str, &str, &str) = (
     "184467440737525020961601000037588",
     "1844674407370955161600",
@@ -95,6 +95,15 @@ async fn locked_pool(
     .unwrap();
     address
 }
+
+/// A row of `analytic_vesting_unlocks`: `(pool, position, instant, liquidity, amount_usd)`.
+type Release = (
+    String,
+    String,
+    DateTime<Utc>,
+    BigDecimal,
+    Option<BigDecimal>,
+);
 
 /// `(cliff_point, period_frequency, cliff_unlock_liquidity, liquidity_per_period, number_of_period)`.
 type Schedule = (i64, i64, i64, i64, i32);
@@ -274,6 +283,26 @@ async fn a_slot_counted_vesting_is_judged_at_the_last_indexed_slot(pool: PgPool)
     assert_eq!(row.1.as_deref(), Some("15"));
 }
 
+/// Before the indexer's first report, the slot is unknown: no slot schedule judged at 0.
+/// Mutation: the seeded slot 0 read as a slot.
+#[sqlx::test]
+async fn a_slot_schedule_before_any_slot_is_reported_is_unknown(pool: PgPool) {
+    let address = locked_pool(
+        &pool,
+        1,
+        (FULL_RANGE.1, FULL_RANGE.2, FULL_RANGE.3),
+        1,
+        Some(0),
+        "0",
+        (1, 1),
+    )
+    .await;
+    vesting(&pool, &address, 0, (1_000, 100, 10, 5, 4)).await;
+
+    let row = locked_at(&pool, &address, 999).await.expect("listed");
+    assert_eq!(row.1, None);
+}
+
 /// Mutation: SUM alone, which skips the schedule of unknown unit and reports the others as all.
 #[sqlx::test]
 async fn a_vesting_of_unknown_unit_leaves_its_pool_unknown(pool: PgPool) {
@@ -359,8 +388,8 @@ async fn a_compounding_pool_or_one_without_its_range_is_not_valued(pool: PgPool)
 }
 
 /// The reading, as `yog_analytic`: half a full-range pool's L locked is half its TVL.
-/// Mutations: an unvalued pool summed, a token without a valued side kept, the releases' bounds
-/// moved, a slot schedule given an instant.
+/// Mutations: an unvalued pool summed, a token without a valued side kept or its unknown lock
+/// read as 0, the releases' bounds moved, a slot schedule given an instant.
 #[sqlx::test]
 async fn the_reading_writes_the_locked_part_the_tokens_and_the_releases(pool: PgPool) {
     let now = now();
@@ -441,17 +470,11 @@ async fn the_reading_writes_the_locked_part_the_tokens_and_the_releases(pool: Pg
     assert!((tokens[0].2.clone().unwrap() - dec("500000")).abs() < dec("0.01"));
     assert_eq!(
         (tokens[1].2.clone(), tokens[1].3),
-        (Some(dec("0")), 1),
-        "a pool counted unvalued adds no locked part"
+        (None, 1),
+        "a token whose only locked pool is unvalued: unknown, not 0"
     );
 
-    let all: Vec<(
-        String,
-        String,
-        DateTime<Utc>,
-        BigDecimal,
-        Option<BigDecimal>,
-    )> = sqlx::query_as(
+    let all: Vec<Release> = sqlx::query_as(
         "SELECT pool_address, position, unlocks_at, liquidity, amount_usd
            FROM analytic_vesting_unlocks ORDER BY unlocks_at",
     )

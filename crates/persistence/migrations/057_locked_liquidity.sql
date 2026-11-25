@@ -11,7 +11,7 @@ COMMENT ON COLUMN meteora_damm_v2_pool_properties.pool_activation_type IS
 UPDATE pools SET needs_refresh = true WHERE protocol = 'meteora_damm_v2';
 
 -- ── What L is worth ──────────────────────────────────────────────────────────────────────────
--- cp-amm's concentrated-liquidity amounts (`liquidity_handler/concentrated_liquidity.rs`), unrounded.
+-- The amounts of L in a concentrated pool, unrounded.
 -- ⚠️ A compounding pool has no range: its amounts are a share of the reserves, not this.
 CREATE FUNCTION yog_damm_v2_liquidity_amounts(
     l NUMERIC, sqrt_price NUMERIC, sqrt_min NUMERIC, sqrt_max NUMERIC,
@@ -31,12 +31,13 @@ RETURNS TABLE (pool_address TEXT, permanent_liquidity NUMERIC, vesting_liquidity
 LANGUAGE sql STABLE AS $$
     WITH point AS (
         SELECT extract(epoch FROM at)::NUMERIC AS secs,
-               (SELECT slot FROM network_status WHERE id = 1)::NUMERIC AS slot
+               -- ⚠️ NULLIF: the row is seeded at slot 0, before the indexer's first report.
+               NULLIF((SELECT slot FROM network_status WHERE id = 1), 0)::NUMERIC AS slot
     ),
     last_permanent AS (
         SELECT DISTINCT ON (e.pool_address) e.pool_address, e.total_permanent_locked_liquidity AS l
           FROM meteora_damm_v2_permanent_lock_position_events e
-         ORDER BY e.pool_address, e.slot DESC, e.event_index DESC
+         ORDER BY e.pool_address, e.timestamp DESC, e.event_index DESC
     ),
     permanent AS (
         SELECT pp.pool_address, pp.permanent_lock_liquidity AS l
@@ -60,7 +61,6 @@ LANGUAGE sql STABLE AS $$
           LEFT JOIN meteora_damm_v2_pool_properties pp ON pp.pool_address = v.pool_address
     ),
     vesting AS (
-        -- `get_max_unlocked_liquidity` of cp-amm's `state/vesting.rs`.
         -- ⚠️ CASE, not SUM alone: SUM skips the NULL of a schedule whose unit is unknown.
         SELECT s.pool_address,
                CASE WHEN bool_or(s.now_point IS NULL) THEN NULL
