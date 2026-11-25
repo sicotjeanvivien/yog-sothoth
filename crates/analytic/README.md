@@ -185,7 +185,8 @@ in `persistence` (`repositories/analytic.rs`).
 - **Locked liquidity**: with each TVL, in its transaction, one statement
   (`meteora_damm_v2_locked_reading.sql`) over `yog_damm_v2_pool_locked_liquidity` (057), computed once: the
   DAMM v2 liquidity locked at the measure, permanent — the greater of the account's total and the last lock's —
-  and vesting, judged on cp-amm's schedule in the pool's own unit (seconds, or the last indexed slot); converted
+  and vesting, judged on cp-amm's schedule in the pool's own unit (seconds, or the slot the indexer last read
+  from its RPC, in `network_status`); converted
   from L by cp-amm's formulas and valued at the TVL's stock prices. A pool is valued when a side is and its
   vesting known; otherwise, or compounding, or its range unread, it is counted apart (`pools_locked_unvalued`).
   The same statement replaces the TVL by token of the last reading (`analytic_tvl_by_token`: every token with

@@ -35,9 +35,10 @@ LANGUAGE sql STABLE AS $$
                NULLIF((SELECT slot FROM network_status WHERE id = 1), 0)::NUMERIC AS slot
     ),
     last_permanent AS (
-        SELECT DISTINCT ON (e.pool_address) e.pool_address, e.total_permanent_locked_liquidity AS l
+        -- ⚠️ MAX, not the last event: a pool's total never falls, and two locks of one block have no order.
+        SELECT e.pool_address, MAX(e.total_permanent_locked_liquidity) AS l
           FROM meteora_damm_v2_permanent_lock_position_events e
-         ORDER BY e.pool_address, e.timestamp DESC, e.event_index DESC
+         GROUP BY e.pool_address
     ),
     permanent AS (
         SELECT pp.pool_address, pp.permanent_lock_liquidity AS l

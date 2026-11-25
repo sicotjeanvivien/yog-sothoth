@@ -337,6 +337,39 @@ async fn the_permanent_total_is_the_greater_of_the_account_and_the_last_lock(poo
     assert_eq!(locked_at(&pool, &fresh_account, 0).await.unwrap().0, "200");
 }
 
+/// Two locks of one block, the earlier transaction's second in it: time and index misorder them.
+/// Mutation: the total of the last event by time and index, which picks 120 here.
+#[sqlx::test]
+async fn two_locks_of_one_block_keep_the_greater_total(pool: PgPool) {
+    let address = locked_pool(
+        &pool,
+        1,
+        (FULL_RANGE.1, FULL_RANGE.2, FULL_RANGE.3),
+        1,
+        Some(1),
+        "0",
+        (1, 1),
+    )
+    .await;
+    for (signature, total, index) in [("later", "150", 0), ("earlier", "120", 1)] {
+        sqlx::query(
+            "INSERT INTO meteora_damm_v2_permanent_lock_position_events
+               (pool_address, signature, position, lock_liquidity_amount,
+                total_permanent_locked_liquidity, timestamp, slot, event_index)
+             VALUES ($1, $2, 'position', 1, $3, '2026-11-25 12:00:00+00', 7, $4)",
+        )
+        .bind(&address)
+        .bind(signature)
+        .bind(dec(total))
+        .bind(index)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    assert_eq!(locked_at(&pool, &address, 0).await.unwrap().0, "150");
+}
+
 /// Mutation: the compounding mode valued by the concentrated formula, or a missing range read as 0.
 #[sqlx::test]
 async fn a_compounding_pool_or_one_without_its_range_is_not_valued(pool: PgPool) {
