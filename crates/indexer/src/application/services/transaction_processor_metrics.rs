@@ -23,7 +23,7 @@ impl TransactionProcessorMetrics {
         // The fetch exits are counted by the RPC source, before a transaction exists.
         describe_counter!(
             INDEX_TX_EXITED,
-            "Exits from index_transaction (label: outcome=ok|no_events|extract_failure|unknown_exit)"
+            "Exits from index_transaction (label: outcome=ok|no_events|unknown_exit)"
         );
 
         // Extract and persist only, comparable across both paths; fetch latency is

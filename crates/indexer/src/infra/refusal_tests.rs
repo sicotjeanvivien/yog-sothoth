@@ -22,7 +22,7 @@ fn the_refusal_names_the_field_and_the_transaction() {
     let error = refuse(Gap::Meta, &signature);
 
     assert!(
-        matches!(&error, CoreError::MissingField { field, signature: s }
+        matches!(&error, TransactionAdapterError::MissingField { field, signature: s }
             if field == Gap::Meta.field() && s == &signature.to_string()),
         "expected a MissingField naming both: {error:?}"
     );

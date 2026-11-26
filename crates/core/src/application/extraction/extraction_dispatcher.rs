@@ -1,6 +1,5 @@
 //! Routes a transaction to its protocol's extractor: an enum match, no dyn dispatch.
 
-use crate::CoreResult;
 use crate::application::extraction::EventExtractor;
 use crate::application::extraction::OnChainTransaction;
 use crate::application::extraction::{
@@ -24,11 +23,7 @@ impl ExtractionDispatcher {
     }
 
     /// Extract every domain event the transaction emitted for `protocol`.
-    pub fn extract(
-        &self,
-        protocol: Protocol,
-        tx: &OnChainTransaction,
-    ) -> CoreResult<ExtractionOutcome> {
+    pub fn extract(&self, protocol: Protocol, tx: &OnChainTransaction) -> ExtractionOutcome {
         match protocol {
             Protocol::MeteoraDammV2 => self.damm_v2.extract_events(tx),
             Protocol::MeteoraDlmm => self.dlmm.extract_events(tx),

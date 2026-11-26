@@ -1,9 +1,6 @@
 use solana_pubkey::Pubkey;
 
-use crate::{
-    CoreResult,
-    application::extraction::{ExtractionOutcome, OnChainTransaction},
-};
+use crate::application::extraction::{ExtractionOutcome, OnChainTransaction};
 
 /// One protocol's extraction of domain events from an [`OnChainTransaction`].
 /// ⚠️ Per-event failures go into `unknown` or `failures`, never a panic; `Err` is
@@ -13,7 +10,7 @@ pub trait EventExtractor: Send + Sync {
     fn program_id(&self) -> Pubkey;
 
     /// Extract every domain event the transaction emitted for this protocol.
-    fn extract_events(&self, tx: &OnChainTransaction) -> CoreResult<ExtractionOutcome>;
+    fn extract_events(&self, tx: &OnChainTransaction) -> ExtractionOutcome;
 
     /// Whether this extractor actually extracts anything.
     /// ⚠️ No default: subscribing to a stub pays a firehose for nothing, so each

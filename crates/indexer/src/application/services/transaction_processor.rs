@@ -1,7 +1,7 @@
 use solana_rpc_client_api::response::transaction::Signature;
 use std::sync::Arc;
 use std::time::Instant;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 use yog_core::{
     application::extraction::{
         ExtractionDispatcher, ExtractionFailure, ExtractionOutcome, OnChainTransaction,
@@ -42,14 +42,7 @@ impl TransactionProcessor {
 
         info!(%signature, protocol = %protocol.as_str(), "processing transaction");
 
-        let outcome = match self.extractor.extract(protocol, transaction) {
-            Ok(o) => o,
-            Err(e) => {
-                error!(%signature, error = %e, "extraction failed at transaction level");
-                guard.set("extract_failure");
-                return Err(e.into());
-            }
-        };
+        let outcome = self.extractor.extract(protocol, transaction);
 
         self.report_diagnostics(&protocol, &signature, &outcome);
 

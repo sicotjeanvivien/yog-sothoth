@@ -197,11 +197,9 @@ impl UpdateKind {
 /// Why a transaction was dropped, for [`DROPPED_TRANSACTIONS`].
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum DropReason {
-    /// The two `CoreError` kinds `from_grpc` returns: an absent field, a value that will not parse.
+    /// The two `TransactionAdapterError` kinds `from_grpc` returns: an absent field, a value that will not parse.
     MissingField,
     ParseError,
-    /// A `from_grpc` failure of another kind: a label, not `unreachable!`, so a future one stays countable.
-    OtherMalformation,
     /// The update matched no protocol filter: the request and this reader disagree, which is
     /// fixed in `subscription`, not in the adapter.
     Unroutable,
@@ -212,7 +210,6 @@ impl DropReason {
         match self {
             Self::MissingField => "missing_field",
             Self::ParseError => "parse_error",
-            Self::OtherMalformation => "other_malformation",
             Self::Unroutable => "unroutable",
         }
     }

@@ -5,7 +5,6 @@ pub(super) mod translator;
 
 use solana_pubkey::Pubkey;
 
-use crate::CoreResult;
 use crate::application::extraction::{EventExtractor, ExtractionOutcome, OnChainTransaction};
 use crate::application::extraction::{ExtractionFailure, UnknownEventInfo};
 use crate::domain::{Protocol, TransactionPosition};
@@ -50,7 +49,7 @@ impl EventExtractor for MeteoraDammV2 {
         true
     }
 
-    fn extract_events(&self, tx: &OnChainTransaction) -> CoreResult<ExtractionOutcome> {
+    fn extract_events(&self, tx: &OnChainTransaction) -> ExtractionOutcome {
         // Step 1: extract wire events from the inner-instruction payloads.
         let wire_outcome = extract_wire_events(tx, &self.program_id);
 
@@ -65,7 +64,7 @@ fn translate_extracted_events(
     wire_outcome: extractor::ExtractedEvents,
     protocol: Protocol,
     transaction_position: TransactionPosition,
-) -> CoreResult<ExtractionOutcome> {
+) -> ExtractionOutcome {
     let mut outcome = ExtractionOutcome::default();
 
     // Carry decode-time failures and unknowns over.
@@ -94,7 +93,7 @@ fn translate_extracted_events(
         }
     }
 
-    Ok(outcome)
+    outcome
 }
 
 fn wire_event_name(wire: &events::DammV2WireEvent) -> &'static str {

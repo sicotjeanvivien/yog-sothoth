@@ -26,6 +26,7 @@ indexer/src/
 ├── infra/endpoint/        ← the endpoint's configuration, refused at start-up
 │                            before anything is dialled: scheme.rs, credential.rs
 ├── infra/refusal.rs       ← the wording both adapters refuse a source's gap with
+├── infra/transaction_adapter_error.rs ← TransactionAdapterError, what both adapters refuse with
 ├── infra/grpc/            ← GrpcTransactionSource and the single stage behind
 │                            it: listener, subscription, session, credential
 │                            interceptor, protobuf adapter, slot/time buffer,
@@ -629,7 +630,7 @@ three gauges of the gRPC listener, named in its entry.
 - **Processor counters** —
   `yog_indexer_index_transaction_entered_total`,
   `yog_indexer_index_transaction_exited_total{outcome}` — `ok`, `no_events`,
-  `extract_failure`, `unknown_exit`,
+  `unknown_exit`,
   `yog_indexer_transactions_no_match_total`,
   `yog_indexer_unknown_event_total{discriminator}`,
   `yog_indexer_extraction_failure_total{kind}`.

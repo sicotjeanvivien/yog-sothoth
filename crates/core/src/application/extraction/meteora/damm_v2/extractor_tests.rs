@@ -156,9 +156,7 @@ fn the_four_events_without_a_capture_come_out_under_their_own_type() {
 #[test]
 fn the_four_events_reach_their_domain_event() {
     let domain = |payload| {
-        let outcome = MeteoraDammV2::new()
-            .extract_events(&transaction(vec![payload]))
-            .expect("extract");
+        let outcome = MeteoraDammV2::new().extract_events(&transaction(vec![payload]));
         assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
         assert_eq!(outcome.events.len(), 1, "{:?}", outcome.events);
         outcome.events.into_iter().next().expect("one event")
@@ -211,7 +209,7 @@ fn an_unreadable_payload_is_a_failure_under_its_event_name() {
 fn an_unreadable_payload_keeps_its_name_out_of_the_extractor() {
     let tx = transaction(vec![event_cpi(discriminator_set_pool_status(), &[])]);
 
-    let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+    let outcome = MeteoraDammV2::new().extract_events(&tx);
 
     assert!(outcome.events.is_empty(), "{:?}", outcome.events);
     assert!(
@@ -304,7 +302,7 @@ fn an_unknown_discriminator_is_unknown_and_no_failure() {
 fn an_unknown_discriminator_stays_unknown_out_of_the_extractor() {
     let tx = transaction(vec![event_cpi([9u8; DISCRIMINATOR_LEN], &[])]);
 
-    let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+    let outcome = MeteoraDammV2::new().extract_events(&tx);
 
     assert!(outcome.events.is_empty(), "{:?}", outcome.events);
     assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
@@ -345,7 +343,7 @@ fn the_payload_past_the_last_index_is_a_failure_and_not_a_truncated_index() {
         outcome.failures
     );
 
-    let domain = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+    let domain = MeteoraDammV2::new().extract_events(&tx);
     assert!(
         matches!(
             domain.failures.as_slice(),

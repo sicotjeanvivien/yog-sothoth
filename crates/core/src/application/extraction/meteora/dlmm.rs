@@ -1,6 +1,5 @@
 use solana_pubkey::Pubkey;
 
-use crate::CoreResult;
 use crate::application::extraction::{EventExtractor, ExtractionOutcome, OnChainTransaction};
 use crate::domain::Protocol;
 
@@ -31,8 +30,8 @@ impl EventExtractor for MeteoraDlmm {
         self.program_id
     }
 
-    fn extract_events(&self, _tx: &OnChainTransaction) -> CoreResult<ExtractionOutcome> {
-        Ok(ExtractionOutcome::default())
+    fn extract_events(&self, _tx: &OnChainTransaction) -> ExtractionOutcome {
+        ExtractionOutcome::default()
     }
 
     /// ⚠️ False, which keeps the ingestion off one of Solana's busiest programs.
