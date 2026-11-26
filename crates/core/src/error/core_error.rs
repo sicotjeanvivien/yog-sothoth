@@ -1,6 +1,5 @@
 use thiserror::Error;
 
-/// All errors that can occur within yog-core.
 #[derive(Debug, Error)]
 pub enum CoreError {
     /// The transaction does not belong to a known protocol.

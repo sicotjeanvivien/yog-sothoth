@@ -21,4 +21,4 @@ pub use extraction_failure::ExtractionFailure;
 pub use meteora::{MeteoraDammV2, MeteoraDlmm};
 pub use on_chain_transaction::{InnerInstructionPayload, OnChainTransaction};
 pub use outcome::{ExtractionOutcome, UnknownEventInfo, discriminator_hex};
-pub use translation_error::TranslationError;
+pub(crate) use translation_error::TranslationError;
