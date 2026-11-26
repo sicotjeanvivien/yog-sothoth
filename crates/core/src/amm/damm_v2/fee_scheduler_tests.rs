@@ -1,8 +1,6 @@
 use super::*;
 use crate::amm::damm_v2::fee_numerator_to_bps;
 
-// ── Fee scheduler ────────────────────────────────────────────────────
-
 /// `28BDU1…`, a real mainnet `scheduler_linear` from the account fixtures:
 /// cliff 5000 bps, 144 periods of 600 s (24 h), floor 400 bps.
 fn fixture_28bdu1() -> FeeSchedulerParams {
