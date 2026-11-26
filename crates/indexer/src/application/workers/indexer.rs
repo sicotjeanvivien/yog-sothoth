@@ -151,7 +151,7 @@ fn drain_and_count(rx: &mut mpsc::Receiver<IngestedTransaction>) -> usize {
 #[path = "indexer/indexer_tests.rs"]
 mod tests;
 
-/// Index a single transaction; errors are logged and counted, never propagated.
+/// Index a single transaction.
 async fn index_one(processor: Arc<TransactionProcessor>, ingested: IngestedTransaction) {
     let IngestedTransaction {
         protocol,

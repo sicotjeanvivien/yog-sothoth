@@ -197,7 +197,6 @@ impl UpdateKind {
 /// Why a transaction was dropped, for [`DROPPED_TRANSACTIONS`].
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum DropReason {
-    /// The two `TransactionAdapterError` kinds `from_grpc` returns: an absent field, a value that will not parse.
     MissingField,
     ParseError,
     /// The update matched no protocol filter: the request and this reader disagree, which is

@@ -490,11 +490,9 @@ the two dispatch points a new protocol touches in this crate, the other being
   one that wrongly rejects. The label on the duration histogram is
   `pool_current_state_rejected`, not `stale`: the old name asserted healthy
   concurrency for what was mostly the guard's own second-granularity.
-- **Per-transaction failures don't stop the worker** — `IndexerWorker` catches
-  errors from `process_transaction`, logs and counts them, and keeps draining
-  the channel. The same rule applies one stage earlier inside the JSON-RPC
-  source: a signature the RPC will not return, or a response that will not
-  adapt, is counted and stepped over by `FetchWorker`.
+- **Per-transaction failures don't stop the worker** — in the JSON-RPC source,
+  a signature the RPC will not return, or a response that will not adapt, is
+  counted and stepped over by `FetchWorker`.
 - **An observer never stops the pipeline** — a `NetworkStatusReporter` tick
   that fails is logged, counted and skipped; its `run` returns
   `Result<(), Infallible>`. Until 11 September 2026 it stopped the daemon
