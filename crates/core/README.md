@@ -12,21 +12,24 @@ Every other crate depends on this one: it declares the domain entities, the repo
 core/src/
 ├── domain/                ← entities + repository contracts
 │   ├── meteora/damm_v2/   (one module per event kind — 19 today — each with
-│   │                       model + repository trait; damm_v2.rs holds the
+│   │                       model + repository trait, swap_event/ also TradeDirection;
+│   │                       damm_v2.rs holds the
 │   │                       MeteoraDammV2Event sub-enum; pool_properties/ holds
 │   │                       this protocol's satellite payload; pool_fees/ the
 │   │                       fee parameters a creation or fee update carries;
 │   │                       locked_liquidity.rs the part of a TVL reading only
 │   │                       this protocol has)
 │   ├── meteora/dlmm/      (pool_properties/ only — events not extracted yet)
-│   ├── pool/              (Pool, PoolRepository — cross-protocol registry; PoolEntry,
-│   │                       PoolScope — the catalog PoolCatalog pages)
+│   ├── pool/              (Pool, PoolRepository — cross-protocol registry; read.rs,
+│   │                       PoolEntry, PoolScope — the catalog PoolCatalog pages)
 │   ├── pool_current_state/(CQRS projection of the latest per-pool state)
-│   ├── analytic/          (CycleWrite — what one cycle of yog-analytic writes,
-│   │                       and which hours it freezes; AnalyticRepository;
-│   │                       Window and FrozenPeriod — what a measure is read over,
-│   │                       ProtocolBucket — one bucket of a series;
-│   │                       rotation_run.rs — the run's two thresholds and quoted mints)
+│   ├── analytic/          (cycle.rs, CycleWrite — what one cycle of yog-analytic writes,
+│   │                       and which hours it freezes; AnalyticRepository; window.rs,
+│   │                       Window, frozen_period.rs, FrozenPeriod, tranche_period.rs,
+│   │                       TranchePeriod — what a measure is read over; protocol_bucket.rs,
+│   │                       ProtocolBucket — one bucket of a series; tvl_measure.rs, TvlMeasure
+│   │                       and the hour it is written to; rotation_run.rs — the run's two
+│   │                       thresholds and quoted mints)
 │   ├── swap_activity/     (SwapActivity, by protocol and by pool — SwapActivityLookup)
 │   ├── swap_event/, liquidity_change_event/, pool_creation_event/,
 │   │   position_change_event/, position_fee_claim_event/, protocol_fee_claim_event/,
@@ -34,20 +37,22 @@ core/src/
 │   │                       (an enum per protocol over its own event type — the on-chain
 │   │                       lists, each with its *EventLookup; a DAMM v2 position, reward
 │   │                       or pool change is one of several events, MeteoraDammV2*Change;
-│   │                       EventScope, EventCursor and its window_start in event_cursor.rs;
 │   │                       each with its *Table, the tables it is written in)
-│   ├── event_table.rs     (EventTable and event_tables! — the tables a collection is written in)
-│   ├── live_event_feed.rs (LiveRecord, LiveEventFeed — a collection read live, table by table,
-│   │                       by id)
+│   ├── event/             (domain_event.rs, the two-level DomainEvent enum; cursor.rs,
+│   │                       EventScope, EventCursor and its window_start; position.rs,
+│   │                       EventPosition, TransactionPosition — where an event sits;
+│   │                       table.rs, EventTable and event_tables! — the tables a collection
+│   │                       is written in; live_feed.rs, LiveRecord, LiveEventFeed — a
+│   │                       collection read live, table by table, by id; insert_outcome.rs,
+│   │                       InsertOutcome — what an idempotent insert did)
 │   ├── pool_creations/    (PoolCreations, by protocol — PoolCreationsLookup)
-│   ├── liquidity_moves/   (LiquidityMove and its LiquidityMoveLock, LiquidityFlows and
-│   │                       LiquidityTotals, its order,
-│   │                       list (scope and kind) and cursor —
-│   │                       LiquidityMoveLookup)
-│   ├── rotation_runs/     (RotationRun, its totals, order, scope and cursor; RunSplit, a bar's
-│   │                       volume split by the runs —
-│   │                       RotationRunLookup; TranchePeriod, through the last tranche
-│   │                       written, in analytic/window.rs)
+│   ├── liquidity_moves/   (LiquidityMove and its LiquidityMoveLock — LiquidityMoveLookup;
+│   │                       flows.rs, LiquidityFlows and LiquidityTotals; read.rs, its
+│   │                       order, list (scope and kind) and cursor)
+│   ├── rotation_runs/     (RotationRun — RotationRunLookup; totals.rs, its totals; read.rs,
+│   │                       its order, scope and cursor; split.rs, RunSplit, a bar's volume
+│   │                       split by the runs; TranchePeriod, through the last tranche
+│   │                       written, in analytic/tranche_period.rs)
 │   ├── position_change_counts/ (PositionChangeCounts, a protocol's positions opened, locked,
 │   │                       split and closed — PositionChangeCountsLookup)
 │   ├── claim_totals/      (ClaimTotals, the claims of fees or rewards by protocol —
@@ -62,14 +67,16 @@ core/src/
 │   ├── vesting_unlocks/   (VestingUnlock, what the vesting locks release after the last
 │   │                       reading — VestingUnlockLookup; read.rs, its order, cursor and page)
 │   ├── protocol_activity/ (ProtocolActivityLookup: the frozen hours every measure is read over)
-│   ├── token_activity/    (TokenActivity — TokenActivityFeed, by volume)
+│   ├── token_activity/    (TokenActivity — TokenActivityFeed, by volume; read.rs, its
+│   │                       cursor and page)
 │   ├── signals/           (Signal, Severity, SignalDetector, EvalContext,
-│   │                       SignalRepository + SignalFeed and its SignalFilter,
+│   │                       SignalRepository + SignalFeed; read.rs, its SignalFilter and cursor,
 │   │                       DetectorError)
 │   ├── swap_flow/         (PoolSwapFlow — directional volume read model)
 │   ├── liquidity_flow/    (PoolLiquidityFlow — windowed add/remove + TVL read model)
-│   ├── token_metadata/    (TokenMetadata + repo; TokenEntry, its latest price beside it)
-│   ├── token_price/       (TokenPrice + repo, PriceProvider)
+│   ├── token_metadata/    (TokenMetadata + repo; read.rs, TokenEntry, its latest price
+│   │                       beside it, and its cursor)
+│   ├── token_price/       (TokenPrice + repo, PriceProvider; read.rs, its cursor)
 │   ├── kept_prices/       (KeptPrices — what the price series already records,
 │   │                       and what a new observation must say to earn a row)
 │   ├── price_candidate/   (PriceCandidate — how often a candidate mint is
@@ -84,14 +91,11 @@ core/src/
 │   │                       and the lateness rule; the alarm's read model)
 │   ├── announcements/     (Announcement + AnnouncementLookup — operator → users
 │   │                       banner; severity deliberately distinct from signals';
-│   │                       AnnouncementEntry, its status and cursor, for the list)
+│   │                       read.rs, AnnouncementEntry, its status and cursor, for the list)
 │   ├── watched_pool/      (allowlist)
 │   ├── auth/              (api_client/, api_key/, ticket/, credential_text.rs —
 │   │                       who calls the API; see Responsibilities)
-│   ├── protocol/          (Protocol enum), trade_direction.rs, freshness_status/
-│   ├── domain_event.rs    (two-level DomainEvent enum)
-│   ├── event_position.rs  (EventPosition, TransactionPosition — where an event sits)
-│   ├── insert_outcome.rs  (InsertOutcome — what an idempotent insert did)
+│   ├── protocol/          (Protocol enum), freshness_status/
 │   └── pool_account/      (DecodedPoolAccount = PoolRegistryProperties for
 │                           `pools` + two-level PoolAccountProperties for the
 │                           satellite; PoolAccountResolver)
@@ -114,8 +118,8 @@ File trees here are kept coarse on purpose — the module structure is the contr
 
 ## Responsibilities
 
-- **Domain models** (`domain/`) — entities and the repository traits behind every persistence contract. Per-protocol events live under `domain/<platform>/<product>/`; cross-protocol concepts (`Pool`, `TokenPrice`, `Signal`, …) sit at the root of `domain/`. Read models used by a single consumer (e.g. `swap_flow` for the flow-imbalance detector) get their own slim module rather than widening an existing trait.
-- **Two-level `DomainEvent`** (`domain/domain_event.rs`) — sum type with one outer variant per protocol, delegating to a sub-enum per event kind. `DomainEvent::MeteoraDammV2(MeteoraDammV2Event::Swap(...))` is the canonical shape. Accessors (`pool_address`, `signature`, `timestamp`, `protocol`, `kind`) delegate to the inner sub-enum.
+- **Domain models** (`domain/`) — entities and the repository traits behind every persistence contract. Per-protocol events live under `domain/<platform>/<product>/`; cross-protocol concepts (`Pool`, `TokenPrice`, `Signal`, …) sit at the root of `domain/`. Read models used by a single consumer (e.g. `swap_flow` for the flow-imbalance detector) get their own slim module rather than widening an existing trait. A resource's module holds one subject per file: `model.rs` the entity and its parts, `read.rs` what a list reading takes and returns (scope, order, cursor, entry, total, page), `repository.rs` the traits; any other subject — a total over many, a split — its own file.
+- **Two-level `DomainEvent`** (`domain/event/domain_event.rs`) — sum type with one outer variant per protocol, delegating to a sub-enum per event kind. `DomainEvent::MeteoraDammV2(MeteoraDammV2Event::Swap(...))` is the canonical shape. Accessors (`pool_address`, `signature`, `timestamp`, `protocol`, `kind`) delegate to the inner sub-enum.
 - **Event extraction** (`application/extraction/`) — turns raw Solana transactions into protocol-agnostic `DomainEvent`s. Lives in `application/` rather than `domain/` because it orchestrates an external concern (the Solana transaction shape) into the domain language.
 - **Account decoding** (`application/decoder/`) — the counterpart of the above: turns an on-chain account's raw bytes into a `DecodedPoolAccount`, the properties events never carry (mints, base fee, fee split, fee shape; for cp-amm also the price range and the price at the read, the fee collection mode and the liquidity locked for good). The result is split by *who stores it* — `PoolRegistryProperties` for the cross-protocol `pools` registry, `PoolAccountProperties` for that protocol's satellite — each named by the table that owns it — so one read feeds two tables without either repository writing the other's. Dispatches on the account's owning program id — which is what the chain calls its `owner` — via `Protocol::from_program_id`, so callers need not know which protocol they asked for and one client can serve them all. Named for what it does, not for where the bytes came from: they may arrive over JSON-RPC today and over gRPC tomorrow, and nothing here changes. Two guards on every decode, neither redundant: the program id (by dispatch) and the account's Anchor discriminator. They are not defensive — at cp-amm's mint offsets a DLMM `LbPair` holds `reserve_x`/`reserve_y`, valid aligned `Pubkey`s, so an unguarded decode succeeds and writes vault addresses into mint columns. Failure is a typed `PoolAccountRejection`, not a bare `None`: in the only call path the caller asks for accounts of pools it queued itself, so *every* rejection signals a problem — an unindexed program, a missing decoder, the wrong account, or (the one to watch) a truncated account, the signature of an ABI change. `core` does no I/O, so it returns the reason and the caller logs and counts it — the same discipline as `ExtractionOutcome`.
 - **Signals domain** (`domain/signals/`) — the write model (`Signal`, `Severity`, and what a value means: the detectors' tags, `SignalValueUnit::of`, `Signal::leans_toward`) and the contracts of the signal engine: the `SignalDetector` trait (see below), the thin `EvalContext` (carries the tick clock, nothing else), `SignalRepository` (write + cooldown lookup) and `SignalFeed` (the API's read side: paginated feed and SSE delta reads). The read model `SignalRecord { id, signal }` exists because the id only exists after insert — it never sits on the write-side `Signal`.
@@ -317,7 +321,7 @@ Documented on the affected types and enforced at construction time:
 - **Lossless `u128` in DB** — `next_sqrt_price` (Q64.64) and `liquidity_delta` are stored as `NUMERIC(39, 0)`; conversion happens in `persistence`, never here.
 - **Off-chain decimal prices** — `TokenPrice::price_usd` is a `rust_decimal::Decimal` (infra-neutral, no `sqlx` leak). It carries one invariant the type cannot express on its own: a price must survive coercion to the column's `NUMERIC(38, 18)`, i.e. land in `[5e-19, 1e20)`. `TokenPrice::is_storable` states it (mirroring Postgres's round-half-away-from-zero), and `price_positivity.rs` asserts it agrees with the server at both ends. The test is deliberately *not* `> 0`: a sub-scale price is positive in Rust and becomes zero only on write — and a stored zero is far worse than an absent one, since it multiplies into a plausible number instead of NULL-annihilating and being caught by the `valuation_complete` guards. The two ends are enforced by *different* layers — the `CHECK` of migration 009 below, the column type itself above (`22003`, before any constraint runs) — which is why the Rust filter has to know both: a batch insert is aborted identically by either.
 - **Integer signedness follows whoever owns the number** — on-chain quantities are unsigned (`u64` / `u128`), database-produced counts are `i64`. Decided 5 August 2026; the reasoning and the counter-argument are below.
-- **Every event carries its position in the chain** — `slot`, `event_index` and `transaction_index` sit on all 19 DAMM v2 event types, assembled once per transaction as an `EventPosition` (see `domain/event_position.rs`) and threaded through the translators. `event_index` numbers the inner instructions of the `OnChainTransaction` addressed to the program — Anchor `event_cpi` or not, decoded or not — which is what lets `(signature, event_index, timestamp)` be a stable unique key: numbering only recognised events would renumber stored rows the day a new discriminator is implemented. The contract that guarantees it is the filter in `extract_anchor_event_cpis` — widen it freely, never narrow it (its doc-comment says why). `transaction_index` is always set on the gRPC path; on the `getTransaction` path it is set only when the provider includes it, `None` otherwise.
+- **Every event carries its position in the chain** — `slot`, `event_index` and `transaction_index` sit on all 19 DAMM v2 event types, assembled once per transaction as an `EventPosition` (see `domain/event/position.rs`) and threaded through the translators. `event_index` numbers the inner instructions of the `OnChainTransaction` addressed to the program — Anchor `event_cpi` or not, decoded or not — which is what lets `(signature, event_index, timestamp)` be a stable unique key: numbering only recognised events would renumber stored rows the day a new discriminator is implemented. The contract that guarantees it is the filter in `extract_anchor_event_cpis` — widen it freely, never narrow it (its doc-comment says why). `transaction_index` is always set on the gRPC path; on the `getTransaction` path it is set only when the provider includes it, `None` otherwise.
 - **An insert reports what it did** — event repositories return `InsertOutcome::{Inserted, Skipped}`, not `()`. `ON CONFLICT DO NOTHING` makes "no error" ambiguous, and discarding the difference is how a too-narrow unique key silently dropped 3–8 % of a pool's swaps until the August 2026 audit.
 
 ### Integer signedness: why counts are `i64`

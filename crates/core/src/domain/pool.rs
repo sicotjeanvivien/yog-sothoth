@@ -1,5 +1,7 @@
 mod model;
+mod read;
 mod repository;
 
-pub use model::{Pool, PoolCursor, PoolEntry, PoolScope, PoolValue};
-pub use repository::{PoolCatalog, PoolRepository, ProtocolPools};
+pub use model::Pool;
+pub use read::{PoolCursor, PoolEntry, PoolScope, PoolValue, ProtocolPools};
+pub use repository::{PoolCatalog, PoolRepository};

@@ -74,7 +74,7 @@ pub use split_position_event::{
     MeteoraDammV2SplitAmounts, MeteoraDammV2SplitNumerators, MeteoraDammV2SplitPositionEvent,
     MeteoraDammV2SplitPositionEventRepository, MeteoraDammV2SplitPositionState,
 };
-pub use swap_event::{MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventRepository};
+pub use swap_event::{MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventRepository, TradeDirection};
 pub use update_pool_fees_event::{
     MeteoraDammV2UpdatePoolFeesEvent, MeteoraDammV2UpdatePoolFeesEventRepository,
 };

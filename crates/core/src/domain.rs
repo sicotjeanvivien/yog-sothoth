@@ -3,17 +3,12 @@ mod announcements;
 mod auth;
 mod claim_totals;
 mod discovered_tvl;
-mod domain_event;
-mod event_cursor;
-mod event_position;
-mod event_table;
+mod event;
 mod freshness_status;
-mod insert_outcome;
 mod kept_prices;
 mod liquidity_change_event;
 mod liquidity_flow;
 mod liquidity_moves;
-mod live_event_feed;
 mod materialization_backlog;
 mod meteora;
 mod network_status;
@@ -43,7 +38,6 @@ mod token_activity;
 mod token_metadata;
 mod token_price;
 mod token_tvl;
-mod trade_direction;
 mod unpriced_mints;
 mod vesting_unlocks;
 mod watched_pool;
@@ -64,13 +58,12 @@ pub use auth::{
 };
 pub use claim_totals::{ClaimKind, ClaimTotals, ClaimTotalsLookup};
 pub use discovered_tvl::{DiscoveredTvlLookup, ProtocolDiscoveredTvl};
-pub use domain_event::DomainEvent;
-pub use event_cursor::{EventCursor, EventScope};
-pub use event_position::{EventPosition, TransactionPosition};
-pub use event_table::EventTable;
-pub(crate) use event_table::event_tables;
+pub(crate) use event::event_tables;
+pub use event::{
+    DomainEvent, EventCursor, EventPosition, EventScope, EventTable, InsertOutcome, LiveEventFeed,
+    LiveRecord, TransactionPosition,
+};
 pub use freshness_status::{EventFreshnessRepository, FreshnessStatus};
-pub use insert_outcome::InsertOutcome;
 pub use kept_prices::{KeptPrices, PRICE_MAX_AGE_LATEST};
 pub use liquidity_change_event::{
     LiquidityChangeEvent, LiquidityChangeEventLookup, LiquidityChangeTable,
@@ -81,7 +74,6 @@ pub use liquidity_moves::{
     LiquidityMoveLock, LiquidityMoveLookup, LiquidityMoveOrder, LiquidityMoveScope,
     LiquidityTotals,
 };
-pub use live_event_feed::{LiveEventFeed, LiveRecord};
 pub use materialization_backlog::{MaterializationBacklog, MaterializationBacklogRepository};
 pub use meteora::{
     MeteoraDammV2BaseFee, MeteoraDammV2ClaimPositionFeeEvent,
@@ -110,7 +102,7 @@ pub use meteora::{
     MeteoraDammV2WithdrawDeadLiquidityRewardEventRepository,
     MeteoraDammV2WithdrawIneligibleRewardEvent,
     MeteoraDammV2WithdrawIneligibleRewardEventRepository, MeteoraDlmmPoolAccountProperties,
-    ProtocolTvlMeteoraDammV2,
+    ProtocolTvlMeteoraDammV2, TradeDirection,
 };
 pub use network_status::{NetworkStatus, NetworkStatusLookup, NetworkStatusRepository};
 pub use observed_slots::{ObservedSlots, ObservedSlotsRepository};
@@ -182,7 +174,6 @@ pub use token_price::{
 pub use token_tvl::{
     TokenTvl, TokenTvlCursor, TokenTvlLookup, TokenTvlOrder, TokenTvlPage, TokenTvlTotal,
 };
-pub use trade_direction::TradeDirection;
 pub use unpriced_mints::UnpricedMints;
 pub use vesting_unlocks::{
     VestingUnlock, VestingUnlockCursor, VestingUnlockLookup, VestingUnlockOrder, VestingUnlockPage,

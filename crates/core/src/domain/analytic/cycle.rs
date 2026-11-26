@@ -107,21 +107,7 @@ pub struct CycleOutcome {
     pub hours_frozen: u64,
 }
 
-/// What a TVL measure did: one per hour, the hour's first measure kept.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TvlMeasure {
-    Measured,
-    /// The hour already had its TVL: nothing written.
-    AlreadyMeasured,
-}
-
-/// The hour a TVL measured at `now` is written to: the last closed one, read from the
-/// pools' current state.
-pub fn last_closed_hour(now: DateTime<Utc>) -> DateTime<Utc> {
-    hour_of(now) - TimeDelta::hours(1)
-}
-
-fn hour_of(at: DateTime<Utc>) -> DateTime<Utc> {
+pub(super) fn hour_of(at: DateTime<Utc>) -> DateTime<Utc> {
     at.duration_trunc(TimeDelta::hours(1))
         .expect("an hour divides every instant chrono can represent in nanoseconds")
 }
@@ -132,5 +118,5 @@ fn tranche_of(at: DateTime<Utc>) -> DateTime<Utc> {
 }
 
 #[cfg(test)]
-#[path = "model_tests.rs"]
+#[path = "cycle_tests.rs"]
 mod tests;

@@ -1,8 +1,4 @@
-//! The windows a measure is read over, and the period one read covers.
-
-use chrono::{DateTime, TimeDelta, Utc};
-
-use crate::domain::Protocol;
+use chrono::TimeDelta;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Window {
@@ -39,95 +35,6 @@ impl Window {
             Window::Month => "30d",
         }
     }
-}
-
-/// The first hour the analytic tables hold, and the last one frozen.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FrozenHours {
-    pub first: DateTime<Utc>,
-    pub last_frozen: DateTime<Utc>,
-}
-
-/// The first tranche whose pools' facts are still held, and the end of the last one written.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct WrittenTranches {
-    pub first: DateTime<Utc>,
-    pub through: DateTime<Utc>,
-}
-
-/// The hours `from..as_of` one read covers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FrozenPeriod {
-    pub from: DateTime<Utc>,
-    /// The close of its last hour: the instant the read reflects.
-    pub as_of: DateTime<Utc>,
-    /// The first hour the facts hold: a period starting earlier sums missing hours.
-    pub covered_since: DateTime<Utc>,
-}
-
-impl FrozenPeriod {
-    /// `window` through the last frozen hour, moved `offset` back.
-    pub fn of(hours: FrozenHours, window: Window, offset: Option<Window>) -> Self {
-        let as_of = hours.last_frozen + TimeDelta::hours(1)
-            - offset.map_or(TimeDelta::zero(), Window::duration);
-        Self {
-            from: as_of - window.duration(),
-            as_of,
-            covered_since: hours.first,
-        }
-    }
-
-    pub fn is_covered(&self) -> bool {
-        self.from >= self.covered_since
-    }
-
-    /// The period's last hour, the one its distinct counts were written at.
-    pub fn last_hour(&self) -> DateTime<Utc> {
-        self.as_of - TimeDelta::hours(1)
-    }
-}
-
-/// The tranches `from..as_of` one read covers, through the last one written: unlike a
-/// [`FrozenPeriod`], its last hour may be open.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TranchePeriod {
-    pub from: DateTime<Utc>,
-    /// The end of the last tranche written: the runs read started before it.
-    pub as_of: DateTime<Utc>,
-    /// The first tranche the read's measure holds: a period starting earlier misses some.
-    pub covered_since: DateTime<Utc>,
-}
-
-impl TranchePeriod {
-    /// `window` through `as_of`; covered from `measured_since`, or never before it is measured.
-    pub fn of(as_of: DateTime<Utc>, window: Window, measured_since: Option<DateTime<Utc>>) -> Self {
-        Self {
-            from: as_of - window.duration(),
-            as_of,
-            covered_since: measured_since.unwrap_or(as_of),
-        }
-    }
-
-    pub fn is_covered(&self) -> bool {
-        self.from >= self.covered_since
-    }
-
-    /// The last hour through the last tranche written, moved `offset` back.
-    pub fn hour_through(tranches: WrittenTranches, offset: Option<Window>) -> Self {
-        Self::of(
-            tranches.through - offset.map_or(TimeDelta::zero(), Window::duration),
-            Window::Hour,
-            Some(tranches.first),
-        )
-    }
-}
-
-/// One protocol's measure over one bucket of a series, from `from`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProtocolBucket<T> {
-    pub protocol: Protocol,
-    pub from: DateTime<Utc>,
-    pub value: T,
 }
 
 #[cfg(test)]

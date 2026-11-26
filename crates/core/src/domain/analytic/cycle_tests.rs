@@ -87,14 +87,6 @@ fn a_clock_behind_the_last_frozen_hour_plans_nothing() {
     assert_eq!(cycle.freeze_through, None);
 }
 
-/// Against the open hour measured: its TVL would be rewritten through the hour, then kept as
-/// it stood at the first measure.
-#[test]
-fn the_tvl_goes_to_the_last_closed_hour() {
-    assert_eq!(last_closed_hour(at(20, 35)), at(19, 0));
-    assert_eq!(last_closed_hour(at(20, 0)), at(19, 0));
-}
-
 /// Against a frozen hour left in the range: a second writer, or a cycle
 /// planned before the freeze it now runs after, would write it again.
 #[test]

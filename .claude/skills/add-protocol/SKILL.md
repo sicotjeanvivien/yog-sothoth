@@ -23,7 +23,7 @@ Then read where the protocol stands today — the code says it, this file does n
 ```bash
 sed -n '/pub enum Protocol/,/^}/p' crates/core/src/domain/protocol/model.rs   # named by the enum?
 grep -rn -A2 'fn is_implemented' crates/core/src/application/extraction/   # false = stub
-sed -n '/pub enum DomainEvent/,/^}/p' crates/core/src/domain/domain_event.rs   # has events?
+sed -n '/pub enum DomainEvent/,/^}/p' crates/core/src/domain/event/domain_event.rs   # has events?
 grep -rli '<product>' crates/*/src web/src | sort   # every file that already names it, layer by layer
 ```
 
@@ -65,7 +65,7 @@ Rules: *1. In `core`*.
   - `crates/core/src/domain/<platform>/<product>/<event_kind>/` — `model.rs`,
     `repository.rs`; the sub-enum in `domain/<platform>/<product>.rs`; template
     `domain/meteora/damm_v2/`.
-  - `crates/core/src/domain/domain_event.rs` — the outer variant and its accessors.
+  - `crates/core/src/domain/event/domain_event.rs` — the outer variant and its accessors.
   - `crates/core/src/domain/protocol/model.rs` — only for a protocol the enum does not name
     yet.
 - Account side:

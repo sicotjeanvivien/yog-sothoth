@@ -3,15 +3,8 @@ use solana_pubkey::Pubkey;
 
 use crate::{
     Page, RepositoryResult,
-    domain::{Pool, PoolCursor, PoolEntry, PoolRegistryProperties, PoolScope, Protocol},
+    domain::{Pool, PoolCursor, PoolEntry, PoolRegistryProperties, PoolScope, ProtocolPools},
 };
-
-/// How many pools of one protocol were ever recorded.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ProtocolPools {
-    pub protocol: Protocol,
-    pub pools_seen: i64,
-}
 
 /// Write side of the pool registry, the indexer's lens; [`PoolCatalog`] reads it.
 #[async_trait]
