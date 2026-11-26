@@ -97,7 +97,7 @@ pub(in crate::application::decoder) fn decode_pool_account(
             .expect("2 bytes, length checked above"),
     );
     let base_fee_kind =
-        crate::amm::damm_v2::base_fee_kind_from(data[BASE_FEE_MODE_OFFSET], number_of_period).ok();
+        crate::amm::damm_v2::base_fee_kind_from(data[BASE_FEE_MODE_OFFSET], number_of_period);
 
     let cliff_fee_numerator = u64::from_le_bytes(
         data[CLIFF_FEE_NUMERATOR_OFFSET..CLIFF_FEE_NUMERATOR_OFFSET + 8]

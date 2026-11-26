@@ -37,7 +37,7 @@ impl TryFrom<TokenPriceRow> for TokenPrice {
 /// unknown value is an integrity error.
 fn parse_price_provider(raw: &str) -> RepositoryResult<PriceProvider> {
     PriceProvider::from_str(raw)
-        .map_err(|e| RepositoryError::Integrity(format!("invalid price_provider: {e}")))
+        .map_err(|()| RepositoryError::Integrity(format!("invalid price_provider: {raw}")))
 }
 
 #[cfg(test)]

@@ -104,7 +104,7 @@ fn try_from_invalid_protocol_returns_integrity_with_message() {
         other => panic!("expected Integrity, got {other:?}"),
     };
     assert!(
-        msg.contains("invalid protocol"),
+        msg.contains("invalid protocol") && msg.contains("definitely_not_a_protocol"),
         "expected message to mention the failure context, got: {msg}"
     );
 }

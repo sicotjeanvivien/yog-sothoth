@@ -1,7 +1,6 @@
 use rust_decimal::Decimal;
 
 use super::fee_adjusted_amount;
-use crate::CoreResult;
 use crate::amm::common::price_impact;
 
 const Q64_SCALE: f64 = 18_446_744_073_709_551_616.0; // 2^64
@@ -35,7 +34,7 @@ pub fn net_price_impact(
     reserve_b: u128,
     amount_in: u128,
     fee_bps: u32,
-) -> CoreResult<u32> {
+) -> Option<u32> {
     let amount_in_net = fee_adjusted_amount(amount_in, fee_bps)?;
     price_impact(reserve_a, reserve_b, amount_in_net)
 }

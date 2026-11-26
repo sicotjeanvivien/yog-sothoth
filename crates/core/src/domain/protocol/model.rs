@@ -1,4 +1,3 @@
-use crate::CoreError;
 use serde::{Deserialize, Serialize};
 use solana_pubkey::{Pubkey, pubkey};
 
@@ -53,13 +52,13 @@ impl std::fmt::Display for Protocol {
 }
 
 impl std::str::FromStr for Protocol {
-    type Err = CoreError;
+    type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "meteora_damm_v2" => Ok(Protocol::MeteoraDammV2),
             "meteora_dlmm" => Ok(Protocol::MeteoraDlmm),
-            _ => Err(CoreError::UnknownProgram(s.to_string())),
+            _ => Err(()),
         }
     }
 }

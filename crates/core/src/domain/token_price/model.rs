@@ -4,8 +4,6 @@ use chrono::{DateTime, Utc};
 use rust_decimal::{Decimal, RoundingStrategy};
 use solana_pubkey::Pubkey;
 
-use crate::CoreError;
-
 /// Origin of a price observation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PriceProvider {
@@ -29,14 +27,14 @@ impl PriceProvider {
 }
 
 impl std::str::FromStr for PriceProvider {
-    type Err = CoreError;
+    type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "jupiter" => Ok(PriceProvider::Jupiter),
             "helius" => Ok(PriceProvider::Helius),
             "fallback" => Ok(PriceProvider::Fallback),
-            _ => Err(CoreError::UnknownProgram(s.to_string())),
+            _ => Err(()),
         }
     }
 }

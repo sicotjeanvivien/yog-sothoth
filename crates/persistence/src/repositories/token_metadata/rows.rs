@@ -41,7 +41,7 @@ impl TryFrom<TokenMetadataRow> for TokenMetadata {
 
 fn parse_metadata_provider(raw: &str) -> RepositoryResult<MetadataProvider> {
     MetadataProvider::from_str(raw)
-        .map_err(|e| RepositoryError::Integrity(format!("invalid price_provider: {e}")))
+        .map_err(|()| RepositoryError::Integrity(format!("invalid metadata_provider: {raw}")))
 }
 
 /// A token's metadata and its latest price, the price columns `None` before its first.

@@ -3,8 +3,6 @@
 use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 
-use crate::CoreError;
-
 /// Identity and display metadata for a single SPL mint.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokenMetadata {
@@ -50,12 +48,12 @@ impl MetadataProvider {
 }
 
 impl std::str::FromStr for MetadataProvider {
-    type Err = CoreError;
+    type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "helius_das" => Ok(MetadataProvider::HeliusDas),
-            _ => Err(CoreError::UnknownProgram(s.to_string())),
+            _ => Err(()),
         }
     }
 }

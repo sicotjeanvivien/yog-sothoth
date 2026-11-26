@@ -25,11 +25,7 @@ fn test_spot_price_sol_usdc() {
 #[test]
 fn test_spot_price_zero_reserve_a_returns_error() {
     let result = spot_price(0, 1_000_000);
-    assert!(result.is_err());
-    assert!(matches!(
-        result,
-        Err(crate::CoreError::ArithmeticOverflow { .. })
-    ));
+    assert!(result.is_none());
 }
 
 #[test]
@@ -99,5 +95,5 @@ fn test_imbalance_real_pool_values() {
 #[test]
 fn test_imbalance_zero_reserves_returns_error() {
     let result = imbalance(0, 0);
-    assert!(result.is_err());
+    assert!(result.is_none());
 }

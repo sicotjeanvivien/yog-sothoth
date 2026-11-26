@@ -74,8 +74,8 @@ fn the_rate_limiter_ignores_the_period_count() {
 /// A mode cp-amm gains after this build is refused, never guessed.
 #[test]
 fn an_unknown_mode_is_refused() {
-    assert!(base_fee_kind_from(5, 0).is_err());
-    assert!(base_fee_kind_from(99, 12).is_err());
+    assert!(base_fee_kind_from(5, 0).is_none());
+    assert!(base_fee_kind_from(99, 12).is_none());
 }
 
 // ── The cap that must NOT be applied ──────────────────────────────
