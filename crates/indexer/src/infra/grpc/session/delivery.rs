@@ -3,13 +3,15 @@
 use chrono::{DateTime, Utc};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use yog_core::CoreError;
 
 use crate::{
     application::source::IngestedTransaction,
-    infra::grpc::{
-        metrics::{DropReason, GrpcListenerMetrics},
-        transaction_adapter::from_grpc,
+    infra::{
+        TransactionAdapterError,
+        grpc::{
+            metrics::{DropReason, GrpcListenerMetrics},
+            transaction_adapter::from_grpc,
+        },
     },
 };
 
@@ -87,12 +89,9 @@ impl Delivery {
 
 /// The reason label for a translation failure: a bounded set, so the counter
 /// does not become a cardinality problem the day an error quotes a signature.
-fn drop_reason(error: &CoreError) -> DropReason {
+fn drop_reason(error: &TransactionAdapterError) -> DropReason {
     match error {
-        CoreError::MissingField { .. } => DropReason::MissingField,
-        CoreError::ParseError { .. } => DropReason::ParseError,
-        // `from_grpc` returns only the two above; the catch-all keeps a future
-        // variant countable.
-        _ => DropReason::OtherMalformation,
+        TransactionAdapterError::MissingField { .. } => DropReason::MissingField,
+        TransactionAdapterError::Parse { .. } => DropReason::ParseError,
     }
 }

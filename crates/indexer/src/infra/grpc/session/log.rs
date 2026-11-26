@@ -1,7 +1,7 @@
 //! The lines a stream session writes, one function each.
 
+use crate::infra::TransactionAdapterError;
 use tracing::{debug, info, warn};
-use yog_core::CoreError;
 
 use crate::infra::grpc::slot_timestamp_buffer::Bank;
 
@@ -32,7 +32,7 @@ pub(super) fn no_bank_id(slot: u64) {
 }
 
 /// A transaction could not be translated and was dropped.
-pub(super) fn untranslatable(slot: u64, error: &CoreError) {
+pub(super) fn untranslatable(slot: u64, error: &TransactionAdapterError) {
     warn!(slot, %error, "could not translate a transaction");
 }
 

@@ -1,7 +1,7 @@
 use solana_rpc_client_api::response::transaction::Signature;
 use std::sync::Arc;
 use std::time::Instant;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 use yog_core::{
     application::extraction::{
         ExtractionDispatcher, ExtractionFailure, ExtractionOutcome, OnChainTransaction,
@@ -36,20 +36,13 @@ impl TransactionProcessor {
         &self,
         protocol: Protocol,
         transaction: &OnChainTransaction,
-    ) -> anyhow::Result<()> {
+    ) {
         let mut guard = ExitGuard::new(protocol);
         let signature = transaction.position.signature;
 
         info!(%signature, protocol = %protocol.as_str(), "processing transaction");
 
-        let outcome = match self.extractor.extract(protocol, transaction) {
-            Ok(o) => o,
-            Err(e) => {
-                error!(%signature, error = %e, "extraction failed at transaction level");
-                guard.set("extract_failure");
-                return Err(e.into());
-            }
-        };
+        let outcome = self.extractor.extract(protocol, transaction);
 
         self.report_diagnostics(&protocol, &signature, &outcome);
 
@@ -57,7 +50,7 @@ impl TransactionProcessor {
             TransactionProcessorMetrics::record_no_match(&protocol);
             debug!(%signature, "no recognized events in transaction");
             guard.set("no_events");
-            return Ok(());
+            return;
         }
 
         for event in &outcome.events {
@@ -65,7 +58,6 @@ impl TransactionProcessor {
         }
 
         guard.set("ok");
-        Ok(())
     }
 
     /// Surface unknown discriminators and extraction failures via logs and metrics.

@@ -8,6 +8,6 @@ pub mod domain;
 mod error;
 mod tools;
 
-pub use error::{CoreError, CoreResult, RepositoryError, RepositoryResult};
+pub use error::{RepositoryError, RepositoryResult};
 
 pub use tools::{Cursor, Page, PageDirection, PagePosition};

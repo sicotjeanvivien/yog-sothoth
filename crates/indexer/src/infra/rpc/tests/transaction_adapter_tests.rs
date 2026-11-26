@@ -40,7 +40,7 @@ fn a_transaction_without_block_time_is_refused() {
     let err = from_rpc(&parse(json)).expect_err("a missing blockTime must be refused");
 
     assert!(
-        matches!(&err, CoreError::MissingField { field, .. } if field == "blockTime"),
+        matches!(&err, TransactionAdapterError::MissingField { field, .. } if field == "blockTime"),
         "expected a MissingField on blockTime, got {err:?}"
     );
 }
@@ -57,7 +57,7 @@ fn a_transaction_in_another_encoding_is_refused() {
     let err = from_rpc(&parse(json)).expect_err("a non-JSON encoding must be refused");
 
     assert!(
-        matches!(&err, CoreError::ParseError { reason, .. } if reason.contains("encoding")),
+        matches!(&err, TransactionAdapterError::Parse { reason, .. } if reason.contains("encoding")),
         "expected a ParseError about the encoding, got {err:?}"
     );
 }
@@ -75,7 +75,7 @@ fn meta_not_captured_is_an_error_not_an_empty_list() {
 
     // The exact field, not `contains("not captured")`: which absence occurred is what the operator acts on.
     assert!(
-        matches!(&err, CoreError::MissingField { field, .. }
+        matches!(&err, TransactionAdapterError::MissingField { field, .. }
             if field == Gap::Meta.field()),
         "the error must distinguish absence from emptiness, and name which: {err:?}"
     );
@@ -91,7 +91,7 @@ fn inner_instructions_not_captured_is_an_error_not_an_empty_list() {
     let err = from_rpc(&parse(json)).expect_err("absent innerInstructions must be refused");
 
     assert!(
-        matches!(&err, CoreError::MissingField { field, .. }
+        matches!(&err, TransactionAdapterError::MissingField { field, .. }
             if field == Gap::InnerInstructions.field()),
         "the error must distinguish absence from emptiness, and name which: {err:?}"
     );

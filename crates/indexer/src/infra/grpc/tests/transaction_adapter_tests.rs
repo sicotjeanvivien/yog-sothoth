@@ -337,7 +337,7 @@ fn a_missing_meta_is_an_error_not_an_empty_list() {
     // ⚠️ The exact field, not `contains("not captured")`, true of both refusals: which one is
     // what an operator acts on, and only the log line tells them apart.
     assert!(
-        matches!(&error, CoreError::MissingField { field, .. }
+        matches!(&error, TransactionAdapterError::MissingField { field, .. }
             if field == Gap::Meta.field()),
         "the error must distinguish absence from emptiness, and name which: {error:?}"
     );
@@ -360,7 +360,7 @@ fn inner_instructions_not_captured_is_an_error_not_an_empty_list() {
     let error = from_grpc(&update, reference_timestamp()).expect_err("not captured");
 
     assert!(
-        matches!(&error, CoreError::MissingField { field, .. }
+        matches!(&error, TransactionAdapterError::MissingField { field, .. }
             if field == Gap::InnerInstructions.field()),
         "the error must distinguish absence from emptiness, and name which: {error:?}"
     );

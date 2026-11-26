@@ -9,6 +9,7 @@ use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 
+use crate::infra::TransactionAdapterError;
 use crate::infra::refusal::{self, Gap};
 pub(crate) use solana_transaction_status_client_types::{
     EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding,
@@ -18,14 +19,13 @@ use solana_transaction_status_client_types::{
 };
 use yog_core::application::extraction::{InnerInstructionPayload, OnChainTransaction};
 use yog_core::domain::TransactionPosition;
-use yog_core::{CoreError, CoreResult};
 
 /// Build the neutral transaction from a `getTransaction` response. Refusals, all counted under
 /// `reason="adapt"`: no or bad `signatures[0]`, a non-`Json` encoding, `blockTime` absent or out of
 /// range, no `meta`, no `innerInstructions`. An empty `innerInstructions` is ordinary traffic.
 pub(crate) fn from_rpc(
     tx: &EncodedConfirmedTransactionWithStatusMeta,
-) -> CoreResult<OnChainTransaction> {
+) -> Result<OnChainTransaction, TransactionAdapterError> {
     let signature = extract_signature(tx)?;
 
     Ok(OnChainTransaction {
@@ -42,23 +42,26 @@ pub(crate) fn from_rpc(
 
 /// Extract `signatures[0]`, the transaction id: what `getTransaction` is queried by.
 /// ⚠️ The others are co-signers; keying rows on one would file them where no lookup finds them.
-fn extract_signature(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResult<Signature> {
+fn extract_signature(
+    tx: &EncodedConfirmedTransactionWithStatusMeta,
+) -> Result<Signature, TransactionAdapterError> {
     match &tx.transaction.transaction {
         EncodedTransaction::Json(ui_tx) => {
-            let sig_str = ui_tx
-                .signatures
-                .first()
-                .ok_or_else(|| CoreError::MissingField {
-                    signature: String::new(),
-                    field: "signatures".to_string(),
-                })?;
+            let sig_str =
+                ui_tx
+                    .signatures
+                    .first()
+                    .ok_or_else(|| TransactionAdapterError::MissingField {
+                        signature: String::new(),
+                        field: "signatures".to_string(),
+                    })?;
 
-            Signature::from_str(sig_str).map_err(|e| CoreError::ParseError {
+            Signature::from_str(sig_str).map_err(|e| TransactionAdapterError::Parse {
                 signature: String::new(),
                 reason: format!("invalid signature {sig_str}: {e}"),
             })
         }
-        _ => Err(CoreError::ParseError {
+        _ => Err(TransactionAdapterError::Parse {
             signature: String::new(),
             reason: "unexpected transaction encoding".to_string(),
         }),
@@ -66,13 +69,17 @@ fn extract_signature(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResu
 }
 
 /// Extract the block timestamp as UTC.
-fn extract_timestamp(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResult<DateTime<Utc>> {
-    let block_time = tx.block_time.ok_or_else(|| CoreError::MissingField {
-        signature: String::new(),
-        field: "blockTime".to_string(),
-    })?;
+fn extract_timestamp(
+    tx: &EncodedConfirmedTransactionWithStatusMeta,
+) -> Result<DateTime<Utc>, TransactionAdapterError> {
+    let block_time = tx
+        .block_time
+        .ok_or_else(|| TransactionAdapterError::MissingField {
+            signature: String::new(),
+            field: "blockTime".to_string(),
+        })?;
 
-    DateTime::from_timestamp(block_time, 0).ok_or_else(|| CoreError::ParseError {
+    DateTime::from_timestamp(block_time, 0).ok_or_else(|| TransactionAdapterError::Parse {
         signature: String::new(),
         reason: format!("invalid timestamp: {block_time}"),
     })
@@ -84,7 +91,7 @@ fn extract_timestamp(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResu
 fn extract_inner_instructions(
     tx: &EncodedConfirmedTransactionWithStatusMeta,
     signature: &Signature,
-) -> CoreResult<Vec<InnerInstructionPayload>> {
+) -> Result<Vec<InnerInstructionPayload>, TransactionAdapterError> {
     // ⚠️ No `meta` means "not captured", like the field below: an empty list would record a
     // transaction full of events as "nothing to record". Refusing counts the loss, not recovers it.
     let Some(meta) = tx.transaction.meta.as_ref() else {

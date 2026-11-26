@@ -14,9 +14,7 @@ use yog_persistence::PgMeteoraDammV2SwapEventRepository;
 /// The mainnet transaction `2qJrr…`: two swaps on the same pool, opposite directions, one
 /// signature, one `blockTime` — from `yog-core`'s conformance module, pinned to the mainnet response.
 pub(super) fn swap_double_swaps() -> Vec<MeteoraDammV2SwapEvent> {
-    let outcome = MeteoraDammV2::new()
-        .extract_events(&reference_transaction())
-        .expect("extraction failed on the reference transaction");
+    let outcome = MeteoraDammV2::new().extract_events(&reference_transaction());
 
     outcome
         .events

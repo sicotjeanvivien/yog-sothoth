@@ -150,7 +150,7 @@ fn decodes_liquidity_add_fixtures() {
             extracted.failures
         );
 
-        let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+        let outcome = MeteoraDammV2::new().extract_events(&tx);
         let liq = outcome
             .events
             .iter()
@@ -192,9 +192,7 @@ fn decodes_liquidity_add_fixtures() {
 fn a_v1_transaction_yields_its_swap() {
     let tx = load_fixture("damm_v2/swap_v1.json");
 
-    let outcome = MeteoraDammV2::new()
-        .extract_events(&tx)
-        .expect("a v1 transaction must extract at the transaction level");
+    let outcome = MeteoraDammV2::new().extract_events(&tx);
 
     assert!(
         outcome.failures.is_empty(),
@@ -227,9 +225,7 @@ fn extracts_swap_via_router_correctly() {
     let tx = load_fixture("damm_v2/swap_via_router.json");
 
     let pool = MeteoraDammV2::new();
-    let outcome = pool
-        .extract_events(&tx)
-        .expect("extract_events should succeed at the transaction level");
+    let outcome = pool.extract_events(&tx);
 
     // No anchor decode / borsh / translation failures expected.
     assert!(
@@ -729,7 +725,7 @@ fn decodes_create_position_from_genesis_fixtures() {
             create.position,
             create.position_nft_mint,
         );
-        let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+        let outcome = MeteoraDammV2::new().extract_events(&tx);
         let domain = outcome
             .events
             .iter()
@@ -773,7 +769,7 @@ fn decodes_close_position_fixture() {
         close.position,
         close.position_nft_mint,
     );
-    let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+    let outcome = MeteoraDammV2::new().extract_events(&tx);
     let domain = outcome
         .events
         .iter()
@@ -829,7 +825,7 @@ fn decodes_lock_position_fixture() {
         lock.liquidity_per_period,
         lock.number_of_period,
     );
-    let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+    let outcome = MeteoraDammV2::new().extract_events(&tx);
     let d = outcome
         .events
         .iter()
@@ -890,7 +886,7 @@ fn decodes_permanent_lock_position_fixture() {
         plock.lock_liquidity_amount,
         plock.total_permanent_locked_liquidity,
     );
-    let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+    let outcome = MeteoraDammV2::new().extract_events(&tx);
     let d = outcome
         .events
         .iter()
@@ -920,7 +916,7 @@ fn an_ordinary_cp_amm_instruction_is_not_an_extraction_failure() {
         "the fixture no longer carries the 8-byte instruction this test is about"
     );
 
-    let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+    let outcome = MeteoraDammV2::new().extract_events(&tx);
     assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
     assert!(
         outcome.events.iter().any(|e| matches!(
@@ -961,7 +957,7 @@ fn a_tagged_but_truncated_payload_stays_an_extraction_failure() {
         after.failures
     );
 
-    let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+    let outcome = MeteoraDammV2::new().extract_events(&tx);
     assert!(
         matches!(
             outcome.failures.as_slice(),
@@ -1005,7 +1001,7 @@ fn decodes_claim_position_fee_fixture() {
     assert_ne!(claim.position, Pubkey::default());
     assert_ne!(claim.owner, Pubkey::default());
 
-    let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+    let outcome = MeteoraDammV2::new().extract_events(&tx);
     let d = outcome
         .events
         .iter()
@@ -1048,7 +1044,7 @@ fn decodes_claim_reward_fixture() {
     assert_ne!(claim.owner, Pubkey::default());
     assert_ne!(claim.mint_reward, Pubkey::default());
 
-    let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+    let outcome = MeteoraDammV2::new().extract_events(&tx);
     let d = outcome
         .events
         .iter()
@@ -1107,9 +1103,7 @@ fn decodes_update_pool_fees_fixture() {
     let (wire_pool, wire_operator, wire_params) =
         (update.pool, update.operator, update.params_raw.clone());
 
-    let outcome = MeteoraDammV2::new()
-        .extract_events(&tx)
-        .expect("extract_events should succeed at the transaction level");
+    let outcome = MeteoraDammV2::new().extract_events(&tx);
     assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
 
     let domain = outcome

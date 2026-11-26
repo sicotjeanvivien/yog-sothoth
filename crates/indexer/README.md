@@ -26,6 +26,7 @@ indexer/src/
 ├── infra/endpoint/        ← the endpoint's configuration, refused at start-up
 │                            before anything is dialled: scheme.rs, credential.rs
 ├── infra/refusal.rs       ← the wording both adapters refuse a source's gap with
+├── infra/transaction_adapter_error.rs ← TransactionAdapterError, what both adapters refuse with
 ├── infra/grpc/            ← GrpcTransactionSource and the single stage behind
 │                            it: listener, subscription, session, credential
 │                            interceptor, protobuf adapter, slot/time buffer,
@@ -489,11 +490,9 @@ the two dispatch points a new protocol touches in this crate, the other being
   one that wrongly rejects. The label on the duration histogram is
   `pool_current_state_rejected`, not `stale`: the old name asserted healthy
   concurrency for what was mostly the guard's own second-granularity.
-- **Per-transaction failures don't stop the worker** — `IndexerWorker` catches
-  errors from `process_transaction`, logs and counts them, and keeps draining
-  the channel. The same rule applies one stage earlier inside the JSON-RPC
-  source: a signature the RPC will not return, or a response that will not
-  adapt, is counted and stepped over by `FetchWorker`.
+- **Per-transaction failures don't stop the worker** — in the JSON-RPC source,
+  a signature the RPC will not return, or a response that will not adapt, is
+  counted and stepped over by `FetchWorker`.
 - **An observer never stops the pipeline** — a `NetworkStatusReporter` tick
   that fails is logged, counted and skipped; its `run` returns
   `Result<(), Infallible>`. Until 11 September 2026 it stopped the daemon
@@ -629,7 +628,7 @@ three gauges of the gRPC listener, named in its entry.
 - **Processor counters** —
   `yog_indexer_index_transaction_entered_total`,
   `yog_indexer_index_transaction_exited_total{outcome}` — `ok`, `no_events`,
-  `extract_failure`, `unknown_exit`,
+  `unknown_exit`,
   `yog_indexer_transactions_no_match_total`,
   `yog_indexer_unknown_event_total{discriminator}`,
   `yog_indexer_extraction_failure_total{kind}`.

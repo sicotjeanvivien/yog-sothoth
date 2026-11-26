@@ -2,8 +2,8 @@
 //! once: the log line is the only place an operator tells the two gaps apart.
 //! ⚠️ `refusal_tests.rs` pins the text on purpose: rewording what an operator greps for is a decision.
 
+use super::TransactionAdapterError;
 use solana_signature::Signature;
-use yog_core::CoreError;
 
 /// A gap **both** adapters can meet; one only an adapter can raise stays inline there.
 /// ⚠️ An enum, not a `&'static str`: a string would let the next shared gap return as two literals.
@@ -30,8 +30,8 @@ impl Gap {
 
 /// Refuse a transaction whose source did not describe `gap`.
 /// ⚠️ Called as `refusal::refuse`, not imported bare: the module name says the text is shared.
-pub(crate) fn refuse(gap: Gap, signature: &Signature) -> CoreError {
-    CoreError::MissingField {
+pub(crate) fn refuse(gap: Gap, signature: &Signature) -> TransactionAdapterError {
+    TransactionAdapterError::MissingField {
         signature: signature.to_string(),
         field: gap.field().to_string(),
     }
