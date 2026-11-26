@@ -5,7 +5,9 @@ use utoipa::ToSchema;
 use yog_core::domain::ProtocolSwapActivity;
 
 use super::protocol::ProtocolResponse;
-use super::swap_activity::{SwapActivityMeteoraDammV2Response, SwapActivityResponse};
+use super::swap_activity::{
+    SwapActivityMeteoraDammV2Response, SwapActivityResponse, meteora_damm_v2_of,
+};
 use crate::http::dto::schema::Count;
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -26,7 +28,7 @@ impl From<ProtocolSwapActivity> for ProtocolSwapActivityResponse {
     fn from(mut t: ProtocolSwapActivity) -> Self {
         Self {
             protocol: t.protocol.into(),
-            meteora_damm_v2: t.activity.meteora_damm_v2.take().map(Into::into),
+            meteora_damm_v2: meteora_damm_v2_of(t.activity.protocol_part.take()),
             activity: t.activity.into(),
             pools: t.pools,
         }

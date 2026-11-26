@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use std::str::FromStr;
 use yog_core::{
     RepositoryError,
-    domain::{MeteoraDammV2SwapEvent, TradeDirection},
+    domain::{MeteoraDammV2SwapEvent, MeteoraDammV2TradeDirection},
 };
 
 use crate::repositories::helper::{
@@ -47,12 +47,14 @@ impl TryFrom<MeteoraDammV2SwapEventRow> for MeteoraDammV2SwapEvent {
                 convert_i64_to_u32,
             )?,
             event_index: convert_i32_to_u16(row.event_index, "event_index")?,
-            trade_direction: TradeDirection::from_str(&row.trade_direction).map_err(|()| {
-                RepositoryError::Integrity(format!(
-                    "invalid trade_direction: {}",
-                    row.trade_direction
-                ))
-            })?,
+            trade_direction: MeteoraDammV2TradeDirection::from_str(&row.trade_direction).map_err(
+                |()| {
+                    RepositoryError::Integrity(format!(
+                        "invalid trade_direction: {}",
+                        row.trade_direction
+                    ))
+                },
+            )?,
             amount_a: convert_i64_to_u64(row.amount_a, "amount_a")?,
             amount_b: convert_i64_to_u64(row.amount_b, "amount_b")?,
             reserve_a_after: convert_i64_to_u64(row.reserve_a_after, "reserve_a_after")?,

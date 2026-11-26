@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 
-use crate::domain::TradeDirection;
+use crate::domain::MeteoraDammV2TradeDirection;
 
 /// A DAMM v2 swap; amounts and reserves (after the swap) in the pool's own A/B order.
 /// ⚠️ That order is not a sort of the mints: never a canonical pair key, and SQL
@@ -17,7 +17,7 @@ pub struct MeteoraDammV2SwapEvent {
     pub slot: u64,
     pub transaction_index: Option<u32>,
     pub event_index: u16,
-    pub trade_direction: TradeDirection,
+    pub trade_direction: MeteoraDammV2TradeDirection,
     pub amount_a: u64,
     pub amount_b: u64,
     pub reserve_a_after: u64,

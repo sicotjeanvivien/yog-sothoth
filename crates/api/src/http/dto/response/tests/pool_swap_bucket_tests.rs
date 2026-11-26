@@ -1,7 +1,7 @@
 use chrono::{TimeZone, Utc};
 use rust_decimal::Decimal;
 use serde_json::json;
-use yog_core::domain::{MeteoraDammV2LpFeeSplit, PoolSwapBucket, SwapActivity};
+use yog_core::domain::{MeteoraDammV2LpFeeSplit, PoolSwapBucket, SwapActivity, SwapActivityPart};
 
 use super::PoolSwapBucketResponse;
 
@@ -19,7 +19,7 @@ fn a_pools_bar_says_its_start_and_its_activity() {
             referral_fees_usd: Some(Decimal::from(8)),
             pool_hours: 6,
             pool_hours_valued: 7,
-            meteora_damm_v2: None,
+            protocol_part: None,
         },
     });
 
@@ -53,10 +53,10 @@ fn a_damm_v2_pools_bar_carries_its_split() {
             referral_fees_usd: None,
             pool_hours: 0,
             pool_hours_valued: 0,
-            meteora_damm_v2: Some(MeteoraDammV2LpFeeSplit {
+            protocol_part: Some(SwapActivityPart::MeteoraDammV2(MeteoraDammV2LpFeeSplit {
                 claiming_fees_usd: Some(Decimal::from(3)),
                 compounding_fees_usd: None,
-            }),
+            })),
         },
     });
 

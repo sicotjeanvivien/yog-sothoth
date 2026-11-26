@@ -1,6 +1,6 @@
 use serde::Serialize;
 use utoipa::ToSchema;
-use yog_core::domain::TradeDirection;
+use yog_core::domain::MeteoraDammV2TradeDirection;
 
 /// Which token went in: `a_to_b` sold token A for token B.
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
@@ -10,11 +10,11 @@ pub(super) enum SwapEventDirectionResponse {
     BToA,
 }
 
-impl From<TradeDirection> for SwapEventDirectionResponse {
-    fn from(direction: TradeDirection) -> Self {
+impl From<MeteoraDammV2TradeDirection> for SwapEventDirectionResponse {
+    fn from(direction: MeteoraDammV2TradeDirection) -> Self {
         match direction {
-            TradeDirection::AtoB => Self::AToB,
-            TradeDirection::BtoA => Self::BToA,
+            MeteoraDammV2TradeDirection::AtoB => Self::AToB,
+            MeteoraDammV2TradeDirection::BtoA => Self::BToA,
         }
     }
 }

@@ -1,5 +1,5 @@
 mod model;
 mod repository;
 
-pub use model::{MeteoraDammV2RewardChange, RewardChangeEvent};
+pub use model::RewardChangeEvent;
 pub use repository::{RewardChangeEventLookup, RewardChangeTable};

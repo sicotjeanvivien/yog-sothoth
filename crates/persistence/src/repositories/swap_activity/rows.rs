@@ -4,7 +4,7 @@ use yog_core::{
     RepositoryError,
     domain::{
         MeteoraDammV2LpFeeSplit, PoolSwapBucket, Protocol, ProtocolBucket, ProtocolSwapActivity,
-        SwapActivity,
+        SwapActivity, SwapActivityPart,
     },
 };
 
@@ -92,14 +92,16 @@ impl TryFrom<SwapActivityRow> for SwapActivity {
             referral_fees_usd: convert_usd(row.referral_fees_usd, "referral_fees_usd")?,
             pool_hours: row.pool_hours,
             pool_hours_valued: row.pool_hours_valued,
-            meteora_damm_v2: match parse_protocol(&row.protocol)? {
-                Protocol::MeteoraDammV2 => Some(MeteoraDammV2LpFeeSplit {
-                    claiming_fees_usd: convert_usd(row.claiming_fees_usd, "claiming_fees_usd")?,
-                    compounding_fees_usd: convert_usd(
-                        row.compounding_fees_usd,
-                        "compounding_fees_usd",
-                    )?,
-                }),
+            protocol_part: match parse_protocol(&row.protocol)? {
+                Protocol::MeteoraDammV2 => {
+                    Some(SwapActivityPart::MeteoraDammV2(MeteoraDammV2LpFeeSplit {
+                        claiming_fees_usd: convert_usd(row.claiming_fees_usd, "claiming_fees_usd")?,
+                        compounding_fees_usd: convert_usd(
+                            row.compounding_fees_usd,
+                            "compounding_fees_usd",
+                        )?,
+                    }))
+                }
                 Protocol::MeteoraDlmm => None,
             },
         })

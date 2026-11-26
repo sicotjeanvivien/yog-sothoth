@@ -1,7 +1,7 @@
 //! Translation of `cp-amm::EvtSwap2` into its domain event.
 
 use crate::application::extraction::meteora::damm_v2::events::EvtSwap2;
-use crate::domain::{EventPosition, MeteoraDammV2SwapEvent, TradeDirection};
+use crate::domain::{EventPosition, MeteoraDammV2SwapEvent, MeteoraDammV2TradeDirection};
 use crate::error::TranslationError;
 
 /// Translate an [`EvtSwap2`] into a [`MeteoraDammV2SwapEvent`].
@@ -11,12 +11,13 @@ pub(super) fn translate_swap(
     wire: &EvtSwap2,
     event_position: EventPosition,
 ) -> Result<MeteoraDammV2SwapEvent, TranslationError> {
-    let trade_direction = TradeDirection::from_u8(wire.trade_direction).map_err(|raw| {
-        TranslationError::InvalidEnum {
-            field: "trade_direction",
-            value: raw,
-        }
-    })?;
+    let trade_direction =
+        MeteoraDammV2TradeDirection::from_u8(wire.trade_direction).map_err(|raw| {
+            TranslationError::InvalidEnum {
+                field: "trade_direction",
+                value: raw,
+            }
+        })?;
 
     let fee_token_is_a =
         compute_fee_token_is_a(wire.collect_fee_mode, trade_direction).map_err(|raw| {
@@ -28,11 +29,11 @@ pub(super) fn translate_swap(
 
     // Input and output onto (amount_a, amount_b): AtoB → (in, out), BtoA → (out, in).
     let (amount_a, amount_b) = match trade_direction {
-        TradeDirection::AtoB => (
+        MeteoraDammV2TradeDirection::AtoB => (
             wire.included_transfer_fee_amount_in,
             wire.included_transfer_fee_amount_out,
         ),
-        TradeDirection::BtoA => (
+        MeteoraDammV2TradeDirection::BtoA => (
             wire.included_transfer_fee_amount_out,
             wire.included_transfer_fee_amount_in,
         ),
@@ -65,14 +66,14 @@ pub(super) fn translate_swap(
 /// `FeeMode::get_fee_mode` (`state/fee.rs`) decides it.
 pub(super) fn compute_fee_token_is_a(
     collect_fee_mode: u8,
-    trade_direction: TradeDirection,
+    trade_direction: MeteoraDammV2TradeDirection,
 ) -> Result<bool, u8> {
     // 0 BothToken: fee on the output token; 1 OnlyB and 2 Compounding: always on B.
     let fee_token_is_a = match (collect_fee_mode, trade_direction) {
-        (0, TradeDirection::AtoB) => false, // out is B, fee on B
-        (0, TradeDirection::BtoA) => true,  // out is A, fee on A
-        (1, _) => false,                    // OnlyB → always B
-        (2, _) => false,                    // Compounding → always B
+        (0, MeteoraDammV2TradeDirection::AtoB) => false, // out is B, fee on B
+        (0, MeteoraDammV2TradeDirection::BtoA) => true,  // out is A, fee on A
+        (1, _) => false,                                 // OnlyB → always B
+        (2, _) => false,                                 // Compounding → always B
         (other, _) => return Err(other),
     };
     Ok(fee_token_is_a)
