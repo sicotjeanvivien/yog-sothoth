@@ -3,8 +3,7 @@ use solana_pubkey::Pubkey;
 use crate::application::extraction::{ExtractionOutcome, OnChainTransaction};
 
 /// One protocol's extraction of domain events from an [`OnChainTransaction`].
-/// ⚠️ Per-event failures go into `unknown` or `failures`, never a panic; `Err` is
-/// for a malformed transaction as a whole.
+/// ⚠️ Per-event failures go into `unknown` or `failures`, never a panic.
 pub trait EventExtractor: Send + Sync {
     /// Program ID this extractor decodes events from.
     fn program_id(&self) -> Pubkey;

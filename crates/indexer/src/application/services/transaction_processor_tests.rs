@@ -137,10 +137,7 @@ pub(crate) fn swaps_written(calls: &Calls) -> usize {
 
 fn process(processor: Arc<TransactionProcessor>, tx: OnChainTransaction) -> Snapshot {
     snapshotted(async move {
-        processor
-            .process_transaction(PROTOCOL, &tx)
-            .await
-            .expect("no transaction-level failure");
+        processor.process_transaction(PROTOCOL, &tx).await;
     })
 }
 

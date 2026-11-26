@@ -36,7 +36,7 @@ impl TransactionProcessor {
         &self,
         protocol: Protocol,
         transaction: &OnChainTransaction,
-    ) -> anyhow::Result<()> {
+    ) {
         let mut guard = ExitGuard::new(protocol);
         let signature = transaction.position.signature;
 
@@ -50,7 +50,7 @@ impl TransactionProcessor {
             TransactionProcessorMetrics::record_no_match(&protocol);
             debug!(%signature, "no recognized events in transaction");
             guard.set("no_events");
-            return Ok(());
+            return;
         }
 
         for event in &outcome.events {
@@ -58,7 +58,6 @@ impl TransactionProcessor {
         }
 
         guard.set("ok");
-        Ok(())
     }
 
     /// Surface unknown discriminators and extraction failures via logs and metrics.

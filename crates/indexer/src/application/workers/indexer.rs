@@ -7,7 +7,7 @@
 use std::sync::Arc;
 use tokio::sync::{Semaphore, mpsc};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 
 use crate::{
     application::{services::TransactionProcessor, source::IngestedTransaction},
@@ -159,13 +159,6 @@ async fn index_one(processor: Arc<TransactionProcessor>, ingested: IngestedTrans
     } = ingested;
     let signature = transaction.position.signature;
 
-    match processor.process_transaction(protocol, &transaction).await {
-        Ok(()) => {
-            debug!(%signature, "process ok");
-        }
-        Err(e) => {
-            let msg = e.to_string();
-            error!(error = %msg, %signature, "process failed");
-        }
-    }
+    processor.process_transaction(protocol, &transaction).await;
+    debug!(%signature, "process ok");
 }
