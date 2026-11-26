@@ -191,8 +191,12 @@
         "protocolFeesShare": "{share} des fees",
         "info": {
           "fees": "Ce que les échanges de ce protocole ont payé en frais sur la période choisie : la part des déposants (LP) et celle du protocole. Le taux effectif rapporte ces fees au volume.",
-          "protocolFees": "La part des fees qui revient au protocole sur la période choisie, et ce qu'elle représente de toutes les fees."
-        }
+          "protocolFees": "La part des fees qui revient au protocole sur la période choisie, et ce qu'elle représente de toutes les fees.",
+          "locked": "À la dernière lecture de la TVL, la liquidité que ses déposants ne peuvent pas retirer : verrouillée à vie, ou en vesting jusqu'à son déblocage. Valorisée comme la TVL ; une pool à compounding est comptée à part."
+        },
+        "locked": "Liquidité verrouillée",
+        "lockedShare": "{share} de la TVL",
+        "lockedNotMeasured": "La liquidité verrouillée n'est pas encore mesurée."
       },
       "tabsLabel": "Thèmes",
       "notApplicable": "Périodicité non applicable pour cette donnée.",
@@ -239,6 +243,23 @@
           "remove": "retrait",
           "empty": "Aucun mouvement valorisé sur la période.",
           "create": "création"
+        },
+        "locked": {
+          "title": "Liquidité verrouillée",
+          "info": "À la dernière lecture de la TVL : la liquidité verrouillée à vie (permanent) ou en vesting, valorisée comme la TVL. Une pool à compounding, ou dont la plage de prix n'est pas encore lue, est comptée sans être valorisée. Les vestings posés avant le démarrage de l'indexeur ne sont pas connus. Les déblocages à venir ne comptent que les échéanciers en secondes.",
+          "notMeasured": "La liquidité verrouillée n'est pas encore mesurée.",
+          "permanent": "Permanent",
+          "vesting": "Vesting",
+          "splitLabel": "Permanent {permanent}, vesting {vesting}",
+          "coverage": "{pools} {poolsCount, plural, one {pool verrouillée} other {pools verrouillées}} · {unvalued} {unvaluedCount, plural, one {non valorisée} other {non valorisées}}",
+          "coverageSince": " · vesting observé depuis le {date}",
+          "byToken": "Par token",
+          "byTokenLabel": "Liquidité verrouillée par token",
+          "byTokenEmpty": "Aucun token verrouillé à cette lecture.",
+          "others": "Autres",
+          "unlocks": "Déblocages à venir · 7 j",
+          "unlocksLabel": "Les plus gros déblocages des 7 prochains jours",
+          "unlocksEmpty": "Aucun déblocage dans les 7 prochains jours."
         }
       },
       "volume": {

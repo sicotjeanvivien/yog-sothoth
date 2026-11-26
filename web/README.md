@@ -367,7 +367,8 @@ on the Overview, which reads the root routes and shows their `total`, the protoc
 here, which reads its own routes (`/api/protocols/{protocol}/…`) — never a root route
 filtered in the page. The page adds its fees with their
 effective rate and, in the advanced mode, the protocol's fees with their share
-(`protocol/protocol-kpis.tsx`). The advanced mode is one choice for the whole
+and the locked liquidity of the last TVL reading with its share of that reading's
+TVL (`protocol/protocol-kpis.tsx`). The advanced mode is one choice for the whole
 dashboard: same `OverviewMode`, same cookie.
 
 **01 Liquidity** — `protocol/liquidity/liquidity-tab.tsx`: the period's
@@ -377,8 +378,12 @@ stacked under the additions; the TVL hour by hour on a tight axis
 (`lib/protocol/liquidity.ts`), its reading fixed above and a dashed mark under
 the pointer — over a period the contract does not serve `tvl/series` on (`servesTvlSeries`), its place greyed with the reason, the route not read; the liquidity created and added above the axis and removed under
 it (`dash-flow-out`, darker than the text red), per bar
-of the period, with symmetric marks; and, in the advanced mode, the largest moves
-beside the chart, so the page is no longer. The liquidity is measured from a
+of the period, with symmetric marks; and, in the advanced mode, the locked
+liquidity beside the chart on two rows (`protocol/liquidity/locked-liquidity.tsx`:
+the last TVL reading's permanent and vesting parts and their coverage, the four
+tokens most locked and the rest — `lib/protocol/locked.ts`, over the reading's own
+`total` of `tvl/by-token` — and the five largest unlocks of the next 7 days), the
+largest moves under the chart. The liquidity is measured from a
 later hour than the swaps: until a window is covered, its totals, bars and
 moves say so instead of a partial sum, while the API keeps the period open on the facts' coverage. Opening this tab opened the menu entry,
 with a green dot beside it while the ingestion is live

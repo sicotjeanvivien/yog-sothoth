@@ -191,8 +191,12 @@
         "protocolFeesShare": "{share} of fees",
         "info": {
           "fees": "What this protocol's trades paid in fees over the chosen period: the depositors' (LP) share and the protocol's. The effective rate relates these fees to the volume.",
-          "protocolFees": "The share of fees that goes to the protocol over the chosen period, and what it is of all fees."
-        }
+          "protocolFees": "The share of fees that goes to the protocol over the chosen period, and what it is of all fees.",
+          "locked": "At the last TVL reading, the liquidity its depositors cannot withdraw: locked for good, or vesting until it unlocks. Valued like the TVL; a compounding pool is counted apart."
+        },
+        "locked": "Locked liquidity",
+        "lockedShare": "{share} of the TVL",
+        "lockedNotMeasured": "The locked liquidity is not measured yet."
       },
       "tabsLabel": "Themes",
       "notApplicable": "Period not applicable to this data.",
@@ -239,6 +243,23 @@
           "remove": "withdrawal",
           "empty": "No valued move over the period.",
           "create": "creation"
+        },
+        "locked": {
+          "title": "Locked liquidity",
+          "info": "At the last TVL reading: the liquidity locked for good (permanent) or vesting, valued like the TVL. A compounding pool, or one whose price range is not read yet, is counted without a value. Vestings set before the indexer started are not known. The coming unlocks count only schedules in seconds.",
+          "notMeasured": "The locked liquidity is not measured yet.",
+          "permanent": "Permanent",
+          "vesting": "Vesting",
+          "splitLabel": "Permanent {permanent}, vesting {vesting}",
+          "coverage": "{pools} locked {poolsCount, plural, one {pool} other {pools}} · {unvalued} not valued",
+          "coverageSince": " · vesting observed since {date}",
+          "byToken": "By token",
+          "byTokenLabel": "Locked liquidity by token",
+          "byTokenEmpty": "No token locked at this reading.",
+          "others": "Others",
+          "unlocks": "Coming unlocks · 7d",
+          "unlocksLabel": "The largest unlocks of the next 7 days",
+          "unlocksEmpty": "No unlock in the next 7 days."
         }
       },
       "volume": {

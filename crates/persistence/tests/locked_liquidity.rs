@@ -562,6 +562,73 @@ async fn the_reading_writes_the_locked_part_the_tokens_and_the_releases(pool: Pg
     );
 }
 
+/// Mutation: a pool's side counted for its other token too, or a side left out; a locked pool out
+/// of the TVL valued.
+#[sqlx::test]
+async fn the_tokens_add_up_to_the_reading(pool: PgPool) {
+    let now = now();
+    let half = (dec(FULL_RANGE.0) / BigDecimal::from(2))
+        .round(0)
+        .to_string();
+    locked_pool(
+        &pool,
+        1,
+        (FULL_RANGE.1, FULL_RANGE.2, FULL_RANGE.3),
+        1,
+        Some(1),
+        &half,
+        FULL_RANGE_DEPOSIT,
+    )
+    .await;
+    price_mint(&pool, &pk(101).to_string(), "2.0").await;
+    let stateless = locked_pool(
+        &pool,
+        3,
+        (FULL_RANGE.1, FULL_RANGE.2, FULL_RANGE.3),
+        1,
+        Some(1),
+        &half,
+        FULL_RANGE_DEPOSIT,
+    )
+    .await;
+    sqlx::query("DELETE FROM pool_current_state WHERE pool_address = $1")
+        .bind(&stateless)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let repository =
+        PgAnalyticRepository::new(setup_roles_and_connect_as(&pool, "yog_analytic").await);
+    let hour = last_closed_hour(now);
+    assert_eq!(
+        repository.measure_tvl(hour, now).await.unwrap(),
+        TvlMeasure::Measured
+    );
+
+    let (tvl, locked, unvalued, tokens_tvl, tokens_locked, tokens): (
+        BigDecimal,
+        BigDecimal,
+        i64,
+        BigDecimal,
+        BigDecimal,
+        i64,
+    ) = sqlx::query_as(
+        "SELECT t.tvl_usd, t.locked_usd, t.pools_locked_unvalued, SUM(b.tvl_usd), SUM(b.locked_usd),
+                COUNT(*)
+           FROM analytic_protocol_tvl t
+           JOIN analytic_tvl_by_token b ON b.protocol = t.protocol AND b.bucket = t.bucket
+          WHERE t.protocol = 'meteora_damm_v2' AND t.bucket = $1
+          GROUP BY t.tvl_usd, t.locked_usd, t.pools_locked_unvalued",
+    )
+    .bind(hour)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(tokens, 2, "both sides of the pool in the TVL priced");
+    assert_eq!(unvalued, 1, "the locked pool out of the TVL");
+    assert_eq!(tokens_tvl, tvl);
+    assert_eq!(tokens_locked, locked);
+}
+
 /// Mutation: the locked reading written after the TVL's commit, which a failure would split.
 #[sqlx::test]
 async fn a_failed_locked_reading_writes_no_tvl_either(pool: PgPool) {

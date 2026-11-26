@@ -1,7 +1,7 @@
 /**
  * The tab 01 of a protocol's page: how its liquidity moves — the TVL hour by hour, the
- * liquidity added and removed per bar — then, in the advanced mode, its largest moves. The
- * server words every reading; the charts only track the point under the pointer.
+ * liquidity added and removed per bar — then, in the advanced mode, its locked liquidity and its
+ * largest moves. The server words every reading; the charts only track the point under the pointer.
  */
 
 import { Suspense } from "react";
@@ -39,6 +39,7 @@ import type { Period } from "@/lib/overview/period";
 import { CURVE_BOX, curveOf, flowSlotsOf } from "@/lib/protocol/liquidity";
 
 import { FlowBars } from "./flow-bars";
+import { LOCKED_MIN_HEIGHT, LOCKED_SPAN, LockedLiquidity } from "./locked-liquidity";
 import { TvlCurve } from "./tvl-curve";
 
 /** The flows' half height, and their tallest bar a little under it for the top mark's label. */
@@ -60,10 +61,9 @@ const SIGN = {
   remove: { sign: "− ", tone: "text-dash-down" },
 } as const;
 
-/** ⚠️ Side by side in the advanced mode: the moves below the chart would lengthen the page. */
 const FLOWS_SPAN = "col-span-12 adv:dash-wide:col-span-8";
 
-const MOVES_SPAN = `col-span-12 dash-wide:col-span-4 ${ADVANCED_ONLY.block}`;
+const MOVES_SPAN = `col-span-12 dash-wide:col-span-8 ${ADVANCED_ONLY.block}`;
 
 const FLOWS_CLASS = `${CELL_CLASS} ${FLOWS_SPAN} min-h-[420px]`;
 
@@ -92,6 +92,19 @@ export async function LiquidityTab({ period, protocol }: TabProps) {
         }
       >
         <LiquidityFlows period={period} protocol={protocol} />
+      </Suspense>
+      <Suspense
+        key="locked"
+        fallback={
+          <BlockSkeleton
+            title={t("locked.title")}
+            span={LOCKED_SPAN}
+            minHeight={LOCKED_MIN_HEIGHT}
+            shape={{ rows: 8 }}
+          />
+        }
+      >
+        <LockedLiquidity protocol={protocol} />
       </Suspense>
       <Suspense
         key={`moves-${period}`}

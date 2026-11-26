@@ -14,7 +14,10 @@ valued AS (
            vesting_liquidity * usd_per_liquidity AS vesting_usd,
            (permanent_liquidity + vesting_liquidity) * a_usd_per_liquidity AS a_usd,
            (permanent_liquidity + vesting_liquidity) * b_usd_per_liquidity AS b_usd,
-           usd_per_liquidity IS NOT NULL AND vesting_liquidity IS NOT NULL AS is_valued
+           -- ⚠️ A pool out of the TVL (no current state) is not valued: its part would be no part of it.
+           usd_per_liquidity IS NOT NULL AND vesting_liquidity IS NOT NULL
+               AND EXISTS (SELECT 1 FROM pool_current_state s WHERE s.pool_address = locked.pool_address)
+               AS is_valued
       FROM locked
 ),
 reading AS (

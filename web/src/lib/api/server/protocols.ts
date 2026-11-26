@@ -34,6 +34,10 @@ import {
   zListProtocolLiquidityMovesResponse,
   zListProtocolRotationRunsResponse,
   zListProtocolsResponse,
+  zListProtocolTvlByTokenQuery,
+  zListProtocolTvlByTokenResponse,
+  zListProtocolVestingUnlocksQuery,
+  zListProtocolVestingUnlocksResponse,
   type LiquidityMoveKindResponse,
   type ProtocolResponse,
   type WindowResponse,
@@ -191,5 +195,34 @@ export const fetchLargestRotationRuns = cache(
       `/api/protocols/${protocol}/rotation-runs`,
       { window, sort: "volume", limit: String(limit) },
       zListProtocolRotationRunsResponse,
+    ),
+);
+
+/** A page of the protocol's tokens at its last TVL reading, with the reading's own total. */
+export const fetchTokenTvl = cache(
+  (
+    protocol: ProtocolResponse,
+    sort: NonNullable<z.infer<typeof zListProtocolTvlByTokenQuery>["sort"]>,
+    limit: number,
+  ) =>
+    apiGet(
+      `/api/protocols/${protocol}/tvl/by-token`,
+      { sort, limit: String(limit) },
+      zListProtocolTvlByTokenResponse,
+    ),
+);
+
+/** A page of what the protocol's vesting locks release over the window after its last reading. */
+export const fetchVestingUnlocks = cache(
+  (
+    protocol: ProtocolResponse,
+    window: NonNullable<z.infer<typeof zListProtocolVestingUnlocksQuery>["window"]>,
+    sort: NonNullable<z.infer<typeof zListProtocolVestingUnlocksQuery>["sort"]>,
+    limit: number,
+  ) =>
+    apiGet(
+      `/api/protocols/${protocol}/vesting-unlocks`,
+      { window, sort, limit: String(limit) },
+      zListProtocolVestingUnlocksResponse,
     ),
 );

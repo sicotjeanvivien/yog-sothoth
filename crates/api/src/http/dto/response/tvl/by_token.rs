@@ -8,7 +8,6 @@ use yog_core::domain::TokenTvl;
 use crate::http::dto::response::token::EmbeddedTokenResponse;
 use crate::http::dto::schema::{Count, UnsignedDecimal};
 
-/// ⚠️ A pool counts for both its tokens: the tokens add up to twice `total`.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TokenTvlResponse {

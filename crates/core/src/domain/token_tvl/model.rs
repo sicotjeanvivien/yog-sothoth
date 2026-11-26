@@ -6,7 +6,6 @@ use solana_pubkey::Pubkey;
 use crate::domain::TokenMetadata;
 
 /// One token at a reading: the valued sides of its pools, and the part of them locked.
-/// ⚠️ A pool counts for both its tokens: the tokens add up to twice the protocol's TVL.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokenTvl {
     pub mint: Pubkey,
