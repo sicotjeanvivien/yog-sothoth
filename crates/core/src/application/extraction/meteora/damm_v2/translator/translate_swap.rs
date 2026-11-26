@@ -1,8 +1,8 @@
 //! Translation of `cp-amm::EvtSwap2` into its domain event.
 
+use crate::application::extraction::TranslationError;
 use crate::application::extraction::meteora::damm_v2::events::EvtSwap2;
 use crate::domain::{EventPosition, MeteoraDammV2SwapEvent, MeteoraDammV2TradeDirection};
-use crate::error::TranslationError;
 
 /// Translate an [`EvtSwap2`] into a [`MeteoraDammV2SwapEvent`].
 ///

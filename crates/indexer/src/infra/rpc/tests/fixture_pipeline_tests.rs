@@ -6,9 +6,8 @@ use solana_transaction_status_client_types::EncodedConfirmedTransactionWithStatu
 use std::path::PathBuf;
 
 use yog_core::{
-    AnchorDecodeError,
     application::extraction::{
-        EventExtractor, ExtractionFailure, MeteoraDammV2, OnChainTransaction,
+        AnchorDecodeError, EventExtractor, ExtractionFailure, MeteoraDammV2, OnChainTransaction,
         meteora::damm_v2::{
             events::DammV2WireEvent,
             extractor::{ExtractFailure, extract_wire_events},

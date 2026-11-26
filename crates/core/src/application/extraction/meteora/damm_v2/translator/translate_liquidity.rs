@@ -1,8 +1,8 @@
 //! Translation of `cp-amm::EvtLiquidityChange` into its domain event.
 
+use crate::application::extraction::TranslationError;
 use crate::application::extraction::meteora::damm_v2::events::EvtLiquidityChange;
 use crate::domain::{EventPosition, MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventKind};
-use crate::error::TranslationError;
 
 /// Translate an [`EvtLiquidityChange`] into a [`MeteoraDammV2LiquidityEvent`].
 pub(super) fn translate_liquidity(
