@@ -127,3 +127,20 @@ fn try_from_decimals_above_u8_max_returns_integrity_with_value() {
         "expected message to mention the field and the bad value, got: {msg}"
     );
 }
+
+#[test]
+fn try_from_invalid_metadata_provider_returns_integrity_with_value() {
+    let row = TokenMetadataRow {
+        metadata_provider: "definitely_not_a_source".into(),
+        ..valid_row()
+    };
+    let err = TokenMetadata::try_from(row).expect_err("unknown metadata_provider should fail");
+    let msg = match err {
+        RepositoryError::Integrity(m) => m,
+        other => panic!("expected Integrity, got {other:?}"),
+    };
+    assert!(
+        msg.contains("invalid metadata_provider") && msg.contains("definitely_not_a_source"),
+        "expected message to mention the field and the bad value, got: {msg}"
+    );
+}

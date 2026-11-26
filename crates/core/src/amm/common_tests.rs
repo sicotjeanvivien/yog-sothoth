@@ -23,13 +23,16 @@ fn test_spot_price_sol_usdc() {
 }
 
 #[test]
-fn test_spot_price_zero_reserve_a_returns_error() {
+fn test_spot_price_zero_reserve_a_returns_none() {
     let result = spot_price(0, 1_000_000);
-    assert!(result.is_err());
-    assert!(matches!(
-        result,
-        Err(crate::CoreError::ArithmeticOverflow { .. })
-    ));
+    assert!(result.is_none());
+}
+
+/// Mutation: `checked_shl(64)` as the guard, which drops the high bits and returns `Some(0)`.
+#[test]
+fn test_spot_price_reserve_b_past_64_bits_returns_none() {
+    assert_eq!(spot_price(1, 1u128 << 64), None);
+    assert!(spot_price(1, (1u128 << 64) - 1).is_some());
 }
 
 #[test]
@@ -71,6 +74,12 @@ fn test_price_impact_zero_amount_is_zero() {
     assert_eq!(impact, 0);
 }
 
+/// Mutation: a plain `/ price_before`, which panics when the spot price rounds to 0.
+#[test]
+fn test_price_impact_with_a_spot_price_of_zero_returns_none() {
+    assert_eq!(price_impact(1u128 << 70, 1, 0), None);
+}
+
 // ── imbalance ───────────────────────────────────────────────────────────
 
 #[test]
@@ -97,7 +106,7 @@ fn test_imbalance_real_pool_values() {
 }
 
 #[test]
-fn test_imbalance_zero_reserves_returns_error() {
+fn test_imbalance_zero_reserves_returns_none() {
     let result = imbalance(0, 0);
-    assert!(result.is_err());
+    assert!(result.is_none());
 }
