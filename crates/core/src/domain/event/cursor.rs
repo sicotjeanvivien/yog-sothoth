@@ -40,5 +40,5 @@ impl EventCursor {
 }
 
 #[cfg(test)]
-#[path = "event_cursor_tests.rs"]
+#[path = "cursor_tests.rs"]
 mod tests;
