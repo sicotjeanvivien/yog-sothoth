@@ -12,9 +12,12 @@ pub fn spot_price(reserve_a: u128, reserve_b: u128) -> Option<u128> {
         return None;
     }
 
-    let numerator = reserve_b.checked_shl(64)?;
+    // ⚠️ Not `checked_shl`: it refuses a shift of 128 or more, never the high bits it drops.
+    if reserve_b.leading_zeros() < 64 {
+        return None;
+    }
 
-    Some(numerator / reserve_a)
+    Some((reserve_b << 64) / reserve_a)
 }
 
 /// Price impact of a swap in basis points, under constant product.
@@ -35,7 +38,7 @@ pub fn price_impact(reserve_a: u128, reserve_b: u128, amount_in: u128) -> Option
     // price_after <= price_before for a standard swap
     let delta = price_before.saturating_sub(price_after);
 
-    let impact_bps = delta.checked_mul(10_000)? / price_before;
+    let impact_bps = delta.checked_mul(10_000)?.checked_div(price_before)?;
 
     Some(impact_bps as u32)
 }

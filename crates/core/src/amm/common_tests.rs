@@ -28,6 +28,13 @@ fn test_spot_price_zero_reserve_a_returns_none() {
     assert!(result.is_none());
 }
 
+/// Mutation: `checked_shl(64)` as the guard, which drops the high bits and returns `Some(0)`.
+#[test]
+fn test_spot_price_reserve_b_past_64_bits_returns_none() {
+    assert_eq!(spot_price(1, 1u128 << 64), None);
+    assert!(spot_price(1, (1u128 << 64) - 1).is_some());
+}
+
 #[test]
 fn test_spot_price_zero_reserve_b_returns_zero() {
     // reserve_b = 0 → price = 0, no error
@@ -65,6 +72,12 @@ fn test_price_impact_zero_amount_is_zero() {
     let reserve_b = 1_000_000u128;
     let impact = price_impact(reserve_a, reserve_b, 0).unwrap();
     assert_eq!(impact, 0);
+}
+
+/// Mutation: a plain `/ price_before`, which panics when the spot price rounds to 0.
+#[test]
+fn test_price_impact_with_a_spot_price_of_zero_returns_none() {
+    assert_eq!(price_impact(1u128 << 70, 1, 0), None);
 }
 
 // ── imbalance ───────────────────────────────────────────────────────────
