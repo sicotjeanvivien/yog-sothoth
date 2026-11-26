@@ -5,10 +5,8 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use thiserror::Error;
 
-use crate::RepositoryError;
-use crate::domain::Signal;
+use crate::domain::{DetectorError, Signal};
 
 /// What a tick hands to a detector; its data comes through its own repositories.
 #[derive(Debug, Clone)]
@@ -34,16 +32,4 @@ pub trait SignalDetector: Send + Sync {
 
     /// Evaluate a fresh snapshot and return the signals to raise.
     async fn evaluate(&self, ctx: &EvalContext) -> Result<Vec<Signal>, DetectorError>;
-}
-
-/// Failure of a single detector tick.
-#[derive(Debug, Error)]
-pub enum DetectorError {
-    /// A read from one of the detector's repositories failed.
-    #[error("detector read failed: {0}")]
-    Repository(#[from] RepositoryError),
-
-    /// The data was read but could not be evaluated: a data problem, not a backend one.
-    #[error("detector evaluation failed: {0}")]
-    Evaluation(String),
 }

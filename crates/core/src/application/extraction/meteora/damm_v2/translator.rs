@@ -1,8 +1,8 @@
 //! Translate DAMM v2 wire events into protocol-agnostic domain events.
 //! Mints are not derived here: yog-context resolves them from the pool account.
 
+use crate::application::extraction::TranslationError;
 use crate::domain::EventPosition;
-use crate::error::TranslationError;
 
 use super::events::DammV2WireEvent;
 

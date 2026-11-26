@@ -6,8 +6,8 @@ pub(super) mod translator;
 use solana_pubkey::Pubkey;
 
 use crate::CoreResult;
-use crate::application::extraction::outcome::{ExtractionFailure, UnknownEventInfo};
 use crate::application::extraction::{EventExtractor, ExtractionOutcome, OnChainTransaction};
+use crate::application::extraction::{ExtractionFailure, UnknownEventInfo};
 use crate::domain::{Protocol, TransactionPosition};
 
 pub use self::fee_parameters::{

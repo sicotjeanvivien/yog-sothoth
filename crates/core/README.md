@@ -106,11 +106,12 @@ core/src/
 │   │   ├── on_chain_transaction.rs (OnChainTransaction — the neutral input)
 │   │   ├── conformance.rs   (the contract adapters must satisfy — `test-support`)
 │   │   ├── event_extractor.rs / extraction_dispatcher.rs
-│   │   └── outcome.rs       (ExtractionOutcome, ExtractionFailure)
+│   │   ├── extraction_failure.rs / anchor_decode_error.rs / translation_error.rs (its errors)
+│   │   └── outcome.rs       (ExtractionOutcome)
 │   └── decoder/           ← account bytes → pool properties use case
 ├── amm/                   ← pure AMM math (damm_v2.rs + dlmm.rs; common.rs is dormant)
 ├── tools/                 ← Page<T>, Cursor enum; sum_known, the sum of terms that may be unknown
-└── error/                 ← CoreError, RepositoryError, CoreResult<T>
+└── error/                 ← CoreError, RepositoryError, CoreResult<T> — the errors that cross layers
 ```
 
 File trees here are kept coarse on purpose — the module structure is the contract, the per-file detail lives in the code.
@@ -136,7 +137,7 @@ File trees here are kept coarse on purpose — the module structure is the contr
   What stayed is `base_fee_kind_from`, which is *meant* to be here: it maps a `BaseFeeMode` discriminant and a period count to a `BaseFeeKind` — a rule, not a layout. A scheduler mode with zero periods is a constant fee, and mode 2 (rate limiter) must not consult the period count at all, because its variant reuses those bytes.
 - **Pagination** (`tools/pagination.rs`) — `Page<T>` envelope and the discriminated `Cursor` enum used by every paginated repository method. A keyset cursor is only sound over an **immutable** sort key: a listing sorted on a mutable one must anchor its traversal to a snapshot instant carried by the cursor. Adding a sort column means answering "is it immutable?", not "is it materialized?".
 - **The adapter contract** (`application/extraction/conformance.rs`, behind the `test-support` feature) — the expectation every source adapter must satisfy, and the reference transaction it is proven on. This crate states the ordering contract but no longer enforces it: the adapters live in `yog-indexer`, one per source. Without a shared arbiter, two adapters and two independent test suites drift with nothing turning red. It adds no dependency — the reference payloads are hex constants decoded by ten lines rather than by `bs58`, which left this crate with the adapter. With the adapter gone, **no transport dependency remains here at all**: `solana-transaction-status`, unused and pulled in by the default `solana` feature (which now gates only `solana-pubkey`), went with it. That is what makes the no-I/O rule checkable from the manifest instead of taken on trust.
-- **Errors** (`error/`) — `CoreError` for domain-level failures, `RepositoryError` as the boundary type returned by every repository trait. Adapters convert their internal errors (e.g. `sqlx::Error`) into `RepositoryError` at their public surface.
+- **Errors** (`error/`) — `CoreError` for domain-level failures, `RepositoryError` as the boundary type returned by every repository trait. Only the errors that cross layers without belonging to a subject live there: any other error lives beside the subject that produces it, in its own file (`DetectorError`, `PoolAccountRejection`, the extraction's). Adapters convert their internal errors (e.g. `sqlx::Error`) into `RepositoryError` at their public surface.
 
 ## `EventExtractor` and `ExtractionDispatcher`
 

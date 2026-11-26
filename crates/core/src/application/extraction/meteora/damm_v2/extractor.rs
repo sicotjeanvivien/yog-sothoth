@@ -2,14 +2,15 @@
 //! Never logs, never aborts the transaction: each payload ends up decoded,
 //! unknown or failed, for the caller to log and count.
 
+mod extract_failure;
+mod extracted_events;
+
 use borsh::BorshDeserialize;
 use solana_pubkey::Pubkey;
 
-use crate::{
-    application::extraction::{
-        DISCRIMINATOR_LEN, OnChainTransaction, decode_anchor_event_cpi, extract_anchor_event_cpis,
-    },
-    error::AnchorDecodeError,
+use crate::application::extraction::{
+    AnchorDecodeError, DISCRIMINATOR_LEN, OnChainTransaction, decode_anchor_event_cpi,
+    extract_anchor_event_cpis,
 };
 
 use super::events::{
@@ -28,62 +29,8 @@ use super::events::{
     discriminator_withdraw_ineligible_reward,
 };
 
-// ---------------------------------------------------------------------------
-// Public types
-// ---------------------------------------------------------------------------
-
-/// Outcome of extracting wire events from a transaction; never fails as a whole.
-#[derive(Debug, Default)]
-pub struct ExtractedEvents {
-    /// Recognized events, in transaction order.
-    pub events: Vec<IndexedWireEvent>,
-
-    /// Payloads whose discriminator matches no known event: a metric, not an error.
-    pub unknown: Vec<UnknownEvent>,
-
-    /// Payloads addressed to cp-amm that failed to decode.
-    pub failures: Vec<ExtractFailure>,
-}
-
-/// A recognized wire event and its position in the transaction.
-/// ⚠️ `event_index` counts every inner instruction to cp-amm, `event_cpi` or not: that keeps
-/// it stable across releases ([`crate::domain::EventPosition`]).
-#[derive(Debug)]
-pub struct IndexedWireEvent {
-    pub event_index: u16,
-    pub event: DammV2WireEvent,
-}
-
-/// A self-CPI payload whose discriminator matches no known event; the
-/// discriminator labels the caller's metric.
-#[derive(Debug, Clone, Copy)]
-pub struct UnknownEvent {
-    pub discriminator: [u8; DISCRIMINATOR_LEN],
-}
-
-/// A failed extraction attempt and its reason.
-#[derive(Debug, thiserror::Error)]
-pub enum ExtractFailure {
-    /// Neither an ordinary instruction nor a decodable event_cpi payload.
-    #[error("anchor event_cpi decode failed: {source}")]
-    AnchorDecode {
-        #[source]
-        source: AnchorDecodeError,
-    },
-
-    /// Known discriminator, but borsh failed: usually schema drift in our mirror.
-    #[error("borsh deserialization of {event_name} failed: {reason}")]
-    Borsh {
-        event_name: &'static str,
-        discriminator: [u8; DISCRIMINATOR_LEN],
-        reason: String,
-    },
-
-    /// More inner instructions addressed to cp-amm than an `event_index` can number.
-    /// ⚠️ Dropped, never truncated: a wrong index is a duplicate or a lost row.
-    #[error("event index {index} exceeds u16")]
-    EventIndexOverflow { index: usize },
-}
+pub use extract_failure::ExtractFailure;
+pub use extracted_events::{ExtractedEvents, IndexedWireEvent, UnknownEvent};
 
 // ---------------------------------------------------------------------------
 // Public entry point

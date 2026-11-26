@@ -3,8 +3,8 @@
 
 use solana_pubkey::Pubkey;
 
+use crate::application::extraction::AnchorDecodeError;
 use crate::application::extraction::OnChainTransaction;
-use crate::error::AnchorDecodeError;
 
 /// Length of an Anchor event discriminator, in bytes.
 pub const DISCRIMINATOR_LEN: usize = 8;

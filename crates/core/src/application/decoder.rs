@@ -4,33 +4,13 @@
 //! 32 bytes parse as a `Pubkey`, so a foreign account decodes without an error.
 
 mod meteora;
+mod pool_account_rejection;
 
 use solana_pubkey::Pubkey;
-use thiserror::Error;
 
 use crate::domain::{DecodedPoolAccount, Protocol};
 
-/// Why an account was not decoded.
-/// ⚠️ Not an `Option`: a pool that never resolves is re-fetched every cycle, so
-/// each reason must reach its own log line and metric.
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum PoolAccountRejection {
-    /// Owned by a program we do not index: a `pools` row points at the wrong account.
-    #[error("account owned by an unindexed program: {program_id}")]
-    UnknownProgram { program_id: Pubkey },
-
-    /// Right program, wrong account: the Anchor discriminator does not match.
-    #[error("{protocol}: not a pool account (unexpected discriminator)")]
-    NotAPoolAccount { protocol: Protocol },
-
-    /// Shorter than the layout requires: most likely an ABI change of the program.
-    #[error("{protocol}: account too short — {len} bytes, layout needs {min}")]
-    Truncated {
-        protocol: Protocol,
-        len: usize,
-        min: usize,
-    },
-}
+pub use pool_account_rejection::PoolAccountRejection;
 
 /// Decode a raw pool account; `program_id` (its owner) selects the layout,
 /// `data` is already base64-decoded by the transport.
