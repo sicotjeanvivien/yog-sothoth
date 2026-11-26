@@ -42,10 +42,3 @@ pub struct PoolCursor {
     pub first_seen_at: DateTime<Utc>,
     pub pool_address: Pubkey,
 }
-
-/// How many pools of one protocol were ever recorded.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ProtocolPools {
-    pub protocol: Protocol,
-    pub pools_seen: i64,
-}
