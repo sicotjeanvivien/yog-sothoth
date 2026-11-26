@@ -109,7 +109,7 @@ core/src/
 │   │   ├── extraction_failure.rs / anchor_decode_error.rs / translation_error.rs (its errors)
 │   │   └── outcome.rs       (ExtractionOutcome)
 │   └── decoder/           ← account bytes → pool properties use case
-├── amm/                   ← pure AMM math (damm_v2.rs + dlmm.rs; common.rs is dormant)
+├── amm/                   ← pure AMM math (damm_v2/ — fees, price and fee scheduler; dlmm.rs; common.rs is dormant)
 ├── tools/                 ← Page<T>, Cursor enum; sum_known, the sum of terms that may be unknown
 └── error/                 ← CoreError, RepositoryError, CoreResult<T> — the errors that cross layers
 ```
