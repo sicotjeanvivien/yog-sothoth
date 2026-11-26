@@ -12,13 +12,14 @@ Every other crate depends on this one: it declares the domain entities, the repo
 core/src/
 ├── domain/                ← entities + repository contracts
 │   ├── meteora/damm_v2/   (one module per event kind — 19 today — each with
-│   │                       model + repository trait; swap_event/ also TradeDirection;
-│   │                       damm_v2.rs holds the
+│   │                       model + repository trait; swap_event/ also
+│   │                       MeteoraDammV2TradeDirection; damm_v2.rs holds the
 │   │                       MeteoraDammV2Event sub-enum; pool_properties/ holds
 │   │                       this protocol's satellite payload; pool_fees/ the
 │   │                       fee parameters a creation or fee update carries;
-│   │                       locked_liquidity.rs the part of a TVL reading only
-│   │                       this protocol has)
+│   │                       the part of a TVL reading and of a swaps row only
+│   │                       this protocol has; MeteoraDammV2*Change, the events a
+│   │                       position, reward or pool change is one of)
 │   ├── meteora/dlmm/      (pool_properties/ only — events not extracted yet)
 │   ├── pool/              (Pool, PoolRepository — cross-protocol registry; PoolEntry,
 │   │                       PoolScope — the catalog PoolCatalog pages)
@@ -29,14 +30,16 @@ core/src/
 │   │                       ProtocolBucket — one bucket of a series; TvlMeasure and the hour
 │   │                       it is written to; rotation_run.rs — the run's two thresholds and
 │   │                       quoted mints)
-│   ├── swap_activity/     (SwapActivity, by protocol and by pool — SwapActivityLookup)
+│   ├── swap_activity/     (SwapActivity, by protocol and by pool — SwapActivityLookup;
+│   │                       SwapActivityPart, the part only one protocol has)
 │   ├── swap_event/, liquidity_change_event/, pool_creation_event/,
 │   │   position_change_event/, position_fee_claim_event/, protocol_fee_claim_event/,
 │   │   reward_claim_event/, reward_change_event/, pool_change_event/
 │   │                       (an enum per protocol over its own event type — the on-chain
 │   │                       lists, each with its *EventLookup; a DAMM v2 position, reward
-│   │                       or pool change is one of several events, MeteoraDammV2*Change;
-│   │                       each with its *Table, the tables it is written in)
+│   │                       or pool change is one of several events, MeteoraDammV2*Change
+│   │                       under meteora/damm_v2/; each with its *Table, the tables it is
+│   │                       written in)
 │   ├── event/             (the two-level DomainEvent enum; EventScope, EventCursor and its
 │   │                       window_start; EventPosition, TransactionPosition — where an event
 │   │                       sits; EventTable and event_tables! — the tables a collection is
@@ -56,9 +59,9 @@ core/src/
 │   ├── claim_totals/      (ClaimTotals, the claims of fees or rewards by protocol —
 │   │                       ClaimTotalsLookup)
 │   ├── protocol_tvl/      (ProtocolTvl, a reading at an instant; ProtocolTvlChange, from the
-│   │                       reading a window before; TvlChangeTotal; LiquidityTurnover, a
-│   │                       window's volume over the last TVL — ProtocolTvlLookup; part.rs,
+│   │                       reading a window before; TvlChangeTotal — ProtocolTvlLookup;
 │   │                       ProtocolTvlPart, the part only one protocol has)
+│   ├── liquidity_turnover/ (LiquidityTurnover, a window's volume over the last TVL)
 │   ├── discovered_tvl/    (ProtocolDiscoveredTvl — DiscoveredTvlLookup)
 │   ├── token_tvl/         (TokenTvl, a protocol's tokens at its last reading, ranked by TVL
 │   │                       or locked — TokenTvlLookup; read.rs, its order, cursor, total and page)
@@ -106,7 +109,7 @@ core/src/
 │   │   └── outcome.rs       (ExtractionOutcome, ExtractionFailure)
 │   └── decoder/           ← account bytes → pool properties use case
 ├── amm/                   ← pure AMM math (damm_v2.rs + dlmm.rs; common.rs is dormant)
-├── tools/pagination.rs    ← Page<T>, Cursor enum
+├── tools/                 ← Page<T>, Cursor enum; sum_known, the sum of terms that may be unknown
 └── error/                 ← CoreError, RepositoryError, CoreResult<T>
 ```
 
@@ -310,7 +313,7 @@ Don't invent new vocabulary words for future lenses unless none of these fit.
 
 Documented on the affected types and enforced at construction time:
 
-- **`(token_a, token_b)` is the program's order, not a sort** — `token_a_mint` / `token_b_mint` hold the designation read off the on-chain account, and **nothing anywhere re-orders it**: measured on the local index, 50 of 136 pools have `token_a_mint > token_b_mint`. What it guarantees is internal consistency — amounts, reserves, the mint columns and the direction of `sqrt_price_to_price_a_in_b` all mean the same side — and stability over a pool's life. What it is *not* is a canonical pair key: deduplicating a pair across pools, or joining DAMM v2 to DLMM on "the same pair", needs a key built explicitly. Swap direction lives in the `TradeDirection` enum (`AtoB` | `BtoA`), read against this order.
+- **`(token_a, token_b)` is the program's order, not a sort** — `token_a_mint` / `token_b_mint` hold the designation read off the on-chain account, and **nothing anywhere re-orders it**: measured on the local index, 50 of 136 pools have `token_a_mint > token_b_mint`. What it guarantees is internal consistency — amounts, reserves, the mint columns and the direction of `sqrt_price_to_price_a_in_b` all mean the same side — and stability over a pool's life. What it is *not* is a canonical pair key: deduplicating a pair across pools, or joining DAMM v2 to DLMM on "the same pair", needs a key built explicitly. Swap direction lives in the `MeteoraDammV2TradeDirection` enum (`AtoB` | `BtoA`), read against this order.
 - **No `protocol` field on per-protocol sub-events** — the protocol identity is encoded by the outer `DomainEvent` variant and by the SQL table name itself.
 - **`fee_token_is_a` precomputed** — derived from `(collect_fee_mode, trade_direction)` in the translator, mirroring `cp-amm::FeeMode::get_fee_mode`.
 - **Four fee components separated** — `claiming_fee`, `protocol_fee`, `compounding_fee`, `referral_fee` — so detectors can distinguish LP yield from protocol revenue.

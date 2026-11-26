@@ -346,7 +346,7 @@ async fn an_hour_the_tranches_do_not_cover_is_not_read() {
                 referral_fees_usd: None,
                 pool_hours: 1,
                 pool_hours_valued: 0,
-                meteora_damm_v2: None,
+                protocol_part: None,
             },
             pools: None,
         }],

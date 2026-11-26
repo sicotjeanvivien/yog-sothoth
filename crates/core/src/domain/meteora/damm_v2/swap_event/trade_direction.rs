@@ -4,12 +4,12 @@ use serde::{Deserialize, Serialize};
 /// token A and received token B; `BtoA` the reverse.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum TradeDirection {
+pub enum MeteoraDammV2TradeDirection {
     AtoB,
     BtoA,
 }
 
-impl TradeDirection {
+impl MeteoraDammV2TradeDirection {
     /// Stable tag of the DB and the logs.
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -28,13 +28,13 @@ impl TradeDirection {
     }
 }
 
-impl std::fmt::Display for TradeDirection {
+impl std::fmt::Display for MeteoraDammV2TradeDirection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
     }
 }
 
-impl std::str::FromStr for TradeDirection {
+impl std::str::FromStr for MeteoraDammV2TradeDirection {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {

@@ -9,9 +9,13 @@ mod initialize_reward_event;
 mod liquidity_event;
 mod lock_position_event;
 mod locked_liquidity;
+mod lp_fee_split;
 mod permanent_lock_position_event;
+mod pool_change;
 mod pool_fees;
 mod pool_properties;
+mod position_change;
+mod reward_change;
 mod set_pool_status_event;
 mod split_position_event;
 mod swap_event;
@@ -22,6 +26,10 @@ mod withdraw_dead_liquidity_reward_event;
 mod withdraw_ineligible_reward_event;
 
 pub use locked_liquidity::ProtocolTvlMeteoraDammV2;
+pub use lp_fee_split::MeteoraDammV2LpFeeSplit;
+pub use pool_change::MeteoraDammV2PoolChange;
+pub use position_change::MeteoraDammV2PositionChange;
+pub use reward_change::MeteoraDammV2RewardChange;
 
 use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
@@ -74,7 +82,9 @@ pub use split_position_event::{
     MeteoraDammV2SplitAmounts, MeteoraDammV2SplitNumerators, MeteoraDammV2SplitPositionEvent,
     MeteoraDammV2SplitPositionEventRepository, MeteoraDammV2SplitPositionState,
 };
-pub use swap_event::{MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventRepository, TradeDirection};
+pub use swap_event::{
+    MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventRepository, MeteoraDammV2TradeDirection,
+};
 pub use update_pool_fees_event::{
     MeteoraDammV2UpdatePoolFeesEvent, MeteoraDammV2UpdatePoolFeesEventRepository,
 };

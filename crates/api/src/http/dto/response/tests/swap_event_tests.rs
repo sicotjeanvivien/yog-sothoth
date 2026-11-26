@@ -2,11 +2,11 @@ use chrono::{TimeZone, Utc};
 use serde_json::json;
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
-use yog_core::domain::{MeteoraDammV2SwapEvent, Protocol, SwapEvent, TradeDirection};
+use yog_core::domain::{MeteoraDammV2SwapEvent, MeteoraDammV2TradeDirection, Protocol, SwapEvent};
 
 use super::SwapEventResponse;
 
-fn event(direction: TradeDirection, fee_token_is_a: bool) -> MeteoraDammV2SwapEvent {
+fn event(direction: MeteoraDammV2TradeDirection, fee_token_is_a: bool) -> MeteoraDammV2SwapEvent {
     MeteoraDammV2SwapEvent {
         pool_address: Pubkey::new_from_array([1; 32]),
         signature: Signature::from([2; 64]),
@@ -37,7 +37,7 @@ fn wire(event: MeteoraDammV2SwapEvent) -> serde_json::Value {
 #[test]
 fn each_value_of_a_swap_is_under_its_name() {
     assert_eq!(
-        wire(event(TradeDirection::AtoB, true)),
+        wire(event(MeteoraDammV2TradeDirection::AtoB, true)),
         json!({
             "protocol": Protocol::MeteoraDammV2.as_str(),
             "poolAddress": Pubkey::new_from_array([1; 32]).to_string(),
@@ -65,7 +65,7 @@ fn each_value_of_a_swap_is_under_its_name() {
 /// Mutation: a direction or a fee token mapped to the other — a sale read as a purchase.
 #[test]
 fn the_other_direction_and_fee_token_are_said() {
-    let other = wire(event(TradeDirection::BtoA, false));
+    let other = wire(event(MeteoraDammV2TradeDirection::BtoA, false));
 
     assert_eq!(other["direction"], "b_to_a");
     assert_eq!(other["meteoraDammV2"]["feeToken"], "b");

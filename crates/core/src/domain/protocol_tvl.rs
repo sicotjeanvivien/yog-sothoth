@@ -1,10 +1,9 @@
+mod change;
 mod model;
 mod part;
 mod repository;
 
-pub use model::{
-    LiquidityTurnover, ProtocolLiquidityTurnover, ProtocolTvl, ProtocolTvlChange, TvlChangeTotal,
-    TvlReading,
-};
+pub use change::{ProtocolTvlChange, TvlChangeTotal};
+pub use model::{ProtocolTvl, TvlReading};
 pub use part::ProtocolTvlPart;
 pub use repository::ProtocolTvlLookup;

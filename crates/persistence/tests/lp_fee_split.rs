@@ -7,7 +7,7 @@ use sqlx::types::BigDecimal;
 use sqlx::{AssertSqlSafe, PgPool};
 use yog_core::domain::{
     AnalyticProgress, AnalyticRepository, CycleWrite, MeteoraDammV2LpFeeSplit, Protocol,
-    SwapActivity, SwapActivityLookup, TranchePeriod, Window, WrittenTranches,
+    SwapActivity, SwapActivityLookup, SwapActivityPart, TranchePeriod, Window, WrittenTranches,
 };
 use yog_persistence::{PgAnalyticRepository, PgSwapActivityRepository};
 
@@ -341,18 +341,18 @@ async fn api(pool: &PgPool) -> PgSwapActivityRepository {
     PgSwapActivityRepository::new(setup_roles_and_connect_as(pool, "yog_api").await)
 }
 
-fn split(claiming: i64, compounding: i64) -> Option<MeteoraDammV2LpFeeSplit> {
-    Some(MeteoraDammV2LpFeeSplit {
+fn split(claiming: i64, compounding: i64) -> Option<SwapActivityPart> {
+    Some(SwapActivityPart::MeteoraDammV2(MeteoraDammV2LpFeeSplit {
         claiming_fees_usd: Some(Decimal::from(claiming)),
         compounding_fees_usd: Some(Decimal::from(compounding)),
-    })
+    }))
 }
 
-fn unknown() -> Option<MeteoraDammV2LpFeeSplit> {
-    Some(MeteoraDammV2LpFeeSplit {
+fn unknown() -> Option<SwapActivityPart> {
+    Some(SwapActivityPart::MeteoraDammV2(MeteoraDammV2LpFeeSplit {
         claiming_fees_usd: None,
         compounding_fees_usd: None,
-    })
+    }))
 }
 
 /// Each hour of `period(24)` for `protocol`: LP fees of 4, split 3 + 1; the first hour written
@@ -400,15 +400,15 @@ async fn a_protocols_split_is_unknown_over_an_hour_before_it_and_only_damm_carri
         .iter()
         .find(|r| r.protocol == Protocol::MeteoraDlmm)
         .unwrap();
-    assert_eq!(damm.activity.meteora_damm_v2, unknown());
-    assert_eq!(dlmm.activity.meteora_damm_v2, None);
+    assert_eq!(damm.activity.protocol_part, unknown());
+    assert_eq!(dlmm.activity.protocol_part, None);
 
     let hourly = repository
         .list_protocol_hourly(&day, Some(Protocol::MeteoraDammV2))
         .await
         .unwrap();
-    assert_eq!(hourly[0].value.meteora_damm_v2, unknown());
-    assert_eq!(hourly[1].value.meteora_damm_v2, split(3, 1));
+    assert_eq!(hourly[0].value.protocol_part, unknown());
+    assert_eq!(hourly[1].value.protocol_part, split(3, 1));
 
     let slices = repository
         .list_protocol_buckets(&day, Duration::hours(6), Some(Protocol::MeteoraDammV2))
@@ -416,7 +416,7 @@ async fn a_protocols_split_is_unknown_over_an_hour_before_it_and_only_damm_carri
         .unwrap();
     let drawn: Vec<_> = slices
         .iter()
-        .map(|b| b.value.meteora_damm_v2.clone())
+        .map(|b| b.value.protocol_part.clone())
         .collect();
     assert_eq!(drawn, [unknown(), split(15, 5), split(18, 6), split(18, 6)]);
 }
@@ -492,18 +492,18 @@ async fn a_pools_split_is_unknown_over_an_hour_before_it_and_zero_where_it_did_n
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(totals.meteora_damm_v2, unknown());
+    assert_eq!(totals.protocol_part, unknown());
     let totals = repository
         .find_pool_totals(&day, new)
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(totals.meteora_damm_v2, split(3, 1));
+    assert_eq!(totals.protocol_part, split(3, 1));
 
     let hourly = repository.list_pool_hourly(&day, old).await.unwrap();
     let drawn: Vec<_> = hourly
         .iter()
-        .map(|b| b.activity.meteora_damm_v2.clone())
+        .map(|b| b.activity.protocol_part.clone())
         .collect();
     assert_eq!(
         (drawn[1].clone(), drawn[15].clone()),
@@ -521,7 +521,7 @@ async fn a_pools_split_is_unknown_over_an_hour_before_it_and_zero_where_it_did_n
         .unwrap();
     let drawn: Vec<_> = slices
         .iter()
-        .map(|b| b.activity.meteora_damm_v2.clone())
+        .map(|b| b.activity.protocol_part.clone())
         .collect();
     assert_eq!(drawn, [unknown(), split(0, 0), split(3, 1), split(0, 0)]);
 }
@@ -579,15 +579,12 @@ async fn the_last_hours_split_is_unknown_over_a_tranche_before_it(pool: PgPool) 
         .find_protocol_totals_in_tranches(&hour, None)
         .await
         .unwrap();
-    assert_eq!(totals[0].activity.meteora_damm_v2, unknown());
+    assert_eq!(totals[0].activity.protocol_part, unknown());
     let bars = repository
         .list_protocol_tranches(&hour, Some(Protocol::MeteoraDammV2))
         .await
         .unwrap();
-    let drawn: Vec<_> = bars
-        .iter()
-        .map(|b| b.value.meteora_damm_v2.clone())
-        .collect();
+    let drawn: Vec<_> = bars.iter().map(|b| b.value.protocol_part.clone()).collect();
     assert_eq!(
         (drawn[1].clone(), drawn[6].clone()),
         (unknown(), split(6, 2))
@@ -599,16 +596,16 @@ async fn the_last_hours_split_is_unknown_over_a_tranche_before_it(pool: PgPool) 
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(old_totals.meteora_damm_v2, unknown());
+    assert_eq!(old_totals.protocol_part, unknown());
     let new_totals = repository
         .find_pool_totals_in_tranches(&hour, new)
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(new_totals.meteora_damm_v2, split(3, 1));
+    assert_eq!(new_totals.protocol_part, split(3, 1));
     let bars = repository.list_pool_tranches(&hour, old).await.unwrap();
     let drawn: Vec<SwapActivity> = bars.into_iter().map(|b| b.activity).collect();
-    assert_eq!(drawn[1].meteora_damm_v2, unknown());
-    assert_eq!(drawn[6].meteora_damm_v2, split(3, 1));
-    assert_eq!(drawn[0].meteora_damm_v2, split(0, 0));
+    assert_eq!(drawn[1].protocol_part, unknown());
+    assert_eq!(drawn[6].protocol_part, split(3, 1));
+    assert_eq!(drawn[0].protocol_part, split(0, 0));
 }

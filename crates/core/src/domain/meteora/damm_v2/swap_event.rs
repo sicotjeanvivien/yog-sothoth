@@ -4,4 +4,4 @@ mod trade_direction;
 
 pub use model::MeteoraDammV2SwapEvent;
 pub use repository::MeteoraDammV2SwapEventRepository;
-pub use trade_direction::TradeDirection;
+pub use trade_direction::MeteoraDammV2TradeDirection;

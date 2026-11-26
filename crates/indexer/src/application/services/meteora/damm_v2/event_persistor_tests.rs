@@ -6,9 +6,9 @@ use solana_signature::Signature;
 use std::sync::Mutex;
 use yog_core::domain::{
     InsertOutcome, MeteoraDammV2LiquidityEventKind, MeteoraDammV2SplitAmounts,
-    MeteoraDammV2SplitNumerators, MeteoraDammV2SplitPositionState, Pool,
-    PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolCurrentStateUpsertOutcome,
-    PoolRepository, TradeDirection,
+    MeteoraDammV2SplitNumerators, MeteoraDammV2SplitPositionState, MeteoraDammV2TradeDirection,
+    Pool, PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolCurrentStateUpsertOutcome,
+    PoolRepository,
 };
 use yog_core::{RepositoryError, RepositoryResult};
 
@@ -365,7 +365,7 @@ fn swap() -> MeteoraDammV2SwapEvent {
         slot: 1,
         transaction_index: None,
         event_index: 0,
-        trade_direction: TradeDirection::AtoB,
+        trade_direction: MeteoraDammV2TradeDirection::AtoB,
         amount_a: 1,
         amount_b: 2,
         reserve_a_after: 10,

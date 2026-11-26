@@ -1,6 +1,6 @@
 use rust_decimal::Decimal;
 use serde_json::json;
-use yog_core::domain::{MeteoraDammV2LpFeeSplit, SwapActivity};
+use yog_core::domain::{MeteoraDammV2LpFeeSplit, SwapActivity, SwapActivityPart};
 
 use super::PoolSwapActivityResponse;
 
@@ -16,10 +16,10 @@ fn a_damm_v2_pools_totals_carry_its_split_beside_its_fields() {
         referral_fees_usd: None,
         pool_hours: 1,
         pool_hours_valued: 1,
-        meteora_damm_v2: Some(MeteoraDammV2LpFeeSplit {
+        protocol_part: Some(SwapActivityPart::MeteoraDammV2(MeteoraDammV2LpFeeSplit {
             claiming_fees_usd: Some(Decimal::from(2)),
             compounding_fees_usd: Some(Decimal::from(3)),
-        }),
+        })),
     }))
     .unwrap();
 

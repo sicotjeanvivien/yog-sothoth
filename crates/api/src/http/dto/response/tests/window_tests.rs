@@ -6,7 +6,7 @@ use serde_json::{Value, json, to_value};
 use yog_core::domain::{
     FrozenHours, FrozenPeriod, LiquidityTurnover, MeteoraDammV2LpFeeSplit, Protocol,
     ProtocolBucket, ProtocolLiquidityTurnover, ProtocolPoolCreations, ProtocolSwapActivity,
-    ProtocolTvlChange, SwapActivity, TvlReading, Window,
+    ProtocolTvlChange, SwapActivity, SwapActivityPart, TvlReading, Window,
 };
 
 use super::{
@@ -43,7 +43,7 @@ fn activity() -> SwapActivity {
         referral_fees_usd: None,
         pool_hours: 3,
         pool_hours_valued: 1,
-        meteora_damm_v2: None,
+        protocol_part: None,
     }
 }
 
@@ -66,10 +66,10 @@ fn reading(at: DateTime<Utc>, tvl: i64) -> TvlReading {
 #[test]
 fn the_damm_v2_split_is_in_its_row_never_in_total() {
     let split = || SwapActivity {
-        meteora_damm_v2: Some(MeteoraDammV2LpFeeSplit {
+        protocol_part: Some(SwapActivityPart::MeteoraDammV2(MeteoraDammV2LpFeeSplit {
             claiming_fees_usd: Some(Decimal::ONE),
             compounding_fees_usd: None,
-        }),
+        })),
         ..activity()
     };
     let totals = SwapTotals {

@@ -10,7 +10,7 @@ use yog_core::domain::SwapActivity;
 
 use crate::http::dto::schema::{Count, UnsignedDecimal};
 
-pub(crate) use meteora_damm_v2_response::SwapActivityMeteoraDammV2Response;
+pub(crate) use meteora_damm_v2_response::{SwapActivityMeteoraDammV2Response, meteora_damm_v2_of};
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
