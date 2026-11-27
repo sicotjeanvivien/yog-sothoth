@@ -3,10 +3,10 @@
 /** Controls, format characters, default-ignorables and line/paragraph separators: drawn as nothing. */
 const UNDRAWN = /[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}\p{Zl}\p{Zp}]/u;
 
-const EMOJI = /\p{Extended_Pictographic}/u;
+const EMOJI = /\p{Extended_Pictographic}|\u20E3/u;
 
 /** ZWJ, variation selectors and tag characters: what composes an emoji.
- * ⚠\uFE0F Kept only inside an emoji's grapheme; between letters a ZWJ would hide "USD\u200DT" as "USDT". */
+ * ⚠️ Kept only inside an emoji's grapheme; between letters a ZWJ would hide "USD\u200DT" as "USDT". */
 const EMOJI_GLUE = /[\u200D\uFE00-\uFE0F\u{E0020}-\u{E007F}]/u;
 
 const GRAPHEMES = new Intl.Segmenter("en", { granularity: "grapheme" });

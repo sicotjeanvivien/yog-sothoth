@@ -33,8 +33,8 @@ export type Release = {
 export const RELEASES: readonly Release[] = [
   {
     version: "v0.13.0",
-    date: "2026-11-25",
-    summary: "The DAMM v2 page shows how much of its liquidity is locked, and what unlocks next.",
+    date: "2026-11-27",
+    summary: "The DAMM v2 page shows how much of its liquidity is locked and what unlocks next, and a token can no longer pass for another under a disguised symbol.",
     sections: [
       {
         kind: "features",

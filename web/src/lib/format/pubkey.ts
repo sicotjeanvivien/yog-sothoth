@@ -27,7 +27,7 @@ export function shortenPubkey(
   return `${head}${ELLIPSIS}${tail}`;
 }
 
-/** A pool named by its pair, `"SOL / USDC"`, or by its shortened address while a symbol is unknown.
+/** A pool named by its pair, or by its shortened address while a symbol is unknown.
  * ⚠️ Each symbol isolated (FSI…PDI): a right-to-left one would reverse the line. */
 export function pairLabel(pool: {
   poolAddress: string;

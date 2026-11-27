@@ -33,6 +33,7 @@ describe("formatTokenText", () => {
     ["family", "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}"],
     ["red heart", "❤\uFE0F"],
     ["skin tone and profession", "\u{1F469}\u{1F3FD}\u200D\u{1F4BB}"],
+    ["keycap", "1\uFE0F\u20E3"],
     ["flag of England", "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}"],
   ])("leaves a composed emoji whole: %s", (_, emoji) => {
     expect(formatTokenText(emoji)).toBe(emoji);
