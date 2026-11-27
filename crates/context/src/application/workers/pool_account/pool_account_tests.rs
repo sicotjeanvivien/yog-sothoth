@@ -10,8 +10,8 @@ use yog_core::RepositoryResult;
 use yog_core::amm::damm_v2::BaseFeeKind;
 
 use yog_core::domain::{
-    MeteoraDammV2PoolAccountProperties, PoolAccountProperties, PoolAccountResolver,
-    PoolRegistryProperties, PoolRepository, Protocol,
+    FieldOutOfRange, MeteoraDammV2PoolAccountProperties, PoolAccountProperties,
+    PoolAccountResolver, PoolRegistryProperties, PoolRepository, Protocol,
 };
 
 use crate::application::source::RawAccount;
@@ -34,6 +34,13 @@ fn cp_amm_account(token_a: Pubkey, token_b: Pubkey) -> Vec<u8> {
     bytes[56] = 1; // dynamic_fee.initialized
     bytes[168..200].copy_from_slice(token_a.as_ref());
     bytes[200..232].copy_from_slice(token_b.as_ref());
+    bytes
+}
+
+/// A DLMM `LbPair` buffer the decoder accepts: its discriminator, the rest zero.
+fn lb_pair_account() -> Vec<u8> {
+    let mut bytes = vec![0u8; 904];
+    bytes[..8].copy_from_slice(&[0x21, 0x0b, 0x31, 0x62, 0xb5, 0x65, 0xb1, 0x0d]);
     bytes
 }
 
@@ -77,6 +84,8 @@ struct FakeRepo {
     journal: Journal,
     /// When true, the satellite write fails, which must stop the registry write.
     fail: bool,
+    /// What a successful satellite write reports as dropped.
+    drops: Option<FieldOutOfRange>,
 }
 
 #[async_trait]
@@ -91,7 +100,7 @@ impl PoolAccountResolver for FakeRepo {
         &self,
         pool: &Pubkey,
         properties: &PoolAccountProperties,
-    ) -> RepositoryResult<()> {
+    ) -> RepositoryResult<Option<FieldOutOfRange>> {
         if self.fail {
             return Err(yog_core::RepositoryError::Integrity("boom".into()));
         }
@@ -99,7 +108,7 @@ impl PoolAccountResolver for FakeRepo {
             .lock()
             .unwrap()
             .push(Write::Satellite(*pool, properties.clone()));
-        Ok(())
+        Ok(self.drops)
     }
 }
 
@@ -169,6 +178,7 @@ fn fakes(unresolved: Vec<Pubkey>, fail: bool) -> (Arc<FakeRepo>, Arc<FakePoolRep
             unresolved,
             journal: journal.clone(),
             fail,
+            drops: None,
         }),
         Arc::new(FakePoolRepo {
             journal: journal.clone(),
@@ -259,7 +269,7 @@ async fn an_account_of_another_protocol_is_not_written() {
         accounts: vec![RawAccount {
             pool_address: pk(1),
             program_id: Protocol::MeteoraDlmm.program_id(),
-            data: vec![0u8; 904],
+            data: lb_pair_account(),
         }],
     });
 
@@ -311,4 +321,199 @@ async fn each_source_call_is_counted_for_the_heartbeat() {
     refusing.run_one_cycle().await;
     answering.run_one_cycle().await;
     assert_eq!(health.take_window(), WindowVerdict::Healthy);
+}
+
+// ── Metrics ───────────────────────────────────────────────────────────
+//
+// Not `#[tokio::test]`: `with_local_recorder` binds the current thread.
+
+use metrics_util::debugging::{DebugValue, DebuggingRecorder, Snapshotter};
+
+type Snapshot = Vec<(
+    metrics_util::CompositeKey,
+    Option<::metrics::Unit>,
+    Option<::metrics::SharedString>,
+    DebugValue,
+)>;
+
+/// Drive one cycle under a thread-local recorder and return its snapshot.
+fn snapshot_one_cycle(worker: PoolAccountWorker) -> Snapshot {
+    let recorder = DebuggingRecorder::new();
+    let snapshotter: Snapshotter = recorder.snapshotter();
+    ::metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("current-thread runtime")
+            .block_on(worker.run_one_cycle());
+    });
+    snapshotter.snapshot().into_vec()
+}
+
+/// The count under `name{protocol="meteora_damm_v2", reason}`, if any was recorded.
+fn count(snapshot: &Snapshot, name: &str, reason: &str) -> Option<u64> {
+    snapshot.iter().find_map(|(key, _, _, v)| {
+        let labels: Vec<_> = key.key().labels().collect();
+        let matches = key.key().name() == name
+            && labels
+                .iter()
+                .any(|l| l.key() == "protocol" && l.value() == "meteora_damm_v2")
+            && labels
+                .iter()
+                .any(|l| l.key() == "reason" && l.value() == reason);
+        match (matches, v) {
+            (true, DebugValue::Counter(n)) => Some(*n),
+            _ => None,
+        }
+    })
+}
+
+fn one_account(data: Vec<u8>, program_id: Pubkey) -> Arc<FakeSource> {
+    Arc::new(FakeSource {
+        accounts: vec![RawAccount {
+            pool_address: pk(1),
+            program_id,
+            data,
+        }],
+    })
+}
+
+/// Mutation: the rejection logged but not counted.
+#[test]
+fn a_rejected_account_is_counted_under_its_reason() {
+    let (repo, pool_repo, _) = fakes(vec![pk(1)], false);
+    let source = one_account(cp_amm_account(pk(2), pk(3)), pk(99));
+
+    let snapshot = snapshot_one_cycle(worker(repo, pool_repo, source));
+
+    assert_eq!(
+        count(
+            &snapshot,
+            "yog_context_pool_account_rejected_total",
+            "unknown_program"
+        ),
+        Some(1)
+    );
+}
+
+/// Mutation: the decoder's degradations left uncounted, or the account no longer written.
+#[test]
+fn a_degraded_account_is_written_and_counted() {
+    let (repo, pool_repo, journal) = fakes(vec![pk(1)], false);
+    let mut data = cp_amm_account(pk(2), pk(3));
+    data[16] = 99; // a BaseFeeMode no build maps
+
+    let snapshot = snapshot_one_cycle(worker(
+        repo,
+        pool_repo,
+        one_account(data, Protocol::MeteoraDammV2.program_id()),
+    ));
+
+    assert_eq!(
+        count(
+            &snapshot,
+            "yog_context_pool_account_degraded_total",
+            "base_fee_mode_unknown"
+        ),
+        Some(1)
+    );
+    assert_eq!(
+        journal.lock().unwrap().len(),
+        2,
+        "both halves still written"
+    );
+}
+
+/// Mutation: the repository's `Some` ignored, so the lost curve stays invisible.
+#[test]
+fn a_curve_the_store_cannot_hold_is_counted() {
+    let journal: Journal = Arc::new(Mutex::new(Vec::new()));
+    let repo = Arc::new(FakeRepo {
+        unresolved: vec![pk(1)],
+        journal: journal.clone(),
+        fail: false,
+        drops: Some(FieldOutOfRange {
+            field: "period_frequency",
+        }),
+    });
+    let pool_repo = Arc::new(FakePoolRepo {
+        journal: journal.clone(),
+    });
+    let source = one_account(
+        cp_amm_account(pk(2), pk(3)),
+        Protocol::MeteoraDammV2.program_id(),
+    );
+
+    let snapshot = snapshot_one_cycle(worker(repo, pool_repo, source));
+
+    assert_eq!(
+        count(
+            &snapshot,
+            "yog_context_pool_account_degraded_total",
+            "fee_scheduler_out_of_range"
+        ),
+        Some(1)
+    );
+    assert_eq!(
+        journal.lock().unwrap().len(),
+        2,
+        "the registry is still written"
+    );
+}
+
+/// Mutation: a whole account counted as degraded.
+#[test]
+fn a_whole_account_counts_nothing() {
+    let (repo, pool_repo, _) = fakes(vec![pk(1)], false);
+    let source = one_account(
+        cp_amm_account(pk(2), pk(3)),
+        Protocol::MeteoraDammV2.program_id(),
+    );
+
+    let snapshot = snapshot_one_cycle(worker(repo, pool_repo, source));
+
+    assert!(
+        snapshot
+            .iter()
+            .all(|(key, _, _, _)| !key.key().name().starts_with("yog_context_pool_account_")),
+        "nothing to count: {snapshot:?}"
+    );
+}
+
+/// Mutation: degradations counted before the satellite write, so a failing one counts every tick.
+#[test]
+fn a_failed_write_counts_no_degradation() {
+    let (repo, pool_repo, _) = fakes(vec![pk(1)], true);
+    let mut data = cp_amm_account(pk(2), pk(3));
+    data[16] = 99; // a BaseFeeMode no build maps
+    let source = one_account(data, Protocol::MeteoraDammV2.program_id());
+
+    let snapshot = snapshot_one_cycle(worker(repo, pool_repo, source));
+
+    assert_eq!(
+        count(
+            &snapshot,
+            "yog_context_pool_account_degraded_total",
+            "base_fee_mode_unknown"
+        ),
+        None,
+        "nothing was written, so nothing was written without a field"
+    );
+}
+
+/// Mutation: the skip left uncounted, so a pool requeued forever moves no series.
+#[test]
+fn an_account_of_another_protocol_is_counted_as_a_mismatch() {
+    let (repo, pool_repo, _) = fakes(vec![pk(1)], false);
+    let source = one_account(lb_pair_account(), Protocol::MeteoraDlmm.program_id());
+
+    let snapshot = snapshot_one_cycle(worker(repo, pool_repo, source));
+
+    assert_eq!(
+        count(
+            &snapshot,
+            "yog_context_pool_account_rejected_total",
+            "protocol_mismatch"
+        ),
+        Some(1)
+    );
 }

@@ -90,5 +90,6 @@ pub(in crate::application::decoder) fn decode_pool_account(
             max_volatility_accumulator: u32_at(data, MAX_VOLATILITY_ACCUMULATOR_OFFSET),
             protocol_share: u16_at(data, PROTOCOL_SHARE_OFFSET),
         }),
+        degradations: Vec::new(),
     })
 }

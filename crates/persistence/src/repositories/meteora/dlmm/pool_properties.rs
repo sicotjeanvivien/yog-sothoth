@@ -9,7 +9,7 @@ use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
-    domain::{PoolAccountProperties, PoolAccountResolver, Protocol},
+    domain::{FieldOutOfRange, PoolAccountProperties, PoolAccountResolver, Protocol},
 };
 
 use crate::repositories::helper::{convert_string_to_pubkey, map_sqlx_error};
@@ -68,7 +68,7 @@ impl PoolAccountResolver for PgMeteoraDlmmPoolPropertiesRepository {
         &self,
         pool_address: &Pubkey,
         properties: &PoolAccountProperties,
-    ) -> RepositoryResult<()> {
+    ) -> RepositoryResult<Option<FieldOutOfRange>> {
         let PoolAccountProperties::MeteoraDlmm(properties) = properties else {
             return Err(yog_core::RepositoryError::Integrity(format!(
                 "expected DLMM pool properties, got {:?}",
@@ -102,6 +102,6 @@ impl PoolAccountResolver for PgMeteoraDlmmPoolPropertiesRepository {
         .await
         .map_err(map_sqlx_error)?;
 
-        Ok(())
+        Ok(None)
     }
 }

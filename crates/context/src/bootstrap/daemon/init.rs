@@ -8,7 +8,9 @@ use yog_bootstrap::{HealthchecksHeartbeat, Heartbeat, HeartbeatSettings, SecretU
 use yog_persistence::Database;
 
 use super::log;
-use crate::application::workers::{MetadataWorkerMetrics, PriceWorkerMetrics};
+use crate::application::workers::{
+    MetadataWorkerMetrics, PoolAccountWorkerMetrics, PriceWorkerMetrics,
+};
 use crate::infra::{HEARTBEAT_FAILURES, ProviderMetrics};
 
 /// Connect to the database. The error names the failure, never the URL.
@@ -33,6 +35,7 @@ pub(super) fn init_heartbeat(url: SecretUrl) -> anyhow::Result<Arc<dyn Heartbeat
 /// Declare the HELP text of every metric family the process exports.
 pub(super) fn register_metric_descriptions() {
     MetadataWorkerMetrics::register_descriptions();
+    PoolAccountWorkerMetrics::register_descriptions();
     PriceWorkerMetrics::register_descriptions();
     ProviderMetrics::register_descriptions();
 }

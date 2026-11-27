@@ -5,21 +5,23 @@
 //! account go through `PoolRepository`, without a transaction.
 
 mod rows;
+mod scheduler_columns;
 
 use async_trait::async_trait;
 use rows::MeteoraDammV2PoolPropertiesRow;
+use scheduler_columns::scheduler_columns;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
     domain::{
-        MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesLookup, PoolAccountProperties,
-        PoolAccountResolver, Protocol,
+        FieldOutOfRange, MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesLookup,
+        PoolAccountProperties, PoolAccountResolver, Protocol,
     },
 };
 
 use crate::repositories::helper::{
-    convert_string_to_pubkey, convert_u64_to_i64, convert_u128_to_bigdecimal, map_sqlx_error,
+    convert_string_to_pubkey, convert_u128_to_bigdecimal, map_sqlx_error,
 };
 
 pub struct PgMeteoraDammV2PoolPropertiesRepository {
@@ -111,7 +113,7 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
         &self,
         pool_address: &Pubkey,
         properties: &PoolAccountProperties,
-    ) -> RepositoryResult<()> {
+    ) -> RepositoryResult<Option<FieldOutOfRange>> {
         let PoolAccountProperties::MeteoraDammV2(properties) = properties else {
             return Err(yog_core::RepositoryError::Integrity(format!(
                 "expected cp-amm pool properties, got {:?}",
@@ -125,24 +127,19 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
         );
         let base_fee_kind = properties.base_fee_kind.map(|kind| kind.as_str());
 
-        // ⚠️ Dropped as a unit, not `?`: a curve that does not fit (cp-amm bounds `period_frequency`
-        // by `!= 0` only) must not sink the whole write and keep the pool queued forever.
-        let scheduler = properties.fee_scheduler.and_then(|s| {
-            Some((
-                convert_u64_to_i64(s.cliff_fee_numerator, "cliff_fee_numerator").ok()?,
-                i32::from(s.number_of_period),
-                convert_u64_to_i64(s.period_frequency, "period_frequency").ok()?,
-                convert_u64_to_i64(s.reduction_factor, "reduction_factor").ok()?,
-                convert_u64_to_i64(s.activation_point, "activation_point").ok()?,
-                i16::from(s.activation_type),
-            ))
-        });
-        let cliff = scheduler.map(|s| s.0);
-        let number_of_period = scheduler.map(|s| s.1);
-        let period_frequency = scheduler.map(|s| s.2);
-        let reduction_factor = scheduler.map(|s| s.3);
-        let activation_point = scheduler.map(|s| s.4);
-        let activation_type = scheduler.map(|s| s.5);
+        // ⚠️ Dropped as a unit, not `?`: a curve that does not fit must not sink the whole
+        // write and keep the pool queued forever. The caller logs and counts the field.
+        let (scheduler, dropped) = match properties.fee_scheduler.as_ref().map(scheduler_columns) {
+            Some(Ok(columns)) => (Some(columns), None),
+            Some(Err(out_of_range)) => (None, Some(out_of_range)),
+            None => (None, None),
+        };
+        let cliff = scheduler.as_ref().map(|s| s.cliff_fee_numerator);
+        let number_of_period = scheduler.as_ref().map(|s| s.number_of_period);
+        let period_frequency = scheduler.as_ref().map(|s| s.period_frequency);
+        let reduction_factor = scheduler.as_ref().map(|s| s.reduction_factor);
+        let activation_point = scheduler.as_ref().map(|s| s.activation_point);
+        let activation_type = scheduler.as_ref().map(|s| s.activation_type);
 
         sqlx::query!(
             r#"
@@ -213,6 +210,6 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
         .await
         .map_err(map_sqlx_error)?;
 
-        Ok(())
+        Ok(dropped)
     }
 }

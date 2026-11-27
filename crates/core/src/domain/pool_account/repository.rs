@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 
 use crate::RepositoryResult;
-use crate::domain::{PoolAccountProperties, Protocol};
+use crate::domain::{FieldOutOfRange, PoolAccountProperties, Protocol};
 
 /// Back-fill of a pool's account-derived properties by yog-context, one
 /// implementation per protocol, each scoping its own queue.
@@ -16,10 +16,11 @@ pub trait PoolAccountResolver: Send + Sync {
     /// and an undecodable pool would sit at the head of the queue forever.
     async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>>;
 
-    /// Store a pool's decoded account properties. Idempotent.
+    /// Store a pool's decoded account properties. Idempotent. `Some` names the fee-curve
+    /// field the store cannot hold: the curve was stored empty.
     async fn set_pool_account(
         &self,
         pool_address: &Pubkey,
         properties: &PoolAccountProperties,
-    ) -> RepositoryResult<()>;
+    ) -> RepositoryResult<Option<FieldOutOfRange>>;
 }

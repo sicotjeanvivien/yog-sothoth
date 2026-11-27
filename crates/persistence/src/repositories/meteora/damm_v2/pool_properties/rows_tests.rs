@@ -1,7 +1,10 @@
 //! DB-free tests of
 //! `TryFrom<MeteoraDammV2PoolPropertiesRow> for MeteoraDammV2PoolProperties`.
 
-use yog_core::{RepositoryError, domain::MeteoraDammV2PoolProperties};
+use yog_core::{
+    RepositoryError,
+    domain::{FeeSchedulerDrop, FieldOutOfRange, MeteoraDammV2PoolProperties},
+};
 
 use super::MeteoraDammV2PoolPropertiesRow;
 use yog_core::amm::damm_v2::BaseFeeKind;
@@ -135,6 +138,7 @@ fn a_complete_scheduler_row_rebuilds_its_curve() {
     assert_eq!(s.reduction_factor, 3_194_444);
     assert_eq!(s.activation_point, 1_785_180_416);
     assert_eq!(s.kind, BaseFeeKind::SchedulerLinear);
+    assert_eq!(props.fee_scheduler_dropped, None);
 }
 
 /// Mutation: a curve built from some of its six columns, which would give a confident wrong fee.
@@ -189,6 +193,59 @@ fn a_partial_scheduler_row_yields_no_curve_rather_than_half_of_one() {
             props.fee_scheduler.is_none(),
             "{label}: expected no curve at all"
         );
+        assert_eq!(
+            props.fee_scheduler_dropped,
+            Some(FeeSchedulerDrop::PartlyNull),
+            "{label}"
+        );
+    }
+}
+
+/// Mutation: six NULL columns reported as a corrupt row; no curve was ever stored.
+#[test]
+fn a_scheduler_kind_with_no_curve_stored_is_not_a_drop() {
+    let row = MeteoraDammV2PoolPropertiesRow {
+        cliff_fee_numerator: None,
+        number_of_period: None,
+        period_frequency: None,
+        reduction_factor: None,
+        activation_point: None,
+        activation_type: None,
+        ..scheduler_row()
+    };
+
+    let props = MeteoraDammV2PoolProperties::try_from(row).unwrap();
+
+    assert_eq!(
+        (props.fee_scheduler, props.fee_scheduler_dropped),
+        (None, None)
+    );
+}
+
+/// Mutation: a field reported under another's name, or the value dropped without a reason.
+#[test]
+fn a_stored_value_out_of_range_names_its_field() {
+    type Corrupt = fn(&mut MeteoraDammV2PoolPropertiesRow);
+    let cases: [(&str, Corrupt); 6] = [
+        ("cliff_fee_numerator", |r| r.cliff_fee_numerator = Some(-1)),
+        ("number_of_period", |r| r.number_of_period = Some(-1)),
+        ("period_frequency", |r| r.period_frequency = Some(-1)),
+        ("reduction_factor", |r| r.reduction_factor = Some(-1)),
+        ("activation_point", |r| r.activation_point = Some(-1)),
+        ("activation_type", |r| r.activation_type = Some(-1)),
+    ];
+    for (field, corrupt) in cases {
+        let mut row = scheduler_row();
+        corrupt(&mut row);
+
+        let props = MeteoraDammV2PoolProperties::try_from(row).unwrap();
+
+        assert_eq!(props.fee_scheduler, None, "{field}");
+        assert_eq!(
+            props.fee_scheduler_dropped,
+            Some(FeeSchedulerDrop::OutOfRange(FieldOutOfRange { field })),
+            "{field}"
+        );
     }
 }
 
@@ -210,5 +267,6 @@ fn a_non_time_scheduler_kind_carries_no_curve() {
             props.fee_scheduler.is_none(),
             "{kind} must carry no time curve"
         );
+        assert_eq!(props.fee_scheduler_dropped, None, "{kind}");
     }
 }

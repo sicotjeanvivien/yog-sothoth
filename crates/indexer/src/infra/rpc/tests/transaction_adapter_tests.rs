@@ -112,6 +112,98 @@ fn no_inner_instructions_is_an_empty_list_not_an_error() {
     );
 }
 
+// ── unreadable inner instructions ───────────────────────────────────
+
+/// The first `PartiallyDecoded` inner instruction of the fixture, the only shape the adapter reads.
+fn first_partially_decoded(json: &mut serde_json::Value) -> &mut serde_json::Value {
+    json["meta"]["innerInstructions"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .flat_map(|g| g["instructions"].as_array_mut().unwrap().iter_mut())
+        .find(|ix| ix.get("data").is_some())
+        .expect("the fixture must carry a partially decoded inner instruction")
+}
+
+/// Mutation: an unreadable program id dropped from the payloads, which renumbers every later event.
+#[test]
+fn an_inner_instruction_with_an_unreadable_program_id_refuses_the_transaction() {
+    let mut json = fixture_json();
+    first_partially_decoded(&mut json)["programId"] = "not-a-pubkey".into();
+
+    let err = from_rpc(&parse(json)).expect_err("an unreadable program id must be refused");
+
+    assert!(
+        matches!(&err, TransactionAdapterError::Parse { reason, .. }
+            if reason.starts_with("inner instruction program id not-a-pubkey")),
+        "expected a ParseError naming the program id, got {err:?}"
+    );
+}
+
+/// Mutation: an indexed program's undecodable data dropped, which renumbers every later event.
+#[test]
+fn an_indexed_programs_inner_instruction_whose_data_is_not_base58_refuses_the_transaction() {
+    let mut json = fixture_json();
+    let ix = first_partially_decoded(&mut json);
+    ix["programId"] = Protocol::MeteoraDammV2.program_id().to_string().into();
+    // `0`, `O`, `I` and `l` are outside the base58 alphabet.
+    ix["data"] = "0OIl".into();
+
+    let err = from_rpc(&parse(json)).expect_err("non-base58 data must be refused");
+
+    assert!(
+        matches!(&err, TransactionAdapterError::Parse { reason, .. }
+        if reason.starts_with(&format!(
+            "inner instruction data of {} is not base58",
+            Protocol::MeteoraDammV2.program_id()
+        ))),
+        "expected a ParseError naming the program, got {err:?}"
+    );
+}
+
+/// A foreign program's payload never numbers an event of ours: it is set aside, not refused.
+/// Mutation: refusing it, which loses every Meteora event of the transaction.
+#[test]
+fn a_foreign_programs_inner_instruction_whose_data_is_not_base58_is_set_aside() {
+    let whole = from_rpc(&parse(fixture_json())).expect("fixture must convert");
+    let mut json = fixture_json();
+    let ix = first_partially_decoded(&mut json);
+    ix["programId"] = "11111111111111111111111111111111".into();
+    ix["data"] = "0OIl".into();
+
+    let on_chain_tx = from_rpc(&parse(json)).expect("a foreign program's data cannot refuse");
+
+    assert_eq!(
+        on_chain_tx.inner_instructions.len(),
+        whole.inner_instructions.len() - 1
+    );
+}
+
+/// An instruction the node fully parsed (a token transfer) is set aside, not refused.
+/// Mutation: refusing anything that is not `PartiallyDecoded`, which refuses ordinary swaps.
+#[test]
+fn an_inner_instruction_parsed_by_the_node_is_set_aside() {
+    let json = fixture_json();
+    let instructions: Vec<_> = json["meta"]["innerInstructions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|g| g["instructions"].as_array().unwrap())
+        .collect();
+    let partially_decoded = instructions
+        .iter()
+        .filter(|ix| ix.get("data").is_some())
+        .count();
+    assert!(
+        partially_decoded < instructions.len(),
+        "the fixture must carry a parsed instruction for this test to mean anything"
+    );
+
+    let on_chain_tx = from_rpc(&parse(json)).expect("parsed instructions are ordinary traffic");
+
+    assert_eq!(on_chain_tx.inner_instructions.len(), partially_decoded);
+}
+
 /// The payload order does not depend on the order the groups were serialized in.
 /// Mutation this is written against: removing `sort_by_key` in `extract_inner_instructions`; every
 /// fixture arrives sorted, so the groups (0 and 2 of `initialize_reward.json`) are reversed here.

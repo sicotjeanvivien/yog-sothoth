@@ -7,7 +7,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
 
 use yog_core::application::decode_pool_account;
 use yog_core::domain::{PoolAccountResolver, PoolRepository};
@@ -15,6 +14,11 @@ use yog_core::domain::{PoolAccountResolver, PoolRepository};
 use crate::application::heartbeat::{source_health::SourceHealth, source_role::SourceRole};
 use crate::application::source::PoolAccountSource;
 use crate::error::WorkerError;
+
+mod log;
+mod metrics;
+
+pub(crate) use metrics::PoolAccountWorkerMetrics;
 
 /// Max pools resolved per tick: `getMultipleAccounts`' 100-key cap, so one RPC round-trip.
 const RESOLVE_BATCH_MAX: i64 = 100;
@@ -47,7 +51,7 @@ impl PoolAccountWorker {
     }
 
     pub async fn run(self, shutdown: CancellationToken) -> Result<(), WorkerError> {
-        info!("PoolAccountWorker started");
+        log::started();
         let mut ticker = tokio::time::interval(self.poll_interval);
         loop {
             tokio::select! {
@@ -56,7 +60,7 @@ impl PoolAccountWorker {
             biased;
 
                 _ = shutdown.cancelled() => {
-                    info!("shutdown requested — pool-account worker stopping");
+                    log::stopping();
                     return Ok(());
                 }
                 _ = ticker.tick() => self.run_one_cycle().await,
@@ -78,12 +82,12 @@ impl PoolAccountWorker {
         let unresolved = match resolver.list_unresolved(RESOLVE_BATCH_MAX).await {
             Ok(pools) => pools,
             Err(e) => {
-                warn!(protocol = %protocol, error = %e, "pool-account worker: list_unresolved failed");
+                log::list_unresolved_failed(protocol, &e);
                 return;
             }
         };
         if unresolved.is_empty() {
-            debug!(protocol = %protocol, "pool-account worker: no unresolved pools");
+            log::nothing_unresolved(protocol);
             return;
         }
 
@@ -95,7 +99,7 @@ impl PoolAccountWorker {
             Err(e) => {
                 self.health
                     .record_failure(SourceRole::PoolAccount, e.to_string());
-                warn!(protocol = %protocol, error = %e, "pool-account worker: source returned a hard error");
+                log::source_failed(protocol, &e);
                 return;
             }
         };
@@ -105,16 +109,12 @@ impl PoolAccountWorker {
         let mut ok = 0usize;
         for account in &accounts {
             // Routed on the program id: a pool that changed hands is rejected rather than decoded
-            // at the wrong layout. Every rejection is logged, none being routine on this queue.
+            // at the wrong layout. None being routine on this queue, every rejection is counted.
             let decoded_account = match decode_pool_account(&account.program_id, &account.data) {
                 Ok(decoded_account) => decoded_account,
                 Err(rejection) => {
-                    warn!(
-                        protocol = %protocol,
-                        pool = %account.pool_address,
-                        reason = %rejection,
-                        "pool-account worker: account rejected",
-                    );
+                    log::rejected(protocol, &account.pool_address, &rejection);
+                    PoolAccountWorkerMetrics::record_rejected(protocol, &rejection);
                     rejected += 1;
                     continue;
                 }
@@ -122,24 +122,39 @@ impl PoolAccountWorker {
             decoded += 1;
 
             if decoded_account.protocol() != protocol {
-                warn!(
-                    protocol = %protocol,
-                    decoded_as = %decoded_account.protocol(),
-                    pool = %account.pool_address,
-                    "pool-account worker: queue and account disagree on protocol — skipping",
+                log::protocol_disagrees(
+                    protocol,
+                    decoded_account.protocol(),
+                    &account.pool_address,
                 );
+                PoolAccountWorkerMetrics::record_protocol_mismatch(protocol);
                 continue;
             }
 
             // ⚠️ Satellite first, registry last: the registry write lowers `needs_refresh`, so a
             // failure before it leaves the pool queued. No transaction: both halves are idempotent.
-            if let Err(e) = resolver
+            match resolver
                 .set_pool_account(&account.pool_address, &decoded_account.properties)
                 .await
             {
-                warn!(protocol = %protocol, pool = %account.pool_address, error = %e,
-                      "pool-account worker: set_pool_account failed");
-                continue;
+                Ok(out_of_range) => {
+                    for degradation in &decoded_account.degradations {
+                        log::degraded(protocol, &account.pool_address, degradation);
+                        PoolAccountWorkerMetrics::record_degraded(protocol, degradation);
+                    }
+                    if let Some(out_of_range) = out_of_range {
+                        log::fee_scheduler_out_of_range(
+                            protocol,
+                            &account.pool_address,
+                            out_of_range,
+                        );
+                        PoolAccountWorkerMetrics::record_fee_scheduler_out_of_range(protocol);
+                    }
+                }
+                Err(e) => {
+                    log::set_pool_account_failed(protocol, &account.pool_address, &e);
+                    continue;
+                }
             }
 
             match self
@@ -148,22 +163,18 @@ impl PoolAccountWorker {
                 .await
             {
                 Ok(()) => ok += 1,
-                Err(e) => {
-                    warn!(protocol = %protocol, pool = %account.pool_address, error = %e,
-                          "pool-account worker: set_registry_properties failed")
-                }
+                Err(e) => log::set_registry_properties_failed(protocol, &account.pool_address, &e),
             }
         }
 
-        debug!(
-            protocol = %protocol,
-            requested = unresolved.len(),
-            fetched = accounts.len(),
+        log::cycle_done(
+            protocol,
+            unresolved.len(),
+            accounts.len(),
             decoded,
             rejected,
-            written = ok,
-            elapsed_s = start.elapsed().as_secs_f64(),
-            "pool-account worker: cycle done",
+            ok,
+            start.elapsed(),
         );
     }
 }

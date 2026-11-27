@@ -238,6 +238,10 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   enrichment for everything behind them. Covered in both directions by
   `persistence/tests/pool_properties.rs`.
 
+  **Nothing it loses goes unseen**: a rejected account or one of another
+  protocol (the pool stays queued) and an account written without a field each
+  log a `warn` naming the pool, and count — see *Observability*.
+
 ## Resilience contract
 
 All workers are **deliberately resilient**: HTTP errors, decode errors, and
@@ -374,6 +378,18 @@ that does not carry one entry per address asked: it fails the call, a decode
 error, and none of its accounts is kept, since they pair with the addresses by
 position. An absent account, a closed pool, is
 not counted.
+
+The pool-account worker counts what it loses, every series published at 0 for
+each protocol at start: `yog_context_pool_account_rejected_total{protocol,
+reason}` — `unknown_program`, `not_a_pool_account`, `truncated`,
+`protocol_mismatch` — and `yog_context_pool_account_degraded_total{protocol,
+reason}` — `base_fee_mode_unknown`, `account_too_short`,
+`fee_scheduler_out_of_range`, counted once the satellite write succeeded.
+`protocol` is the queue's. Both count reads, not pools: a rejected pool stays
+queued and is read, and counted, again every cycle. The captured mainnet accounts lose nothing
+(`core/tests/pool_account_fixtures.rs`), so a non-zero value is a pool to look
+at, or a program that changed its layout. `fee_scheduler_out_of_range` is the
+field the satellite reported it could not hold; the `warn` names it.
 
 **Price coverage** is the one gauge pair worth alerting on:
 

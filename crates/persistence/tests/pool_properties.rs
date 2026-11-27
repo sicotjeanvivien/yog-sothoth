@@ -10,7 +10,8 @@ use sqlx::PgPool;
 use yog_core::RepositoryError;
 use yog_core::amm::damm_v2::{BaseFeeKind, FeeSchedulerParams};
 use yog_core::domain::{
-    MeteoraDammV2PoolAccountProperties, MeteoraDlmmPoolAccountProperties, PoolAccountProperties,
+    FeeSchedulerDrop, FieldOutOfRange, MeteoraDammV2PoolAccountProperties,
+    MeteoraDammV2PoolPropertiesLookup, MeteoraDlmmPoolAccountProperties, PoolAccountProperties,
     PoolAccountResolver, PoolRegistryProperties, PoolRepository, Protocol,
 };
 use yog_persistence::{
@@ -879,7 +880,11 @@ async fn the_fee_scheduler_curve_round_trips_and_can_be_cleared(pool: PgPool) {
         pool_activation_type: None,
     });
 
-    repo.set_pool_account(&pk(1), &with_curve).await.unwrap();
+    assert_eq!(
+        repo.set_pool_account(&pk(1), &with_curve).await.unwrap(),
+        None,
+        "a curve that fits drops nothing"
+    );
 
     let row = sqlx::query!(
         r#"SELECT cliff_fee_numerator, number_of_period, period_frequency,
@@ -951,9 +956,18 @@ async fn an_out_of_range_curve_costs_the_curve_and_nothing_else(pool: PgPool) {
         pool_activation_type: None,
     });
 
-    repo.set_pool_account(&pk(1), &props)
+    let dropped = repo
+        .set_pool_account(&pk(1), &props)
         .await
         .expect("an unstorable curve must not fail the write");
+
+    assert_eq!(
+        dropped,
+        Some(FieldOutOfRange {
+            field: "period_frequency"
+        }),
+        "the caller is told which field cost the curve"
+    );
 
     let stored = read_properties(&pool, &pk(1))
         .await
@@ -965,4 +979,65 @@ async fn an_out_of_range_curve_costs_the_curve_and_nothing_else(pool: PgPool) {
         stored.curve_columns, 0,
         "the curve is what is lost, and all that is lost"
     );
+}
+
+/// The repository rebuilds the curve from what the store holds, and says why when it cannot.
+/// Mutation: a corrupt row read back as a curve, or as an absence without a reason.
+#[sqlx::test]
+async fn a_corrupt_stored_curve_is_read_back_with_its_reason(pool: PgPool) {
+    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+    let with_curve = PoolAccountProperties::MeteoraDammV2(MeteoraDammV2PoolAccountProperties {
+        base_fee_kind: Some(BaseFeeKind::SchedulerLinear),
+        fee_scheduler: Some(FeeSchedulerParams {
+            cliff_fee_numerator: 500_000_000,
+            number_of_period: 144,
+            period_frequency: 600,
+            reduction_factor: 3_194_444,
+            activation_point: 1_785_180_416,
+            activation_type: 1,
+            kind: BaseFeeKind::SchedulerLinear,
+        }),
+        ..damm_v2_half(properties_only(None))
+    });
+    repo.set_pool_account(&pk(1), &with_curve).await.unwrap();
+    let corrupt = |period_frequency: Option<i64>| {
+        sqlx::query(
+            "UPDATE meteora_damm_v2_pool_properties SET period_frequency = $2
+              WHERE pool_address = $1",
+        )
+        .bind(pk(1).to_string())
+        .bind(period_frequency)
+        .execute(&pool)
+    };
+
+    let whole = repo.find_by_pool(&pk(1)).await.unwrap().expect("row");
+    assert!(whole.fee_scheduler.is_some());
+    assert_eq!(whole.fee_scheduler_dropped, None);
+
+    corrupt(Some(-1)).await.expect("corrupting the row failed");
+    let negative = repo.find_by_pool(&pk(1)).await.unwrap().expect("row");
+    assert_eq!(negative.fee_scheduler, None);
+    assert_eq!(
+        negative.fee_scheduler_dropped,
+        Some(FeeSchedulerDrop::OutOfRange(FieldOutOfRange {
+            field: "period_frequency"
+        }))
+    );
+
+    corrupt(None).await.expect("corrupting the row failed");
+    let partial = repo.find_by_pool(&pk(1)).await.unwrap().expect("row");
+    assert_eq!(partial.fee_scheduler, None);
+    assert_eq!(
+        partial.fee_scheduler_dropped,
+        Some(FeeSchedulerDrop::PartlyNull)
+    );
+}
+
+/// The cp-amm half of a payload built by [`properties_only`].
+fn damm_v2_half(properties: PoolAccountProperties) -> MeteoraDammV2PoolAccountProperties {
+    match properties {
+        PoolAccountProperties::MeteoraDammV2(props) => props,
+        other => panic!("expected cp-amm properties, got {other:?}"),
+    }
 }

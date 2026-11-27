@@ -18,11 +18,12 @@ use solana_transaction_status_client_types::{
     EncodedTransaction, UiInstruction, UiParsedInstruction, option_serializer::OptionSerializer,
 };
 use yog_core::application::extraction::{InnerInstructionPayload, OnChainTransaction};
-use yog_core::domain::TransactionPosition;
+use yog_core::domain::{Protocol, TransactionPosition};
 
 /// Build the neutral transaction from a `getTransaction` response. Refusals, all counted under
 /// `reason="adapt"`: no or bad `signatures[0]`, a non-`Json` encoding, `blockTime` absent or out of
-/// range, no `meta`, no `innerInstructions`. An empty `innerInstructions` is ordinary traffic.
+/// range, no `meta`, no `innerInstructions`, an unreadable inner instruction of a program we may
+/// index. An empty `innerInstructions` is ordinary traffic.
 pub(crate) fn from_rpc(
     tx: &EncodedConfirmedTransactionWithStatusMeta,
 ) -> Result<OnChainTransaction, TransactionAdapterError> {
@@ -86,7 +87,7 @@ fn extract_timestamp(
 }
 
 /// Flatten `meta.innerInstructions` in outer-instruction order, the `event_index` contract of
-/// [`OnChainTransaction::inner_instructions`]; drops what is not `PartiallyDecoded` or not base58.
+/// [`OnChainTransaction::inner_instructions`]; drops what [`to_payload`] sets aside.
 /// ⚠️ Narrowing that filter further renumbers stored events, see [`InnerInstructionPayload`].
 fn extract_inner_instructions(
     tx: &EncodedConfirmedTransactionWithStatusMeta,
@@ -107,24 +108,41 @@ fn extract_inner_instructions(
     let mut groups: Vec<_> = inner_groups.iter().collect();
     groups.sort_by_key(|g| g.index);
 
-    Ok(groups
+    groups
         .into_iter()
         .flat_map(|group| group.instructions.iter())
-        .filter_map(to_payload)
-        .collect())
+        .filter_map(|ix| to_payload(ix, signature).transpose())
+        .collect()
 }
 
-/// Turn one RPC inner instruction into a neutral payload, or `None` when this
-/// adapter cannot represent it.
-fn to_payload(ix: &UiInstruction) -> Option<InnerInstructionPayload> {
+/// Turn one RPC inner instruction into a neutral payload, `None` for one not `PartiallyDecoded`.
+/// ⚠️ Unreadable, it refuses the transaction when it may be an indexed program's: dropping
+/// it would renumber the rest. A foreign program's unreadable data is set aside.
+fn to_payload(
+    ix: &UiInstruction,
+    signature: &Signature,
+) -> Result<Option<InnerInstructionPayload>, TransactionAdapterError> {
     let UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(p)) = ix else {
-        return None;
+        return Ok(None);
+    };
+    let unreadable = |reason: String| TransactionAdapterError::Parse {
+        signature: signature.to_string(),
+        reason,
     };
 
-    Some(InnerInstructionPayload {
-        program_id: Pubkey::from_str(&p.program_id).ok()?,
-        data: bs58_decode(&p.data).into_vec().ok()?,
-    })
+    let program_id = Pubkey::from_str(&p.program_id).map_err(|e| {
+        unreadable(format!(
+            "inner instruction program id {}: {e}",
+            p.program_id
+        ))
+    })?;
+    match bs58_decode(&p.data).into_vec() {
+        Ok(data) => Ok(Some(InnerInstructionPayload { program_id, data })),
+        Err(_) if Protocol::from_program_id(&program_id).is_none() => Ok(None),
+        Err(e) => Err(unreadable(format!(
+            "inner instruction data of {program_id} is not base58: {e}"
+        ))),
+    }
 }
 
 #[cfg(test)]

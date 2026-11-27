@@ -1,5 +1,6 @@
 use solana_pubkey::Pubkey;
 
+use super::FeeSchedulerDrop;
 use crate::amm::damm_v2::{BaseFeeKind, FeeSchedulerParams};
 
 /// DAMM v2-only pool properties, the satellite of [`crate::domain::Pool`], as read.
@@ -25,6 +26,9 @@ pub struct MeteoraDammV2PoolProperties {
     /// The decay curve, to tell what the pool charges now; `None` also when the
     /// fee shape has no time curve (`base_fee_kind` tells which).
     pub fee_scheduler: Option<FeeSchedulerParams>,
+
+    /// `Some` when a stored curve could not be rebuilt, so `fee_scheduler` hides it.
+    pub fee_scheduler_dropped: Option<FeeSchedulerDrop>,
 }
 
 /// What one read of a cp-amm `Pool` account yields for this protocol's satellite.

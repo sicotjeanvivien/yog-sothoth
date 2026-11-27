@@ -908,6 +908,14 @@ unresolved queue does not wait for them — it would requeue such an account for
 migration flags every DAMM v2 pool `needs_refresh` once, and a permanent lock flags its pool
 for the next read.
 
+**A fee curve the satellite cannot hold, on write and on read.** The six curve columns are
+written or dropped as a unit: a `u64` past `BIGINT` stores the curve NULL and `set_pool_account`
+returns the field (`FieldOutOfRange`) for `yog-context` to count, rather than failing the write and
+keeping the pool queued. On read, `find_by_pool` tells six NULL columns — no curve stored — from a
+corrupt row: a value outside its domain type or a partly NULL curve comes back as
+`fee_scheduler_dropped` (`FeeSchedulerDrop`), with `fee_scheduler` empty, for `yog-api` to count.
+This crate counts nothing: it has no exporter.
+
 **The pool's unit and the locked liquidity (057).** `pool_activation_type`, the unit of every point of a
 pool (0 slot, 1 timestamp), read for every pool — the scheduler's `activation_type` is kept with a fee
 curve only — and every DAMM v2 pool flagged once more. `yog_damm_v2_liquidity_amounts` is cp-amm's

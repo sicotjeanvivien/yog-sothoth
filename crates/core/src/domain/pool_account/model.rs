@@ -2,7 +2,8 @@ use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 
 use crate::domain::{
-    MeteoraDammV2PoolAccountProperties, MeteoraDlmmPoolAccountProperties, Protocol,
+    MeteoraDammV2PoolAccountProperties, MeteoraDlmmPoolAccountProperties, PoolAccountDegradation,
+    Protocol,
 };
 
 /// The half of a pool account for the cross-protocol `pools` registry, written by
@@ -41,6 +42,8 @@ pub struct DecodedPoolAccount {
     pub registry: PoolRegistryProperties,
     /// Goes to this protocol's satellite.
     pub properties: PoolAccountProperties,
+    /// The fields lost on the way, empty for a whole account.
+    pub degradations: Vec<PoolAccountDegradation>,
 }
 
 impl DecodedPoolAccount {
