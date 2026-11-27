@@ -1,6 +1,8 @@
 /** The locked liquidity block's figures: the first tokens of the ranking, then the rest of the reading. */
 
 import type { EmbeddedTokenResponse } from "@/lib/api/schema/zod.gen";
+import { formatTokenText } from "@/lib/format/format-token-text";
+import { shortenPubkey } from "@/lib/format/pubkey";
 import { amountOf, shareOf } from "@/lib/overview/totals";
 
 export type LockedToken = {
@@ -51,4 +53,13 @@ export function comingUnlocksOf<T extends { unlocksAt: string }>(
   shown: number,
 ): T[] {
   return items.filter((item) => Date.parse(item.unlocksAt) > now.getTime()).slice(0, shown);
+}
+
+/** A token of the block by its symbol, isolated (FSI…PDI), its short mint while the symbol is
+ * unknown, "—" without either. */
+export function lockedTokenLabel(token: EmbeddedTokenResponse): string {
+  if (token.symbol !== null) {
+    return `\u2068${formatTokenText(token.symbol)}\u2069`;
+  }
+  return token.mint === null ? "—" : shortenPubkey(token.mint);
 }

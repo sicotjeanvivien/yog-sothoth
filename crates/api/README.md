@@ -336,6 +336,10 @@ at the end of this section.
    signal's tokens), nothing else: neither its state nor its measures. A field that exists in
    one protocol only goes in a block named after it. The runs' bars carry the volume they split:
    "the volume, split by the runs".
+
+   A token's symbol and name are the chain's, byte for byte: they can carry characters a
+   browser does not draw, a right-to-left override included, and a client that prints them
+   as is can show one token under another's symbol.
 7. **A response does not mix what is read live and what `yog-analytic` computes.**
    - Live: what is read as it was written — the on-chain events, the business resources and
      their current state (reserves, price, a pool's current TVL), the service resources,

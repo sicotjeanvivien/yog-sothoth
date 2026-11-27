@@ -15,7 +15,7 @@ import {
 import { BlockHeading, PeriodNotice } from "@/components/dashboard/overview/overview-parts";
 import { BlockFailed } from "@/components/dashboard/overview/overview-states";
 import { ApiClientError } from "@/lib/api/errors";
-import type { EmbeddedTokenResponse, ProtocolResponse } from "@/lib/api/schema/zod.gen";
+import type { ProtocolResponse } from "@/lib/api/schema/zod.gen";
 import {
   fetchTokenTvl,
   fetchTvl,
@@ -25,9 +25,9 @@ import { formatRelative, formatUtcMoment, type FormatLocale } from "@/lib/format
 import { formatCount } from "@/lib/format/format-count";
 import { formatPercent } from "@/lib/format/format-percent";
 import { formatUsdCompact } from "@/lib/format/format-usd";
-import { pairLabel, shortenPubkey } from "@/lib/format/pubkey";
+import { pairLabel } from "@/lib/format/pubkey";
 import { amountOf, shareOf } from "@/lib/overview/totals";
-import { comingUnlocksOf, lockedTokensOf } from "@/lib/protocol/locked";
+import { comingUnlocksOf, lockedTokenLabel, lockedTokensOf } from "@/lib/protocol/locked";
 
 const TOKENS_SHOWN = 4;
 
@@ -87,12 +87,10 @@ export async function LockedLiquidity({ protocol }: BlockProps) {
   const percent = (share: number | null) =>
     share === null ? "—" : formatPercent(String(share), locale);
   const byToken = lockedTokensOf(tokens);
-  const tokenLabel = (token: EmbeddedTokenResponse) =>
-    token.symbol ?? (token.mint === null ? "—" : shortenPubkey(token.mint));
   const rows = [
     ...byToken.tokens.map((row) => ({
-      key: row.token.mint ?? tokenLabel(row.token),
-      label: tokenLabel(row.token),
+      key: row.token.mint ?? lockedTokenLabel(row.token),
+      label: lockedTokenLabel(row.token),
       usd: row.usd,
       share: row.share,
     })),

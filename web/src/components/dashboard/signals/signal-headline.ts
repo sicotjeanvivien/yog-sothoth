@@ -1,5 +1,6 @@
 import type { SignalResponse } from "@/lib/api/schema/zod.gen";
 import { formatShortAddress } from "@/lib/format/format-short-address";
+import { formatTokenText } from "@/lib/format/format-token-text";
 
 import { formatSignalValue, KNOWN_DETECTORS } from "./signal-display";
 
@@ -10,7 +11,7 @@ export function signalHeadline(signal: SignalResponse, locale: string, t: Headli
   // ⚠️ Isolated (FSI…PDI): a right-to-left symbol would otherwise reverse the whole line.
   const pair =
     signal.tokenA.symbol !== null && signal.tokenB.symbol !== null
-      ? `\u2068${signal.tokenA.symbol}\u2069 / \u2068${signal.tokenB.symbol}\u2069`
+      ? `\u2068${formatTokenText(signal.tokenA.symbol)}\u2069 / \u2068${formatTokenText(signal.tokenB.symbol)}\u2069`
       : formatShortAddress(signal.poolAddress);
   const value = formatSignalValue(signal, locale);
   return KNOWN_DETECTORS.has(signal.detector)

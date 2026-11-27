@@ -1,5 +1,7 @@
 /** Shortens a base58 pubkey for a table cell, keeping both ends. */
 
+import { formatTokenText } from "./format-token-text";
+
 const DEFAULT_CHARS_EACH_SIDE = 4;
 
 const ELLIPSIS = "…";
@@ -25,13 +27,14 @@ export function shortenPubkey(
   return `${head}${ELLIPSIS}${tail}`;
 }
 
-/** A pool named by its pair, `"SOL / USDC"`, or by its shortened address while a symbol is unknown. */
+/** A pool named by its pair, or by its shortened address while a symbol is unknown.
+ * ⚠️ Each symbol isolated (FSI…PDI): a right-to-left one would reverse the line. */
 export function pairLabel(pool: {
   poolAddress: string;
   tokenASymbol: string | null;
   tokenBSymbol: string | null;
 }): string {
   return pool.tokenASymbol !== null && pool.tokenBSymbol !== null
-    ? `${pool.tokenASymbol} / ${pool.tokenBSymbol}`
+    ? `\u2068${formatTokenText(pool.tokenASymbol)}\u2069 / \u2068${formatTokenText(pool.tokenBSymbol)}\u2069`
     : shortenPubkey(pool.poolAddress);
 }
