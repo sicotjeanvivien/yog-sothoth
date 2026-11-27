@@ -9,9 +9,9 @@ import { ApiClientError } from "@/lib/api/errors";
 import { fetchTopTokens } from "@/lib/api/server/tokens";
 import { volumeCoverage } from "@/lib/coverage/volume-coverage";
 import { formatCount } from "@/lib/format/format-count";
-import { formatShortAddress } from "@/lib/format/format-short-address";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import type { Period } from "@/lib/overview/period";
+import { topTokenName, topTokenSymbol } from "@/lib/overview/top-tokens";
 
 import { BlockHeading, closedReason, PeriodNotice } from "./overview-parts";
 import {
@@ -71,29 +71,29 @@ export async function TopTokens({ period }: { period: Period }) {
               {t("tokens.pools")}
             </div>
           </div>
-          {page.items.map((item, i) => (
-            <div key={item.token.mint ?? i} role="row" className={`${ROW_CLASS} ${COLUMNS}`}>
-              <div role="cell" className="truncate">
-                <span className="text-dash-ink">
-                  {item.token.symbol ??
-                    (item.token.mint ? formatShortAddress(item.token.mint) : "—")}
-                </span>
-                {item.token.name && (
-                  <span className="ml-1.5 text-[12px] text-dash-ink-3">{item.token.name}</span>
-                )}
+          {page.items.map((item, i) => {
+            const name = topTokenName(item.token);
+            return (
+              <div key={item.token.mint ?? i} role="row" className={`${ROW_CLASS} ${COLUMNS}`}>
+                <div role="cell" className="truncate">
+                  <span className="text-dash-ink">{topTokenSymbol(item.token)}</span>
+                  {name !== null && (
+                    <span className="ml-1.5 text-[12px] text-dash-ink-3">{name}</span>
+                  )}
+                </div>
+                <div role="cell" className={NUM_CLASS}>
+                  {formatUsdCompact(item.volumeUsd)}
+                  <VolumeCoverageMark
+                    coverage={volumeCoverage(item)}
+                    label={(priced, total) => t(`coverage.${page.coverageUnit}.mark`, { priced, total })}
+                  />
+                </div>
+                <div role="cell" className={`${NUM_CLASS} text-dash-ink-2`}>
+                  {formatCount(item.pools)}
+                </div>
               </div>
-              <div role="cell" className={NUM_CLASS}>
-                {formatUsdCompact(item.volumeUsd)}
-                <VolumeCoverageMark
-                  coverage={volumeCoverage(item)}
-                  label={(priced, total) => t(`coverage.${page.coverageUnit}.mark`, { priced, total })}
-                />
-              </div>
-              <div role="cell" className={`${NUM_CLASS} text-dash-ink-2`}>
-                {formatCount(item.pools)}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </section>

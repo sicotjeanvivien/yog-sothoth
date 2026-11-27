@@ -57,6 +57,10 @@ export const RELEASES: readonly Release[] = [
         kind: "fixes",
         items: [
           {
+            text: "A token whose symbol or name hides an invisible character, such as one that reverses the text, now shows that character as a ⟨U+XXXX⟩ mark instead of passing for another token.",
+            technical: false,
+          },
+          {
             text: "Nothing a decode loses goes unseen any more: a pool account refused or read short of a field, and a stored fee curve the API cannot rebuild, are logged and counted (yog_context_pool_account_rejected_total, yog_context_pool_account_degraded_total, yog_api_pool_properties_degraded_total). On the JSON-RPC path, an unreadable inner instruction that may be an indexed program's refuses its transaction, as on gRPC.",
             technical: true,
           },

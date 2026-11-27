@@ -25,6 +25,7 @@ import {
   type RewardClaimEventResponse,
 } from "@/lib/api/schema/zod.gen";
 import { formatTokenAmount } from "@/lib/format/format-token-amount";
+import { formatTokenText } from "@/lib/format/format-token-text";
 import { shortenPubkey } from "@/lib/format/pubkey";
 import type { ActivityTopic } from "@/lib/live/live-topics";
 
@@ -89,7 +90,12 @@ function amount(raw: string, token: EmbeddedTokenResponse, sign: "+" | "−" | "
   if (value === null) {
     return [];
   }
-  const unit = token.symbol ?? (token.mint === null ? "" : shortenPubkey(token.mint));
+  const unit =
+    token.symbol !== null
+      ? `\u2068${formatTokenText(token.symbol)}\u2069`
+      : token.mint === null
+        ? ""
+        : shortenPubkey(token.mint);
   return [{ type: "amount", sign, value, unit }];
 }
 
@@ -234,7 +240,7 @@ export function activityRow(item: ActivityItem): ActivityRow {
  * ⚠️ Each symbol isolated (FSI…PDI): a right-to-left one would reverse the line. */
 function poolLabel(e: Pair & { poolAddress: string }): string {
   return e.tokenA.symbol !== null && e.tokenB.symbol !== null
-    ? `\u2068${e.tokenA.symbol}\u2069 / \u2068${e.tokenB.symbol}\u2069`
+    ? `\u2068${formatTokenText(e.tokenA.symbol)}\u2069 / \u2068${formatTokenText(e.tokenB.symbol)}\u2069`
     : shortenPubkey(e.poolAddress);
 }
 

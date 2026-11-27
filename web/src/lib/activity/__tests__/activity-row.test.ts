@@ -27,11 +27,18 @@ describe("activityRow", () => {
     expect(row.kind).toBe("liquidity_add");
     expect(row.pool).toBe("⁨MET⁩ / ⁨SOL⁩");
     expect(row.detail).toEqual([
-      { type: "amount", sign: "+", value: "2.5", unit: "MET" },
-      { type: "amount", sign: "+", value: "1.48K", unit: "SOL" },
+      { type: "amount", sign: "+", value: "2.5", unit: "\u2068MET\u2069" },
+      { type: "amount", sign: "+", value: "1.48K", unit: "\u2068SOL\u2069" },
       { type: "party", role: "position", address: "9fQ2…L8xa" },
     ]);
     expect(activityRow(liquidity("remove")).detail[0]).toMatchObject({ sign: "−" });
+  });
+
+  // Mutation: a symbol written as is in the pair or the unit — "\u202ETDSU" reads "USDT".
+  it("shows an invisible character of a symbol in the pair and the unit", () => {
+    const row = activityRow(liquidity("add", { tokenA: { ...MET, symbol: "\u202ETDSU" }, tokenB: SOL }));
+    expect(row.pool).toBe("\u2068⟨U+202E⟩TDSU\u2069 / \u2068SOL\u2069");
+    expect(row.detail[0]).toMatchObject({ unit: "\u2068⟨U+202E⟩TDSU\u2069" });
   });
 
   // Mutation: a fallback to 0 decimals — the raw amount passes for units of the token.
@@ -39,7 +46,7 @@ describe("activityRow", () => {
     const row = activityRow(liquidity("add", { tokenA: UNKNOWN, tokenB: SOL }));
     expect(row.pool).toBe("ELR1…9xQz");
     expect(row.detail).toEqual([
-      { type: "amount", sign: "+", value: "1.48K", unit: "SOL" },
+      { type: "amount", sign: "+", value: "1.48K", unit: "\u2068SOL\u2069" },
       { type: "party", role: "position", address: "9fQ2…L8xa" },
     ]);
   });
@@ -51,7 +58,7 @@ describe("activityRow", () => {
       event: { ...BASE, amount: "2500000", rewardMint, rewardIndex: 0, position: POSITION, owner: OWNER },
     });
     expect(activityRow(claim(MET.mint as string)).detail).toEqual([
-      { type: "amount", sign: "", value: "2.5", unit: "MET" },
+      { type: "amount", sign: "", value: "2.5", unit: "\u2068MET\u2069" },
       { type: "party", role: "owner", address: "5hTr…Wq1c" },
     ]);
     expect(activityRow(claim(UNKNOWN.mint as string)).detail).toEqual([

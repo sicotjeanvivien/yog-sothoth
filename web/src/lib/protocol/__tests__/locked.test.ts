@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { comingUnlocksOf, lockedTokensOf } from "../locked";
+import { comingUnlocksOf, lockedTokenLabel, lockedTokensOf } from "../locked";
 
 const token = (symbol: string) => ({
   decimals: 9,
@@ -102,5 +102,19 @@ describe("comingUnlocksOf", () => {
     const items = [at("2026-11-25T10:00:00Z"), at("2026-11-25T12:00:00Z"), at("2026-11-25T13:00:00Z")];
 
     expect(comingUnlocksOf(items, now, 2)).toHaveLength(2);
+  });
+});
+
+describe("lockedTokenLabel", () => {
+  // Mutation: the symbol written as is — "\u202ETDSU" reads "USDT" in the ranking.
+  it("shows an invisible character of a symbol", () => {
+    expect(lockedTokenLabel(token("\u202ETDSU"))).toBe("\u2068⟨U+202E⟩TDSU\u2069");
+  });
+
+  // Mutation: the fallbacks swapped, or a missing symbol shown as "null".
+  it("names a token by its short mint while its symbol is unknown, by a dash without either", () => {
+    const mint = "CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j";
+    expect(lockedTokenLabel({ ...token("X"), symbol: null, mint })).toBe("CGPx…Zp5j");
+    expect(lockedTokenLabel({ ...token("X"), symbol: null, mint: null })).toBe("—");
   });
 });

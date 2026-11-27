@@ -30,10 +30,17 @@ describe("shortenPubkey", () => {
 });
 
 describe("pairLabel", () => {
-  // Mutation: a pair named with one symbol unknown — "SOL / null" in a cell.
+  // Mutation: a pair named with one symbol unknown — "SOL / null" in a cell; or a symbol not
+  // isolated, so a right-to-left one reverses the line.
   it("names a pool by its pair, and by its address while a symbol is unknown", () => {
     const pool = { poolAddress: "CGPxRANDOMMIDDLEPARTZp5j", tokenASymbol: "SOL", tokenBSymbol: "USDC" };
-    expect(pairLabel(pool)).toBe("SOL / USDC");
+    expect(pairLabel(pool)).toBe("\u2068SOL\u2069 / \u2068USDC\u2069");
     expect(pairLabel({ ...pool, tokenBSymbol: null })).toBe("CGPx…Zp5j");
+  });
+
+  // Mutation: the symbol written as is — "\u202ETDSU" reads "USDT" in the cell.
+  it("shows an invisible character of a symbol", () => {
+    const pool = { poolAddress: "CGPxRANDOMMIDDLEPARTZp5j", tokenASymbol: "\u202ETDSU", tokenBSymbol: "SOL" };
+    expect(pairLabel(pool)).toBe("\u2068⟨U+202E⟩TDSU\u2069 / \u2068SOL\u2069");
   });
 });

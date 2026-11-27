@@ -217,6 +217,13 @@ rendering: the announcement streams in its own `<Suspense>`, and each Overview
 block in its own, behind its skeleton. A failed block shows its error box;
 the status code is already sent.
 
+**A token's text** — every symbol and name a page shows goes through
+`formatTokenText` (`lib/format/format-token-text.ts`): each character the
+browser would not draw — Unicode controls, format characters, default-ignorables,
+line and paragraph separators — is shown as `⟨U+XXXX⟩`, but the joiners and
+selectors inside an emoji, so `"\u202ETDSU"` never reads "USDT". Each symbol and name
+is isolated (FSI…PDI) as well, so a right-to-left one cannot reorder its neighbours.
+
 **Beta** — `dashboard/beta/`: a "Bêta" badge under the name, in the rail and
 the mobile bar, hidden on the collapsed rail; and a banner at the top of every
 page, above the announcement so that one streams in below it without moving
