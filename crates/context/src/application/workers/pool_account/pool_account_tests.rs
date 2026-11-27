@@ -479,7 +479,7 @@ fn a_whole_account_counts_nothing() {
     );
 }
 
-/// Mutation: degradations counted before the satellite write, so a failing write counts every tick.
+/// Mutation: degradations counted before the satellite write, so a failing one counts every tick.
 #[test]
 fn a_failed_write_counts_no_degradation() {
     let (repo, pool_repo, _) = fakes(vec![pk(1)], true);

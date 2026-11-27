@@ -22,8 +22,8 @@ use yog_core::domain::{Protocol, TransactionPosition};
 
 /// Build the neutral transaction from a `getTransaction` response. Refusals, all counted under
 /// `reason="adapt"`: no or bad `signatures[0]`, a non-`Json` encoding, `blockTime` absent or out of
-/// range, no `meta`, no `innerInstructions`, an unreadable inner instruction. An empty
-/// `innerInstructions` is ordinary traffic.
+/// range, no `meta`, no `innerInstructions`, an unreadable inner instruction of a program we may
+/// index. An empty `innerInstructions` is ordinary traffic.
 pub(crate) fn from_rpc(
     tx: &EncodedConfirmedTransactionWithStatusMeta,
 ) -> Result<OnChainTransaction, TransactionAdapterError> {
@@ -87,7 +87,7 @@ fn extract_timestamp(
 }
 
 /// Flatten `meta.innerInstructions` in outer-instruction order, the `event_index` contract of
-/// [`OnChainTransaction::inner_instructions`]; drops what is not `PartiallyDecoded`.
+/// [`OnChainTransaction::inner_instructions`]; drops what [`to_payload`] sets aside.
 /// ⚠️ Narrowing that filter further renumbers stored events, see [`InnerInstructionPayload`].
 fn extract_inner_instructions(
     tx: &EncodedConfirmedTransactionWithStatusMeta,

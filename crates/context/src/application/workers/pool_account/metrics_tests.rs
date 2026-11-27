@@ -5,7 +5,7 @@ use yog_core::domain::{PoolAccountDegradation, Protocol};
 
 use super::*;
 
-/// Mutation: two variants swapped onto each other's label, or a label the README does not list.
+/// Mutation: two variants swapped onto each other's label, or a label missing from the zero list.
 #[test]
 fn each_rejection_has_its_own_label() {
     let cases = [
