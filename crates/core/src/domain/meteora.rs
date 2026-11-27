@@ -4,7 +4,7 @@ mod dlmm;
 pub use dlmm::MeteoraDlmmPoolAccountProperties;
 
 pub use damm_v2::{
-    MeteoraDammV2BaseFee, MeteoraDammV2ClaimPositionFeeEvent,
+    FeeSchedulerDrop, MeteoraDammV2BaseFee, MeteoraDammV2ClaimPositionFeeEvent,
     MeteoraDammV2ClaimPositionFeeEventRepository, MeteoraDammV2ClaimProtocolFeeEvent,
     MeteoraDammV2ClaimProtocolFeeEventRepository, MeteoraDammV2ClaimRewardEvent,
     MeteoraDammV2ClaimRewardEventRepository, MeteoraDammV2ClosePositionEvent,

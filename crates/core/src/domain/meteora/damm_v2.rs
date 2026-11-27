@@ -72,7 +72,7 @@ pub use pool_fees::{
     MeteoraDammV2FeeDecay, MeteoraDammV2PoolFees, MeteoraDammV2PoolFeesUpdate,
 };
 pub use pool_properties::{
-    MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolProperties,
+    FeeSchedulerDrop, MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolProperties,
     MeteoraDammV2PoolPropertiesLookup,
 };
 pub use set_pool_status_event::{

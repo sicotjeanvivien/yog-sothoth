@@ -17,7 +17,8 @@ use crate::application::decoder::meteora::dlmm::{
     TOKEN_Y_MINT_OFFSET, VARIABLE_FEE_CONTROL_OFFSET,
 };
 use crate::domain::{
-    MeteoraDammV2PoolAccountProperties, MeteoraDlmmPoolAccountProperties, PoolAccountProperties,
+    MeteoraDammV2PoolAccountProperties, MeteoraDlmmPoolAccountProperties, PoolAccountDegradation,
+    PoolAccountProperties,
 };
 use rust_decimal::Decimal;
 
@@ -292,6 +293,55 @@ fn an_unknown_base_fee_mode_costs_only_the_fee_shape() {
     let props = damm_v2_properties(&data);
     assert_eq!(props.base_fee_kind, None, "the unmappable mode yields None");
     assert!(props.has_dynamic_fee, "the flag is independent of the mode");
+}
+
+// ── Degradations ────────────────────────────────────────────────────
+
+/// Mutation: pushing a degradation whatever the account.
+#[test]
+fn a_whole_account_reports_no_degradation() {
+    let data = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));
+
+    let decoded = decode_pool_account(&cp_amm_owner(), &data).expect("should decode");
+
+    assert_eq!(decoded.degradations, []);
+}
+
+/// Mutation: dropping the push on an unmapped `BaseFeeMode`, which loses the field silently.
+#[test]
+fn an_unknown_base_fee_mode_is_reported_as_such() {
+    let data = with_fee_shape(
+        cp_amm_account(2_500_000, (20, 20), pk(2), pk(3)),
+        99,
+        0,
+        false,
+    );
+
+    let decoded = decode_pool_account(&cp_amm_owner(), &data).expect("must still decode");
+
+    assert_eq!(
+        decoded.degradations,
+        [PoolAccountDegradation::BaseFeeModeUnknown]
+    );
+}
+
+/// Mutation: dropping the push, or `<` → `<=` on the threshold (the exact length is whole).
+#[test]
+fn an_account_too_short_for_the_tail_is_reported_with_its_sizes() {
+    let data = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));
+    let needed = PERMANENT_LOCK_LIQUIDITY_OFFSET + 16;
+
+    let short = decode_pool_account(&cp_amm_owner(), &data[..needed - 1]).expect("must decode");
+    let exact = decode_pool_account(&cp_amm_owner(), &data[..needed]).expect("must decode");
+
+    assert_eq!(
+        short.degradations,
+        [PoolAccountDegradation::AccountTooShort {
+            len: needed - 1,
+            needed
+        }]
+    );
+    assert_eq!(exact.degradations, []);
 }
 
 /// Mutation: `!= 0` → `== 1`; any non-zero `dynamic_fee.initialized` means enabled.

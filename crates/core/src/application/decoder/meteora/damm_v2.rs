@@ -9,8 +9,8 @@ use solana_pubkey::Pubkey;
 use crate::amm::damm_v2::{BaseFeeKind, FeeSchedulerParams, fee_numerator_to_bps};
 use crate::application::decoder::PoolAccountRejection;
 use crate::domain::{
-    DecodedPoolAccount, MeteoraDammV2PoolAccountProperties, PoolAccountProperties,
-    PoolRegistryProperties, Protocol,
+    DecodedPoolAccount, MeteoraDammV2PoolAccountProperties, PoolAccountDegradation,
+    PoolAccountProperties, PoolRegistryProperties, Protocol,
 };
 
 /// `sha256("account:Pool")[..8]`.
@@ -72,6 +72,9 @@ const SCHEDULER_MIN_LEN: usize = ACTIVATION_TYPE_OFFSET + 1;
 /// Length needed for the range and the permanent lock, optional like the scheduler.
 const LIQUIDITY_SHAPE_MIN_LEN: usize = PERMANENT_LOCK_LIQUIDITY_OFFSET + 16;
 
+// `AccountTooShort` is raised on this one threshold, so it must cover the fee curve's.
+const _: () = assert!(SCHEDULER_MIN_LEN <= LIQUIDITY_SHAPE_MIN_LEN);
+
 /// Decode a cp-amm `Pool` account, split by **who stores it**: the `pools`
 /// registry (token pair, base fee) and this protocol's satellite.
 pub(in crate::application::decoder) fn decode_pool_account(
@@ -105,6 +108,17 @@ pub(in crate::application::decoder) fn decode_pool_account(
             .expect("8 bytes, length checked above"),
     );
     let has_liquidity_shape = data.len() >= LIQUIDITY_SHAPE_MIN_LEN;
+
+    let mut degradations = Vec::new();
+    if base_fee_kind.is_none() {
+        degradations.push(PoolAccountDegradation::BaseFeeModeUnknown);
+    }
+    if !has_liquidity_shape {
+        degradations.push(PoolAccountDegradation::AccountTooShort {
+            len: data.len(),
+            needed: LIQUIDITY_SHAPE_MIN_LEN,
+        });
+    }
     let read_u128 = |at: usize| {
         has_liquidity_shape.then(|| {
             u128::from_le_bytes(
@@ -137,6 +151,7 @@ pub(in crate::application::decoder) fn decode_pool_account(
             pool_activation_type: (data.len() > ACTIVATION_TYPE_OFFSET)
                 .then(|| data[ACTIVATION_TYPE_OFFSET]),
         }),
+        degradations,
     })
 }
 

@@ -680,6 +680,7 @@ The series, on `:9000/metrics` (host-mapped to 9004 in dev, read through
 | `yog_api_unauthorized_total` | `credential` — `key` or `ticket`; `reason` — `missing`, `scheme`, `malformed`, `unknown` or `expired` (a key presented to the live stream is a `malformed` ticket; an expired ticket an issue has already forgotten is `unknown`) |
 | `yog_api_tickets_issued_total` | `client` |
 | `yog_api_key_ring_reloads_total` | `outcome` — `reloaded` or `failed` |
+| `yog_api_pool_properties_degraded_total` | `protocol`; `reason` — `fee_scheduler_out_of_range` or `fee_scheduler_partly_null`: a pool read whose stored fee curve could not be rebuilt and is served without it. Reads, not rows — one corrupt row counts at every read of its pool. Published at 0 at start |
 
 ## Error responses
 

@@ -48,6 +48,7 @@ fn scheduler_properties() -> MeteoraDammV2PoolProperties {
             activation_type: 1,
             kind: yog_core::amm::damm_v2::BaseFeeKind::SchedulerLinear,
         }),
+        fee_scheduler_dropped: None,
     }
 }
 

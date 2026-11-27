@@ -135,6 +135,12 @@ fn decodes_real_mainnet_accounts() {
             .unwrap_or_else(|err| panic!("{}: real account rejected: {err}", e.pool));
 
         assert_eq!(decoded.protocol(), Protocol::MeteoraDammV2, "{}", e.pool);
+        assert_eq!(
+            decoded.degradations,
+            [],
+            "{}: a real account loses nothing",
+            e.pool
+        );
 
         // The registry half — the values every protocol has.
         assert_eq!(

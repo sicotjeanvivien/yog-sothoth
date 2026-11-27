@@ -78,7 +78,7 @@ pub use liquidity_moves::{
 pub use liquidity_turnover::{LiquidityTurnover, ProtocolLiquidityTurnover};
 pub use materialization_backlog::{MaterializationBacklog, MaterializationBacklogRepository};
 pub use meteora::{
-    MeteoraDammV2BaseFee, MeteoraDammV2ClaimPositionFeeEvent,
+    FeeSchedulerDrop, MeteoraDammV2BaseFee, MeteoraDammV2ClaimPositionFeeEvent,
     MeteoraDammV2ClaimPositionFeeEventRepository, MeteoraDammV2ClaimProtocolFeeEvent,
     MeteoraDammV2ClaimProtocolFeeEventRepository, MeteoraDammV2ClaimRewardEvent,
     MeteoraDammV2ClaimRewardEventRepository, MeteoraDammV2ClosePositionEvent,
@@ -114,7 +114,8 @@ pub use pool::{
     Pool, PoolCatalog, PoolCursor, PoolEntry, PoolRepository, PoolScope, PoolValue, ProtocolPools,
 };
 pub use pool_account::{
-    DecodedPoolAccount, PoolAccountProperties, PoolAccountResolver, PoolRegistryProperties,
+    DecodedPoolAccount, FieldOutOfRange, PoolAccountDegradation, PoolAccountProperties,
+    PoolAccountResolver, PoolRegistryProperties,
 };
 pub use pool_change_event::{PoolChangeEvent, PoolChangeEventLookup, PoolChangeTable};
 pub use pool_creation_event::{PoolCreationEvent, PoolCreationEventLookup, PoolCreationTable};

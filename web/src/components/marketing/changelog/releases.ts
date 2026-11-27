@@ -53,6 +53,27 @@ export const RELEASES: readonly Release[] = [
           },
         ],
       },
+      {
+        kind: "fixes",
+        items: [
+          {
+            text: "Nothing a decode loses goes unseen any more: a pool account refused or read short of a field, and a stored fee curve the API cannot rebuild, are logged and counted (yog_context_pool_account_rejected_total, yog_context_pool_account_degraded_total, yog_api_pool_properties_degraded_total). On the JSON-RPC path, an unreadable inner instruction that may be an indexed program's refuses its transaction, as on gRPC.",
+            technical: true,
+          },
+          {
+            text: "CoreError is gone: the transaction adapters' errors live in the indexer, and the extraction no longer returns a Result. The metric labels outcome=\"extract_failure\" and reason=\"other_malformation\", never emitted, are removed.",
+            technical: true,
+          },
+          {
+            text: "An unknown stored metadata_provider is reported as such, no longer as an invalid price_provider. The dormant AMM helpers return nothing on an overflow or an empty reserve, instead of an error, a zero price or a panic.",
+            technical: true,
+          },
+          {
+            text: "The core crate holds one subject per file and one folder per resource; no type path outside it changed.",
+            technical: true,
+          },
+        ],
+      },
     ],
   },
   {

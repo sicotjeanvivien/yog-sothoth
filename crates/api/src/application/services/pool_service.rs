@@ -13,6 +13,10 @@ use yog_core::{
     },
 };
 
+use crate::application::metrics::ApiMetrics;
+
+mod log;
+
 /// The properties of a pool's own protocol.
 #[derive(Debug, Clone)]
 pub(crate) enum PoolProperties {
@@ -70,11 +74,14 @@ impl PoolService {
         };
         // ⚠️ Exhaustive on purpose: a new protocol stops compilation here; a wildcard drops it.
         let properties = match entry.pool.protocol {
-            Protocol::MeteoraDammV2 => self
-                .damm_v2_properties
-                .find_by_pool(&address)
-                .await?
-                .map(PoolProperties::MeteoraDammV2),
+            Protocol::MeteoraDammV2 => {
+                let properties = self.damm_v2_properties.find_by_pool(&address).await?;
+                if let Some(drop) = properties.as_ref().and_then(|p| p.fee_scheduler_dropped) {
+                    log::fee_scheduler_dropped(&address, drop);
+                    ApiMetrics::record_pool_properties_degraded(Protocol::MeteoraDammV2, drop);
+                }
+                properties.map(PoolProperties::MeteoraDammV2)
+            }
             Protocol::MeteoraDlmm => None,
         };
         Ok(Some(PoolDetail {
